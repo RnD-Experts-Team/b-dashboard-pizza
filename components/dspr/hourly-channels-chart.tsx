@@ -148,6 +148,7 @@ export function HourlyChannelsChart({
         },
       },
       legend: {
+        show: false,
         position: legendPosition,
         horizontalAlign: "left",
         fontSize: "10px",
@@ -180,7 +181,7 @@ export function HourlyChannelsChart({
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-3 pb-0">
+      <CardContent className="px-0 pb-0">
         <ReactApexChart
           options={options}
           series={series}

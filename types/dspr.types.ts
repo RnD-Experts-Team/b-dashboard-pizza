@@ -49,7 +49,11 @@ export interface TopIngredient {
 
 export interface DsprTop {
   top_5_items_sales_for_day: TopMenuItem[];
-  top_3_ingredients_used: TopIngredient[];
+  ingredients: {
+    top_3_ingredients_used: TopIngredient[],
+    main_5_ingredients_usage: [],
+    top_paper_5_ingredients_usage: [];
+  };
 }
 
 // ============================================================================

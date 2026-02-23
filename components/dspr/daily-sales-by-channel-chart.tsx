@@ -75,6 +75,7 @@ export function DailySalesByChannelChart({
       labels,
       colors,
       legend: {
+        show: false,
         position: "bottom",
         horizontalAlign: "left",
         fontSize: "8px",
@@ -96,7 +97,7 @@ export function DailySalesByChannelChart({
         enabled: true,
         formatter: (value: number) => `${value.toFixed(1)}%`,
         style: {
-          fontSize: "7px",
+          fontSize: "10px",
           fontWeight: 400,
         },
       },
@@ -111,12 +112,12 @@ export function DailySalesByChannelChart({
                   show: true,
                   formatter: (val: any) =>
                     `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                  fontSize: "8px",
+                  fontSize: "12px",
                 },
                 total: {
                   show: true,
                   label: "Total",
-                  fontSize: "9px",
+                  fontSize: "12px",
                   formatter: () =>
                     `$${series
                       .reduce((sum, value) => sum + value, 0)

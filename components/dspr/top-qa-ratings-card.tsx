@@ -236,23 +236,23 @@ export function TopQaRatingsCard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[52%]">Entity</TableHead>
-                <TableHead className="text-right">Auto Fail</TableHead>
-                <TableHead className="text-right">Urgent</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-xs w-[52%]">Entity</TableHead>
+                <TableHead className="text-right text-xs">Auto Fail</TableHead>
+                <TableHead className="text-right text-xs">Urgent</TableHead>
+                <TableHead className="text-right text-xs">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((item) => (
                 <TableRow key={item.entityId} className={cn(isLoading && "opacity-60")}>
                   <TableCell className="text-xs font-medium">{item.entityLabel}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-xs text-right">
                     <Badge variant="secondary">{item.autoFailCount}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-xs text-right">
                     <Badge variant="outline">{item.urgentCount}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-xs text-right">
                     <Badge>{item.totalCount}</Badge>
                   </TableCell>
                 </TableRow>

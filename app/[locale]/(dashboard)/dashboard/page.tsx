@@ -9,11 +9,11 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      {/* <PageHeader
         // title={t("title")}
         title={"DSPR"}
         description={t("welcome")}
-      />
+      /> */}
 
       {/* DSPR Dashboard — real data from the API */}
       <DsprDashboard />

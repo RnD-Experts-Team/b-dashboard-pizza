@@ -567,33 +567,43 @@ export function DsprDashboard() {
       </div>
 
       {/* ── HNR · Labor · Top 5 Menu Items ───────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
-        <HnrCard hnr={day.hnr} />
-        <LaborGauge value={22} />
+      {/* <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3"> */}
+             <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
+
         {/* <LaborGauge value={day.labor} /> */}
         <TopItemsList items={top.top_5_items_sales_for_day} className="sm:col-span-2 lg:col-span-1" />
+        <TopIngredientsList
+          mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
+          paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}
+          usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
+          className="sm:col-span-2 lg:col-span-1"
+        />
+
+         <HnrCard hnr={day.hnr} />
+        <LaborGauge value={22} />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
         <HourlyChannelsChart
           hourlyData={day.hourly_sales_and_channels}
-          height={150}
+          height={190}
           toolbar={false}
-          className="md:col-span-2"
+          className=""
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
-          height={170}
+          height={190}
           toolbar={false}
         />
+        <RecentMaintenanceTable />
+        <TopQaRatingsCard />
       </div>
 
       {/* ── Ingredients + Maintenance + QA ────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
-        <TopIngredientsList ingredients={top.top_3_ingredients_used} />
-        <RecentMaintenanceTable />
-        <TopQaRatingsCard />
+        {/* <RecentMaintenanceTable />
+        <TopQaRatingsCard /> */}
       </div>
     </div>
   );

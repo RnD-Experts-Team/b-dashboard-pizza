@@ -13,6 +13,7 @@ import {
   Users,
   Trash2,
   HandCoins,
+  Star,
 } from "lucide-react";
 import type { DsprDay } from "@/types/dspr.types";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,18 @@ type StatConfig = {
 export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
   const stats: StatConfig[] = [
     {
+      label: "Store Score",
+      shortLabel: "Store Score",
+      value: "88 %", // Placeholder value
+      rawValue: 0,
+      icon: Star,
+      color: "text-yellow-600 dark:text-yellow-400",
+      iconBg: "bg-yellow-500/15 dark:bg-yellow-500/20",
+      borderColor: "border-l-yellow-500",
+      tooltip: "Store score based on various performance metrics",
+      isNegative: false,
+    },
+    {
       label: "Total Cash Sales",
       shortLabel: "Cash Sales",
       value: fmt(day.total_cash_sales),
@@ -63,6 +76,40 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
       tooltip: "Total bank deposit for the day",
     },
     {
+      label: "Refunded Orders",
+      shortLabel: "Refunds",
+      value: `${day.refunded_orders.count} / ${fmt(day.refunded_orders.sales)}`,
+      rawValue: day.refunded_orders.sales,
+      icon: RotateCcw,
+      color: "text-orange-600 dark:text-orange-400",
+      iconBg: "bg-orange-500/15 dark:bg-orange-500/20",
+      borderColor: "border-l-orange-500",
+      tooltip: `${day.refunded_orders.count} order(s) refunded totaling ${fmt(day.refunded_orders.sales)}`,
+      isNegative: day.refunded_orders.count > 0,
+    },
+    {
+      label: "Customer Count",
+      shortLabel: "Customers",
+      value: day.customer_count.toLocaleString(),
+      rawValue: day.customer_count,
+      icon: Users,
+      color: "text-violet-600 dark:text-violet-400",
+      iconBg: "bg-violet-500/15 dark:bg-violet-500/20",
+      borderColor: "border-l-violet-500",
+      tooltip: "Total number of customers served",
+    },
+    {
+      label: "Total Tips",
+      shortLabel: "Tips",
+      value: fmt(day.total_tips),
+      rawValue: day.total_tips,
+      icon: HandCoins,
+      color: "text-teal-600 dark:text-teal-400",
+      iconBg: "bg-teal-500/15 dark:bg-teal-500/20",
+      borderColor: "border-l-teal-500",
+      tooltip: "Total tips collected for the day",
+    },
+    {
       label: "Over/Short",
       shortLabel: "Over/Short",
       value: fmt(day.over_short),
@@ -81,18 +128,6 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
       isNegative: day.over_short < 0,
     },
     {
-      label: "Refunded Orders",
-      shortLabel: "Refunds",
-      value: `${day.refunded_orders.count} / ${fmt(day.refunded_orders.sales)}`,
-      rawValue: day.refunded_orders.sales,
-      icon: RotateCcw,
-      color: "text-orange-600 dark:text-orange-400",
-      iconBg: "bg-orange-500/15 dark:bg-orange-500/20",
-      borderColor: "border-l-orange-500",
-      tooltip: `${day.refunded_orders.count} order(s) refunded totaling ${fmt(day.refunded_orders.sales)}`,
-      isNegative: day.refunded_orders.count > 0,
-    },
-    {
       label: "Waste (GW)",
       shortLabel: "Waste GW",
       value: fmt(day.waste.normal),
@@ -103,17 +138,6 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
       borderColor: "border-l-amber-500",
       tooltip: "Normal waste value",
       isNegative: true,
-    },
-    {
-      label: "Customer Count",
-      shortLabel: "Customers",
-      value: day.customer_count.toLocaleString(),
-      rawValue: day.customer_count,
-      icon: Users,
-      color: "text-violet-600 dark:text-violet-400",
-      iconBg: "bg-violet-500/15 dark:bg-violet-500/20",
-      borderColor: "border-l-violet-500",
-      tooltip: "Total number of customers served",
     },
     {
       label: "Waste (Alta)",
@@ -127,21 +151,11 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
       tooltip: "Alta inventory waste value",
       isNegative: true,
     },
-    {
-      label: "Total Tips",
-      shortLabel: "Tips",
-      value: fmt(day.total_tips),
-      rawValue: day.total_tips,
-      icon: HandCoins,
-      color: "text-teal-600 dark:text-teal-400",
-      iconBg: "bg-teal-500/15 dark:bg-teal-500/20",
-      borderColor: "border-l-teal-500",
-      tooltip: "Total tips collected for the day",
-    },
+     
   ];
 
   return (
-    <div className={cn("grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-1", className)}>
+    <div className={cn("grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-9 gap-1", className)}>
       {stats.map((stat) => {
         const Icon = stat.icon;
         return (

@@ -292,9 +292,9 @@ export function RecentMaintenanceTable() {
               <TableRow>
                 {/* <TableHead>ID</TableHead> */}
                 {/* <TableHead>Entry #</TableHead> */}
-                <TableHead>Submitted At</TableHead>
-                <TableHead>Broken Item</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="text-xs">Submitted At</TableHead>
+                <TableHead className="text-xs">Broken Item</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -331,12 +331,12 @@ export function RecentMaintenanceTable() {
                         "MMM dd, yyyy HH:mm"
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-xs">
                       {request.brokenItem}
                     </TableCell>
-                    <TableCell>
-                      <Badge className={cn("gap-1 text-xs", config.className)}>
-                        <StatusIcon className="h-3 w-3" />
+                    <TableCell className="text-[7px]">
+                      <Badge className={cn("gap-1 text-[7px]", config.className)}>
+                        <StatusIcon className="text-[7px] h-3 w-3" />
                         {formatStatusLabel(request.status)}
                       </Badge>
                     </TableCell>
@@ -379,7 +379,7 @@ export function RecentMaintenanceTable() {
                     {formatStatusLabel(request.status)}
                   </Badge>
                 </div>
-                <p className="text-sm font-medium">{request.brokenItem}</p>
+                <p className="text-xs font-medium">{request.brokenItem}</p>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>Entry #{request.entryNumber}</span>
                   <span>
