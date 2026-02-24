@@ -292,9 +292,9 @@ export function RecentMaintenanceTable() {
               <TableRow>
                 {/* <TableHead>ID</TableHead> */}
                 {/* <TableHead>Entry #</TableHead> */}
-                <TableHead className="text-xs">Submitted At</TableHead>
-                <TableHead className="text-xs">Broken Item</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-[11px]">Submitted At</TableHead>
+                <TableHead className="text-[11px]">Broken Item</TableHead>
+                <TableHead className="text-[11px]">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -325,13 +325,13 @@ export function RecentMaintenanceTable() {
                     {/* <TableCell className="font-medium text-sm">
                       {request.entryNumber}
                     </TableCell> */}
-                    <TableCell className="text-xs text-muted-foreground">
+                    <TableCell className="text-[9px] text-muted-foreground">
                       {format(
                         new Date(request.submittedAt),
-                        "MMM dd, yyyy HH:mm"
+                        "MMM dd,yyyy"
                       )}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-[11px]">
                       {request.brokenItem}
                     </TableCell>
                     <TableCell className="text-[7px]">

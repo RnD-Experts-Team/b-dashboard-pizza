@@ -81,13 +81,9 @@ export function DailySalesByChannelChart({
         fontSize: "8px",
         labels: { colors: isDark ? "#a1a1aa" : "#71717a" },
       },
+      // Disable hover tooltip per UX request
       tooltip: {
-        theme: isDark ? "dark" : "light",
-        style: { fontSize: "8px" },
-        y: {
-          formatter: (val: number) =>
-            `$${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        },
+        enabled: false,
       },
       stroke: {
         width: 1,

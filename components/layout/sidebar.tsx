@@ -299,6 +299,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/due-keys`,
         icon: Database,
       },
+      {
+        title: t("exportImport"),
+        href: `/${locale}/dashboard/export-import`,
+        icon: FolderPlus,
+      },
     ],
   };
 

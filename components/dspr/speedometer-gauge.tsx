@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
@@ -81,7 +81,32 @@ export function SpeedometerGauge({
   className,
 }: SpeedometerGaugeProps) {
   const { resolvedTheme } = useTheme();
-  const angle = useMemo(() => v2a(value, min, max), [value, min, max]);
+  // Animated internal value — always animate from 0 -> value on each change
+  const [animValue, setAnimValue] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const from = 0;
+    const to = value;
+    const duration = 900; // ms
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    function frame(now: number) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = easeOutCubic(t);
+      setAnimValue(from + (to - from) * eased);
+      if (t < 1) {
+        raf = requestAnimationFrame(frame);
+      }
+    }
+
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
+  const angle = useMemo(() => v2a(animValue, min, max), [animValue, min, max]);
   const tip = useMemo(() => polar(NEEDLE, angle), [angle]);
   
   // Value text color: white in dark mode, light gray in light mode for contrast
@@ -173,7 +198,7 @@ export function SpeedometerGauge({
         <circle cx={CX} cy={CY} r={5} fill="#DC2626" />
         <circle cx={CX} cy={CY} r={2.5} fill="hsl(var(--background))" />
 
-        {/* Value display */}
+        {/* Value display — animate text during the initial needle animation */}
         <text
           x={CX}
           y={CY + 34}
@@ -183,7 +208,13 @@ export function SpeedometerGauge({
           fontWeight="700"
           style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.4))" }}
         >
-          {valueDisplay}
+          {(() => {
+            // Determine decimals based on provided `valueDisplay` formatting
+            const decimals = valueDisplay && valueDisplay.includes(".") ? 1 : 0;
+            // If the incoming valueDisplay contains a percent sign, keep it
+            const suffix = valueDisplay && valueDisplay.includes("%") ? "%" : "";
+            return `${animValue.toFixed(decimals)}${suffix}`;
+          })()}
         </text>
       </svg>
     </div>

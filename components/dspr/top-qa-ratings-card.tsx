@@ -156,7 +156,7 @@ export function TopQaRatingsCard() {
         <CardContent className="px-3">
           <div className="flex flex-col items-center gap-2 py-4 text-center">
             <ShieldAlert className="h-6 w-6 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">{error}</p>
+            <p className="text-[11px] text-muted-foreground">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchData}>
               <RefreshCw className="h-3.5 w-3.5 me-1.5" />
               Retry
@@ -182,7 +182,7 @@ export function TopQaRatingsCard() {
         <CardContent className="px-3">
           <div className="flex flex-col items-center gap-1.5 py-4 text-center">
             <CheckCircle2 className="h-6 w-6 text-green-500" />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               No QA rating issues found for this period.
             </p>
           </div>
@@ -236,23 +236,23 @@ export function TopQaRatingsCard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-xs w-[52%]">Entity</TableHead>
-                <TableHead className="text-right text-xs">Auto Fail</TableHead>
-                <TableHead className="text-right text-xs">Urgent</TableHead>
-                <TableHead className="text-right text-xs">Total</TableHead>
+                <TableHead className="text-[11px] w-[52%]">Entity</TableHead>
+                <TableHead className="text-right text-[11px]">Auto Fail</TableHead>
+                <TableHead className="text-right text-[11px]">Urgent</TableHead>
+                <TableHead className="text-right text-[11px]">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((item) => (
                 <TableRow key={item.entityId} className={cn(isLoading && "opacity-60")}>
-                  <TableCell className="text-xs font-medium">{item.entityLabel}</TableCell>
-                  <TableCell className="text-xs text-right">
+                  <TableCell className="text-[11px] font-medium">{item.entityLabel}</TableCell>
+                  <TableCell className="text-[11px] text-right">
                     <Badge variant="secondary">{item.autoFailCount}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-right">
+                  <TableCell className="text-[11px] text-right">
                     <Badge variant="outline">{item.urgentCount}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs text-right">
+                  <TableCell className="text-[11px] text-right">
                     <Badge>{item.totalCount}</Badge>
                   </TableCell>
                 </TableRow>
@@ -268,7 +268,7 @@ export function TopQaRatingsCard() {
               className={cn("rounded-md border p-2 space-y-1.5", isLoading && "opacity-60")}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium line-clamp-2">{item.entityLabel}</p>
+                <p className="text-[11px] font-medium line-clamp-2">{item.entityLabel}</p>
                 <Badge variant="outline" className="shrink-0">#{index + 1}</Badge>
               </div>
               <div className="flex items-center gap-1.5 text-[10px]">

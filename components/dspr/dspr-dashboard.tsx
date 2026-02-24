@@ -296,7 +296,7 @@ export function DsprDashboard() {
         imageTimeout: 5000,
       });
 
-      // Restore hidden elements
+      // Restore hidden elements .
       if (btn) btn.style.display = "";
       ignored.forEach((el) => (el.style.display = ""));
 
@@ -571,21 +571,8 @@ export function DsprDashboard() {
              <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
 
         {/* <LaborGauge value={day.labor} /> */}
-        <TopItemsList items={top.top_5_items_sales_for_day} className="sm:col-span-2 lg:col-span-1" />
-        <TopIngredientsList
-          mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
-          paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}
-          usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
-          className="sm:col-span-2 lg:col-span-1"
-        />
-
-         <HnrCard hnr={day.hnr} />
-        <LaborGauge value={22} />
-      </div>
-
-      {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <HourlyChannelsChart
+        
+<HourlyChannelsChart
           hourlyData={day.hourly_sales_and_channels}
           height={190}
           toolbar={false}
@@ -595,6 +582,19 @@ export function DsprDashboard() {
           totalSales={day.total_sales}
           height={190}
           toolbar={false}
+        />
+         <HnrCard hnr={day.hnr} />
+        <LaborGauge value={22} />
+      </div>
+
+      {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+        <TopItemsList items={top.top_5_items_sales_for_day} className="sm:col-span-2 lg:col-span-1" />
+        <TopIngredientsList
+          mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
+          paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}
+          usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
+          className="sm:col-span-2 lg:col-span-1"
         />
         <RecentMaintenanceTable />
         <TopQaRatingsCard />
