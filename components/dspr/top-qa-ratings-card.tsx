@@ -192,7 +192,7 @@ export function TopQaRatingsCard() {
   }
 
   return (
-    <Card className="py-1.5 gap-0">
+    <Card className="py-1.5 gap-0 bg-gradient-to-r from-[#CFDEE7]/60 via-[#E6F6FA]/45 to-[#FBFEFF]/30 dark:from-[#0E2A30]/30 dark:via-[#102F34]/40 dark:to-[#12363B]/50">
       <CardHeader className="pb-1 px-3">
         <div className="flex items-center justify-between gap-2">
           <div>

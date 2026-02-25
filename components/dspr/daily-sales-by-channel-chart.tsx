@@ -131,7 +131,7 @@ export function DailySalesByChannelChart({
   );
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0  bg-gradient-to-r from-violet-50/50 via-violet-100/40 to-violet-200/30 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">

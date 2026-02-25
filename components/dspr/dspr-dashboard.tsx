@@ -13,8 +13,8 @@ import {
   DailySalesByChannelChart,
   DaySummaryStats,
   HnrCard,
-  PortalCard,
-  OnTimeCard,
+  PortalOnTimeDualGauge,
+  StoreScoreCard,
   LaborGauge,
   DsprDashboardSkeleton,
   RecentMaintenanceTable,
@@ -49,6 +49,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Camera,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -266,6 +268,18 @@ export function DsprDashboard() {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // Toggle to remove section backgrounds (persisted in localStorage)
+  const [hideSectionBackgrounds, setHideSectionBackgrounds] = useState(false);
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("dspr.hideSectionBackgrounds");
+      if (v !== null) setHideSectionBackgrounds(JSON.parse(v));
+    } catch (err) {
+      // ignore
+    }
+  }, []);
+
   const handleScreenshot = useCallback(async () => {
     if (!dashboardRef.current || isCapturing) return;
     setIsCapturing(true);
@@ -323,6 +337,18 @@ export function DsprDashboard() {
       setIsCapturing(false);
     }
   }, [isCapturing, selectedStore, selectedDate]);
+
+  const toggleHideBackgrounds = useCallback(() => {
+    setHideSectionBackgrounds((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("dspr.hideSectionBackgrounds", JSON.stringify(next));
+      } catch (err) {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   // ── Initial loading (no data yet) ──────────────────────────────────────
   if (isLoading && !data) {
@@ -391,7 +417,14 @@ export function DsprDashboard() {
   const { filtering, sales, top, day } = data;
 
   return (
-    <div ref={dashboardRef} className={cn("space-y-1", isRefreshing && "relative")}>
+    <div
+      ref={dashboardRef}
+      className={cn(
+        "space-y-1",
+        isRefreshing && "relative",
+        hideSectionBackgrounds && "no-section-backgrounds"
+      )}
+    >
       {/* ── Refresh overlay bar ──────────────────────────────────── */}
       {isRefreshing && (
         <div className="absolute top-0 left-0 right-0 z-10" data-screenshot-ignore="true">
@@ -553,6 +586,29 @@ export function DsprDashboard() {
               {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
             </TooltipContent>
           </Tooltip>
+
+          {/* Toggle remove section backgrounds */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={toggleHideBackgrounds}
+                aria-pressed={hideSectionBackgrounds}
+                title={hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
+              >
+                {hideSectionBackgrounds ? (
+                  <EyeOff className="h-3 w-3" />
+                ) : (
+                  <Eye className="h-3 w-3" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -562,8 +618,10 @@ export function DsprDashboard() {
       {/* ── Weekly Sales + Portal gauges ─────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
         <SalesChart sales={sales} height={150} toolbar={false} className="lg:col-span-2" />
-        <PortalCard portal={day.portal} />
-        <OnTimeCard portal={day.portal} />
+        <StoreScoreCard daily={88} weekly={70} monthly={80} className="lg:col-span-1" />
+        {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
+        <PortalOnTimeDualGauge portal={day.portal} className="lg:col-span-1" />
+        {/* </div> */}
       </div>
 
       {/* ── HNR · Labor · Top 5 Menu Items ───────────────────────── */}
@@ -572,7 +630,7 @@ export function DsprDashboard() {
 
         {/* <LaborGauge value={day.labor} /> */}
         
-<HourlyChannelsChart
+        <HourlyChannelsChart
           hourlyData={day.hourly_sales_and_channels}
           height={190}
           toolbar={false}

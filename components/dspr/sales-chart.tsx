@@ -199,11 +199,11 @@ export function SalesChart({
   if (series.length === 0) return null;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0  bg-gradient-to-r from-violet-50/50 via-violet-100/40 to-violet-200/30 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <div className="rounded p-0.5 bg-blue-500/15 dark:bg-blue-500/20">
-            <svg className="h-3 w-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">
+            <svg className="h-3 w-3 text-violet-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
           </div>
           {title}
         </CardTitle>

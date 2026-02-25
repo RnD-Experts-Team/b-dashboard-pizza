@@ -48,6 +48,27 @@ const methodColors: Record<HttpMethod, string> = {
   ANY: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
 };
 
+// Normalize API response (snake_case) to the UI-friendly camelCase shape
+const normalizeRule = (r: any) => ({
+  id: r.id,
+  service: r.service,
+  method: (r.method || r.http_method) as HttpMethod,
+  pathDsl: r.path_dsl ?? r.pathDsl ?? r.path_dsl ?? r.route_name ?? r.routeName ?? "",
+  routeName: r.route_name ?? r.routeName ?? "",
+  rolesAny: r.roles_any ?? r.rolesAny ?? [],
+  permissionsAny: r.permissions_any ?? r.permissionsAny ?? [],
+  permissionsAll: r.permissions_all ?? r.permissionsAll ?? [],
+  priority: r.priority,
+  isActive: r.is_active ?? r.isActive ?? false,
+  storeScopeMode: r.store_scope_mode ?? r.storeScopeMode,
+  storeIdSources: r.store_id_sources ?? r.storeIdSources,
+  storeMatchPolicy: r.store_match_policy ?? r.storeMatchPolicy,
+  storeAllowsEmpty: r.store_allows_empty ?? r.storeAllowsEmpty,
+  storeAllAccessRolesAny: r.store_all_access_roles_any ?? r.storeAllAccessRolesAny,
+  storeAllAccessPermissionsAny:
+    r.store_all_access_permissions_any ?? r.storeAllAccessPermissionsAny,
+});
+
 export default function AuthRulesPage() {
   const t = useTranslations("authRules");
   const tCommon = useTranslations("common");
@@ -66,10 +87,11 @@ export default function AuthRulesPage() {
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [ruleToDelete, setRuleToDelete] = useState<AuthRule | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<any | null>(null);
 
-  const handleOpenTest = (rule: AuthRule) => {
-    setTestPathDsl(rule.pathDsl || rule.path_dsl || "");
+  const handleOpenTest = (rule: any) => {
+    const nr = normalizeRule(rule);
+    setTestPathDsl(nr.pathDsl || "");
     setTestPath("");
     clearTestResult();
     setTestDialogOpen(true);
@@ -80,8 +102,8 @@ export default function AuthRulesPage() {
     await testRule({ pathDsl: testPathDsl, testPath: testPath });
   };
 
-  const handleOpenDelete = (rule: AuthRule) => {
-    setRuleToDelete(rule);
+  const handleOpenDelete = (rule: any) => {
+    setRuleToDelete(normalizeRule(rule));
     setDeleteDialogOpen(true);
   };
 
@@ -101,70 +123,84 @@ export default function AuthRulesPage() {
     {
       key: "service",
       header: t("columns.service"),
-      cell: (rule: AuthRule) => (
-        <Badge variant="outline">{rule.service}</Badge>
-      ),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        return <Badge variant="outline">{nr.service}</Badge>;
+      },
     },
     {
       key: "method",
       header: t("columns.method"),
-      cell: (rule: AuthRule) => (
-        <span
-          className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
-            methodColors[rule.method] || ""
-          }`}
-        >
-          {rule.method}
-        </span>
-      ),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        return (
+          <span
+            className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
+              methodColors[nr.method] || ""
+            }`}
+          >
+            {nr.method}
+          </span>
+        );
+      },
     },
     {
       key: "path",
       header: t("columns.path"),
-      cell: (rule: AuthRule) => (
-        <code className="rounded bg-muted px-2 py-1 text-sm">
-          {rule.pathDsl || rule.routeName || "-"}
-        </code>
-      ),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        return (
+          <code className="rounded bg-muted px-2 py-1 text-sm">
+            {nr.pathDsl || nr.routeName || "-"}
+          </code>
+        );
+      },
     },
     {
       key: "authorization",
       header: t("columns.authorization"),
-      cell: (rule: AuthRule) => (
-        <div className="flex flex-wrap gap-1">
-          {rule.rolesAny && rule.rolesAny.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {t("rolesAny", { count: rule.rolesAny.length })}
-            </Badge>
-          )}
-          {rule.permissionsAny && rule.permissionsAny.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {t("permissionsAny", { count: rule.permissionsAny.length })}
-            </Badge>
-          )}
-          {rule.permissionsAll && rule.permissionsAll.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {t("permissionsAll", { count: rule.permissionsAll.length })}
-            </Badge>
-          )}
-        </div>
-      ),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        return (
+          <div className="flex flex-wrap gap-1">
+            {nr.rolesAny && nr.rolesAny.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {t("rolesAny", { count: nr.rolesAny.length })}
+              </Badge>
+            )}
+            {nr.permissionsAny && nr.permissionsAny.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {t("permissionsAny", { count: nr.permissionsAny.length })}
+              </Badge>
+            )}
+            {nr.permissionsAll && nr.permissionsAll.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {t("permissionsAll", { count: nr.permissionsAll.length })}
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "priority",
       header: t("columns.priority"),
-      cell: (rule: AuthRule) => (
-        <span className="text-muted-foreground">{rule.priority}</span>
-      ),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        return <span className="text-muted-foreground">{nr.priority}</span>;
+      },
     },
     {
       key: "status",
       header: t("columns.status"),
-      cell: (rule: AuthRule) => (
-        <Badge variant={rule.isActive ? "default" : "secondary"}>
-          {rule.isActive ? t("status.active") : t("status.inactive")}
-        </Badge>
-      ),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        return (
+          <Badge variant={nr.isActive ? "default" : "secondary"}>
+            {nr.isActive ? t("status.active") : t("status.inactive")}
+          </Badge>
+        );
+      },
     },
     {
       key: "actions",

@@ -48,6 +48,13 @@ interface AuthRuleFormData {
   permissionsAll: string[];
   priority: number;
   isActive: boolean;
+  // store scope fields
+  storeScopeMode?: string;
+  storeIdSources?: string[];
+  storeMatchPolicy?: string;
+  storeAllowsEmpty?: boolean;
+  storeAllAccessRolesAny?: string[];
+  storeAllAccessPermissionsAny?: string[];
 }
 
 interface AuthRuleFormProps {
@@ -85,9 +92,18 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
     permissionsAll: rule?.permissionsAll || rule?.permissions_all || [],
     priority: rule?.priority || 1,
     isActive: rule?.isActive ?? rule?.is_active ?? true,
+    storeScopeMode: rule?.storeScopeMode || rule?.store_scope_mode || "none",
+    storeIdSources: rule?.storeIdSources || rule?.store_id_sources || [],
+    storeMatchPolicy: rule?.storeMatchPolicy || rule?.store_match_policy || "all",
+    storeAllowsEmpty: rule?.storeAllowsEmpty ?? rule?.store_allows_empty ?? false,
+    storeAllAccessRolesAny:
+      rule?.storeAllAccessRolesAny || rule?.store_all_access_roles_any || [],
+    storeAllAccessPermissionsAny:
+      rule?.storeAllAccessPermissionsAny || rule?.store_all_access_permissions_any || [],
   });
 
   const [newPermission, setNewPermission] = useState("");
+  const [newStorePermission, setNewStorePermission] = useState("");
   const [validationError, setValidationError] = useState<string>("");
 
   const handleChange = (field: keyof AuthRuleFormData, value: unknown) => {
@@ -130,6 +146,48 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
     }));
   };
 
+  // Store-scoped access handlers
+  const handleAddStoreRole = (roleName: string) => {
+    if (!formData.storeAllAccessRolesAny?.includes(roleName)) {
+      setFormData((prev) => ({
+        ...prev,
+        storeAllAccessRolesAny: [...(prev.storeAllAccessRolesAny || []), roleName],
+      }));
+    }
+  };
+
+  const handleRemoveStoreRole = (roleName: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      storeAllAccessRolesAny:
+        prev.storeAllAccessRolesAny?.filter((name) => name !== roleName) || [],
+    }));
+  };
+
+  const handleAddStorePermission = () => {
+    if (
+      newStorePermission &&
+      !formData.storeAllAccessPermissionsAny?.includes(newStorePermission)
+    ) {
+      setFormData((prev) => ({
+        ...prev,
+        storeAllAccessPermissionsAny: [
+          ...(prev.storeAllAccessPermissionsAny || []),
+          newStorePermission,
+        ],
+      }));
+      setNewStorePermission("");
+    }
+  };
+
+  const handleRemoveStorePermission = (permission: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      storeAllAccessPermissionsAny:
+        prev.storeAllAccessPermissionsAny?.filter((p) => p !== permission) || [],
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -164,6 +222,12 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
           permissionsAll: formData.permissionsAll && formData.permissionsAll.length > 0 ? formData.permissionsAll : [],
           priority: formData.priority,
           isActive: formData.isActive,
+          storeScopeMode: formData.storeScopeMode,
+          storeIdSources: formData.storeIdSources,
+          storeMatchPolicy: formData.storeMatchPolicy,
+          storeAllowsEmpty: formData.storeAllowsEmpty,
+          storeAllAccessRolesAny: formData.storeAllAccessRolesAny && formData.storeAllAccessRolesAny.length > 0 ? formData.storeAllAccessRolesAny : [],
+          storeAllAccessPermissionsAny: formData.storeAllAccessPermissionsAny && formData.storeAllAccessPermissionsAny.length > 0 ? formData.storeAllAccessPermissionsAny : [],
         };
         result = await updateRule(updatePayload);
       } else {
@@ -178,6 +242,12 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               permissionsAll: formData.permissionsAll && formData.permissionsAll.length > 0 ? formData.permissionsAll : [],
               priority: formData.priority,
               isActive: formData.isActive,
+              storeScopeMode: formData.storeScopeMode,
+              storeIdSources: formData.storeIdSources,
+              storeMatchPolicy: formData.storeMatchPolicy,
+              storeAllowsEmpty: formData.storeAllowsEmpty,
+              storeAllAccessRolesAny: formData.storeAllAccessRolesAny && formData.storeAllAccessRolesAny.length > 0 ? formData.storeAllAccessRolesAny : [],
+              storeAllAccessPermissionsAny: formData.storeAllAccessPermissionsAny && formData.storeAllAccessPermissionsAny.length > 0 ? formData.storeAllAccessPermissionsAny : [],
             }
           : {
               service: formData.service.trim(),
@@ -188,6 +258,12 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               permissionsAll: formData.permissionsAll && formData.permissionsAll.length > 0 ? formData.permissionsAll : [],
               priority: formData.priority,
               isActive: formData.isActive,
+              storeScopeMode: formData.storeScopeMode,
+              storeIdSources: formData.storeIdSources,
+              storeMatchPolicy: formData.storeMatchPolicy,
+              storeAllowsEmpty: formData.storeAllowsEmpty,
+              storeAllAccessRolesAny: formData.storeAllAccessRolesAny && formData.storeAllAccessRolesAny.length > 0 ? formData.storeAllAccessRolesAny : [],
+              storeAllAccessPermissionsAny: formData.storeAllAccessPermissionsAny && formData.storeAllAccessPermissionsAny.length > 0 ? formData.storeAllAccessPermissionsAny : [],
             };
         result = await createRule(payload);
       }
@@ -302,6 +378,155 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                 checked={formData.isActive}
                 onCheckedChange={(checked) => handleChange("isActive", checked)}
               />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("form.storeScope")}</CardTitle>
+          <CardDescription>{t("form.storeScopeDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="storeScopeMode">{t("form.storeScopeMode")}</Label>
+              <Select
+                value={formData.storeScopeMode}
+                onValueChange={(value: string) => handleChange("storeScopeMode", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">none</SelectItem>
+                  <SelectItem value="scoped">scoped</SelectItem>
+                  <SelectItem value="all_stores">all_stores</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">{t("form.storeScopeModeHint")}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("form.storeIdSources")}</Label>
+              <div className="flex gap-4">
+                {(["path", "query", "body"] as string[]).map((src) => (
+                  <label key={src} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.storeIdSources?.includes(src)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFormData((prev) => ({
+                          ...prev,
+                          storeIdSources: checked
+                            ? [...(prev.storeIdSources || []), src]
+                            : (prev.storeIdSources || []).filter((s) => s !== src),
+                        }));
+                      }}
+                    />
+                    <span className="text-sm text-muted-foreground">{src}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="storeMatchPolicy">{t("form.storeMatchPolicy")}</Label>
+              <Select
+                value={formData.storeMatchPolicy}
+                onValueChange={(value: string) => handleChange("storeMatchPolicy", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all</SelectItem>
+                  <SelectItem value="any">any</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between pt-6">
+              <div className="space-y-0.5">
+                <Label>{t("form.storeAllowsEmpty")}</Label>
+                <p className="text-sm text-muted-foreground">{t("form.storeAllowsEmptyHint")}</p>
+              </div>
+              <Switch
+                checked={!!formData.storeAllowsEmpty}
+                onCheckedChange={(checked) => handleChange("storeAllowsEmpty", checked)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label>{t("form.storeAllAccessRolesAny")}</Label>
+            <p className="text-sm text-muted-foreground">{t("form.storeAllAccessRolesAnyHint")}</p>
+            <div className="flex flex-wrap gap-2">
+              {formData.storeAllAccessRolesAny?.map((roleName) => (
+                <Badge key={roleName} variant="secondary">
+                  {roleName}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveStoreRole(roleName)}
+                    className="ms-1 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <Select onValueChange={handleAddStoreRole}>
+              <SelectTrigger className="w-50">
+                <SelectValue placeholder={t("form.addRole")} />
+              </SelectTrigger>
+              <SelectContent>
+                {roles
+                  .filter((r) => !formData.storeAllAccessRolesAny?.includes(r.name))
+                  .map((role) => (
+                    <SelectItem key={role.id} value={role.name}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-3">
+            <Label>{t("form.storeAllAccessPermissionsAny")}</Label>
+            <p className="text-sm text-muted-foreground">{t("form.storeAllAccessPermissionsAnyHint")}</p>
+            <div className="flex flex-wrap gap-2">
+              {formData.storeAllAccessPermissionsAny?.map((permission) => (
+                <Badge key={permission} variant="secondary">
+                  {permission}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveStorePermission(permission)}
+                    className="ms-1 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={newStorePermission}
+                onChange={(e) => setNewStorePermission(e.target.value)}
+                placeholder={t("form.permissionPlaceholder")}
+                className="w-50"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleAddStorePermission}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </CardContent>

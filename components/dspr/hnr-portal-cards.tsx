@@ -89,7 +89,7 @@ export function HnrCard({ hnr, className }: HnrCardProps) {
   const pct = hnr.hnr_promise_met_percent;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-orange-50/50 via-orange-100/40 to-orange-200/30 dark:from-orange-950/20 dark:via-orange-900/40 dark:to-orange-800/50", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
@@ -151,11 +151,11 @@ export function PortalCard({ portal, className }: PortalCardProps) {
   const pct = portal.put_into_portal_percent;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5  gap-0 bg-gradient-to-r from-emerald-50/50 via-emerald-100/40 to-emerald-200/30 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <div className="rounded p-0.5 bg-blue-500/15 dark:bg-blue-500/20">
-            <ShieldCheck className="h-3 w-3 text-blue-500" />
+          <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">
+            <ShieldCheck className="h-3 w-3 text-emerald-500" />
           </div>
           Put Into Portal 
           <Tooltip>
@@ -198,7 +198,7 @@ export function OnTimeCard({ portal, className }: OnTimeCardProps) {
   const pct = portal.in_portal_on_time_percent;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0  bg-gradient-to-r from-emerald-50/50 via-emerald-100/40 to-emerald-200/30 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50  ", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">

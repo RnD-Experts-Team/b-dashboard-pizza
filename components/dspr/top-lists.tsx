@@ -34,7 +34,7 @@ export function TopItemsList({
   const maxSales = Math.max(...items.map((i) => i.gross_sales), 1);
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA]/60 via-[#F7E8D9]/45 to-[#FFF7F2]/30 dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", className)}>
       <CardHeader className="pb-0.5 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
@@ -141,7 +141,7 @@ export function TopIngredientsList({
   };
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA]/60 via-[#F7E8D9]/45 to-[#FFF7F2]/30 dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", className)}>
       <CardHeader className="pb-0.5 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-blue-500/15 dark:bg-blue-500/20">

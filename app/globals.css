@@ -183,3 +183,16 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
 }
+
+/* DSPR: when `.no-section-backgrounds` is present on the dashboard wrapper,
+   remove gradient background-images applied by Tailwind utilities from
+   card slots so sections render without gradients. */
+.no-section-backgrounds [data-slot="card"] {
+  background-image: none !important;
+}
+
+/* Ensure dark-mode variants are also neutralized */
+.dark .no-section-backgrounds [data-slot="card"] {
+  background-image: none !important;
+}
+

@@ -31,6 +31,12 @@ interface SpeedometerGaugeProps {
   /** Formatted display value (e.g. "21%") */
   valueDisplay: string;
   className?: string;
+  /** Optional secondary metric to render as a second needle */
+  secondaryValue?: number;
+  /** Color for the secondary needle / legend */
+  secondaryColor?: string;
+  /** Short label for the secondary metric (shown in the legend) */
+  secondaryLabel?: string;
 }
 
 /* ─── Layout constants ──────────────────────────────────────── */
@@ -42,6 +48,7 @@ const ARC_W = 9;      // arc stroke width
 const START = 135;    // gauge start angle (SVG deg, bottom-left)
 const SWEEP = 270;    // total sweep degrees
 const NEEDLE = 46;    // needle length
+const NEEDLE2 = 40;   // secondary needle length (slightly shorter)
 
 /* ─── Geometry helpers ──────────────────────────────────────── */
 
@@ -79,10 +86,15 @@ export function SpeedometerGauge({
   statusColor,
   valueDisplay,
   className,
+  secondaryValue,
+  secondaryColor,
+  secondaryLabel,
 }: SpeedometerGaugeProps) {
   const { resolvedTheme } = useTheme();
   // Animated internal value — always animate from 0 -> value on each change
   const [animValue, setAnimValue] = useState(0);
+
+  const [animSecondary, setAnimSecondary] = useState<number | null>(null);
 
   useEffect(() => {
     let raf = 0;
@@ -106,8 +118,32 @@ export function SpeedometerGauge({
     return () => cancelAnimationFrame(raf);
   }, [value]);
 
+  // Animate secondary needle separately when provided
+  useEffect(() => {
+    if (secondaryValue === undefined || secondaryValue === null) {
+      setAnimSecondary(null);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const from = 0;
+    const to = secondaryValue;
+    const duration = 900;
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    function frame(now: number) {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = easeOutCubic(t);
+      setAnimSecondary(from + (to - from) * eased);
+      if (t < 1) raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [secondaryValue]);
+
   const angle = useMemo(() => v2a(animValue, min, max), [animValue, min, max]);
   const tip = useMemo(() => polar(NEEDLE, angle), [angle]);
+  const angle2 = useMemo(() => (animSecondary == null ? null : v2a(animSecondary, min, max)), [animSecondary, min, max]);
+  const tip2 = useMemo(() => (angle2 == null ? null : polar(NEEDLE2, angle2)), [angle2]);
   
   // Value text color: white in dark mode, light gray in light mode for contrast
   const valueTextColor = resolvedTheme === "dark" ? "#ffffff" : "#f5f5f5";
@@ -182,24 +218,39 @@ export function SpeedometerGauge({
           />
         ))}
 
-        {/* Needle */}
+        {/* Primary Needle */}
         <line
           x1={CX}
           y1={CY}
           x2={tip.x}
           y2={tip.y}
-          stroke="#DC2626"
+          stroke={statusColor || "#DC2626"}
           strokeWidth={2.5}
           strokeLinecap="round"
           style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }}
         />
 
-        {/* Center hub */}
-        <circle cx={CX} cy={CY} r={5} fill="#DC2626" />
-        <circle cx={CX} cy={CY} r={2.5} fill="hsl(var(--background))" />
+        {/* Secondary Needle (optional) */}
+        {tip2 && (
+          <line
+            x1={CX}
+            y1={CY}
+            x2={tip2.x}
+            y2={tip2.y}
+            stroke={secondaryColor || "#2563EB"}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeDasharray="2 1"
+            opacity={0.95}
+          />
+        )}
+
+        {/* Center hub (neutral) */}
+        <circle cx={CX} cy={CY} r={6} fill={statusColor || "#DC2626"} opacity={0.95} />
+        <circle cx={CX} cy={CY} r={3} fill="hsl(var(--background))" />
 
         {/* Value display — animate text during the initial needle animation */}
-        <text
+        {/* <text
           x={CX}
           y={CY + 34}
           textAnchor="middle"
@@ -209,14 +260,28 @@ export function SpeedometerGauge({
           style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.4))" }}
         >
           {(() => {
-            // Determine decimals based on provided `valueDisplay` formatting
             const decimals = valueDisplay && valueDisplay.includes(".") ? 1 : 0;
-            // If the incoming valueDisplay contains a percent sign, keep it
             const suffix = valueDisplay && valueDisplay.includes("%") ? "%" : "";
             return `${animValue.toFixed(decimals)}${suffix}`;
           })()}
-        </text>
+        </text> */}
       </svg>
+
+      {/* Legend for primary/secondary (compact) */}
+      {(secondaryLabel || angle2 != null) && (
+        <div className="flex items-center justify-center gap-3 mt-1">
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ background: statusColor || "#DC2626" }} />
+            <span className="text-[10px] text-muted-foreground">{valueDisplay}</span>
+          </div>
+          {angle2 != null && (
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full" style={{ background: secondaryColor || "#2563EB" }} />
+              <span className="text-[10px] text-muted-foreground">{(animSecondary ?? 0).toFixed(1)}{valueDisplay && valueDisplay.includes('%') ? '%' : ''}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

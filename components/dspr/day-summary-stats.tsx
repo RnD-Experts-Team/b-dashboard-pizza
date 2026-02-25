@@ -41,18 +41,7 @@ type StatConfig = {
 
 export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
   const stats: StatConfig[] = [
-    {
-      label: "Store Score",
-      shortLabel: "Store Score",
-      value: "88 %", // Placeholder value
-      rawValue: 0,
-      icon: Star,
-      color: "text-yellow-600 dark:text-yellow-400",
-      iconBg: "bg-yellow-500/15 dark:bg-yellow-500/20",
-      borderColor: "border-l-yellow-500",
-      tooltip: "Store score based on various performance metrics",
-      isNegative: false,
-    },
+    
     {
       label: "Total Cash Sales",
       shortLabel: "Cash Sales",
@@ -155,7 +144,7 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
   ];
 
   return (
-    <div className={cn("grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-9 gap-1", className)}>
+    <div className={cn("grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-1", className)}>
       {stats.map((stat) => {
         const Icon = stat.icon;
         return (
