@@ -23,6 +23,7 @@ interface AuthRulesState {
   isLoading: boolean;
   isCreating: boolean;
   isUpdating: boolean;
+  isToggling: boolean;
   isDeleting: boolean;
   isTesting: boolean;
 
@@ -43,6 +44,7 @@ interface AuthRulesState {
   createRule: (data: CreateAuthRulePayload) => Promise<AuthRule>;
   updateRule: (id: string, data: UpdateAuthRulePayload) => Promise<AuthRule>;
   deleteRule: (id: string) => Promise<void>;
+  toggleStatus: (id: string) => Promise<void>;
   testRule: (data: TestAuthRulePayload) => Promise<TestAuthRuleResult>;
   fetchServices: () => Promise<void>;
   setFilters: (filters: Partial<AuthRuleFilters>) => void;
@@ -61,6 +63,7 @@ const initialState = {
   isLoading: false,
   isCreating: false,
   isUpdating: false,
+  isToggling: false,
   isDeleting: false,
   isTesting: false,
   error: null,
@@ -165,6 +168,31 @@ export const useAuthRulesStore = create<AuthRulesState>()((set, get) => ({
       const message =
         error instanceof Error ? error.message : "Failed to delete auth rule";
       set({ deleteError: message, isDeleting: false });
+      throw error;
+    }
+  },
+
+  toggleStatus: async (id: string) => {
+    set({ isToggling: true, error: null });
+    try {
+      const response = await authRuleService.toggleAuthRuleStatus(id);
+      if (response.success) {
+        set((state) => ({
+          rules: state.rules.map((r) =>
+            String(r.id) === String(id) ? { ...r, isActive: !r.isActive } : r
+          ),
+          currentRule:
+            String(state.currentRule?.id) === String(id)
+              ? (({ ...state.currentRule, isActive: !state.currentRule!.isActive }) as AuthRule)
+              : state.currentRule,
+          isToggling: false,
+        }));
+        return;
+      }
+      throw new Error(response.message || "Failed to toggle auth rule status");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to toggle auth rule status";
+      set({ error: message, isToggling: false });
       throw error;
     }
   },

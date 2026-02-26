@@ -617,9 +617,9 @@ export function DsprDashboard() {
 
       {/* ── Weekly Sales + Portal gauges ─────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
-        <SalesChart sales={sales} height={150} toolbar={false} className="lg:col-span-2" />
-        <StoreScoreCard daily={88} weekly={70} monthly={80} className="lg:col-span-1" />
+        <SalesChart sales={sales} height={190} toolbar={false} className="lg:col-span-2" />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
+        <StoreScoreCard daily={88} weekly={70} monthly={80} className="lg:col-span-1" />
         <PortalOnTimeDualGauge portal={day.portal} className="lg:col-span-1" />
         {/* </div> */}
       </div>

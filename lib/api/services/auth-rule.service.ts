@@ -174,6 +174,16 @@ export const authRuleService = {
   },
 
   /**
+   * Toggle active status for an auth rule
+   */
+  toggleAuthRuleStatus: async (id: string): Promise<ApiResponse<{ success: boolean }>> => {
+    const { data } = await axiosClient.post<{ success: boolean; message?: string }>(
+      `/auth-rules/${id}/toggle-status`
+    );
+    return { success: data.success, message: data.message, data: { success: data.success } };
+  },
+
+  /**
    * Get available services for auth rules
    */
   getServices: async (): Promise<ApiResponse<string[]>> => {

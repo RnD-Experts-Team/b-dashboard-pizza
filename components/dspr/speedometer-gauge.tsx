@@ -49,6 +49,9 @@ const START = 135;    // gauge start angle (SVG deg, bottom-left)
 const SWEEP = 270;    // total sweep degrees
 const NEEDLE = 46;    // needle length
 const NEEDLE2 = 40;   // secondary needle length (slightly shorter)
+// Default needle colors
+const DEFAULT_PRIMARY_NEEDLE = "#DC2626"; // red
+const DEFAULT_SECONDARY_NEEDLE = "#22C55E"; // green
 
 /* ─── Geometry helpers ──────────────────────────────────────── */
 
@@ -146,7 +149,7 @@ export function SpeedometerGauge({
   const tip2 = useMemo(() => (angle2 == null ? null : polar(NEEDLE2, angle2)), [angle2]);
   
   // Value text color: white in dark mode, light gray in light mode for contrast
-  const valueTextColor = resolvedTheme === "dark" ? "#ffffff" : "#f5f5f5";
+  const valueTextColor = resolvedTheme === "dark" ? "#ffffff" : "#747474";
 
   // Build zone arc paths
   const zoneArcs = useMemo(
@@ -224,7 +227,7 @@ export function SpeedometerGauge({
           y1={CY}
           x2={tip.x}
           y2={tip.y}
-          stroke={statusColor || "#DC2626"}
+          stroke={statusColor || DEFAULT_PRIMARY_NEEDLE}
           strokeWidth={2.5}
           strokeLinecap="round"
           style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }}
@@ -237,7 +240,7 @@ export function SpeedometerGauge({
             y1={CY}
             x2={tip2.x}
             y2={tip2.y}
-            stroke={secondaryColor || "#2563EB"}
+            stroke={secondaryColor || DEFAULT_SECONDARY_NEEDLE}
             strokeWidth={2}
             strokeLinecap="round"
             strokeDasharray="2 1"
@@ -246,38 +249,38 @@ export function SpeedometerGauge({
         )}
 
         {/* Center hub (neutral) */}
-        <circle cx={CX} cy={CY} r={6} fill={statusColor || "#DC2626"} opacity={0.95} />
+        <circle cx={CX} cy={CY} r={6} fill={statusColor || DEFAULT_PRIMARY_NEEDLE} opacity={0.95} />
         <circle cx={CX} cy={CY} r={3} fill="hsl(var(--background))" />
 
         {/* Value display — animate text during the initial needle animation */}
-        {/* <text
+        <text
           x={CX}
           y={CY + 34}
           textAnchor="middle"
           fill={valueTextColor}
           fontSize="10"
           fontWeight="700"
-          style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.4))" }}
+          style={ { filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.4))" }}
         >
           {(() => {
             const decimals = valueDisplay && valueDisplay.includes(".") ? 1 : 0;
             const suffix = valueDisplay && valueDisplay.includes("%") ? "%" : "";
             return `${animValue.toFixed(decimals)}${suffix}`;
           })()}
-        </text> */}
+        </text>
       </svg>
 
       {/* Legend for primary/secondary (compact) */}
       {(secondaryLabel || angle2 != null) && (
         <div className="flex items-center justify-center gap-3 mt-1">
           <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full" style={{ background: statusColor || "#DC2626" }} />
-            <span className="text-[10px] text-muted-foreground">{valueDisplay}</span>
+            {/* <span className="w-2 h-2 rounded-full" style={{ background: statusColor || DEFAULT_PRIMARY_NEEDLE }} /> */}
+            {/* <span className="text-[10px] text-muted-foreground">{valueDisplay}</span> */}
           </div>
           {angle2 != null && (
             <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full" style={{ background: secondaryColor || "#2563EB" }} />
-              <span className="text-[10px] text-muted-foreground">{(animSecondary ?? 0).toFixed(1)}{valueDisplay && valueDisplay.includes('%') ? '%' : ''}</span>
+              {/* <span className="w-2 h-2 rounded-full" style={{ background: secondaryColor || DEFAULT_SECONDARY_NEEDLE }} /> */}
+              <span className="text-[10px] text-muted-foreground">{secondaryLabel ? `${secondaryLabel} ${(animSecondary ?? 0).toFixed(1)}${valueDisplay && valueDisplay.includes('%') ? '%' : ''}` : `${(animSecondary ?? 0).toFixed(1)}${valueDisplay && valueDisplay.includes('%') ? '% On Time' : ''}`}</span>
             </div>
           )}
         </div>

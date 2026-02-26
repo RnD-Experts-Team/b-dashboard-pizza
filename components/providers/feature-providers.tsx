@@ -12,6 +12,7 @@
 import type { ReactNode } from "react";
 import { ThemeProvider } from "./theme-provider";
 import { ThemeSyncProvider } from "./theme-sync-provider";
+import { NextThemeProvider, ThemeAnimationType } from "@space-man/react-theme-animation";
 import { I18nClientProvider } from "./i18n-client-provider";
 import { isFeatureEnabled } from "@/lib/config";
 
@@ -55,9 +56,19 @@ export function ConditionalThemeProvider({
       };
 
   return (
-    <ThemeProvider {...themeProps}>
-      <ThemeSyncProvider>{children}</ThemeSyncProvider>
-    </ThemeProvider>
+    <NextThemeProvider
+      defaultTheme={themeProps.defaultTheme as any}
+      attribute="class"
+      storageKey="theme-storage"
+      defaultColorTheme="default"
+      colorThemePrefix="theme-"
+      animationType={ThemeAnimationType.BLUR_CIRCLE}
+      duration={750}
+    >
+      <ThemeProvider {...themeProps}>
+        <ThemeSyncProvider>{children}</ThemeSyncProvider>
+      </ThemeProvider>
+    </NextThemeProvider>
   );
 }
 

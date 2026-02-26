@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
 import { Breadcrumbs } from "./breadcrumbs";
 import { Feature } from "@/lib/config";
 
@@ -44,7 +44,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
       <Feature name="search">
         <div className="hidden w-full max-w-sm md:block">
           <div className="relative">
-            <Search className="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute inset-s-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
               placeholder={t("search")}

@@ -18,7 +18,7 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
   const secondary = portal.in_portal_on_time_percent;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-emerald-50/50 via-emerald-100/40 to-emerald-200/30 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-emerald-50/50 via-emerald-100/40 to-emerald-200/30 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">
@@ -30,7 +30,7 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
               <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
             </TooltipTrigger>
             <TooltipContent className="max-w-50">
-              Combined view: portal usage and on-time rate in one card
+               Portal Usage (Red) and on-time (Green)
             </TooltipContent>
           </Tooltip>
         </CardTitle>
@@ -39,11 +39,11 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
         <SpeedometerGauge
           value={primary}
           secondaryValue={secondary}
-          secondaryColor="#EF4444"
-          secondaryLabel="On Time"
+          secondaryColor="#22C55E"
+          secondaryLabel=""
           zones={PERFORMANCE_ZONES}
           statusLabel={getPerformanceLabel(primary)}
-          statusColor={getPerformanceColor(primary)}
+          statusColor="#DC2626"
           valueDisplay={`${primary.toFixed(1)}%`}
         />
 

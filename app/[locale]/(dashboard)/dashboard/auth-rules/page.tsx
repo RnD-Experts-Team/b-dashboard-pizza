@@ -77,7 +77,7 @@ export default function AuthRulesPage() {
   const locale = (params?.locale as string) || "en";
 
   const { rules, isLoading, handleSearch, refetch } = useAuthRules();
-  const { deleteRule, isDeleting } = useAuthRulesStore();
+  const { deleteRule, isDeleting, toggleStatus, isToggling } = useAuthRulesStore();
   const { testRule, testResult, isTesting, error: testError, clearTestResult } = useTestAuthRule();
 
   // Test dialog state
@@ -224,6 +224,25 @@ export default function AuthRulesPage() {
             <DropdownMenuItem onClick={() => handleOpenTest(rule)}>
               <TestTube className="me-2 h-4 w-4" />
               {t("actions.test")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                const nr = normalizeRule(rule as any);
+                try {
+                  await toggleStatus(String(nr.id));
+                  refetch();
+                } catch {
+                  // store handles errors
+                }
+              }}
+              disabled={isToggling}
+            >
+              {normalizeRule(rule as any).isActive ? (
+                <XCircle className="me-2 h-4 w-4" />
+              ) : (
+                <CheckCircle2 className="me-2 h-4 w-4" />
+              )}
+              {normalizeRule(rule as any).isActive ? t("actions.deactivate") : t("actions.activate")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() =>
