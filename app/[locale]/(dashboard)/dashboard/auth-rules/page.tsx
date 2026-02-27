@@ -287,7 +287,7 @@ export default function AuthRulesPage() {
         emptyMessage={t("noRules")}
       />
 
-      {/* Test Rule Dialog */}
+      {/* Test Rule Dialog o */}
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
         <DialogContent>
           <DialogHeader>
