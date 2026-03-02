@@ -10,6 +10,13 @@ const noopStorage = {
 import type { AxiosError } from "axios";
 import { authService } from "@/lib/api/services/auth.service";
 import type { AuthUser, LoginCredentials, AuthUserStore } from "@/types/auth.types";
+import type { AuthRule } from "@/types/auth-rule.types";
+import {
+  canAccess as canAccessFn,
+  normalizeAuthPermissions,
+  type CanAccessParams,
+} from "./can-access";
+import { MOCK_AUTH_RULES } from "./mock-auth-rules";
 
 interface AuthState {
   // User data
@@ -19,6 +26,19 @@ interface AuthState {
   // Derived permission/role arrays for quick lookup
   permissions: string[];
   roles: string[];
+
+  // ── Rule-based authorization state ──────────────────────────────────────
+  /** Flat set of global permission names (from global_roles[].permissions[]) */
+  globalPermissions: Set<string>;
+  /** Per-store permission sets (from stores[].effective_permissions[]) */
+  storePermissions: Record<string, Set<string>>;
+  /**
+   * Auth rules used by canAccessRoute().
+   * Currently populated from MOCK_AUTH_RULES.
+   * TODO: replace with live GET /api/v1/auth-rules?per_page=1000 call.
+   */
+  authRules: AuthRule[];
+  // ────────────────────────────────────────────────────────────────────────
   
   // Auth status
   isAuthenticated: boolean;
@@ -33,7 +53,7 @@ interface AuthState {
   checkAuth: () => Promise<void>;
   initialize: () => void;
   
-  // Permission helpers
+  // Permission helpers (legacy — checks flat `permissions` array)
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
   hasAllPermissions: (permissions: string[]) => boolean;
@@ -42,6 +62,12 @@ interface AuthState {
   hasAllRoles: (roles: string[]) => boolean;
   isSuperAdmin: () => boolean;
   canAccess: (requiredPermissions?: string[], requiredRoles?: string[]) => boolean;
+
+  /**
+   * Rule-based authorization check using auth rules + normalized permissions.
+   * Use this for dynamic UI rendering decisions.
+   */
+  canAccessRoute: (params: CanAccessParams) => boolean;
   
   // Store helpers
   getUserStores: () => AuthUserStore[];
@@ -113,6 +139,9 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       permissions: [],
       roles: [],
+      globalPermissions: new Set<string>(),
+      storePermissions: {},
+      authRules: MOCK_AUTH_RULES,
       isAuthenticated: false,
       isLoading: false,
       isInitialized: false,
@@ -123,11 +152,15 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.login(credentials);
           if (response.success) {
             const user = response.data.user;
+            const { globalPermissions, storePermissions } =
+              normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]);
             set({
               user,
               token: response.data.token,
               permissions: extractPermissions(user),
               roles: extractRoles(user),
+              globalPermissions,
+              storePermissions,
               isAuthenticated: true,
               isLoading: false,
             });
@@ -149,16 +182,22 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           permissions: [],
           roles: [],
+          globalPermissions: new Set<string>(),
+          storePermissions: {},
           isAuthenticated: false,
         });
         persistUserData(null);
       },
 
       setUser: (user: AuthUser) => {
+        const { globalPermissions, storePermissions } =
+          normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]);
         set({
           user,
           permissions: extractPermissions(user),
           roles: extractRoles(user),
+          globalPermissions,
+          storePermissions,
         });
         persistUserData(user);
       },
@@ -170,7 +209,14 @@ export const useAuthStore = create<AuthState>()(
       checkAuth: async () => {
         const { token } = get();
         if (!token) {
-          set({ isAuthenticated: false, user: null, permissions: [], roles: [] });
+          set({
+            isAuthenticated: false,
+            user: null,
+            permissions: [],
+            roles: [],
+            globalPermissions: new Set<string>(),
+            storePermissions: {},
+          });
           return;
         }
 
@@ -179,10 +225,14 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.me();
           if (response.success) {
             const user = response.data;
+            const { globalPermissions, storePermissions } =
+              normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]);
             set({
               user,
               permissions: extractPermissions(user),
               roles: extractRoles(user),
+              globalPermissions,
+              storePermissions,
               isAuthenticated: true,
               isLoading: false,
             });
@@ -193,6 +243,8 @@ export const useAuthStore = create<AuthState>()(
               token: null,
               permissions: [],
               roles: [],
+              globalPermissions: new Set<string>(),
+              storePermissions: {},
               isAuthenticated: false,
               isLoading: false,
             });
@@ -204,6 +256,8 @@ export const useAuthStore = create<AuthState>()(
             token: null,
             permissions: [],
             roles: [],
+            globalPermissions: new Set<string>(),
+            storePermissions: {},
             isAuthenticated: false,
             isLoading: false,
           });
@@ -272,6 +326,22 @@ export const useAuthStore = create<AuthState>()(
         }
 
         return hasRequiredPermissions && hasRequiredRoles;
+      },
+
+      /**
+       * Rule-based authorization — matches auth rules by service/method/path,
+       * then checks the user's global or store-scoped permissions.
+       */
+      canAccessRoute: (params: CanAccessParams) => {
+        const state = get();
+        // Super-admin bypasses all rules
+        if (state.isSuperAdmin()) return true;
+        return canAccessFn(
+          params,
+          state.globalPermissions,
+          state.storePermissions,
+          state.authRules
+        );
       },
 
       // Store access helpers

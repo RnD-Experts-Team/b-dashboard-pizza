@@ -54,6 +54,8 @@ import { useUIStore } from "@/lib/store/ui.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useFeature, Feature } from "@/lib/config";
 import { authService } from "@/lib/api/services/auth.service";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import type { CanAccessParams } from "@/lib/auth/can-access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
 
@@ -64,6 +66,18 @@ interface NavItem {
   title: string;
   href: string;
   icon: LucideIcon;
+  /**
+   * Rule-based requirements (API-driven pages).
+   * At least one must satisfy canAccessRoute().
+   */
+  requirements?: CanAccessParams[];
+  /**
+   * Direct permission check (management UI pages).
+   * Checked against globalPermissions via hasPermission().
+   * Used for pages that have no corresponding auth rule.
+   * e.g. "manage users", "manage roles"
+   */
+  requiredPermission?: string;
 }
 
 interface NavGroup {
@@ -170,6 +184,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const isRtl = locale === "ar";
   const t = useTranslations("nav");
   const { toggleSidebar } = useUIStore();
+  const { canAccessRoute, hasPermission } = useAuthStore();
+
+  // Zustand store selection (must be declared before nav items that reference it)
+  const { selectedStore: zustandSelectedStore, setSelectedStore } =
+    useSelectedStoreStore();
 
   // Check feature flags
   const devToolsEnabled = useFeature("devTools");
@@ -181,6 +200,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: t("dashboard"),
     href: `/${locale}/dashboard`,
     icon: LayoutDashboard,
+    // Dashboard is always accessible — no requirements
   };
 
   const maintenanceItem: NavItem = {
@@ -193,6 +213,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: t("settings"),
     href: `/${locale}/dashboard/settings`,
     icon: Settings,
+    // Settings is always accessible — no requirements
   };
 
   /* ---- Collapsible groups ---- */
@@ -204,11 +225,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("stores"),
         href: `/${locale}/dashboard/stores`,
         icon: Building2,
+        // requirements: [
+        //   { service: "Data", method: "GET", path: "/engine/stores/list" },
+        // ],
+        requiredPermission: "manage stores",
+
       },
       {
         title: t("userStoreAssignment"),
         href: `/${locale}/dashboard/user-store-assignment`,
         icon: ClipboardList,
+        requiredPermission: "manage user role assignments",
+
       },
     ],
   };
@@ -217,6 +245,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: t("employees"),
     href: `/${locale}/dashboard/employees`,
     icon: Briefcase,
+    // No rule or management permission defined yet — always visible
   };
 
   const userManagementGroup: NavGroup = {
@@ -227,16 +256,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("users"),
         href: `/${locale}/dashboard/users`,
         icon: Users,
+        requiredPermission: "manage users",
       },
       {
         title: t("roles"),
         href: `/${locale}/dashboard/roles`,
         icon: UserCog,
+        requiredPermission: "manage roles",
       },
       {
         title: t("permissions"),
         href: `/${locale}/dashboard/permissions`,
         icon: ShieldCheck,
+        requiredPermission: "manage permissions",
       },
     ],
   };
@@ -249,16 +281,31 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("cameraForms"),
         href: `/${locale}/dashboard/quality-assurance`,
         icon: ClipboardCheck,
+        requirements: [
+          { service: "QA", method: "POST", path: "/camera-forms", storeId: zustandSelectedStore?.id },
+        ],
       },
       {
         title: t("cameraReport"),
         href: `/${locale}/dashboard/camera-report`,
         icon: Camera,
+        requirements: [
+          {
+            service: "QA",
+            method: "GET",
+            path: "/audits/ratings-summary/overview",
+            storeId: zustandSelectedStore?.id,
+          },
+        ],
       },
       {
         title: t("entitiesAndCategories"),
         href: `/${locale}/dashboard/entities-and-categories`,
         icon: List,
+        requirements: [
+          { service: "QA", method: "POST", path: "/entities", storeId: zustandSelectedStore?.id },
+          { service: "QA", method: "POST", path: "/categories", storeId: zustandSelectedStore?.id },
+        ],
       },
     ],
   };
@@ -271,16 +318,22 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("authRules"),
         href: `/${locale}/dashboard/auth-rules`,
         icon: Lock,
+        requiredPermission: "manage auth rules",
+
+        // auth-rules management page — no rule in mock data yet; always visible for admins
+        // TODO: add requiredPermission once backend defines one
       },
       {
         title: t("hierarchy"),
         href: `/${locale}/dashboard/hierarchy`,
         icon: GitBranch,
+        requiredPermission: "manage role hierarchy",
       },
       {
         title: t("serviceClients"),
         href: `/${locale}/dashboard/service-clients`,
         icon: Key,
+        requiredPermission: "manage service clients",
       },
     ],
   };
@@ -293,16 +346,26 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("keys"),
         href: `/${locale}/dashboard/keys`,
         icon: Key,
+        requirements: [
+          { service: "Data", method: "GET", path: "/engine/keys", storeId: zustandSelectedStore?.id },
+        ],
       },
       {
         title: t("dueKeys"),
         href: `/${locale}/dashboard/due-keys`,
         icon: Database,
+        requirements: [
+          { service: "Data", method: "GET", path: "/engine/stores", storeId: zustandSelectedStore?.id },
+        ],
       },
       {
         title: t("exportImport"),
         href: `/${locale}/dashboard/export-import`,
         icon: FolderPlus,
+        requirements: [
+          { service: "Data", method: "GET", path: "/export/list", storeId: zustandSelectedStore?.id },
+          { service: "Data", method: "GET", path: "/manual-import", storeId: zustandSelectedStore?.id },
+        ],
       },
     ],
   };
@@ -315,7 +378,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("maintenance"),
         href: `/${locale}/dashboard/maintenance`,
         icon: HardHat,
-      }
+        // No rule or management permission defined yet — always visible
+      },
     ],
   };
   // Dev tools navigation (controlled by feature flags)
@@ -347,8 +411,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       : ChevronLeft;
 
   // Store selection state
-  const { selectedStore: zustandSelectedStore, setSelectedStore } =
-    useSelectedStoreStore();
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [selectedStore, setLocalSelectedStore] = useState<Store | null>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -395,6 +457,44 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   }, []);
 
   const currentStoreName = selectedStore?.name || "Select Store";
+
+  /* ---- Authorization filtering ---- */
+
+  /**
+   * Returns true if the nav item should be rendered.
+   * - No requirements → always visible (fail-open for items without rules yet)
+   * - Requirements present → at least one must pass canAccessRoute()
+   */
+  const isNavItemVisible = (item: NavItem): boolean => {
+    // 1. Direct management permission check (no auth-rule required)
+    if (item.requiredPermission) {
+      return hasPermission(item.requiredPermission);
+    }
+    // 2. Rule-driven check via auth-rules
+    if (item.requirements && item.requirements.length > 0) {
+      return item.requirements.some((req) => canAccessRoute(req));
+    }
+    // 3. No restrictions — always visible
+    return true;
+  };
+
+  /**
+   * Returns a copy of the group with only visible items.
+   * If the resulting group has no items, returns null (hide the group).
+   */
+  const filterGroup = (group: NavGroup): NavGroup | null => {
+    const visibleItems = group.items.filter(isNavItemVisible);
+    if (visibleItems.length === 0) return null;
+    return { ...group, items: visibleItems };
+  };
+
+  // Pre-filter all groups and flat items
+  const visibleStoreManagementGroup = filterGroup(storeManagementGroup);
+  const visibleUserManagementGroup = filterGroup(userManagementGroup);
+  const visibleQaManagementGroup = filterGroup(qaManagementGroup);
+  const visibleDataManagementGroup = filterGroup(dataManagementGroup);
+  const visibleReports = filterGroup(Reports);
+  const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
 
   /* ---- Helper: render a single flat nav link ---- */
   const renderNavLink = (item: NavItem) => {
@@ -529,66 +629,79 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {renderNavLink(dashboardItem)}
 
           {/* 2. Store Management */}
-          <SidebarNavGroup
-            group={storeManagementGroup}
-            pathname={pathname}
-            locale={locale}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
+          {visibleStoreManagementGroup && (
+            <SidebarNavGroup
+              group={visibleStoreManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
           {/* 3. User Management */}
-          <SidebarNavGroup
-            group={userManagementGroup}
-            pathname={pathname}
-            locale={locale}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
+          {visibleUserManagementGroup && (
+            <SidebarNavGroup
+              group={visibleUserManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
           {/* 4. QA Management */}
-          <SidebarNavGroup
-            group={qaManagementGroup}
-            pathname={pathname}
-            locale={locale}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
+          {visibleQaManagementGroup && (
+            <SidebarNavGroup
+              group={visibleQaManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
           {/* 5. Data Management */}
-          <SidebarNavGroup
-            group={dataManagementGroup}
-            pathname={pathname}
-            locale={locale}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
+          {visibleDataManagementGroup && (
+            <SidebarNavGroup
+              group={visibleDataManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
           {/* 6. Reports */}
-          <SidebarNavGroup
-            group={Reports}
-            pathname={pathname}
-            locale={locale}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
-          {/* 5. highLevelMgmtGroup */}
-          <SidebarNavGroup
-            group={highLevelMgmtGroup}
-            pathname={pathname}
-            locale={locale}
-            collapsed={collapsed}
-            onNavigate={onNavigate}
-          />
+          {visibleReports && (
+            <SidebarNavGroup
+              group={visibleReports}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
-          {/* 6. Employees */}
-          {renderNavLink(employeesItem)}
+          {/* 7. High Level Management */}
+          {visibleHighLevelMgmtGroup && (
+            <SidebarNavGroup
+              group={visibleHighLevelMgmtGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
-          {/* 7. Maintenance */}
+          {/* 8. Employees */}
+          {isNavItemVisible(employeesItem) && renderNavLink(employeesItem)}
+
+          {/* 9. Maintenance */}
           {/* {renderNavLink(maintenanceItem)} */}
 
-          {/* 7. Settings */}
-          {renderNavLink(settingsItem)}
+          {/* 10. Settings */}
+          {isNavItemVisible(settingsItem) && renderNavLink(settingsItem)}
         </nav>
       </ScrollArea>
 
