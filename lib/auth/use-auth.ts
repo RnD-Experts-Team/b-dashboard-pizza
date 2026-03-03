@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuthStore } from "./auth.store";
 import type { LoginCredentials } from "@/types/auth.types";
+import type { CanAccessParams } from "./can-access";
 
 /**
  * Main authentication hook with permission checking capabilities
@@ -51,6 +52,8 @@ export function useAuth() {
     hasStoreAccess,
     getStorePermissions,
     getStoreRoles,
+    // Rule-based access
+    canAccessRoute,
   } = useAuthStore();
 
   const login = useCallback(
@@ -100,6 +103,9 @@ export function useAuth() {
     hasStoreAccess,
     getStorePermissions,
     getStoreRoles,
+
+    // Rule-based access
+    canAccessRoute,
   };
 }
 
@@ -130,8 +136,8 @@ export function useRole(role: string): boolean {
 }
 
 /**
- * Hook for checking access with both permissions and roles
- * 
+ * Hook for checking access with both permissions and roles (legacy)
+ *
  * Usage:
  * ```tsx
  * const hasAccess = useCanAccess(['manage users'], ['admin']);
@@ -143,4 +149,23 @@ export function useCanAccess(
 ): boolean {
   const { canAccess } = useAuthStore();
   return canAccess(requiredPermissions, requiredRoles);
+}
+
+/**
+ * Rule-based authorization hook.
+ * Matches the auth rule for the given service/method/path and evaluates
+ * the user's permissions against it.
+ *
+ * Usage:
+ * ```tsx
+ * const canCreate = useCanAccessRoute({
+ *   service: "Data",
+ *   method: "POST",
+ *   path: "/engine/keys",
+ * });
+ * ```
+ */
+export function useCanAccessRoute(params: CanAccessParams): boolean {
+  const { canAccessRoute } = useAuthStore();
+  return canAccessRoute(params);
 }
