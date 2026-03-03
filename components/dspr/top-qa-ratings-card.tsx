@@ -35,6 +35,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CanAccessParams } from "@/lib/auth/can-access";
+import { useAuth } from "@/lib/auth/use-auth";
 
 function TopQaRatingsSkeleton() {
   return (
@@ -71,7 +73,24 @@ function getDefaultDateRange() {
   };
 }
 
-export function TopQaRatingsCard() {
+export function TopQaRatingsCard({
+  requiredPermission,
+  requirements,
+}: {
+  requiredPermission?: string;
+  requirements?: CanAccessParams[];
+}) {
+  const { hasPermission, canAccessRoute } = useAuth();
+
+  // Authorization: mirror sidebar behavior — fail-open when no requirements
+  if (requiredPermission) {
+    if (!hasPermission(requiredPermission)) return null;
+  }
+  if (requirements && requirements.length > 0) {
+    const ok = requirements.some((req) => canAccessRoute(req));
+    if (!ok) return null;
+  }
+
   const { selectedStore } = useSelectedStoreStore();
   const [data, setData] = useState<QARatingsSummaryItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);

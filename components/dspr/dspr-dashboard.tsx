@@ -655,7 +655,16 @@ export function DsprDashboard() {
           className="sm:col-span-2 lg:col-span-1"
         />
         <RecentMaintenanceTable />
-        <TopQaRatingsCard />
+        <TopQaRatingsCard
+          requirements={[
+            {
+              service: "QA",
+              method: "GET",
+              path: "/audits/ratings-summary/overview",
+              storeId: storeId ? String(storeId) : undefined,
+            },
+          ]}
+        /> 
       </div>
 
       {/* ── Ingredients + Maintenance + QA ────────────────────────── */}

@@ -225,9 +225,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("stores"),
         href: `/${locale}/dashboard/stores`,
         icon: Building2,
-        // requirements: [
-        //   { service: "Data", method: "GET", path: "/engine/stores/list" },
-        // ],
         requiredPermission: "manage stores",
 
       },

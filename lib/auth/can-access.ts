@@ -115,7 +115,6 @@ export function canAccess(
 
   // Scoped rules require store-specific permissions only.
   if (scopeMode === "scoped") {
-    console.log(storeId)
     if (!storeId) return false; // scoped rule but no store selected
     const storeSet = storePerms[String(storeId)] ?? new Set();
     return passesAgainst(storeSet);

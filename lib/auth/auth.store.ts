@@ -16,7 +16,6 @@ import {
   normalizeAuthPermissions,
   type CanAccessParams,
 } from "./can-access";
-import { MOCK_AUTH_RULES } from "./mock-auth-rules";
 
 interface AuthState {
   // User data
@@ -34,8 +33,7 @@ interface AuthState {
   storePermissions: Record<string, Set<string>>;
   /**
    * Auth rules used by canAccessRoute().
-   * Currently populated from MOCK_AUTH_RULES.
-   * TODO: replace with live GET /api/v1/auth-rules?per_page=1000 call.
+   * Loaded from GET /auth/general-overview after authentication.
    */
   authRules: AuthRule[];
   // ────────────────────────────────────────────────────────────────────────
@@ -141,7 +139,7 @@ export const useAuthStore = create<AuthState>()(
       roles: [],
       globalPermissions: new Set<string>(),
       storePermissions: {},
-      authRules: MOCK_AUTH_RULES,
+      authRules: [],
       isAuthenticated: false,
       isLoading: false,
       isInitialized: false,
@@ -152,8 +150,13 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.login(credentials);
           if (response.success) {
             const user = response.data.user;
-            const { globalPermissions, storePermissions } =
-              normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]);
+            // Fetch rules + permissions from general-overview using the fresh
+            // token so the axios interceptor does not need localStorage yet.
+            const overview = await authService.getGeneralOverview(response.data.token);
+            const { globalPermissions, storePermissions, authRules } =
+              overview.success
+                ? overview.data
+                : { ...normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]), authRules: [] };
             set({
               user,
               token: response.data.token,
@@ -161,6 +164,7 @@ export const useAuthStore = create<AuthState>()(
               roles: extractRoles(user),
               globalPermissions,
               storePermissions,
+              authRules,
               isAuthenticated: true,
               isLoading: false,
             });
@@ -184,9 +188,17 @@ export const useAuthStore = create<AuthState>()(
           roles: [],
           globalPermissions: new Set<string>(),
           storePermissions: {},
+          authRules: [],
           isAuthenticated: false,
         });
         persistUserData(null);
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.removeItem("selected-store-storage");
+          } catch {
+            // ignore
+          }
+        }
       },
 
       setUser: (user: AuthUser) => {
@@ -225,14 +237,20 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.me();
           if (response.success) {
             const user = response.data;
-            const { globalPermissions, storePermissions } =
-              normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]);
+            // Re-fetch rules + permissions; token is already in localStorage
+            // so the axios interceptor will attach it automatically.
+            const overview = await authService.getGeneralOverview(token);
+            const { globalPermissions, storePermissions, authRules } =
+              overview.success
+                ? overview.data
+                : { ...normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]), authRules: [] };
             set({
               user,
               permissions: extractPermissions(user),
               roles: extractRoles(user),
               globalPermissions,
               storePermissions,
+              authRules,
               isAuthenticated: true,
               isLoading: false,
             });
