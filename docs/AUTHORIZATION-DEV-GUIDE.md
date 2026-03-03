@@ -1,4 +1,4 @@
-Here is a clean, simplified, documentation-style version you can give to any developer.
+Here is a clean, simplified, documentation-style version you can give to any developer..
 
 ---
 
@@ -9,7 +9,7 @@ Here is a clean, simplified, documentation-style version you can give to any dev
 After successful login, the app calls:
 
 ```
-/auth/general-overview
+/auth/general-overview 
 ```
 
 From this response, the app prepares three main things:
