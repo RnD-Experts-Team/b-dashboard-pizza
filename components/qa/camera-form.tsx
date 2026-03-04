@@ -35,10 +35,10 @@ import {
   X,
 } from "lucide-react";
 import {
-  useStoresForCameraForm,
   useEntitiesForCameraForm,
   useCreateCameraForm,
 } from "@/lib/hooks/use-camera-form";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { CameraFormEntityEntry } from "@/types/qa.types";
 import { useRouter, useParams } from "next/navigation";
 
@@ -69,11 +69,37 @@ export function CameraForm() {
   const locale = (params?.locale as string) || "en";
 
   // ── Data hooks ─────────────────────────────────────────────────────────
-  const {
-    stores,
-    isLoading: isStoresLoading,
-    error: storesError,
-  } = useStoresForCameraForm();
+  const userStores = useAuthStore((state) => state.user?.stores ?? []);
+  const authLoading = useAuthStore((state) => state.isLoading);
+
+  const stores = useMemo(() => {
+    const uniqueStores = new Map<
+      number,
+      { name: string; assignmentId: string }
+    >();
+
+    for (const assignment of userStores) {
+      const storeId =
+        assignment.store.internalId ?? Number.parseInt(assignment.store.id, 10);
+
+      if (!Number.isFinite(storeId)) continue;
+      if (!uniqueStores.has(storeId)) {
+        uniqueStores.set(storeId, {
+          name: assignment.store.name,
+          assignmentId: assignment.store.id,
+        });
+      }
+    }
+
+    return Array.from(uniqueStores, ([id, store]) => ({
+      id,
+      name: store.name,
+      assignmentId: store.assignmentId,
+    }));
+  }, [userStores]);
+
+  const isStoresLoading = authLoading && stores.length === 0;
+  const storesError = null;
 
   const {
     entities,
@@ -452,7 +478,7 @@ export function CameraForm() {
                   <SelectContent>
                     {stores.map((store) => (
                       <SelectItem key={store.id} value={String(store.id)}>
-                        {store.name || store.storeId} (ID: {store.id})
+                        {store.name} (ID: {store.assignmentId})
                       </SelectItem>
                     ))}
                   </SelectContent>

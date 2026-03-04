@@ -17,6 +17,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileArchive,
   FileSpreadsheet,
+  FileJson,
   UploadCloud,
   Shield,
   Zap,
@@ -36,7 +45,39 @@ import {
   Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import axios from "axios";
+import { dataExportService } from "@/lib/api/services/data-export.service";
+import { dsprService } from "@/lib/api/services/dspr.service";
 import { manualImportService } from "@/lib/api/services/manual-import.service";
+import type { DsprResponse } from "@/types/dspr.types";
+
+const EXPORT_MODELS = [
+  "detail_orders",
+  "order_line",
+  "summary_sales",
+  "summary_items",
+  "summary_transactions",
+  "waste",
+  "cash_management",
+  "financial_views",
+  "alta_inventory_waste",
+  "alta_inventory_ingredient_usage",
+  "alta_inventory_ingredient_orders",
+  "alta_inventory_cogs",
+  "yearly_store_summary",
+  "yearly_item_summary",
+  "weekly_store_summary",
+  "weekly_item_summary",
+  "quarterly_store_summary",
+  "quarterly_item_summary",
+  "monthly_store_summary",
+  "monthly_item_summary",
+  "daily_store_summary",
+  "daily_item_summary",
+  "hourly_store_summary",
+  "hourly_item_summary",
+  "all",
+];
 
 type AggregationType =
   | "hourly"
@@ -68,6 +109,18 @@ const AGGREGATION_TYPES: AggregationType[] = [
   "all",
 ];
 
+const numberFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 2,
+});
+
+const currencyFormatter = new Intl.NumberFormat(undefined, {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function isZipFile(file: File) {
   return file.name.toLowerCase().endsWith(".zip");
 }
@@ -83,6 +136,17 @@ function toProcessorKey(fileName: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function formatProcessorLabel(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getDefaultProcessorKey(fileName: string, availableProcessorKeys: string[]) {
+  if (availableProcessorKeys.length === 0) return toProcessorKey(fileName);
+  const inferred = toProcessorKey(fileName);
+  if (availableProcessorKeys.includes(inferred)) return inferred;
+  return availableProcessorKeys[0];
 }
 
 function normalizeDate(value: Date) {
@@ -165,12 +229,68 @@ function isFailedStatus(status: string | null) {
   return !!status && ["failed", "error"].includes(status);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asRecordArray(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => !!entry);
+}
+
+function toSortedEntries(value: unknown): Array<[string, unknown]> {
+  const record = asRecord(value);
+  if (!record) return [];
+  return Object.entries(record).sort(([a], [b]) => a.localeCompare(b));
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function formatMetric(
+  value: unknown,
+  variant: "currency" | "number" | "percent" = "number"
+) {
+  const numericValue = toNumber(value);
+  if (numericValue === null) return "—";
+
+  if (variant === "currency") return currencyFormatter.format(numericValue);
+  if (variant === "percent") return `${numberFormatter.format(numericValue)}%`;
+  return numberFormatter.format(numericValue);
+}
+
+function formatText(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  const numericValue = toNumber(value);
+  if (numericValue !== null) return numberFormatter.format(numericValue);
+  return String(value);
+}
+
+function isValidDateOnly(value: string) {
+  if (!DATE_ONLY_RE.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed.toISOString().startsWith(value);
+}
+
 export default function ExportImportPage() {
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isInspectingZip, setIsInspectingZip] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [zipTempId, setZipTempId] = useState<string | null>(null);
+  const [processorOptions, setProcessorOptions] = useState<string[]>([]);
+  const [isLoadingProcessorOptions, setIsLoadingProcessorOptions] = useState(false);
+  const [processorOptionsError, setProcessorOptionsError] = useState<string | null>(null);
 
   const [uploadId, setUploadId] = useState<string | null>(null);
   const [uploadProgressData, setUploadProgressData] = useState<Record<string, unknown> | null>(null);
@@ -182,6 +302,20 @@ export default function ExportImportPage() {
   const [endDate, setEndDate] = useState(normalizeDate(new Date()));
   const [aggregationType, setAggregationType] = useState<AggregationType>("hourly");
   const [isTriggeringAggregation, setIsTriggeringAggregation] = useState(false);
+
+  // Export specific state
+  const [exportModel, setExportModel] = useState<string>("detail_orders");
+  const [exportStore, setExportStore] = useState<string>("");
+  const [exportStartDate, setExportStartDate] = useState(normalizeDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
+  const [exportEndDate, setExportEndDate] = useState(normalizeDate(new Date()));
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+  const [isExportingJson, setIsExportingJson] = useState(false);
+
+  const [dsprStore, setDsprStore] = useState<string>("");
+  const [dsprDate, setDsprDate] = useState(normalizeDate(new Date()));
+  const [isLoadingDspr, setIsLoadingDspr] = useState(false);
+  const [dsprError, setDsprError] = useState<string | null>(null);
+  const [dsprData, setDsprData] = useState<DsprResponse | null>(null);
 
   const uploadProgress = useMemo(
     () => extractProgressPercent(uploadProgressData),
@@ -203,6 +337,100 @@ export default function ExportImportPage() {
       extractStringValue(aggregationProgressData, ["status", "state", "phase"])?.toLowerCase() ||
       null,
     [aggregationProgressData]
+  );
+
+  const dsprDay = useMemo(() => asRecord(dsprData?.day), [dsprData]);
+  const dsprSales = useMemo(() => asRecord(dsprData?.sales), [dsprData]);
+  const dsprTop = useMemo(() => asRecord(dsprData?.top), [dsprData]);
+
+  const dsprTopItems = useMemo(
+    () => asRecordArray(dsprTop?.top_5_items_sales_for_day),
+    [dsprTop]
+  );
+
+  const dsprTopIngredients = useMemo(() => {
+    const direct = asRecordArray(dsprTop?.top_3_ingredients_used);
+    if (direct.length > 0) return direct;
+
+    const ingredientsSection = asRecord(dsprTop?.ingredients);
+    return asRecordArray(ingredientsSection?.top_3_ingredients_used);
+  }, [dsprTop]);
+
+  const dsprHourlyRows = useMemo(
+    () => asRecordArray(dsprDay?.hourly_sales_and_channels),
+    [dsprDay]
+  );
+
+  const dsprSalesSeries = useMemo(
+    () => [
+      {
+        title: "This Week by Day",
+        entries: toSortedEntries(dsprSales?.this_week_by_day),
+      },
+      {
+        title: "Previous Week by Day",
+        entries: toSortedEntries(dsprSales?.previous_week_by_day),
+      },
+      {
+        title: "Same Week Last Year",
+        entries: toSortedEntries(dsprSales?.same_week_last_year_by_day),
+      },
+    ],
+    [dsprSales]
+  );
+
+  const dsprKpis = useMemo(
+    () => [
+      {
+        label: "Total Gross Sales",
+        value: formatMetric(dsprDay?.total_gross_sales, "currency"),
+      },
+      {
+        label: "Total Net Sales",
+        value: formatMetric(dsprDay?.total_net_sales, "currency"),
+      },
+      {
+        label: "Total Royalty Obligation",
+        value: formatMetric(dsprDay?.total_royalty_obligation, "currency"),
+      },
+      {
+        label: "Total Digital Sales",
+        value: formatMetric(dsprDay?.total_digital_sales, "currency"),
+      },
+      {
+        label: "Total Cash Sales",
+        value: formatMetric(dsprDay?.total_cash_sales, "currency"),
+      },
+      {
+        label: "Customer Count",
+        value: formatMetric(dsprDay?.customer_count, "number"),
+      },
+      {
+        label: "Total Tips",
+        value: formatMetric(dsprDay?.total_tips, "currency"),
+      },
+      {
+        label: "Labor",
+        value: formatMetric(dsprDay?.labor, "currency"),
+      },
+      {
+        label: "Total Deposit",
+        value: formatMetric(dsprDay?.total_deposit, "currency"),
+      },
+      {
+        label: "Over / Short",
+        value: formatMetric(dsprDay?.over_short, "currency"),
+      },
+      {
+        label: "HNR Promise Met %",
+        value: formatMetric(asRecord(dsprDay?.hnr)?.hnr_promise_met_percent, "percent"),
+      },
+      {
+        label: "Portal On-time %",
+        value: formatMetric(asRecord(dsprDay?.portal)?.in_portal_on_time_percent, "percent"),
+      },
+    ],
+    [dsprDay]
   );
 
   useEffect(() => {
@@ -285,6 +513,59 @@ export default function ExportImportPage() {
     };
   }, [aggregationId]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadProcessorOptions = async () => {
+      try {
+        setIsLoadingProcessorOptions(true);
+        setProcessorOptionsError(null);
+
+        const response = await manualImportService.getProcessors();
+        if (!active) return;
+
+        setProcessorOptions(response);
+        if (response.length === 0) {
+          setProcessorOptionsError(
+            "No processor keys were returned by the manual import endpoint."
+          );
+        }
+      } catch (error) {
+        if (!active) return;
+
+        const message =
+          error instanceof Error ? error.message : "Failed to load processor keys.";
+        setProcessorOptions([]);
+        setProcessorOptionsError(message);
+        toast.error(message);
+      } finally {
+        if (active) setIsLoadingProcessorOptions(false);
+      }
+    };
+
+    loadProcessorOptions();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const processorOptionsSet = useMemo(() => new Set(processorOptions), [processorOptions]);
+
+  useEffect(() => {
+    if (processorOptions.length === 0) return;
+
+    setQueue((prev) =>
+      prev.map((item) => {
+        if (processorOptionsSet.has(item.processorKey)) return item;
+        return {
+          ...item,
+          processorKey: getDefaultProcessorKey(item.name, processorOptions),
+        };
+      })
+    );
+  }, [processorOptions, processorOptionsSet]);
+
   const selectedItems = useMemo(() => queue.filter((item) => item.selected), [queue]);
 
   const setQueueFromFiles = async (files: File[]) => {
@@ -296,7 +577,7 @@ export default function ExportImportPage() {
       name: file.name,
       source: "csv",
       selected: true,
-      processorKey: toProcessorKey(file.name),
+      processorKey: getDefaultProcessorKey(file.name, processorOptions),
       file,
     }));
 
@@ -316,7 +597,7 @@ export default function ExportImportPage() {
           name,
           source: "zip",
           selected: true,
-          processorKey: toProcessorKey(name),
+          processorKey: getDefaultProcessorKey(name, processorOptions),
         }));
       } catch (error) {
         const message =
@@ -354,11 +635,16 @@ export default function ExportImportPage() {
       return;
     }
 
+    if (processorOptions.length === 0) {
+      toast.error("Processor keys are unavailable. Please refresh and try again.");
+      return;
+    }
+
     const mappings: Record<string, string> = {};
     for (const item of selectedItems) {
       const key = item.processorKey.trim();
-      if (!key) {
-        toast.error(`Processor key is required for ${item.name}.`);
+      if (!key || !processorOptionsSet.has(key)) {
+        toast.error(`Select a valid processor key for ${item.name}.`);
         return;
       }
       mappings[item.name] = key;
@@ -428,6 +714,90 @@ export default function ExportImportPage() {
     }
   };
 
+  const handleExport = async (format: "csv" | "json") => {
+    if (!exportModel) {
+      toast.error("Please select a model to export.");
+      return;
+    }
+
+    try {
+      if (format === "csv") setIsExportingCsv(true);
+      else setIsExportingJson(true);
+      
+      toast.info(`Preparing ${format.toUpperCase()} export. This might take a moment...`);
+      
+      const payload = {
+        model: exportModel,
+        start: exportStartDate || undefined,
+        end: exportEndDate || undefined,
+        store: exportStore || undefined,
+      };
+
+      const { data, filename } = format === "csv" 
+        ? await dataExportService.exportCsv(payload)
+        : await dataExportService.exportJson(payload);
+
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success(`${format.toUpperCase()} Export remote successful.`);
+    } catch (error) {
+      if (axios.isCancel(error)) {
+        return;
+      }
+      const message =
+        error instanceof Error ? error.message : "Failed to export data.";
+      toast.error(message);
+    } finally {
+      if (format === "csv") setIsExportingCsv(false);
+      else setIsExportingJson(false);
+    }
+  };
+
+  const handleLoadDsprLite = async () => {
+    const normalizedStore = dsprStore.trim();
+
+    if (!normalizedStore) {
+      const message = "Store is required for the DSPR Lite report.";
+      setDsprError(message);
+      toast.error(message);
+      return;
+    }
+
+    if (!isValidDateOnly(dsprDate)) {
+      const message = "Date must be a valid YYYY-MM-DD value.";
+      setDsprError(message);
+      toast.error(message);
+      return;
+    }
+
+    try {
+      setIsLoadingDspr(true);
+      setDsprError(null);
+
+      const response = await dsprService.getReport(normalizedStore, dsprDate);
+      setDsprData(response);
+      toast.success("DSPR Lite report loaded.");
+    } catch (error) {
+      if (axios.isCancel(error)) return;
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to load DSPR Lite report.";
+      setDsprError(message);
+      toast.error(message);
+    } finally {
+      setIsLoadingDspr(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -441,13 +811,339 @@ export default function ExportImportPage() {
           <TabsTrigger value="import">Import</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="export">
+        <TabsContent value="export" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Export</CardTitle>
-              <CardDescription>Export tools will be implemented in a later step.</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <FileArchive className="h-5 w-5" />
+                Data Export
+              </CardTitle>
+              <CardDescription>
+                Download a specific data model as a CSV or JSON file.
+              </CardDescription>
             </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+                <div className="space-y-2">
+                  <Label htmlFor="export-start-date">Start Date</Label>
+                  <Input
+                    id="export-start-date"
+                    type="date"
+                    value={exportStartDate}
+                    onChange={(e) => setExportStartDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="export-end-date">End Date</Label>
+                  <Input
+                    id="export-end-date"
+                    type="date"
+                    value={exportEndDate}
+                    onChange={(e) => setExportEndDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="export-store">Store (Optional)</Label>
+                  <Input
+                    id="export-store"
+                    type="text"
+                    placeholder="e.g. store_123"
+                    value={exportStore}
+                    onChange={(e) => setExportStore(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="export-model">Model *</Label>
+                  <Select
+                    value={exportModel}
+                    onValueChange={(value) => setExportModel(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-75">
+                      {EXPORT_MODELS.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                <Button
+                  onClick={() => handleExport("csv")}
+                  disabled={isExportingCsv || isExportingJson || !exportModel}
+                  className="w-full sm:w-auto"
+                >
+                  {isExportingCsv ? (
+                    <>
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" /> Gathering...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="me-2 h-4 w-4" /> Export CSV
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleExport("json")}
+                  disabled={isExportingCsv || isExportingJson || !exportModel}
+                  className="w-full sm:w-auto"
+                >
+                  {isExportingJson ? (
+                    <>
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" /> Gathering...
+                    </>
+                  ) : (
+                    <>
+                      <FileJson className="me-2 h-4 w-4" /> Export JSON
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
           </Card>
+
+          {/* <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                DSPR Lite report
+              </CardTitle>
+              <CardDescription>
+                Fetch daily store performance data by store and date from
+                the DSPR report endpoint.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="dspr-store">Store *</Label>
+                  <Input
+                    id="dspr-store"
+                    placeholder="Enter store id"
+                    value={dsprStore}
+                    onChange={(event) => setDsprStore(event.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dspr-date">Date *</Label>
+                  <Input
+                    id="dspr-date"
+                    type="date"
+                    value={dsprDate}
+                    onChange={(event) => setDsprDate(event.target.value)}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleLoadDsprLite}
+                  disabled={isLoadingDspr}
+                  className="w-full md:w-auto"
+                >
+                  {isLoadingDspr ? (
+                    <>
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" /> Loading...
+                    </>
+                  ) : (
+                    "Load Report"
+                  )}
+                </Button>
+              </div>
+
+              {dsprError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  {dsprError}
+                </div>
+              )}
+
+              {dsprData && (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Store</p>
+                      <p className="text-sm font-medium">{formatText(dsprData.filtering?.store)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Date</p>
+                      <p className="text-sm font-medium">{formatText(dsprData.filtering?.date)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">ISO Week</p>
+                      <p className="text-sm font-medium">{formatText(dsprData.filtering?.iso_week)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Week Start</p>
+                      <p className="text-sm font-medium">{formatText(dsprData.filtering?.week_start)}</p>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">Week End</p>
+                      <p className="text-sm font-medium">{formatText(dsprData.filtering?.week_end)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {dsprKpis.map((metric) => (
+                      <div key={metric.label} className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">{metric.label}</p>
+                        <p className="text-base font-semibold">{metric.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    {dsprSalesSeries.map((series) => (
+                      <div key={series.title} className="rounded-lg border p-3">
+                        <p className="mb-2 text-sm font-medium">{series.title}</p>
+
+                        {series.entries.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No sales data available.</p>
+                        ) : (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Day</TableHead>
+                                <TableHead className="text-right">Sales</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {series.entries.map(([day, value]) => (
+                                <TableRow key={`${series.title}-${day}`}>
+                                  <TableCell>{day}</TableCell>
+                                  <TableCell className="text-right">
+                                    {formatMetric(value, "currency")}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-lg border p-3">
+                      <p className="mb-2 text-sm font-medium">Top 5 Items Sales for Day</p>
+
+                      {dsprTopItems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No top items data available.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Item</TableHead>
+                              <TableHead className="text-right">Gross Sales</TableHead>
+                              <TableHead className="text-right">Qty</TableHead>
+                              <TableHead className="text-right">Avg Price</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {dsprTopItems.map((item, index) => (
+                              <TableRow key={`top-item-${index}`}>
+                                <TableCell>
+                                  <div className="flex flex-col">
+                                    <span>{formatText(item.menu_item_name)}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {formatText(item.menu_item_account)}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {formatMetric(item.gross_sales, "currency")}
+                                </TableCell>
+                                <TableCell className="text-right">{formatText(item.quantity_sold)}</TableCell>
+                                <TableCell className="text-right">
+                                  {formatMetric(item.avg_item_price, "currency")}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border p-3">
+                      <p className="mb-2 text-sm font-medium">Top 3 Ingredients Used</p>
+
+                      {dsprTopIngredients.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No ingredients data available.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Ingredient</TableHead>
+                              <TableHead className="text-right">Actual Usage</TableHead>
+                              <TableHead className="text-right">Variance</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {dsprTopIngredients.map((ingredient, index) => (
+                              <TableRow key={`top-ingredient-${index}`}>
+                                <TableCell>{formatText(ingredient.ingredient_description)}</TableCell>
+                                <TableCell className="text-right">
+                                  {formatMetric(ingredient.actual_usage, "number")}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {formatMetric(ingredient.variance_value, "number")}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border p-3">
+                    <p className="mb-2 text-sm font-medium">Hourly Sales and Channels</p>
+
+                    {dsprHourlyRows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No hourly channel data available.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Hour</TableHead>
+                            <TableHead className="text-right">Royalty</TableHead>
+                            <TableHead className="text-right">Phone</TableHead>
+                            <TableHead className="text-right">Call Center</TableHead>
+                            <TableHead className="text-right">Drive Thru</TableHead>
+                            <TableHead className="text-right">Website</TableHead>
+                            <TableHead className="text-right">Mobile</TableHead>
+                            <TableHead className="text-right">DoorDash</TableHead>
+                            <TableHead className="text-right">UberEats</TableHead>
+                            <TableHead className="text-right">GrubHub</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dsprHourlyRows.map((row, index) => (
+                            <TableRow key={`hourly-${index}`}>
+                              <TableCell>{formatText(row.hour)}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.royalty_obligation, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.phone_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.call_center_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.drive_thru_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.website_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.mobile_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.doordash_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.ubereats_sales, "currency")}</TableCell>
+                              <TableCell className="text-right">{formatMetric(row.grubhub_sales, "currency")}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card> */}
         </TabsContent>
 
         <TabsContent value="import" className="space-y-4">
@@ -521,10 +1217,15 @@ export default function ExportImportPage() {
                 <CardHeader className="px-4">
                   <CardTitle className="text-base">Selected Files</CardTitle>
                   <CardDescription>
-                    Uncheck any file you do not want to import and edit processor keys as needed.
+                    Uncheck any file you do not want to import and select processor keys.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 px-4">
+                  {processorOptionsError && (
+                    <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                      {processorOptionsError}
+                    </div>
+                  )}
                   {queue.length === 0 ? (
                     <div className="rounded-lg border p-4 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">No files selected</p>
@@ -554,16 +1255,38 @@ export default function ExportImportPage() {
                           <Label htmlFor={`processor-${item.id}`} className="text-xs">
                             Processor key
                           </Label>
-                          <Input
-                            id={`processor-${item.id}`}
-                            value={item.processorKey}
-                            onChange={(event) =>
+                          <Select
+                            value={
+                              processorOptionsSet.has(item.processorKey)
+                                ? item.processorKey
+                                : ""
+                            }
+                            onValueChange={(value) =>
                               updateQueueItem(item.id, {
-                                processorKey: event.target.value,
+                                processorKey: value,
                               })
                             }
-                            placeholder="detail_orders"
-                          />
+                            disabled={
+                              isLoadingProcessorOptions || processorOptions.length === 0
+                            }
+                          >
+                            <SelectTrigger id={`processor-${item.id}`}>
+                              <SelectValue
+                                placeholder={
+                                  isLoadingProcessorOptions
+                                    ? "Loading processor keys..."
+                                    : "Select processor key"
+                                }
+                              />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-75">
+                              {processorOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {formatProcessorLabel(option)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     ))
@@ -572,7 +1295,13 @@ export default function ExportImportPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
                       onClick={handleUpload}
-                      disabled={selectedItems.length === 0 || isUploading || isInspectingZip}
+                      disabled={
+                        selectedItems.length === 0 ||
+                        isUploading ||
+                        isInspectingZip ||
+                        isLoadingProcessorOptions ||
+                        processorOptions.length === 0
+                      }
                     >
                       {isUploading ? (
                         <>

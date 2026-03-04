@@ -61,6 +61,7 @@ export interface AuthPermission {
 export interface AuthUserStore {
   store: {
     id: string;
+    internalId?: number;
     name: string;
     metadata?: Record<string, unknown>;
     isActive?: boolean;

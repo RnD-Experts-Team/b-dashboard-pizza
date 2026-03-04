@@ -26,8 +26,10 @@ import {
 import {
   Filter,
   X,
-  Download,
   Loader2,
+  FileSpreadsheet,
+  Image as ImageIcon,
+  FileArchive,
 } from "lucide-react";
 
 interface CameraReportFiltersProps {
@@ -35,8 +37,12 @@ interface CameraReportFiltersProps {
   filters: CameraReportFilterParams;
   isLoading: boolean;
   isExporting: boolean;
+  isExportingExcel?: boolean;
+  isExportingImages?: boolean;
   onApplyFilters: (filters: CameraReportFilterParams) => void;
   onExport: () => void;
+  onExportExcel?: () => void;
+  onExportImages?: () => void;
 }
 
 export function CameraReportFilters({
@@ -44,8 +50,12 @@ export function CameraReportFilters({
   filters,
   isLoading,
   isExporting,
+  isExportingExcel = false,
+  isExportingImages = false,
   onApplyFilters,
   onExport,
+  onExportExcel,
+  onExportImages,
 }: CameraReportFiltersProps) {
   const t = useTranslations("cameraReport");
 
@@ -90,7 +100,7 @@ export function CameraReportFilters({
             <Filter className="h-4 w-4" />
             {t("filters.title")}
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {hasActiveFilters && (
               <Button
                 variant="ghost"
@@ -102,19 +112,55 @@ export function CameraReportFilters({
                 {t("filters.reset")}
               </Button>
             )}
+
+            {/* Download ZIP */}
             <Button
               variant="outline"
               size="sm"
               onClick={onExport}
-              disabled={isExporting || isLoading}
+              disabled={isExporting || isLoading || isExportingExcel || isExportingImages}
             >
               {isExporting ? (
                 <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Download className="me-1.5 h-3.5 w-3.5" />
+                <FileArchive className="me-1.5 h-3.5 w-3.5" />
               )}
               {t("filters.export")}
             </Button>
+
+            {/* Export Excel */}
+            {onExportExcel && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onExportExcel}
+                disabled={isExportingExcel || isLoading || isExporting || isExportingImages}
+              >
+                {isExportingExcel ? (
+                  <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="me-1.5 h-3.5 w-3.5" />
+                )}
+                {t("filters.exportExcel")}
+              </Button>
+            )}
+
+            {/* Export Images */}
+            {onExportImages && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onExportImages}
+                disabled={isExportingImages || isLoading || isExporting || isExportingExcel}
+              >
+                {isExportingImages ? (
+                  <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ImageIcon className="me-1.5 h-3.5 w-3.5" />
+                )}
+                {t("filters.exportImages")}
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>

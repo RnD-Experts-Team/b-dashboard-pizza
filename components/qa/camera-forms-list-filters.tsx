@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
-import { useStoresForCameraForm } from "@/lib/hooks/use-camera-form";
+import { useCallback, useMemo } from "react";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import {
   Card,
   CardContent,
@@ -45,7 +45,26 @@ export function CameraFormsListFilters({
   onApply,
   onReset,
 }: CameraFormsListFiltersProps) {
-  const { stores, isLoading: storesLoading } = useStoresForCameraForm();
+  const userStores = useAuthStore((state) => state.user?.stores ?? []);
+  const authLoading = useAuthStore((state) => state.isLoading);
+
+  const stores = useMemo(() => {
+    const uniqueStores = new Map<number, string>();
+
+    for (const assignment of userStores) {
+      const storeId =
+        assignment.store.internalId ?? Number.parseInt(assignment.store.id, 10);
+
+      if (!Number.isFinite(storeId)) continue;
+      if (!uniqueStores.has(storeId)) {
+        uniqueStores.set(storeId, assignment.store.name);
+      }
+    }
+
+    return Array.from(uniqueStores, ([id, name]) => ({ id, name }));
+  }, [userStores]);
+
+  const storesLoading = authLoading && stores.length === 0;
 
   const hasActiveFilters =
     filters.dateFrom !== "" ||
@@ -87,7 +106,7 @@ export function CameraFormsListFilters({
           <div className="space-y-2">
             <Label htmlFor="store-filter">Store</Label>
             <Select
-              value={filters.storeId ? String(filters.storeId) : "all"}
+              value={filters.storeId !== undefined ? String(filters.storeId) : "all"}
               onValueChange={(val) =>
                 onSetFilters({
                   storeId: val === "all" ? undefined : Number(val),
