@@ -1387,6 +1387,144 @@ export const qaService = {
   },
 
   /**
+   * Export camera report to Excel through the local API proxy.
+   * Triggers a file download in the browser.
+   *
+   * @param params - Optional filter parameters.
+   */
+  async exportCameraReportExcel(params?: {
+    store_id?: number;
+    group?: number;
+    report_type?: string;
+    date_from?: string;
+    date_to?: string;
+    rating_id?: number;
+  }): Promise<void> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError(
+        "You must be logged in to export camera reports.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    const url = `/api/qa/camera-reports/exportExcel`;
+
+    try {
+      const response = await axios.get(url, {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: "blob",
+        timeout: 60_000,
+      });
+
+      const contentDisposition = response.headers["content-disposition"];
+      let filename = "camera-report-export.xlsx";
+      if (contentDisposition) {
+        const match = contentDisposition.match(
+          /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+        );
+        if (match?.[1]) {
+          filename = match[1].replace(/['"]/g, "");
+        }
+      }
+
+      const blob = new Blob([response.data]);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        if (status === 401) throw new QAError("Authentication failed.", "UNAUTHORIZED");
+        if (status === 403) throw new QAError("Permission denied.", "FORBIDDEN");
+        if (status === 404) throw new QAError("Export endpoint not found.", "NOT_FOUND");
+        if (status === 429) throw new QAError("Rate limit exceeded.", "RATE_LIMITED", 30);
+        throw new QAError(`Server error: ${status || "Unknown"}`, "SERVER_ERROR");
+      }
+      throw new QAError(err instanceof Error ? err.message : "Network or parsing error.", "NETWORK_ERROR");
+    }
+  },
+
+  /**
+   * Export camera report images through the local API proxy.
+   * Triggers a file download in the browser.
+   *
+   * @param params - Optional filter parameters.
+   */
+  async exportCameraReportImages(params?: {
+    store_id?: number;
+    group?: number;
+    report_type?: string;
+    date_from?: string;
+    date_to?: string;
+    rating_id?: number;
+  }): Promise<void> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError(
+        "You must be logged in to export camera reports.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    const url = `/api/qa/camera-reports/exportImages`;
+
+    try {
+      const response = await axios.get(url, {
+        params,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: "blob",
+        timeout: 60_000,
+      });
+
+      const contentDisposition = response.headers["content-disposition"];
+      let filename = "camera-report-images.zip";
+      if (contentDisposition) {
+        const match = contentDisposition.match(
+          /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
+        );
+        if (match?.[1]) {
+          filename = match[1].replace(/['"]/g, "");
+        }
+      }
+
+      const blob = new Blob([response.data]);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        if (status === 401) throw new QAError("Authentication failed.", "UNAUTHORIZED");
+        if (status === 403) throw new QAError("Permission denied.", "FORBIDDEN");
+        if (status === 404) throw new QAError("Export endpoint not found.", "NOT_FOUND");
+        if (status === 429) throw new QAError("Rate limit exceeded.", "RATE_LIMITED", 30);
+        throw new QAError(`Server error: ${status || "Unknown"}`, "SERVER_ERROR");
+      }
+      throw new QAError(err instanceof Error ? err.message : "Network or parsing error.", "NETWORK_ERROR");
+    }
+  },
+
+  /**
    * Fetch camera forms list through the local API proxy.
    *
    * @param filters - Filter/pagination parameters.

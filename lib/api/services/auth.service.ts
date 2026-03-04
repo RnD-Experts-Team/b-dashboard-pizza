@@ -90,6 +90,7 @@ function transformUserStore(apiStore: ApiAuthUserStore) {
   return {
     store: {
       id: apiStore.store.store_id,
+      internalId: apiStore.store.id,
       name: apiStore.store.name,
       metadata: apiStore.store.metadata,
       isActive: apiStore.store.is_active,

@@ -20,9 +20,13 @@ export default function CameraReportPage() {
     error,
     filters,
     isExporting,
+    isExportingExcel,
+    isExportingImages,
     refetch,
     applyFilters,
     exportReport,
+    exportReportExcel,
+    exportReportImages,
     clearError,
   } = useCameraReport();
 
@@ -51,8 +55,12 @@ export default function CameraReportPage() {
         filters={filters}
         isLoading={isLoading}
         isExporting={isExporting}
+        isExportingExcel={isExportingExcel}
+        isExportingImages={isExportingImages}
         onApplyFilters={applyFilters}
         onExport={exportReport}
+        onExportExcel={exportReportExcel}
+        onExportImages={exportReportImages}
       />
 
       {isLoading && !data && <CameraReportSkeleton />}

@@ -23,50 +23,34 @@ export async function POST(request: NextRequest) {
     return errorResponse("INVALID_PARAM", "Invalid form data in request body.", 400);
   }
 
-  const mappings = formData.get("mappings");
   const tempId = formData.get("temp_id");
   const files = formData
     .getAll("files")
     .filter((entry): entry is File => entry instanceof File);
+  const mappingsField = formData.get("mappings");
 
-  if (typeof mappings !== "string" || !mappings.trim()) {
-    return errorResponse("VALIDATION_ERROR", "mappings is required.", 422, {
+  if (typeof mappingsField !== "string" || !mappingsField.trim()) {
+    return errorResponse("VALIDATION_ERROR", "mappings is required and must be a valid JSON object.", 422, {
       field: "mappings",
     });
   }
 
-  // Ensure mappings are forwarded as an array (upstream expects an array).
-  // We'll append one `mappings[]` form entry per mapping item.
   let parsedMappings: unknown;
   try {
-    parsedMappings = JSON.parse(mappings);
+    parsedMappings = JSON.parse(mappingsField);
   } catch {
     return errorResponse(
       "VALIDATION_ERROR",
-      "mappings must be valid JSON (object or array).",
+      "mappings must be valid JSON (object).",
       422,
       { field: "mappings" }
     );
   }
 
-  const appendMappingEntry = (item: unknown) => {
-    if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
-      upstreamFormData.append("mappings[]", String(item));
-    } else {
-      upstreamFormData.append("mappings[]", JSON.stringify(item));
-    }
-  };
-
-  if (Array.isArray(parsedMappings)) {
-    for (const item of parsedMappings) appendMappingEntry(item);
-  } else if (parsedMappings && typeof parsedMappings === "object") {
-    for (const [filename, mapTo] of Object.entries(parsedMappings as Record<string, unknown>)) {
-      appendMappingEntry({ filename, mapping: mapTo });
-    }
-  } else {
+  if (!parsedMappings || typeof parsedMappings !== "object" || Array.isArray(parsedMappings)) {
     return errorResponse(
       "VALIDATION_ERROR",
-      "mappings must be an object or array.",
+      "mappings must be a JSON object.",
       422,
       { field: "mappings" }
     );
@@ -82,10 +66,17 @@ export async function POST(request: NextRequest) {
   }
 
   const upstreamFormData = new FormData();
+  
   for (const file of files) {
-    upstreamFormData.append("files[]", file);
+    // Ensure filename is preserved when passing to the upstream fetch
+    upstreamFormData.append("files", file, file.name || "upload.csv");
+    // Also send as files[] in case the upstream API expects PHP/Laravel array conventions
+    upstreamFormData.append("files[]", file, file.name || "upload.csv");
   }
-  // `mappings[]` entries already appended above
+
+  // Forward the mappings exact JSON string, as the API expects an object structure (e.g. {"file1.csv": "detail_orders"})
+  upstreamFormData.append("mappings", mappingsField);
+
   if (typeof tempId === "string" && tempId.trim()) {
     upstreamFormData.append("temp_id", tempId);
   }

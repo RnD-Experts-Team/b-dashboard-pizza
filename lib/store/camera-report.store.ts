@@ -42,6 +42,8 @@ interface CameraReportState {
   error: CameraReportErrorState | null;
   filters: CameraReportFilterParams;
   isExporting: boolean;
+  isExportingExcel: boolean;
+  isExportingImages: boolean;
   lastFetchedAt: number | null;
   fetchCount: number;
 
@@ -49,6 +51,8 @@ interface CameraReportState {
   refreshReport: () => Promise<void>;
   setFilters: (filters: CameraReportFilterParams) => void;
   exportReport: () => Promise<void>;
+  exportReportExcel: () => Promise<void>;
+  exportReportImages: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
   startAutoRefresh: () => void;
@@ -90,6 +94,8 @@ export const useCameraReportStore = create<CameraReportState>()(
     error: null,
     filters: {},
     isExporting: false,
+    isExportingExcel: false,
+    isExportingImages: false,
     lastFetchedAt: null,
     fetchCount: 0,
 
@@ -238,6 +244,108 @@ export const useCameraReportStore = create<CameraReportState>()(
       set({ isExporting: false });
     },
 
+    exportReportExcel: async () => {
+      const state = get();
+      if (state.isExportingExcel) return;
+
+      set({ isExportingExcel: true });
+
+      const clean = cleanParams(state.filters);
+
+      try {
+        await qaService.exportCameraReportExcel(
+          Object.keys(clean).length > 0 ? clean : undefined
+        );
+      } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          (err.name === "CanceledError" || err.name === "AbortError")
+        ) {
+          set({ isExportingExcel: false });
+          return;
+        }
+
+        if (err instanceof QAError) {
+          set({
+            isExportingExcel: false,
+            error: {
+              message: err.message,
+              code: err.code,
+              retryable: err.retryable,
+              retryAfter: err.retryAfter,
+            },
+          });
+          return;
+        }
+
+        set({
+          isExportingExcel: false,
+          error: {
+            message:
+              err instanceof Error
+                ? err.message
+                : "An unexpected error occurred during export.",
+            code: "UNKNOWN",
+            retryable: true,
+          },
+        });
+        return;
+      }
+
+      set({ isExportingExcel: false });
+    },
+
+    exportReportImages: async () => {
+      const state = get();
+      if (state.isExportingImages) return;
+
+      set({ isExportingImages: true });
+
+      const clean = cleanParams(state.filters);
+
+      try {
+        await qaService.exportCameraReportImages(
+          Object.keys(clean).length > 0 ? clean : undefined
+        );
+      } catch (err: unknown) {
+        if (
+          err instanceof Error &&
+          (err.name === "CanceledError" || err.name === "AbortError")
+        ) {
+          set({ isExportingImages: false });
+          return;
+        }
+
+        if (err instanceof QAError) {
+          set({
+            isExportingImages: false,
+            error: {
+              message: err.message,
+              code: err.code,
+              retryable: err.retryable,
+              retryAfter: err.retryAfter,
+            },
+          });
+          return;
+        }
+
+        set({
+          isExportingImages: false,
+          error: {
+            message:
+              err instanceof Error
+                ? err.message
+                : "An unexpected error occurred during export.",
+            code: "UNKNOWN",
+            retryable: true,
+          },
+        });
+        return;
+      }
+
+      set({ isExportingImages: false });
+    },
+
     clearError: () => set({ error: null }),
 
     reset: () => {
@@ -256,6 +364,8 @@ export const useCameraReportStore = create<CameraReportState>()(
         error: null,
         filters: {},
         isExporting: false,
+        isExportingExcel: false,
+        isExportingImages: false,
         lastFetchedAt: null,
         fetchCount: 0,
       });
