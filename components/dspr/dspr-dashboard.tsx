@@ -244,7 +244,8 @@ export function DsprDashboard() {
   );
 
   // Re-fetch when the selected store changes
-  const storeId = selectedStore?.id ?? null;
+  // Use the human-readable storeId (e.g. "03795-00021") — this is what the DSPR API expects
+  const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
   // console.log("[DsprDashboard] render:", { storeId, selectedStore: selectedStore ? { id: selectedStore.id, name: selectedStore.name } : null, hasData: !!data, isLoading, error });
   const selectedDateRef = useRef(selectedDate);
 
