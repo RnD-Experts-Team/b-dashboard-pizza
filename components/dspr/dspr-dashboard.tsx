@@ -246,6 +246,8 @@ export function DsprDashboard() {
   // Re-fetch when the selected store changes
   // Use the human-readable storeId (e.g. "03795-00021") — this is what the DSPR API expects
   const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
+  // Numeric id used as the storePermissions map key for canAccessRoute checks
+  const storeNumericId = selectedStore?.id ?? null;
   // console.log("[DsprDashboard] render:", { storeId, selectedStore: selectedStore ? { id: selectedStore.id, name: selectedStore.name } : null, hasData: !!data, isLoading, error });
   const selectedDateRef = useRef(selectedDate);
 
@@ -662,7 +664,7 @@ export function DsprDashboard() {
               service: "QA",
               method: "GET",
               path: "/audits/ratings-summary/overview",
-              storeId: storeId ? String(storeId) : undefined,
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
             },
           ]}
         /> 
