@@ -27,8 +27,9 @@ export function useDspr() {
     stopAutoRefresh,
   } = useDsprStore();
 
-  const storeIdRef = useRef(selectedStore?.id);
-  storeIdRef.current = selectedStore?.id;
+  // Use the human-readable storeId (e.g. "03795-00021") for the DSPR API URL
+  const storeIdRef = useRef(selectedStore?.storeId ?? selectedStore?.id);
+  storeIdRef.current = selectedStore?.storeId ?? selectedStore?.id;
 
   // console.log("[useDspr] selectedStore:", selectedStore ? { id: selectedStore.id, name: selectedStore.name } : null);
 

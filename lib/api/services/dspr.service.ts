@@ -63,7 +63,8 @@ function getSelectedStoreId(): string | null {
     const raw = localStorage.getItem("selected-store-storage");
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.state?.selectedStore?.id ?? null;
+    // Use the human-readable storeId (e.g. "03795-00021"), not the numeric id
+    return parsed?.state?.selectedStore?.storeId ?? parsed?.state?.selectedStore?.id ?? null;
   } catch (e) {
     if (process.env.NODE_ENV === "development") {
       console.warn("[DSPR] Failed to read selected store from localStorage:", e);
