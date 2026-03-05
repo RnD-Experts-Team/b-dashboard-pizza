@@ -1,5 +1,6 @@
 "use client";
 
+import axios from "axios";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -12,6 +13,20 @@ import { Button } from "@/components/ui/button";
 import { Pencil } from "lucide-react";
 import { userService } from "@/lib/api/services/user.service";
 import type { User } from "@/types/user.types";
+
+const cancelErrorPattern = /cancel(?:ed|led)|abort(?:ed|error)?/i;
+
+function isCanceledError(error: unknown): boolean {
+  if (axios.isCancel(error)) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (
+    error instanceof Error &&
+    (error.name === "CanceledError" || cancelErrorPattern.test(error.message))
+  ) {
+    return true;
+  }
+  return typeof error === "string" ? cancelErrorPattern.test(error) : false;
+}
 
 export default function UserDetailsPage() {
   const t = useTranslations("users");
@@ -34,13 +49,12 @@ export default function UserDetailsPage() {
       try {
         setIsLoading(true);
         setError(null);
-        // console.log(`Fetching user details for user ID: ${userId}`);
-        
         const response = await userService.getUser(userId);
-        // console.log("User details fetched successfully:", response);
-        
         setUser(response.data);
       } catch (err) {
+        if (isCanceledError(err)) {
+          return;
+        }
         const errorMessage = err instanceof Error ? err.message : "Failed to fetch user details";
         console.error("Error fetching user details:", errorMessage);
         setError(errorMessage);
@@ -49,7 +63,7 @@ export default function UserDetailsPage() {
       }
     };
 
-    fetchUser();
+    void fetchUser();
   }, [userId]);
 
   if (isLoading) {
@@ -80,8 +94,6 @@ export default function UserDetailsPage() {
       </div>
     );
   }
-
-  console.log("Rendering user details for:", user.name);
 
   return (
     <div className="space-y-6">
@@ -220,11 +232,11 @@ export default function UserDetailsPage() {
             <CardDescription>{t("details.storeAccessDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {user.stores.map((userStore) => (
-                <div key={userStore.store.id} className="border-t pt-4 first:border-t-0 first:pt-0">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold">{userStore.store.name}</h4>
+                <div key={userStore.store.id} className="rounded-lg border p-4">
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-semibold leading-tight">{userStore.store.name}</h4>
                     <Badge variant="outline">{userStore.store.id}</Badge>
                   </div>
                   <div>

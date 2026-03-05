@@ -54,10 +54,25 @@ function transformAuthRule(raw: RawAuthRule): AuthRule {
   };
 }
 
+/** Lightweight store info derived from the general-overview response. */
+export interface OverviewStore {
+  /** Numeric store id string (e.g. "48") — used as the storePermissions map key. */
+  id: string;
+  /** Human-readable store identifier (e.g. "03795-00001"), cross-referenced from /auth/me. */
+  storeId?: string;
+  name: string;
+  metadata: Record<string, unknown>;
+  isActive: boolean;
+}
+
 export interface GeneralOverviewResult {
   authRules: AuthRule[];
   globalPermissions: Set<string>;
   storePermissions: Record<string, Set<string>>;
+  /** Basic user info returned by the overview endpoint */
+  overviewUser: { id: string; name: string; email: string } | null;
+  /** Store assignments the user has access to, keyed by numeric store id */
+  overviewStores: OverviewStore[];
 }
 
 /**
@@ -191,11 +206,13 @@ export const authService = {
       success: boolean;
       message?: string;
       data: {
+        user?: { id: number; name: string; email: string };
         auth_rules?: RawAuthRule[];
         full_permissions?: Array<{ id: number; name: string }>;
+        direct_permissions?: Array<{ id: number; name: string }>;
         direct_roles?: Array<{ permissions?: Array<{ id: number; name: string }> }>;
         store_assignments?: Array<{
-          store: { id: number | string; name: string };
+          store: { id: number | string; name: string; metadata?: Record<string, unknown>; is_active?: boolean };
           all_permissions_from_store_roles?: Array<{ id: number; name: string }>;
         }>;
       };
@@ -203,25 +220,39 @@ export const authService = {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
 
+    // ── User info ──────────────────────────────────────────────────────────
+    const overviewUser = data.data.user
+      ? { id: String(data.data.user.id), name: data.data.user.name, email: data.data.user.email }
+      : null;
+
     // ── Global permissions ─────────────────────────────────────────────────
-    // Prefer the flattened `full_permissions` list, then supplement with any
-    // permissions carried on `direct_roles`.
+    // Merge full_permissions + direct_permissions + permissions from
+    // direct_roles into one flat set.
     const globalPermissions = new Set<string>();
     data.data.full_permissions?.forEach((p) => globalPermissions.add(p.name));
+    data.data.direct_permissions?.forEach((p) => globalPermissions.add(p.name));
     data.data.direct_roles?.forEach((role) =>
       role.permissions?.forEach((p) => globalPermissions.add(p.name))
     );
 
     // ── Store-scoped permissions ───────────────────────────────────────────
-    // Each store assignment carries `all_permissions_from_store_roles` which
-    // is the flattened union of all permissions from roles assigned at that
-    // store. Keyed by store numeric id (as string).
+    // Keyed by the store's numeric id (as string) — this is the only id
+    // present in the general-overview response.
     const storePermissions: Record<string, Set<string>> = {};
+    const overviewStores: OverviewStore[] = [];
+
     data.data.store_assignments?.forEach((assignment) => {
       const id = String(assignment.store.id);
       const perms = new Set<string>();
       assignment.all_permissions_from_store_roles?.forEach((p) => perms.add(p.name));
       storePermissions[id] = perms;
+
+      overviewStores.push({
+        id,
+        name: assignment.store.name,
+        metadata: assignment.store.metadata ?? {},
+        isActive: assignment.store.is_active ?? true,
+      });
     });
 
     return {
@@ -231,6 +262,8 @@ export const authService = {
         authRules: (data.data.auth_rules ?? []).map(transformAuthRule),
         globalPermissions,
         storePermissions,
+        overviewUser,
+        overviewStores,
       },
     };
   },

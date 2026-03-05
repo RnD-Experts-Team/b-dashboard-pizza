@@ -9,6 +9,7 @@ const noopStorage = {
 };
 import type { AxiosError } from "axios";
 import { authService } from "@/lib/api/services/auth.service";
+import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { AuthUser, LoginCredentials, AuthUserStore } from "@/types/auth.types";
 import type { AuthRule } from "@/types/auth-rule.types";
 import {
@@ -36,6 +37,11 @@ interface AuthState {
    * Loaded from GET /auth/general-overview after authentication.
    */
   authRules: AuthRule[];
+  /**
+   * Store list from /auth/general-overview.
+   * Uses numeric store IDs (as strings) consistent with storePermissions keys.
+   */
+  overviewStores: OverviewStore[];
   // ────────────────────────────────────────────────────────────────────────
   
   // Auth status
@@ -140,6 +146,7 @@ export const useAuthStore = create<AuthState>()(
       globalPermissions: new Set<string>(),
       storePermissions: {},
       authRules: [],
+      overviewStores: [],
       isAuthenticated: false,
       isLoading: false,
       isInitialized: false,
@@ -153,10 +160,21 @@ export const useAuthStore = create<AuthState>()(
             // Fetch rules + permissions from general-overview using the fresh
             // token so the axios interceptor does not need localStorage yet.
             const overview = await authService.getGeneralOverview(response.data.token);
-            const { globalPermissions, storePermissions, authRules } =
+            const { globalPermissions, storePermissions, authRules, overviewStores } =
               overview.success
                 ? overview.data
-                : { ...normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]), authRules: [] };
+                : { ...normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]), authRules: [], overviewStores: [] };
+            // Cross-reference user.stores (from login response) to attach human-readable storeId
+            const loginIdMap = new Map<string, string>();
+            user.stores?.forEach((s) => {
+              if (s.store.internalId !== undefined) {
+                loginIdMap.set(String(s.store.internalId), s.store.id);
+              }
+            });
+            const enrichedLoginStores = overviewStores.map((s) => ({
+              ...s,
+              storeId: loginIdMap.get(s.id) ?? s.id,
+            }));
             set({
               user,
               token: response.data.token,
@@ -165,6 +183,7 @@ export const useAuthStore = create<AuthState>()(
               globalPermissions,
               storePermissions,
               authRules,
+              overviewStores: enrichedLoginStores,
               isAuthenticated: true,
               isLoading: false,
             });
@@ -189,6 +208,7 @@ export const useAuthStore = create<AuthState>()(
           globalPermissions: new Set<string>(),
           storePermissions: {},
           authRules: [],
+          overviewStores: [],
           isAuthenticated: false,
         });
         persistUserData(null);
@@ -228,6 +248,7 @@ export const useAuthStore = create<AuthState>()(
             roles: [],
             globalPermissions: new Set<string>(),
             storePermissions: {},
+            overviewStores: [],
           });
           return;
         }
@@ -240,10 +261,21 @@ export const useAuthStore = create<AuthState>()(
             // Re-fetch rules + permissions; token is already in localStorage
             // so the axios interceptor will attach it automatically.
             const overview = await authService.getGeneralOverview(token);
-            const { globalPermissions, storePermissions, authRules } =
+            const { globalPermissions, storePermissions, authRules, overviewStores } =
               overview.success
                 ? overview.data
-                : { ...normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]), authRules: [] };
+                : { ...normalizeAuthPermissions(user as unknown as Parameters<typeof normalizeAuthPermissions>[0]), authRules: [], overviewStores: [] as OverviewStore[] };
+            // Cross-reference user.stores (from /auth/me) to attach human-readable storeId
+            const meIdMap = new Map<string, string>();
+            user.stores?.forEach((s) => {
+              if (s.store.internalId !== undefined) {
+                meIdMap.set(String(s.store.internalId), s.store.id);
+              }
+            });
+            const enrichedMeStores = overviewStores.map((s) => ({
+              ...s,
+              storeId: meIdMap.get(s.id) ?? s.id,
+            }));
             set({
               user,
               permissions: extractPermissions(user),
@@ -251,6 +283,7 @@ export const useAuthStore = create<AuthState>()(
               globalPermissions,
               storePermissions,
               authRules,
+              overviewStores: enrichedMeStores,
               isAuthenticated: true,
               isLoading: false,
             });
@@ -263,6 +296,7 @@ export const useAuthStore = create<AuthState>()(
               roles: [],
               globalPermissions: new Set<string>(),
               storePermissions: {},
+              overviewStores: [],
               isAuthenticated: false,
               isLoading: false,
             });
@@ -276,6 +310,7 @@ export const useAuthStore = create<AuthState>()(
             roles: [],
             globalPermissions: new Set<string>(),
             storePermissions: {},
+            overviewStores: [],
             isAuthenticated: false,
             isLoading: false,
           });

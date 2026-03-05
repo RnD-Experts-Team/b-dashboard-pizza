@@ -396,7 +396,7 @@ export function SecurityMonitor() {
                   </p>
                 </div>
               ) : (
-                <ScrollArea className="h-[400px]">
+                <ScrollArea className="h-100">
                   <div className="space-y-2">
                     {events.map((event) => (
                       <div

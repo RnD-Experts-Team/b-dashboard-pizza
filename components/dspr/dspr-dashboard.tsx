@@ -442,7 +442,7 @@ export function DsprDashboard() {
           className="text-xs gap-1.5 px-3 py-1 font-medium"
         >
           <Store className="h-3.5 w-3.5" />
-          Store {filtering.store}
+          Store {selectedStore.storeId}
         </Badge>
 
         {/* Date picker */}

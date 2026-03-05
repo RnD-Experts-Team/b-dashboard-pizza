@@ -1,5 +1,6 @@
-"use client";
+﻿"use client";
 
+import axios from "axios";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useParams } from "next/navigation";
@@ -12,14 +13,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   ArrowLeft,
   ArrowRight,
@@ -40,6 +33,43 @@ import { toast } from "sonner";
 import type { User, UserStore } from "@/types/user.types";
 import type { Store } from "@/types/store.types";
 import type { RoleWithStats } from "@/types/role.types";
+
+const cancelErrorPattern = /cancel(?:ed|led)|abort(?:ed|error)?/i;
+
+function isCanceledError(error: unknown): boolean {
+  if (axios.isCancel(error)) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (
+    error instanceof Error &&
+    (error.name === "CanceledError" || cancelErrorPattern.test(error.message))
+  ) {
+    return true;
+  }
+  return typeof error === "string" ? cancelErrorPattern.test(error) : false;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((chunk) => chunk[0])
+    .join("")
+    .toUpperCase();
+}
+
+function getRoleAssignedStoreIds(
+  stores: UserStore[] | undefined,
+  roleId: string | undefined
+): Set<string> {
+  if (!stores || !roleId) {
+    return new Set();
+  }
+
+  return new Set(
+    stores
+      .filter((userStore) => userStore.roles?.some((role) => role.id === roleId))
+      .map((userStore) => userStore.store.id)
+  );
+}
 
 export default function AssignStorePage() {
   const t = useTranslations("userStoreAssignment.assign");
@@ -79,49 +109,64 @@ export default function AssignStorePage() {
   const BackIcon = isRtl ? ArrowRight : ArrowLeft;
 
   // Fetch data
-  const fetchUsers = useCallback(async (search?: string) => {
-    setIsLoadingUsers(true);
-    try {
-      const response = await userService.getUsers({ search, pageSize: 100 });
-      setUsers(response.data);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    } finally {
-      setIsLoadingUsers(false);
-    }
-  }, []);
+  const fetchUsers = useCallback(
+    async (search?: string) => {
+      setIsLoadingUsers(true);
+      try {
+        const response = await userService.getUsers({ search, pageSize: 100 });
+        setUsers(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch users:", error);
+        toast.error(t("loadUsersError"));
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    },
+    [t]
+  );
 
-  const fetchStores = useCallback(async (search?: string) => {
-    setIsLoadingStores(true);
-    try {
-      const response = await storeService.getStores({
-        search,
-        perPage: 100,
-      });
-      setStores(response.data);
-    } catch (error) {
-      console.error("Failed to fetch stores:", error);
-    } finally {
-      setIsLoadingStores(false);
-    }
-  }, []);
+  const fetchStores = useCallback(
+    async (search?: string) => {
+      setIsLoadingStores(true);
+      try {
+        const response = await storeService.getStores({
+          search,
+          perPage: 100,
+        });
+        setStores(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch stores:", error);
+        toast.error(t("loadStoresError"));
+      } finally {
+        setIsLoadingStores(false);
+      }
+    },
+    [t]
+  );
 
-  const fetchRoles = useCallback(async (search?: string) => {
-    setIsLoadingRoles(true);
-    try {
-      const response = await roleService.getRoles({ search, perPage: 100 });
-      setRoles(response.data);
-    } catch (error) {
-      console.error("Failed to fetch roles:", error);
-    } finally {
-      setIsLoadingRoles(false);
-    }
-  }, []);
+  const fetchRoles = useCallback(
+    async (search?: string) => {
+      setIsLoadingRoles(true);
+      try {
+        const response = await roleService.getRoles({ search, perPage: 100 });
+        setRoles(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch roles:", error);
+        toast.error(t("loadRolesError"));
+      } finally {
+        setIsLoadingRoles(false);
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
-    fetchUsers();
-    fetchStores();
-    fetchRoles();
+    void fetchUsers();
+    void fetchStores();
+    void fetchRoles();
   }, [fetchUsers, fetchStores, fetchRoles]);
 
   // Fetch user details when a user is selected
@@ -129,6 +174,7 @@ export default function AssignStorePage() {
     const fetchUserDetails = async () => {
       if (!selectedUser) {
         setUserDetails(null);
+        setSelectedStoreIds(new Set());
         return;
       }
 
@@ -137,40 +183,78 @@ export default function AssignStorePage() {
         const response = await userService.getUser(selectedUser.id);
         setUserDetails(response.data);
       } catch (error) {
+        if (isCanceledError(error)) return;
         console.error("Failed to fetch user details:", error);
-        toast.error("Failed to load user assignments");
+        toast.error(t("loadAssignmentsError"));
       } finally {
         setIsLoadingUserDetails(false);
       }
     };
 
-    fetchUserDetails();
-  }, [selectedUser]);
+    void fetchUserDetails();
+  }, [selectedUser, t]);
+
+  const assignedStoreIdsForRole = useMemo(
+    () => getRoleAssignedStoreIds(userDetails?.stores, selectedRole?.id),
+    [userDetails?.stores, selectedRole?.id]
+  );
+
+  // Auto-check stores that are already assigned for the selected user-role pair.
+  useEffect(() => {
+    if (!selectedUser || !selectedRole) {
+      setSelectedStoreIds(new Set());
+      return;
+    }
+
+    setSelectedStoreIds(new Set(assignedStoreIdsForRole));
+  }, [assignedStoreIdsForRole, selectedRole, selectedUser]);
 
   // Filtered lists
   const filteredUsers = useMemo(() => {
     if (!userSearch) return users;
     const q = userSearch.toLowerCase();
     return users.filter(
-      (u) =>
-        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      (user) =>
+        (user.name ?? "").toLowerCase().includes(q) ||
+        (user.email ?? "").toLowerCase().includes(q)
     );
   }, [users, userSearch]);
 
   const filteredRoles = useMemo(() => {
     if (!roleSearch) return roles;
     const q = roleSearch.toLowerCase();
-    return roles.filter((r) => r.name.toLowerCase().includes(q));
+    return roles.filter((role) => (role.name ?? "").toLowerCase().includes(q));
   }, [roles, roleSearch]);
 
   const filteredStores = useMemo(() => {
     if (!storeSearch) return stores;
     const q = storeSearch.toLowerCase();
-    return stores.filter((s) => s.name.toLowerCase().includes(q));
+    return stores.filter((store) => (store.name ?? "").toLowerCase().includes(q));
   }, [stores, storeSearch]);
+
+  const filteredStoreIds = useMemo(
+    () => filteredStores.map((store) => store.id),
+    [filteredStores]
+  );
+
+  const selectedFilteredCount = useMemo(
+    () => filteredStoreIds.filter((id) => selectedStoreIds.has(id)).length,
+    [filteredStoreIds, selectedStoreIds]
+  );
+
+  const allFilteredSelected =
+    filteredStoreIds.length > 0 &&
+    selectedFilteredCount === filteredStoreIds.length;
+  const partiallyFilteredSelected =
+    selectedFilteredCount > 0 && !allFilteredSelected;
+  const canSelectStores = Boolean(selectedUser && selectedRole);
 
   // Store toggle
   const toggleStore = (storeId: string) => {
+    if (!canSelectStores) {
+      return;
+    }
+
     setSelectedStoreIds((prev) => {
       const next = new Set(prev);
       if (next.has(storeId)) {
@@ -180,6 +264,27 @@ export default function AssignStorePage() {
       }
       return next;
     });
+    setErrors((prev) => ({ ...prev, stores: "" }));
+  };
+
+  const toggleAllFilteredStores = () => {
+    if (!canSelectStores || filteredStoreIds.length === 0) {
+      return;
+    }
+
+    setSelectedStoreIds((prev) => {
+      const next = new Set(prev);
+      const areAllFilteredSelected = filteredStoreIds.every((id) => next.has(id));
+
+      if (areAllFilteredSelected) {
+        filteredStoreIds.forEach((id) => next.delete(id));
+      } else {
+        filteredStoreIds.forEach((id) => next.add(id));
+      }
+
+      return next;
+    });
+
     setErrors((prev) => ({ ...prev, stores: "" }));
   };
 
@@ -210,17 +315,26 @@ export default function AssignStorePage() {
   // Submit assignment
   const handleSubmit = async () => {
     if (!validate()) return;
+    if (!selectedUser || !selectedRole) return;
 
     setIsSubmitting(true);
     try {
       const storeIds = Array.from(selectedStoreIds);
+      const newStoreIds = storeIds.filter(
+        (storeId) => !assignedStoreIdsForRole.has(storeId)
+      );
+
+      if (newStoreIds.length === 0) {
+        toast.info(t("noNewStoresSelected"));
+        return;
+      }
 
       // Assign each store one by one using the endpoint
-      for (const storeId of storeIds) {
+      for (const storeId of newStoreIds) {
         await assignmentService.createAssignment({
-          userId: selectedUser!.id,
-          roleId: selectedRole!.id,
-          storeId: storeId,
+          userId: selectedUser.id,
+          roleId: selectedRole.id,
+          storeId,
           metadata: {},
           isActive: true,
         });
@@ -229,6 +343,7 @@ export default function AssignStorePage() {
       toast.success(t("success"));
       router.push(`/${locale}/dashboard/user-store-assignment`);
     } catch (error) {
+      if (isCanceledError(error)) return;
       console.error("Failed to assign store:", error);
       toast.error(t("error"));
     } finally {
@@ -236,8 +351,8 @@ export default function AssignStorePage() {
     }
   };
 
-  const selectedStoreObjects = stores.filter((s) =>
-    selectedStoreIds.has(s.id)
+  const selectedStoreObjects = stores.filter((store) =>
+    selectedStoreIds.has(store.id)
   );
 
   return (
@@ -275,7 +390,7 @@ export default function AssignStorePage() {
                 type="search"
                 placeholder={t("selectUserPlaceholder")}
                 value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
+                onChange={(event) => setUserSearch(event.target.value)}
                 className="ps-8"
               />
             </div>
@@ -284,10 +399,10 @@ export default function AssignStorePage() {
               <p className="text-sm text-destructive">{errors.user}</p>
             )}
 
-            <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            <div className="max-h-75 space-y-1 overflow-y-auto">
               {isLoadingUsers ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-8 w-8 rounded-full" />
                     <div className="flex-1 space-y-1">
                       <Skeleton className="h-3 w-24" />
@@ -318,11 +433,7 @@ export default function AssignStorePage() {
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={user.avatar || undefined} />
                       <AvatarFallback className="text-xs">
-                        {user.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()}
+                        {getInitials(user.name || "User")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 overflow-hidden">
@@ -363,7 +474,7 @@ export default function AssignStorePage() {
                 type="search"
                 placeholder={t("selectRolePlaceholder")}
                 value={roleSearch}
-                onChange={(e) => setRoleSearch(e.target.value)}
+                onChange={(event) => setRoleSearch(event.target.value)}
                 className="ps-8"
               />
             </div>
@@ -372,10 +483,10 @@ export default function AssignStorePage() {
               <p className="text-sm text-destructive">{errors.role}</p>
             )}
 
-            <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            <div className="max-h-75 space-y-1 overflow-y-auto">
               {isLoadingRoles ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-4 w-4 rounded" />
                     <Skeleton className="h-4 w-32" />
                   </div>
@@ -448,7 +559,7 @@ export default function AssignStorePage() {
                 type="search"
                 placeholder={t("selectStoresPlaceholder")}
                 value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
+                onChange={(event) => setStoreSearch(event.target.value)}
                 className="ps-8"
               />
             </div>
@@ -457,10 +568,54 @@ export default function AssignStorePage() {
               <p className="text-sm text-destructive">{errors.stores}</p>
             )}
 
-            <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            <Label className="flex items-center justify-between rounded-md border p-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={
+                    allFilteredSelected
+                      ? true
+                      : partiallyFilteredSelected
+                      ? "indeterminate"
+                      : false
+                  }
+                  onCheckedChange={toggleAllFilteredStores}
+                  disabled={!canSelectStores || filteredStoreIds.length === 0}
+                  aria-label={
+                    allFilteredSelected
+                      ? t("deselectAllStores")
+                      : t("selectAllStores")
+                  }
+                />
+                <span className="text-sm font-medium">
+                  {allFilteredSelected
+                    ? t("deselectAllStores")
+                    : t("selectAllStores")}
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {t("selectedCount", {
+                  count: selectedFilteredCount,
+                  total: filteredStoreIds.length,
+                })}
+              </span>
+            </Label>
+
+            {!canSelectStores && (
+              <p className="text-xs text-muted-foreground">
+                {t("selectUserAndRoleFirst")}
+              </p>
+            )}
+
+            {canSelectStores && assignedStoreIdsForRole.size === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("noStoresAssignedForRole")}
+              </p>
+            )}
+
+            <div className="max-h-75 space-y-1 overflow-y-auto">
               {isLoadingStores ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-4 w-4 rounded" />
                     <Skeleton className="h-4 w-32" />
                   </div>
@@ -477,18 +632,25 @@ export default function AssignStorePage() {
                       "flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors",
                       selectedStoreIds.has(store.id)
                         ? "bg-primary/10 ring-1 ring-primary/30"
-                        : "hover:bg-muted"
+                        : "hover:bg-muted",
+                      !canSelectStores && "cursor-not-allowed opacity-60"
                     )}
                   >
                     <Checkbox
                       checked={selectedStoreIds.has(store.id)}
                       onCheckedChange={() => toggleStore(store.id)}
+                      disabled={!canSelectStores}
                     />
                     <div className="flex-1 overflow-hidden">
                       <div className="truncate text-sm font-medium">
                         {store.name}
                       </div>
                     </div>
+                    {assignedStoreIdsForRole.has(store.id) && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t("alreadyAssigned")}
+                      </Badge>
+                    )}
                   </Label>
                 ))
               )}
@@ -507,9 +669,9 @@ export default function AssignStorePage() {
           </CardHeader>
           <CardContent>
             {isLoadingUserDetails ? (
-              <div className="space-y-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-28 w-full" />
                 ))}
               </div>
             ) : !userDetails?.stores || userDetails.stores.length === 0 ? (
@@ -517,33 +679,38 @@ export default function AssignStorePage() {
                 {t("noCurrentAssignments")}
               </p>
             ) : (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("storeName")}</TableHead>
-                      <TableHead>{t("assignedRoles")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {userDetails.stores.map((userStore: UserStore, index: number) => (
-                      <TableRow key={`${userStore.store.id}-${index}`}>
-                        <TableCell className="font-medium">
-                          {userStore.store.name}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {userStore.roles.map((role) => (
-                              <Badge key={role.id} variant="outline" className="capitalize">
-                                {role.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                {userDetails.stores.map((userStore: UserStore, index: number) => {
+                  const hasSelectedRole = selectedRole
+                    ? userStore.roles.some((role) => role.id === selectedRole.id)
+                    : false;
+
+                  return (
+                    <div
+                      key={`${userStore.store.id}-${index}`}
+                      className={cn(
+                        "rounded-lg border p-4",
+                        hasSelectedRole && "border-primary/50 bg-primary/5"
+                      )}
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{userStore.store.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {userStore.store.storeId}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {userStore.roles.map((role) => (
+                          <Badge key={role.id} variant="outline" className="capitalize">
+                            {role.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -571,6 +738,7 @@ export default function AssignStorePage() {
                     type="button"
                     onClick={() => removeStore(store.id)}
                     className="ms-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                    aria-label={`Remove ${store.name}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -587,7 +755,7 @@ export default function AssignStorePage() {
           size="lg"
           onClick={handleSubmit}
           disabled={isSubmitting}
-          className="min-w-[160px]"
+          className="min-w-40"
         >
           {isSubmitting ? (
             <>
@@ -602,3 +770,4 @@ export default function AssignStorePage() {
     </div>
   );
 }
+

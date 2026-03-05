@@ -1,19 +1,24 @@
-"use client";
+﻿"use client";
 
+import axios from "axios";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
 import {
   ArrowLeft,
   ArrowRight,
   Search,
   Check,
+  X,
   Loader2,
   Store as StoreIcon,
   User as UserIcon,
@@ -25,9 +30,46 @@ import { storeService } from "@/lib/api/services/store.service";
 import { roleService } from "@/lib/api/services/role.service";
 import { assignmentService } from "@/lib/api/services/assignment.service";
 import { toast } from "sonner";
-import type { User } from "@/types/user.types";
+import type { User, UserStore } from "@/types/user.types";
 import type { Store } from "@/types/store.types";
 import type { RoleWithStats } from "@/types/role.types";
+
+const cancelErrorPattern = /cancel(?:ed|led)|abort(?:ed|error)?/i;
+
+function isCanceledError(error: unknown): boolean {
+  if (axios.isCancel(error)) return true;
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (
+    error instanceof Error &&
+    (error.name === "CanceledError" || cancelErrorPattern.test(error.message))
+  ) {
+    return true;
+  }
+  return typeof error === "string" ? cancelErrorPattern.test(error) : false;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((chunk) => chunk[0])
+    .join("")
+    .toUpperCase();
+}
+
+function getRoleAssignedStoreIds(
+  stores: UserStore[] | undefined,
+  roleId: string | undefined
+): Set<string> {
+  if (!stores || !roleId) {
+    return new Set();
+  }
+
+  return new Set(
+    stores
+      .filter((userStore) => userStore.roles?.some((role) => role.id === roleId))
+      .map((userStore) => userStore.store.id)
+  );
+}
 
 export default function RemoveAssignmentPage() {
   const t = useTranslations("userStoreAssignment.remove");
@@ -40,14 +82,18 @@ export default function RemoveAssignmentPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [roles, setRoles] = useState<RoleWithStats[]>([]);
+  const [userDetails, setUserDetails] = useState<User | null>(null);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isLoadingStores, setIsLoadingStores] = useState(true);
   const [isLoadingRoles, setIsLoadingRoles] = useState(true);
+  const [isLoadingUserDetails, setIsLoadingUserDetails] = useState(false);
 
   // Selection state
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<RoleWithStats | null>(null);
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Search state
   const [userSearch, setUserSearch] = useState("");
@@ -62,75 +108,190 @@ export default function RemoveAssignmentPage() {
 
   const BackIcon = isRtl ? ArrowRight : ArrowLeft;
 
-  // Fetch data
-  const fetchUsers = useCallback(async (search?: string) => {
-    setIsLoadingUsers(true);
-    try {
-      const response = await userService.getUsers({ search, pageSize: 100 });
-      setUsers(response.data);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    } finally {
-      setIsLoadingUsers(false);
-    }
-  }, []);
+  const fetchUsers = useCallback(
+    async (search?: string) => {
+      setIsLoadingUsers(true);
+      try {
+        const response = await userService.getUsers({ search, pageSize: 100 });
+        setUsers(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch users:", error);
+        toast.error(t("loadUsersError"));
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    },
+    [t]
+  );
 
-  const fetchStores = useCallback(async (search?: string) => {
-    setIsLoadingStores(true);
-    try {
-      const response = await storeService.getStores({
-        search,
-        perPage: 100,
-      });
-      setStores(response.data);
-    } catch (error) {
-      console.error("Failed to fetch stores:", error);
-    } finally {
-      setIsLoadingStores(false);
-    }
-  }, []);
+  const fetchStores = useCallback(
+    async (search?: string) => {
+      setIsLoadingStores(true);
+      try {
+        const response = await storeService.getStores({
+          search,
+          perPage: 100,
+        });
+        setStores(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch stores:", error);
+        toast.error(t("loadStoresError"));
+      } finally {
+        setIsLoadingStores(false);
+      }
+    },
+    [t]
+  );
 
-  const fetchRoles = useCallback(async (search?: string) => {
-    setIsLoadingRoles(true);
-    try {
-      const response = await roleService.getRoles({ search, perPage: 100 });
-      setRoles(response.data);
-    } catch (error) {
-      console.error("Failed to fetch roles:", error);
-    } finally {
-      setIsLoadingRoles(false);
-    }
-  }, []);
+  const fetchRoles = useCallback(
+    async (search?: string) => {
+      setIsLoadingRoles(true);
+      try {
+        const response = await roleService.getRoles({ search, perPage: 100 });
+        setRoles(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch roles:", error);
+        toast.error(t("loadRolesError"));
+      } finally {
+        setIsLoadingRoles(false);
+      }
+    },
+    [t]
+  );
 
   useEffect(() => {
-    fetchUsers();
-    fetchStores();
-    fetchRoles();
+    void fetchUsers();
+    void fetchStores();
+    void fetchRoles();
   }, [fetchUsers, fetchStores, fetchRoles]);
 
-  // Filtered lists
+  useEffect(() => {
+    const fetchUserDetails = async () => {
+      if (!selectedUser) {
+        setUserDetails(null);
+        setSelectedStoreIds(new Set());
+        return;
+      }
+
+      setIsLoadingUserDetails(true);
+      try {
+        const response = await userService.getUser(selectedUser.id);
+        setUserDetails(response.data);
+      } catch (error) {
+        if (isCanceledError(error)) return;
+        console.error("Failed to fetch user details:", error);
+        toast.error(t("loadAssignmentsError"));
+      } finally {
+        setIsLoadingUserDetails(false);
+      }
+    };
+
+    void fetchUserDetails();
+  }, [selectedUser, t]);
+
+  const assignedStoreIdsForRole = useMemo(
+    () => getRoleAssignedStoreIds(userDetails?.stores, selectedRole?.id),
+    [userDetails?.stores, selectedRole?.id]
+  );
+
+  useEffect(() => {
+    if (!selectedUser || !selectedRole) {
+      setSelectedStoreIds(new Set());
+      return;
+    }
+
+    setSelectedStoreIds(new Set(assignedStoreIdsForRole));
+  }, [assignedStoreIdsForRole, selectedRole, selectedUser]);
+
   const filteredUsers = useMemo(() => {
     if (!userSearch) return users;
     const q = userSearch.toLowerCase();
     return users.filter(
-      (u) =>
-        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      (user) =>
+        (user.name ?? "").toLowerCase().includes(q) ||
+        (user.email ?? "").toLowerCase().includes(q)
     );
   }, [users, userSearch]);
 
   const filteredRoles = useMemo(() => {
     if (!roleSearch) return roles;
     const q = roleSearch.toLowerCase();
-    return roles.filter((r) => r.name.toLowerCase().includes(q));
+    return roles.filter((role) => (role.name ?? "").toLowerCase().includes(q));
   }, [roles, roleSearch]);
 
   const filteredStores = useMemo(() => {
     if (!storeSearch) return stores;
     const q = storeSearch.toLowerCase();
-    return stores.filter((s) => s.name.toLowerCase().includes(q));
+    return stores.filter((store) => (store.name ?? "").toLowerCase().includes(q));
   }, [stores, storeSearch]);
 
-  // Validate form
+  const filteredStoreIds = useMemo(
+    () => filteredStores.map((store) => store.id),
+    [filteredStores]
+  );
+
+  const selectedFilteredCount = useMemo(
+    () => filteredStoreIds.filter((id) => selectedStoreIds.has(id)).length,
+    [filteredStoreIds, selectedStoreIds]
+  );
+
+  const allFilteredSelected =
+    filteredStoreIds.length > 0 &&
+    selectedFilteredCount === filteredStoreIds.length;
+  const partiallyFilteredSelected =
+    selectedFilteredCount > 0 && !allFilteredSelected;
+  const canSelectStores = Boolean(selectedUser && selectedRole);
+
+  const toggleStore = (storeId: string) => {
+    if (!canSelectStores) {
+      return;
+    }
+
+    setSelectedStoreIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(storeId)) {
+        next.delete(storeId);
+      } else {
+        next.add(storeId);
+      }
+      return next;
+    });
+
+    setErrors((prev) => ({ ...prev, stores: "" }));
+  };
+
+  const toggleAllFilteredStores = () => {
+    if (!canSelectStores || filteredStoreIds.length === 0) {
+      return;
+    }
+
+    setSelectedStoreIds((prev) => {
+      const next = new Set(prev);
+      const areAllFilteredSelected = filteredStoreIds.every((id) => next.has(id));
+
+      if (areAllFilteredSelected) {
+        filteredStoreIds.forEach((id) => next.delete(id));
+      } else {
+        filteredStoreIds.forEach((id) => next.add(id));
+      }
+
+      return next;
+    });
+
+    setErrors((prev) => ({ ...prev, stores: "" }));
+  };
+
+  const removeStore = (storeId: string) => {
+    setSelectedStoreIds((prev) => {
+      const next = new Set(prev);
+      next.delete(storeId);
+      return next;
+    });
+  };
+
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!selectedUser) {
@@ -139,34 +300,50 @@ export default function RemoveAssignmentPage() {
     if (!selectedRole) {
       newErrors.role = t("validation.roleRequired");
     }
-    if (!selectedStore) {
-      newErrors.store = t("validation.storeRequired");
+    if (selectedStoreIds.size === 0) {
+      newErrors.stores = t("validation.storeRequired");
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Submit removal
   const handleSubmit = async () => {
     if (!validate()) return;
+    if (!selectedUser || !selectedRole) return;
 
     setIsSubmitting(true);
     try {
-      await assignmentService.deleteAssignment(
-        selectedUser!.id,
-        selectedRole!.id,
-        selectedStore!.id
+      const removableStoreIds = Array.from(selectedStoreIds).filter((storeId) =>
+        assignedStoreIdsForRole.has(storeId)
       );
+
+      if (removableStoreIds.length === 0) {
+        toast.error(t("noAssignedStoresSelected"));
+        return;
+      }
+
+      for (const storeId of removableStoreIds) {
+        await assignmentService.deleteAssignment(
+          selectedUser.id,
+          selectedRole.id,
+          storeId
+        );
+      }
 
       toast.success(t("success"));
       router.push(`/${locale}/dashboard/user-store-assignment`);
     } catch (error) {
+      if (isCanceledError(error)) return;
       console.error("Failed to remove assignment:", error);
       toast.error(t("error"));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const selectedStoreObjects = stores.filter((store) =>
+    selectedStoreIds.has(store.id)
+  );
 
   return (
     <div className="space-y-6">
@@ -203,7 +380,7 @@ export default function RemoveAssignmentPage() {
                 type="search"
                 placeholder={t("selectUserPlaceholder")}
                 value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
+                onChange={(event) => setUserSearch(event.target.value)}
                 className="ps-8"
               />
             </div>
@@ -212,10 +389,10 @@ export default function RemoveAssignmentPage() {
               <p className="text-sm text-destructive">{errors.user}</p>
             )}
 
-            <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            <div className="max-h-75 space-y-1 overflow-y-auto">
               {isLoadingUsers ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-8 w-8 rounded-full" />
                     <div className="flex-1 space-y-1">
                       <Skeleton className="h-3 w-24" />
@@ -246,11 +423,7 @@ export default function RemoveAssignmentPage() {
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={user.avatar || undefined} />
                       <AvatarFallback className="text-xs">
-                        {user.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .toUpperCase()}
+                        {getInitials(user.name || "User")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 overflow-hidden">
@@ -291,7 +464,7 @@ export default function RemoveAssignmentPage() {
                 type="search"
                 placeholder={t("selectRolePlaceholder")}
                 value={roleSearch}
-                onChange={(e) => setRoleSearch(e.target.value)}
+                onChange={(event) => setRoleSearch(event.target.value)}
                 className="ps-8"
               />
             </div>
@@ -300,10 +473,10 @@ export default function RemoveAssignmentPage() {
               <p className="text-sm text-destructive">{errors.role}</p>
             )}
 
-            <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            <div className="max-h-75 space-y-1 overflow-y-auto">
               {isLoadingRoles ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-4 w-4 rounded" />
                     <Skeleton className="h-4 w-32" />
                   </div>
@@ -356,17 +529,17 @@ export default function RemoveAssignmentPage() {
           </CardContent>
         </Card>
 
-        {/* Step 3: Select Store */}
+        {/* Step 3: Select Stores */}
         <Card
           className={cn(
             "transition-all",
-            selectedStore && "border-destructive/50"
+            selectedStoreIds.size > 0 && "border-destructive/50"
           )}
         >
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <StoreIcon className="h-4 w-4" />
-              {t("selectStore")}
+              {t("selectStores")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -374,21 +547,65 @@ export default function RemoveAssignmentPage() {
               <Search className="absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder={t("selectStorePlaceholder")}
+                placeholder={t("selectStoresPlaceholder")}
                 value={storeSearch}
-                onChange={(e) => setStoreSearch(e.target.value)}
+                onChange={(event) => setStoreSearch(event.target.value)}
                 className="ps-8"
               />
             </div>
 
-            {errors.store && (
-              <p className="text-sm text-destructive">{errors.store}</p>
+            {errors.stores && (
+              <p className="text-sm text-destructive">{errors.stores}</p>
             )}
 
-            <div className="max-h-[300px] space-y-1 overflow-y-auto">
+            <Label className="flex items-center justify-between rounded-md border p-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={
+                    allFilteredSelected
+                      ? true
+                      : partiallyFilteredSelected
+                      ? "indeterminate"
+                      : false
+                  }
+                  onCheckedChange={toggleAllFilteredStores}
+                  disabled={!canSelectStores || filteredStoreIds.length === 0}
+                  aria-label={
+                    allFilteredSelected
+                      ? t("deselectAllStores")
+                      : t("selectAllStores")
+                  }
+                />
+                <span className="text-sm font-medium">
+                  {allFilteredSelected
+                    ? t("deselectAllStores")
+                    : t("selectAllStores")}
+                </span>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {t("selectedCount", {
+                  count: selectedFilteredCount,
+                  total: filteredStoreIds.length,
+                })}
+              </span>
+            </Label>
+
+            {!canSelectStores && (
+              <p className="text-xs text-muted-foreground">
+                {t("selectUserAndRoleFirst")}
+              </p>
+            )}
+
+            {canSelectStores && assignedStoreIdsForRole.size === 0 && (
+              <p className="text-xs text-muted-foreground">
+                {t("noStoresAssignedForRole")}
+              </p>
+            )}
+
+            <div className="max-h-75 space-y-1 overflow-y-auto">
               {isLoadingStores ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="flex items-center gap-3 p-2">
                     <Skeleton className="h-4 w-4 rounded" />
                     <Skeleton className="h-4 w-32" />
                   </div>
@@ -399,43 +616,128 @@ export default function RemoveAssignmentPage() {
                 </p>
               ) : (
                 filteredStores.map((store) => (
-                  <button
+                  <Label
                     key={store.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedStore(store);
-                      setErrors((prev) => ({ ...prev, store: "" }));
-                    }}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-md p-2 text-start transition-colors",
-                      selectedStore?.id === store.id
+                      "flex cursor-pointer items-center gap-3 rounded-md p-2 transition-colors",
+                      selectedStoreIds.has(store.id)
                         ? "bg-destructive/10 ring-1 ring-destructive/30"
-                        : "hover:bg-muted"
+                        : "hover:bg-muted",
+                      !canSelectStores && "cursor-not-allowed opacity-60"
                     )}
                   >
-                    <StoreIcon
-                      className={cn(
-                        "h-4 w-4 shrink-0",
-                        selectedStore?.id === store.id
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      )}
+                    <Checkbox
+                      checked={selectedStoreIds.has(store.id)}
+                      onCheckedChange={() => toggleStore(store.id)}
+                      disabled={!canSelectStores}
                     />
                     <div className="flex-1 overflow-hidden">
                       <div className="truncate text-sm font-medium">
                         {store.name}
                       </div>
                     </div>
-                    {selectedStore?.id === store.id && (
-                      <Check className="h-4 w-4 shrink-0 text-destructive" />
+                    {assignedStoreIdsForRole.has(store.id) && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {t("alreadyAssigned")}
+                      </Badge>
                     )}
-                  </button>
+                  </Label>
                 ))
               )}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Current User Assignments */}
+      {selectedUser && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              {t("currentAssignments")} - {selectedUser.name}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingUserDetails ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-28 w-full" />
+                ))}
+              </div>
+            ) : !userDetails?.stores || userDetails.stores.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                {t("noCurrentAssignments")}
+              </p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                {userDetails.stores.map((userStore: UserStore, index: number) => {
+                  const hasSelectedRole = selectedRole
+                    ? userStore.roles.some((role) => role.id === selectedRole.id)
+                    : false;
+
+                  return (
+                    <div
+                      key={`${userStore.store.id}-${index}`}
+                      className={cn(
+                        "rounded-lg border p-4",
+                        hasSelectedRole && "border-destructive/50 bg-destructive/5"
+                      )}
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{userStore.store.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {userStore.store.storeId}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {userStore.roles.map((role) => (
+                          <Badge key={role.id} variant="outline" className="capitalize">
+                            {role.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Selected Stores Summary */}
+      {selectedStoreObjects.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">
+              {t("selectedStores")} ({selectedStoreObjects.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {selectedStoreObjects.map((store) => (
+                <Badge
+                  key={store.id}
+                  variant="destructive"
+                  className="flex items-center gap-1 pe-1"
+                >
+                  {store.name}
+                  <button
+                    type="button"
+                    onClick={() => removeStore(store.id)}
+                    className="ms-1 rounded-full p-0.5 hover:bg-black/10"
+                    aria-label={`Remove ${store.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Submit */}
       <div className="flex justify-end">
@@ -444,7 +746,7 @@ export default function RemoveAssignmentPage() {
           variant="destructive"
           onClick={handleSubmit}
           disabled={isSubmitting}
-          className="min-w-[160px]"
+          className="min-w-40"
         >
           {isSubmitting ? (
             <>
@@ -459,3 +761,4 @@ export default function RemoveAssignmentPage() {
     </div>
   );
 }
+
