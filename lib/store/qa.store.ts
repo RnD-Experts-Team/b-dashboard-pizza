@@ -13,9 +13,6 @@ import type { QAAuditsResponse } from "@/types/qa.types";
 /** Data is considered fresh for 2 minutes */
 const STALE_AFTER_MS = 2 * 60 * 1000;
 
-/** Auto-refresh interval (3 min) */
-const AUTO_REFRESH_MS = 3 * 60 * 1000;
-
 /** Max retries for retryable errors (client-level) */
 const MAX_AUTO_RETRIES = 2;
 
@@ -64,7 +61,6 @@ interface QAState {
 /*  Internal state                                                          */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-let _autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let _abortController: AbortController | null = null;
 let _retryTimer: ReturnType<typeof setTimeout> | null = null;
 let _retryCount = 0;
@@ -198,9 +194,7 @@ export const useQAStore = create<QAState>()((set, get) => ({
 
   reset: () => {
     if (_abortController) _abortController.abort();
-    if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
     if (_retryTimer) clearTimeout(_retryTimer);
-    _autoRefreshTimer = null;
     _retryTimer = null;
     _retryCount = 0;
 
@@ -222,20 +216,10 @@ export const useQAStore = create<QAState>()((set, get) => ({
   },
 
   startAutoRefresh: () => {
-    if (_autoRefreshTimer) return;
-
-    _autoRefreshTimer = setInterval(() => {
-      const { isLoading, isRefreshing, refreshAudits } = get();
-      if (!isLoading && !isRefreshing) {
-        refreshAudits();
-      }
-    }, AUTO_REFRESH_MS);
+    // Auto-refresh polling intentionally disabled.
   },
 
   stopAutoRefresh: () => {
-    if (_autoRefreshTimer) {
-      clearInterval(_autoRefreshTimer);
-      _autoRefreshTimer = null;
-    }
+    // No-op: polling is disabled.
   },
 }));

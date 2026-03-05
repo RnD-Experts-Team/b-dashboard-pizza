@@ -53,7 +53,6 @@ import { UserMenu } from "./user-menu";
 import { useUIStore } from "@/lib/store/ui.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useFeature, Feature } from "@/lib/config";
-import { authService } from "@/lib/api/services/auth.service";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import type { Store, StoreMetadata } from "@/types/store.types";
@@ -184,11 +183,16 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const isRtl = locale === "ar";
   const t = useTranslations("nav");
   const { toggleSidebar } = useUIStore();
-  const { canAccessRoute, hasPermission } = useAuthStore();
+  const { canAccessRoute, hasPermission, overviewStores } = useAuthStore();
 
   // Zustand store selection (must be declared before nav items that reference it)
   const { selectedStore: zustandSelectedStore, setSelectedStore } =
     useSelectedStoreStore();
+
+  // Effective store id: prefer the user's explicit selection, fall back to the
+  // first store from /auth/general-overview. Uses the same numeric string id
+  // that keys storePermissions, so canAccessRoute lookups always match.
+  const effectiveStoreId = zustandSelectedStore?.id ?? overviewStores?.[0]?.id;
 
   // Check feature flags
   const devToolsEnabled = useFeature("devTools");
@@ -238,12 +242,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
-  const employeesItem: NavItem = {
-    title: t("employees"),
-    href: `/${locale}/dashboard/employees`,
-    icon: Briefcase,
-    // No rule or management permission defined yet — always visible
-  };
+  // const employeesItem: NavItem = {
+  //   title: t("employees"),
+  //   href: `/${locale}/dashboard/employees`,
+  //   icon: Briefcase,
+  //   // No rule or management permission defined yet — always visible
+  // };
 
   const userManagementGroup: NavGroup = {
     label: t("userManagement"),
@@ -279,7 +283,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/quality-assurance`,
         icon: ClipboardCheck,
         requirements: [
-          { service: "QA", method: "POST", path: "/camera-forms", storeId: zustandSelectedStore?.id },
+          { service: "QA", method: "POST", path: "/camera-forms", storeId: effectiveStoreId },
         ],
       },
       {
@@ -291,7 +295,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             service: "QA",
             method: "GET",
             path: "/audits/ratings-summary/overview",
-            storeId: zustandSelectedStore?.id,
+            storeId: effectiveStoreId,
           },
         ],
       },
@@ -300,8 +304,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/entities-and-categories`,
         icon: List,
         requirements: [
-          { service: "QA", method: "POST", path: "/entities", storeId: zustandSelectedStore?.id },
-          { service: "QA", method: "POST", path: "/categories", storeId: zustandSelectedStore?.id },
+          { service: "QA", method: "POST", path: "/entities", storeId: effectiveStoreId },
+          { service: "QA", method: "POST", path: "/categories", storeId: effectiveStoreId },
         ],
       },
     ],
@@ -344,7 +348,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/keys`,
         icon: Key,
         requirements: [
-          { service: "Data", method: "GET", path: "/engine/keys", storeId: zustandSelectedStore?.id },
+          { service: "Data", method: "GET", path: "/engine/keys", storeId: effectiveStoreId },
         ],
       },
       {
@@ -352,7 +356,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/due-keys`,
         icon: Database,
         requirements: [
-          { service: "Data", method: "GET", path: "/engine/stores", storeId: zustandSelectedStore?.id },
+          { service: "Data", method: "GET", path: "/engine/stores/", storeId: effectiveStoreId },
         ],
       },
       {
@@ -360,8 +364,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/export-import`,
         icon: FolderPlus,
         requirements: [
-          { service: "Data", method: "GET", path: "/export/list", storeId: zustandSelectedStore?.id },
-          { service: "Data", method: "GET", path: "/manual-import", storeId: zustandSelectedStore?.id },
+          { service: "Data", method: "GET", path: "/export/list", storeId: effectiveStoreId },
+          { service: "Data", method: "GET", path: "/manual-import", storeId: effectiveStoreId },
         ],
       },
     ],
@@ -411,9 +415,29 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [selectedStore, setLocalSelectedStore] = useState<Store | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  const [userStores, setUserStores] = useState<Store[]>([]);
 
-  // Initialize from Zustand store
+  // Derive the store list for the picker from the auth store's overviewStores
+  // (loaded from /auth/general-overview during login/checkAuth — no extra API call).
+  const userStores: Store[] = (overviewStores ?? []).map((s) => ({
+    id: s.id,
+    storeId: s.storeId ?? s.id,
+    name: s.name,
+    metadata: (s.metadata ?? {}) as StoreMetadata,
+    isActive: s.isActive,
+    createdAt: "",
+    updatedAt: "",
+  }));
+
+  // Auto-select the first store from overviewStores when no store is selected.
+  // This runs synchronously with the auth data — no async delay.
+  useEffect(() => {
+    if (!zustandSelectedStore && userStores.length > 0) {
+      setSelectedStore(userStores[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overviewStores]);
+
+  // Sync local state with the Zustand-persisted selection
   useEffect(() => {
     if (zustandSelectedStore) {
       setLocalSelectedStore(zustandSelectedStore);
@@ -421,39 +445,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     setIsMounted(true);
   }, [zustandSelectedStore]);
 
-  useEffect(() => {
-    let isActive = true;
-
-    const loadStores = async () => {
-      try {
-        const response = await authService.me();
-        if (!isActive || !response.success) return;
-
-        const stores: Store[] =
-          response.data.stores?.map((userStore) => ({
-            id: userStore.store.id,
-            storeId:
-              ((userStore.store as Record<string, unknown>).store_id as string) ||
-              userStore.store.id,
-            name: userStore.store.name,
-            metadata: (userStore.store.metadata ?? {}) as StoreMetadata,
-            isActive: userStore.store.isActive ?? true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          })) || [];
-        setUserStores(stores);
-      } catch {
-        if (isActive) setUserStores([]);
-      }
-    };
-
-    loadStores();
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
   const currentStoreName = selectedStore?.name || "Select Store";
+  const currentStoreId = selectedStore?.storeId || ""; // Default to 'N/A' if no store is selected
 
   /* ---- Authorization filtering ---- */
 
@@ -569,7 +562,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           onClick={() => setIsStoreModalOpen(true)}
         >
           <Building2 className="me-2 h-4 w-4" />
-          {!collapsed && <span className="truncate">{currentStoreName}</span>}
+          {!collapsed && <span className="truncate">{currentStoreName} - <span className="text-xs">{currentStoreId}</span></span>}
         </Button>
       </div>
 
@@ -606,7 +599,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
                           : "opacity-0"
                       )}
                     />
-                    <span className="truncate">{store.name}</span>
+                    <span className="truncate">{store.name} - <span className="text-xs">{store.storeId}</span></span>
+
                   </Button>
                 ))}
               </div>
@@ -692,13 +686,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           )}
 
           {/* 8. Employees */}
-          {isNavItemVisible(employeesItem) && renderNavLink(employeesItem)}
+          {/* {isNavItemVisible(employeesItem) && renderNavLink(employeesItem)} */}
 
           {/* 9. Maintenance */}
           {/* {renderNavLink(maintenanceItem)} */}
 
           {/* 10. Settings */}
-          {isNavItemVisible(settingsItem) && renderNavLink(settingsItem)}
+          {/* {isNavItemVisible(settingsItem) && renderNavLink(settingsItem)} */}
         </nav>
       </ScrollArea>
 

@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const authError = validateAuth(request);
   if (authError) return authError;
 
-  const targetUrl = `${DATA_BASE_URL}/manual-import/`;
+  const targetUrl = `${DATA_BASE_URL}/manual-import`;
 
   try {
     const response = await fetchWithRetry(

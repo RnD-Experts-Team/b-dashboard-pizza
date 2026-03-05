@@ -10,9 +10,7 @@ export default function CreateUserPage() {
   return (
     <div className="space-y-6 pb-2">
       <PageHeader title={t("create.title")} description={t("create.description")} />
-      <div className="max-w-4xl">
-        <UserForm />
-      </div>
+      <UserForm mode="create" />
     </div>
   );
 }
