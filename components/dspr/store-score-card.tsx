@@ -111,7 +111,7 @@ export function StoreScoreCard({
   const dash = (d / 100) * circumference;
 
   return (
-    <Card className={cn("relative group transition-shadow py-2 px-3 bg-linear-to-r from-yellow-50/50 via-yellow-100/40 to-yellow-200/30 dark:from-yellow-950/30 dark:via-yellow-900/40 dark:to-yellow-800/50", className)}>
+    <Card className={cn("relative group transition-shadow py-2 px-3 bg-linear-to-r from-yellow-50 via-yellow-100 to-yellow-200 dark:from-yellow-950/30 dark:via-yellow-900/40 dark:to-yellow-800/50", className)}>
       <div className="absolute top-2 left-3 flex items-center gap-2 pointer-events-none">
         <Star className="h-4 w-4 text-amber-400" />
         <div className="text-[11px] font-semibold">Store Score</div>

@@ -9,6 +9,8 @@ const noopStorage = {
 };
 import type { AxiosError } from "axios";
 import { authService } from "@/lib/api/services/auth.service";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useDsprStore } from "@/lib/store/dspr.store";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { AuthUser, LoginCredentials, AuthUserStore } from "@/types/auth.types";
 import type { AuthRule } from "@/types/auth-rule.types";
@@ -200,6 +202,13 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         authService.logout().catch(() => {});
+        try {
+          useDsprStore.getState().reset();
+          useSelectedStoreStore.getState().clearSelectedStore();
+          useSelectedStoreStore.persist.clearStorage();
+        } catch {
+          // ignore client-side cache cleanup failures during logout
+        }
         set({
           user: null,
           token: null,
@@ -212,13 +221,6 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
         });
         persistUserData(null);
-        if (typeof window !== "undefined") {
-          try {
-            localStorage.removeItem("selected-store-storage");
-          } catch {
-            // ignore
-          }
-        }
       },
 
       setUser: (user: AuthUser) => {

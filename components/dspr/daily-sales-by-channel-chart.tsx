@@ -103,17 +103,23 @@ export function DailySalesByChannelChart({
               size: "58%",
               labels: {
                 show: true,
-                name: { show: true, fontSize: "7px" },
+                name: {
+                  show: true,
+                  fontSize: "7px",
+                  color: isDark ? "#d4d4d8" : "#52525b",
+                },
                 value: {
                   show: true,
                   formatter: (val: any) =>
                     `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                   fontSize: "12px",
+                  color: isDark ? "#f4f4f5" : "#18181b",
                 },
                 total: {
                   show: true,
                   label: "Total",
                   fontSize: "12px",
+                  color: isDark ? "#f4f4f5" : "#18181b",
                   formatter: () =>
                     `$${series
                       .reduce((sum, value) => sum + value, 0)
@@ -131,7 +137,7 @@ export function DailySalesByChannelChart({
   );
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0  bg-gradient-to-r from-violet-50/50 via-violet-100/40 to-violet-200/30 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
+    <Card className={cn("daily-sales-by-channel-chart group hover:shadow-md transition-shadow py-1.5 gap-0  bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">
@@ -143,6 +149,19 @@ export function DailySalesByChannelChart({
       <CardContent className="px-3 pb-0">
         <ReactApexChart options={options} series={series} type="donut" height={height} />
       </CardContent>
+      <style jsx global>{`
+        .daily-sales-by-channel-chart .apexcharts-datalabel-label,
+        .daily-sales-by-channel-chart .apexcharts-datalabel-value,
+        .daily-sales-by-channel-chart .apexcharts-datalabel-total {
+          fill: #18181b !important;
+        }
+
+        .dark .daily-sales-by-channel-chart .apexcharts-datalabel-label,
+        .dark .daily-sales-by-channel-chart .apexcharts-datalabel-value,
+        .dark .daily-sales-by-channel-chart .apexcharts-datalabel-total {
+          fill: #f4f4f5 !important;
+        }
+      `}</style>
     </Card>
   );
 }

@@ -204,6 +204,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: t("dashboard"),
     href: `/${locale}/dashboard`,
     icon: LayoutDashboard,
+    requirements: [
+          { service: "Data", method: "GET", path: "/reports/dspr/", storeId: effectiveStoreId },
+        ],
     // Dashboard is always accessible — no requirements
   };
 
@@ -617,7 +620,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       <ScrollArea className="flex-1 overflow-y-auto">
         <nav className="space-y-1 px-2 sm:px-3 py-2 sm:py-3">
           {/* 1. Dashboard */}
-          {renderNavLink(dashboardItem)}
+          {/* {renderNavLink(dashboardItem)} */}
+          {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (

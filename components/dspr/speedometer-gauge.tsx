@@ -94,6 +94,7 @@ export function SpeedometerGauge({
   secondaryLabel,
 }: SpeedometerGaugeProps) {
   const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   // Animated internal value — always animate from 0 -> value on each change
   const [animValue, setAnimValue] = useState(0);
 
@@ -188,9 +189,8 @@ export function SpeedometerGauge({
         <path
           d={arcPath(R, START, START + SWEEP)}
           fill="none"
-          stroke="currentColor"
+          stroke={isDark ? "rgba(161,161,170,0.24)" : "rgba(63,63,70,0.26)"}
           strokeWidth={ARC_W}
-          className="text-muted/20"
           strokeLinecap="round"
         />
 
@@ -215,9 +215,8 @@ export function SpeedometerGauge({
             y1={t.y1}
             x2={t.x2}
             y2={t.y2}
-            stroke="currentColor"
+            stroke={isDark ? "rgba(161,161,170,0.45)" : "rgba(63,63,70,0.5)"}
             strokeWidth={t.major ? 1.5 : 0.75}
-            className="text-muted-foreground/40"
           />
         ))}
 
@@ -227,7 +226,7 @@ export function SpeedometerGauge({
           y1={CY}
           x2={tip.x}
           y2={tip.y}
-          stroke={statusColor || DEFAULT_PRIMARY_NEEDLE}
+          stroke={ DEFAULT_PRIMARY_NEEDLE}
           strokeWidth={2.5}
           strokeLinecap="round"
           style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }}
@@ -249,7 +248,7 @@ export function SpeedometerGauge({
         )}
 
         {/* Center hub (neutral) */}
-        <circle cx={CX} cy={CY} r={6} fill={statusColor || DEFAULT_PRIMARY_NEEDLE} opacity={0.95} />
+        <circle cx={CX} cy={CY} r={6} fill={ DEFAULT_PRIMARY_NEEDLE} opacity={0.95} />
         <circle cx={CX} cy={CY} r={3} fill="hsl(var(--background))" />
 
         {/* Value display — animate text during the initial needle animation */}
@@ -257,10 +256,9 @@ export function SpeedometerGauge({
           x={CX}
           y={CY + 34}
           textAnchor="middle"
-          fill={valueTextColor}
           fontSize="10"
           fontWeight="700"
-          style={ { filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.4))" }}
+          className="speedometer-value-text"
         >
           {(() => {
             const decimals = valueDisplay && valueDisplay.includes(".") ? 1 : 0;
@@ -269,6 +267,17 @@ export function SpeedometerGauge({
           })()}
         </text>
       </svg>
+
+      <style jsx global>{`
+        .speedometer-value-text {
+          fill: #111827 !important;
+          filter: drop-shadow(0 0.5px 0.75px rgba(255, 255, 255, 0.6)) !important;
+        }
+        .dark .speedometer-value-text {
+          fill: #f8fafc !important;
+          filter: drop-shadow(0 0.75px 1px rgba(0, 0, 0, 0.55)) !important;
+        }
+      `}</style>
 
       {/* Legend for primary/secondary (compact) */}
       {(secondaryLabel || angle2 != null) && (

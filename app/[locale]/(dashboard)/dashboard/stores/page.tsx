@@ -34,7 +34,7 @@ export default function StoresPage() {
   const params = useParams();
   const locale = params?.locale as string || "en";
   
-  const { stores, isLoading, handleSearch, refetch } = useStores();
+  const { stores, pagination, isLoading, handleSearch, handlePageChange, refetch } = useStores();
   const { deleteStore, isDeleting } = useDeleteStore();
   
   const [storeToDelete, setStoreToDelete] = useState<Store | null>(null);
@@ -142,6 +142,8 @@ export default function StoresPage() {
         searchPlaceholder={t("searchPlaceholder")}
         onSearchChange={handleSearch}
         emptyMessage={t("noStores")}
+        pagination={pagination}
+        onPageChange={handlePageChange}
       />
 
       <AlertDialog open={!!storeToDelete} onOpenChange={() => setStoreToDelete(null)}>

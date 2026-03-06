@@ -211,7 +211,7 @@ export function TopQaRatingsCard({
   }
 
   return (
-    <Card className="py-1.5 gap-0 bg-gradient-to-r from-[#CFDEE7]/60 via-[#E6F6FA]/45 to-[#FBFEFF]/30 dark:from-[#0E2A30]/30 dark:via-[#102F34]/40 dark:to-[#12363B]/50">
+    <Card className="py-1.5 gap-0 bg-gradient-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/30 dark:via-[#102F34]/40 dark:to-[#12363B]/50">
       <CardHeader className="pb-1 px-3">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -255,20 +255,20 @@ export function TopQaRatingsCard({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-[11px] w-[52%]">Entity</TableHead>
-                <TableHead className="text-right text-[11px]">Auto Fail</TableHead>
-                <TableHead className="text-right text-[11px]">Urgent</TableHead>
-                <TableHead className="text-right text-[11px]">Total</TableHead>
+                <TableHead className="text-[11px] w-[52%] p-0">Entity</TableHead>
+                <TableHead className="text-right text-[11px] p-0">Auto Fail</TableHead>
+                <TableHead className="text-right text-[11px] p-0">Urgent</TableHead>
+                <TableHead className="text-right text-[11px] p-0">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((item) => (
                 <TableRow key={item.entityId} className={cn(isLoading && "opacity-60")}>
-                  <TableCell className="text-[11px] font-medium">{item.entityLabel}</TableCell>
-                  <TableCell className="text-[11px] text-right">
+                  <TableCell className="text-[11px] font-medium p-0">{item.entityLabel}</TableCell>
+                  <TableCell className="text-[11px] text-right p-0">
                     <Badge variant="secondary">{item.autoFailCount}</Badge>
                   </TableCell>
-                  <TableCell className="text-[11px] text-right">
+                  <TableCell className="text-[11px] text-right p-0">
                     <Badge variant="outline">{item.urgentCount}</Badge>
                   </TableCell>
                   <TableCell className="text-[11px] text-right">

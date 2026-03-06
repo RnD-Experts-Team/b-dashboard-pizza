@@ -69,6 +69,42 @@ let _abortController: AbortController | null = null;
 let _retryTimer: ReturnType<typeof setTimeout> | null = null;
 let _retryCount = 0;
 
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Helpers                                                                 */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Gets the date range for the current week starting from Tuesday to Monday.
+ */
+function getThisWeekRange(): { date_from: string; date_to: string } {
+  const now = new Date();
+  const day = now.getDay(); // 0 (Sun) to 6 (Sat)
+
+  // Target: Tuesday (2)
+  // If today is Tue, Wed, Thu, Fri, Sat, Sun, Mon
+  // We want the most recent Tuesday.
+  // Day of week mapping: Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6
+  
+  // Calculate days to subtract to get to last Tuesday
+  // (day - 2 + 7) % 7
+  const daysSinceTuesday = (day - 2 + 7) % 7;
+  
+  const tuesday = new Date(now);
+  tuesday.setDate(now.getDate() - daysSinceTuesday);
+  tuesday.setHours(0, 0, 0, 0);
+
+  const monday = new Date(tuesday);
+  monday.setDate(tuesday.getDate() + 6);
+  monday.setHours(23, 59, 59, 999);
+
+  const formatDate = (date: Date) => date.toISOString().split("T")[0];
+
+  return {
+    date_from: formatDate(tuesday),
+    date_to: formatDate(monday),
+  };
+}
+
 /** Strip empty/null/undefined values from filters */
 function cleanParams(
   raw: CameraReportFilterParams
@@ -92,7 +128,7 @@ export const useCameraReportStore = create<CameraReportState>()(
     isLoading: false,
     isRefreshing: false,
     error: null,
-    filters: {},
+    filters: getThisWeekRange(),
     isExporting: false,
     isExportingExcel: false,
     isExportingImages: false,
