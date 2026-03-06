@@ -40,6 +40,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CameraFormDetailsSheet } from "@/components/qa/camera-form-details-sheet";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   ChevronLeft,
   ChevronRight,
@@ -129,10 +131,38 @@ export function CameraFormsListTable({
   const params = useParams();
   const router = useRouter();
   const locale = (params?.locale as string) || "en";
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [auditToDelete, setAuditToDelete] = useState<CameraFormAudit | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<number | null>(null);
+
+  // Keep store resolution aligned with sidebar/page-level authorization checks.
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const deleteRequirements = [
+    {
+      service: "QA",
+      method: "DELETE",
+      path: "/camera-forms/",
+      storeId: effectiveStoreId,
+    },
+  ];
+  const editRequirements = [
+    {
+      service: "QA",
+      method: "PUT",
+      path: "/camera-forms/",
+      storeId: effectiveStoreId,
+    },
+  ];
+  const canDeleteCameraForm = deleteRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const canEditCameraForm = editRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const canManageCameraForms = canEditCameraForm || canDeleteCameraForm;
 
   const handleRowOpen = (auditId: number) => {
     setSelectedAuditId(auditId);
@@ -141,6 +171,7 @@ export function CameraFormsListTable({
 
   const handleDeleteClick = (e: React.MouseEvent, audit: CameraFormAudit) => {
     e.stopPropagation();
+    if (!canDeleteCameraForm) return;
     setAuditToDelete(audit);
     setDeleteDialogOpen(true);
   };
@@ -159,7 +190,45 @@ export function CameraFormsListTable({
 
   const handleEditClick = (e: React.MouseEvent, audit: CameraFormAudit) => {
     e.stopPropagation();
+    if (!canEditCameraForm) return;
     router.push(`/${locale}/dashboard/quality-assurance/${audit.id}`);
+  };
+
+  const renderAuditActions = (audit: CameraFormAudit) => {
+    if (!canManageCameraForms) return null;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {canEditCameraForm && (
+            <DropdownMenuItem onClick={(e) => handleEditClick(e, audit)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+          )}
+          {canEditCameraForm && canDeleteCameraForm && <DropdownMenuSeparator />}
+          {canDeleteCameraForm && (
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={(e) => handleDeleteClick(e, audit)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   };
 
   // Extract all unique entities across all audits
@@ -305,34 +374,7 @@ export function CameraFormsListTable({
                           );
                         })}
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={(e) => handleEditClick(e, audit)}
-                              >
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={(e) => handleDeleteClick(e, audit)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {renderAuditActions(audit)}
                         </TableCell>
                     </TableRow>
                   ))}
@@ -367,34 +409,7 @@ export function CameraFormsListTable({
                         {audit.store.store}
                       </span>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => handleEditClick(e, audit)}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={(e) => handleDeleteClick(e, audit)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {renderAuditActions(audit)}
                   </div>
 
                     {/* Meta info */}

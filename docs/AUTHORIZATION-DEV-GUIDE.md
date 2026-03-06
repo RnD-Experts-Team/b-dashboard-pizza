@@ -1,297 +1,211 @@
-Here is a clean, simplified, documentation-style version you can give to any developer..
+# Authorization System Developer Guide
 
----
+## Purpose
 
-# Authorization System – Developer Guide
+This guide explains how authorization works in the frontend and how to apply it correctly in UI code.
 
-## What Happens After Login
+- `Backend` remains the source of truth.
+- `Frontend` mirrors backend rules only to control visibility and UX.
+- `API endpoints` still enforce authorization server-side.
 
-After successful login, the app calls:
+## Core Concepts
 
-```
-/auth/general-overview 
-```
+### Role
 
-From this response, the app prepares three main things:
+A role is a named group of permissions, such as `admin` or `super-admin`.
 
----
+### Permission
 
-## 1️⃣ Normalized Authorization State
+A permission is an atomic capability string, such as `manage users`.
 
-### `globalPermissions`
+### Auth Rule
 
-A `Set<string>` containing all permission names the user has globally.
+An auth rule maps a route shape to required permissions. Rules are matched by:
 
-Source:
+- `service`
+- `method`
+- `path` (regex from backend)
 
-* `full_permissions`
-* permissions inside global `roles`
+Rules can also be store-scoped and priority-based.
 
----
+## Data Flow After Login
 
-### `storePermissions`
+1. User logs in via `/auth/login`.
+2. Frontend fetches `/auth/general-overview`.
+3. Frontend normalizes and stores auth data in Zustand.
 
-A record of store-based permissions:
+## Frontend Authorization State
 
-```ts
-Record<storeId, Set<string>>
-```
+Main state lives in `lib/auth/auth.store.ts`.
 
-Source:
+- `globalPermissions: Set<string>`
+- `storePermissions: Record<string, Set<string>>`
+- `authRules: AuthRule[]`
+- `overviewStores: OverviewStore[]`
 
-* `store_assignments[*].all_permissions_from_store_roles`
+Legacy state is still present for compatibility:
 
-Each store gets its own permission set.
+- `permissions: string[]`
+- `roles: string[]`
 
----
+## Helpers You Should Use
 
-### `authRules`
+### 1) `hasPermission(permission: string)`
 
-A list of API authorization rules.
-
-Each rule contains:
-
-* `service`
-* `method`
-* `path` (regex provided by backend)
-* `permissions_any`
-* `permissions_all`
-* `store_scope_mode`
-* `priority`
-* `is_active`
-
-These rules define how API access should be evaluated.
-
----
-
-# Two Types of Checks in the UI
-
-The system exposes two main helpers:
-
----
-
-## 1️⃣ `hasPermission(permission: string)`
-
-A simple permission check. like for (manage roles , manage users , manage permissions .....)
-
-Checks directly against `globalPermissions`.
-
-Used for:
-
-* Management pages
-* Legacy visibility logic
-* Items using `requiredPermission`
-
-Example:
+Use this for simple, direct checks (mostly management pages):
 
 ```ts
-hasPermission("manage users")
+const canManageUsers = hasPermission("manage users");
 ```
 
----
+### 2) `canAccessRoute(params: CanAccessParams)`
 
-## 2️⃣ `canAccessRoute(params: CanAccessParams)`
-
-Rule-driven engine.
-
-Used for pages backed by API routes.
-
-Matches a route against `authRules` and evaluates required permissions.
-
-Supports:
-
-* Store scoping
-* `permissions_any`
-* `permissions_all`
-* Super-admin bypass
-
----
-
-# How `canAccessRoute` Works
-
-## Step 1 — Find Matching Rule
-
-Match active rules by:
-
-* `service`
-* `method`
-* `path` (regex match)
-
-Choose the top candidate based on:
-
-* `priority`
-* `is_active`
-
----
-
-## Step 2 — Determine Scope
-
-Read:
-
-```
-rule.store_scope_mode
-```
-
-Possible values:
-
-### `"scoped"`
-
-* Requires `storeId`
-* If no store selected → deny
-* Only check permissions inside `storePermissions[storeId]`
-
----
-
-### `"none"`
-
-If `storeId` exists:
-
-1. Check `storePermissions[storeId]`
-2. If not satisfied → fallback to `globalPermissions`
-
-If no `storeId`:
-
-* Check `globalPermissions` only
-
----
-
-## Step 3 — Permission Matching
-
-### `permissions_any`
-
-Passes if **at least one** permission exists in the checked set.
-
----
-
-### `permissions_all`
-
-Passes only if **all** permissions exist in the checked set.
-
----
-
-## Step 4 — Super Admin Bypass
-
-If user has the `super-admin` role:
-
-→ Automatically return `true`.
-
----
-
-# UI Rendering Rules
-
-When rendering sidebar items or components:
-
----
-
-### If item has `requiredPermission`
-
-Use:
+Use this for API-backed features and store-scoped logic:
 
 ```ts
-hasPermission(permission)
+const canCreate = canAccessRoute({
+  service: "QA",
+  method: "POST",
+  path: "/camera-forms",
+  storeId: effectiveStoreId,
+});
 ```
 
----
+## How `canAccessRoute` Works
 
-### If item has `requirements`
+Implementation is in `lib/auth/can-access.ts`.
 
-Use:
+1. Find matching active rules by `service`, `method`, and regex path match.
+2. Sort by `priority` and pick the highest-priority candidate.
+3. Determine scope from `store_scope_mode`.
+4. Evaluate `permissions_any` and `permissions_all`.
+5. Allow super-admin immediately.
+
+### Scope Modes
+
+#### `scoped`
+
+- Requires `storeId`.
+- Checks only `storePermissions[storeId]`.
+- Missing `storeId` means deny.
+
+#### `none` (or non-scoped)
+
+- If `storeId` exists, check store permissions first.
+- If store check fails, fall back to global permissions.
+- If no `storeId`, check global permissions only.
+
+## Effective Store ID Pattern
+
+Use the same fallback used by sidebar and QA pages:
 
 ```ts
-canAccessRoute(params)
+const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
 ```
 
-At least one requirement must pass.
+Important:
 
----
+- Use the numeric store id key used by `storePermissions`.
+- Do not use human-readable store code when a rule expects store-scoped checks.
 
-### If neither exists
+## UI Rendering Rules
 
-Fail-open:
+For a component or nav item:
 
-→ Item is visible by default.
+1. If it has `requiredPermission`, check with `hasPermission`.
+2. If it has `requirements`, check with `canAccessRoute`.
+3. If both exist, enforce both checks.
+4. If neither exists, it is visible by default (fail-open behavior in current UI patterns).
 
----
+## Examples
 
-# Practical Guidelines
+### Example A: Show Create Camera Form button only when allowed
 
-### Prefer Rule-Based Checks For:
+```tsx
+const createFormRequirements = [
+  {
+    service: "QA",
+    method: "POST",
+    path: "/camera-forms",
+    storeId: effectiveStoreId,
+  },
+];
 
-* API-backed pages
-* Pages that depend on store scoping
-* Anything covered by backend auth rules
+const canCreateCameraForm = createFormRequirements.some((requirement) =>
+  canAccessRoute(requirement)
+);
 
----
-
-### Use `requiredPermission` For:
-
-* Management pages
-* Pages without backend auth rules
-* Simple visibility checks
-
----
-
-### Important
-
-* Scoped rules require a selected `storeId`.
-* Always ensure store selection exists before evaluating scoped routes.
-* Backend remains the source of truth.
-* Frontend only mirrors logic for UI behavior.
-
----
-
-# Summary
-
-After login:
-
-1. Normalize permissions
-2. Store global and store-based permission sets
-3. Store auth rules
-4. Use:
-
-   * `hasPermission()` for direct checks
-   * `canAccessRoute()` for rule-driven checks
-
-This keeps the UI fully dynamic, backend-driven, and scalable.
-
-
----
-
-## Examples — Sidebar items
-
-Here are three examples that mirror how items are defined in the sidebar:
-
-1) Page with `requirements` (rule-driven):
-
-```ts
-const cameraReportItem = {
-  title: 'Camera Report',
-  href: '/en/dashboard/camera-report',
-  icon: Camera,
-  requirements: [
-    { service: 'QA', method: 'GET', path: '/audits/ratings-summary/overview', storeId: zustandSelectedStore?.id },
-  ],
-};
+{canCreateCameraForm && (
+  <Button asChild size="sm">
+    <Link href={`/${locale}/dashboard/quality-assurance/create-camera-forms`}>
+      Create Form
+    </Link>
+  </Button>
+)}
 ```
 
-2) Page with `requiredPermission` (direct permission check):
+### Example B: Gate Edit and Delete menu actions independently
+
+```tsx
+const editRequirements = [
+  {
+    service: "QA",
+    method: "PUT",
+    path: "/camera-forms/",
+    storeId: effectiveStoreId,
+  },
+];
+
+const deleteRequirements = [
+  {
+    service: "QA",
+    method: "DELETE",
+    path: "/camera-forms/",
+    storeId: effectiveStoreId,
+  },
+];
+
+const canEditCameraForm = editRequirements.some((r) => canAccessRoute(r));
+const canDeleteCameraForm = deleteRequirements.some((r) => canAccessRoute(r));
+
+{canEditCameraForm && <DropdownMenuItem>Edit</DropdownMenuItem>}
+{canEditCameraForm && canDeleteCameraForm && <DropdownMenuSeparator />}
+{canDeleteCameraForm && (
+  <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+)}
+```
+
+### Example C: Sidebar item using direct permission
 
 ```ts
 const usersItem = {
-  title: 'Users',
-  href: '/en/dashboard/users',
-  icon: Users,
-  requiredPermission: 'manage users',
+  title: "Users",
+  href: `/${locale}/dashboard/users`,
+  requiredPermission: "manage users",
 };
 ```
 
-3) Page with no requirements (visible by default):
+## Best Practices
 
-```ts
-const dashboardItem = {
-  title: 'Dashboard',
-  href: '/en/dashboard',
-  icon: LayoutDashboard,
-  // no requirements or requiredPermission -> always shown
-};
-```
+- Prefer `canAccessRoute` for features backed by API routes.
+- Prefer `hasPermission` for admin/management pages with simple permissions.
+- Keep requirement objects aligned with backend rule definitions.
+- Use consistent path strings (including trailing slash when required by rules).
+- Hide unauthorized UI, but still expect backend to enforce access.
+
+## Troubleshooting Checklist
+
+- Confirm `authRules` are loaded after login.
+- Confirm `effectiveStoreId` is defined when evaluating scoped rules.
+- Confirm `service`, `method`, and `path` match backend rule patterns.
+- Confirm permission names in rules match stored permission names exactly.
+- Confirm user is not missing the selected store assignment.
+
+## Source Files
+
+- `lib/auth/auth.store.ts`
+- `lib/auth/can-access.ts`
+- `lib/auth/use-auth.ts`
+- `components/layout/sidebar.tsx`
+- `app/[locale]/(dashboard)/dashboard/quality-assurance/page.tsx`
+- `components/qa/camera-forms-list-table.tsx`

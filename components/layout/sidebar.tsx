@@ -285,9 +285,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("cameraForms"),
         href: `/${locale}/dashboard/quality-assurance`,
         icon: ClipboardCheck,
-        requirements: [
-          { service: "QA", method: "POST", path: "/camera-forms", storeId: effectiveStoreId },
-        ],
+        
       },
       {
         title: t("cameraReport"),

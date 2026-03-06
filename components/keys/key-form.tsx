@@ -243,114 +243,128 @@ function StoreRuleForm({
           </div>
 
           {/* Month Day */}
-          <div className="space-y-2">
-            <Label htmlFor={`month-day-${index}`}>Month Day (1–31)</Label>
-            <Input
-              id={`month-day-${index}`}
-              type="number"
-              min={1}
-              max={31}
-              value={rule.month_day ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                update({
-                  month_day: v === "" ? null : Math.min(31, Math.max(1, Number(v))),
-                });
-              }}
-              placeholder="null"
-            />
-          </div>
+          {(rule.frequency_type === "monthly" ||
+            rule.frequency_type === "yearly") && (
+            <div className="space-y-2">
+              <Label htmlFor={`month-day-${index}`}>Month Day (1–31)</Label>
+              <Input
+                id={`month-day-${index}`}
+                type="number"
+                min={1}
+                max={31}
+                value={rule.month_day ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  update({
+                    month_day:
+                      v === "" ? null : Math.min(31, Math.max(1, Number(v))),
+                  });
+                }}
+                placeholder="null"
+              />
+            </div>
+          )}
 
           {/* Week Day */}
-          <div className="space-y-2">
-            <Label htmlFor={`week-day-${index}`}>Week Day (1–7)</Label>
-            <Select
-              value={rule.week_day != null ? String(rule.week_day) : "none"}
-              onValueChange={(v) =>
-                update({ week_day: v === "none" ? null : Number(v) })
-              }
-            >
-              <SelectTrigger id={`week-day-${index}`}>
-                <SelectValue placeholder="None" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {WEEK_DAYS_OPTIONS.map((wd) => (
-                  <SelectItem key={wd.value} value={String(wd.value)}>
-                    {wd.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {rule.frequency_type !== "daily" && (
+            <div className="space-y-2">
+              <Label htmlFor={`week-day-${index}`}>Week Day (1–7)</Label>
+              <Select
+                value={rule.week_day != null ? String(rule.week_day) : "none"}
+                onValueChange={(v) =>
+                  update({ week_day: v === "none" ? null : Number(v) })
+                }
+              >
+                <SelectTrigger id={`week-day-${index}`}>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {WEEK_DAYS_OPTIONS.map((wd) => (
+                    <SelectItem key={wd.value} value={String(wd.value)}>
+                      {wd.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Week of Month */}
-          <div className="space-y-2">
-            <Label htmlFor={`week-of-month-${index}`}>Week of Month</Label>
-            <Select
-              value={
-                rule.week_of_month != null
-                  ? String(rule.week_of_month)
-                  : "none"
-              }
-              onValueChange={(v) =>
-                update({ week_of_month: v === "none" ? null : Number(v) })
-              }
-            >
-              <SelectTrigger id={`week-of-month-${index}`}>
-                <SelectValue placeholder="None" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {WEEK_OF_MONTH_OPTIONS.map((wm) => (
-                  <SelectItem key={wm.value} value={String(wm.value)}>
-                    {wm.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {(rule.frequency_type === "monthly" ||
+            rule.frequency_type === "yearly") && (
+            <div className="space-y-2">
+              <Label htmlFor={`week-of-month-${index}`}>Week of Month</Label>
+              <Select
+                value={
+                  rule.week_of_month != null
+                    ? String(rule.week_of_month)
+                    : "none"
+                }
+                onValueChange={(v) =>
+                  update({ week_of_month: v === "none" ? null : Number(v) })
+                }
+              >
+                <SelectTrigger id={`week-of-month-${index}`}>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {WEEK_OF_MONTH_OPTIONS.map((wm) => (
+                    <SelectItem key={wm.value} value={String(wm.value)}>
+                      {wm.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Year Month */}
-          <div className="space-y-2">
-            <Label htmlFor={`year-month-${index}`}>Year Month (1–12)</Label>
-            <Input
-              id={`year-month-${index}`}
-              type="number"
-              min={1}
-              max={12}
-              value={rule.year_month ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                update({
-                  year_month: v === "" ? null : Math.min(12, Math.max(1, Number(v))),
-                });
-              }}
-              placeholder="null"
-            />
-          </div>
+          {rule.frequency_type === "yearly" && (
+            <div className="space-y-2">
+              <Label htmlFor={`year-month-${index}`}>Year Month (1–12)</Label>
+              <Input
+                id={`year-month-${index}`}
+                type="number"
+                min={1}
+                max={12}
+                value={rule.year_month ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  update({
+                    year_month:
+                      v === "" ? null : Math.min(12, Math.max(1, Number(v))),
+                  });
+                }}
+                placeholder="null"
+              />
+            </div>
+          )}
         </div>
 
         {/* Week Days multi-select (toggle buttons) */}
-        <div className="space-y-2">
-          <Label>Week Days</Label>
-          <div className="flex flex-wrap gap-2">
-            {WEEK_DAYS_OPTIONS.map((wd) => {
-              const selected = rule.week_days.includes(wd.value);
-              return (
-                <Button
-                  key={wd.value}
-                  type="button"
-                  variant={selected ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleWeekDay(wd.value)}
-                >
-                  {wd.label.slice(0, 3)}
-                </Button>
-              );
-            })}
+        {rule.frequency_type !== "daily" && (
+          <div className="space-y-2">
+            <Label>Week Days</Label>
+            <div className="flex flex-wrap gap-2">
+              {WEEK_DAYS_OPTIONS.map((wd) => {
+                const selected = rule.week_days.includes(wd.value);
+                return (
+                  <Button
+                    key={wd.value}
+                    type="button"
+                    variant={selected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => toggleWeekDay(wd.value)}
+                  >
+                    {wd.label.slice(0, 3)}
+                  </Button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
