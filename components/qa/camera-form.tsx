@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,6 +56,87 @@ const RATINGS = [
 ] as const;
 
 const REPORT_TYPE_ALL = "__all__";
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Subcomponents                                                           */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+interface EntityNoteFieldProps {
+  id: string;
+  placeholder: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  disabled?: boolean;
+}
+
+function EntityNoteField({
+  id,
+  placeholder,
+  value,
+  onChange,
+  disabled,
+}: EntityNoteFieldProps) {
+  return (
+    <Textarea
+      id={id}
+      placeholder={placeholder}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      rows={2}
+      className="resize-none text-sm"
+    />
+  );
+}
+
+interface AttachmentButtonProps {
+  entityId: number;
+  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onHoverStart: () => void;
+  onHoverEnd: () => void;
+  disabled?: boolean;
+  label: string;
+}
+
+function AttachmentButton({
+  entityId,
+  onFileSelect,
+  onHoverStart,
+  onHoverEnd,
+  disabled,
+  label,
+}: AttachmentButtonProps) {
+  return (
+    <div
+      className="flex items-center gap-2"
+      onMouseEnter={onHoverStart}
+      onMouseLeave={onHoverEnd}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 text-xs focus-visible:ring-2 focus-visible:ring-ring"
+        disabled={disabled}
+        onClick={() => {
+          document.getElementById(`file-${entityId}`)?.click();
+        }}
+      >
+        <Paperclip className="me-1.5 h-3.5 w-3.5" />
+        {label}
+      </Button>
+      <Input
+        id={`file-${entityId}`}
+        type="file"
+        multiple
+        accept="image/*,.pdf,.doc,.docx"
+        className="hidden"
+        disabled={disabled}
+        onChange={onFileSelect}
+      />
+    </div>
+  );
+}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Component                                                               */
@@ -127,6 +208,7 @@ export function CameraForm() {
   );
   const [entityNotes, setEntityNotes] = useState<Record<number, string>>({});
   const [entityFiles, setEntityFiles] = useState<Record<number, File[]>>({});
+  const [hoveredAttachmentEntityId, setHoveredAttachmentEntityId] = useState<number | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
@@ -235,6 +317,43 @@ export function CameraForm() {
     },
     []
   );
+
+  // ── Attachment hover paste handler ────────────────────────────────────
+  useEffect(() => {
+    const handleWindowPaste = (event: ClipboardEvent) => {
+      if (hoveredAttachmentEntityId === null || isSubmitting) return;
+
+      const items = event.clipboardData?.items;
+      if (!items) return;
+
+      const dataTransfer = new DataTransfer();
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item.type.startsWith("image/")) continue;
+
+        const blob = item.getAsFile();
+        if (!blob) continue;
+
+        const extension = blob.type.split("/")[1] || "png";
+        const file = new File([blob], `pasted-image-${Date.now()}-${i}.${extension}`, {
+          type: blob.type,
+        });
+        dataTransfer.items.add(file);
+      }
+
+      if (dataTransfer.files.length === 0) return;
+
+      event.preventDefault();
+      handleFilesChange(hoveredAttachmentEntityId, dataTransfer.files);
+    };
+
+    window.addEventListener("paste", handleWindowPaste);
+
+    return () => {
+      window.removeEventListener("paste", handleWindowPaste);
+    };
+  }, [handleFilesChange, hoveredAttachmentEntityId, isSubmitting]);
 
   // ── Validation ─────────────────────────────────────────────────────────
   const validate = (): boolean => {
@@ -661,7 +780,7 @@ export function CameraForm() {
                           >
                             {t("entities.note")}
                           </Label>
-                          <Textarea
+                          <EntityNoteField 
                             id={`note-${entity.id}`}
                             placeholder={t("entities.notePlaceholder")}
                             value={entityNotes[entity.id] || ""}
@@ -669,8 +788,6 @@ export function CameraForm() {
                               handleNoteChange(entity.id, e.target.value)
                             }
                             disabled={isSubmitting}
-                            rows={2}
-                            className="resize-none text-sm"
                           />
                         </div>
 
@@ -682,37 +799,20 @@ export function CameraForm() {
                           >
                             {t("entities.attachment")}
                           </Label>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs"
-                              disabled={isSubmitting}
-                              onClick={() => {
-                                document
-                                  .getElementById(`file-${entity.id}`)
-                                  ?.click();
-                              }}
-                            >
-                              <Paperclip className="me-1.5 h-3.5 w-3.5" />
-                              {t("entities.attachment")}
-                            </Button>
-                            <Input
-                              id={`file-${entity.id}`}
-                              type="file"
-                              multiple
-                              accept="image/*,.pdf,.doc,.docx"
-                              className="hidden"
-                              disabled={isSubmitting}
-                              onChange={(e) =>
-                                handleFilesChange(
-                                  entity.id,
-                                  e.target.files
-                                )
-                              }
-                            />
-                          </div>
+                          <AttachmentButton
+                            entityId={entity.id}
+                            label={t("entities.attachment")}
+                            disabled={isSubmitting}
+                            onFileSelect={(e) =>
+                              handleFilesChange(entity.id, e.target.files)
+                            }
+                            onHoverStart={() => setHoveredAttachmentEntityId(entity.id)}
+                            onHoverEnd={() =>
+                              setHoveredAttachmentEntityId((current) =>
+                                current === entity.id ? null : current
+                              )
+                            }
+                          />
                           {/* Attached files list */}
                           {entityFiles[entity.id] &&
                             entityFiles[entity.id].length > 0 && (

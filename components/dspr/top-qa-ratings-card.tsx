@@ -242,8 +242,7 @@ export function TopQaRatingsCard({
               className="h-6 text-[10px]"
               asChild
             >
-              <Link href={`/${locale}/dashboard/camera-report`}>
-                View All
+              <Link href={`/${locale}/dashboard/quality-assurance`}>
                 <ExternalLink className="h-2.5 w-2.5 ms-1" />
               </Link>
             </Button>
@@ -254,26 +253,26 @@ export function TopQaRatingsCard({
         <div className="hidden md:block">
           <Table>
             <TableHeader>
-              <TableRow>
+              {/* <TableRow>
                 <TableHead className="text-[11px] w-[52%] p-0">Entity</TableHead>
                 <TableHead className="text-right text-[11px] p-0">Auto Fail</TableHead>
                 <TableHead className="text-right text-[11px] p-0">Urgent</TableHead>
                 <TableHead className="text-right text-[11px] p-0">Total</TableHead>
-              </TableRow>
+              </TableRow> */}
             </TableHeader>
             <TableBody>
               {data.map((item) => (
-                <TableRow key={item.entityId} className={cn(isLoading && "opacity-60")}>
-                  <TableCell className="text-[11px] font-medium p-0">{item.entityLabel}</TableCell>
-                  <TableCell className="text-[11px] text-right p-0">
-                    <Badge variant="secondary">{item.autoFailCount}</Badge>
+                <TableRow key={item.entityId} className={cn(isLoading && "opacity-60 ")}>
+                  <TableCell className="text-[9px] font-medium p-0">{item.entityLabel}</TableCell>
+                  <TableCell className="text-[9px] text-right py-1">
+                    <Badge className="text-[9px]" variant="secondary">{item.autoFailCount} autoFail</Badge>
                   </TableCell>
-                  <TableCell className="text-[11px] text-right p-0">
-                    <Badge variant="outline">{item.urgentCount}</Badge>
+                  <TableCell className="text-[9px] text-right p-0">
+                    <Badge className="text-[9px]" variant="outline">{item.urgentCount} urgent</Badge>
                   </TableCell>
-                  <TableCell className="text-[11px] text-right">
-                    <Badge>{item.totalCount}</Badge>
-                  </TableCell>
+                  {/* <TableCell className="text-[11px] text-right">
+                    <Badge>{item.totalCount} total</Badge>
+                  </TableCell> */}
                 </TableRow>
               ))}
             </TableBody>

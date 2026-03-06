@@ -76,7 +76,7 @@ export default function AuthRulesPage() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
-  const { rules, isLoading, handleSearch, refetch } = useAuthRules();
+  const { rules, pagination, isLoading, handleSearch, handlePageChange, refetch } = useAuthRules();
   const { deleteRule, isDeleting, toggleStatus, isToggling } = useAuthRulesStore();
   const { testRule, testResult, isTesting, error: testError, clearTestResult } = useTestAuthRule();
 
@@ -284,6 +284,8 @@ export default function AuthRulesPage() {
         searchable
         searchPlaceholder={t("searchPlaceholder")}
         onSearchChange={handleSearch}
+        pagination={pagination}
+        onPageChange={handlePageChange}
         emptyMessage={t("noRules")}
       />
 
