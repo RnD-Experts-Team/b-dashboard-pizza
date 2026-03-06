@@ -4,6 +4,10 @@ import {
   getAuthorizationHeader,
 } from "@/app/api/_lib/auth";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Configuration                                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -12,6 +16,14 @@ const DSPR_BASE_URL =
   process.env.DSPR_API_URL ||
   process.env.NEXT_PUBLIC_DSPR_API_URL ||
   "https://data.lcportal.cloud/api/reports/dspr";
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+  "Surrogate-Control": "no-store",
+  Vary: "Authorization, Cookie",
+} as const;
 
 /**
  * Server-side only DSPR API token.
@@ -79,7 +91,7 @@ function errorResponse(
       status,
       headers: {
         "Content-Type": "application/json",
-        "Cache-Control": "no-store",
+        ...NO_CACHE_HEADERS,
       },
     }
   );
@@ -221,6 +233,7 @@ export async function GET(
       targetUrl,
       {
         method: "GET",
+        cache: "no-store",
         headers: {
           Accept: "application/json",
           Authorization: upstreamAuth,
@@ -262,9 +275,7 @@ export async function GET(
         status: 200,
         headers: {
           "Content-Type": "application/json",
-          // Cache 5 min browser, 10 min CDN, stale-while-revalidate 30 min
-          "Cache-Control":
-            "public, s-maxage=600, max-age=300, stale-while-revalidate=1800",
+          ...NO_CACHE_HEADERS,
           "X-Response-Time": `${elapsed}ms`,
         },
       });
@@ -307,6 +318,7 @@ export async function GET(
       const retryAfter = response.headers.get("Retry-After");
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
+        ...NO_CACHE_HEADERS,
       };
       if (retryAfter) headers["Retry-After"] = retryAfter;
 

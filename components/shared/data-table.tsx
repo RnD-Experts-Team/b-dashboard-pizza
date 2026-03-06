@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Column<T> {
   key: string;
@@ -28,6 +29,14 @@ interface DataTableProps<T> {
   searchPlaceholder?: string;
   onSearchChange?: (value: string) => void;
   emptyMessage?: string;
+  // Pagination props
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  } | null;
+  onPageChange?: (page: number) => void;
 }
 
 export function DataTable<T extends object>({
@@ -38,6 +47,8 @@ export function DataTable<T extends object>({
   searchPlaceholder = "Search...",
   onSearchChange,
   emptyMessage = "No results found.",
+  pagination,
+  onPageChange,
 }: DataTableProps<T>) {
   const [searchValue, setSearchValue] = useState("");
 
@@ -145,6 +156,65 @@ export function DataTable<T extends object>({
           </TableBody>
         </Table>
       </div>
+
+      {pagination && onPageChange && (
+        <div className="flex items-center justify-between px-2">
+          <div className="flex-1 text-sm text-muted-foreground">
+            {pagination.total > 0 ? (
+              <>
+                Showing {(pagination.page - 1) * pagination.pageSize + 1} to{" "}
+                {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{" "}
+                {pagination.total} entries
+              </>
+            ) : (
+              "0 entries"
+            )}
+          </div>
+          <div className="flex items-center space-x-6 lg:space-x-8">
+            <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+              Page {pagination.page} of {pagination.totalPages}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => onPageChange(1)}
+                disabled={pagination.page <= 1}
+              >
+                <span className="sr-only">Go to first page</span>
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => onPageChange(pagination.page - 1)}
+                disabled={pagination.page <= 1}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 w-8 p-0"
+                onClick={() => onPageChange(pagination.page + 1)}
+                disabled={pagination.page >= pagination.totalPages}
+              >
+                <span className="sr-only">Go to next page</span>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex"
+                onClick={() => onPageChange(pagination.totalPages)}
+                disabled={pagination.page >= pagination.totalPages}
+              >
+                <span className="sr-only">Go to last page</span>
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

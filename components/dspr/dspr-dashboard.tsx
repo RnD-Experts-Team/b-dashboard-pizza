@@ -38,6 +38,7 @@ import {
   AlertCircle,
   RefreshCw,
   Store,
+  Pizza,
   Calendar as CalendarIcon,
   ExternalLink,
   Clock,
@@ -193,6 +194,47 @@ function ErrorDisplay({
               Support
             </a>
           </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ForbiddenWelcomeScreen({ locale }: { locale: string }) {
+  return (
+    <Card className="overflow-hidden border  ">
+      <CardContent className="p-5 sm:p-8">
+        <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-500/10 ring-1 ring-orange-400/30 sm:h-20 sm:w-20">
+            <Pizza className="h-8 w-8 text-orange-600 sm:h-10 sm:w-10" />
+          </div>
+
+          <h2 className="text-xl font-semibold tracking-tight sm:text-3xl">
+            Welcome to Pizza Dashboard
+          </h2>
+
+          <p className="mt-2 max-w-xl text-sm text-muted-foreground sm:text-base">
+            Here you can see details about your stores.<br />Enjoy exploring the dashboard.
+          </p>
+
+          <div className="mt-5 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {/* <Button asChild className="w-full sm:w-auto">
+              <a href={`/${locale}/dashboard`}>
+                <Store className="me-2 h-4 w-4" />
+                Open Dashboard
+              </a>
+            </Button> */}
+            <Button variant="outline" asChild className="w-full sm:w-auto">
+              <a
+                href="https://tasks.rdexperts.tech/support-ticket"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="me-2 h-4 w-4" />
+                Contact Support
+              </a>
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -379,6 +421,10 @@ export function DsprDashboard() {
 
   // ── Error state (no data) ──────────────────────────────────────────────
   if (error && !data) {
+    if (error.code === "FORBIDDEN") {
+      return <ForbiddenWelcomeScreen locale={locale} />;
+    }
+
     return (
       <ErrorDisplay
         error={error}

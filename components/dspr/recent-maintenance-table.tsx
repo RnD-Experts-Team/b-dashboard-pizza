@@ -110,7 +110,7 @@ function RecentMaintenanceSkeleton() {
       </CardHeader>
       <CardContent className="px-3">
         <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
               <Skeleton className="h-3.5 w-10" />
               <Skeleton className="h-3.5 w-14" />
@@ -162,7 +162,7 @@ export function RecentMaintenanceTable() {
         storeId,
         1,
         controller.signal,
-        3
+        5
       );
       if (!controller.signal.aborted) {
         setData(result);
@@ -245,7 +245,7 @@ export function RecentMaintenanceTable() {
 
   // ── Data table ───────────────────────────────────────────────────────
   return (
-    <Card className="py-1.5 gap-0 bg-gradient-to-r from-[#CFDEE7]/60 via-[#E6F6FA]/45 to-[#FBFEFF]/30 dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
+    <Card className="py-1.5 gap-0 bg-gradient-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
       <CardHeader className="pb-1 px-3">
         <div className="flex items-center justify-between">
           <div>
@@ -277,26 +277,18 @@ export function RecentMaintenanceTable() {
               asChild
             >
               <Link href={`/${locale}/dashboard/maintenance`}>
-                View All
+                
                 <ExternalLink className="h-2.5 w-2.5 ms-1" />
               </Link>
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="px-3 pb-1">
+      <CardContent className="px-3 pb-0">
         {/* Desktop table */}
         <div className="hidden md:block">
           <Table>
-            <TableHeader>
-              <TableRow>
-                {/* <TableHead>ID</TableHead> */}
-                {/* <TableHead>Entry #</TableHead> */}
-                <TableHead className="text-[11px]">Submitted At</TableHead>
-                <TableHead className="text-[11px]">Broken Item</TableHead>
-                <TableHead className="text-[11px]">Status</TableHead>
-              </TableRow>
-            </TableHeader>
+           
             <TableBody>
               {data.data.map((request) => {
                 const config = getStatusConfig(request.status);
@@ -331,11 +323,11 @@ export function RecentMaintenanceTable() {
                         "MMM dd,yyyy"
                       )}
                     </TableCell>
-                    <TableCell className="text-[11px]">
+                    <TableCell className="text-[11px] py-0">
                       {request.brokenItem}
                     </TableCell>
-                    <TableCell className="text-[7px]">
-                      <Badge className={cn("gap-1 text-[7px]", config.className)}>
+                    <TableCell className="text-[7px] py-0">
+                      <Badge className={cn("gap-1 text-[7px] py-0", config.className)}>
                         <StatusIcon className="text-[7px] h-3 w-3" />
                         {formatStatusLabel(request.status)}
                       </Badge>

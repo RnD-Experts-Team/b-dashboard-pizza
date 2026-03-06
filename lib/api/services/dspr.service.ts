@@ -224,7 +224,8 @@ export const dsprService = {
       );
     }
 
-    const url = `/api/dspr/${encodeURIComponent(resolvedStore)}/${encodeURIComponent(resolvedDate)}`;
+    const cacheBuster = Date.now();
+    const url = `/api/dspr/${encodeURIComponent(resolvedStore)}/${encodeURIComponent(resolvedDate)}?__noCache=${cacheBuster}`;
     // console.log("[DsprService] Fetching URL:", url);
 
     try {
@@ -232,6 +233,8 @@ export const dsprService = {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache, no-store, max-age=0",
+          Pragma: "no-cache",
         },
         timeout: CLIENT_TIMEOUT_MS,
         signal,
