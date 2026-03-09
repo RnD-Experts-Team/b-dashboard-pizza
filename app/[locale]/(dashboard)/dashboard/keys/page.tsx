@@ -22,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -45,6 +46,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { EngineKey } from "@/types/key.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -101,6 +104,45 @@ function KeysTableSkeleton() {
 export default function KeysPage() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
+
+  // Keep store selection behavior aligned with sidebar authorization checks.
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const createKeyRequirements = [
+    {
+      service: "Data",
+      method: "POST",
+      path: "/engine/keys",
+      storeId: effectiveStoreId,
+    },
+  ];
+  const canCreateKey = createKeyRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const updateKeyRequirements = [
+    {
+      service: "Data",
+      method: "PUT",
+      path: "/engine/keys/",
+      storeId: effectiveStoreId,
+    },
+  ];
+  const deactivateKeyRequirements = [
+    {
+      service: "Data",
+      method: "DELETE",
+      path: "/engine/keys/id",
+      storeId: effectiveStoreId,
+    },
+  ];
+  const canUpdateKey = updateKeyRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const canDeactivateKeyAction = deactivateKeyRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const canManageKeys = canUpdateKey || canDeactivateKeyAction;
 
   const {
     data,
@@ -133,7 +175,7 @@ export default function KeysPage() {
   };
 
   const handleDeactivate = async () => {
-    if (!deactivateTarget) return;
+    if (!deactivateTarget || !canDeactivateKeyAction) return;
     const success = await deactivateKey(deactivateTarget.id);
     if (success) {
       toast.success("Key deactivated successfully.");
@@ -162,12 +204,14 @@ export default function KeysPage() {
             />
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
-          <Button asChild size="sm">
-            <Link href={`/${locale}/dashboard/keys/create`}>
-              <Plus className="me-2 h-4 w-4" />
-              Create Key
-            </Link>
-          </Button>
+          {canCreateKey && (
+            <Button asChild size="sm">
+              <Link href={`/${locale}/dashboard/keys/create`}>
+                <Plus className="me-2 h-4 w-4" />
+                Create Key
+              </Link>
+            </Button>
+          )}
         </div>
       </PageHeader>
 
@@ -250,40 +294,45 @@ export default function KeysPage() {
                         {key.storeRules.length} rule(s)
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Actions</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link
-                                href={`/${locale}/dashboard/keys/${key.id}/update`}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Pencil className="me-2 h-4 w-4" />
-                                Update Key
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeactivateTarget(key);
-                              }}
-                            >
-                              <Power className="me-2 h-4 w-4" />
-                              Deactivate Key
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {canUpdateKey && (
+                                <DropdownMenuItem asChild>
+                                  <Link
+                                    href={`/${locale}/dashboard/keys/${key.id}/update`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Pencil className="me-2 h-4 w-4" />
+                                    Update Key
+                                  </Link>
+                                </DropdownMenuItem>
+                              )}
+                             
+                              {canDeactivateKeyAction && (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeactivateTarget(key);
+                                  }}
+                                >
+                                  <Power className="me-2 h-4 w-4" />
+                                  Deactivate Key
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))

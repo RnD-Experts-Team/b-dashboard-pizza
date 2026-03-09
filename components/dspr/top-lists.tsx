@@ -154,13 +154,13 @@ export function TopIngredientsList({
               type="button"
               onClick={() => setTab("used")}
               className={cn(
-                "text-[10px] px-2 py-0.5 rounded cursor-pointer",
+                "text-[10px] px-1 py-0.5 rounded cursor-pointer",
                 tab === "used"
                   ? "bg-muted text-foreground"
                   : "bg-transparent text-muted-foreground"
               )}
             >
-               Three Used 
+               3 Used 
             </button>
             <button
               type="button"
