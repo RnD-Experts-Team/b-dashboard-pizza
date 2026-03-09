@@ -25,6 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
 import { RefreshCw } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
@@ -138,6 +140,8 @@ function DueKeysTableSkeleton() {
 }
 
 export default function DueKeysPage() {
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
   const [stores, setStores] = useState<AuthUserStoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(formatTodayDate());
@@ -177,12 +181,28 @@ export default function DueKeysPage() {
 
   const activeItems = data?.items ?? [];
 
+  // Keep store selection behavior aligned with sidebar/keys authorization checks.
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+
+  const dueKeysWriteRequirements = [
+    {
+      service: "Data",
+      method: "POST",
+      path: "/engine/stores/",
+      storeId: effectiveStoreId,
+    },
+  ];
+  const canWriteDueKeys = dueKeysWriteRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+
   const hasValidContext = useMemo(
     () => !!selectedStoreId && !!selectedDate,
     [selectedStoreId, selectedDate]
   );
 
   const handleRowClick = (item: DueKeyItem) => {
+    if (!canWriteDueKeys) return;
     setSelectedItem(item);
     clearSubmitError();
     setSheetOpen(true);
@@ -192,7 +212,7 @@ export default function DueKeysPage() {
     payload: DueKeyValuePayload,
     mode: "created" | "updated" | "deactivated"
   ) => {
-    if (!selectedStoreId) return;
+    if (!selectedStoreId || !canWriteDueKeys) return;
     const success = await setDueKeyValue(selectedStoreId, selectedDate, payload);
 
     if (!success) {
@@ -219,14 +239,16 @@ export default function DueKeysPage() {
         description="View due keys by store and date, then update key values directly."
       >
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setBulkSheetOpen(true)}
-              disabled={!hasValidContext || isLoading || isRefreshing || activeItems.length === 0}
-            >
-              Fill All Keys
-            </Button>
+            {canWriteDueKeys && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setBulkSheetOpen(true)}
+                disabled={!hasValidContext || isLoading || isRefreshing || activeItems.length === 0}
+              >
+                Fill All Keys
+              </Button>
+            )}
 
             <Button
               variant="outline"
@@ -314,8 +336,10 @@ export default function DueKeysPage() {
                 activeItems.map((item) => (
                   <TableRow
                     key={item.keyId}
-                    className="cursor-pointer"
-                    onClick={() => handleRowClick(item)}
+                    className={cn(canWriteDueKeys && "cursor-pointer")}
+                    onClick={() => {
+                      if (canWriteDueKeys) handleRowClick(item);
+                    }}
                   >
                     <TableCell>{item.keyId}</TableCell>
                     <TableCell className="font-medium">{item.label}</TableCell>
@@ -336,39 +360,43 @@ export default function DueKeysPage() {
         </div>
       )}
 
-      <DueKeyValueSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        item={selectedItem}
-        storeId={selectedStoreId ?? ""}
-        date={selectedDate}
-        isSubmitting={isSubmitting}
-        submitError={submitError}
-        onSubmit={handleSubmitValue}
-      />
+      {canWriteDueKeys && (
+        <DueKeyValueSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          item={selectedItem}
+          storeId={selectedStoreId ?? ""}
+          date={selectedDate}
+          isSubmitting={isSubmitting}
+          submitError={submitError}
+          onSubmit={handleSubmitValue}
+        />
+      )}
 
-      <FillAllKeysSheet
-        open={bulkSheetOpen}
-        onOpenChange={(open) => {
-          setBulkSheetOpen(open);
-          if (!open) clearBulkError();
-        }}
-        items={activeItems}
-        storeId={selectedStoreId ?? ""}
-        date={selectedDate}
-        isSubmitting={isSubmittingBulk}
-        submitError={submitErrorBulk}
-        onSubmit={async (payload) => {
-          if (!selectedStoreId) return false;
-          const success = await setDueKeysBulk(selectedStoreId, selectedDate, payload.items);
-          if (success) {
-            refetch();
-          } else {
-            if (submitErrorBulk) toast.error(submitErrorBulk);
-          }
-          return success;
-        }}
-      />
+      {canWriteDueKeys && (
+        <FillAllKeysSheet
+          open={bulkSheetOpen}
+          onOpenChange={(open) => {
+            setBulkSheetOpen(open);
+            if (!open) clearBulkError();
+          }}
+          items={activeItems}
+          storeId={selectedStoreId ?? ""}
+          date={selectedDate}
+          isSubmitting={isSubmittingBulk}
+          submitError={submitErrorBulk}
+          onSubmit={async (payload) => {
+            if (!selectedStoreId || !canWriteDueKeys) return false;
+            const success = await setDueKeysBulk(selectedStoreId, selectedDate, payload.items);
+            if (success) {
+              refetch();
+            } else {
+              if (submitErrorBulk) toast.error(submitErrorBulk);
+            }
+            return success;
+          }}
+        />
+      )}
     </div>
   );
 }

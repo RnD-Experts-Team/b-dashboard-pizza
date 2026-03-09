@@ -245,7 +245,7 @@ export function RecentMaintenanceTable() {
 
   // ── Data table ───────────────────────────────────────────────────────
   return (
-    <Card className="py-1.5 gap-0 bg-gradient-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
+    <Card className="py-1.5 gap-0 bg-linear-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
       <CardHeader className="pb-1 px-3">
         <div className="flex items-center justify-between">
           <div>
@@ -277,8 +277,8 @@ export function RecentMaintenanceTable() {
               asChild
             >
               <Link href={`/${locale}/dashboard/maintenance`}>
-                
-                <ExternalLink className="h-2.5 w-2.5 ms-1" />
+              {/* View all */}
+                <ExternalLink className="" />
               </Link>
             </Button>
           </div>
