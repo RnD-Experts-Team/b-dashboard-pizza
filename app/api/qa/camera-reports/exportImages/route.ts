@@ -14,7 +14,10 @@ const QA_BASE_URL =
   "https://qa.lcportal.cloud/api";
 
 const QA_API_TOKEN = process.env.QA_API_TOKEN;
-const UPSTREAM_TIMEOUT_MS = Number(process.env.QA_TIMEOUT_MS) || 60_000;
+const UPSTREAM_TIMEOUT_MS =
+  Number(process.env.QA_EXPORT_TIMEOUT_MS) ||
+  Number(process.env.QA_TIMEOUT_MS) ||
+  5 * 60_000;
 const MAX_RETRIES = 1;
 const RETRY_BASE_MS = 500;
 
@@ -198,15 +201,23 @@ export async function GET(request: NextRequest) {
       const contentDisposition =
         response.headers.get("Content-Disposition") ||
         'attachment; filename="camera-report-images.zip"';
+      const contentLength = response.headers.get("Content-Length");
 
-      const body = await response.arrayBuffer();
+      if (!response.body) {
+        return errorResponse(
+          "UPSTREAM_ERROR",
+          "QA API returned an empty export response body.",
+          502
+        );
+      }
 
-      return new NextResponse(body, {
+      return new NextResponse(response.body, {
         status: 200,
         headers: {
           "Content-Type": contentType,
           "Content-Disposition": contentDisposition,
           "Cache-Control": "no-store",
+          ...(contentLength ? { "Content-Length": contentLength } : {}),
           "X-Response-Time": `${elapsed}ms`,
         },
       });

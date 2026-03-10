@@ -53,6 +53,7 @@
     "serviceClients": "Service Clients",
     "userStoreAssignment": "User Store Assignment",
     "maintenance": "Maintenance",
+    "sensors": "Sensors",
     "qualityAssurance": "Quality Assurance",
     "cameraForms": "Camera Forms",
     "createCameraForms": "Create Camera Forms",
@@ -93,6 +94,7 @@
     "by-store": "By Store",
     "user-store-assignment": "User Store Assignment",
     "maintenance": "Maintenance",
+    "sensors": "Sensors",
     "quality-assurance": "Quality Assurance",
     "create-qa-category": "Create QA Category",
     "entities-and-categories": "Entities & Categories",
@@ -1466,5 +1468,80 @@
     "submitting": "Updating...",
     "cancel": "Cancel",
     "success": "Camera form updated successfully!"
+  },
+  "sensors": {
+    "title": "Sensor Dashboard",
+    "description": "Monitor temperature and humidity sensors across your store.",
+    "refresh": "Refresh",
+    "refreshAll": "Refresh All",
+    "reloadDevices": "Reload Devices",
+    "toggleUnit": "Toggle temperature unit",
+    "temperature": "Temperature",
+    "alert": "Alert",
+    "online": "Online",
+    "offline": "Offline",
+    "tempRange": "Temp range",
+    "sensorsSection": "Sensors",
+    "noStore": {
+      "title": "No Store Selected",
+      "description": "Please select a store from the sidebar to view its sensors."
+    },
+    "noSensors": {
+      "title": "No Sensors Found",
+      "description": "This store does not have any sensors configured."
+    },
+    "error": {
+      "title": "Error Loading Sensors",
+      "retry": "Try Again"
+    },
+    "stats": {
+      "totalDevices": "Total Devices",
+      "online": "Online",
+      "offline": "Offline",
+      "alerts": "Alerts"
+    },
+    "period": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly"
+    },
+    "report": {
+      "todayReport": "Today Report",
+      "weeklyReport": "Weekly Report",
+      "monthlyReport": "Monthly Report",
+      "totalReadings": "total readings",
+      "avgTemp": "Avg Temperature",
+      "avgHumidity": "Avg Humidity",
+      "alarms": "Alarms",
+      "offlineEvents": "Offline Events",
+      "eventsDetected": "Events detected",
+      "allOnline": "All online",
+      "timeSeries": "Time Series",
+      "timeSeriesDesc": "Temperature and humidity aggregated by hour.",
+      "perDevice": "Per-Device Summary",
+      "readings": "readings",
+      "temperature": "Temperature",
+      "humidity": "Humidity",
+      "alarmsLabel": "alarms",
+      "columns": {
+        "time": "Time",
+        "avgTemp": "Avg Temp",
+        "minMax": "Min / Max",
+        "avgHumidity": "Avg Humidity",
+        "humidityMinMax": "Min / Max",
+        "readings": "Readings"
+      }
+    },
+    "alerts": {
+      "title": "Recent Alerts",
+      "showingFirst": "Showing first {count} of {total} alerts",
+      "columns": {
+        "device": "Device",
+        "temperature": "Temperature",
+        "humidity": "Humidity",
+        "state": "State",
+        "recordedAt": "Recorded At"
+      }
+    }
   }
 }
