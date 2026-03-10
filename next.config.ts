@@ -23,6 +23,8 @@ const maintenanceApiUrl = process.env.NEXT_PUBLIC_MAINTENANCE_API_URL || "https:
 const maintenanceDomain = getApiDomain(maintenanceApiUrl);
 const qaApiUrl = process.env.NEXT_PUBLIC_QA_API_URL || "https://qa.lcportal.cloud/api";
 const qaDomain = getApiDomain(qaApiUrl);
+const sensorsApiUrl = process.env.NEXT_PUBLIC_SENSORS_API_URL || "https://sensors.pnefoods.com/api";
+const sensorsDomain = getApiDomain(sensorsApiUrl);
 
 const nextConfig: NextConfig = {
   // Security headers
@@ -69,7 +71,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
+              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
               "frame-src 'self'",
               "object-src 'none'",
               "base-uri 'self'",

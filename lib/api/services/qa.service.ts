@@ -241,6 +241,8 @@ function getToken(): string | null {
   }
 }
 
+const EXPORT_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Service                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -1314,7 +1316,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
         },
         responseType: "blob",
-        timeout: 30_000,
+        timeout: EXPORT_DOWNLOAD_TIMEOUT_MS,
       });
 
       // Extract filename from Content-Disposition header or use default
@@ -1330,7 +1332,7 @@ export const qaService = {
       }
 
       // Trigger download
-      const blob = new Blob([response.data]);
+      const blob = response.data as Blob;
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
@@ -1417,7 +1419,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
         },
         responseType: "blob",
-        timeout: 60_000,
+        timeout: EXPORT_DOWNLOAD_TIMEOUT_MS,
       });
 
       const contentDisposition = response.headers["content-disposition"];
@@ -1431,7 +1433,7 @@ export const qaService = {
         }
       }
 
-      const blob = new Blob([response.data]);
+      const blob = response.data as Blob;
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;
@@ -1486,7 +1488,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
         },
         responseType: "blob",
-        timeout: 60_000,
+        timeout: EXPORT_DOWNLOAD_TIMEOUT_MS,
       });
 
       const contentDisposition = response.headers["content-disposition"];
@@ -1500,7 +1502,7 @@ export const qaService = {
         }
       }
 
-      const blob = new Blob([response.data]);
+      const blob = response.data as Blob;
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = downloadUrl;

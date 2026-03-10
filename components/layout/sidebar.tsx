@@ -32,6 +32,7 @@ import {
   Landmark,
   Camera,
   Database,
+  Gauge,
 } from "lucide-react";
 import {
   Dialog,
@@ -381,6 +382,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/maintenance`,
         icon: HardHat,
         // No rule or management permission defined yet — always visible
+      },
+      {
+        title: t("sensors"),
+        href: `/${locale}/dashboard/sensors`,
+        icon: Gauge,
       },
     ],
   };

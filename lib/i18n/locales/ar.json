@@ -53,6 +53,7 @@
     "serviceClients": "عملاء الخدمة",
     "userStoreAssignment": "تعيين الفروع للمستخدمين",
     "maintenance": "الصيانة",
+    "sensors": "المستشعرات",
     "qualityAssurance": "ضمان الجودة",
     "cameraForms": "نماذج الكاميرا",
     "createCameraForms": "إنشاء نماذج الكاميرا",
@@ -93,6 +94,7 @@
     "by-store": "حسب الفرع",
     "user-store-assignment": "تعيين الفروع للمستخدمين",
     "maintenance": "الصيانة",
+    "sensors": "المستشعرات",
     "quality-assurance": "ضمان الجودة",
     "create-qa-category": "إنشاء فئة الجودة",
     "entities-and-categories": "الكيانات والفئات",
@@ -1465,5 +1467,80 @@
     "submitting": "جاري التحديث...",
     "cancel": "إلغاء",
     "success": "تم تحديث نموذج الكاميرا بنجاح!"
+  },
+  "sensors": {
+    "title": "لوحة المستشعرات",
+    "description": "مراقبة مستشعرات الحرارة والرطوبة في فرعك.",
+    "refresh": "تحديث",
+    "refreshAll": "تحديث الكل",
+    "reloadDevices": "إعادة تحميل الأجهزة",
+    "toggleUnit": "تبديل وحدة الحرارة",
+    "temperature": "الحرارة",
+    "alert": "تنبيه",
+    "online": "متصل",
+    "offline": "غير متصل",
+    "tempRange": "نطاق الحرارة",
+    "sensorsSection": "المستشعرات",
+    "noStore": {
+      "title": "لم يتم اختيار فرع",
+      "description": "يرجى اختيار فرع من الشريط الجانبي لعرض المستشعرات."
+    },
+    "noSensors": {
+      "title": "لا توجد مستشعرات",
+      "description": "لا يحتوي هذا الفرع على أي مستشعرات."
+    },
+    "error": {
+      "title": "خطأ في تحميل المستشعرات",
+      "retry": "إعادة المحاولة"
+    },
+    "stats": {
+      "totalDevices": "إجمالي الأجهزة",
+      "online": "متصل",
+      "offline": "غير متصل",
+      "alerts": "التنبيهات"
+    },
+    "period": {
+      "daily": "يومي",
+      "weekly": "أسبوعي",
+      "monthly": "شهري"
+    },
+    "report": {
+      "todayReport": "تقرير اليوم",
+      "weeklyReport": "التقرير الأسبوعي",
+      "monthlyReport": "التقرير الشهري",
+      "totalReadings": "إجمالي القراءات",
+      "avgTemp": "متوسط الحرارة",
+      "avgHumidity": "متوسط الرطوبة",
+      "alarms": "التنبيهات",
+      "offlineEvents": "أحداث عدم الاتصال",
+      "eventsDetected": "أحداث مكتشفة",
+      "allOnline": "الكل متصل",
+      "timeSeries": "السلسلة الزمنية",
+      "timeSeriesDesc": "الحرارة والرطوبة مجمعة حسب الساعة.",
+      "perDevice": "ملخص لكل جهاز",
+      "readings": "قراءات",
+      "temperature": "الحرارة",
+      "humidity": "الرطوبة",
+      "alarmsLabel": "تنبيهات",
+      "columns": {
+        "time": "الوقت",
+        "avgTemp": "متوسط الحرارة",
+        "minMax": "الحد الأدنى / الأقصى",
+        "avgHumidity": "متوسط الرطوبة",
+        "humidityMinMax": "الحد الأدنى / الأقصى",
+        "readings": "القراءات"
+      }
+    },
+    "alerts": {
+      "title": "التنبيهات الأخيرة",
+      "showingFirst": "عرض أول {count} من {total} تنبيه",
+      "columns": {
+        "device": "الجهاز",
+        "temperature": "الحرارة",
+        "humidity": "الرطوبة",
+        "state": "الحالة",
+        "recordedAt": "وقت التسجيل"
+      }
+    }
   }
 }
