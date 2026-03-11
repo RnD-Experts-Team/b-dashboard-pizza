@@ -62,7 +62,7 @@ export function ConditionalThemeProvider({
       storageKey="theme-storage"
       defaultColorTheme="default"
       colorThemePrefix="theme-"
-      animationType={ThemeAnimationType.BLUR_CIRCLE}
+      animationType={ThemeAnimationType.SLIDE}
       duration={750}
     >
       <ThemeProvider {...themeProps}>

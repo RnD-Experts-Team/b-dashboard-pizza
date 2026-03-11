@@ -10,6 +10,8 @@ export type FrequencyType = "daily" | "weekly" | "monthly" | "yearly";
 
 export type WeekOfMonth = 1 | 2 | 3 | 4 | -1;
 
+export type FillMode = "store_once" | "role_each";
+
 // ── Raw API types (snake_case) ─────────────────────────────────────────
 
 export interface ApiStoreRule {
@@ -31,6 +33,8 @@ export interface ApiKey {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
+  fill_mode: FillMode;
+  role_names: string[] | null;
   store_rules: ApiStoreRule[];
   created_at: string | null;
   updated_at: string | null;
@@ -76,6 +80,8 @@ export interface EngineKey {
   label: string;
   dataType: KeyDataType;
   isActive: boolean;
+  fillMode: FillMode;
+  roleNames: string[] | null;
   storeRules: StoreRule[];
   createdAt: string | null;
   updatedAt: string | null;
@@ -116,6 +122,8 @@ export interface CreateKeyPayload {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
+  fill_mode: FillMode;
+  role_names: string[] | null;
   store_rules: StoreRulePayload[];
 }
 
@@ -123,5 +131,7 @@ export interface UpdateKeyPayload {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
+  fill_mode: FillMode;
+  role_names: string[] | null;
   store_rules: StoreRulePayload[];
 }

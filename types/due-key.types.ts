@@ -44,4 +44,5 @@ export interface DueKeyValuePayload {
   value_number: number | null;
   value_boolean: boolean | null;
   value_json: unknown;
+  note?: string | null;
 }

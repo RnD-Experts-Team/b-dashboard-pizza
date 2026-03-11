@@ -17,12 +17,14 @@ import {
   Calendar,
   Database,
   Hash,
+  Layers,
   Loader2,
   RefreshCw,
   Tag,
   Store,
+  Users,
 } from "lucide-react";
-import type { EngineKey, StoreRule } from "@/types/key.types";
+import type { EngineKey, FillMode, StoreRule } from "@/types/key.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
@@ -33,6 +35,11 @@ const FREQUENCY_LABELS: Record<string, string> = {
   weekly: "Weekly",
   monthly: "Monthly",
   yearly: "Yearly",
+};
+
+const FILL_MODE_LABELS: Record<FillMode, string> = {
+  store_once: "Store Once",
+  role_each: "Role Each",
 };
 
 const WEEK_DAY_LABELS: Record<number, string> = {
@@ -91,6 +98,34 @@ function KeyDetailsContent({ engineKey }: { engineKey: EngineKey }) {
             {engineKey.isActive ? "Active" : "Inactive"}
           </Badge>
         </div>
+
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Layers className="h-4 w-4 shrink-0" />
+          <span>
+            Fill Mode:{" "}
+            <span className="font-medium text-foreground">
+              {FILL_MODE_LABELS[engineKey.fillMode] ?? engineKey.fillMode}
+            </span>
+          </span>
+        </div>
+
+        {engineKey.fillMode === "role_each" &&
+          engineKey.roleNames &&
+          engineKey.roleNames.length > 0 && (
+            <div className="flex items-start gap-2 text-muted-foreground sm:col-span-2">
+              <Users className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="space-y-1">
+                <span className="text-sm">Roles:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {engineKey.roleNames.map((r) => (
+                    <Badge key={r} variant="outline" className="text-xs">
+                      {r}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
         {engineKey.createdAt && (
           <div className="flex items-center gap-2 text-muted-foreground">

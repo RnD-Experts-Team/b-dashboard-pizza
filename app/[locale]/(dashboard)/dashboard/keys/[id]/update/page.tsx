@@ -38,6 +38,8 @@ export default function UpdateKeyPage() {
         label: engineKey.label,
         data_type: engineKey.dataType,
         is_active: engineKey.isActive,
+        fill_mode: engineKey.fillMode,
+        role_names: engineKey.roleNames ?? [],
         store_rules: engineKey.storeRules.map((sr) => ({
           store_id: sr.storeId,
           frequency_type: sr.frequencyType as FrequencyType,

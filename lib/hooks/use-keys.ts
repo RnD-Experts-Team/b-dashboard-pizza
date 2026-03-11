@@ -301,3 +301,91 @@ export function useDeactivateKey(): UseDeactivateKeyReturn {
 
   return { deactivateKey: deactivate, isDeactivating, error, clearError };
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  useRestoreKey — restore (reactivate) a soft-deleted key                 */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+interface UseRestoreKeyReturn {
+  restoreKey: (id: number) => Promise<boolean>;
+  isRestoring: boolean;
+  error: string | null;
+  clearError: () => void;
+}
+
+export function useRestoreKey(): UseRestoreKeyReturn {
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  const restore = useCallback(async (id: number): Promise<boolean> => {
+    setIsRestoring(true);
+    setError(null);
+
+    try {
+      await keysService.restoreKey(id);
+      return true;
+    } catch (err) {
+      if (isCanceledError(err)) return false;
+      if (err instanceof KeysError) {
+        setError(err.message);
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred."
+        );
+      }
+      return false;
+    } finally {
+      setIsRestoring(false);
+    }
+  }, []);
+
+  return { restoreKey: restore, isRestoring, error, clearError };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  useForceDeleteKey — permanently delete a key                            */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+interface UseForceDeleteKeyReturn {
+  forceDeleteKey: (id: number) => Promise<boolean>;
+  isDeleting: boolean;
+  error: string | null;
+  clearError: () => void;
+}
+
+export function useForceDeleteKey(): UseForceDeleteKeyReturn {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  const forceDelete = useCallback(async (id: number): Promise<boolean> => {
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      await keysService.forceDeleteKey(id);
+      return true;
+    } catch (err) {
+      if (isCanceledError(err)) return false;
+      if (err instanceof KeysError) {
+        setError(err.message);
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred."
+        );
+      }
+      return false;
+    } finally {
+      setIsDeleting(false);
+    }
+  }, []);
+
+  return { forceDeleteKey: forceDelete, isDeleting, error, clearError };
+}
