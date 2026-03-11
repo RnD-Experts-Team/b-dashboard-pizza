@@ -1494,6 +1494,10 @@
       "title": "Error Loading Sensors",
       "retry": "Try Again"
     },
+    "notFound": {
+      "title": "Sensors Not Found",
+      "description": "This store or its sensors are not available on the server. Please check with your administrator."
+    },
     "stats": {
       "totalDevices": "Total Devices",
       "online": "Online",

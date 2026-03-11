@@ -63,6 +63,7 @@ export function DueKeyValueSheet({
   const [booleanValue, setBooleanValue] = useState<"null" | "true" | "false">("null");
   const [jsonValue, setJsonValue] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     if (!item) return;
@@ -82,6 +83,7 @@ export function DueKeyValueSheet({
     );
     setJsonValue(item.dataType === "json" ? normalized : "");
     setJsonError(null);
+    setNote("");
   }, [item]);
 
   const payload = useMemo<DueKeyValuePayload | null>(() => {
@@ -173,7 +175,7 @@ export function DueKeyValueSheet({
     }
 
     if (!payload) return;
-    await onSubmit(payload, submitMode);
+    await onSubmit({ ...payload, note: note.trim() || null }, submitMode);
   };
 
   return (
@@ -255,6 +257,24 @@ export function DueKeyValueSheet({
                 {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
               </div>
             )}
+
+            <div className="space-y-2">
+              <Label htmlFor="due-key-note">
+                Note{" "}
+                <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Textarea
+                id="due-key-note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                maxLength={2000}
+                placeholder="Add a note..."
+                className="min-h-20 resize-none"
+              />
+              {note.length > 0 && (
+                <p className="text-right text-xs text-muted-foreground">{note.length}/2000</p>
+              )}
+            </div>
 
             {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 

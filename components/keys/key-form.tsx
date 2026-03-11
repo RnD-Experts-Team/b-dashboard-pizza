@@ -11,6 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useRoles } from "@/lib/hooks/use-roles";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -23,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import type {
   KeyDataType,
+  FillMode,
   FrequencyType,
   WeekOfMonth,
   StoreRulePayload,
@@ -33,12 +36,21 @@ import type {
 /*  Constants                                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+// Defined outside the component so the reference is stable across renders
+// and does not trigger the infinite-loop in useRoles' useEffect.
+const ROLES_FETCH_PARAMS = { perPage: 100 };
+
 const DATA_TYPES: { value: KeyDataType; label: string }[] = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
   { value: "decimal", label: "Decimal" },
   { value: "boolean", label: "Boolean" },
   { value: "json", label: "JSON" },
+];
+
+const FILL_MODES: { value: FillMode; label: string; description: string }[] = [
+  { value: "store_once", label: "Store Once", description: "Filled once per store" },
+  { value: "role_each", label: "Role Each", description: "Filled separately by each role" },
 ];
 
 const FREQUENCY_TYPES: { value: FrequencyType; label: string }[] = [
@@ -102,6 +114,8 @@ export interface KeyFormValues {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
+  fill_mode: FillMode;
+  role_names: string[];
   store_rules: StoreRuleFormData[];
 }
 
@@ -117,18 +131,26 @@ export interface KeyFormProps {
 /*  Store Rule sub-form                                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+interface StoreOption {
+  id: string;
+  storeId?: string;
+  name: string;
+}
+
 function StoreRuleForm({
   index,
   rule,
   onChange,
   onRemove,
   canRemove,
+  stores,
 }: {
   index: number;
   rule: StoreRuleFormData;
   onChange: (index: number, updated: StoreRuleFormData) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
+  stores: StoreOption[];
 }) {
   const update = (partial: Partial<StoreRuleFormData>) => {
     onChange(index, { ...rule, ...partial });
@@ -165,15 +187,40 @@ function StoreRuleForm({
           {/* Store ID */}
           <div className="space-y-2">
             <Label htmlFor={`store-id-${index}`}>
-              Store ID <span className="text-destructive">*</span>
+              Store <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id={`store-id-${index}`}
-              value={rule.store_id}
-              onChange={(e) => update({ store_id: e.target.value })}
-              placeholder="Enter store ID"
-              required
-            />
+            {stores.length > 0 ? (
+              <Select
+                value={rule.store_id}
+                onValueChange={(v) => update({ store_id: v })}
+              >
+                <SelectTrigger id={`store-id-${index}`}>
+                  <SelectValue placeholder="Select a store" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((s) => {
+                    const displayId = s.storeId ?? s.id;
+                    const value = displayId;
+                    return (
+                      <SelectItem key={s.id} value={value}>
+                        {s.name}
+                        <span className="ms-1 text-muted-foreground text-xs">
+                          ({displayId})
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id={`store-id-${index}`}
+                value={rule.store_id}
+                onChange={(e) => update({ store_id: e.target.value })}
+                placeholder="Enter store ID"
+                required
+              />
+            )}
           </div>
 
           {/* Frequency Type */}
@@ -381,11 +428,26 @@ export function KeyForm({
   error,
   submitLabel = "Submit",
 }: KeyFormProps) {
+  const { overviewStores } = useAuthStore();
+  const stores: StoreOption[] = (overviewStores ?? []).map((s) => ({
+    id: s.id,
+    storeId: s.storeId,
+    name: s.name,
+  }));
+
+  const { roles, isLoading: isLoadingRoles } = useRoles(ROLES_FETCH_PARAMS);
+
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [dataType, setDataType] = useState<KeyDataType>(
     initialValues?.data_type ?? "text"
   );
   const [isActive, setIsActive] = useState(initialValues?.is_active ?? true);
+  const [fillMode, setFillMode] = useState<FillMode>(
+    initialValues?.fill_mode ?? "store_once"
+  );
+  const [roleNames, setRoleNames] = useState<string[]>(
+    initialValues?.role_names ?? []
+  );
   const [storeRules, setStoreRules] = useState<StoreRuleFormData[]>(
     initialValues?.store_rules ?? [emptyStoreRule()]
   );
@@ -414,6 +476,8 @@ export function KeyForm({
       label: label.trim(),
       data_type: dataType,
       is_active: isActive,
+      fill_mode: fillMode,
+      role_names: fillMode === "role_each" && roleNames.length > 0 ? roleNames : null,
       store_rules: storeRules.map<StoreRulePayload>((rule) => ({
         store_id: rule.store_id.trim(),
         frequency_type: rule.frequency_type,
@@ -487,7 +551,77 @@ export function KeyForm({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Fill Mode */}
+            <div className="space-y-2">
+              <Label htmlFor="fill-mode">
+                Fill Mode <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={fillMode}
+                onValueChange={(v) => {
+                  setFillMode(v as FillMode);
+                  if (v === "store_once") setRoleNames([]);
+                }}
+              >
+                <SelectTrigger id="fill-mode">
+                  <SelectValue placeholder="Select fill mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FILL_MODES.map((fm) => (
+                    <SelectItem key={fm.value} value={fm.value}>
+                      {fm.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {FILL_MODES.find((fm) => fm.value === fillMode)?.description}
+              </p>
+            </div>
           </div>
+
+          {/* Role Names — shown only when fill_mode is role_each */}
+          {fillMode === "role_each" && (
+            <div className="space-y-2">
+              <Label>
+                Role Names <span className="text-destructive">*</span>
+              </Label>
+              {isLoadingRoles ? (
+                <p className="text-xs text-muted-foreground">Loading roles…</p>
+              ) : roles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No roles available.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {roles.map((role) => {
+                    const selected = roleNames.includes(role.name);
+                    return (
+                      <Button
+                        key={role.id}
+                        type="button"
+                        variant={selected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() =>
+                          setRoleNames((prev) =>
+                            selected
+                              ? prev.filter((n) => n !== role.name)
+                              : [...prev, role.name]
+                          )
+                        }
+                      >
+                        {role.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+              {fillMode === "role_each" && roleNames.length === 0 && (
+                <p className="text-xs text-destructive">
+                  Select at least one role.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Active toggle */}
           <div className="flex items-center gap-3">
@@ -527,6 +661,7 @@ export function KeyForm({
               onChange={updateStoreRule}
               onRemove={removeStoreRule}
               canRemove={storeRules.length > 1}
+              stores={stores}
             />
           ))}
         </div>

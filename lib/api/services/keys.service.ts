@@ -68,6 +68,8 @@ function transformKey(raw: ApiKey): EngineKey {
     label: raw.label,
     dataType: raw.data_type,
     isActive: raw.is_active,
+    fillMode: raw.fill_mode ?? "store_once",
+    roleNames: raw.role_names ?? null,
     storeRules: (raw.store_rules ?? []).map(transformStoreRule),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
@@ -308,6 +310,67 @@ export const keysService = {
     try {
       const response = await axios.delete<{ message: string }>(
         `/api/data/keys/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+
+      return response.data;
+    } catch (err) {
+      throw handleAxiosError(err);
+    }
+  },
+
+  /**
+   * Restore (reactivate) a previously deactivated engine key.
+   */
+  async restoreKey(id: number): Promise<{ message: string }> {
+    const token = getToken();
+    if (!token) {
+      throw new KeysError(
+        "You must be logged in to restore keys.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    try {
+      const response = await axios.patch<{ message: string }>(
+        `/api/data/keys/${id}/restore`,
+        null,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+
+      return response.data;
+    } catch (err) {
+      throw handleAxiosError(err);
+    }
+  },
+
+  /**
+   * Permanently (force) delete an engine key.
+   */
+  async forceDeleteKey(id: number): Promise<{ message: string }> {
+    const token = getToken();
+    if (!token) {
+      throw new KeysError(
+        "You must be logged in to delete keys.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    try {
+      const response = await axios.delete<{ message: string }>(
+        `/api/data/keys/${id}/force-delete`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

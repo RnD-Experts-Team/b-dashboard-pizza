@@ -44,10 +44,10 @@ export function FillAllKeysSheet({
   submitError,
   onSubmit,
 }: FillAllKeysSheetProps) {
-  const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string }>>(() => {
+  const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string }>>(() => {
     const initial: Record<number, any> = {};
     for (const it of items) {
-      initial[it.keyId] = { text: "", number: "", boolean: "null", json: "" };
+      initial[it.keyId] = { text: "", number: "", boolean: "null", json: "", note: "" };
     }
     return initial;
   });
@@ -110,7 +110,11 @@ export function FillAllKeysSheet({
       payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: v.boolean === "null" ? null : v.boolean === "true", value_json: null });
     }
 
-    return { items: payloadItems };
+    const enrichedItems = payloadItems.map((p) => ({
+      ...p,
+      note: ((values[p.key_id]?.note ?? "").trim()) || null,
+    }));
+    return { items: enrichedItems };
   };
 
   const handleSubmit = async () => {
@@ -204,6 +208,20 @@ export function FillAllKeysSheet({
                       {jsonErrors[it.keyId] && <p className="text-xs text-destructive">{jsonErrors[it.keyId]}</p>}
                     </div>
                   )}
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  <Label>
+                    Note{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Textarea
+                    value={values[it.keyId]?.note ?? ""}
+                    onChange={(e) => handleChange(it.keyId, "note", e.target.value)}
+                    maxLength={2000}
+                    placeholder="Add a note..."
+                    className="min-h-16 resize-none"
+                  />
                 </div>
               </div>
             ))}

@@ -1,10 +1,15 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { useKeysList, useDeactivateKey } from "@/lib/hooks/use-keys";
+import {
+  useKeysList,
+  useDeactivateKey,
+  useRestoreKey,
+  useForceDeleteKey,
+} from "@/lib/hooks/use-keys";
 import { PageHeader } from "@/components/layout/page-header";
 import { KeyDetailsSheet } from "@/components/keys/key-details-sheet";
 import { Badge } from "@/components/ui/badge";
@@ -44,15 +49,17 @@ import {
   Plus,
   Power,
   RefreshCw,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { EngineKey } from "@/types/key.types";
 
-/* ────────────────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /*  Skeleton                                                                */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function KeysTableSkeleton() {
   return (
@@ -97,9 +104,18 @@ function KeysTableSkeleton() {
   );
 }
 
-/* ────────────────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/*  Dialog variants                                                         */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+type ActionTarget =
+  | { type: "deactivate"; key: EngineKey }
+  | { type: "restore"; key: EngineKey }
+  | { type: "forceDelete"; key: EngineKey };
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 /*  Main page                                                               */
-/* ────────────────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export default function KeysPage() {
   const params = useParams();
@@ -107,41 +123,30 @@ export default function KeysPage() {
   const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
 
-  // Keep store selection behavior aligned with sidebar authorization checks.
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+
   const createKeyRequirements = [
-    {
-      service: "Data",
-      method: "POST",
-      path: "/engine/keys",
-      storeId: effectiveStoreId,
-    },
+    { service: "Data", method: "POST", path: "/engine/keys", storeId: effectiveStoreId },
   ];
-  const canCreateKey = createKeyRequirements.some((requirement) =>
-    canAccessRoute(requirement)
-  );
+  const canCreateKey = createKeyRequirements.some((r) => canAccessRoute(r));
+
   const updateKeyRequirements = [
-    {
-      service: "Data",
-      method: "PUT",
-      path: "/engine/keys/",
-      storeId: effectiveStoreId,
-    },
+    { service: "Data", method: "PUT", path: "/engine/keys/", storeId: effectiveStoreId },
   ];
+  const canUpdateKey = updateKeyRequirements.some((r) => canAccessRoute(r));
+
   const deactivateKeyRequirements = [
-    {
-      service: "Data",
-      method: "DELETE",
-      path: "/engine/keys/id",
-      storeId: effectiveStoreId,
-    },
+    { service: "Data", method: "DELETE", path: "/engine/keys/id", storeId: effectiveStoreId },
   ];
-  const canUpdateKey = updateKeyRequirements.some((requirement) =>
-    canAccessRoute(requirement)
+  const canDeactivateKeyAction = deactivateKeyRequirements.some((r) =>
+    canAccessRoute(r)
   );
-  const canDeactivateKeyAction = deactivateKeyRequirements.some((requirement) =>
-    canAccessRoute(requirement)
-  );
+
+  // Restore and force-delete share the same permission check pattern;
+  // adjust if the backend exposes different route permissions.
+  const canRestoreKey = canDeactivateKeyAction;
+  const canForceDeleteKey = canDeactivateKeyAction;
+
   const canManageKeys = canUpdateKey || canDeactivateKeyAction;
 
   const {
@@ -155,40 +160,118 @@ export default function KeysPage() {
     clearError,
   } = useKeysList();
 
-  const {
-    deactivateKey,
-    isDeactivating,
-  } = useDeactivateKey();
+  const { deactivateKey, isDeactivating } = useDeactivateKey();
+  const { restoreKey, isRestoring } = useRestoreKey();
+  const { forceDeleteKey, isDeleting } = useForceDeleteKey();
+
+  const isMutating = isDeactivating || isRestoring || isDeleting;
 
   // Sheet state
   const [sheetKeyId, setSheetKeyId] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Deactivate dialog state
-  const [deactivateTarget, setDeactivateTarget] = useState<EngineKey | null>(
-    null
-  );
+  // Unified action dialog state
+  const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
 
   const handleRowClick = (key: EngineKey) => {
     setSheetKeyId(key.id);
     setSheetOpen(true);
   };
 
-  const handleDeactivate = async () => {
-    if (!deactivateTarget || !canDeactivateKeyAction) return;
-    const success = await deactivateKey(deactivateTarget.id);
-    if (success) {
-      toast.success("Key deactivated successfully.");
-      setDeactivateTarget(null);
-      refetch();
-    } else {
-      toast.error("Failed to deactivate key.");
+  const handleConfirmAction = async () => {
+    if (!actionTarget) return;
+
+    const { type, key } = actionTarget;
+
+    if (type === "deactivate") {
+      if (!canDeactivateKeyAction) return;
+      const ok = await deactivateKey(key.id);
+      if (ok) {
+        toast.success(`"${key.label}" has been deactivated.`);
+        setActionTarget(null);
+        refetch();
+      } else {
+        toast.error("Failed to deactivate key. Please try again.");
+      }
+    } else if (type === "restore") {
+      if (!canRestoreKey) return;
+      const ok = await restoreKey(key.id);
+      if (ok) {
+        toast.success(`"${key.label}" has been reactivated.`);
+        setActionTarget(null);
+        refetch();
+      } else {
+        toast.error("Failed to restore key. Please try again.");
+      }
+    } else if (type === "forceDelete") {
+      if (!canForceDeleteKey) return;
+      const ok = await forceDeleteKey(key.id);
+      if (ok) {
+        toast.success(`"${key.label}" has been permanently deleted.`);
+        setActionTarget(null);
+        refetch();
+      } else {
+        toast.error("Failed to delete key. Please try again.");
+      }
     }
   };
 
+  /* â”€â”€ dialog copy helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+  const dialogTitle = () => {
+    if (!actionTarget) return "";
+    if (actionTarget.type === "deactivate") return "Deactivate Key";
+    if (actionTarget.type === "restore") return "Reactivate Key";
+    return "Permanently Delete Key";
+  };
+
+  const dialogDescription = () => {
+    if (!actionTarget) return null;
+    const name = actionTarget.key.label;
+    if (actionTarget.type === "deactivate")
+      return (
+        <>
+          Are you sure you want to deactivate <strong>{name}</strong>? The key
+          will be marked as inactive but can be restored later.
+        </>
+      );
+    if (actionTarget.type === "restore")
+      return (
+        <>
+          Are you sure you want to reactivate <strong>{name}</strong>? The key
+          will become active again immediately.
+        </>
+      );
+    return (
+      <>
+        Are you sure you want to <strong>permanently delete</strong>{" "}
+        <strong>{name}</strong>? This action{" "}
+        <span className="text-destructive font-semibold">cannot be undone</span>{" "}
+        and all associated data will be lost.
+      </>
+    );
+  };
+
+  const dialogActionLabel = () => {
+    if (!actionTarget) return "";
+    if (isMutating) {
+      if (actionTarget.type === "deactivate") return "Deactivatingâ€¦";
+      if (actionTarget.type === "restore") return "Reactivatingâ€¦";
+      return "Deletingâ€¦";
+    }
+    if (actionTarget.type === "deactivate") return "Deactivate";
+    if (actionTarget.type === "restore") return "Reactivate";
+    return "Delete Permanently";
+  };
+
+  const isDestructiveAction = actionTarget?.type === "forceDelete";
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Keys" description="View and manage engine keys across your stores.">
+      <PageHeader
+        title="Keys"
+        description="View and manage engine keys across your stores."
+      >
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -197,10 +280,7 @@ export default function KeysPage() {
             disabled={isLoading || isRefreshing}
           >
             <RefreshCw
-              className={cn(
-                "me-2 h-4 w-4",
-                isRefreshing && "animate-spin"
-              )}
+              className={cn("me-2 h-4 w-4", isRefreshing && "animate-spin")}
             />
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
@@ -246,9 +326,7 @@ export default function KeysPage() {
                   <TableHead className="hidden sm:table-cell">
                     Data Type
                   </TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Status
-                  </TableHead>
+                  <TableHead className="hidden md:table-cell">Status</TableHead>
                   <TableHead className="hidden lg:table-cell">
                     Store Rules
                   </TableHead>
@@ -271,22 +349,21 @@ export default function KeysPage() {
                   data.data.map((key) => (
                     <TableRow
                       key={key.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={cn(
+                        "cursor-pointer hover:bg-muted/50",
+                        !key.isActive && "opacity-60"
+                      )}
                       onClick={() => handleRowClick(key)}
                     >
                       <TableCell className="font-mono text-xs">
                         {key.id}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {key.label}
-                      </TableCell>
+                      <TableCell className="font-medium">{key.label}</TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Badge variant="outline">{key.dataType}</Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        <Badge
-                          variant={key.isActive ? "default" : "secondary"}
-                        >
+                        <Badge variant={key.isActive ? "default" : "secondary"}>
                           {key.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
@@ -294,45 +371,73 @@ export default function KeysPage() {
                         {key.storeRules.length} rule(s)
                       </TableCell>
                       <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => e.stopPropagation()}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {canUpdateKey && (
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/${locale}/dashboard/keys/${key.id}/update`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Pencil className="me-2 h-4 w-4" />
+                                  Update Key
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* Activate / Deactivate toggle */}
+                            {canDeactivateKeyAction && key.isActive && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionTarget({ type: "deactivate", key });
+                                }}
                               >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {canUpdateKey && (
-                                <DropdownMenuItem asChild>
-                                  <Link
-                                    href={`/${locale}/dashboard/keys/${key.id}/update`}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <Pencil className="me-2 h-4 w-4" />
-                                    Update Key
-                                  </Link>
-                                </DropdownMenuItem>
-                              )}
-                             
-                              {canDeactivateKeyAction && (
+                                <Power className="me-2 h-4 w-4" />
+                                Deactivate
+                              </DropdownMenuItem>
+                            )}
+
+                            {canRestoreKey && !key.isActive && (
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionTarget({ type: "restore", key });
+                                }}
+                              >
+                                <RotateCcw className="me-2 h-4 w-4" />
+                                Reactivate
+                              </DropdownMenuItem>
+                            )}
+
+                            {canForceDeleteKey && (
+                              <>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-destructive focus:text-destructive"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setDeactivateTarget(key);
+                                    setActionTarget({ type: "forceDelete", key });
                                   }}
                                 >
-                                  <Power className="me-2 h-4 w-4" />
-                                  Deactivate Key
+                                  <Trash2 className="me-2 h-4 w-4" />
+                                  Delete Permanently
                                 </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -381,7 +486,7 @@ export default function KeysPage() {
           {isRefreshing && (
             <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Refreshing…
+              Refreshingâ€¦
             </div>
           )}
         </>
@@ -394,38 +499,37 @@ export default function KeysPage() {
         onOpenChange={setSheetOpen}
       />
 
-      {/* Deactivate Confirmation Dialog */}
+      {/* Unified Confirmation Dialog */}
       <AlertDialog
-        open={!!deactivateTarget}
+        open={!!actionTarget}
         onOpenChange={(open) => {
-          if (!open) setDeactivateTarget(null);
+          if (!open && !isMutating) setActionTarget(null);
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate Key</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to deactivate{" "}
-              <strong>{deactivateTarget?.label}</strong>? This action will mark
-              the key as inactive.
+            <AlertDialogTitle>{dialogTitle()}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <p>{dialogDescription()}</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeactivating}>
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel disabled={isMutating}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeactivate}
-              disabled={isDeactivating}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmAction}
+              disabled={isMutating}
+              className={cn(
+                isDestructiveAction &&
+                  "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              )}
             >
-              {isDeactivating ? (
+              {isMutating ? (
                 <>
                   <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                  Deactivating…
+                  {dialogActionLabel()}
                 </>
               ) : (
-                "Deactivate"
+                dialogActionLabel()
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
