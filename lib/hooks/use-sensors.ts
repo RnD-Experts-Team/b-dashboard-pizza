@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useSensorStore } from "@/lib/store/sensor.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 
@@ -14,9 +14,32 @@ export function useSensors() {
   const store = useSensorStore();
 
   const storeId = selectedStore?.storeId ?? null;
+  // Track whether the mount-effect has already fired a fetch so the
+  // storeId-change effect doesn't immediately fire a duplicate request.
+  const mountFetchedRef = useRef(false);
 
-  /* ── Fetch everything when the selected store changes ─────────────────── */
+  /* ── Always fetch fresh data when the page is entered (mounted) ────────── */
+  // Using an empty dependency array intentionally: we want this to run on
+  // every mount (i.e. every time the user navigates to this page), regardless
+  // of whether the selected store has changed.
   useEffect(() => {
+    if (storeId) {
+      mountFetchedRef.current = true;
+      store.fetchAll(storeId);
+    } else {
+      store.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Re-fetch when the selected store changes while the page is open ──── */
+  // Skip the very first run (handled by the mount effect above).
+  useEffect(() => {
+    if (!mountFetchedRef.current) {
+      // First render — mount effect will handle it.
+      mountFetchedRef.current = true;
+      return;
+    }
     if (storeId) {
       store.fetchAll(storeId);
     } else {

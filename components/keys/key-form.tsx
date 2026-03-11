@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -117,18 +118,26 @@ export interface KeyFormProps {
 /*  Store Rule sub-form                                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+interface StoreOption {
+  id: string;
+  storeId?: string;
+  name: string;
+}
+
 function StoreRuleForm({
   index,
   rule,
   onChange,
   onRemove,
   canRemove,
+  stores,
 }: {
   index: number;
   rule: StoreRuleFormData;
   onChange: (index: number, updated: StoreRuleFormData) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
+  stores: StoreOption[];
 }) {
   const update = (partial: Partial<StoreRuleFormData>) => {
     onChange(index, { ...rule, ...partial });
@@ -165,15 +174,40 @@ function StoreRuleForm({
           {/* Store ID */}
           <div className="space-y-2">
             <Label htmlFor={`store-id-${index}`}>
-              Store ID <span className="text-destructive">*</span>
+              Store <span className="text-destructive">*</span>
             </Label>
-            <Input
-              id={`store-id-${index}`}
-              value={rule.store_id}
-              onChange={(e) => update({ store_id: e.target.value })}
-              placeholder="Enter store ID"
-              required
-            />
+            {stores.length > 0 ? (
+              <Select
+                value={rule.store_id}
+                onValueChange={(v) => update({ store_id: v })}
+              >
+                <SelectTrigger id={`store-id-${index}`}>
+                  <SelectValue placeholder="Select a store" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((s) => {
+                    const displayId = s.storeId ?? s.id;
+                    const value = displayId;
+                    return (
+                      <SelectItem key={s.id} value={value}>
+                        {s.name}
+                        <span className="ms-1 text-muted-foreground text-xs">
+                          ({displayId})
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                id={`store-id-${index}`}
+                value={rule.store_id}
+                onChange={(e) => update({ store_id: e.target.value })}
+                placeholder="Enter store ID"
+                required
+              />
+            )}
           </div>
 
           {/* Frequency Type */}
@@ -381,6 +415,13 @@ export function KeyForm({
   error,
   submitLabel = "Submit",
 }: KeyFormProps) {
+  const { overviewStores } = useAuthStore();
+  const stores: StoreOption[] = (overviewStores ?? []).map((s) => ({
+    id: s.id,
+    storeId: s.storeId,
+    name: s.name,
+  }));
+
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [dataType, setDataType] = useState<KeyDataType>(
     initialValues?.data_type ?? "text"
@@ -527,6 +568,7 @@ export function KeyForm({
               onChange={updateStoreRule}
               onRemove={removeStoreRule}
               canRemove={storeRules.length > 1}
+              stores={stores}
             />
           ))}
         </div>

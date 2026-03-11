@@ -176,8 +176,13 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
     _abortController?.abort();
     _abortController = new AbortController();
 
-    // Reset errors & set all loaders
+    // Clear previous data + set loading flags so the skeleton always shows
+    // on page entry, even if stale data from a prior visit is in the store.
     set({
+      sensors: null,
+      reports: null,
+      history: null,
+      alerts: null,
       sensorsLoading: true,
       reportsLoading: true,
       historyLoading: true,

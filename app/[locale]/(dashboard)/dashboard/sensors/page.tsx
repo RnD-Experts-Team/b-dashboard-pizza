@@ -577,13 +577,27 @@ export default function SensorsPage() {
     toggleUnit,
   } = useSensors();
 
-  const isAnyLoading = sensorsLoading && !sensors;
+  // Show the skeleton whenever we have a store but no sensor data yet.
+  // Must also check !sensorsError — if the fetch failed (e.g. 404), sensors
+  // stays null but we should fall through to the error UI, not loop forever.
+  const isAnyLoading = !!selectedStore && !sensors && !sensorsError;
+
+  // ── Derived display values ─────────────────────────────────────────────
+  // Show "StoreName — Sensors" once a store is selected; fall back to the
+  // generic title while nothing is chosen yet.
+  const pageTitle = selectedStore
+    ? `${selectedStore.name} \u2014 ${t("sensorsSection")}`
+    : t("title");
+
+  // True whenever ANY endpoint is actively fetching (first load or refresh).
+  const isAnyFetching =
+    sensorsLoading || reportsLoading || historyLoading || alertsLoading;
 
   /* ── No store selected ────────────────────────────────────────────────── */
   if (!selectedStore) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("title")} description={t("description")} />
+        <PageHeader title={pageTitle} description={t("description")} />
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <Activity className="h-10 w-10 text-muted-foreground" />
@@ -599,8 +613,38 @@ export default function SensorsPage() {
   if (isAnyLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("title")} description={t("description")} />
+        <PageHeader title={pageTitle} description={t("description")} />
+        {/* Loading label shown above the skeleton so the user knows a fetch is in progress */}
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+          <span className="flex-1">Fetching sensor data…</span>
+          <div className="h-1 w-24 overflow-hidden rounded-full bg-primary/10 hidden sm:block">
+            <div className="h-full w-full animate-pulse bg-primary/60" />
+          </div>
+        </div>
         <SensorsPageSkeleton />
+      </div>
+    );
+  }
+
+  /* ── 404: store has no sensor data on the remote API ─────────────────── */
+  if (sensorsError && !sensors && sensorsError.code === "NOT_FOUND") {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={pageTitle} description={t("description")} />
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Radio className="h-10 w-10 text-muted-foreground" />
+            <h3 className="text-lg font-semibold">{t("notFound.title")}</h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              {t("notFound.description")}
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -609,7 +653,7 @@ export default function SensorsPage() {
   if (sensorsError && !sensors) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("title")} description={t("description")} />
+        <PageHeader title={pageTitle} description={t("description")} />
         <Card className="border-destructive/50">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <AlertTriangle className="h-10 w-10 text-destructive" />
@@ -628,7 +672,7 @@ export default function SensorsPage() {
   if (sensors && sensors.count === 0) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("title")} description={t("description")} />
+        <PageHeader title={pageTitle} description={t("description")} />
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <Thermometer className="h-10 w-10 text-muted-foreground" />
@@ -649,7 +693,7 @@ export default function SensorsPage() {
   return (
     <div className="space-y-6">
       {/* Page header with refresh + unit toggle */}
-      <PageHeader title={t("title")} description={t("description")}>
+      <PageHeader title={pageTitle} description={t("description")}>
         <div className="flex items-center gap-2 flex-wrap">
           {/* °F / °C toggle */}
           <Button variant="outline" size="sm" onClick={toggleUnit} title={t("toggleUnit")}>
@@ -661,13 +705,31 @@ export default function SensorsPage() {
             variant="outline"
             size="sm"
             onClick={refetch}
-            disabled={sensorsLoading}
+            disabled={isAnyFetching}
           >
-            <RefreshCw className={cn("me-1.5 h-4 w-4", sensorsLoading && "animate-spin")} />
+            <RefreshCw className={cn("me-1.5 h-4 w-4", isAnyFetching && "animate-spin")} />
             {t("refresh")}
           </Button>
         </div>
       </PageHeader>
+
+      {/* Loading indicator — visible during background refreshes while data is already shown.
+          Uses a subtle banner + animated bar so the user knows a fetch is in flight
+          without hiding existing content behind a full skeleton. */}
+      {isAnyFetching && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+          <span className="flex-1">Fetching latest sensor data…</span>
+          {/* Pulsing bar — gives a sense of ongoing progress */}
+          <div className="h-1 w-24 overflow-hidden rounded-full bg-primary/10 hidden sm:block">
+            <div className="h-full w-full animate-pulse bg-primary/60" />
+          </div>
+        </div>
+      )}
 
       {/* ── Stats summary row ───────────────────────────────────────────── */}
       <StatsCards
