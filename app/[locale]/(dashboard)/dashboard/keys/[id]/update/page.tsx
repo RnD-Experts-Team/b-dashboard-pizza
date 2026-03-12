@@ -38,10 +38,8 @@ export default function UpdateKeyPage() {
         label: engineKey.label,
         data_type: engineKey.dataType,
         is_active: engineKey.isActive,
-        fill_mode: engineKey.fillMode,
-        role_names: engineKey.roleNames ?? [],
         store_rules: engineKey.storeRules.map((sr) => ({
-          store_id: sr.storeId,
+          store_ids: [sr.storeId],
           frequency_type: sr.frequencyType as FrequencyType,
           interval: sr.interval,
           week_days: sr.weekDays ?? [],
@@ -51,6 +49,8 @@ export default function UpdateKeyPage() {
           year_month: sr.yearMonth,
           starts_at: sr.startsAt,
           ends_at: sr.endsAt ?? "",
+          fill_mode: sr.fillMode,
+          role_names: sr.roleNames ?? [],
         })),
       }
     : undefined;

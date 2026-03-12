@@ -26,6 +26,8 @@ export interface ApiStoreRule {
   year_month: number | null;
   starts_at: string;
   ends_at: string | null;
+  fill_mode: FillMode;
+  role_names: string[] | null;
 }
 
 export interface ApiKey {
@@ -33,8 +35,6 @@ export interface ApiKey {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
-  fill_mode: FillMode;
-  role_names: string[] | null;
   store_rules: ApiStoreRule[];
   created_at: string | null;
   updated_at: string | null;
@@ -73,6 +73,8 @@ export interface StoreRule {
   yearMonth: number | null;
   startsAt: string;
   endsAt: string | null;
+  fillMode: FillMode;
+  roleNames: string[] | null;
 }
 
 export interface EngineKey {
@@ -80,8 +82,6 @@ export interface EngineKey {
   label: string;
   dataType: KeyDataType;
   isActive: boolean;
-  fillMode: FillMode;
-  roleNames: string[] | null;
   storeRules: StoreRule[];
   createdAt: string | null;
   updatedAt: string | null;
@@ -116,14 +116,14 @@ export interface StoreRulePayload {
   year_month: number | null;
   starts_at: string;
   ends_at: string | null;
+  fill_mode: FillMode;
+  role_names: string[] | null;
 }
 
 export interface CreateKeyPayload {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
-  fill_mode: FillMode;
-  role_names: string[] | null;
   store_rules: StoreRulePayload[];
 }
 
@@ -131,7 +131,5 @@ export interface UpdateKeyPayload {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
-  fill_mode: FillMode;
-  role_names: string[] | null;
   store_rules: StoreRulePayload[];
 }

@@ -44,6 +44,8 @@ export function FillAllKeysSheet({
   submitError,
   onSubmit,
 }: FillAllKeysSheetProps) {
+  const unfilledItems = useMemo(() => items.filter((it) => !it.filled), [items]);
+
   const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string }>>(() => {
     const initial: Record<number, any> = {};
     for (const it of items) {
@@ -70,7 +72,7 @@ export function FillAllKeysSheet({
   const buildPayload = (): { items: DueKeyValuePayload[] } | null => {
     const payloadItems: DueKeyValuePayload[] = [];
 
-    for (const it of items) {
+    for (const it of unfilledItems) {
       const v = values[it.keyId] || { text: "", number: "", boolean: "null", json: "" };
 
       if (it.dataType === "json") {
@@ -123,7 +125,7 @@ export function FillAllKeysSheet({
 
     // determine per-key mode for toasts after a successful save
     const modes: Record<number, "created" | "updated" | "deactivated"> = {};
-    for (const it of items) {
+    for (const it of unfilledItems) {
       const p = payload.items.find((x) => x.key_id === it.keyId)!;
       const hasNew = p.value_text !== null || p.value_number !== null || p.value_boolean !== null || p.value_json !== null;
       if (!it.filled && hasNew) modes[it.keyId] = "created";
@@ -134,7 +136,7 @@ export function FillAllKeysSheet({
     const ok = await onSubmit(payload);
     if (!ok) return;
 
-    for (const it of items) {
+    for (const it of unfilledItems) {
       const m = modes[it.keyId];
       if (m === "created") toast.success(`${it.label} created.`);
       else if (m === "deactivated") toast.success(`${it.label} deactivated.`);
@@ -156,18 +158,21 @@ export function FillAllKeysSheet({
           <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
             <p>Store: {storeId}</p>
             <p>Date: {date}</p>
-            <p>Keys: {items.length}</p>
+            <p>Keys to fill: {unfilledItems.length}</p>
             <p />
           </div>
 
           <Separator />
 
           <div className="space-y-4 max-h-[60vh] overflow-auto pr-2">
-            {items.map((it) => (
+            {unfilledItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">All keys are already filled.</p>
+            ) : null}
+            {unfilledItems.map((it) => (
               <div key={it.keyId} className="rounded-md border p-3">
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="font-medium">{it.label} <span className="text-xs text-muted-foreground">#{it.keyId}</span></div>
-                  <div className="text-sm text-muted-foreground">{it.dataType} • {it.filled ? "Filled" : "Not Filled"}</div>
+                  <div className="text-sm text-muted-foreground">{it.dataType}</div>
                 </div>
 
                 <div className="mt-3">

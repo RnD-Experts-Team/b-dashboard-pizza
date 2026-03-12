@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -46,6 +47,32 @@ function normalizeValueForInput(item: DueKeyItem | null): string {
     }
   }
   return String(item.value);
+}
+
+function getFilledValueDisplay(item: DueKeyItem): { label: string; display: string; raw: unknown } {
+  const v = item.value as any;
+  if (v == null) return { label: "Value", display: "—", raw: null };
+
+  if (v?.value_text != null) return { label: "Text Value", display: String(v.value_text), raw: v.value_text };
+  if (v?.value_number != null) return { label: "Number Value", display: String(v.value_number), raw: v.value_number };
+  if (v?.value_boolean != null) return { label: "Boolean Value", display: String(v.value_boolean), raw: v.value_boolean };
+  if (v?.value_json != null) {
+    try {
+      return { label: "JSON Value", display: JSON.stringify(v.value_json, null, 2), raw: v.value_json };
+    } catch {
+      return { label: "JSON Value", display: String(v.value_json), raw: v.value_json };
+    }
+  }
+
+  if (typeof item.value === "object") {
+    try {
+      return { label: "Value", display: JSON.stringify(item.value, null, 2), raw: item.value };
+    } catch {
+      return { label: "Value", display: "[Object]", raw: item.value };
+    }
+  }
+
+  return { label: "Value", display: String(item.value), raw: item.value };
 }
 
 export function DueKeyValueSheet({
@@ -189,104 +216,162 @@ export function DueKeyValueSheet({
         </SheetHeader>
 
         {item ? (
-          <div className="space-y-4 p-4">
-            <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-              <p>Store: {storeId}</p>
-              <p>Date: {date}</p>
-              <p>Data Type: {item.dataType}</p>
-              <p>Status: {item.filled ? "Filled" : "Not Filled"}</p>
+          item.filled ? (
+            /* ── Read-only detail view for filled keys ── */
+            <div className="space-y-4 p-4">
+              <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                <p>Store: {storeId}</p>
+                <p>Date: {date}</p>
+                <p>Data Type: {item.dataType}</p>
+                <p className="flex items-center gap-1.5">
+                  Status: <Badge variant="default" className="text-xs">Filled</Badge>
+                </p>
+              </div>
+
+              <Separator />
+
+              {(() => {
+                const { label, display } = getFilledValueDisplay(item);
+                const isJson = item.dataType === "json" || display.startsWith("{") || display.startsWith("[");
+                const note = (item.value as any)?.note;
+                return (
+                  <>
+                    <div className="space-y-2">
+                      <Label>{label}</Label>
+                      {isJson ? (
+                        <pre className="rounded-md border bg-muted p-3 text-xs overflow-auto max-h-60 whitespace-pre-wrap break-all">
+                          {display}
+                        </pre>
+                      ) : (
+                        <div className="rounded-md border bg-muted px-3 py-2 text-sm break-all">
+                          {display}
+                        </div>
+                      )}
+                    </div>
+
+                    {note ? (
+                      <div className="space-y-2">
+                        <Label>Note</Label>
+                        <div className="rounded-md border bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-all">
+                          {note}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close
+                </Button>
+              </div>
             </div>
-
-            <Separator />
-
-            {item.dataType === "text" && (
-              <div className="space-y-2">
-                <Label htmlFor="due-key-text">Text Value</Label>
-                <Input
-                  id="due-key-text"
-                  // value={textValue}
-                  onChange={(event) => setTextValue(event.target.value)}
-                  placeholder="Enter value"
-                />
+          ) : (
+            /* ── Edit form (unfilled keys, or edit mode for filled keys) ── */
+            <div className="space-y-4 p-4">
+              <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                <p>Store: {storeId}</p>
+                <p>Date: {date}</p>
+                <p>Data Type: {item.dataType}</p>
+                <p>Status: {item.filled ? "Filled" : "Not Filled"}</p>
               </div>
-            )}
 
-            {(item.dataType === "number" || item.dataType === "decimal") && (
-              <div className="space-y-2">
-                <Label htmlFor="due-key-number">Number Value</Label>
-                <Input
-                  id="due-key-number"
-                  type="number"
-                  step={item.dataType === "decimal" ? "0.01" : "1"}
-                  value={numberValue}
-                  onChange={(event) => setNumberValue(event.target.value)}
-                  placeholder="Enter number"
-                />
-              </div>
-            )}
+              <Separator />
 
-            {item.dataType === "boolean" && (
-              <div className="space-y-2">
-                <Label>Boolean Value</Label>
-                <Select value={booleanValue} onValueChange={(v) => setBooleanValue(v as "null" | "true" | "false")}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select value" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="null">No Value</SelectItem>
-                    <SelectItem value="true">True</SelectItem>
-                    <SelectItem value="false">False</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {item.dataType === "json" && (
-              <div className="space-y-2">
-                <Label htmlFor="due-key-json">JSON Value</Label>
-                <Textarea
-                  id="due-key-json"
-                  value={jsonValue}
-                  onChange={(event) => {
-                    setJsonValue(event.target.value);
-                    if (jsonError) setJsonError(null);
-                  }}
-                  className="min-h-36"
-                  placeholder='{"example": "value"}'
-                />
-                {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="due-key-note">
-                Note{" "}
-                <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Textarea
-                id="due-key-note"
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                maxLength={2000}
-                placeholder="Add a note..."
-                className="min-h-20 resize-none"
-              />
-              {note.length > 0 && (
-                <p className="text-right text-xs text-muted-foreground">{note.length}/2000</p>
+              {item.dataType === "text" && (
+                <div className="space-y-2">
+                  <Label htmlFor="due-key-text">Text Value</Label>
+                  <Input
+                    id="due-key-text"
+                    value={textValue}
+                    onChange={(event) => setTextValue(event.target.value)}
+                    placeholder="Enter value"
+                  />
+                </div>
               )}
-            </div>
 
-            {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+              {(item.dataType === "number" || item.dataType === "decimal") && (
+                <div className="space-y-2">
+                  <Label htmlFor="due-key-number">Number Value</Label>
+                  <Input
+                    id="due-key-number"
+                    type="number"
+                    step={item.dataType === "decimal" ? "0.01" : "1"}
+                    value={numberValue}
+                    onChange={(event) => setNumberValue(event.target.value)}
+                    placeholder="Enter number"
+                  />
+                </div>
+              )}
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                Close
-              </Button>
-              <Button onClick={handleSubmit} disabled={isSubmitting || !payload}>
-                {isSubmitting ? "Saving..." : "Save"}
-              </Button>
+              {item.dataType === "boolean" && (
+                <div className="space-y-2">
+                  <Label>Boolean Value</Label>
+                  <Select value={booleanValue} onValueChange={(v) => setBooleanValue(v as "null" | "true" | "false")}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select value" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="null">No Value</SelectItem>
+                      <SelectItem value="true">True</SelectItem>
+                      <SelectItem value="false">False</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {item.dataType === "json" && (
+                <div className="space-y-2">
+                  <Label htmlFor="due-key-json">JSON Value</Label>
+                  <Textarea
+                    id="due-key-json"
+                    value={jsonValue}
+                    onChange={(event) => {
+                      setJsonValue(event.target.value);
+                      if (jsonError) setJsonError(null);
+                    }}
+                    className="min-h-36"
+                    placeholder='{"example": "value"}'
+                  />
+                  {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="due-key-note">
+                  Note{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Textarea
+                  id="due-key-note"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  maxLength={2000}
+                  placeholder="Add a note..."
+                  className="min-h-20 resize-none"
+                />
+                {note.length > 0 && (
+                  <p className="text-right text-xs text-muted-foreground">{note.length}/2000</p>
+                )}
+              </div>
+
+              {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isSubmitting}
+                >
+                  Close
+                </Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting || !payload}>
+                  {isSubmitting ? "Saving..." : "Save"}
+                </Button>
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <p className="p-4 text-sm text-muted-foreground">No due key selected.</p>
         )}

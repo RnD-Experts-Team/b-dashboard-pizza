@@ -59,6 +59,8 @@ function transformStoreRule(raw: ApiStoreRule): StoreRule {
     yearMonth: raw.year_month,
     startsAt: raw.starts_at,
     endsAt: raw.ends_at,
+    fillMode: raw.fill_mode ?? "store_once",
+    roleNames: raw.role_names ?? null,
   };
 }
 
@@ -68,8 +70,6 @@ function transformKey(raw: ApiKey): EngineKey {
     label: raw.label,
     dataType: raw.data_type,
     isActive: raw.is_active,
-    fillMode: raw.fill_mode ?? "store_once",
-    roleNames: raw.role_names ?? null,
     storeRules: (raw.store_rules ?? []).map(transformStoreRule),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
