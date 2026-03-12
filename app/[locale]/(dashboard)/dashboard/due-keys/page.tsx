@@ -5,9 +5,21 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
 import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
 import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
+import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
+import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -15,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -25,11 +38,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
+import {
+  useEmployeeDebriefs,
+  useDeleteEmployeeDebrief,
+  useCreateEmployeeDebrief,
+} from "@/lib/hooks/use-employee-debriefs";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
+import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
 interface AuthUserStoreOption {
   id: string;
@@ -100,6 +119,46 @@ function renderValuePreview(item: DueKeyItem): string {
   return String(item.value);
 }
 
+function formatDebriefDate(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function DebriefTableSkeleton() {
+  return (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-16">ID</TableHead>
+            <TableHead>Employee</TableHead>
+            <TableHead className="hidden sm:table-cell">Date Written</TableHead>
+            <TableHead className="hidden lg:table-cell">Notes</TableHead>
+            <TableHead className="w-10" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <TableRow key={i}>
+              <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+              <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+              <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
+              <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-48" /></TableCell>
+              <TableCell><Skeleton className="h-7 w-7" /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function DueKeysTableSkeleton() {
   return (
     <div className="rounded-md border">
@@ -146,8 +205,15 @@ export default function DueKeysPage() {
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(formatTodayDate());
 
+  // ── Due Keys sheet state ───────────────────────────────────────────
   const [selectedItem, setSelectedItem] = useState<DueKeyItem | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // ── Employee Debrief state ─────────────────────────────────────────
+  const [selectedDebrief, setSelectedDebrief] = useState<EmployeeDebriefItem | null>(null);
+  const [debriefSheetOpen, setDebriefSheetOpen] = useState(false);
+  const [deletingDebrief, setDeletingDebrief] = useState<EmployeeDebriefItem | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     const parsedStores = parseAuthUserStores();
@@ -176,6 +242,29 @@ export default function DueKeysPage() {
     error: submitErrorBulk,
     clearError: clearBulkError,
   } = useSetDueKeysBulk();
+
+  const {
+    items: debriefItems,
+    isLoading: isDebriefLoading,
+    isRefreshing: isDebriefRefreshing,
+    error: debriefError,
+    refetch: refetchDebriefs,
+    clearError: clearDebriefError,
+  } = useEmployeeDebriefs(selectedStoreId);
+
+  const {
+    deleteDebrief,
+    isDeleting,
+    error: deleteError,
+    clearError: clearDeleteError,
+  } = useDeleteEmployeeDebrief();
+
+  const {
+    createDebrief,
+    isSubmitting: isCreating,
+    error: createError,
+    clearError: clearCreateError,
+  } = useCreateEmployeeDebrief();
 
   const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
 
@@ -230,6 +319,32 @@ export default function DueKeysPage() {
 
     setSheetOpen(false);
     refetch();
+  };
+
+  const handleDebriefRowClick = (item: EmployeeDebriefItem) => {
+    setSelectedDebrief(item);
+    setDebriefSheetOpen(true);
+  };
+
+  const handleDebriefDeleteClick = (e: React.MouseEvent, item: EmployeeDebriefItem) => {
+    e.stopPropagation();
+    setDeletingDebrief(item);
+    clearDeleteError();
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeleteDebrief = async () => {
+    if (!deletingDebrief || !selectedStoreId) return;
+    setDeleteConfirmOpen(false);
+    const success = await deleteDebrief(selectedStoreId, deletingDebrief.id);
+    if (success) {
+      toast.success(`Debrief #${deletingDebrief.id} deleted successfully.`);
+      if (selectedDebrief?.id === deletingDebrief.id) setDebriefSheetOpen(false);
+      refetchDebriefs();
+    } else {
+      toast.error(deleteError ?? "Failed to delete the debrief.");
+    }
+    setDeletingDebrief(null);
   };
 
   return (
@@ -397,6 +512,172 @@ export default function DueKeysPage() {
           }}
         />
       )}
+
+      {/* ── Employee Debrief Notes section ──────────────────────────── */}
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Employee Debrief Notes</h2>
+            <p className="text-sm text-muted-foreground">
+              Debrief notes for the selected store.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refetchDebriefs}
+            disabled={!selectedStoreId || isDebriefLoading || isDebriefRefreshing}
+          >
+            <RefreshCw
+              className={cn("me-2 h-4 w-4", isDebriefRefreshing && "animate-spin")}
+            />
+            {isDebriefRefreshing ? "Refreshing..." : "Refresh"}
+          </Button>
+        </div>
+
+        {debriefError && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
+            <p className="text-sm text-destructive">{debriefError}</p>
+            <div className="mt-3 flex gap-2">
+              <Button variant="outline" size="sm" onClick={refetchDebriefs}>
+                Retry
+              </Button>
+              <Button variant="ghost" size="sm" onClick={clearDebriefError}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Side-by-side: list (left) + create form (right) */}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
+          {/* Table */}
+          <div>
+            {isDebriefLoading && !debriefItems.length ? (
+              <DebriefTableSkeleton />
+            ) : !selectedStoreId ? (
+              <div className="rounded-md border p-6 text-sm text-muted-foreground">
+                Select a store to load employee debrief notes.
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-16">ID</TableHead>
+                      <TableHead>Employee</TableHead>
+                      <TableHead className="hidden sm:table-cell">Date Written</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {debriefItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="py-8 text-center text-sm text-muted-foreground"
+                        >
+                          No employee debrief notes found for this store.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      debriefItems.map((item) => {
+                        const writtenDate = item.date ?? item.createdAt;
+
+                        return (
+                          <TableRow
+                            key={item.id}
+                            className="cursor-pointer"
+                            onClick={() => handleDebriefRowClick(item)}
+                          >
+                            <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                            <TableCell className="font-medium">
+                              {item.employeeName ? (
+                                item.employeeName
+                              ) : item.employeeId != null ? (
+                                <Badge variant="secondary">ID {item.employeeId}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              {writtenDate ? (
+                                <span className="text-sm">{formatDebriefDate(writtenDate)}</span>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => handleDebriefDeleteClick(e, item)}
+                                disabled={isDeleting}
+                                aria-label={`Delete debrief #${item.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Create form */}
+          <CreateEmployeeDebriefForm
+            storeId={selectedStoreId}
+            isSubmitting={isCreating}
+            submitError={createError}
+            onClearError={clearCreateError}
+            onSubmit={async (payload) => {
+              if (!selectedStoreId) return false;
+              const success = await createDebrief(selectedStoreId, payload);
+              if (success) refetchDebriefs();
+              return success;
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Debrief detail sheet */}
+      <EmployeeDebriefDetailSheet
+        open={debriefSheetOpen}
+        onOpenChange={setDebriefSheetOpen}
+        storeId={selectedStoreId ?? ""}
+        debriefId={selectedDebrief?.id ?? null}
+      />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Debrief</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete debrief{" "}
+              <strong>#{deletingDebrief?.id}</strong>
+              {deletingDebrief?.employeeName ? ` for ${deletingDebrief.employeeName}` : ""}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleConfirmDeleteDebrief}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

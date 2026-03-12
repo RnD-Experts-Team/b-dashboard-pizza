@@ -21,8 +21,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronsUpDown, Loader2, Plus, Trash2, X } from "lucide-react";
 import type {
   KeyDataType,
   FillMode,
@@ -83,7 +87,7 @@ const WEEK_OF_MONTH_OPTIONS = [
 /* ────────────────────────────────────────────────────────────────────────── */
 
 interface StoreRuleFormData {
-  store_id: string;
+  store_ids: string[];
   frequency_type: FrequencyType;
   interval: number;
   week_days: number[];
@@ -93,11 +97,13 @@ interface StoreRuleFormData {
   year_month: number | null;
   starts_at: string;
   ends_at: string;
+  fill_mode: FillMode;
+  role_names: string[];
 }
 
 function emptyStoreRule(): StoreRuleFormData {
   return {
-    store_id: "",
+    store_ids: [],
     frequency_type: "daily",
     interval: 1,
     week_days: [],
@@ -107,6 +113,8 @@ function emptyStoreRule(): StoreRuleFormData {
     year_month: null,
     starts_at: "",
     ends_at: "",
+    fill_mode: "store_once",
+    role_names: [],
   };
 }
 
@@ -114,8 +122,6 @@ export interface KeyFormValues {
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
-  fill_mode: FillMode;
-  role_names: string[];
   store_rules: StoreRuleFormData[];
 }
 
@@ -144,6 +150,8 @@ function StoreRuleForm({
   onRemove,
   canRemove,
   stores,
+  roles,
+  isLoadingRoles,
 }: {
   index: number;
   rule: StoreRuleFormData;
@@ -151,7 +159,11 @@ function StoreRuleForm({
   onRemove: (index: number) => void;
   canRemove: boolean;
   stores: StoreOption[];
+  roles: { id: string; name: string }[];
+  isLoadingRoles: boolean;
 }) {
+  const [storeSearch, setStoreSearch] = useState("");
+
   const update = (partial: Partial<StoreRuleFormData>) => {
     onChange(index, { ...rule, ...partial });
   };
@@ -184,42 +196,165 @@ function StoreRuleForm({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {/* Store ID */}
-          <div className="space-y-2">
-            <Label htmlFor={`store-id-${index}`}>
-              Store <span className="text-destructive">*</span>
+          {/* Stores multi-select */}
+          <div className="space-y-2 sm:col-span-2">
+            <Label>
+              Stores <span className="text-destructive">*</span>
             </Label>
             {stores.length > 0 ? (
-              <Select
-                value={rule.store_id}
-                onValueChange={(v) => update({ store_id: v })}
-              >
-                <SelectTrigger id={`store-id-${index}`}>
-                  <SelectValue placeholder="Select a store" />
-                </SelectTrigger>
-                <SelectContent>
-                  {stores.map((s) => {
-                    const displayId = s.storeId ?? s.id;
-                    const value = displayId;
-                    return (
-                      <SelectItem key={s.id} value={value}>
-                        {s.name}
-                        <span className="ms-1 text-muted-foreground text-xs">
-                          ({displayId})
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                    >
+                      {rule.store_ids.length === 0
+                        ? "Select stores…"
+                        : `${rule.store_ids.length} store${rule.store_ids.length > 1 ? "s" : ""} selected`}
+                      <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-2" align="start">
+                    <Input
+                      placeholder="Search stores…"
+                      value={storeSearch}
+                      onChange={(e) => setStoreSearch(e.target.value)}
+                      className="mb-2 h-8 text-sm"
+                    />
+                    <ScrollArea className="max-h-52">
+                      <div className="space-y-1">
+                        {stores
+                          .filter((s) => {
+                            const q = storeSearch.toLowerCase();
+                            return (
+                              s.name.toLowerCase().includes(q) ||
+                              (s.storeId ?? s.id).toLowerCase().includes(q)
+                            );
+                          })
+                          .map((s) => {
+                            const displayId = s.storeId ?? s.id;
+                            const selected = rule.store_ids.includes(displayId);
+                            return (
+                              <label
+                                key={s.id}
+                                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+                              >
+                                <Checkbox
+                                  checked={selected}
+                                  onCheckedChange={(checked) =>
+                                    update({
+                                      store_ids: checked
+                                        ? [...rule.store_ids, displayId]
+                                        : rule.store_ids.filter((id) => id !== displayId),
+                                    })
+                                  }
+                                />
+                                <span className="flex-1 text-sm">{s.name}</span>
+                                <span className="text-xs text-muted-foreground">({displayId})</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </ScrollArea>
+                    {rule.store_ids.length > 0 && (
+                      <div className="mt-2 border-t pt-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-full text-xs text-muted-foreground"
+                          onClick={() => update({ store_ids: [] })}
+                        >
+                          Clear selection
+                        </Button>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+                {rule.store_ids.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {rule.store_ids.map((id) => {
+                      const store = stores.find((s) => (s.storeId ?? s.id) === id);
+                      return (
+                        <Badge key={id} variant="secondary" className="gap-1 pe-1">
+                          {store?.name ?? id}
+                          <button
+                            type="button"
+                            className="rounded-sm opacity-70 hover:opacity-100"
+                            onClick={() =>
+                              update({
+                                store_ids: rule.store_ids.filter((sid) => sid !== id),
+                              })
+                            }
+                          >
+                            <X className="h-3 w-3" />
+                            <span className="sr-only">Remove {store?.name ?? id}</span>
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             ) : (
-              <Input
-                id={`store-id-${index}`}
-                value={rule.store_id}
-                onChange={(e) => update({ store_id: e.target.value })}
-                placeholder="Enter store ID"
-                required
-              />
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={storeSearch}
+                    onChange={(e) => setStoreSearch(e.target.value)}
+                    placeholder="Enter store ID and press Add"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const v = storeSearch.trim();
+                        if (v && !rule.store_ids.includes(v)) {
+                          update({ store_ids: [...rule.store_ids, v] });
+                          setStoreSearch("");
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const v = storeSearch.trim();
+                      if (v && !rule.store_ids.includes(v)) {
+                        update({ store_ids: [...rule.store_ids, v] });
+                        setStoreSearch("");
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {rule.store_ids.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {rule.store_ids.map((id) => (
+                      <Badge key={id} variant="secondary" className="gap-1 pe-1">
+                        {id}
+                        <button
+                          type="button"
+                          className="rounded-sm opacity-70 hover:opacity-100"
+                          onClick={() =>
+                            update({ store_ids: rule.store_ids.filter((sid) => sid !== id) })
+                          }
+                        >
+                          <X className="h-3 w-3" />
+                          <span className="sr-only">Remove {id}</span>
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {rule.store_ids.length === 0 && (
+              <p className="text-xs text-destructive">Select at least one store.</p>
             )}
           </div>
 
@@ -412,6 +547,78 @@ function StoreRuleForm({
             </div>
           </div>
         )}
+
+        {/* Fill Mode */}
+        <div className="space-y-2">
+          <Label htmlFor={`fill-mode-${index}`}>
+            Fill Mode <span className="text-destructive">*</span>
+          </Label>
+          <Select
+            value={rule.fill_mode}
+            onValueChange={(v) => {
+              update({
+                fill_mode: v as FillMode,
+                role_names: v === "store_once" ? [] : rule.role_names,
+              });
+            }}
+          >
+            <SelectTrigger id={`fill-mode-${index}`}>
+              <SelectValue placeholder="Select fill mode" />
+            </SelectTrigger>
+            <SelectContent>
+              {FILL_MODES.map((fm) => (
+                <SelectItem key={fm.value} value={fm.value}>
+                  {fm.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {FILL_MODES.find((fm) => fm.value === rule.fill_mode)?.description}
+          </p>
+        </div>
+
+        {/* Role Names — shown only when fill_mode is role_each */}
+        {rule.fill_mode === "role_each" && (
+          <div className="space-y-2">
+            <Label>
+              Role Names <span className="text-destructive">*</span>
+            </Label>
+            {isLoadingRoles ? (
+              <p className="text-xs text-muted-foreground">Loading roles…</p>
+            ) : roles.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No roles available.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {roles.map((role) => {
+                  const selected = rule.role_names.includes(role.name);
+                  return (
+                    <Button
+                      key={role.id}
+                      type="button"
+                      variant={selected ? "default" : "outline"}
+                      size="sm"
+                      onClick={() =>
+                        update({
+                          role_names: selected
+                            ? rule.role_names.filter((n) => n !== role.name)
+                            : [...rule.role_names, role.name],
+                        })
+                      }
+                    >
+                      {role.name}
+                    </Button>
+                  );
+                })}
+              </div>
+            )}
+            {rule.role_names.length === 0 && (
+              <p className="text-xs text-destructive">
+                Select at least one role.
+              </p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -442,12 +649,6 @@ export function KeyForm({
     initialValues?.data_type ?? "text"
   );
   const [isActive, setIsActive] = useState(initialValues?.is_active ?? true);
-  const [fillMode, setFillMode] = useState<FillMode>(
-    initialValues?.fill_mode ?? "store_once"
-  );
-  const [roleNames, setRoleNames] = useState<string[]>(
-    initialValues?.role_names ?? []
-  );
   const [storeRules, setStoreRules] = useState<StoreRuleFormData[]>(
     initialValues?.store_rules ?? [emptyStoreRule()]
   );
@@ -476,20 +677,22 @@ export function KeyForm({
       label: label.trim(),
       data_type: dataType,
       is_active: isActive,
-      fill_mode: fillMode,
-      role_names: fillMode === "role_each" && roleNames.length > 0 ? roleNames : null,
-      store_rules: storeRules.map<StoreRulePayload>((rule) => ({
-        store_id: rule.store_id.trim(),
-        frequency_type: rule.frequency_type,
-        interval: rule.interval,
-        week_days: rule.week_days.length > 0 ? rule.week_days : null,
-        month_day: rule.month_day,
-        week_of_month: rule.week_of_month as WeekOfMonth | null,
-        week_day: rule.week_day,
-        year_month: rule.year_month,
-        starts_at: rule.starts_at,
-        ends_at: rule.ends_at || null,
-      })),
+      store_rules: storeRules.flatMap<StoreRulePayload>((rule) =>
+        rule.store_ids.map((store_id) => ({
+          store_id: store_id.trim(),
+          frequency_type: rule.frequency_type,
+          interval: rule.interval,
+          week_days: rule.week_days.length > 0 ? rule.week_days : null,
+          month_day: rule.month_day,
+          week_of_month: rule.week_of_month as WeekOfMonth | null,
+          week_day: rule.week_day,
+          year_month: rule.year_month,
+          starts_at: rule.starts_at,
+          ends_at: rule.ends_at || null,
+          fill_mode: rule.fill_mode,
+          role_names: rule.fill_mode === "role_each" && rule.role_names.length > 0 ? rule.role_names : null,
+        }))
+      ),
     };
 
     await onSubmit(payload);
@@ -552,76 +755,7 @@ export function KeyForm({
               </Select>
             </div>
 
-            {/* Fill Mode */}
-            <div className="space-y-2">
-              <Label htmlFor="fill-mode">
-                Fill Mode <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={fillMode}
-                onValueChange={(v) => {
-                  setFillMode(v as FillMode);
-                  if (v === "store_once") setRoleNames([]);
-                }}
-              >
-                <SelectTrigger id="fill-mode">
-                  <SelectValue placeholder="Select fill mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FILL_MODES.map((fm) => (
-                    <SelectItem key={fm.value} value={fm.value}>
-                      {fm.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                {FILL_MODES.find((fm) => fm.value === fillMode)?.description}
-              </p>
-            </div>
           </div>
-
-          {/* Role Names — shown only when fill_mode is role_each */}
-          {fillMode === "role_each" && (
-            <div className="space-y-2">
-              <Label>
-                Role Names <span className="text-destructive">*</span>
-              </Label>
-              {isLoadingRoles ? (
-                <p className="text-xs text-muted-foreground">Loading roles…</p>
-              ) : roles.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No roles available.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {roles.map((role) => {
-                    const selected = roleNames.includes(role.name);
-                    return (
-                      <Button
-                        key={role.id}
-                        type="button"
-                        variant={selected ? "default" : "outline"}
-                        size="sm"
-                        onClick={() =>
-                          setRoleNames((prev) =>
-                            selected
-                              ? prev.filter((n) => n !== role.name)
-                              : [...prev, role.name]
-                          )
-                        }
-                      >
-                        {role.name}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-              {fillMode === "role_each" && roleNames.length === 0 && (
-                <p className="text-xs text-destructive">
-                  Select at least one role.
-                </p>
-              )}
-            </div>
-          )}
 
           {/* Active toggle */}
           <div className="flex items-center gap-3">
@@ -662,6 +796,8 @@ export function KeyForm({
               onRemove={removeStoreRule}
               canRemove={storeRules.length > 1}
               stores={stores}
+              roles={roles}
+              isLoadingRoles={isLoadingRoles}
             />
           ))}
         </div>

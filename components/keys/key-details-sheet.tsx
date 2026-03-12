@@ -57,6 +57,10 @@ function formatWeekDays(days: number[] | null): string {
   return days.map((d) => WEEK_DAY_LABELS[d] || `Day ${d}`).join(", ");
 }
 
+function formatDate(value: string): string {
+  return value.slice(0, 10);
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Detail content                                                          */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -99,45 +103,17 @@ function KeyDetailsContent({ engineKey }: { engineKey: EngineKey }) {
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Layers className="h-4 w-4 shrink-0" />
-          <span>
-            Fill Mode:{" "}
-            <span className="font-medium text-foreground">
-              {FILL_MODE_LABELS[engineKey.fillMode] ?? engineKey.fillMode}
-            </span>
-          </span>
-        </div>
-
-        {engineKey.fillMode === "role_each" &&
-          engineKey.roleNames &&
-          engineKey.roleNames.length > 0 && (
-            <div className="flex items-start gap-2 text-muted-foreground sm:col-span-2">
-              <Users className="mt-0.5 h-4 w-4 shrink-0" />
-              <div className="space-y-1">
-                <span className="text-sm">Roles:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {engineKey.roleNames.map((r) => (
-                    <Badge key={r} variant="outline" className="text-xs">
-                      {r}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
         {engineKey.createdAt && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 shrink-0" />
-            <span>Created: {engineKey.createdAt}</span>
+            <span>Created: {formatDate(engineKey.createdAt)}</span>
           </div>
         )}
 
         {engineKey.updatedAt && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 shrink-0" />
-            <span>Updated: {engineKey.updatedAt}</span>
+            <span>Updated: {formatDate(engineKey.updatedAt)}</span>
           </div>
         )}
       </div>
@@ -181,8 +157,8 @@ function StoreRuleCard({ rule }: { rule: StoreRule }) {
 
       <div className="grid grid-cols-1 gap-1.5 text-xs text-muted-foreground sm:grid-cols-2">
         <span>Interval: {rule.interval}</span>
-        <span>Starts: {rule.startsAt}</span>
-        {rule.endsAt && <span>Ends: {rule.endsAt}</span>}
+        <span>Starts: {formatDate(rule.startsAt)}</span>
+        {rule.endsAt && <span>Ends: {formatDate(rule.endsAt)}</span>}
         {rule.weekDays && rule.weekDays.length > 0 && (
           <span className="sm:col-span-2">
             Week Days: {formatWeekDays(rule.weekDays)}
@@ -196,6 +172,23 @@ function StoreRuleCard({ rule }: { rule: StoreRule }) {
           <span>Week of Month: {rule.weekOfMonth === -1 ? "Last" : rule.weekOfMonth}</span>
         )}
         {rule.yearMonth != null && <span>Year Month: {rule.yearMonth}</span>}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <Layers className="h-3.5 w-3.5 shrink-0" />
+          <span>Fill Mode: <span className="font-medium text-foreground">{FILL_MODE_LABELS[rule.fillMode] ?? rule.fillMode}</span></span>
+        </div>
+        {rule.fillMode === "role_each" && rule.roleNames && rule.roleNames.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5 shrink-0" />
+            <div className="flex flex-wrap gap-1">
+              {rule.roleNames.map((r) => (
+                <Badge key={r} variant="outline" className="text-xs">{r}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </article>
   );
