@@ -5,6 +5,7 @@ import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useUIStore } from "@/lib/store/ui.store";
+import { FloatingDebriefButton } from "./floating-debrief-button";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -37,6 +38,8 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </main>
       </div>
+
+      <FloatingDebriefButton />
     </div>
   );
 }

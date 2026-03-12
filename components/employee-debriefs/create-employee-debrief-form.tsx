@@ -8,13 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Clock, Eraser, Loader2, Send } from "lucide-react";
 import type { CreateDebriefPayload } from "@/lib/hooks/use-employee-debriefs";
@@ -161,43 +157,34 @@ export function CreateEmployeeDebriefForm({
   };
 
   return (
-    <Card className="flex flex-col">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-base">Write a Debrief Note</CardTitle>
-            <CardDescription className="text-xs">
-              Draft is saved automatically as you type.
-            </CardDescription>
-          </div>
-          <div className="shrink-0">
-            {draftSavedFlash ? (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                <CheckCircle2 className="h-3 w-3 text-green-500" />
-                Saved
-              </Badge>
-            ) : hasDraft ? (
-              <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                Draft
-              </Badge>
-            ) : null}
-          </div>
+    <Card className="flex flex-col border-0 shadow-none bg-transparent">
+      <div className="flex items-center justify-between px-0 pt-2 pb-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Form Fields</p>
+        <div className="shrink-0">
+          {draftSavedFlash ? (
+            <Badge variant="secondary" className="gap-1 text-[11px]">
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              Saved
+            </Badge>
+          ) : hasDraft ? (
+            <Badge variant="outline" className="gap-1 text-[11px] text-muted-foreground border-gray-200/60 dark:border-gray-700/60">
+              <Clock className="h-2.5 w-2.5" />
+              Draft
+            </Badge>
+          ) : null}
         </div>
-      </CardHeader>
-
-      <Separator />
+      </div>
 
       <form onSubmit={handleSubmit} className="contents">
-        <CardContent className="flex flex-col gap-5 pt-5">
+        <CardContent className="flex flex-col gap-2.5 pt-2 px-0">
           {/* Date */}
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <Label htmlFor="debrief-date" className="text-xs font-medium">
+              <Label htmlFor="debrief-date" className="text-[11px] font-medium">
                 Date
               </Label>
               {isToday && (
-                <span className="text-xs text-muted-foreground">Today</span>
+                <span className="text-[11px] text-muted-foreground">Today</span>
               )}
             </div>
             <Input
@@ -206,12 +193,13 @@ export function CreateEmployeeDebriefForm({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
+              className="h-8 text-xs"
             />
           </div>
 
           {/* Employee name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="debrief-employee-name" className="text-xs font-medium">
+          <div className="space-y-1">
+            <Label htmlFor="debrief-employee-name" className="text-[11px] font-medium">
               Employee Name
             </Label>
             <Input
@@ -224,61 +212,50 @@ export function CreateEmployeeDebriefForm({
               }}
               required
               autoComplete="off"
+              className="h-8 text-xs"
             />
-            <p className={cn("text-right text-xs tabular-nums", charCountColor(employeeName.length, MAX_NAME))}>
-              {employeeName.length} / {MAX_NAME}
-            </p>
           </div>
 
           {/* Note */}
-          <div className="space-y-1.5">
-            <Label htmlFor="debrief-note" className="text-xs font-medium">
+          <div className="space-y-1">
+            <Label htmlFor="debrief-note" className="text-xs font-semibold text-foreground uppercase tracking-wide">
               Note
             </Label>
             <Textarea
               id="debrief-note"
-              placeholder="Write your debrief notes here…&#10;&#10;Include key observations, issues discussed, action items, follow-ups, or any relevant information."
+              placeholder="Write your debrief notes here…"
               value={note}
               onChange={(e) => {
                 setNote(e.target.value.slice(0, MAX_NOTE));
                 onClearError();
               }}
               required
-              className="min-h-[200px] resize-y text-sm leading-relaxed"
+              className="min-h-25 resize-y text-xs leading-relaxed border-gray-200/60 dark:border-gray-700/60 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
             />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                {note.length === 0
-                  ? "Up to 5,000 characters"
-                  : note.length >= MAX_NOTE
-                  ? "Character limit reached"
-                  : `${MAX_NOTE - note.length} characters remaining`}
-              </span>
-              <p className={cn("text-xs tabular-nums", charCountColor(note.length, MAX_NOTE))}>
-                {note.length} / {MAX_NOTE}
-              </p>
-            </div>
+            <p className={cn("text-right text-[11px] tabular-nums font-medium", note.length > MAX_NOTE * 0.8 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
+              {note.length} / {MAX_NOTE}
+            </p>
           </div>
 
           {/* Error banner */}
           {submitError && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2.5">
-              <p className="text-xs text-destructive">{submitError}</p>
+            <div className="rounded-lg border border-gray-200/60 dark:border-gray-700/60 px-3 py-2">
+              <p className="text-xs text-foreground font-medium">{submitError}</p>
             </div>
           )}
 
           {/* Success flash */}
           {successFlash && (
-            <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2.5">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
-              <p className="text-xs text-green-700 dark:text-green-400">
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200/60 dark:border-gray-700/60 px-3 py-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <p className="text-xs text-foreground font-medium">
                 Debrief submitted successfully.
               </p>
             </div>
           )}
         </CardContent>
 
-        <CardFooter className="gap-2 pt-2">
+        <CardFooter className="gap-2 pt-2 pb-1 px-0">
           <Button
             type="button"
             variant="ghost"

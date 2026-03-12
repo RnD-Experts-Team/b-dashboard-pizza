@@ -114,7 +114,7 @@ interface CameraFormsListTableProps {
   currentPage: number;
   onPageChange: (page: number) => void;
   label: string;
-  onDelete?: (id: number) => Promise<void>;
+  onDelete?: (id: number, storeId?: string) => Promise<void>;
   isDeleting?: boolean;
 }
 
@@ -179,7 +179,12 @@ export function CameraFormsListTable({
   const handleConfirmDelete = async () => {
     if (auditToDelete && onDelete) {
       try {
-        await onDelete(auditToDelete.id);
+        // Find the human-readable storeId from overviewStores
+        const matchedStore = overviewStores?.find(
+          (s) => String(s.id) === String(auditToDelete.storeId)
+        );
+        const humanStoreId = matchedStore?.storeId;
+        await onDelete(auditToDelete.id, humanStoreId);
       } catch {
         // Error handled by store
       }
