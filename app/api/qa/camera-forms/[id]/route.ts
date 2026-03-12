@@ -269,6 +269,7 @@ export async function DELETE(
     ? `Bearer ${QA_API_TOKEN}`
     : authorization ?? "";
 
+  const xStoreId = request.headers.get("X-Store-Id");
   const targetUrl = `${QA_BASE_URL}/camera-forms/${id}`;
 
   try {
@@ -279,6 +280,7 @@ export async function DELETE(
         headers: {
           Accept: "application/json",
           ...(upstreamAuth && { Authorization: upstreamAuth }),
+          ...(xStoreId && { "X-Store-Id": xStoreId }),
         },
       },
       UPSTREAM_TIMEOUT_MS,

@@ -604,7 +604,7 @@ export interface CameraFormsFilterParams {
 /** Single entity rating entry for the camera form submission */
 export interface CameraFormEntityEntry {
   entity_id: number;
-  rating_id: number;
+  rating_id?: number;
   note?: string;
   attachments?: File[];
 }
@@ -619,7 +619,7 @@ export interface CreateCameraFormPayload {
 /** Single entity rating entry for camera form update (supports edit-specific fields) */
 export interface CameraFormUpdateEntityEntry {
   entity_id: number;
-  rating_id: number;
+  rating_id?: number;
   notes?: Array<{
     id?: number;          // existing note id (to update)
     note?: string;

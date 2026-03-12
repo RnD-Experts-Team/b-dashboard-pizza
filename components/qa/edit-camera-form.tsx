@@ -34,13 +34,15 @@ import {
   Paperclip,
   X,
   ArrowLeft,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
-  useStoresForCameraForm,
   useEntitiesForCameraForm,
   useUpdateCameraForm,
   useCameraFormDetail,
 } from "@/lib/hooks/use-camera-form";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
   CameraFormUpdateEntityEntry,
   CameraFormAttachment,
@@ -81,11 +83,19 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
   const locale = (params?.locale as string) || "en";
 
   // ── Data hooks ─────────────────────────────────────────────────────────
-  const {
-    stores,
-    isLoading: isStoresLoading,
-    error: storesError,
-  } = useStoresForCameraForm();
+  const overviewStores = useAuthStore((state) => state.overviewStores);
+  const authLoading = useAuthStore((state) => state.isLoading);
+
+  const stores = useMemo(() => {
+    return (overviewStores ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      storeId: s.storeId ?? s.id,
+    }));
+  }, [overviewStores]);
+
+  const isStoresLoading = authLoading && stores.length === 0;
+  const storesError: string | null = null;
 
   const {
     entities,
@@ -134,6 +144,7 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
   >({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isPrePopulated, setIsPrePopulated] = useState(false);
+  const [collapsedEntities, setCollapsedEntities] = useState<Record<number, boolean>>({});
 
   // ── Pre-populate form data from audit ──────────────────────────────────
   useEffect(() => {
@@ -364,16 +375,6 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
 
     if (filteredEntities.length === 0) {
       errors.entities = tCreate("validation.entitiesRequired");
-    } else {
-      const unrated = filteredEntities.filter(
-        (e) => !entityRatings[e.id]
-      );
-      if (unrated.length > 0) {
-        errors.entities = tCreate("validation.ratingRequired");
-        for (const e of unrated) {
-          errors[`entity_${e.id}`] = tCreate("validation.ratingRequired");
-        }
-      }
     }
 
     setValidationErrors(errors);
@@ -389,7 +390,6 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
     if (!validate()) return;
 
     const entityEntries: CameraFormUpdateEntityEntry[] = filteredEntities
-      .filter((entity) => entityRatings[entity.id])
       .map((entity) => {
         const noteText = entityNotes[entity.id]?.trim();
         const existingNoteId = entityNoteIds[entity.id];
@@ -403,7 +403,9 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
 
         const entry: CameraFormUpdateEntityEntry = {
           entity_id: entity.id,
-          rating_id: Number(entityRatings[entity.id]),
+          ...(entityRatings[entity.id] && {
+            rating_id: Number(entityRatings[entity.id]),
+          }),
         };
 
         // Build notes array if there's any note-related data
@@ -638,10 +640,14 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
                       }
                     />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                      position="popper"
+                      style={{ maxHeight: "160px", overflowY: "auto" }}
+                      className="scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+                    >
                     {stores.map((store) => (
                       <SelectItem key={store.id} value={String(store.id)}>
-                        {store.name || store.storeId} (ID: {store.id})
+                        {store.name} ({store.storeId})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -727,239 +733,248 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
               <p>{tCreate("entities.noEntities")}</p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {groupedEntities.map((group, groupIdx) => (
                 <div key={group.categoryId}>
-                  {groupIdx > 0 && <Separator className="mb-6" />}
+                  {groupIdx > 0 && <Separator className="mb-4" />}
 
                   {/* Category Header */}
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold">
-                      {group.categoryLabel}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {group.entities.length}{" "}
-                      {group.entities.length === 1 ? "entity" : "entities"}
-                    </p>
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold">
+                        {group.categoryLabel}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        {group.entities.length}{" "}
+                        {group.entities.length === 1 ? "entity" : "entities"}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Entity Cards */}
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    {group.entities.map((entity) => (
-                      <div
-                        key={entity.id}
-                        className={`rounded-lg border p-4 transition-colors ${
-                          validationErrors[`entity_${entity.id}`]
-                            ? "border-destructive bg-destructive/5"
-                            : entityRatings[entity.id]
+                  {/* Entity Cards - 4 col responsive grid */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {group.entities.map((entity) => {
+                      const isCollapsed = collapsedEntities[entity.id] ?? true;
+                      return (
+                        <div
+                          key={entity.id}
+                          className={`rounded-lg border p-3 transition-colors ${
+                            entityRatings[entity.id]
                               ? "border-primary/30 bg-primary/5"
                               : "border-border"
-                        }`}
-                      >
-                        {/* Entity Name */}
-                        <div className="mb-3 flex items-center justify-between">
-                          <Label className="text-sm font-medium">
-                            {entity.entityLabel}
-                          </Label>
-                          {entityRatings[entity.id] && (
-                            <Badge variant="outline" className="text-xs">
-                              {RATINGS.find(
-                                (r) =>
-                                  String(r.id) === entityRatings[entity.id]
-                              )
-                                ? tCreate(
-                                    `entities.${RATINGS.find((r) => String(r.id) === entityRatings[entity.id])!.key}`
+                          }`}
+                        >
+                          {/* Entity Header with collapse toggle */}
+                          <div
+                            className="flex cursor-pointer items-center justify-between gap-1"
+                            onClick={() =>
+                              setCollapsedEntities((prev) => ({
+                                ...prev,
+                                [entity.id]: !isCollapsed,
+                              }))
+                            }
+                          >
+                            <Label className="pointer-events-none text-xs font-medium leading-tight">
+                              {entity.entityLabel}
+                            </Label>
+                            <div className="flex shrink-0 items-center gap-1">
+                              {entityRatings[entity.id] && (
+                                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                  {RATINGS.find(
+                                    (r) =>
+                                      String(r.id) === entityRatings[entity.id]
                                   )
-                                : ""}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Rating Selection */}
-                        <div className="mb-3 space-y-1.5">
-                          <Label
-                            htmlFor={`rating-${entity.id}`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            {tCreate("entities.rating")}{" "}
-                            <span className="text-destructive">*</span>
-                          </Label>
-                          <Select
-                            value={entityRatings[entity.id] || ""}
-                            onValueChange={(value) =>
-                              handleRatingChange(entity.id, value)
-                            }
-                            disabled={isSubmitting}
-                          >
-                            <SelectTrigger
-                              id={`rating-${entity.id}`}
-                              className={`h-9 ${
-                                validationErrors[`entity_${entity.id}`]
-                                  ? "border-destructive"
-                                  : ""
-                              }`}
-                            >
-                              <SelectValue
-                                placeholder={tCreate(
-                                  "entities.ratingPlaceholder"
-                                )}
-                              />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {RATINGS.map((rating) => (
-                                <SelectItem
-                                  key={rating.id}
-                                  value={String(rating.id)}
-                                >
-                                  {tCreate(`entities.${rating.key}`)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* Note */}
-                        <div className="space-y-1.5">
-                          <Label
-                            htmlFor={`note-${entity.id}`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            {tCreate("entities.note")}
-                          </Label>
-                          <Textarea
-                            id={`note-${entity.id}`}
-                            placeholder={tCreate("entities.notePlaceholder")}
-                            value={entityNotes[entity.id] || ""}
-                            onChange={(e) =>
-                              handleNoteChange(entity.id, e.target.value)
-                            }
-                            disabled={isSubmitting}
-                            rows={2}
-                            className="resize-none text-sm"
-                          />
-                        </div>
-
-                        {/* File Attachment */}
-                        <div className="mt-3 space-y-1.5">
-                          <Label
-                            htmlFor={`file-${entity.id}`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            {tCreate("entities.attachment")}
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-8 text-xs"
-                              disabled={isSubmitting}
-                              onClick={() => {
-                                document
-                                  .getElementById(`file-${entity.id}`)
-                                  ?.click();
-                              }}
-                            >
-                              <Paperclip className="me-1.5 h-3.5 w-3.5" />
-                              {tCreate("entities.attachment")}
-                            </Button>
-                            <Input
-                              id={`file-${entity.id}`}
-                              type="file"
-                              multiple
-                              accept="image/*"
-                              className="hidden"
-                              disabled={isSubmitting}
-                              onChange={(e) =>
-                                handleFilesChange(entity.id, e.target.files)
-                              }
-                            />
-                          {validationErrors[`entity_${entity.id}_files`] && (
-                            <p className="text-xs text-destructive">
-                              {validationErrors[`entity_${entity.id}_files`]}
-                            </p>
-                          )}
-                          </div>
-
-                          {/* Existing attachments */}
-                          {existingAttachments[entity.id]?.length ? (
-                            <div className="mt-2 space-y-1">
-                              {existingAttachments[entity.id].map(
-                                (attachment) => (
-                                  <div
-                                    key={attachment.id}
-                                    className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1 text-xs"
-                                  >
-                                    <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                    <a
-                                      href={attachment.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="min-w-0 flex-1 truncate text-primary underline-offset-2 hover:underline"
-                                    >
-                                      {attachment.path}
-                                    </a>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-5 w-5 p-0"
-                                      disabled={isSubmitting}
-                                      onClick={() =>
-                                        handleRemoveExistingAttachment(
-                                          entity.id,
-                                          attachment.id
-                                        )
-                                      }
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                )
+                                    ? tCreate(
+                                        `entities.${RATINGS.find((r) => String(r.id) === entityRatings[entity.id])!.key}`
+                                      )
+                                    : ""}
+                                </Badge>
+                              )}
+                              {isCollapsed ? (
+                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              ) : (
+                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
                               )}
                             </div>
-                          ) : null}
+                          </div>
 
-                          {/* New attached files list */}
-                          {entityFiles[entity.id] &&
-                            entityFiles[entity.id].length > 0 && (
-                              <div className="mt-2 space-y-1">
-                                {entityFiles[entity.id].map(
-                                  (file, fileIdx) => (
-                                    <div
-                                      key={`${entity.id}-${fileIdx}`}
-                                      className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1 text-xs"
-                                    >
-                                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                      <span className="min-w-0 flex-1 truncate">
-                                        {file.name}
-                                      </span>
-                                      <span className="shrink-0 text-muted-foreground">
-                                        {(file.size / 1024).toFixed(0)}KB
-                                      </span>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-5 w-5 p-0"
-                                        disabled={isSubmitting}
-                                        onClick={() =>
-                                          handleRemoveFile(
-                                            entity.id,
-                                            fileIdx
-                                          )
-                                        }
+                          {/* Collapsible content */}
+                          {!isCollapsed && (
+                            <div className="mt-2 space-y-2">
+                              {/* Rating Selection */}
+                              <div className="space-y-1">
+                                <Label
+                                  htmlFor={`rating-${entity.id}`}
+                                  className="text-[10px] text-muted-foreground"
+                                >
+                                  {tCreate("entities.rating")}
+                                </Label>
+                                <Select
+                                  value={entityRatings[entity.id] || ""}
+                                  onValueChange={(value) =>
+                                    handleRatingChange(entity.id, value)
+                                  }
+                                  disabled={isSubmitting}
+                                >
+                                  <SelectTrigger
+                                    id={`rating-${entity.id}`}
+                                    className="h-8 text-xs"
+                                  >
+                                    <SelectValue
+                                      placeholder={tCreate(
+                                        "entities.ratingPlaceholder"
+                                      )}
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {RATINGS.map((rating) => (
+                                      <SelectItem
+                                        key={rating.id}
+                                        value={String(rating.id)}
                                       >
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  )
-                                )}
+                                        {tCreate(`entities.${rating.key}`)}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </div>
-                            )}
+
+                              {/* Note */}
+                              <div className="space-y-1">
+                                <Label
+                                  htmlFor={`note-${entity.id}`}
+                                  className="text-[10px] text-muted-foreground"
+                                >
+                                  {tCreate("entities.note")}
+                                </Label>
+                                <Textarea
+                                  id={`note-${entity.id}`}
+                                  placeholder={tCreate("entities.notePlaceholder")}
+                                  value={entityNotes[entity.id] || ""}
+                                  onChange={(e) =>
+                                    handleNoteChange(entity.id, e.target.value)
+                                  }
+                                  disabled={isSubmitting}
+                                  rows={2}
+                                  className="resize-none text-xs"
+                                />
+                              </div>
+
+                              {/* File Attachment */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-[10px]"
+                                    disabled={isSubmitting}
+                                    onClick={() => {
+                                      document
+                                        .getElementById(`file-${entity.id}`)
+                                        ?.click();
+                                    }}
+                                  >
+                                    <Paperclip className="me-1 h-3 w-3" />
+                                    {tCreate("entities.attachment")}
+                                  </Button>
+                                  <Input
+                                    id={`file-${entity.id}`}
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    className="hidden"
+                                    disabled={isSubmitting}
+                                    onChange={(e) =>
+                                      handleFilesChange(entity.id, e.target.files)
+                                    }
+                                  />
+                                </div>
+                                {validationErrors[`entity_${entity.id}_files`] && (
+                                  <p className="text-[10px] text-destructive">
+                                    {validationErrors[`entity_${entity.id}_files`]}
+                                  </p>
+                                )}
+
+                                {/* Existing attachments */}
+                                {existingAttachments[entity.id]?.length ? (
+                                  <div className="space-y-1">
+                                    {existingAttachments[entity.id].map(
+                                      (attachment) => (
+                                        <div
+                                          key={attachment.id}
+                                          className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]"
+                                        >
+                                          <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                          <a
+                                            href={attachment.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="min-w-0 flex-1 truncate text-primary underline-offset-2 hover:underline"
+                                          >
+                                            {attachment.path}
+                                          </a>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-4 w-4 p-0"
+                                            disabled={isSubmitting}
+                                            onClick={() =>
+                                              handleRemoveExistingAttachment(
+                                                entity.id,
+                                                attachment.id
+                                              )
+                                            }
+                                          >
+                                            <X className="h-2.5 w-2.5" />
+                                          </Button>
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                ) : null}
+
+                                {/* New attached files */}
+                                {entityFiles[entity.id] &&
+                                  entityFiles[entity.id].length > 0 && (
+                                    <div className="space-y-1">
+                                      {entityFiles[entity.id].map(
+                                        (file, fileIdx) => (
+                                          <div
+                                            key={`${entity.id}-${fileIdx}`}
+                                            className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]"
+                                          >
+                                            <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                                            <span className="min-w-0 flex-1 truncate">
+                                              {file.name}
+                                            </span>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-4 w-4 p-0"
+                                              disabled={isSubmitting}
+                                              onClick={() =>
+                                                handleRemoveFile(
+                                                  entity.id,
+                                                  fileIdx
+                                                )
+                                              }
+                                            >
+                                              <X className="h-2.5 w-2.5" />
+                                            </Button>
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}

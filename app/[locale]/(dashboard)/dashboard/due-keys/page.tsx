@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
 import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
-import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,6 @@ import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/us
 import {
   useEmployeeDebriefs,
   useDeleteEmployeeDebrief,
-  useCreateEmployeeDebrief,
 } from "@/lib/hooks/use-employee-debriefs";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -259,13 +258,6 @@ export default function DueKeysPage() {
     clearError: clearDeleteError,
   } = useDeleteEmployeeDebrief();
 
-  const {
-    createDebrief,
-    isSubmitting: isCreating,
-    error: createError,
-    clearError: clearCreateError,
-  } = useCreateEmployeeDebrief();
-
   const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
 
   const activeItems = data?.items ?? [];
@@ -388,7 +380,11 @@ export default function DueKeysPage() {
             <SelectTrigger>
               <SelectValue placeholder={stores.length === 0 ? "No stores found" : "Select store"} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+                position="popper"
+                style={{ maxHeight: "160px", overflowY: "auto" }}
+                className="scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+            >
               {stores.map((store) => (
                 <SelectItem key={store.id} value={store.id}>
                   {store.name}
@@ -552,7 +548,7 @@ export default function DueKeysPage() {
         )}
 
         {/* Side-by-side: list (left) + create form (right) */}
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
+        <div>
           {/* Table */}
           <div>
             {isDebriefLoading && !debriefItems.length ? (
@@ -630,20 +626,6 @@ export default function DueKeysPage() {
               </div>
             )}
           </div>
-
-          {/* Create form */}
-          <CreateEmployeeDebriefForm
-            storeId={selectedStoreId}
-            isSubmitting={isCreating}
-            submitError={createError}
-            onClearError={clearCreateError}
-            onSubmit={async (payload) => {
-              if (!selectedStoreId) return false;
-              const success = await createDebrief(selectedStoreId, payload);
-              if (success) refetchDebriefs();
-              return success;
-            }}
-          />
         </div>
       </div>
 

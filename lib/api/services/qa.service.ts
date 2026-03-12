@@ -1779,7 +1779,9 @@ export const qaService = {
       
       // Required fields for each entity
       formData.append(`entities[${i}][entity_id]`, String(entity.entity_id));
-      formData.append(`entities[${i}][rating_id]`, String(entity.rating_id));
+      if (entity.rating_id != null) {
+        formData.append(`entities[${i}][rating_id]`, String(entity.rating_id));
+      }
 
       // Optional note and attachments
       if (entity.note?.trim() || (entity.attachments && entity.attachments.length > 0)) {
@@ -1879,7 +1881,7 @@ export const qaService = {
   /**
    * Delete a camera form (audit) by ID.
    */
-  async deleteCameraForm(id: number): Promise<void> {
+  async deleteCameraForm(id: number, storeId?: string): Promise<void> {
     const token = getToken();
     if (!token) {
       throw new QAError(
@@ -1895,6 +1897,7 @@ export const qaService = {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
+          ...(storeId && { "X-Store-Id": storeId }),
         },
         timeout: 15_000,
       });
@@ -1954,7 +1957,9 @@ export const qaService = {
     for (let i = 0; i < entities.length; i++) {
       const entity = entities[i];
       formData.append(`entities[${i}][entity_id]`, String(entity.entity_id));
-      formData.append(`entities[${i}][rating_id]`, String(entity.rating_id));
+      if (entity.rating_id != null) {
+        formData.append(`entities[${i}][rating_id]`, String(entity.rating_id));
+      }
 
       // Notes array
       if (entity.notes && entity.notes.length > 0) {

@@ -24,7 +24,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { ChevronsUpDown, Loader2, Plus, Trash2, X } from "lucide-react";
 import type {
@@ -224,7 +223,7 @@ function StoreRuleForm({
                       onChange={(e) => setStoreSearch(e.target.value)}
                       className="mb-2 h-8 text-sm"
                     />
-                    <ScrollArea className="max-h-52">
+                    <div className="max-h-52 overflow-y-auto">
                       <div className="space-y-1">
                         {stores
                           .filter((s) => {
@@ -258,7 +257,7 @@ function StoreRuleForm({
                             );
                           })}
                       </div>
-                    </ScrollArea>
+                    </div>
                     {rule.store_ids.length > 0 && (
                       <div className="mt-2 border-t pt-2">
                         <Button
@@ -275,7 +274,7 @@ function StoreRuleForm({
                   </PopoverContent>
                 </Popover>
                 {rule.store_ids.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex max-h-32 flex-wrap gap-1 overflow-y-auto">
                     {rule.store_ids.map((id) => {
                       const store = stores.find((s) => (s.storeId ?? s.id) === id);
                       return (

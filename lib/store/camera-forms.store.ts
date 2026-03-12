@@ -49,7 +49,7 @@ interface CameraFormsState {
   // Actions
   fetchDaily: (page?: number) => Promise<void>;
   fetchWeekly: (page?: number) => Promise<void>;
-  deleteCameraForm: (id: number) => Promise<void>;
+  deleteCameraForm: (id: number, storeId?: string) => Promise<void>;
   setDailyPage: (page: number) => void;
   setWeeklyPage: (page: number) => void;
   setFilters: (filters: Partial<CameraFormsState["filters"]>) => void;
@@ -268,10 +268,10 @@ export const useCameraFormsStore = create<CameraFormsState>()((set, get) => ({
   isDeleting: false,
   deleteError: null,
 
-  deleteCameraForm: async (id: number) => {
+  deleteCameraForm: async (id: number, storeId?: string) => {
     set({ isDeleting: true, deleteError: null });
     try {
-      await qaService.deleteCameraForm(id);
+      await qaService.deleteCameraForm(id, storeId);
       set({ isDeleting: false });
       // Refetch both tabs
       const { dailyPage, weeklyPage, fetchDaily, fetchWeekly } = get();
