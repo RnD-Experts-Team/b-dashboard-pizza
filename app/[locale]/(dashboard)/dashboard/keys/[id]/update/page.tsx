@@ -38,6 +38,7 @@ export default function UpdateKeyPage() {
         label: engineKey.label,
         data_type: engineKey.dataType,
         is_active: engineKey.isActive,
+        tags: engineKey.tags,
         store_rules: engineKey.storeRules.map((sr) => ({
           store_ids: [sr.storeId],
           frequency_type: sr.frequencyType as FrequencyType,

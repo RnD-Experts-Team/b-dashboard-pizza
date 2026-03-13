@@ -14,6 +14,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
 import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
 
 interface StoreOption {
@@ -55,6 +57,17 @@ export function FloatingDebriefButton() {
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
 
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
+
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const canCreateDebrief = canAccessRoute({
+    service: "Data",
+    method: "POST",
+    path: "/engine/stores/debrief",
+    storeId: effectiveStoreId,
+  });
+
   const {
     createDebrief,
     isSubmitting,
@@ -69,6 +82,8 @@ export function FloatingDebriefButton() {
       setSelectedStoreId(parsed[0].id);
     }
   }, []);
+
+  if (!canCreateDebrief) return null;
 
   return (
     <>

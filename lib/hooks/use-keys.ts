@@ -29,6 +29,8 @@ interface UseKeysListReturn {
   data: KeysListResponse | null;
   page: number;
   setPage: (page: number) => void;
+  tagsFilter: number[];
+  setTagsFilter: (tags: number[]) => void;
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
@@ -39,14 +41,20 @@ interface UseKeysListReturn {
 export function useKeysList(): UseKeysListReturn {
   const [data, setData] = useState<KeysListResponse | null>(null);
   const [page, setPage] = useState(1);
+  const [tagsFilter, setTagsFilterState] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
 
+  const setTagsFilter = useCallback((tags: number[]) => {
+    setTagsFilterState(tags);
+    setPage(1);
+  }, []);
+
   const fetchKeys = useCallback(
-    async (pageNum: number, signal?: AbortSignal, isRefresh = false) => {
+    async (pageNum: number, tags: number[], signal?: AbortSignal, isRefresh = false) => {
       if (isRefresh) {
         setIsRefreshing(true);
       } else {
@@ -55,7 +63,7 @@ export function useKeysList(): UseKeysListReturn {
       setError(null);
 
       try {
-        const result = await keysService.getKeys(pageNum, signal);
+        const result = await keysService.getKeys(pageNum, signal, tags.length > 0 ? tags : undefined);
         if (signal?.aborted) return;
         setData(result);
       } catch (err) {
@@ -79,18 +87,20 @@ export function useKeysList(): UseKeysListReturn {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchKeys(page, controller.signal);
+    fetchKeys(page, tagsFilter, controller.signal);
     return () => controller.abort();
-  }, [page, fetchKeys]);
+  }, [page, tagsFilter, fetchKeys]);
 
   const refetch = useCallback(() => {
-    fetchKeys(page, undefined, true);
-  }, [page, fetchKeys]);
+    fetchKeys(page, tagsFilter, undefined, true);
+  }, [page, tagsFilter, fetchKeys]);
 
   return {
     data,
     page,
     setPage,
+    tagsFilter,
+    setTagsFilter,
     isLoading,
     isRefreshing,
     error,

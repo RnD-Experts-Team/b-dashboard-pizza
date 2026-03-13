@@ -65,12 +65,17 @@ function transformStoreRule(raw: ApiStoreRule): StoreRule {
 }
 
 function transformKey(raw: ApiKey): EngineKey {
+  // The API may return tags as full objects {id, name, ...} or as plain integers.
+  const tags = (raw.tags ?? []).map((t) =>
+    typeof t === "object" && t !== null ? (t as { id: number }).id : (t as number)
+  );
   return {
     id: raw.id,
     label: raw.label,
     dataType: raw.data_type,
     isActive: raw.is_active,
     storeRules: (raw.store_rules ?? []).map(transformStoreRule),
+    tags,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -177,7 +182,8 @@ export const keysService = {
    */
   async getKeys(
     page: number = 1,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    tags?: number[]
   ): Promise<KeysListResponse> {
     const token = getToken();
     if (!token) {
@@ -188,8 +194,12 @@ export const keysService = {
     }
 
     try {
+      const params: Record<string, unknown> = { page };
+      if (tags && tags.length > 0) {
+        params.tags = tags.join(",");
+      }
       const response = await axios.get<ApiKeysListResponse>(`/api/data/keys`, {
-        params: { page },
+        params,
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",

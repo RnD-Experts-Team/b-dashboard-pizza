@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useRoles } from "@/lib/hooks/use-roles";
+import { useTagsList } from "@/lib/hooks/use-tags";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -122,6 +123,7 @@ export interface KeyFormValues {
   data_type: KeyDataType;
   is_active: boolean;
   store_rules: StoreRuleFormData[];
+  tags?: number[];
 }
 
 export interface KeyFormProps {
@@ -642,12 +644,16 @@ export function KeyForm({
   }));
 
   const { roles, isLoading: isLoadingRoles } = useRoles(ROLES_FETCH_PARAMS);
+  const { data: tagsData } = useTagsList();
 
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [dataType, setDataType] = useState<KeyDataType>(
     initialValues?.data_type ?? "text"
   );
   const [isActive, setIsActive] = useState(initialValues?.is_active ?? true);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>(
+    initialValues?.tags ?? []
+  );
   const [storeRules, setStoreRules] = useState<StoreRuleFormData[]>(
     initialValues?.store_rules ?? [emptyStoreRule()]
   );
@@ -692,6 +698,7 @@ export function KeyForm({
           role_names: rule.fill_mode === "role_each" && rule.role_names.length > 0 ? rule.role_names : null,
         }))
       ),
+      ...(selectedTagIds.length > 0 ? { tags: selectedTagIds } : {}),
     };
 
     await onSubmit(payload);
@@ -765,6 +772,88 @@ export function KeyForm({
             />
             <Label htmlFor="is-active">Active</Label>
           </div>
+
+          {/* Tags */}
+          {tagsData && tagsData.data.length > 0 && (
+            <div className="space-y-2">
+              <Label>Tags <span className="text-xs font-normal text-muted-foreground">(optional)</span></Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedTagIds.length === 0
+                      ? "Select tags…"
+                      : `${selectedTagIds.length} tag${selectedTagIds.length > 1 ? "s" : ""} selected`}
+                    <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-2" align="start">
+                  <div className="max-h-52 overflow-y-auto space-y-1">
+                    {tagsData.data.map((tag) => {
+                      const selected = selectedTagIds.includes(tag.id);
+                      return (
+                        <label
+                          key={tag.id}
+                          className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+                        >
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={(checked) =>
+                              setSelectedTagIds(
+                                checked
+                                  ? [...selectedTagIds, tag.id]
+                                  : selectedTagIds.filter((id) => id !== tag.id)
+                              )
+                            }
+                          />
+                          <span className="flex-1 text-sm">{tag.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {selectedTagIds.length > 0 && (
+                    <div className="mt-2 border-t pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-full text-xs text-muted-foreground"
+                        onClick={() => setSelectedTagIds([])}
+                      >
+                        Clear selection
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+              {selectedTagIds.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {selectedTagIds.map((id) => {
+                    const tag = tagsData.data.find((t) => t.id === id);
+                    return (
+                      <Badge key={id} variant="secondary" className="gap-1 pe-1">
+                        {tag?.name ?? `Tag #${id}`}
+                        <button
+                          type="button"
+                          className="rounded-sm opacity-70 hover:opacity-100"
+                          onClick={() =>
+                            setSelectedTagIds(selectedTagIds.filter((t) => t !== id))
+                          }
+                        >
+                          <X className="h-3 w-3" />
+                          <span className="sr-only">Remove {tag?.name ?? id}</span>
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

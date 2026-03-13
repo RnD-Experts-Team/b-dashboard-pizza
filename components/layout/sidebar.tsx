@@ -9,8 +9,6 @@ import {
   LayoutDashboard,
   Users,
   Settings,
-  ChevronLeft,
-  ChevronRight,
   Languages,
   Wrench,
   Shield,
@@ -22,6 +20,7 @@ import {
   ShieldCheck,
   Check,
   ChevronDown,
+  ChevronsUpDown,
   Briefcase,
   ClipboardList,
   HardHat,
@@ -33,6 +32,7 @@ import {
   Camera,
   Database,
   Gauge,
+  Tag,
 } from "lucide-react";
 import {
   Dialog,
@@ -296,7 +296,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {
             service: "QA",
             method: "GET",
-            path: "/audits/ratings-summary/overview",
+            path: "/audits/ratings-summary/{store_id}",
             storeId: effectiveStoreId,
           },
         ],
@@ -358,7 +358,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/due-keys`,
         icon: Database,
         requirements: [
-          { service: "Data", method: "GET", path: "/engine/stores/", storeId: effectiveStoreId },
+          { service: "Data", method: "GET", path: "/engine/stores/{store_id}", storeId: effectiveStoreId },
         ],
       },
       {
@@ -369,6 +369,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/export/list", storeId: effectiveStoreId },
           { service: "Data", method: "GET", path: "/manual-import", storeId: effectiveStoreId },
         ],
+      },
+      {
+        title: t("tags"),
+        href: `/${locale}/dashboard/tags`,
+        icon: Tag,
       },
     ],
   };
@@ -408,15 +413,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       });
     }
   }
-
-  // For RTL, swap chevron icons
-  const CollapseIcon = collapsed
-    ? isRtl
-      ? ChevronLeft
-      : ChevronRight
-    : isRtl
-      ? ChevronRight
-      : ChevronLeft;
 
   // Store selection state
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
@@ -526,17 +522,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Logo */}
-      <div
-        className={cn(
-          "flex h-14 items-center border-b px-2 sm:px-3 sm:py-3",
-          collapsed ? "justify-center" : "justify-between"
-        )}
-      >
-        {!collapsed && (
-          <Link
-            href={`/${locale}/dashboard`}
-            className="flex items-center gap-2"
+      {/* Unified logo + store selector header */}
+      <div className="flex h-14 items-center border-b px-2 sm:px-3">
+        {collapsed ? (
+          <button
+            className="flex w-full items-center justify-center rounded-md p-1 hover:bg-sidebar-accent transition-colors"
+            onClick={() => setIsStoreModalOpen(true)}
+            aria-label="Select store"
           >
             <Image
               src="/logo.svg"
@@ -545,32 +537,31 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               height={32}
               className="h-8 w-8"
             />
-            <span className="font-semibold text-sidebar-foreground">
-              Pizza Dashboard
-            </span>
-          </Link>
+          </button>
+        ) : (
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 hover:bg-sidebar-accent transition-colors text-start"
+            onClick={() => setIsStoreModalOpen(true)}
+          >
+            <Image
+              src="/logo.svg"
+              alt="Pizza Dashboard Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-sidebar-foreground leading-none truncate">
+                Pizza Dashboard
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                {currentStoreName}
+                {currentStoreId ? ` – ${currentStoreId}` : ""}
+              </p>
+            </div>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </button>
         )}
-        {collapsed && (
-          <Image
-            src="/logo.svg"
-            alt="Pizza Dashboard Logo"
-            width={32}
-            height={32}
-            className="h-8 w-8"
-          />
-        )}
-      </div>
-
-      {/* Store selection */}
-      <div className="px-3 pt-2 pb-0">
-        <Button
-          variant="outline"
-          className="w-full justify-start text-xs sm:text-sm"
-          onClick={() => setIsStoreModalOpen(true)}
-        >
-          <Building2 className="me-2 h-4 w-4" />
-          {!collapsed && <span className="truncate">{currentStoreName} - <span className="text-xs">{currentStoreId}</span></span>}
-        </Button>
       </div>
 
       {/* Store Selection Modal */}
@@ -718,24 +709,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         </div>
       </Feature>
 
-      {/* Collapse Toggle (desktop only) */}
-      <div className="hidden border-t px-2 sm:px-3 py-2 md:block">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn("w-full", collapsed && "px-2")}
-          onClick={toggleSidebar}
-        >
-          {collapsed ? (
-            <CollapseIcon className="h-4 w-4" />
-          ) : (
-            <>
-              <CollapseIcon className="me-2 h-4 w-4" />
-              {t("collapse")}
-            </>
-          )}
-        </Button>
-      </div>
     </div>
   );
 }

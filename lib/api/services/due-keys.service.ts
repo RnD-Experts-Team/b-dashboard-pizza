@@ -104,7 +104,8 @@ export const dueKeysService = {
   async getDueKeys(
     storeId: string,
     date: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    tags?: number[]
   ): Promise<DueKeysResponse> {
     const token = getToken();
     if (!token) {
@@ -115,6 +116,10 @@ export const dueKeysService = {
     }
 
     try {
+      const params: Record<string, unknown> = {};
+      if (tags && tags.length > 0) {
+        params.tags = tags.join(",");
+      }
       const response = await axios.get<ApiDueKeysResponse>(
         `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
           date
@@ -126,6 +131,7 @@ export const dueKeysService = {
           },
           timeout: 15_000,
           signal,
+          ...(Object.keys(params).length > 0 ? { params } : {}),
         }
       );
 

@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  requireAuthorization,
-  getAuthorizationHeader,
-} from "@/app/api/_lib/auth";
+import { requireAuthorization, getAuthorizationHeader } from "@/app/api/_lib/auth";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Configuration                                                           */
@@ -42,16 +39,10 @@ function errorResponse(
   details?: Record<string, unknown>
 ) {
   return NextResponse.json(
-    {
-      success: false,
-      error: { code, message, ...(details && { details }) },
-    },
+    { success: false, error: { code, message, ...(details && { details }) } },
     {
       status,
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-store",
-      },
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     }
   );
 }
@@ -101,7 +92,7 @@ async function fetchWithRetry(
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Upstream helpers                                                        */
+/*  Auth helpers                                                            */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function getUpstreamAuth(request: NextRequest): string {
@@ -109,47 +100,34 @@ function getUpstreamAuth(request: NextRequest): string {
   return getAuthorizationHeader(request) ?? "";
 }
 
-function handleUpstreamError(response: Response, elapsed: number) {
-  if (response.status === 401) {
-    return errorResponse(
-      "UNAUTHORIZED",
-      "Authentication failed for the Data API.",
-      401,
-      { upstream: true, tokenConfigured: !!DATA_API_TOKEN }
-    );
-  }
-  if (response.status === 403) {
-    return errorResponse(
-      "FORBIDDEN",
-      "You do not have permission to access this resource.",
-      403
-    );
-  }
-  if (response.status === 404) {
+async function handleUpstreamError(response: Response): Promise<NextResponse> {
+  if (response.status === 401)
+    return errorResponse("UNAUTHORIZED", "Authentication failed for the Data API.", 401);
+  if (response.status === 403)
+    return errorResponse("FORBIDDEN", "You do not have permission to access this resource.", 403);
+  if (response.status === 404)
     return errorResponse("NOT_FOUND", "The requested resource was not found.", 404);
-  }
   if (response.status === 422) {
-    return response.json().then((body) =>
-      errorResponse("VALIDATION_ERROR", body?.message || "Validation error.", 422, {
-        errors: body?.errors,
-      })
+    let body: Record<string, unknown> = {};
+    try { body = await response.json(); } catch { /* ignore */ }
+    return errorResponse(
+      "VALIDATION_ERROR",
+      (body?.message as string) || "Validation error.",
+      422,
+      { errors: body?.errors }
     );
   }
-  if (response.status === 429) {
+  if (response.status === 429)
     return errorResponse("RATE_LIMITED", "Too many requests. Please wait.", 429);
-  }
   return errorResponse(
     "UPSTREAM_ERROR",
     `Data API returned an error (${response.status}).`,
-    502,
-    process.env.NODE_ENV === "development"
-      ? { upstreamStatus: response.status }
-      : undefined
+    502
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  GET /api/data/keys?page=1                                               */
+/*  GET /api/data/tags — list all tags                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export async function GET(request: NextRequest) {
@@ -158,30 +136,7 @@ export async function GET(request: NextRequest) {
   const authError = requireAuthorization(request);
   if (authError) return authError;
 
-  const { searchParams } = new URL(request.url);
-  const pageParam = searchParams.get("page");
-  const page = pageParam ? Number(pageParam) : 1;
-
-  if (pageParam !== null && (!Number.isFinite(page) || page < 1)) {
-    return errorResponse("INVALID_PARAM", "Page must be a positive integer", 400, {
-      param: "page",
-    });
-  }
-
-  const tagsParam = searchParams.get("tags");
-  if (tagsParam !== null && tagsParam.trim() !== "") {
-    if (!/^(\d+,)*\d+$/.test(tagsParam.trim())) {
-      return errorResponse("INVALID_PARAM", "tags must be comma-separated integers", 400, { param: "tags" });
-    }
-  }
-
-  const upstreamParams = new URLSearchParams();
-  upstreamParams.set("page", String(page));
-  if (tagsParam && tagsParam.trim()) {
-    upstreamParams.set("tags", tagsParam.trim());
-  }
-
-  const targetUrl = `${DATA_BASE_URL}/engine/keys?${upstreamParams.toString()}`;
+  const targetUrl = `${DATA_BASE_URL}/tags`;
 
   try {
     const response = await fetchWithRetry(
@@ -201,9 +156,7 @@ export async function GET(request: NextRequest) {
 
     if (response.ok) {
       const body = await response.text();
-      try {
-        JSON.parse(body);
-      } catch {
+      try { JSON.parse(body); } catch {
         return errorResponse("UPSTREAM_ERROR", "Upstream returned invalid JSON", 502);
       }
       return new NextResponse(body, {
@@ -216,18 +169,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    return await handleUpstreamError(response, elapsed);
+    return await handleUpstreamError(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    if (message.includes("timed out") || message.includes("abort")) {
+    if (message.includes("timed out") || message.includes("abort"))
       return errorResponse("TIMEOUT", "The Data API did not respond in time.", 504);
-    }
     return errorResponse("NETWORK_ERROR", "Unable to reach the Data API.", 503);
   }
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  POST /api/data/keys — create a key                                      */
+/*  POST /api/data/tags — create a tag                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export async function POST(request: NextRequest) {
@@ -237,13 +189,10 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("INVALID_PARAM", "Invalid JSON body", 400);
-  }
+  try { body = await request.json(); }
+  catch { return errorResponse("INVALID_PARAM", "Invalid JSON body", 400); }
 
-  const targetUrl = `${DATA_BASE_URL}/engine/keys`;
+  const targetUrl = `${DATA_BASE_URL}/tags`;
 
   try {
     const response = await fetchWithRetry(
@@ -265,9 +214,7 @@ export async function POST(request: NextRequest) {
 
     if (response.ok) {
       const responseBody = await response.text();
-      try {
-        JSON.parse(responseBody);
-      } catch {
+      try { JSON.parse(responseBody); } catch {
         return errorResponse("UPSTREAM_ERROR", "Upstream returned invalid JSON", 502);
       }
       return new NextResponse(responseBody, {
@@ -280,12 +227,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return await handleUpstreamError(response, elapsed);
+    return await handleUpstreamError(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    if (message.includes("timed out") || message.includes("abort")) {
+    if (message.includes("timed out") || message.includes("abort"))
       return errorResponse("TIMEOUT", "The Data API did not respond in time.", 504);
-    }
     return errorResponse("NETWORK_ERROR", "Unable to reach the Data API.", 503);
   }
 }
+
+

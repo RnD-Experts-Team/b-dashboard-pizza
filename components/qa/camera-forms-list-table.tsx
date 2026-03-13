@@ -144,7 +144,7 @@ export function CameraFormsListTable({
     {
       service: "QA",
       method: "DELETE",
-      path: "/camera-forms/id",
+      path: "/camera-forms/{id}",
       storeId: effectiveStoreId,
     },
   ];
@@ -152,7 +152,7 @@ export function CameraFormsListTable({
     {
       service: "QA",
       method: "PUT",
-      path: "/camera-forms/id",
+      path: "/camera-forms/{id}",
       storeId: effectiveStoreId,
     },
   ];

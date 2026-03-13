@@ -23,7 +23,8 @@ interface UseDueKeysReturn {
 
 export function useDueKeys(
   storeId: string | null,
-  date: string | null
+  date: string | null,
+  tags?: number[]
 ): UseDueKeysReturn {
   const [data, setData] = useState<DueKeysResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +51,7 @@ export function useDueKeys(
       setError(null);
 
       try {
-        const response = await dueKeysService.getDueKeys(storeId, date, signal);
+        const response = await dueKeysService.getDueKeys(storeId, date, signal, tags && tags.length > 0 ? tags : undefined);
         if (signal?.aborted) return;
         setData(response);
       } catch (err) {
@@ -67,7 +68,8 @@ export function useDueKeys(
         }
       }
     },
-    [storeId, date]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [storeId, date, tags]
   );
 
   useEffect(() => {
