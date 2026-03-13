@@ -156,9 +156,19 @@ export async function GET(
     });
   }
 
-  const targetUrl = `${DATA_BASE_URL}/engine/stores/${encodeURIComponent(
+  const { searchParams } = new URL(request.url);
+  const tagsParam = searchParams.get("tags");
+
+  const baseUrl = `${DATA_BASE_URL}/engine/stores/${encodeURIComponent(
     storeId
   )}/dates/${encodeURIComponent(date)}/due`;
+  const upstreamParams = new URLSearchParams();
+  if (tagsParam && tagsParam.trim()) {
+    upstreamParams.set("tags", tagsParam.trim());
+  }
+  const targetUrl = upstreamParams.toString()
+    ? `${baseUrl}?${upstreamParams.toString()}`
+    : baseUrl;
 
   try {
     const response = await fetchWithRetry(

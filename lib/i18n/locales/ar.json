@@ -71,6 +71,7 @@
     "dueKeys": "المفاتيح المستحقة",
     "employeeDebriefs": "ملاحظات إحاطة الموظفين",
     "exportImport": "تصدير / استيراد",
+    "tags": "العلامات",
     "collapse": "طي",
     "selectStore": "اختيار الفرع",
     "selectStoreDescription": "اختر فرعاً لإدارته",
@@ -1548,5 +1549,11 @@
         "recordedAt": "وقت التسجيل"
       }
     }
+  },
+  "notFound": {
+    "heading": "٤٠٤",
+    "title": "الصفحة غير موجودة",
+    "description": "عذراً، الصفحة التي تبحث عنها غير موجودة أو تم نقلها.",
+    "backToDashboard": "العودة إلى لوحة التحكم"
   }
 }

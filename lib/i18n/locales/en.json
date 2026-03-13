@@ -71,6 +71,7 @@
     "dueKeys": "Due Keys",
     "employeeDebriefs": "Employee Debrief Notes",
     "exportImport": "Export / Import",
+    "tags": "Tags",
     "collapse": "Collapse",
     "selectStore": "Select Store",
     "selectStoreDescription": "Choose a store to manage",
@@ -1549,5 +1550,11 @@
         "recordedAt": "Recorded At"
       }
     }
+  },
+  "notFound": {
+    "heading": "404",
+    "title": "Page Not Found",
+    "description": "Sorry, the page you are looking for doesn't exist or has been moved.",
+    "backToDashboard": "Back to Dashboard"
   }
 }

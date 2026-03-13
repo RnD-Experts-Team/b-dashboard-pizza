@@ -30,12 +30,21 @@ export interface ApiStoreRule {
   role_names: string[] | null;
 }
 
+export interface ApiKeyTag {
+  id: number;
+  name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  pivot?: Record<string, unknown>;
+}
+
 export interface ApiKey {
   id: number;
   label: string;
   data_type: KeyDataType;
   is_active: boolean;
   store_rules: ApiStoreRule[];
+  tags?: ApiKeyTag[] | number[];
   created_at: string | null;
   updated_at: string | null;
 }
@@ -83,6 +92,7 @@ export interface EngineKey {
   dataType: KeyDataType;
   isActive: boolean;
   storeRules: StoreRule[];
+  tags: number[];
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -125,6 +135,7 @@ export interface CreateKeyPayload {
   data_type: KeyDataType;
   is_active: boolean;
   store_rules: StoreRulePayload[];
+  tags?: number[];
 }
 
 export interface UpdateKeyPayload {
@@ -132,4 +143,5 @@ export interface UpdateKeyPayload {
   data_type: KeyDataType;
   is_active: boolean;
   store_rules: StoreRulePayload[];
+  tags?: number[];
 }

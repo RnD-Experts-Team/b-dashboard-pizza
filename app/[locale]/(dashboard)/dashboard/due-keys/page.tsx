@@ -42,10 +42,17 @@ import {
   useEmployeeDebriefs,
   useDeleteEmployeeDebrief,
 } from "@/lib/hooks/use-employee-debriefs";
+import { useTagsList } from "@/lib/hooks/use-tags";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { RefreshCw, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2, ChevronsUpDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
@@ -205,6 +212,11 @@ export default function DueKeysPage() {
   const [selectedDate, setSelectedDate] = useState<string>(formatTodayDate());
 
   // ── Due Keys sheet state ───────────────────────────────────────────
+  // ── Tags filter ───────────────────────────────────────────────────
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const { data: tagsData } = useTagsList();
+
+  // ── Due Keys sheet state ───────────────────────────────────────────
   const [selectedItem, setSelectedItem] = useState<DueKeyItem | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -225,7 +237,8 @@ export default function DueKeysPage() {
 
   const { data, isLoading, isRefreshing, error, refetch, clearError } = useDueKeys(
     selectedStoreId,
-    selectedDate
+    selectedDate,
+    selectedTagIds.length > 0 ? selectedTagIds : undefined
   );
 
   const {
@@ -402,6 +415,60 @@ export default function DueKeysPage() {
             onChange={(event) => setSelectedDate(event.target.value)}
           />
         </div>
+
+        {tagsData && tagsData.data.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Filter by Tags</p>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="w-full justify-between font-normal">
+                  {selectedTagIds.length === 0
+                    ? "All tags"
+                    : `${selectedTagIds.length} tag${selectedTagIds.length > 1 ? "s" : ""} selected`}
+                  <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="start">
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {tagsData.data.map((tag) => {
+                    const selected = selectedTagIds.includes(tag.id);
+                    return (
+                      <label
+                        key={tag.id}
+                        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+                      >
+                        <Checkbox
+                          checked={selected}
+                          onCheckedChange={(checked) => {
+                            setSelectedTagIds(
+                              checked
+                                ? [...selectedTagIds, tag.id]
+                                : selectedTagIds.filter((id) => id !== tag.id)
+                            );
+                          }}
+                        />
+                        <span className="flex-1 text-sm">{tag.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {selectedTagIds.length > 0 && (
+                  <div className="mt-2 border-t pt-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-full text-xs text-muted-foreground"
+                      onClick={() => setSelectedTagIds([])}
+                    >
+                      Clear filter
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
       </div>
 
       {error && (

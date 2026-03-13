@@ -2,7 +2,8 @@
 
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Menu, Search } from "lucide-react";
+import { Menu, PanelLeft, Search } from "lucide-react";
+import { useUIStore } from "@/lib/store/ui.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
@@ -16,9 +17,21 @@ interface TopbarProps {
 export function Topbar({ onMenuClick }: TopbarProps) {
   const pathname = usePathname();
   const t = useTranslations("common");
+  const { toggleSidebar } = useUIStore();
 
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6">
+      {/* Desktop collapse toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="hidden md:flex"
+        onClick={toggleSidebar}
+      >
+        <PanelLeft className="h-5 w-5" />
+        <span className="sr-only">Toggle sidebar</span>
+      </Button>
+
       {/* Mobile menu button */}
       <Button
         variant="ghost"

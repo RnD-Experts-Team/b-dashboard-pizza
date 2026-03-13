@@ -10,10 +10,12 @@ import {
   useRestoreKey,
   useForceDeleteKey,
 } from "@/lib/hooks/use-keys";
+import { useTagsList } from "@/lib/hooks/use-tags";
 import { PageHeader } from "@/components/layout/page-header";
 import { KeyDetailsSheet } from "@/components/keys/key-details-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -31,6 +33,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -43,6 +50,7 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -131,12 +139,12 @@ export default function KeysPage() {
   const canCreateKey = createKeyRequirements.some((r) => canAccessRoute(r));
 
   const updateKeyRequirements = [
-    { service: "Data", method: "PUT", path: "/engine/keys/", storeId: effectiveStoreId },
+    { service: "Data", method: "PUT", path: "/engine/keys/{id}", storeId: effectiveStoreId },
   ];
   const canUpdateKey = updateKeyRequirements.some((r) => canAccessRoute(r));
 
   const deactivateKeyRequirements = [
-    { service: "Data", method: "DELETE", path: "/engine/keys/id", storeId: effectiveStoreId },
+    { service: "Data", method: "DELETE", path: "/engine/keys/{id}", storeId: effectiveStoreId },
   ];
   const canDeactivateKeyAction = deactivateKeyRequirements.some((r) =>
     canAccessRoute(r)
@@ -153,12 +161,16 @@ export default function KeysPage() {
     data,
     page,
     setPage,
+    tagsFilter,
+    setTagsFilter,
     isLoading,
     isRefreshing,
     error,
     refetch,
     clearError,
   } = useKeysList();
+
+  const { data: tagsData } = useTagsList();
 
   const { deactivateKey, isDeactivating } = useDeactivateKey();
   const { restoreKey, isRestoring } = useRestoreKey();
@@ -294,6 +306,83 @@ export default function KeysPage() {
           )}
         </div>
       </PageHeader>
+
+      {/* Tags filter */}
+      {tagsData && tagsData.data.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+                Filter by Tags
+                {tagsFilter.length > 0 && (
+                  <Badge variant="secondary" className="ms-1 px-1.5 py-0 text-xs">
+                    {tagsFilter.length}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-2" align="start">
+              <div className="max-h-52 overflow-y-auto space-y-1">
+                {tagsData.data.map((tag) => {
+                  const selected = tagsFilter.includes(tag.id);
+                  return (
+                    <label
+                      key={tag.id}
+                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+                    >
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={(checked) => {
+                          setTagsFilter(
+                            checked
+                              ? [...tagsFilter, tag.id]
+                              : tagsFilter.filter((id) => id !== tag.id)
+                          );
+                        }}
+                      />
+                      <span className="flex-1 text-sm">{tag.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              {tagsFilter.length > 0 && (
+                <div className="mt-2 border-t pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-full text-xs text-muted-foreground"
+                    onClick={() => setTagsFilter([])}
+                  >
+                    Clear filter
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+          {tagsFilter.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tagsFilter.map((id) => {
+                const tag = tagsData.data.find((t) => t.id === id);
+                return (
+                  <Badge key={id} variant="secondary" className="gap-1 pe-1 text-xs">
+                    {tag?.name ?? `Tag #${id}`}
+                    <button
+                      type="button"
+                      className="rounded-sm opacity-70 hover:opacity-100"
+                      onClick={() => setTagsFilter(tagsFilter.filter((t) => t !== id))}
+                    >
+                      <span className="sr-only">Remove</span>
+                      ×
+                    </button>
+                  </Badge>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error */}
       {error && !data && (
