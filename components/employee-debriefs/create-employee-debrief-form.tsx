@@ -157,7 +157,7 @@ export function CreateEmployeeDebriefForm({
   };
 
   return (
-    <Card className="flex flex-col border-0 shadow-none bg-transparent">
+    <Card className="flex flex-col border-0 shadow-none p-0 gap-0 bg-transparent">
       <div className="flex items-center justify-between px-0 pt-2 pb-2">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Form Fields</p>
         <div className="shrink-0">

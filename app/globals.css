@@ -196,3 +196,19 @@
   background-image: none !important;
 }
 
+/* Thin scrollbar for all elements */
+* {
+  scrollbar-width: thin; /* Firefox */
+}
+
+/* Chrome, Edge, Safari */
+*::-webkit-scrollbar {
+  scrollbar-width: thin; 
+  width: 3px;
+  height: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+}
+
