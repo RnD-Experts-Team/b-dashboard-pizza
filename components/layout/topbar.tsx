@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Menu, PanelLeft, Search } from "lucide-react";
@@ -12,31 +13,51 @@ import { Feature } from "@/lib/config";
 
 interface TopbarProps {
   onMenuClick?: () => void;
+  /** Show the logo in the topbar (used by topnav layout) */
+  showLogo?: boolean;
+  /** Always show the hamburger menu, even on desktop (topnav layout) */
+  alwaysShowMenu?: boolean;
 }
 
-export function Topbar({ onMenuClick }: TopbarProps) {
+export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
   const pathname = usePathname();
   const t = useTranslations("common");
   const { toggleSidebar } = useUIStore();
 
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6">
-      {/* Desktop collapse toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="hidden md:flex"
-        onClick={toggleSidebar}
-      >
-        <PanelLeft className="h-5 w-5" />
-        <span className="sr-only">Toggle sidebar</span>
-      </Button>
+      {/* Logo — shown only in topnav layout */}
+      {showLogo && (
+        <div className="flex items-center gap-2 me-1">
+          <Image
+            src="/logo.svg"
+            alt="Pizza Dashboard"
+            width={28}
+            height={28}
+            className="h-7 w-7"
+          />
+          <span className="hidden sm:inline text-sm font-semibold">Pizza Dashboard</span>
+        </div>
+      )}
 
-      {/* Mobile menu button */}
+      {/* Desktop collapse toggle — hidden in topnav layout */}
+      {!alwaysShowMenu && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden md:flex"
+          onClick={toggleSidebar}
+        >
+          <PanelLeft className="h-5 w-5" />
+          <span className="sr-only">Toggle sidebar</span>
+        </Button>
+      )}
+
+      {/* Menu button — always shown if alwaysShowMenu, otherwise mobile only */}
       <Button
         variant="ghost"
         size="icon"
-        className="md:hidden"
+        className={alwaysShowMenu ? "flex" : "md:hidden"}
         onClick={onMenuClick}
       >
         <Menu className="h-5 w-5" />
@@ -54,7 +75,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
       <div className="flex-1" />
 
       {/* Search (stub) - conditionally rendered */}
-      <Feature name="search">
+      {/* <Feature name="search">
         <div className="hidden w-full max-w-sm md:block">
           <div className="relative">
             <Search className="absolute inset-s-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -66,7 +87,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             />
           </div>
         </div>
-      </Feature>
+      </Feature> */}
 
       {/* Theme toggle - conditionally rendered */}
       <Feature name="darkMode">

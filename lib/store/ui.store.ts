@@ -10,12 +10,16 @@ const noopStorage = {
 
 type Theme = "light" | "dark" | "system";
 
+export type LayoutVariant = "classic" | "inset" | "floating" | "topnav";
+
 interface UIState {
   sidebarCollapsed: boolean;
   theme: Theme;
+  layoutVariant: LayoutVariant;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTheme: (theme: Theme) => void;
+  setLayoutVariant: (variant: LayoutVariant) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -23,6 +27,7 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       sidebarCollapsed: false,
       theme: "system",
+      layoutVariant: "classic",
 
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -31,6 +36,9 @@ export const useUIStore = create<UIState>()(
         set({ sidebarCollapsed: collapsed }),
 
       setTheme: (theme: Theme) => set({ theme }),
+
+      setLayoutVariant: (variant: LayoutVariant) =>
+        set({ layoutVariant: variant }),
     }),
     {
       name: "ui-storage",

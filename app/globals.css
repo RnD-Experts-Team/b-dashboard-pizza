@@ -85,6 +85,10 @@
   --skeleton-highlight: oklch(0.98 0 0);
   --skeleton-shimmer-direction: 90deg;
   --skeleton-border-radius: calc(var(--radius) - 2px);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(0 0 0 / 25%);
+  --scrollbar-track: transparent;
 }
 
 .dark {
@@ -124,6 +128,10 @@
   --skeleton-base: oklch(0.25 0 0);
   --skeleton-highlight: oklch(0.32 0 0);
   --skeleton-border-radius: calc(var(--radius) - 2px);
+
+  /* Scrollbar */
+  --scrollbar-thumb: oklch(1 0 0 / 25%);
+  --scrollbar-track: transparent;
 }
 
 /* RTL shimmer direction */
@@ -199,16 +207,22 @@
 /* Thin scrollbar for all elements */
 * {
   scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); /* Firefox */
 }
 
 /* Chrome, Edge, Safari */
 *::-webkit-scrollbar {
-  scrollbar-width: thin; 
   width: 3px;
   height: 3px;
 }
 
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
 *::-webkit-scrollbar-thumb {
   border-radius: 8px;
+  background-color: var(--scrollbar-thumb);
 }
 

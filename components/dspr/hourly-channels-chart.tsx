@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,6 +58,16 @@ export function HourlyChannelsChart({
   currencyPrefix = "$",
   className,
 }: HourlyChannelsChartProps) {
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+
+  const toggleSeries = useCallback((label: string) => {
+    setHiddenSeries((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -86,7 +96,12 @@ export function HourlyChannelsChart({
     return { series: s, categories: cats, royaltyTotals: royalty };
   }, [hourlyData]);
 
-  const channelColors = colors || CHANNEL_KEYS.map((c) => c.color);
+  const baseColors = colors || CHANNEL_KEYS.map((c) => c.color);
+
+  // Only pass visible series + matching colors to the chart
+  const visibleKeys = CHANNEL_KEYS.filter((c) => !hiddenSeries.has(c.label));
+  const visibleSeriesData = series.filter((s) => !hiddenSeries.has(s.name));
+  const channelColors = visibleKeys.map((c, i) => (colors ? baseColors[i] : c.color));
 
   const options: ApexOptions = useMemo(
     () => ({
@@ -180,11 +195,37 @@ export function HourlyChannelsChart({
           </div>
           {title}
         </CardTitle>
+
+        {/* Legend toggle buttons */}
+        <div className="flex flex-wrap gap-1 pt-1">
+          {CHANNEL_KEYS.map(({ label, color }) => {
+            const isHidden = hiddenSeries.has(label);
+            return (
+              <button
+                key={label}
+                onClick={() => toggleSeries(label)}
+                className={cn(
+                  "flex items-center gap-1 rounded-full border-none px-1 py-0.5 text-[10px] font-medium transition-all",
+                  isHidden
+                    ? "border-dashed border-muted-foreground/30 text-muted-foreground opacity-40"
+                    : "opacity-100"
+                )}
+                style={isHidden ? undefined : { borderColor: color, color }}
+              >
+                <span
+                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: isHidden ? "#71717a" : color }}
+                />
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </CardHeader>
       <CardContent className="px-0 pb-0">
         <ReactApexChart
           options={options}
-          series={series}
+          series={visibleSeriesData}
           type="bar"
           height={height}
         />

@@ -367,7 +367,7 @@ export function DueKeyValueSheet({
                   Close
                 </Button>
                 <Button onClick={handleSubmit} disabled={isSubmitting || !payload}>
-                  {isSubmitting ? "Saving..." : "Save"}
+                  {isSubmitting ? "Submitting..." : "Submit"}
                 </Button>
               </div>
             </div>
