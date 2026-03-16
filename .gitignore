@@ -42,3 +42,6 @@ next-env.d.ts
 
 .i18n-intelligence/
 
+# vitepress
+docs/pizza-dashboard-docs/.vitepress/dist
+docs/pizza-dashboard-docs/.vitepress/cache
