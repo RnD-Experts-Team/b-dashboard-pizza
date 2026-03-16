@@ -687,7 +687,7 @@ export function DsprDashboard() {
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
-          height={190}
+          height={220}
           toolbar={false}
         />
          <HnrCard hnr={day.hnr} />
