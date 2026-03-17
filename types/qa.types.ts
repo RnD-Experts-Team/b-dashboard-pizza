@@ -605,8 +605,10 @@ export interface CameraFormsFilterParams {
 export interface CameraFormEntityEntry {
   entity_id: number;
   rating_id?: number;
-  note?: string;
-  attachments?: File[];
+  notes?: Array<{
+    note?: string;
+    images?: File[];
+  }>;
 }
 
 /** Payload sent to POST /camera-forms */

@@ -185,7 +185,10 @@ export function CameraReportFilters({
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t("filters.allStores")} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                position="popper"
+                style={{ maxHeight: "200px", overflowY: "auto" }}
+              >
                 <SelectItem value="all">
                   {t("filters.allStores")}
                 </SelectItem>

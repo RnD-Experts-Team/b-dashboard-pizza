@@ -24,9 +24,7 @@ export default function EditCameraFormPage() {
           </Link>
         </Button>
       </PageHeader>
-      <div className="mx-auto max-w-4xl">
-        <EditCameraForm formId={formId} />
-      </div>
+      <EditCameraForm formId={formId} />
     </div>
   );
 }

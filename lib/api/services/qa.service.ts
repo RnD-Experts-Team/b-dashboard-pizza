@@ -1783,17 +1783,17 @@ export const qaService = {
         formData.append(`entities[${i}][rating_id]`, String(entity.rating_id));
       }
 
-      // Optional note and attachments
-      if (entity.note?.trim() || (entity.attachments && entity.attachments.length > 0)) {
-        // If we have a note, add it to notes[0][note]
-        if (entity.note?.trim()) {
-          formData.append(`entities[${i}][notes][0][note]`, entity.note.trim());
-        }
-        
-        // If we have attachments, add them to notes[0][images][]
-        if (entity.attachments && entity.attachments.length > 0) {
-          for (const file of entity.attachments) {
-            formData.append(`entities[${i}][notes][0][images][]`, file);
+      // Optional notes array — each note has its own text and images
+      if (entity.notes && entity.notes.length > 0) {
+        for (let j = 0; j < entity.notes.length; j++) {
+          const noteEntry = entity.notes[j];
+          if (noteEntry.note?.trim()) {
+            formData.append(`entities[${i}][notes][${j}][note]`, noteEntry.note.trim());
+          }
+          if (noteEntry.images && noteEntry.images.length > 0) {
+            for (const file of noteEntry.images) {
+              formData.append(`entities[${i}][notes][${j}][images][]`, file);
+            }
           }
         }
       }

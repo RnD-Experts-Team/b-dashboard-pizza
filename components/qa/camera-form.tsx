@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -20,21 +19,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  Filter,
   FileText,
   ClipboardCheck,
   Paperclip,
   X,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
+  Plus,
 } from "lucide-react";
 import {
   useEntitiesForCameraForm,
@@ -60,84 +64,12 @@ const RATINGS = [
 const REPORT_TYPE_ALL = "__all__";
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Subcomponents                                                           */
+/*  Types                                                                   */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-interface EntityNoteFieldProps {
-  id: string;
-  placeholder: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  disabled?: boolean;
-}
-
-function EntityNoteField({
-  id,
-  placeholder,
-  value,
-  onChange,
-  disabled,
-}: EntityNoteFieldProps) {
-  return (
-    <Textarea
-      id={id}
-      placeholder={placeholder}
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      rows={2}
-      className="resize-none text-sm"
-    />
-  );
-}
-
-interface AttachmentButtonProps {
-  entityId: number;
-  onFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onHoverStart: () => void;
-  onHoverEnd: () => void;
-  disabled?: boolean;
-  label: string;
-}
-
-function AttachmentButton({
-  entityId,
-  onFileSelect,
-  onHoverStart,
-  onHoverEnd,
-  disabled,
-  label,
-}: AttachmentButtonProps) {
-  return (
-    <div
-      className="flex items-center gap-2"
-      onMouseEnter={onHoverStart}
-      onMouseLeave={onHoverEnd}
-    >
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-8 text-xs focus-visible:ring-2 focus-visible:ring-ring"
-        disabled={disabled}
-        onClick={() => {
-          document.getElementById(`file-${entityId}`)?.click();
-        }}
-      >
-        <Paperclip className="me-1.5 h-3.5 w-3.5" />
-        {label}
-      </Button>
-      <Input
-        id={`file-${entityId}`}
-        type="file"
-        multiple
-        accept="image/*,.pdf,.doc,.docx"
-        className="hidden"
-        disabled={disabled}
-        onChange={onFileSelect}
-      />
-    </div>
-  );
+interface NoteEntry {
+  note: string;
+  files: File[];
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -146,7 +78,6 @@ function AttachmentButton({
 
 export function CameraForm() {
   const t = useTranslations("createCameraForm");
-  const tCommon = useTranslations("common");
   const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || "en";
@@ -180,91 +111,81 @@ export function CameraForm() {
     clearError,
   } = useCreateCameraForm();
 
-  // ── Filter state ───────────────────────────────────────────────────────
-  const [dateRangeType, setDateRangeType] = useState<string>("daily");
+  // ── Filter / tab state ─────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<string>("daily");
   const [reportType, setReportType] = useState<string>(REPORT_TYPE_ALL);
 
   // ── Form state ─────────────────────────────────────────────────────────
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>("");
-  const [entityRatings, setEntityRatings] = useState<Record<number, string>>(
-    {}
-  );
-  const [entityNotes, setEntityNotes] = useState<Record<number, string>>({});
-  const [entityFiles, setEntityFiles] = useState<Record<number, File[]>>({});
-  const [hoveredAttachmentEntityId, setHoveredAttachmentEntityId] = useState<number | null>(null);
-  const [validationErrors, setValidationErrors] = useState<
-    Record<string, string>
-  >({});
+  const [entityRatings, setEntityRatings] = useState<Record<string, string>>({});
+  const [entityNotes, setEntityNotes] = useState<Record<string, NoteEntry[]>>({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [collapsedEntities, setCollapsedEntities] = useState<Record<number, boolean>>({});
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [collapsedEntities, setCollapsedEntities] = useState<Record<string, boolean>>({});
 
-  // ── Filtered entities ──────────────────────────────────────────────────
-  const filteredEntities = useMemo(() => {
-    return entities.filter((entity) => {
-      // Only show active entities
-      if (!entity.active) return false;
+  // ── Key helpers ────────────────────────────────────────────────────────
+  const eKey = (tab: string, entityId: number) => `${tab}_${entityId}`;
+  const cKey = (tab: string, catId: number) => `${tab}_${catId}`;
 
-      // Filter by date range type
-      if (
-        dateRangeType &&
-        entity.dateRangeType.toLowerCase() !== dateRangeType.toLowerCase()
-      ) {
-        return false;
-      }
-
-      // Filter by report type
-      if (reportType && reportType !== REPORT_TYPE_ALL) {
-        if (
-          !entity.reportType ||
-          entity.reportType.toLowerCase() !== reportType.toLowerCase()
-        ) {
-          return false;
+  // ── Filter entities per tab ────────────────────────────────────────────
+  const getFilteredEntities = useCallback(
+    (dateRangeType: string) => {
+      return entities.filter((entity) => {
+        if (!entity.active) return false;
+        if (entity.dateRangeType.toLowerCase() !== dateRangeType.toLowerCase()) return false;
+        if (reportType && reportType !== REPORT_TYPE_ALL) {
+          if (!entity.reportType || entity.reportType.toLowerCase() !== reportType.toLowerCase()) return false;
         }
+        return true;
+      });
+    },
+    [entities, reportType]
+  );
+
+  const dailyEntities = useMemo(() => getFilteredEntities("daily"), [getFilteredEntities]);
+  const weeklyEntities = useMemo(() => getFilteredEntities("weekly"), [getFilteredEntities]);
+
+  const getGroupedEntities = useCallback(
+    (filtered: typeof entities) => {
+      const groups: Record<number, { categoryId: number; categoryLabel: string; entities: typeof filtered }> = {};
+      for (const entity of filtered) {
+        const catId = entity.categoryId;
+        if (!groups[catId]) {
+          const category = categories.find((c) => c.id === catId);
+          groups[catId] = {
+            categoryId: catId,
+            categoryLabel: entity.categoryLabel || category?.label || `Category ${catId}`,
+            entities: [],
+          };
+        }
+        groups[catId].entities.push(entity);
       }
+      return Object.values(groups).sort((a, b) => {
+        const catA = categories.find((c) => c.id === a.categoryId);
+        const catB = categories.find((c) => c.id === b.categoryId);
+        return (catA?.sortOrder ?? 0) - (catB?.sortOrder ?? 0);
+      });
+    },
+    [categories]
+  );
 
-      return true;
-    });
-  }, [entities, dateRangeType, reportType]);
+  const dailyGrouped = useMemo(() => getGroupedEntities(dailyEntities), [getGroupedEntities, dailyEntities]);
+  const weeklyGrouped = useMemo(() => getGroupedEntities(weeklyEntities), [getGroupedEntities, weeklyEntities]);
 
-  // ── Entities grouped by category ───────────────────────────────────────
-  const groupedEntities = useMemo(() => {
-    const groups: Record<
-      number,
-      {
-        categoryId: number;
-        categoryLabel: string;
-        entities: typeof filteredEntities;
-      }
-    > = {};
-
-    for (const entity of filteredEntities) {
-      const catId = entity.categoryId;
-      if (!groups[catId]) {
-        const category = categories.find((c) => c.id === catId);
-        groups[catId] = {
-          categoryId: catId,
-          categoryLabel:
-            entity.categoryLabel || category?.label || `Category ${catId}`,
-          entities: [],
-        };
-      }
-      groups[catId].entities.push(entity);
-    }
-
-    // Sort groups by category sort order
-    return Object.values(groups).sort((a, b) => {
-      const catA = categories.find((c) => c.id === a.categoryId);
-      const catB = categories.find((c) => c.id === b.categoryId);
-      return (catA?.sortOrder ?? 0) - (catB?.sortOrder ?? 0);
-    });
-  }, [filteredEntities, categories]);
-
-  // ── Rating update handler ──────────────────────────────────────────────
+  // ── Handlers ───────────────────────────────────────────────────────────
   const handleRatingChange = useCallback(
-    (entityId: number, ratingId: string) => {
-      setEntityRatings((prev) => ({ ...prev, [entityId]: ratingId }));
-      // Clear any related validation errors
+    (tab: string, entityId: number, ratingId: string | null) => {
+      const key = eKey(tab, entityId);
+      setEntityRatings((prev) => {
+        if (ratingId === null) {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        }
+        return { ...prev, [key]: ratingId };
+      });
       setValidationErrors((prev) => {
         const next = { ...prev };
         delete next[`entity_${entityId}`];
@@ -275,79 +196,86 @@ export function CameraForm() {
     []
   );
 
-  const handleNoteChange = useCallback(
-    (entityId: number, note: string) => {
-      setEntityNotes((prev) => ({ ...prev, [entityId]: note }));
+  const getNotesForEntity = useCallback(
+    (tab: string, entityId: number): NoteEntry[] => {
+      return entityNotes[eKey(tab, entityId)] || [{ note: "", files: [] }];
+    },
+    [entityNotes]
+  );
+
+  const handleNoteTextChange = useCallback(
+    (tab: string, entityId: number, noteIndex: number, text: string) => {
+      const key = eKey(tab, entityId);
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [] }];
+        const updated = [...current];
+        updated[noteIndex] = { ...updated[noteIndex], note: text };
+        return { ...prev, [key]: updated };
+      });
     },
     []
   );
 
-  const handleFilesChange = useCallback(
-    (entityId: number, files: FileList | null) => {
+  const handleNoteFilesChange = useCallback(
+    (tab: string, entityId: number, noteIndex: number, files: FileList | null) => {
       if (!files || files.length === 0) return;
-      setEntityFiles((prev) => ({
-        ...prev,
-        [entityId]: [...(prev[entityId] || []), ...Array.from(files)],
-      }));
+      const key = eKey(tab, entityId);
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [] }];
+        const updated = [...current];
+        updated[noteIndex] = {
+          ...updated[noteIndex],
+          files: [...updated[noteIndex].files, ...Array.from(files)],
+        };
+        return { ...prev, [key]: updated };
+      });
     },
     []
   );
 
-  const handleRemoveFile = useCallback(
-    (entityId: number, fileIndex: number) => {
-      setEntityFiles((prev) => ({
-        ...prev,
-        [entityId]: (prev[entityId] || []).filter((_, i) => i !== fileIndex),
-      }));
+  const handleRemoveNoteFile = useCallback(
+    (tab: string, entityId: number, noteIndex: number, fileIndex: number) => {
+      const key = eKey(tab, entityId);
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [] }];
+        const updated = [...current];
+        updated[noteIndex] = {
+          ...updated[noteIndex],
+          files: updated[noteIndex].files.filter((_, i) => i !== fileIndex),
+        };
+        return { ...prev, [key]: updated };
+      });
     },
     []
   );
 
-  // ── Attachment hover paste handler ────────────────────────────────────
-  useEffect(() => {
-    const handleWindowPaste = (event: ClipboardEvent) => {
-      if (hoveredAttachmentEntityId === null || isSubmitting) return;
+  const handleAddNote = useCallback(
+    (tab: string, entityId: number) => {
+      const key = eKey(tab, entityId);
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [] }];
+        return { ...prev, [key]: [...current, { note: "", files: [] }] };
+      });
+    },
+    []
+  );
 
-      const items = event.clipboardData?.items;
-      if (!items) return;
-
-      const dataTransfer = new DataTransfer();
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item.type.startsWith("image/")) continue;
-
-        const blob = item.getAsFile();
-        if (!blob) continue;
-
-        const extension = blob.type.split("/")[1] || "png";
-        const file = new File([blob], `pasted-image-${Date.now()}-${i}.${extension}`, {
-          type: blob.type,
-        });
-        dataTransfer.items.add(file);
-      }
-
-      if (dataTransfer.files.length === 0) return;
-
-      event.preventDefault();
-      handleFilesChange(hoveredAttachmentEntityId, dataTransfer.files);
-    };
-
-    window.addEventListener("paste", handleWindowPaste);
-
-    return () => {
-      window.removeEventListener("paste", handleWindowPaste);
-    };
-  }, [handleFilesChange, hoveredAttachmentEntityId, isSubmitting]);
+  const handleRemoveNote = useCallback(
+    (tab: string, entityId: number, noteIndex: number) => {
+      const key = eKey(tab, entityId);
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [] }];
+        const updated = current.filter((_, i) => i !== noteIndex);
+        return { ...prev, [key]: updated.length > 0 ? updated : [{ note: "", files: [] }] };
+      });
+    },
+    []
+  );
 
   // ── Validation ─────────────────────────────────────────────────────────
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
-
-    if (!selectedStoreId) {
-      errors.store = t("validation.storeRequired");
-    }
-
+    if (!selectedStoreId) errors.store = t("validation.storeRequired");
     if (!selectedDate) {
       errors.date = t("validation.dateRequired");
     } else {
@@ -356,13 +284,33 @@ export function CameraForm() {
         errors.date = t("validation.dateInvalid");
       }
     }
-
-    if (filteredEntities.length === 0) {
+    if (dailyEntities.length === 0 && weeklyEntities.length === 0) {
       errors.entities = t("validation.entitiesRequired");
     }
-
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  // ── Build entity entries for a tab ─────────────────────────────────────
+  const buildEntityEntries = (tab: string, filtered: typeof entities): CameraFormEntityEntry[] => {
+    return filtered.map((entity) => {
+      const key = eKey(tab, entity.id);
+      const rating = entityRatings[key];
+      const noteEntries = entityNotes[key] || [{ note: "", files: [] }];
+
+      const validNotes = noteEntries
+        .filter((n) => n.note.trim() || n.files.length > 0)
+        .map((n) => ({
+          ...(n.note.trim() ? { note: n.note.trim() } : {}),
+          ...(n.files.length > 0 ? { images: n.files } : {}),
+        }));
+
+      return {
+        entity_id: entity.id,
+        ...(rating && { rating_id: Number(rating) }),
+        ...(validNotes.length > 0 && { notes: validNotes }),
+      };
+    });
   };
 
   // ── Submit handler ─────────────────────────────────────────────────────
@@ -370,70 +318,277 @@ export function CameraForm() {
     e.preventDefault();
     setSuccessMessage(null);
     clearError();
-
     if (!validate()) return;
 
-    const entityEntries: CameraFormEntityEntry[] = filteredEntities
-      .map((entity) => ({
-        entity_id: entity.id,
-        ...(entityRatings[entity.id] && {
-          rating_id: Number(entityRatings[entity.id]),
-        }),
-        ...(entityNotes[entity.id]?.trim() && {
-          note: entityNotes[entity.id].trim(),
-        }),
-        ...(entityFiles[entity.id]?.length && {
-          attachments: entityFiles[entity.id],
-        }),
-      }));
+    const allEntries = [
+      ...buildEntityEntries("daily", dailyEntities),
+      ...buildEntityEntries("weekly", weeklyEntities),
+    ];
 
-    const success = await submitCameraForm(
-      Number(selectedStoreId),
-      selectedDate,
-      entityEntries
-    );
+    if (allEntries.length === 0) {
+      setValidationErrors({ entities: t("validation.entitiesRequired") });
+      return;
+    }
 
+    const success = await submitCameraForm(Number(selectedStoreId), selectedDate, allEntries);
     if (success) {
       setSuccessMessage(t("success"));
-      handleReset();
       router.push(`/${locale}/dashboard/quality-assurance`);
     }
   };
 
-  // ── Reset handler ──────────────────────────────────────────────────────
-  const handleReset = () => {
-    setSelectedStoreId("");
-    setSelectedDate("");
-    setEntityRatings({});
-    setEntityNotes({});
-    setEntityFiles({});
-    setValidationErrors({});
-    setSuccessMessage(null);
-    clearError();
+  const isDataLoading = isStoresLoading || isEntitiesLoading;
+
+  // ── Render a single entity card ────────────────────────────────────────
+  const renderEntityCard = (tab: string, entity: (typeof entities)[0]) => {
+    const key = eKey(tab, entity.id);
+    const ratingValue = entityRatings[key] || "";
+    const notes = getNotesForEntity(tab, entity.id);
+    const isEntityOpen = collapsedEntities[key] !== false;
+
+    return (
+      <Collapsible
+        key={entity.id}
+        open={isEntityOpen}
+        onOpenChange={(open) =>
+          setCollapsedEntities((prev) => ({ ...prev, [key]: open }))
+        }
+      >
+        <div
+          className={`overflow-hidden rounded-lg border transition-colors ${
+            ratingValue ? "border-primary/30 bg-primary/5" : "border-border"
+          }`}
+        >
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-3 py-2.5 text-start"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-xs font-medium leading-tight">{entity.entityLabel}</span>
+                {ratingValue && (
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                    {RATINGS.find((r) => String(r.id) === ratingValue)
+                      ? t(`entities.${RATINGS.find((r) => String(r.id) === ratingValue)!.key}`)
+                      : ""}
+                  </Badge>
+                )}
+              </div>
+              {isEntityOpen ? (
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              )}
+            </button>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <div className="space-y-2 border-t px-3 pb-3 pt-2">
+              {/* Rating Selection — toggle buttons */}
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground">{t("entities.rating")}</Label>
+                <div className="flex flex-wrap gap-1">
+                  {RATINGS.map((rating) => {
+                    const isSelected = ratingValue === String(rating.id);
+                    return (
+                      <Button
+                        key={rating.id}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        className="h-7 px-2 text-[10px]"
+                        disabled={isSubmitting}
+                        onClick={() => handleRatingChange(tab, entity.id, isSelected ? null : String(rating.id))}
+                      >
+                        {t(`entities.${rating.key}`)}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Notes (multi) */}
+              <div className="space-y-2">
+                {notes.map((noteEntry, noteIdx) => (
+                  <div key={noteIdx} className="space-y-1 rounded border border-dashed border-muted-foreground/30 p-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] text-muted-foreground">
+                        {t("entities.note")} {notes.length > 1 ? `#${noteIdx + 1}` : ""}
+                      </Label>
+                      {notes.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 w-5 p-0"
+                          disabled={isSubmitting}
+                          onClick={() => handleRemoveNote(tab, entity.id, noteIdx)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea
+                      placeholder={t("entities.notePlaceholder")}
+                      value={noteEntry.note}
+                      onChange={(e) => handleNoteTextChange(tab, entity.id, noteIdx, e.target.value)}
+                      disabled={isSubmitting}
+                      rows={2}
+                      className="resize-none text-xs"
+                    />
+                    {/* Attachment for this note */}
+                    <div className="space-y-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-[10px]"
+                        disabled={isSubmitting}
+                        onClick={() => document.getElementById(`file-${tab}-${entity.id}-${noteIdx}`)?.click()}
+                      >
+                        <Paperclip className="me-1 h-3 w-3" />
+                        {t("entities.attachment")}
+                      </Button>
+                      <Input
+                        id={`file-${tab}-${entity.id}-${noteIdx}`}
+                        type="file"
+                        multiple
+                        accept="image/*,.pdf,.doc,.docx"
+                        className="hidden"
+                        disabled={isSubmitting}
+                        onChange={(e) => handleNoteFilesChange(tab, entity.id, noteIdx, e.target.files)}
+                      />
+                      {noteEntry.files.length > 0 && (
+                        <div className="space-y-1">
+                          {noteEntry.files.map((file, fileIdx) => (
+                            <div key={fileIdx} className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]">
+                              <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
+                              <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-4 w-4 p-0"
+                                disabled={isSubmitting}
+                                onClick={() => handleRemoveNoteFile(tab, entity.id, noteIdx, fileIdx)}
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  disabled={isSubmitting}
+                  onClick={() => handleAddNote(tab, entity.id)}
+                >
+                  <Plus className="me-1 h-3 w-3" />
+                  {t("entities.addNote")}
+                </Button>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
+    );
   };
 
-  // ── Loading state ──────────────────────────────────────────────────────
-  const isDataLoading = isStoresLoading || isEntitiesLoading;
+  // ── Render tab content ─────────────────────────────────────────────────
+  const renderTabContent = (
+    tab: string,
+    grouped: ReturnType<typeof getGroupedEntities>,
+    filtered: typeof entities
+  ) => {
+    if (isEntitiesLoading) {
+      return (
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (filtered.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+          <ClipboardCheck className="mb-2 h-10 w-10" />
+          <p>{t("entities.noEntities")}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {grouped.map((group) => {
+          const catKey = cKey(tab, group.categoryId);
+          // Default open
+          const isOpen = collapsedCategories[catKey] !== false;
+
+          return (
+            <Collapsible
+              key={group.categoryId}
+              open={isOpen}
+              onOpenChange={(open) =>
+                setCollapsedCategories((prev) => ({ ...prev, [catKey]: open }))
+              }
+            >
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-lg bg-muted/50 px-4 py-2.5 text-start transition-colors hover:bg-muted/80"
+                >
+                  <div>
+                    <h3 className="text-sm font-semibold">{group.categoryLabel}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {group.entities.length} {group.entities.length === 1 ? "entity" : "entities"}
+                    </p>
+                  </div>
+                  {isOpen ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {group.entities.map((entity) => renderEntityCard(tab, entity))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Success Alert */}
+      {/* Alerts */}
       {successMessage && (
         <Alert className="border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription>{successMessage}</AlertDescription>
         </Alert>
       )}
-
-      {/* Submit Error Alert */}
       {submitError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{submitError}</AlertDescription>
         </Alert>
       )}
-
-      {/* Data Load Errors */}
       {storesError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -447,82 +602,7 @@ export function CameraForm() {
         </Alert>
       )}
 
-      {/* ────────────────────────────────────────────────────────────────── */}
-      {/*  Section 1: Filter Entities                                       */}
-      {/* ────────────────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-muted-foreground" />
-            <CardTitle>{t("filterEntities.title")}</CardTitle>
-          </div>
-          <CardDescription>
-            {t("description")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Date Range Type */}
-            <div className="space-y-2">
-              <Label htmlFor="dateRangeType">
-                {t("filterEntities.dateRangeType")}
-              </Label>
-              <Select
-                value={dateRangeType}
-                onValueChange={setDateRangeType}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger id="dateRangeType">
-                  <SelectValue
-                    placeholder={t("filterEntities.dateRangeTypePlaceholder")}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">
-                    {t("filterEntities.daily")}
-                  </SelectItem>
-                  <SelectItem value="weekly">
-                    {t("filterEntities.weekly")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Report Type */}
-            <div className="space-y-2">
-              <Label htmlFor="reportType">
-                {t("filterEntities.reportType")}
-              </Label>
-              <Select
-                value={reportType}
-                onValueChange={setReportType}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger id="reportType">
-                  <SelectValue
-                    placeholder={t("filterEntities.reportTypePlaceholder")}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={REPORT_TYPE_ALL}>
-                    {t("filterEntities.allReports")}
-                  </SelectItem>
-                  <SelectItem value="main">
-                    {t("filterEntities.main")}
-                  </SelectItem>
-                  <SelectItem value="secondary">
-                    {t("filterEntities.secondary")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ────────────────────────────────────────────────────────────────── */}
-      {/*  Section 2: Basic Information                                     */}
-      {/* ────────────────────────────────────────────────────────────────── */}
+      {/* ── Section 1: Store & Date ──────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -531,12 +611,11 @@ export function CameraForm() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Store Selection */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {/* Store */}
             <div className="space-y-2">
               <Label htmlFor="store">
-                {t("basicInfo.store")}{" "}
-                <span className="text-destructive">*</span>
+                {t("basicInfo.store")} <span className="text-destructive">*</span>
               </Label>
               {isStoresLoading ? (
                 <Skeleton className="h-10 w-full" />
@@ -555,18 +634,9 @@ export function CameraForm() {
                   }}
                   disabled={isSubmitting}
                 >
-                  <SelectTrigger
-                    id="store"
-                    className={
-                      validationErrors.store ? "border-destructive" : ""
-                    }
-                  >
+                  <SelectTrigger id="store" className={validationErrors.store ? "border-destructive" : ""}>
                     <SelectValue
-                      placeholder={
-                        isStoresLoading
-                          ? t("basicInfo.storeLoading")
-                          : t("basicInfo.storePlaceholder")
-                      }
+                      placeholder={isStoresLoading ? t("basicInfo.storeLoading") : t("basicInfo.storePlaceholder")}
                     />
                   </SelectTrigger>
                   <SelectContent
@@ -576,24 +646,19 @@ export function CameraForm() {
                   >
                     {stores.map((store) => (
                       <SelectItem key={store.id} value={String(store.id)}>
-                        {store.name} ({store.storeId})
+                        {store.storeId}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
-              {validationErrors.store && (
-                <p className="text-sm text-destructive">
-                  {validationErrors.store}
-                </p>
-              )}
+              {validationErrors.store && <p className="text-sm text-destructive">{validationErrors.store}</p>}
             </div>
 
-            {/* Date Selection */}
+            {/* Date */}
             <div className="space-y-2">
               <Label htmlFor="date">
-                {t("basicInfo.date")}{" "}
-                <span className="text-destructive">*</span>
+                {t("basicInfo.date")} <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="date"
@@ -613,250 +678,86 @@ export function CameraForm() {
                 aria-invalid={!!validationErrors.date}
                 className={validationErrors.date ? "border-destructive" : ""}
               />
-              {validationErrors.date && (
-                <p className="text-sm text-destructive">
-                  {validationErrors.date}
-                </p>
-              )}
+              {validationErrors.date && <p className="text-sm text-destructive">{validationErrors.date}</p>}
+            </div>
+
+            {/* Report Type */}
+            <div className="space-y-2">
+              <Label htmlFor="reportType">{t("filterEntities.reportType")}</Label>
+              <Select value={reportType} onValueChange={setReportType} disabled={isSubmitting}>
+                <SelectTrigger id="reportType">
+                  <SelectValue placeholder={t("filterEntities.reportTypePlaceholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={REPORT_TYPE_ALL}>{t("filterEntities.allReports")}</SelectItem>
+                  <SelectItem value="main">{t("filterEntities.main")}</SelectItem>
+                  <SelectItem value="secondary">{t("filterEntities.secondary")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* ────────────────────────────────────────────────────────────────── */}
-      {/*  Section 3: Entities / Ratings                                    */}
-      {/* ────────────────────────────────────────────────────────────────── */}
+      {/* ── Section 2: Daily / Weekly Tabs ───────────────────────────── */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
               <CardTitle>{t("entities.title")}</CardTitle>
             </div>
             {!isEntitiesLoading && (
-              <Badge variant="secondary">
-                {filteredEntities.length}{" "}
-                {filteredEntities.length === 1 ? "entity" : "entities"}
-              </Badge>
+              <div className="flex gap-2">
+                <Badge variant="secondary">
+                  {t("filterEntities.daily")}: {dailyEntities.length}
+                </Badge>
+                <Badge variant="secondary">
+                  {t("filterEntities.weekly")}: {weeklyEntities.length}
+                </Badge>
+              </div>
             )}
           </div>
           {validationErrors.entities && (
-            <p className="text-sm text-destructive">
-              {validationErrors.entities}
-            </p>
+            <p className="text-sm text-destructive">{validationErrors.entities}</p>
           )}
         </CardHeader>
         <CardContent>
-          {isEntitiesLoading ? (
-            <div className="space-y-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-6 w-40" />
-                  <Skeleton className="h-24 w-full" />
-                </div>
-              ))}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <div className="flex justify-center">
+              <TabsList>
+                <TabsTrigger value="daily">
+                  {t("filterEntities.daily")}
+                  {dailyEntities.length > 0 && (
+                    <Badge variant="outline" className="ms-1.5 h-5 px-1.5 text-[10px]">
+                      {dailyEntities.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="weekly">
+                  {t("filterEntities.weekly")}
+                  {weeklyEntities.length > 0 && (
+                    <Badge variant="outline" className="ms-1.5 h-5 px-1.5 text-[10px]">
+                      {weeklyEntities.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
             </div>
-          ) : filteredEntities.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-              <ClipboardCheck className="mb-2 h-10 w-10" />
-              <p>{t("entities.noEntities")}</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {groupedEntities.map((group, groupIdx) => (
-                <div key={group.categoryId}>
-                  {groupIdx > 0 && <Separator className="mb-4" />}
 
-                  {/* Category Header */}
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold">
-                        {group.categoryLabel}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {group.entities.length}{" "}
-                        {group.entities.length === 1 ? "entity" : "entities"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Entity Cards - 4 col responsive grid */}
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {group.entities.map((entity) => {
-                      const isCollapsed = collapsedEntities[entity.id] ?? true;
-                      return (
-                        <div
-                          key={entity.id}
-                          className={`rounded-lg border p-3 transition-colors ${
-                            entityRatings[entity.id]
-                              ? "border-primary/30 bg-primary/5"
-                              : "border-border"
-                          }`}
-                        >
-                          {/* Entity Header with collapse toggle */}
-                          <div
-                            className="flex cursor-pointer items-center justify-between gap-1"
-                            onClick={() =>
-                              setCollapsedEntities((prev) => ({
-                                ...prev,
-                                [entity.id]: !isCollapsed,
-                              }))
-                            }
-                          >
-                            <Label className="pointer-events-none text-xs font-medium leading-tight">
-                              {entity.entityLabel}
-                            </Label>
-                            <div className="flex shrink-0 items-center gap-1">
-                              {entityRatings[entity.id] && (
-                                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                                  {RATINGS.find(
-                                    (r) =>
-                                      String(r.id) === entityRatings[entity.id]
-                                  )
-                                    ? t(
-                                        `entities.${RATINGS.find((r) => String(r.id) === entityRatings[entity.id])!.key}`
-                                      )
-                                    : ""}
-                                </Badge>
-                              )}
-                              {isCollapsed ? (
-                                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                              ) : (
-                                <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Collapsible content */}
-                          {!isCollapsed && (
-                            <div className="mt-2 space-y-2">
-                              {/* Rating Selection */}
-                              <div className="space-y-1">
-                                <Label
-                                  htmlFor={`rating-${entity.id}`}
-                                  className="text-[10px] text-muted-foreground"
-                                >
-                                  {t("entities.rating")}
-                                </Label>
-                                <Select
-                                  value={entityRatings[entity.id] || ""}
-                                  onValueChange={(value) =>
-                                    handleRatingChange(entity.id, value)
-                                  }
-                                  disabled={isSubmitting}
-                                >
-                                  <SelectTrigger
-                                    id={`rating-${entity.id}`}
-                                    className="h-8 text-xs"
-                                  >
-                                    <SelectValue
-                                      placeholder={t("entities.ratingPlaceholder")}
-                                    />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {RATINGS.map((rating) => (
-                                      <SelectItem
-                                        key={rating.id}
-                                        value={String(rating.id)}
-                                      >
-                                        {t(`entities.${rating.key}`)}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              {/* Note */}
-                              <div className="space-y-1">
-                                <Label
-                                  htmlFor={`note-${entity.id}`}
-                                  className="text-[10px] text-muted-foreground"
-                                >
-                                  {t("entities.note")}
-                                </Label>
-                                <EntityNoteField
-                                  id={`note-${entity.id}`}
-                                  placeholder={t("entities.notePlaceholder")}
-                                  value={entityNotes[entity.id] || ""}
-                                  onChange={(e) =>
-                                    handleNoteChange(entity.id, e.target.value)
-                                  }
-                                  disabled={isSubmitting}
-                                />
-                              </div>
-
-                              {/* File Attachment */}
-                              <div className="space-y-1">
-                                <AttachmentButton
-                                  entityId={entity.id}
-                                  label={t("entities.attachment")}
-                                  disabled={isSubmitting}
-                                  onFileSelect={(e) =>
-                                    handleFilesChange(entity.id, e.target.files)
-                                  }
-                                  onHoverStart={() => setHoveredAttachmentEntityId(entity.id)}
-                                  onHoverEnd={() =>
-                                    setHoveredAttachmentEntityId((current) =>
-                                      current === entity.id ? null : current
-                                    )
-                                  }
-                                />
-                                {entityFiles[entity.id] &&
-                                  entityFiles[entity.id].length > 0 && (
-                                    <div className="space-y-1">
-                                      {entityFiles[entity.id].map(
-                                        (file, fileIdx) => (
-                                          <div
-                                            key={`${entity.id}-${fileIdx}`}
-                                            className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]"
-                                          >
-                                            <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                                            <span className="min-w-0 flex-1 truncate">
-                                              {file.name}
-                                            </span>
-                                            <Button
-                                              type="button"
-                                              variant="ghost"
-                                              size="sm"
-                                              className="h-4 w-4 p-0"
-                                              disabled={isSubmitting}
-                                              onClick={() =>
-                                                handleRemoveFile(
-                                                  entity.id,
-                                                  fileIdx
-                                                )
-                                              }
-                                            >
-                                              <X className="h-2.5 w-2.5" />
-                                            </Button>
-                                          </div>
-                                        )
-                                      )}
-                                    </div>
-                                  )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            <TabsContent value="daily" className="mt-4">
+              {renderTabContent("daily", dailyGrouped, dailyEntities)}
+            </TabsContent>
+            <TabsContent value="weekly" className="mt-4">
+              {renderTabContent("weekly", weeklyGrouped, weeklyEntities)}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
-      {/* ────────────────────────────────────────────────────────────────── */}
-      {/*  Submit Actions                                                   */}
-      {/* ────────────────────────────────────────────────────────────────── */}
+      {/* ── Submit ───────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Button
-          type="submit"
-          disabled={isSubmitting || isDataLoading}
-          className="min-w-45"
-        >
+        <Button type="submit" disabled={isSubmitting || isDataLoading} className="min-w-45">
           {isSubmitting ? (
             <>
               <Loader2 className="me-2 h-4 w-4 animate-spin" />
@@ -865,14 +766,6 @@ export function CameraForm() {
           ) : (
             t("submit")
           )}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleReset}
-          disabled={isSubmitting}
-        >
-          {t("reset")}
         </Button>
       </div>
     </form>

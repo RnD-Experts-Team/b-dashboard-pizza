@@ -181,6 +181,7 @@ export function HourlyChannelsChart({
       dataLabels,
       currencyPrefix,
       categories,
+      showRoyaltyTotal,
       legendPosition,
       isDark,
     ]
@@ -197,7 +198,7 @@ export function HourlyChannelsChart({
         </CardTitle>
 
         {/* Legend toggle buttons */}
-        <div className="flex flex-wrap gap-1 pt-1">
+        <div className="flex flex-wrap gap-0 pt-1">
           {CHANNEL_KEYS.map(({ label, color }) => {
             const isHidden = hiddenSeries.has(label);
             return (

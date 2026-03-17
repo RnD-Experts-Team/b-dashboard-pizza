@@ -2,7 +2,10 @@
 
 import { format, parseISO } from "date-fns";
 import { useMemo } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 import { useCameraFormDetail } from "@/lib/hooks/use-camera-form";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +23,7 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
+  Pencil,
   RefreshCw,
   User,
 } from "lucide-react";
@@ -204,15 +208,37 @@ export function CameraFormDetailsSheet({
 }: CameraFormDetailsSheetProps) {
   const activeAuditId = open ? auditId : null;
   const { audit, isLoading, error, refetch } = useCameraFormDetail(activeAuditId);
+  const params = useParams();
+  const locale = (params?.locale as string) || "en";
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = overviewStores?.[0]?.id;
+  const canEditCameraForm = [{
+    service: "QA",
+    method: "PUT",
+    path: "/camera-forms/{id}",
+    storeId: effectiveStoreId,
+  }].some((req) => canAccessRoute(req));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full p-0 sm:max-w-xl md:max-w-2xl">
         <SheetHeader className="border-b pb-3">
-          <SheetTitle>Camera Form Details</SheetTitle>
-          <SheetDescription>
-            {audit ? `Form #${audit.id}` : auditId ? `Form #${auditId}` : "Form details"}
-          </SheetDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <SheetTitle>Camera Form Details</SheetTitle>
+              <SheetDescription>
+                {audit ? `Form #${audit.id}` : auditId ? `Form #${auditId}` : "Form details"}
+              </SheetDescription>
+            </div>
+            {canEditCameraForm && auditId && (
+              <Button variant="outline" size="sm" asChild className="shrink-0 mt-0.5 mr-6">
+                <Link href={`/${locale}/dashboard/quality-assurance/${auditId}`}>
+                  <Pencil className="me-1.5 h-3.5 w-3.5" />
+                  Edit
+                </Link>
+              </Button>
+            )}
+          </div>
         </SheetHeader>
 
         {isLoading ? (
