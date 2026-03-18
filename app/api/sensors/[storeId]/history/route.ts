@@ -99,6 +99,7 @@ export async function GET(
     const perPage = sp.get("per_page") || "20";
     const deviceType = sp.get("device_type") || "";
     const page = sp.get("page") || "";
+    const unit = sp.get("unit") || "";
 
     if (from && !isValidDate(from)) return errorResponse("INVALID_PARAM", "Invalid from date", 400);
     if (to && !isValidDate(to)) return errorResponse("INVALID_PARAM", "Invalid to date", 400);
@@ -110,6 +111,7 @@ export async function GET(
     qs.set("per_page", perPage);
     if (deviceType) qs.set("device_type", deviceType);
     if (page) qs.set("page", page);
+    if (unit) qs.set("unit", unit);
 
     const upstreamAuth = SENSORS_API_TOKEN
       ? `Bearer ${SENSORS_API_TOKEN}`

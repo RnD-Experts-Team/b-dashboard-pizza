@@ -89,12 +89,12 @@ export const sensorService = {
    * Fetch the live sensor list + current state for a store.
    * Proxied through /api/sensors/:storeId → sensors.pnefoods.com
    */
-  async getSensors(storeId: string, signal?: AbortSignal): Promise<SensorsResponse> {
+  async getSensors(storeId: string, unit?: "c" | "f", signal?: AbortSignal): Promise<SensorsResponse> {
     if (!storeId) throw new SensorError("No store selected.", "NO_STORE");
     try {
       const { data } = await axios.get<SensorsResponse>(
         `/api/sensors/${encodeURIComponent(storeId)}`,
-        { headers: buildHeaders(), timeout: 15_000, signal },
+        { params: { unit }, headers: buildHeaders(), timeout: 15_000, signal },
       );
       return data;
     } catch (err) {
@@ -109,13 +109,14 @@ export const sensorService = {
   async getReports(
     storeId: string,
     period: ReportPeriod = "daily",
+    unit?: "c" | "f",
     signal?: AbortSignal,
   ): Promise<ReportsResponse> {
     if (!storeId) throw new SensorError("No store selected.", "NO_STORE");
     try {
       const { data } = await axios.get<ReportsResponse>(
         `/api/sensors/${encodeURIComponent(storeId)}/reports`,
-        { params: { period }, headers: buildHeaders(), timeout: 15_000, signal },
+        { params: { period, unit }, headers: buildHeaders(), timeout: 15_000, signal },
       );
       return data;
     } catch (err) {
@@ -130,13 +131,14 @@ export const sensorService = {
   async getHistory(
     storeId: string,
     params: HistoryQueryParams = {},
+    unit?: "c" | "f",
     signal?: AbortSignal,
   ): Promise<HistoryResponse> {
     if (!storeId) throw new SensorError("No store selected.", "NO_STORE");
     try {
       const { data } = await axios.get<HistoryResponse>(
         `/api/sensors/${encodeURIComponent(storeId)}/history`,
-        { params, headers: buildHeaders(), timeout: 15_000, signal },
+        { params: { ...params, unit }, headers: buildHeaders(), timeout: 15_000, signal },
       );
       return data;
     } catch (err) {
@@ -150,13 +152,14 @@ export const sensorService = {
   async getAlerts(
     storeId: string,
     params: AlertsQueryParams = {},
+    unit?: "c" | "f",
     signal?: AbortSignal,
   ): Promise<AlertsResponse> {
     if (!storeId) throw new SensorError("No store selected.", "NO_STORE");
     try {
       const { data } = await axios.get<AlertsResponse>(
         `/api/sensors/${encodeURIComponent(storeId)}/alerts`,
-        { params, headers: buildHeaders(), timeout: 15_000, signal },
+        { params: { ...params, unit }, headers: buildHeaders(), timeout: 15_000, signal },
       );
       return data;
     } catch (err) {

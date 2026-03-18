@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import type {
   CameraReportData,
   CameraReportStore,
 } from "@/types/qa.types";
 import type { CameraReportFilterParams } from "@/lib/store/camera-report.store";
+import { useQAEntityCategories } from "@/lib/hooks/use-qa-entities";
 import {
   Card,
   CardContent,
@@ -16,6 +17,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -30,6 +37,7 @@ import {
   FileSpreadsheet,
   Image as ImageIcon,
   FileArchive,
+  ChevronsUpDown,
 } from "lucide-react";
 
 interface CameraReportFiltersProps {
@@ -58,10 +66,22 @@ export function CameraReportFilters({
   onExportImages,
 }: CameraReportFiltersProps) {
   const t = useTranslations("cameraReport");
+  const { categories, isLoading: isCategoriesLoading } =
+    useQAEntityCategories();
 
   // Local filter state (only applied when user clicks "Apply")
   const [localFilters, setLocalFilters] =
     useState<CameraReportFilterParams>(filters);
+
+  const sortedCategories = useMemo(
+    () =>
+      [...categories].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label)
+      ),
+    [categories]
+  );
+
+  const selectedCategoryIds = localFilters.category_ids ?? [];
 
   // Available options from data
   const stores: CameraReportStore[] = data?.stores ?? [];
@@ -89,7 +109,10 @@ export function CameraReportFilters({
 
   const hasActiveFilters =
     Object.values(filters).some(
-      (v) => v !== undefined && v !== "" && v !== null
+      (v) =>
+        Array.isArray(v)
+          ? v.length > 0
+          : v !== undefined && v !== "" && v !== null
     );
 
   return (
@@ -118,7 +141,12 @@ export function CameraReportFilters({
               variant="outline"
               size="sm"
               onClick={onExport}
-              disabled={isExporting || isLoading || isExportingExcel || isExportingImages}
+              disabled={
+                isExporting ||
+                isLoading ||
+                isExportingExcel ||
+                isExportingImages
+              }
             >
               {isExporting ? (
                 <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
@@ -134,7 +162,12 @@ export function CameraReportFilters({
                 variant="outline"
                 size="sm"
                 onClick={onExportExcel}
-                disabled={isExportingExcel || isLoading || isExporting || isExportingImages}
+                disabled={
+                  isExportingExcel ||
+                  isLoading ||
+                  isExporting ||
+                  isExportingImages
+                }
               >
                 {isExportingExcel ? (
                   <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
@@ -151,7 +184,12 @@ export function CameraReportFilters({
                 variant="outline"
                 size="sm"
                 onClick={onExportImages}
-                disabled={isExportingImages || isLoading || isExporting || isExportingExcel}
+                disabled={
+                  isExportingImages ||
+                  isLoading ||
+                  isExporting ||
+                  isExportingExcel
+                }
               >
                 {isExportingImages ? (
                   <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
@@ -165,7 +203,7 @@ export function CameraReportFilters({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8">
           {/* Store */}
           <div className="space-y-1.5">
             <Label className="text-xs">{t("filters.store")}</Label>
@@ -199,6 +237,101 @@ export function CameraReportFilters({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Categories (multi-select) */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("filters.category")}</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {selectedCategoryIds.length === 0
+                      ? t("filters.allCategories")
+                      : t("filters.selectedCategories", {
+                          count: selectedCategoryIds.length,
+                        })}
+                  </span>
+                  <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-2" align="start">
+                <div className="max-h-56 overflow-y-auto">
+                  <div className="space-y-1">
+                    {isCategoriesLoading && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        {t("filters.loadingCategories")}
+                      </div>
+                    )}
+
+                    {!isCategoriesLoading && sortedCategories.length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        {t("filters.noCategories")}
+                      </div>
+                    )}
+
+                    {!isCategoriesLoading &&
+                      sortedCategories.map((category) => {
+                        const checked = selectedCategoryIds.includes(category.id);
+                        return (
+                          <label
+                            key={category.id}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(state) => {
+                                const isChecked = state === true;
+                                setLocalFilters((prev) => {
+                                  const current = prev.category_ids ?? [];
+                                  const next = isChecked
+                                    ? current.includes(category.id)
+                                      ? current
+                                      : [...current, category.id]
+                                    : current.filter((id) => id !== category.id);
+
+                                  return {
+                                    ...prev,
+                                    category_ids:
+                                      next.length > 0 ? next : undefined,
+                                  };
+                                });
+                              }}
+                            />
+                            <span className="flex-1 text-sm">{category.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              #{category.id}
+                            </span>
+                          </label>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {selectedCategoryIds.length > 0 && (
+                  <div className="mt-2 border-t pt-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-full text-xs text-muted-foreground"
+                      onClick={() =>
+                        setLocalFilters((prev) => ({
+                          ...prev,
+                          category_ids: undefined,
+                        }))
+                      }
+                    >
+                      {t("filters.clearCategories")}
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Group */}
@@ -255,6 +388,36 @@ export function CameraReportFilters({
                 </SelectItem>
                 <SelectItem value="secondary">
                   {t("filters.secondary")}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date Range Type */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("filters.dateRangeType")}</Label>
+            <Select
+              value={localFilters.date_range_type || "all"}
+              onValueChange={(val) =>
+                setLocalFilters((prev) => ({
+                  ...prev,
+                  date_range_type:
+                    val === "all" ? undefined : (val as "daily" | "weekly"),
+                }))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("filters.allDateRanges")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t("filters.allDateRanges")}
+                </SelectItem>
+                <SelectItem value="daily">
+                  {t("filters.daily")}
+                </SelectItem>
+                <SelectItem value="weekly">
+                  {t("filters.weekly")}
                 </SelectItem>
               </SelectContent>
             </Select>

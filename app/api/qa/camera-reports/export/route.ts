@@ -111,9 +111,11 @@ const ALLOWED_PARAMS = [
   "date_from",
   "date_to",
   "rating_id",
+  "date_range_type",
 ] as const;
 
 const VALID_REPORT_TYPES = ["main", "secondary"];
+const VALID_DATE_RANGE_TYPES = ["daily", "weekly"];
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  GET /api/qa/camera-reports/export                                       */
@@ -154,6 +156,18 @@ export async function GET(request: NextRequest) {
         );
       }
 
+      if (
+        param === "date_range_type" &&
+        !VALID_DATE_RANGE_TYPES.includes(value)
+      ) {
+        return errorResponse(
+          "INVALID_PARAM",
+          `date_range_type must be one of: ${VALID_DATE_RANGE_TYPES.join(", ")}`,
+          400,
+          { param: "date_range_type" }
+        );
+      }
+
       if (["date_from", "date_to"].includes(param)) {
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(value) || isNaN(Date.parse(value))) {
@@ -167,6 +181,31 @@ export async function GET(request: NextRequest) {
       }
 
       upstreamParams.set(param, value);
+    }
+  }
+
+  const rawCategoryIds = [
+    ...searchParams.getAll("category_ids[]"),
+    ...searchParams.getAll("category_ids"),
+  ];
+
+  if (rawCategoryIds.length > 0) {
+    const uniqueCategoryIds = Array.from(
+      new Set(rawCategoryIds.filter((id) => id !== ""))
+    );
+
+    for (const categoryId of uniqueCategoryIds) {
+      const num = Number(categoryId);
+      if (!Number.isFinite(num) || num < 1 || !Number.isInteger(num)) {
+        return errorResponse(
+          "INVALID_PARAM",
+          "category_ids[] must contain only positive integers",
+          400,
+          { param: "category_ids[]", value: categoryId }
+        );
+      }
+
+      upstreamParams.append("category_ids[]", categoryId);
     }
   }
 

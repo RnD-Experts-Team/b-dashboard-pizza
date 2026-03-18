@@ -110,8 +110,8 @@ export default function EditUserPage() {
         mode="edit"
         user={user}
         userId={user.id}
-        onSuccess={(updatedUser) => {
-          router.push(`/${locale}/dashboard/users/${updatedUser.id}`);
+        onSuccess={() => {
+          router.push(`/${locale}/dashboard/users`);
         }}
         onCancel={() => router.push(`/${locale}/dashboard/users`)}
       />

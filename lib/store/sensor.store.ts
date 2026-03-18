@@ -59,11 +59,11 @@ interface SensorStoreState {
   useCelsius: boolean;
 
   /* ── Actions ──────────────────────────────────────────────────────────── */
-  fetchSensors: (storeId: string) => Promise<void>;
-  fetchReports: (storeId: string, period?: ReportPeriod) => Promise<void>;
-  fetchHistory: (storeId: string, page?: number, perPage?: number) => Promise<void>;
-  fetchAlerts: (storeId: string, from?: string, to?: string) => Promise<void>;
-  fetchAll: (storeId: string) => Promise<void>;
+  fetchSensors: (storeId: string, unit?: "c" | "f") => Promise<void>;
+  fetchReports: (storeId: string, period?: ReportPeriod, unit?: "c" | "f") => Promise<void>;
+  fetchHistory: (storeId: string, page?: number, perPage?: number, unit?: "c" | "f") => Promise<void>;
+  fetchAlerts: (storeId: string, from?: string, to?: string, unit?: "c" | "f") => Promise<void>;
+  fetchAll: (storeId: string, unit?: "c" | "f") => Promise<void>;
   setReportPeriod: (period: ReportPeriod) => void;
   toggleUnit: () => void;
   clearErrors: () => void;
@@ -118,15 +118,16 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
 
   lastStoreId: null,
   lastFetchedAt: null,
-  useCelsius: false,
+  useCelsius: true,
 
   /* ── Fetch live sensors ───────────────────────────────────────────────── */
-  fetchSensors: async (storeId: string) => {
+  fetchSensors: async (storeId: string, unit?: "c" | "f") => {
     _abortController?.abort();
     _abortController = new AbortController();
     set({ sensorsLoading: true, sensorsError: null });
+    const u = unit ?? (get().useCelsius ? "c" : "f");
     try {
-      const data = await sensorService.getSensors(storeId, _abortController.signal);
+      const data = await sensorService.getSensors(storeId, u, _abortController.signal);
       set({ sensors: data, sensorsLoading: false, lastStoreId: storeId, lastFetchedAt: Date.now() });
     } catch (err) {
       if (axios.isCancel(err)) return;
@@ -135,11 +136,12 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
   },
 
   /* ── Fetch aggregated reports ─────────────────────────────────────────── */
-  fetchReports: async (storeId: string, period?: ReportPeriod) => {
+  fetchReports: async (storeId: string, period?: ReportPeriod, unit?: "c" | "f") => {
     const p = period ?? get().reportPeriod;
+    const u = unit ?? (get().useCelsius ? "c" : "f");
     set({ reportsLoading: true, reportsError: null, reportPeriod: p });
     try {
-      const data = await sensorService.getReports(storeId, p, _abortController?.signal);
+      const data = await sensorService.getReports(storeId, p, u, _abortController?.signal);
       set({ reports: data, reportsLoading: false });
     } catch (err) {
       if (axios.isCancel(err)) return;
@@ -148,10 +150,11 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
   },
 
   /* ── Fetch reading history (paginated) ────────────────────────────────── */
-  fetchHistory: async (storeId: string, page = 1, perPage = 20) => {
+  fetchHistory: async (storeId: string, page = 1, perPage = 20, unit?: "c" | "f") => {
+    const u = unit ?? (get().useCelsius ? "c" : "f");
     set({ historyLoading: true, historyError: null });
     try {
-      const data = await sensorService.getHistory(storeId, { page, per_page: perPage }, _abortController?.signal);
+      const data = await sensorService.getHistory(storeId, { page, per_page: perPage }, u, _abortController?.signal);
       set({ history: data, historyLoading: false });
     } catch (err) {
       if (axios.isCancel(err)) return;
@@ -160,10 +163,11 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
   },
 
   /* ── Fetch alert records ──────────────────────────────────────────────── */
-  fetchAlerts: async (storeId: string, from?: string, to?: string) => {
+  fetchAlerts: async (storeId: string, from?: string, to?: string, unit?: "c" | "f") => {
+    const u = unit ?? (get().useCelsius ? "c" : "f");
     set({ alertsLoading: true, alertsError: null });
     try {
-      const data = await sensorService.getAlerts(storeId, { from, to }, _abortController?.signal);
+      const data = await sensorService.getAlerts(storeId, { from, to }, u, _abortController?.signal);
       set({ alerts: data, alertsLoading: false });
     } catch (err) {
       if (axios.isCancel(err)) return;
@@ -172,7 +176,7 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
   },
 
   /* ── Fetch all endpoints in parallel ──────────────────────────────────── */
-  fetchAll: async (storeId: string) => {
+  fetchAll: async (storeId: string, unit?: "c" | "f") => {
     _abortController?.abort();
     _abortController = new AbortController();
 
@@ -196,6 +200,7 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
 
     const signal = _abortController.signal;
     const period = get().reportPeriod;
+    const u = unit ?? (get().useCelsius ? "c" : "f");
 
     // Default alert range: last 7 days
     const now = new Date();
@@ -206,10 +211,10 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
 
     // Fire all requests concurrently — each resolves independently
     const [sensorsResult, reportsResult, historyResult, alertsResult] = await Promise.allSettled([
-      sensorService.getSensors(storeId, signal),
-      sensorService.getReports(storeId, period, signal),
-      sensorService.getHistory(storeId, { per_page: 20 }, signal),
-      sensorService.getAlerts(storeId, { from: fromDate, to: toDate }, signal),
+      sensorService.getSensors(storeId, u, signal),
+      sensorService.getReports(storeId, period, u, signal),
+      sensorService.getHistory(storeId, { per_page: 20 }, u, signal),
+      sensorService.getAlerts(storeId, { from: fromDate, to: toDate }, u, signal),
     ]);
 
     // Map each settled result: update data on success, error on failure
@@ -244,7 +249,14 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
 
   setReportPeriod: (period: ReportPeriod) => set({ reportPeriod: period }),
 
-  toggleUnit: () => set((s) => ({ useCelsius: !s.useCelsius })),
+  toggleUnit: () => {
+    const s = get();
+    const newUseCelsius = !s.useCelsius;
+    set({ useCelsius: newUseCelsius });
+    if (s.lastStoreId) {
+      s.fetchAll(s.lastStoreId, newUseCelsius ? "c" : "f");
+    }
+  },
 
   clearErrors: () =>
     set({ sensorsError: null, reportsError: null, historyError: null, alertsError: null }),

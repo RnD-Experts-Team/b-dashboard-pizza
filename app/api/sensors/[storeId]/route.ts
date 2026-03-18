@@ -111,7 +111,14 @@ export async function GET(
       ? `Bearer ${SENSORS_API_TOKEN}`
       : getAuthorizationHeader(request)!;
 
-    const upstreamUrl = `${SENSORS_BASE_URL}/stores/${encodeURIComponent(storeId)}/sensors`;
+    const sp = request.nextUrl.searchParams;
+    const unit = sp.get("unit");
+    
+    const qs = new URLSearchParams();
+    if (unit) qs.set("unit", unit);
+
+    const qsStr = qs.toString() ? `?${qs}` : "";
+    const upstreamUrl = `${SENSORS_BASE_URL}/stores/${encodeURIComponent(storeId)}/sensors${qsStr}`;
 
     const upstream = await fetchWithRetry(upstreamUrl, {
       method: "GET",

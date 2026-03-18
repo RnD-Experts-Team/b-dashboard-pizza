@@ -42,13 +42,8 @@ import type {
 import type { SensorErrorState } from "@/lib/store/sensor.store";
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Temperature conversion helpers                                          */
+/*  Formatting helpers                                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-/** Fahrenheit → Celsius */
-function fToC(f: number): number {
-  return ((f - 32) * 5) / 9;
-}
 
 /** Round to one decimal place for display */
 function round1(n: number): string {
@@ -57,7 +52,8 @@ function round1(n: number): string {
 
 /**
  * Format a temperature value.
- * The API always returns Fahrenheit — convert when the user toggles to °C.
+ * The API now returns the correct unit based on our `unit` parameter,
+ * so we no longer need to manually convert on the client.
  */
 function formatTemp(value: number | string | null | undefined, useCelsius: boolean): string {
   // Explicitly guard null/undefined before parseFloat — isNaN(null) returns false
@@ -65,8 +61,7 @@ function formatTemp(value: number | string | null | undefined, useCelsius: boole
   if (value == null) return "—";
   const num = typeof value === "string" ? parseFloat(value) : value;
   if (isNaN(num)) return "—";
-  const display = useCelsius ? fToC(num) : num;
-  return `${round1(display)}°${useCelsius ? "C" : "F"}`;
+  return `${round1(num)}°${useCelsius ? "C" : "F"}`;
 }
 
 /** Format an ISO timestamp into a short, locale-friendly string */

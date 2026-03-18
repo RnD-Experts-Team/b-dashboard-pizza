@@ -45,7 +45,7 @@ export interface SensorState {
   state: string;
   tempCorrection: number;
   tempLimit: SensorLimit;
-  /** Current temperature reading (in Fahrenheit from API) */
+  /** Current temperature reading (respects 'unit' param from API) */
   temperature: number;
   version: string;
 }
