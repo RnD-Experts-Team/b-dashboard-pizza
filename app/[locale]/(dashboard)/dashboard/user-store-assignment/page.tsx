@@ -117,7 +117,7 @@ export default function UserStoreAssignmentPage() {
               )
             }
           >
-            <UserMinus className="me-2 h-4 w-4" />
+            <UserMinus className="bg me-2 h-4 w-4" />
             {t("removeUser")}
           </Button>
 

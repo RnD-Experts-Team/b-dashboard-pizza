@@ -1444,7 +1444,9 @@
       "urgent": "Urgent",
       "note": "Note",
       "notePlaceholder": "Add a note (optional)",
-      "attachment": "Attachment"
+      "attachment": "Attachment",
+      "addNote": "Add Note",
+      "attachmentInvalid": "Only image files up to 5MB are allowed."
     },
     "submit": "Submit Camera Form",
     "submitting": "Submitting...",

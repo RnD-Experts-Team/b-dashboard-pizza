@@ -45,24 +45,15 @@ export function CameraFormsListFilters({
   onApply,
   onReset,
 }: CameraFormsListFiltersProps) {
-  const userStores = useAuthStore((state) => state.user?.stores ?? []);
+  const overviewStores = useAuthStore((state) => state.overviewStores);
   const authLoading = useAuthStore((state) => state.isLoading);
 
   const stores = useMemo(() => {
-    const uniqueStores = new Map<number, string>();
-
-    for (const assignment of userStores) {
-      const storeId =
-        assignment.store.internalId ?? Number.parseInt(assignment.store.id, 10);
-
-      if (!Number.isFinite(storeId)) continue;
-      if (!uniqueStores.has(storeId)) {
-        uniqueStores.set(storeId, assignment.store.name);
-      }
-    }
-
-    return Array.from(uniqueStores, ([id, name]) => ({ id, name }));
-  }, [userStores]);
+    return (overviewStores ?? []).map((s) => ({
+      id: s.id,
+      storeId: s.storeId ?? s.id,
+    }));
+  }, [overviewStores]);
 
   const storesLoading = authLoading && stores.length === 0;
 
@@ -121,11 +112,14 @@ export function CameraFormsListFilters({
                   }
                 />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent
+                position="popper"
+                style={{ maxHeight: "200px", overflowY: "auto" }}
+              >
                 <SelectItem value="all">All Stores</SelectItem>
                 {stores.map((store) => (
                   <SelectItem key={store.id} value={String(store.id)}>
-                    {store.name}
+                    {store.storeId}
                   </SelectItem>
                 ))}
               </SelectContent>

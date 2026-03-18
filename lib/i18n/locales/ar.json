@@ -1443,7 +1443,9 @@
       "urgent": "عاجل",
       "note": "ملاحظة",
       "notePlaceholder": "أضف ملاحظة (اختياري)",
-      "attachment": "مرفق"
+      "attachment": "مرفق",
+      "addNote": "إضافة ملاحظة",
+      "attachmentInvalid": "يسمح فقط بملفات الصور حتى 5 ميجابايت."
     },
     "submit": "إرسال نموذج الكاميرا",
     "submitting": "جاري الإرسال...",

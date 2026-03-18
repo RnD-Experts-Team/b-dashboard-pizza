@@ -97,7 +97,12 @@ function getThisWeekRange(): { date_from: string; date_to: string } {
   monday.setDate(tuesday.getDate() + 6);
   monday.setHours(23, 59, 59, 999);
 
-  const formatDate = (date: Date) => date.toISOString().split("T")[0];
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const dayOfMonth = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${dayOfMonth}`;
+  };
 
   return {
     date_from: formatDate(tuesday),
