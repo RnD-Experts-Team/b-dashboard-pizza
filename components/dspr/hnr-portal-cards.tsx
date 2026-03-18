@@ -106,7 +106,7 @@ export function HnrCard({ hnr, className }: HnrCardProps) {
           </Tooltip>
         </CardTitle>
       </CardHeader>
-      <CardContent className="pb-1 px-3">
+      <CardContent className="pb-1 px-3 flex flex-col gap-8">
         <SpeedometerGauge
           value={pct}
           zones={LABOR_ZONES}

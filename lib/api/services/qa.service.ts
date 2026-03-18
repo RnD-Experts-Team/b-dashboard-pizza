@@ -1190,6 +1190,8 @@ export const qaService = {
       date_from?: string;
       date_to?: string;
       rating_id?: number;
+      category_ids?: number[];
+      date_range_type?: "daily" | "weekly";
     },
     signal?: AbortSignal
   ): Promise<CameraReportData> {
@@ -1206,6 +1208,9 @@ export const qaService = {
     try {
       const response = await axios.get<ApiCameraReportResponse>(url, {
         params,
+        paramsSerializer: {
+          indexes: false,
+        },
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -1298,6 +1303,8 @@ export const qaService = {
     date_from?: string;
     date_to?: string;
     rating_id?: number;
+    category_ids?: number[];
+    date_range_type?: "daily" | "weekly";
   }): Promise<void> {
     const token = getToken();
     if (!token) {
@@ -1312,6 +1319,9 @@ export const qaService = {
     try {
       const response = await axios.get(url, {
         params,
+        paramsSerializer: {
+          indexes: false,
+        },
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -1401,6 +1411,8 @@ export const qaService = {
     date_from?: string;
     date_to?: string;
     rating_id?: number;
+    category_ids?: number[];
+    date_range_type?: "daily" | "weekly";
   }): Promise<void> {
     const token = getToken();
     if (!token) {
@@ -1415,6 +1427,9 @@ export const qaService = {
     try {
       const response = await axios.get(url, {
         params,
+        paramsSerializer: {
+          indexes: false,
+        },
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -1470,6 +1485,8 @@ export const qaService = {
     date_from?: string;
     date_to?: string;
     rating_id?: number;
+    category_ids?: number[];
+    date_range_type?: "daily" | "weekly";
   }): Promise<void> {
     const token = getToken();
     if (!token) {
@@ -1484,6 +1501,9 @@ export const qaService = {
     try {
       const response = await axios.get(url, {
         params,
+        paramsSerializer: {
+          indexes: false,
+        },
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -2143,6 +2163,8 @@ function transformCameraReportResponse(
       dateFrom: raw.data.filters.date_from,
       dateTo: raw.data.filters.date_to,
       ratingId: raw.data.filters.rating_id,
+      categoryIds: raw.data.filters.category_ids ?? null,
+      dateRangeType: raw.data.filters.date_range_type ?? null,
     },
   };
 }

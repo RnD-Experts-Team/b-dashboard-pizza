@@ -204,19 +204,19 @@ export function CameraReportTable({
           <>
             {/* ─── Desktop pivot table ─── */}
             <div className="hidden lg:block overflow-x-auto pb-2">
-              <Table className="min-w-[960px]">
+              <Table className="min-w-240">
                 <TableHeader>
                   {/* Row 1: Category headers */}
                   <TableRow className="bg-muted/30">
                     <TableHead
                       rowSpan={2}
-                      className="align-middle border-e min-w-[180px] sticky start-0 bg-muted z-10 py-3 px-8"
+                      className="align-middle border-e min-w-45 sticky start-0 bg-muted z-10 py-3 px-8"
                     >
                       {t("columns.store")}
                     </TableHead>
                     <TableHead
                       rowSpan={2}
-                      className="align-middle border-e text-center w-[120px] py-3 bg-muted"
+                      className="align-middle border-e text-center w-30 py-3 bg-muted"
                     >
                       <div className="flex flex-col items-center leading-tight">
                         <span>{t("scoreLabel")}</span>
@@ -227,7 +227,7 @@ export function CameraReportTable({
                     </TableHead>
                     <TableHead
                       rowSpan={2}
-                      className="align-middle border-e text-center w-[120px] py-3 bg-muted"
+                      className="align-middle border-e text-center w-30 py-3 bg-muted"
                     >
                       <div className="flex flex-col items-center leading-tight">
                         <span>{t("scoreLabel")}</span>
@@ -256,7 +256,7 @@ export function CameraReportTable({
                         <TableHead
                           key={entity.id}
                           className={cn(
-                            "align-middle text-center text-xs min-w-[120px] py-2",
+                            "align-middle text-center text-xs min-w-30 py-2",
                             idx === col.entities.length - 1 &&
                               "border-e last:border-e-0"
                           )}
@@ -264,7 +264,7 @@ export function CameraReportTable({
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="truncate block max-w-[120px] cursor-default">
+                                <span className="truncate block max-w-30 cursor-default">
                                   {entity.entityLabel}
                                 </span>
                               </TooltipTrigger>
@@ -300,7 +300,7 @@ export function CameraReportTable({
                             <Store className="h-4 w-4 text-muted-foreground shrink-0" />
                             <div className="flex flex-col">
                               <span
-                                className="font-medium text-sm truncate max-w-[160px]"
+                                className="font-medium text-sm truncate max-w-40"
                                 title={store.storeName}
                               >
                                 {store.storeName}

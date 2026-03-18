@@ -133,7 +133,7 @@ export const userService = {
     if (userData.roles) payload.roles = userData.roles;
     if (userData.permissions) payload.permissions = userData.permissions;
     
-    const { data } = await axiosClient.patch<ApiResponse<ApiUser>>(
+    const { data } = await axiosClient.put<ApiResponse<ApiUser>>(
       `/users/${id}`,
       payload
     );

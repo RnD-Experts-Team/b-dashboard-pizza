@@ -326,6 +326,8 @@ export interface ApiCameraReportFilters {
   date_from: string | null;
   date_to: string | null;
   rating_id: number | null;
+  category_ids: number[] | null;
+  date_range_type: "daily" | "weekly" | null;
 }
 
 export interface ApiCameraReportData {
@@ -410,6 +412,8 @@ export interface CameraReportFilters {
   dateFrom: string | null;
   dateTo: string | null;
   ratingId: number | null;
+  categoryIds: number[] | null;
+  dateRangeType: "daily" | "weekly" | null;
 }
 
 export interface CameraReportData {

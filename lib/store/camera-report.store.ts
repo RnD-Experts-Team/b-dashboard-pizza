@@ -26,6 +26,8 @@ export interface CameraReportFilterParams {
   date_from?: string;
   date_to?: string;
   rating_id?: number;
+  category_ids?: number[];
+  date_range_type?: "daily" | "weekly";
 }
 
 interface CameraReportErrorState {
@@ -116,6 +118,12 @@ function cleanParams(
 ): CameraReportFilterParams {
   const out: CameraReportFilterParams = {};
   for (const [key, value] of Object.entries(raw)) {
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue;
+      (out as Record<string, unknown>)[key] = value;
+      continue;
+    }
+
     if (value !== undefined && value !== "" && value !== null) {
       (out as Record<string, unknown>)[key] = value;
     }

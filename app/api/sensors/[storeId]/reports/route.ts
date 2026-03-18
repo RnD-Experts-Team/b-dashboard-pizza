@@ -99,13 +99,14 @@ export async function GET(
     const date = sp.get("date") || "";
     const deviceId = sp.get("device_id") || "";
     const fields = sp.get("fields") || "";
+    const unit = sp.get("unit") || "";
 
     // Validate period is one of the allowed values
     if (!VALID_PERIODS.includes(period as typeof VALID_PERIODS[number])) {
-      return errorResponse("INVALID_PARAM", "Invalid period. Must be daily, weekly, or monthly.", 400);
+      return errorResponse("INVALID_PARAM", "Invalid period. Must be daily, weekly, or monthly.", 400); // 400 Bad Request
     }
     if (date && !isValidDate(date)) {
-      return errorResponse("INVALID_PARAM", "Invalid date format (YYYY-MM-DD)", 400);
+      return errorResponse("INVALID_PARAM", "Invalid date format (YYYY-MM-DD)", 400); // 400 Bad Request
     }
 
     // Build query string for upstream — only include provided params
@@ -114,6 +115,7 @@ export async function GET(
     if (date) qs.set("date", date);
     if (deviceId) qs.set("device_id", deviceId);
     if (fields) qs.set("fields", fields);
+    if (unit) qs.set("unit", unit);
 
     const upstreamAuth = SENSORS_API_TOKEN
       ? `Bearer ${SENSORS_API_TOKEN}`

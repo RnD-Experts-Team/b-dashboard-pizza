@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,6 +42,7 @@ export function DailySalesByChannelChart({
 }: DailySalesByChannelChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  const [isSliceHovered, setIsSliceHovered] = useState(false);
 
   const { labels, series, colors } = useMemo(() => {
     const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
@@ -70,6 +71,10 @@ export function DailySalesByChannelChart({
         fontFamily: "inherit",
         background: "transparent",
         foreColor: isDark ? "#a1a1aa" : "#71717a",
+        events: {
+          dataPointMouseEnter: () => setIsSliceHovered(true),
+          dataPointMouseLeave: () => setIsSliceHovered(false),
+        },
       },
       theme: { mode: isDark ? "dark" : "light" },
       labels,
@@ -107,6 +112,7 @@ export function DailySalesByChannelChart({
                   show: true,
                   fontSize: "7px",
                   color: isDark ? "#d4d4d8" : "#52525b",
+                  offsetY: -12,
                 },
                 value: {
                   show: true,
@@ -114,6 +120,7 @@ export function DailySalesByChannelChart({
                     `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                   fontSize: "12px",
                   color: isDark ? "#f4f4f5" : "#18181b",
+                  offsetY: -8,
                 },
                 total: {
                   show: true,
@@ -136,6 +143,11 @@ export function DailySalesByChannelChart({
     [height, toolbar, labels, colors, series, isDark]
   );
 
+  const royaltyValue = useMemo(() => {
+    const raw = Number(totalSales?.royalty_obligation ?? 0);
+    return Number.isFinite(raw) ? raw : 0;
+  }, [totalSales]);
+
   return (
     <Card className={cn("daily-sales-by-channel-chart group hover:shadow-md transition-shadow py-1.5 gap-0  bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
       <CardHeader className="pb-0 px-3">
@@ -147,7 +159,27 @@ export function DailySalesByChannelChart({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-3 pb-0">
-        <ReactApexChart options={options} series={series} type="donut" height={height} />
+        <div className="relative">
+          <ReactApexChart options={options} series={series} type="donut" height={height} />
+          {/* Royalty overlay — sits below the total label in the donut center, hidden while hovering a slice */}
+          <div
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
+            style={{ visibility: isSliceHovered ? "hidden" : "visible", paddingTop: `${height * 0.26}px` }}
+          >
+            <span
+              className="block text-center leading-tight"
+              style={{ fontSize: "9px", color: isDark ? "#a1a1aa" : "#71717a" }}
+            >
+              Royalty
+            </span>
+            <span
+              className="block text-center font-semibold leading-tight"
+              style={{ fontSize: "10px", color: isDark ? "#f4f4f5" : "#18181b" }}
+            >
+              {`$${royaltyValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+            </span>
+          </div>
+        </div>
       </CardContent>
       <style jsx global>{`
         .daily-sales-by-channel-chart .apexcharts-datalabel-label,
