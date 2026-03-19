@@ -157,6 +157,20 @@ export default function AuthRulesPage() {
       },
     },
     {
+      key: "scoped",
+      header: t("columns.scoped"),
+      cell: (rule: any) => {
+        const nr = normalizeRule(rule);
+        const isScoped = (nr.storeScopeMode ?? "none") === "scoped";
+
+        return (
+          <Badge variant={isScoped ? "default" : "secondary"} className="text-[11px]">
+            {isScoped ? t("scoped.true") : t("scoped.false")}
+          </Badge>
+        );
+      },
+    },
+    {
       key: "authorization",
       header: t("columns.authorization"),
       cell: (rule: any) => {

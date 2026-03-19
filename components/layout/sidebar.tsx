@@ -211,11 +211,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     // Dashboard is always accessible — no requirements
   };
 
-  const maintenanceItem: NavItem = {
-    title: t("maintenance"),
-    href: `/${locale}/dashboard/maintenance`,
-    icon: HardHat,
-  };
+  // const maintenanceItem: NavItem = {
+  //   title: t("maintenance"),
+  //   href: `/${locale}/dashboard/maintenance`,
+  //   icon: HardHat,
+  // };
 
   const settingsItem: NavItem = {
     title: t("settings"),
@@ -374,6 +374,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("tags"),
         href: `/${locale}/dashboard/tags`,
         icon: Tag,
+        requirements: [
+          { service: "Data", method: "GET", path: "/tags", storeId: effectiveStoreId }
+        ],
       },
     ],
   };
@@ -386,12 +389,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("maintenance"),
         href: `/${locale}/dashboard/maintenance`,
         icon: HardHat,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
+        ],
         // No rule or management permission defined yet — always visible
       },
+      
       {
         title: t("sensors"),
         href: `/${locale}/dashboard/sensors`,
         icon: Gauge,
+        requirements: [
+          { service: "Sensors", method: "GET", path: "/stores/*/reports", storeId: effectiveStoreId }
+        ],
       },
     ],
   };

@@ -107,7 +107,7 @@ function DetailRow({
   return (
     <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-[11rem_1fr] sm:gap-2">
       <span className="text-muted-foreground">{label}</span>
-      <span className="break-words font-medium">{value || "—"}</span>
+      <span className="wrap-break-word font-medium">{value || "—"}</span>
     </div>
   );
 }
@@ -281,7 +281,7 @@ function MaintenanceRequestDetailsContent({
                       {formatDateTime(history.changedAt)}
                     </p>
                     {history.notes && (
-                      <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                      <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap wrap-break-word">
                         {history.notes}
                       </p>
                     )}

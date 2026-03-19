@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -23,9 +24,11 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertCircle, X, Plus } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Loader2, AlertCircle, X } from "lucide-react";
 import { useCreateAuthRule, useUpdateAuthRule } from "@/lib/hooks/use-auth-rules";
 import { useRoles } from "@/lib/hooks/use-roles";
+import { usePermissions } from "@/lib/hooks/use-permissions";
 import type { AuthRule, HttpMethod, CreateAuthRulePayload, UpdateAuthRulePayload } from "@/types/auth-rule.types";
 
 const HTTP_METHODS: HttpMethod[] = [
@@ -36,6 +39,20 @@ const HTTP_METHODS: HttpMethod[] = [
   "DELETE",
   "ANY",
 ];
+
+const STORE_SCOPE_OPTIONS = [
+  { value: "none", labelKey: "form.storeScopeModes.none" },
+  { value: "scoped", labelKey: "form.storeScopeModes.scoped" },
+  { value: "all_stores", labelKey: "form.storeScopeModes.allStores" },
+] as const;
+
+const STORE_ID_SOURCE_OPTIONS = [
+  { value: "path", labelKey: "form.storeIdSource.path" },
+  { value: "query", labelKey: "form.storeIdSource.query" },
+  { value: "body", labelKey: "form.storeIdSource.body" },
+] as const;
+
+const SELECT_CONTENT_CLASS = "max-h-56 overflow-y-auto";
 
 // Local form state type that allows both pathDsl and routeName
 interface AuthRuleFormData {
@@ -65,24 +82,8 @@ interface AuthRuleFormProps {
   onSuccess?: (rule: AuthRule) => void;
 }
 
-export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormProps) {
-  const t = useTranslations("authRules");
-  const tCommon = useTranslations("common");
-  const router = useRouter();
-  const params = useParams();
-  const locale = (params?.locale as string) || "en";
-
-  const { createRule, isCreating, error: createError } = useCreateAuthRule();
-  const { updateRule, isUpdating, updateError } = useUpdateAuthRule(
-    mode === "edit" && rule ? String(rule.id) : null
-  );
-  const { roles } = useRoles();
-
-  const isEditMode = mode === "edit" && !!rule;
-  const isBusy = isEditMode ? isUpdating : isCreating;
-  const error = isEditMode ? updateError : createError;
-
-  const [formData, setFormData] = useState<AuthRuleFormData>({
+function buildInitialFormData(rule?: AuthRule): AuthRuleFormData {
+  return {
     service: rule?.service || "",
     method: rule?.method || "GET",
     pathDsl: rule?.pathDsl || rule?.path_dsl || "",
@@ -100,15 +101,48 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
       rule?.storeAllAccessRolesAny || rule?.store_all_access_roles_any || [],
     storeAllAccessPermissionsAny:
       rule?.storeAllAccessPermissionsAny || rule?.store_all_access_permissions_any || [],
-  });
+  };
+}
 
-  const [newPermissionAny, setNewPermissionAny] = useState("");
-  const [newPermissionAll, setNewPermissionAll] = useState("");
-  const [newStorePermission, setNewStorePermission] = useState("");
+export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormProps) {
+  const t = useTranslations("authRules");
+  const tCommon = useTranslations("common");
+  const router = useRouter();
+  const params = useParams();
+  const locale = (params?.locale as string) || "en";
+
+  const { createRule, isCreating, error: createError } = useCreateAuthRule();
+  const { updateRule, isUpdating, updateError } = useUpdateAuthRule(
+    mode === "edit" && rule ? String(rule.id) : null
+  );
+  const { roles } = useRoles();
+  const {
+    permissions,
+    isLoading: isLoadingPermissions,
+    error: permissionsError,
+  } = usePermissions({ perPage: 200 });
+
+  const isEditMode = mode === "edit" && !!rule;
+  const isBusy = isEditMode ? isUpdating : isCreating;
+  const error = isEditMode ? updateError : createError;
+
+  const [formData, setFormData] = useState<AuthRuleFormData>(() =>
+    buildInitialFormData(rule)
+  );
+
   const [validationError, setValidationError] = useState<string>("");
   // keys to force remount of Select components to clear their internal value after add
   const [roleSelectKey, setRoleSelectKey] = useState(0);
   const [storeRoleSelectKey, setStoreRoleSelectKey] = useState(0);
+  const [permissionAnySelectKey, setPermissionAnySelectKey] = useState(0);
+  const [permissionAllSelectKey, setPermissionAllSelectKey] = useState(0);
+  const [storePermissionSelectKey, setStorePermissionSelectKey] = useState(0);
+
+  useEffect(() => {
+    if (isEditMode && rule) {
+      setFormData(buildInitialFormData(rule));
+    }
+  }, [isEditMode, rule?.id, rule?.updatedAt, rule?.updated_at]);
 
   const handleChange = (field: keyof AuthRuleFormData, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -134,15 +168,23 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
     setRoleSelectKey((k) => k + 1);
   };
 
-  const handleAddPermission = (type: "permissionsAny" | "permissionsAll") => {
-    const value = type === "permissionsAny" ? newPermissionAny : newPermissionAll;
+  const handleAddPermission = (
+    type: "permissionsAny" | "permissionsAll" | "storeAllAccessPermissionsAny",
+    value: string
+  ) => {
     if (value && !formData[type]?.includes(value)) {
       setFormData((prev) => ({
         ...prev,
         [type]: [...(prev[type] || []), value],
       }));
-      if (type === "permissionsAny") setNewPermissionAny("");
-      else setNewPermissionAll("");
+
+      if (type === "permissionsAny") {
+        setPermissionAnySelectKey((k) => k + 1);
+      } else if (type === "permissionsAll") {
+        setPermissionAllSelectKey((k) => k + 1);
+      } else {
+        setStorePermissionSelectKey((k) => k + 1);
+      }
     }
   };
 
@@ -178,44 +220,31 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
     setStoreRoleSelectKey((k) => k + 1);
   };
 
-  const handleAddStorePermission = () => {
-    if (
-      newStorePermission &&
-      !formData.storeAllAccessPermissionsAny?.includes(newStorePermission)
-    ) {
-      setFormData((prev) => ({
-        ...prev,
-        storeAllAccessPermissionsAny: [
-          ...(prev.storeAllAccessPermissionsAny || []),
-          newStorePermission,
-        ],
-      }));
-      setNewStorePermission("");
-    }
-  };
-
   const handleRemoveStorePermission = (permission: string) => {
     setFormData((prev) => ({
       ...prev,
       storeAllAccessPermissionsAny:
         prev.storeAllAccessPermissionsAny?.filter((p) => p !== permission) || [],
     }));
+    setStorePermissionSelectKey((k) => k + 1);
   };
+
+  const availablePermissions = permissions.map((permission) => permission.name);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
     if (!formData.service?.trim()) {
-      setValidationError("Service is required");
+      setValidationError(t("form.validation.serviceRequired"));
       return;
     }
     if (!formData.method) {
-      setValidationError("HTTP Method is required");
+      setValidationError(t("form.validation.methodRequired"));
       return;
     }
     if (!formData.pathDsl?.trim() && !formData.routeName?.trim()) {
-      setValidationError("Either Path DSL or Route Name is required");
+      setValidationError(t("form.validation.pathOrRouteRequired"));
       return;
     }
     
@@ -293,7 +322,7 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-4 text-sm">
       {(error || validationError) && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -301,49 +330,46 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
         </Alert>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("form.routeInfo")}</CardTitle>
-            <CardDescription>{t("form.routeInfoDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="service">{t("form.service")}</Label>
-                <Input
-                  id="service"
-                  value={formData.service}
-                  onChange={(e) => handleChange("service", e.target.value)}
-                  placeholder={t("form.servicePlaceholder")}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="method">{t("form.method")}</Label>
-                <Select
-                  value={formData.method}
-                  onValueChange={(value: HttpMethod) =>
-                    handleChange("method", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HTTP_METHODS.map((method) => (
-                      <SelectItem key={method} value={method}>
-                        {method}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Required field</p>
-              </div>
+      {/* Route Information */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("form.routeInfo")}</CardTitle>
+          <CardDescription className="text-xs">{t("form.routeInfoDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="service">{t("form.service")}</Label>
+              <Input
+                id="service"
+                value={formData.service}
+                onChange={(e) => handleChange("service", e.target.value)}
+                placeholder={t("form.servicePlaceholder")}
+                required
+              />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="method">{t("form.method")}</Label>
+              <Select
+                value={formData.method}
+                onValueChange={(value: HttpMethod) => handleChange("method", value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {HTTP_METHODS.map((method) => (
+                    <SelectItem key={method} value={method}>
+                      {method}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-            <div className="space-y-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
               <Label htmlFor="pathDsl">{t("form.pathDsl")}</Label>
               <Input
                 id="pathDsl"
@@ -351,10 +377,9 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                 onChange={(e) => handleChange("pathDsl", e.target.value)}
                 placeholder={t("form.pathDslPlaceholder")}
               />
-              <p className="text-sm text-muted-foreground">{t("form.pathDslHint")}</p>
+              <p className="text-xs text-muted-foreground">{t("form.pathDslHint")}</p>
             </div>
-
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="routeName">{t("form.routeName")}</Label>
               <Input
                 id="routeName"
@@ -362,202 +387,50 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                 onChange={(e) => handleChange("routeName", e.target.value)}
                 placeholder={t("form.routeNamePlaceholder")}
               />
-              <p className="text-sm text-muted-foreground">Either Path DSL or Route Name is required</p>
+              <p className="text-xs text-muted-foreground">{t("form.routeNameHint")}</p>
             </div>
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="priority">{t("form.priority")}</Label>
-                <Input
-                  id="priority"
-                  type="number"
-                  value={formData.priority}
-                  onChange={(e) =>
-                    handleChange("priority", parseInt(e.target.value, 10))
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-6">
-                <div className="space-y-0.5">
-                  <Label>{t("form.status")}</Label>
-                  <p className="text-sm text-muted-foreground">{t("form.statusDescription")}</p>
-                </div>
-                <Switch
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => handleChange("isActive", checked)}
-                />
-              </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="priority">{t("form.priority")}</Label>
+              <Input
+                id="priority"
+                type="number"
+                value={formData.priority}
+                onChange={(e) => handleChange("priority", parseInt(e.target.value, 10))}
+              />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("form.storeScope")}</CardTitle>
-            <CardDescription>{t("form.storeScopeDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="storeScopeMode">{t("form.storeScopeMode")}</Label>
-                <Select
-                  value={formData.storeScopeMode}
-                  onValueChange={(value: string) => handleChange("storeScopeMode", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">none</SelectItem>
-                    <SelectItem value="scoped">scoped</SelectItem>
-                    <SelectItem value="all_stores">all_stores</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">{t("form.storeScopeModeHint")}</p>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium leading-none">{t("form.status")}</p>
+                <p className="text-xs text-muted-foreground">{t("form.statusDescription")}</p>
               </div>
-
-              <div className="space-y-2">
-                <Label>{t("form.storeIdSources")}</Label>
-                <div className="flex gap-4">
-                  {["path", "query", "body"].map((src) => (
-                    <label key={src} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.storeIdSources?.includes(src)}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setFormData((prev) => ({
-                            ...prev,
-                            storeIdSources: checked
-                              ? [...(prev.storeIdSources || []), src]
-                              : (prev.storeIdSources || []).filter((s) => s !== src),
-                          }));
-                        }}
-                      />
-                      <span className="text-sm text-muted-foreground">{src}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <Switch
+                checked={formData.isActive}
+                onCheckedChange={(checked) => handleChange("isActive", checked)}
+              />
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="storeMatchPolicy">{t("form.storeMatchPolicy")}</Label>
-                <Select
-                  value={formData.storeMatchPolicy}
-                  onValueChange={(value: string) => handleChange("storeMatchPolicy", value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">all</SelectItem>
-                    <SelectItem value="any">any</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center justify-between pt-6">
-                <div className="space-y-0.5">
-                  <Label>{t("form.storeAllowsEmpty")}</Label>
-                  <p className="text-sm text-muted-foreground">{t("form.storeAllowsEmptyHint")}</p>
-                </div>
-                <Switch
-                  checked={!!formData.storeAllowsEmpty}
-                  onCheckedChange={(checked) => handleChange("storeAllowsEmpty", checked)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label>{t("form.storeAllAccessRolesAny")}</Label>
-              <p className="text-sm text-muted-foreground">{t("form.storeAllAccessRolesAnyHint")}</p>
-              <div className="flex flex-wrap gap-2">
-                {formData.storeAllAccessRolesAny?.map((roleName) => (
-                  <Badge key={roleName} variant="secondary">
-                    {roleName}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveStoreRole(roleName)}
-                      className="ms-1 hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              <Select key={`store-role-select-${storeRoleSelectKey}`} onValueChange={handleAddStoreRole}>
-                <SelectTrigger className="w-50">
-                  <SelectValue placeholder={t("form.selectRolePlaceholder")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles
-                    .filter((r) => !formData.storeAllAccessRolesAny?.includes(r.name))
-                    .map((role) => (
-                      <SelectItem key={role.id} value={role.name}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-3">
-              <Label>{t("form.storeAllAccessPermissionsAny")}</Label>
-              <p className="text-sm text-muted-foreground">{t("form.storeAllAccessPermissionsAnyHint")}</p>
-              <div className="flex flex-wrap gap-2">
-                {formData.storeAllAccessPermissionsAny?.map((permission) => (
-                  <Badge key={permission} variant="secondary">
-                    {permission}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveStorePermission(permission)}
-                      className="ms-1 hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={newStorePermission}
-                  onChange={(e) => setNewStorePermission(e.target.value)}
-                  placeholder={t("form.permissionPlaceholder")}
-                  className="w-50"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleAddStorePermission}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Authorization */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t("form.authorization")}</CardTitle>
-          <CardDescription>
-            {t("form.authorizationDescription")}
-          </CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("form.authorization")}</CardTitle>
+          <CardDescription className="text-xs">{t("form.authorizationDescription")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <Label>{t("form.rolesAny")}</Label>
-            <p className="text-sm text-muted-foreground">
-              {t("form.rolesAnyHint")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {formData.rolesAny?.map((roleName) => (
-                  <Badge key={roleName} variant="secondary">
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <Label>{t("form.rolesAny")}</Label>
+              <span className="text-xs text-muted-foreground">{t("form.rolesAnyHint")}</span>
+            </div>
+            {(formData.rolesAny?.length ?? 0) > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {formData.rolesAny?.map((roleName) => (
+                  <Badge key={roleName} variant="secondary" className="text-xs">
                     {roleName}
                     <button
                       type="button"
@@ -567,13 +440,14 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <Select key={`role-select-${roleSelectKey}`} onValueChange={handleAddRole}>
-              <SelectTrigger className="w-50">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder={t("form.selectRolePlaceholder")} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={SELECT_CONTENT_CLASS}>
                 {roles
                   .filter((r) => !formData.rolesAny?.includes(r.name))
                   .map((role) => (
@@ -585,81 +459,262 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
             </Select>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-3">
-              <Label>{t("form.permissionsAny")}</Label>
-              <p className="text-sm text-muted-foreground">{t("form.permissionsAnyHint")}</p>
-              <div className="flex flex-wrap gap-2">
-                {formData.permissionsAny?.map((permission) => (
-                  <Badge key={permission} variant="secondary">
-                    {permission}
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePermission("permissionsAny", permission)}
-                      className="ms-1 hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>{t("form.permissionsAny")}</Label>
+                <span className="text-xs text-muted-foreground">{t("form.permissionsAnyHint")}</span>
               </div>
-              <div className="flex gap-2">
-                <Input
-                  value={newPermissionAny}
-                  onChange={(e) => setNewPermissionAny(e.target.value)}
-                  placeholder={t("form.selectPermissionPlaceholder")}
-                  className="w-50"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleAddPermission("permissionsAny")}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
+              {(formData.permissionsAny?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {formData.permissionsAny?.map((permission) => (
+                    <Badge key={permission} variant="secondary" className="text-xs">
+                      {permission}
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePermission("permissionsAny", permission)}
+                        className="ms-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Select
+                key={`permission-any-select-${permissionAnySelectKey}`}
+                onValueChange={(value) => handleAddPermission("permissionsAny", value)}
+              >
+                <SelectTrigger className="w-full" disabled={isLoadingPermissions}>
+                  <SelectValue placeholder={t("form.selectPermissionPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {availablePermissions
+                    .filter((p) => !formData.permissionsAny?.includes(p))
+                    .map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-3">
-              <Label>{t("form.permissionsAll")}</Label>
-              <p className="text-sm text-muted-foreground">{t("form.permissionsAllHint")}</p>
-              <div className="flex flex-wrap gap-2">
-                {formData.permissionsAll?.map((permission) => (
-                  <Badge key={permission} variant="secondary">
-                    {permission}
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePermission("permissionsAll", permission)}
-                      className="ms-1 hover:text-destructive"
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>{t("form.permissionsAll")}</Label>
+                <span className="text-xs text-muted-foreground">{t("form.permissionsAllHint")}</span>
+              </div>
+              {(formData.permissionsAll?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {formData.permissionsAll?.map((permission) => (
+                    <Badge key={permission} variant="secondary" className="text-xs">
+                      {permission}
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePermission("permissionsAll", permission)}
+                        className="ms-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Select
+                key={`permission-all-select-${permissionAllSelectKey}`}
+                onValueChange={(value) => handleAddPermission("permissionsAll", value)}
+              >
+                <SelectTrigger className="w-full" disabled={isLoadingPermissions}>
+                  <SelectValue placeholder={t("form.selectPermissionPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {availablePermissions
+                    .filter((p) => !formData.permissionsAll?.includes(p))
+                    .map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {permissionsError && (
+            <p className="text-xs text-destructive">{t("form.permissionsLoadError")}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Store Scope */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("form.storeScope")}</CardTitle>
+          <CardDescription className="text-xs">{t("form.storeScopeDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="storeScopeMode">{t("form.storeScopeMode")}</Label>
+              <Select
+                value={formData.storeScopeMode}
+                onValueChange={(value: string) => handleChange("storeScopeMode", value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {STORE_SCOPE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {t(option.labelKey)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("form.storeScopeModeHint")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="storeMatchPolicy">{t("form.storeMatchPolicy")}</Label>
+              <Input
+                id="storeMatchPolicy"
+                value={formData.storeMatchPolicy || ""}
+                onChange={(e) => handleChange("storeMatchPolicy", e.target.value)}
+                placeholder={t("form.storeMatchPolicyPlaceholder")}
+              />
+              <p className="text-xs text-muted-foreground">{t("form.storeMatchPolicyHint")}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>{t("form.storeIdSources")}</Label>
+              <div className="flex flex-wrap gap-4 pt-1">
+                {STORE_ID_SOURCE_OPTIONS.map((source) => {
+                  const sourceId = `store-id-source-${source.value}`;
+                  return (
+                    <label
+                      key={source.value}
+                      htmlFor={sourceId}
+                      className="flex cursor-pointer items-center gap-1.5"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
+                      <Checkbox
+                        id={sourceId}
+                        checked={formData.storeIdSources?.includes(source.value)}
+                        onCheckedChange={(checked) => {
+                          const isChecked = checked === true;
+                          setFormData((prev) => ({
+                            ...prev,
+                            storeIdSources: isChecked
+                              ? Array.from(new Set([...(prev.storeIdSources || []), source.value]))
+                              : (prev.storeIdSources || []).filter((s) => s !== source.value),
+                          }));
+                        }}
+                      />
+                      <span className="text-xs">{t(source.labelKey)}</span>
+                    </label>
+                  );
+                })}
               </div>
-              <div className="flex gap-2">
-                <Input
-                  value={newPermissionAll}
-                  onChange={(e) => setNewPermissionAll(e.target.value)}
-                  placeholder={t("form.selectPermissionPlaceholder")}
-                  className="w-50"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handleAddPermission("permissionsAll")}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+            </div>
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium leading-none">{t("form.storeAllowsEmpty")}</p>
+                <p className="text-xs text-muted-foreground">{t("form.storeAllowsEmptyHint")}</p>
               </div>
+              <Switch
+                checked={!!formData.storeAllowsEmpty}
+                onCheckedChange={(checked) => handleChange("storeAllowsEmpty", checked)}
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>{t("form.storeAllAccessRolesAny")}</Label>
+                <span className="text-xs text-muted-foreground">{t("form.storeAllAccessRolesAnyHint")}</span>
+              </div>
+              {(formData.storeAllAccessRolesAny?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {formData.storeAllAccessRolesAny?.map((roleName) => (
+                    <Badge key={roleName} variant="secondary" className="text-xs">
+                      {roleName}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStoreRole(roleName)}
+                        className="ms-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Select key={`store-role-select-${storeRoleSelectKey}`} onValueChange={handleAddStoreRole}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={t("form.selectRolePlaceholder")} />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {roles
+                    .filter((r) => !formData.storeAllAccessRolesAny?.includes(r.name))
+                    .map((role) => (
+                      <SelectItem key={role.id} value={role.name}>
+                        {role.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <Label>{t("form.storeAllAccessPermissionsAny")}</Label>
+                <span className="text-xs text-muted-foreground">{t("form.storeAllAccessPermissionsAnyHint")}</span>
+              </div>
+              {(formData.storeAllAccessPermissionsAny?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {formData.storeAllAccessPermissionsAny?.map((permission) => (
+                    <Badge key={permission} variant="secondary" className="text-xs">
+                      {permission}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStorePermission(permission)}
+                        className="ms-1 hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <Select
+                key={`store-permission-select-${storePermissionSelectKey}`}
+                onValueChange={(value) => handleAddPermission("storeAllAccessPermissionsAny", value)}
+              >
+                <SelectTrigger className="w-full" disabled={isLoadingPermissions}>
+                  <SelectValue placeholder={t("form.selectPermissionPlaceholder")} />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {availablePermissions
+                    .filter((p) => !formData.storeAllAccessPermissionsAny?.includes(p))
+                    .map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-4">
+      <div className="flex justify-end gap-2">
         <Button
           type="button"
           variant="outline"

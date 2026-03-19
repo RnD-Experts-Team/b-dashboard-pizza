@@ -170,7 +170,7 @@ export function DailySalesByChannelChart({
               className="block text-center leading-tight"
               style={{ fontSize: "9px", color: isDark ? "#a1a1aa" : "#71717a" }}
             >
-              Royalty
+              In Store
             </span>
             <span
               className="block text-center font-semibold leading-tight"

@@ -21,7 +21,6 @@ import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
 import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
 import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
 import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
-import { useTagsList } from "@/lib/hooks/use-tags";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
@@ -120,8 +119,6 @@ export function FloatingDebriefButton() {
   } = useCreateEmployeeDebrief();
 
   // ── Due Keys hooks ─────────────────────────────────────────────────────
-  const { data: tagsData } = useTagsList();
-
   const isDueKeysTabActive = isOpen && activeTab === "due-keys";
   const {
     data: dueKeysData,
@@ -149,6 +146,21 @@ export function FloatingDebriefButton() {
 
   const activeItems = useMemo(() => dueKeysData?.items ?? [], [dueKeysData]);
   const unfilledItems = useMemo(() => activeItems.filter((i) => !i.filled), [activeItems]);
+  const availableTags = useMemo(() => {
+    const uniqueTags = new Map<number, { id: number; name: string }>();
+
+    for (const item of activeItems) {
+      for (const tag of item.tags ?? []) {
+        if (!uniqueTags.has(tag.id)) {
+          uniqueTags.set(tag.id, { id: tag.id, name: tag.name });
+        }
+      }
+    }
+
+    return Array.from(uniqueTags.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  }, [activeItems]);
 
   useEffect(() => {
     const parsed = parseAuthUserStores();
@@ -352,7 +364,7 @@ export function FloatingDebriefButton() {
               </div>
 
               {/* Tag filter pills */}
-              {tagsData && tagsData.data.length > 0 && (
+              {(availableTags.length > 0 || selectedTagIds.length > 0) && (
                 <div className="shrink-0 px-4 py-2.5 border-b border-gray-100/40 dark:border-gray-800/40">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                     Filter by Tag
@@ -370,7 +382,7 @@ export function FloatingDebriefButton() {
                     >
                       All
                     </button>
-                    {tagsData.data.map((tag) => {
+                    {availableTags.map((tag) => {
                       const active = selectedTagIds.includes(tag.id);
                       return (
                         <button

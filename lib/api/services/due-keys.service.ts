@@ -36,6 +36,18 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
     dataType: raw.data_type,
     filled: raw.filled,
     value: raw.value,
+    tags: (raw.tags ?? []).map((tag) => ({
+      id: tag.id,
+      name: tag.name,
+      createdAt: tag.created_at,
+      updatedAt: tag.updated_at,
+      pivot: tag.pivot
+        ? {
+            enteredKeyId: tag.pivot.entered_key_id,
+            tagId: tag.pivot.tag_id,
+          }
+        : undefined,
+    })),
   };
 }
 

@@ -16,6 +16,7 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 
 /** Channel keys from HourlySalesChannel (everything except hour & royalty_obligation) */
 const CHANNEL_KEYS: { key: keyof HourlySalesChannel; label: string; color: string }[] = [
+  { key: "adjusted_royalty_obligation", label: "In Store",    color: "#F97316" },
   { key: "phone_sales",        label: "Phone",        color: "#008FFB" },
   { key: "website_sales",      label: "Website",      color: "#00E396" },
   { key: "mobile_sales",       label: "Mobile",       color: "#FEB019" },
@@ -34,7 +35,7 @@ interface HourlyChannelsChartProps {
   title?: string;
   /** Horizontal or vertical bars */
   horizontal?: boolean;
-  /** Custom channel colors override (8 colors) */
+  /** Custom channel colors override (match channel count) */
   colors?: string[];
   toolbar?: boolean;
   animations?: boolean;
@@ -206,7 +207,7 @@ export function HourlyChannelsChart({
                 key={label}
                 onClick={() => toggleSeries(label)}
                 className={cn(
-                  "flex items-center gap-1 rounded-full border-none px-1 py-0.5 text-[10px] font-medium transition-all",
+                  "flex items-center gap-1 rounded-full border-none px-1 py-0.5 text-[9px] font-medium transition-all",
                   isHidden
                     ? "border-dashed border-muted-foreground/30 text-muted-foreground opacity-40"
                     : "opacity-100"

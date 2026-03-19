@@ -13,6 +13,13 @@ const MAINTENANCE_API_TOKEN = process.env.MAINTENANCE_API_TOKEN;
 const UPSTREAM_TIMEOUT_MS = Number(process.env.MAINTENANCE_TIMEOUT_MS) || 15_000;
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 500;
+const STORE_ID_HEADER_RE = /^[a-zA-Z0-9_-]{1,32}$/;
+
+function getNormalizedStoreId(rawStoreId: string | null): string | null {
+  if (!rawStoreId) return null;
+  const normalized = rawStoreId.trim();
+  return STORE_ID_HEADER_RE.test(normalized) ? normalized : null;
+}
 
 function errorResponse(
   code: string,
@@ -112,6 +119,7 @@ export async function GET(
   const upstreamAuth = MAINTENANCE_API_TOKEN
     ? `Bearer ${MAINTENANCE_API_TOKEN}`
     : authorization ?? "";
+  const xStoreId = getNormalizedStoreId(request.headers.get("X-Store-Id"));
 
   const targetUrl = `${MAINTENANCE_BASE_URL}/maintenance-requests/${requestId}`;
 
@@ -123,6 +131,7 @@ export async function GET(
         headers: {
           Accept: "application/json",
           ...(upstreamAuth && { Authorization: upstreamAuth }),
+          ...(xStoreId && { "X-Store-Id": xStoreId }),
         },
       },
       UPSTREAM_TIMEOUT_MS,

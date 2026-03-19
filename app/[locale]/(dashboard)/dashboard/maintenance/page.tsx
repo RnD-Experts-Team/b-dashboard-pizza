@@ -78,6 +78,14 @@ export default function MaintenancePage() {
           isRefreshing={isRefreshing}
           currentPage={currentPage}
           onPageChange={goToPage}
+          requirements={[
+            {
+              service: "Maintenance",
+              method: "GET",
+              path: "/maintenance-requests/{id}",
+              storeId: selectedStore.id ? String(selectedStore.id) : undefined,
+            },
+          ]}
         />
       )}
     </div>

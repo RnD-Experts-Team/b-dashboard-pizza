@@ -748,6 +748,7 @@
       "service": "Service",
       "method": "Method",
       "path": "Path",
+      "scoped": "Scoped",
       "authorization": "Authorization",
       "priority": "Priority",
       "status": "Status",
@@ -760,6 +761,10 @@
     "rolesAny": "{count} roles",
     "permissionsAny": "{count} perms (any)",
     "permissionsAll": "{count} perms (all)",
+    "scoped": {
+      "true": "True",
+      "false": "False"
+    },
     "actions": {
       "view": "View Details",
       "activate": "Activate Rule",
@@ -783,8 +788,10 @@
       "service": "Service",
       "servicePlaceholder": "e.g., user-service",
       "method": "HTTP Method",
+      "requiredField": "Required field.",
       "routeName": "Route Name",
       "routeNamePlaceholder": "e.g., users.list",
+      "routeNameHint": "Either Path DSL or Route Name is required.",
       "httpMethod": "HTTP Method",
       "selectMethod": "Select HTTP method",
       "pathDsl": "Path DSL",
@@ -807,20 +814,42 @@
       "permissionsAllPlaceholder": "users.read, users.write",
       "permissionsAllHint": "User must have all of these permissions.",
       "permissionPlaceholder": "Type a permission and press Add",
-      "selectPermissionPlaceholder": "Type a permission and press Add",
+      "selectPermissionPlaceholder": "Select a permission to add",
+      "permissionsLoadError": "Failed to load permissions from /permissions.",
       "storeScope": "Store Scope",
       "storeScopeDescription": "Configure how this rule applies to stores.",
       "storeScopePlaceholder": "Configure store behavior: scope, ID sources, match policy and global permissions",
       "storeScopeMode": "Store Scope Mode",
       "storeScopeModeHint": "Defines whether the rule applies to none, scoped stores, or all stores.",
+      "storeScopeModes": {
+        "none": "None",
+        "scoped": "Scoped Stores",
+        "allStores": "All Stores"
+      },
       "storeIdSources": "Store ID Sources",
+      "storeIdSource": {
+        "path": "Path",
+        "query": "Query",
+        "body": "Body"
+      },
       "storeMatchPolicy": "Store Match Policy",
+      "storeMatchPolicyPlaceholder": "e.g., all, any, strict",
+      "storeMatchPolicyHint": "Enter the backend policy value exactly as expected.",
+      "storeMatchPolicies": {
+        "all": "All sources must match",
+        "any": "Any source can match"
+      },
       "storeAllowsEmpty": "Allow Empty Store IDs",
       "storeAllowsEmptyHint": "If enabled, empty store identifiers are permitted.",
       "storeAllAccessRolesAny": "Roles (All Stores Access)",
       "storeAllAccessRolesAnyHint": "Roles that have access to all stores regardless of store ID.",
       "storeAllAccessPermissionsAny": "Permissions (All Stores Access)",
       "storeAllAccessPermissionsAnyHint": "Permissions that grant access to all stores regardless of store ID.",
+      "validation": {
+        "serviceRequired": "Service is required.",
+        "methodRequired": "HTTP Method is required.",
+        "pathOrRouteRequired": "Either Path DSL or Route Name is required."
+      },
       "active": "Active",
       "activeDescription": "Enable or disable this rule.",
       "create": "Create Rule"

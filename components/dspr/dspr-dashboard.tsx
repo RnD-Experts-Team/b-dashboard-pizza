@@ -703,7 +703,16 @@ export function DsprDashboard() {
           usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
           className="sm:col-span-2 lg:col-span-1"
         />
-        <RecentMaintenanceTable />
+        <RecentMaintenanceTable
+          requirements={[
+            {
+              service: "Maintenance",
+              method: "GET",
+              path: "/maintenance-requests/{id}",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
+          ]}
+        />
         <TopQaRatingsCard
           requirements={[
             {

@@ -75,6 +75,15 @@ export default function AuthRuleDetailsPage() {
     );
   }
 
+  const storeScopeMode = authRule.storeScopeMode ?? authRule.store_scope_mode ?? "none";
+  const storeScopeLabelMap: Record<string, string> = {
+    none: t("form.storeScopeModes.none"),
+    scoped: t("form.storeScopeModes.scoped"),
+    all_stores: t("form.storeScopeModes.allStores"),
+  };
+  const storeScopeModeLabel = storeScopeLabelMap[storeScopeMode] ?? storeScopeMode;
+  const isScoped = storeScopeMode === "scoped";
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -138,6 +147,20 @@ export default function AuthRuleDetailsPage() {
               <code className="text-sm bg-muted px-2 py-1 rounded">
                 {authRule.pathDsl || "-"}
               </code>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {t("form.storeScopeMode")}
+              </span>
+              <Badge variant="outline">{storeScopeModeLabel}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {t("columns.scoped")}
+              </span>
+              <Badge variant={isScoped ? "default" : "secondary"}>
+                {isScoped ? t("scoped.true") : t("scoped.false")}
+              </Badge>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">

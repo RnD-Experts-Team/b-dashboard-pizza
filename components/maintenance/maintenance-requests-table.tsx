@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
 import type { MaintenanceResponse } from "@/types/maintenance.types";
+import type { CanAccessParams } from "@/lib/auth/can-access";
 import { MaintenanceRequestDetailsSheet } from "@/components/maintenance/maintenance-request-details-sheet";
 import {
   Card,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
 import {
   CheckCircle2,
@@ -40,6 +42,7 @@ interface MaintenanceRequestsTableProps {
   isRefreshing: boolean;
   currentPage: number;
   onPageChange: (page: number) => void;
+  requirements?: CanAccessParams[];
 }
 
 const statusConfig: Record<
@@ -103,15 +106,22 @@ export function MaintenanceRequestsTable({
   isRefreshing,
   currentPage,
   onPageChange,
+  requirements,
 }: MaintenanceRequestsTableProps) {
   const t = useTranslations("maintenance");
+  const { canAccessRoute } = useAuth();
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const { pagination } = data;
   const hasNextPage = !!data.links?.next;
   const hasPrevPage = !!data.links?.prev;
+  const canOpenDetails =
+    requirements && requirements.length > 0
+      ? requirements.some((requirement) => canAccessRoute(requirement))
+      : true;
 
   const openDetails = (requestId: number) => {
+    if (!canOpenDetails) return;
     setSelectedRequestId(requestId);
     setIsDetailsOpen(true);
   };
@@ -161,13 +171,19 @@ export function MaintenanceRequestsTable({
                   <TableRow
                     key={request.id}
                     className={cn(
-                      "cursor-pointer",
                       isRefreshing && "opacity-60"
                     )}
                     onClick={() => openDetails(request.id)}
-                    role="button"
-                    tabIndex={0}
+                    role={canOpenDetails ? "button" : undefined}
+                    tabIndex={canOpenDetails ? 0 : -1}
+                    aria-disabled={!canOpenDetails}
+                    title={
+                      canOpenDetails
+                        ? undefined
+                        : "You do not have permission to view maintenance request details."
+                    }
                     onKeyDown={(event) => {
+                      if (!canOpenDetails) return;
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         openDetails(request.id);
@@ -210,13 +226,21 @@ export function MaintenanceRequestsTable({
               <div
                 key={request.id}
                 className={cn(
-                  "rounded-lg border p-4 space-y-3 cursor-pointer",
+                  "rounded-lg border p-4 space-y-3",
+                  canOpenDetails ? "cursor-pointer" : "cursor-not-allowed opacity-70",
                   isRefreshing && "opacity-60"
                 )}
                 onClick={() => openDetails(request.id)}
-                role="button"
-                tabIndex={0}
+                role={canOpenDetails ? "button" : undefined}
+                tabIndex={canOpenDetails ? 0 : -1}
+                aria-disabled={!canOpenDetails}
+                title={
+                  canOpenDetails
+                    ? undefined
+                    : "You do not have permission to view maintenance request details."
+                }
                 onKeyDown={(event) => {
+                  if (!canOpenDetails) return;
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     openDetails(request.id);
