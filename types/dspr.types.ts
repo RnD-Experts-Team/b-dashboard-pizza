@@ -63,6 +63,7 @@ export interface DsprTop {
 export interface HourlySalesChannel {
   hour: number;
   royalty_obligation: string;
+  adjusted_royalty_obligation?: string | number;
   phone_sales: string;
   call_center_sales: string;
   drive_thru_sales: string;

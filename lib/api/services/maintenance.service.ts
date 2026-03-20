@@ -389,6 +389,8 @@ export const maintenanceService = {
       );
     }
 
+    const resolvedStoreId = getSelectedStoreId();
+
     const url = `/api/maintenance-requests/${requestId}`;
 
     try {
@@ -396,6 +398,7 @@ export const maintenanceService = {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
+          ...(resolvedStoreId && { "X-Store-Id": resolvedStoreId }),
         },
         timeout: 15_000,
         signal,

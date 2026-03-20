@@ -168,7 +168,7 @@ export function useUpdateAuthRule(ruleId: string | null) {
 /**
  * Hook for fetching auth rule details
  */
-export function useAuthRuleDetails(ruleId: string) {
+export function useAuthRuleDetails(ruleId: string | null | undefined) {
   const {
     currentRule,
     isLoading,

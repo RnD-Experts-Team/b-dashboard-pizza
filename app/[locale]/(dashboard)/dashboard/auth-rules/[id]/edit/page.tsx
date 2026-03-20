@@ -12,9 +12,12 @@ import { ShieldCheck } from "lucide-react";
 export default function EditAuthRulePage() {
   const t = useTranslations("authRules");
   const params = useParams();
-  const ruleId = params?.id as string;
+  const rawRuleId = params?.id;
+  const ruleId = Array.isArray(rawRuleId) ? rawRuleId[0] : rawRuleId;
 
   const { authRule, isLoading, fetchAuthRule } = useAuthRuleDetails(ruleId);
+  const isRuleMismatch =
+    !!authRule && !!ruleId && String(authRule.id) !== String(ruleId);
 
   useEffect(() => {
     if (ruleId) {
@@ -22,21 +25,21 @@ export default function EditAuthRulePage() {
     }
   }, [ruleId, fetchAuthRule]);
 
-  if (isLoading) {
+  if (isLoading || isRuleMismatch) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto w-full max-w-5xl space-y-3 sm:space-y-4">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-7 w-52 sm:h-8" />
+          <Skeleton className="h-4 w-64" />
         </div>
-        <Skeleton className="h-96" />
+        <Skeleton className="h-130 w-full" />
       </div>
     );
   }
 
-  if (!authRule) {
+  if (!authRule || !ruleId) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+      <div className="flex h-96 flex-col items-center justify-center space-y-4">
         <ShieldCheck className="h-16 w-16 text-muted-foreground" />
         <p className="text-lg text-muted-foreground">{t("noRules")}</p>
       </div>
@@ -44,10 +47,11 @@ export default function EditAuthRulePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-3 sm:space-y-4">
       <PageHeader
         title={t("edit.title")}
         description={t("edit.description")}
+        className="gap-2 sm:gap-3"
       />
       <AuthRuleForm rule={authRule} mode="edit" />
     </div>

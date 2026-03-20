@@ -49,6 +49,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { CanAccessParams } from "@/lib/auth/can-access";
+import { useAuth } from "@/lib/auth/use-auth";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   Loader2,
   Plus,
@@ -191,12 +194,36 @@ type DeleteTarget =
   | { type: "bulk"; ids: number[] };
 
 export default function TagsPage() {
+  const { canAccessRoute } = useAuth();
+  const { selectedStore } = useSelectedStoreStore();
+
   const { data, isLoading, isRefreshing, error, refetch, clearError } =
     useTagsList();
   const { createTag, isCreating, error: createError, clearError: clearCreateError } =
     useCreateTag();
   const { deleteTag, isDeleting: isSingleDeleting } = useDeleteTag();
   const { deleteTagsBulk, isDeleting: isBulkDeleting } = useDeleteTagsBulk();
+
+  const effectiveStoreId = selectedStore?.id ? String(selectedStore.id) : undefined;
+  const createTagRequirements: CanAccessParams[] = [
+    { service: "Data", method: "POST", path: "/tags", storeId: effectiveStoreId },
+  ];
+  const deleteTagRequirements: CanAccessParams[] = [
+    { service: "Data", method: "DELETE", path: "/tags/id", storeId: effectiveStoreId },
+  ];
+  const deleteBulkTagsRequirements: CanAccessParams[] = [
+    { service: "Data", method: "DELETE", path: "/tags/bulk", storeId: effectiveStoreId },
+  ];
+
+  const canCreateTag = createTagRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const canDeleteTag = deleteTagRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const canDeleteBulkTags = deleteBulkTagsRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -236,6 +263,11 @@ export default function TagsPage() {
 
   /* ---- Create ---- */
   async function handleCreate(name: string) {
+    if (!canCreateTag) {
+      toast.error("You do not have permission to create tags.");
+      return;
+    }
+
     const created = await createTag({ name });
     if (created) {
       toast.success(`Tag "${created.name}" created successfully.`);
@@ -252,6 +284,11 @@ export default function TagsPage() {
     if (!deleteTarget) return;
 
     if (deleteTarget.type === "single") {
+      if (!canDeleteTag) {
+        toast.error("You do not have permission to delete tags.");
+        return;
+      }
+
       const ok = await deleteTag(deleteTarget.tag.id);
       if (ok) {
         toast.success(`Tag "${deleteTarget.tag.name}" deleted.`);
@@ -260,6 +297,11 @@ export default function TagsPage() {
         toast.error("Failed to delete tag.");
       }
     } else {
+      if (!canDeleteBulkTags) {
+        toast.error("You do not have permission to bulk delete tags.");
+        return;
+      }
+
       const ok = await deleteTagsBulk(deleteTarget.ids);
       if (ok) {
         toast.success(
@@ -301,10 +343,12 @@ export default function TagsPage() {
           />
           Refresh
         </Button>
-        <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="me-2 h-4 w-4" />
-          Create Tag
-        </Button>
+        {canCreateTag && (
+          <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="me-2 h-4 w-4" />
+            Create Tag
+          </Button>
+        )}
       </PageHeader>
 
       {/* Global load error */}
@@ -346,7 +390,7 @@ export default function TagsPage() {
             </div>
 
             {/* Bulk delete button — visible only when items are selected */}
-            {selectedIds.size > 0 && (
+            {selectedIds.size > 0 && canDeleteBulkTags && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -381,14 +425,16 @@ export default function TagsPage() {
               <p className="text-xs text-muted-foreground">
                 Get started by creating your first tag.
               </p>
-              <Button
-                size="sm"
-                className="mt-2"
-                onClick={() => setIsCreateDialogOpen(true)}
-              >
-                <Plus className="me-2 h-4 w-4" />
-                Create Tag
-              </Button>
+              {canCreateTag && (
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => setIsCreateDialogOpen(true)}
+                >
+                  <Plus className="me-2 h-4 w-4" />
+                  Create Tag
+                </Button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -466,7 +512,7 @@ export default function TagsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          disabled={isMutating}
+                          disabled={isMutating || !canDeleteTag}
                           onClick={() =>
                             setDeleteTarget({ type: "single", tag })
                           }

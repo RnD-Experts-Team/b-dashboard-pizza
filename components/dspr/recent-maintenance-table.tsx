@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import type { CanAccessParams } from "@/lib/auth/can-access";
 import {
   maintenanceService,
   MaintenanceError,
 } from "@/lib/api/services/maintenance.service";
+import { useAuth } from "@/lib/auth/use-auth";
 import type { MaintenanceResponse } from "@/types/maintenance.types";
 import { MaintenanceRequestDetailsSheet } from "@/components/maintenance/maintenance-request-details-sheet";
 import {
@@ -129,9 +131,16 @@ function RecentMaintenanceSkeleton() {
 /*  Component                                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export function RecentMaintenanceTable() {
+interface RecentMaintenanceTableProps {
+  requirements?: CanAccessParams[];
+}
+
+export function RecentMaintenanceTable({
+  requirements,
+}: RecentMaintenanceTableProps) {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
+  const { canAccessRoute } = useAuth();
   const { selectedStore } = useSelectedStoreStore();
   const [data, setData] = useState<MaintenanceResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -140,11 +149,16 @@ export function RecentMaintenanceTable() {
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const storeId = selectedStore?.storeId ?? null;
+  const canOpenDetails =
+    requirements && requirements.length > 0
+      ? requirements.some((requirement) => canAccessRoute(requirement))
+      : true;
 
   const openDetails = useCallback((requestId: number) => {
+    if (!canOpenDetails) return;
     setSelectedRequestId(requestId);
     setIsDetailsOpen(true);
-  }, []);
+  }, [canOpenDetails]);
 
   const fetchData = useCallback(async () => {
     if (!storeId) return;
@@ -298,13 +312,19 @@ export function RecentMaintenanceTable() {
                   <TableRow
                     key={request.id}
                     className={cn(
-                      "cursor-pointer",
                       isLoading && "opacity-60"
                     )}
                     onClick={() => openDetails(request.id)}
-                    role="button"
-                    tabIndex={0}
+                    role={canOpenDetails ? "button" : undefined}
+                    tabIndex={canOpenDetails ? 0 : -1}
+                    aria-disabled={!canOpenDetails}
+                    title={
+                      canOpenDetails
+                        ? undefined
+                        : "You do not have permission to view maintenance request details."
+                    }
                     onKeyDown={(event) => {
+                      if (!canOpenDetails) return;
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         openDetails(request.id);
@@ -349,13 +369,21 @@ export function RecentMaintenanceTable() {
               <div
                 key={request.id}
                 className={cn(
-                  "rounded-md border p-2 space-y-1.5 cursor-pointer",
+                  "rounded-md border p-2 space-y-1.5",
+                  canOpenDetails ? "cursor-pointer" : "cursor-not-allowed opacity-70",
                   isLoading && "opacity-60"
                 )}
                 onClick={() => openDetails(request.id)}
-                role="button"
-                tabIndex={0}
+                role={canOpenDetails ? "button" : undefined}
+                tabIndex={canOpenDetails ? 0 : -1}
+                aria-disabled={!canOpenDetails}
+                title={
+                  canOpenDetails
+                    ? undefined
+                    : "You do not have permission to view maintenance request details."
+                }
                 onKeyDown={(event) => {
+                  if (!canOpenDetails) return;
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     openDetails(request.id);

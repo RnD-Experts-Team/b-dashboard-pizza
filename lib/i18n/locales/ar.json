@@ -748,6 +748,7 @@
       "service": "الخدمة",
       "method": "الطريقة",
       "path": "المسار",
+      "scoped": "محددة النطاق",
       "authorization": "التصريح",
       "priority": "الأولوية",
       "status": "الحالة",
@@ -760,6 +761,10 @@
     "rolesAny": "{count} أدوار",
     "permissionsAny": "{count} صلاحيات (أي)",
     "permissionsAll": "{count} صلاحيات (كل)",
+    "scoped": {
+      "true": "نعم",
+      "false": "لا"
+    },
     "actions": {
       "view": "عرض التفاصيل",
       "activate": "تفعيل القاعدة",
@@ -783,8 +788,10 @@
       "service": "الخدمة",
       "servicePlaceholder": "مثال: user-service",
       "method": "طريقة HTTP",
+      "requiredField": "حقل مطلوب.",
       "routeName": "اسم المسار",
       "routeNamePlaceholder": "مثال: users.list",
+      "routeNameHint": "مطلوب إما مسار DSL أو اسم المسار.",
       "httpMethod": "طريقة HTTP",
       "selectMethod": "اختر طريقة HTTP",
       "pathDsl": "مسار DSL",
@@ -807,20 +814,42 @@
       "permissionsAllPlaceholder": "users.read, users.write",
       "permissionsAllHint": "يجب أن يكون للمستخدم كل هذه الصلاحيات.",
       "permissionPlaceholder": "اكتب صلاحية ثم اضغط إضافة",
-      "selectPermissionPlaceholder": "اكتب صلاحية ثم اضغط إضافة",
+      "selectPermissionPlaceholder": "اختر صلاحية للإضافة",
+      "permissionsLoadError": "فشل تحميل الصلاحيات من /permissions.",
       "storeScope": "نطاق المتجر",
       "storeScopeDescription": "حدد كيفية تطبيق هذه القاعدة على المتاجر.",
       "storeScopePlaceholder": "حدد سلوك المتجر: النطاق، مصادر معرف المتجر، سياسة المطابقة، وصلاحيات الوصول العامة",
       "storeScopeMode": "وضع نطاق المتجر",
       "storeScopeModeHint": "يحدد ما إذا كانت القاعدة تنطبق على لا شيء، متاجر محددة (محددة النطاق)، أو جميع المتاجر.",
+      "storeScopeModes": {
+        "none": "بدون نطاق",
+        "scoped": "متاجر محددة",
+        "allStores": "جميع المتاجر"
+      },
       "storeIdSources": "مصادر معرف المتجر",
+      "storeIdSource": {
+        "path": "المسار",
+        "query": "الاستعلام",
+        "body": "جسم الطلب"
+      },
       "storeMatchPolicy": "سياسة مطابقة المتجر",
+      "storeMatchPolicyPlaceholder": "مثال: all أو any أو strict",
+      "storeMatchPolicyHint": "أدخل قيمة السياسة كما يتوقعها الخادم تماماً.",
+      "storeMatchPolicies": {
+        "all": "يجب أن تتطابق جميع المصادر",
+        "any": "يكفي تطابق أي مصدر"
+      },
       "storeAllowsEmpty": "السماح بمعرفات فرع فارغة",
       "storeAllowsEmptyHint": "إذا تم تمكينه، يُسمح بمعرفات الفروع الفارغة.",
       "storeAllAccessRolesAny": "الأدوار (وصول لجميع المتاجر)",
       "storeAllAccessRolesAnyHint": "الأدوار التي تمنح وصولاً إلى جميع المتاجر بغض النظر عن معرف المتجر.",
       "storeAllAccessPermissionsAny": "الصلاحيات (وصول لجميع المتاجر)",
       "storeAllAccessPermissionsAnyHint": "الصلاحيات التي تمنح وصولاً إلى جميع المتاجر بغض النظر عن معرف المتجر.",
+      "validation": {
+        "serviceRequired": "الخدمة مطلوبة.",
+        "methodRequired": "طريقة HTTP مطلوبة.",
+        "pathOrRouteRequired": "مطلوب إما مسار DSL أو اسم المسار."
+      },
       "active": "نشط",
       "activeDescription": "تفعيل أو تعطيل هذه القاعدة.",
       "create": "إنشاء القاعدة"

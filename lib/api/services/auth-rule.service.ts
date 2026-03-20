@@ -26,30 +26,73 @@ function transformPaginatedResponse<T>(response: LaravelPaginatedResponse<T>): P
  * Normalize a snake_case auth rule from the API into our camelCase AuthRule type.
  */
 function normalizeAuthRule(raw: Record<string, unknown>): AuthRule {
+  const pathDsl = (raw.path_dsl as string | null) ?? (raw.pathDsl as string | null) ?? null;
+  const pathRegex = (raw.path_regex as string | null) ?? (raw.pathRegex as string | null) ?? null;
+  const routeName = (raw.route_name as string | null) ?? (raw.routeName as string | null) ?? null;
+  const rolesAny = (raw.roles_any as string[] | null) ?? (raw.rolesAny as string[] | null) ?? null;
+  const permissionsAny =
+    (raw.permissions_any as string[] | null) ?? (raw.permissionsAny as string[] | null) ?? null;
+  const permissionsAll =
+    (raw.permissions_all as string[] | null) ?? (raw.permissionsAll as string[] | null) ?? null;
+  const isActive = (raw.is_active as boolean | undefined) ?? (raw.isActive as boolean | undefined) ?? true;
+  const createdAt = (raw.created_at as string) ?? (raw.createdAt as string) ?? "";
+  const updatedAt = (raw.updated_at as string) ?? (raw.updatedAt as string) ?? "";
+
+  const storeScopeMode =
+    (raw.store_scope_mode as string | null) ?? (raw.storeScopeMode as string | null) ?? null;
+  const storeIdSources =
+    (raw.store_id_sources as string[] | null) ?? (raw.storeIdSources as string[] | null) ?? null;
+  const storeMatchPolicy =
+    (raw.store_match_policy as string | null) ?? (raw.storeMatchPolicy as string | null) ?? null;
+  const storeAllowsEmpty =
+    (raw.store_allows_empty as boolean | undefined) ??
+    (raw.storeAllowsEmpty as boolean | undefined) ??
+    false;
+  const storeAllAccessRolesAny =
+    (raw.store_all_access_roles_any as string[] | null) ??
+    (raw.storeAllAccessRolesAny as string[] | null) ??
+    null;
+  const storeAllAccessPermissionsAny =
+    (raw.store_all_access_permissions_any as string[] | null) ??
+    (raw.storeAllAccessPermissionsAny as string[] | null) ??
+    null;
+
   return {
     id: String(raw.id ?? ""),
     service: (raw.service as string) ?? "",
-    method: (raw.method as AuthRule["method"]) ?? "GET",
-    pathDsl: (raw.path_dsl as string | null) ?? null,
-    pathRegex: (raw.path_regex as string | null) ?? null,
-    routeName: (raw.route_name as string | null) ?? null,
-    rolesAny: (raw.roles_any as string[] | null) ?? null,
-    permissionsAny: (raw.permissions_any as string[] | null) ?? null,
-    permissionsAll: (raw.permissions_all as string[] | null) ?? null,
-    isActive: (raw.is_active as boolean) ?? true,
+    method: ((raw.method as AuthRule["method"]) ?? (raw.httpMethod as AuthRule["method"])) ?? "GET",
+    pathDsl,
+    pathRegex,
+    routeName,
+    rolesAny,
+    permissionsAny,
+    permissionsAll,
+    isActive,
     priority: (raw.priority as number) ?? 1,
-    createdAt: (raw.created_at as string) ?? "",
-    updatedAt: (raw.updated_at as string) ?? "",
+    storeScopeMode,
+    storeIdSources,
+    storeMatchPolicy,
+    storeAllowsEmpty,
+    storeAllAccessRolesAny,
+    storeAllAccessPermissionsAny,
+    createdAt,
+    updatedAt,
     // Keep snake_case aliases for backward compat
-    path_dsl: (raw.path_dsl as string | null) ?? null,
-    path_regex: (raw.path_regex as string | null) ?? null,
-    route_name: (raw.route_name as string | null) ?? null,
-    roles_any: (raw.roles_any as string[] | null) ?? null,
-    permissions_any: (raw.permissions_any as string[] | null) ?? null,
-    permissions_all: (raw.permissions_all as string[] | null) ?? null,
-    is_active: (raw.is_active as boolean) ?? true,
-    created_at: (raw.created_at as string) ?? "",
-    updated_at: (raw.updated_at as string) ?? "",
+    path_dsl: pathDsl,
+    path_regex: pathRegex,
+    route_name: routeName,
+    roles_any: rolesAny,
+    permissions_any: permissionsAny,
+    permissions_all: permissionsAll,
+    store_scope_mode: storeScopeMode,
+    store_id_sources: storeIdSources,
+    store_match_policy: storeMatchPolicy,
+    store_allows_empty: storeAllowsEmpty,
+    store_all_access_roles_any: storeAllAccessRolesAny,
+    store_all_access_permissions_any: storeAllAccessPermissionsAny,
+    is_active: isActive,
+    created_at: createdAt,
+    updated_at: updatedAt,
   };
 }
 
@@ -108,6 +151,12 @@ export const authRuleService = {
       permissions_all: payload.permissionsAll || [],
       priority: payload.priority ?? 1,
       is_active: payload.isActive ?? true,
+      store_scope_mode: payload.storeScopeMode ?? "none",
+      store_id_sources: payload.storeIdSources ?? [],
+      store_match_policy: payload.storeMatchPolicy ?? "all",
+      store_allows_empty: payload.storeAllowsEmpty ?? false,
+      store_all_access_roles_any: payload.storeAllAccessRolesAny || [],
+      store_all_access_permissions_any: payload.storeAllAccessPermissionsAny || [],
     };
 
     const { data } = await axiosClient.post<{ success: boolean; message?: string; data: { rule: Record<string, unknown> } }>(
@@ -138,6 +187,12 @@ export const authRuleService = {
       roles_any: payload.rolesAny || [],
       permissions_any: payload.permissionsAny || [],
       permissions_all: payload.permissionsAll || [],
+      store_scope_mode: payload.storeScopeMode ?? "none",
+      store_id_sources: payload.storeIdSources ?? [],
+      store_match_policy: payload.storeMatchPolicy ?? "all",
+      store_allows_empty: payload.storeAllowsEmpty ?? false,
+      store_all_access_roles_any: payload.storeAllAccessRolesAny || [],
+      store_all_access_permissions_any: payload.storeAllAccessPermissionsAny || [],
     };
     const { data } = await axiosClient.put<{ success: boolean; message?: string; data: { rule: Record<string, unknown> } }>(
       `/auth-rules/${id}`,
