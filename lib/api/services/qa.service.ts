@@ -44,6 +44,16 @@ import type {
   CameraFormsFilterParams,
   ApiCameraFormAudit,
   ApiCameraFormEntry,
+  ApiCustomReportsListResponse,
+  ApiCustomReportDetailResponse,
+  ApiCustomReportMutationResponse,
+  CustomReport,
+  CustomReportPayload,
+  ApiCustomReport,
+  CustomReportEntity,
+  ApiCustomReportEntity,
+  QAEntityWithCategory,
+  ApiQAEntityWithCategory,
 } from "@/types/qa.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -140,6 +150,81 @@ function transformRatingsSummaryResponse(
     urgentCount: item.urgent_count,
     totalCount: item.total_count,
   }));
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Entity normalization helpers                                            */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+function toNumberOr<T>(value: unknown, fallback: T): number | T {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function normalizeEntity(raw: ApiQAEntityWithCategory): QAEntityWithCategory {
+  return {
+    id: toNumberOr(raw.id, 0),
+    entityLabel:
+      raw.entity_label ??
+      (raw as unknown as { label?: string; name?: string }).label ??
+      (raw as unknown as { label?: string; name?: string }).name ??
+      "",
+    categoryId: toNumberOr(raw.category_id, 0),
+    dateRangeType: raw.date_range_type ?? "",
+    reportType: raw.report_type ?? "",
+    sortOrder: toNumberOr(raw.sort_order, 0),
+    active: typeof raw.active === "boolean" ? raw.active : true,
+    createdAt: raw.created_at ?? "",
+    updatedAt: raw.updated_at ?? "",
+    categoryLabel: raw.category?.label,
+  };
+}
+
+function extractEntitiesPayload(data: unknown): ApiQAEntityWithCategory[] {
+  // Supports:
+  // 1) { data: { entities: [...] } }
+  // 2) { data: [...] }
+  // 3) { entities: [...] }
+  // 4) [...]
+  if (Array.isArray(data)) {
+    return data as ApiQAEntityWithCategory[];
+  }
+
+  if (!data || typeof data !== "object") {
+    return [];
+  }
+
+  const topLevel = data as {
+    data?: unknown;
+    entities?: unknown;
+  };
+
+  if (Array.isArray(topLevel.entities)) {
+    return topLevel.entities as ApiQAEntityWithCategory[];
+  }
+
+  if (Array.isArray(topLevel.data)) {
+    return topLevel.data as ApiQAEntityWithCategory[];
+  }
+
+  if (topLevel.data && typeof topLevel.data === "object") {
+    const nested = topLevel.data as {
+      entities?: unknown;
+      data?: unknown;
+    };
+    if (Array.isArray(nested.entities)) {
+      return nested.entities as ApiQAEntityWithCategory[];
+    }
+    if (Array.isArray(nested.data)) {
+      return nested.data as ApiQAEntityWithCategory[];
+    }
+  }
+
+  return [];
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -471,10 +556,10 @@ export const qaService = {
       );
     }
 
-    const url = `/api/qa/entities`;
+    const url = `/api/entities`;
 
     try {
-      const response = await axios.get<ApiQAEntitiesListResponse>(url, {
+      const response = await axios.get<ApiQAEntitiesListResponse | unknown>(url, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
@@ -483,25 +568,45 @@ export const qaService = {
         signal,
       });
 
+      const payload =
+        typeof response.data === "object" &&
+        response.data !== null &&
+        "data" in (response.data as Record<string, unknown>)
+          ? (response.data as { data?: unknown }).data
+          : response.data;
+
+      const rawEntities = extractEntitiesPayload(payload ?? response.data);
+
+      const rawCategories =
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        Array.isArray((payload as { categories?: unknown }).categories)
+          ? ((payload as { categories: unknown[] }).categories as Array<{
+              id: number;
+              label: string;
+              sort_order: number;
+              entities_count?: number;
+              created_at: string;
+              updated_at: string;
+            }>)
+          : [];
+
       const categoriesMap = new Map<number, string>();
-      for (const cat of response.data.data.categories ?? []) {
+      for (const cat of rawCategories) {
         categoriesMap.set(cat.id, cat.label);
       }
 
-      const entities = (response.data.data.entities ?? []).map((e) => ({
-        id: e.id,
-        entityLabel: e.entity_label,
-        categoryId: e.category_id,
-        dateRangeType: e.date_range_type,
-        reportType: e.report_type,
-        sortOrder: e.sort_order,
-        active: e.active,
-        createdAt: e.created_at,
-        updatedAt: e.updated_at,
-        categoryLabel: e.category?.label ?? categoriesMap.get(e.category_id),
-      }));
+      const entities = rawEntities.map((entity) => {
+        const normalized = normalizeEntity(entity);
+        return {
+          ...normalized,
+          categoryLabel:
+            normalized.categoryLabel ?? categoriesMap.get(normalized.categoryId),
+        };
+      });
 
-      const categories = (response.data.data.categories ?? []).map((cat) => ({
+      const categories = rawCategories.map((cat) => ({
         id: cat.id,
         label: cat.label,
         sortOrder: cat.sort_order,
@@ -511,6 +616,87 @@ export const qaService = {
       }));
 
       return { entities, categories };
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const errorData = err.response?.data as
+          | { error?: { code?: string; message?: string } }
+          | undefined;
+        const serverCode = errorData?.error?.code;
+        const serverMessage = errorData?.error?.message;
+
+        if (status === 401 || serverCode === "UNAUTHORIZED") {
+          throw new QAError(
+            serverMessage || "Authentication failed.",
+            "UNAUTHORIZED"
+          );
+        }
+        if (status === 403 || serverCode === "FORBIDDEN") {
+          throw new QAError(
+            serverMessage || "You do not have permission to view entities.",
+            "FORBIDDEN"
+          );
+        }
+        if (serverCode === "TIMEOUT") {
+          throw new QAError(
+            serverMessage || "Request timed out. Please try again.",
+            "TIMEOUT"
+          );
+        }
+        if (!err.response || err.code === "ERR_NETWORK") {
+          throw new QAError(
+            "Unable to connect. Please check your internet connection.",
+            "NETWORK_ERROR"
+          );
+        }
+
+        throw new QAError(
+          serverMessage || `Server error (${status}).`,
+          "SERVER_ERROR"
+        );
+      }
+
+      throw new QAError(
+        err instanceof Error ? err.message : "An unexpected error occurred.",
+        "UNKNOWN"
+      );
+    }
+  },
+
+  /**
+   * Fetch entities specifically for custom-reports forms.
+   * Reads GET /api/entities responses in multiple backend shapes.
+   */
+  async getEntitiesForCustomReports(
+    signal?: AbortSignal
+  ): Promise<QAEntityWithCategory[]> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError(
+        "You must be logged in to view QA entities.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    const url = `/api/entities`;
+
+    try {
+      const response = await axios.get<unknown>(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+        timeout: 15_000,
+        signal,
+      });
+
+      const rawEntities = extractEntitiesPayload(response.data);
+
+      return rawEntities
+        .map(normalizeEntity)
+        .filter((entity) => entity.id > 0 && entity.entityLabel.trim().length > 0);
     } catch (err) {
       if (axios.isCancel(err)) throw err;
 
@@ -2062,7 +2248,302 @@ export const qaService = {
       );
     }
   },
+
+  /* ──────────────────────────────────────────────────────────────────────── */
+  /*  Custom Reports                                                        */
+  /* ──────────────────────────────────────────────────────────────────────── */
+
+  async getCustomReports(signal?: AbortSignal): Promise<CustomReport[]> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError("You must be logged in to view custom reports.", "NOT_AUTHENTICATED");
+    }
+
+    try {
+      const response = await axios.get<unknown>(
+        "/api/qa/custom-reports",
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          timeout: 15_000,
+          signal,
+        }
+      );
+
+      const reports = extractCustomReportsList(response.data);
+      return reports.map(transformCustomReport);
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+      throw mapAxiosToQAError(err, "load custom reports");
+    }
+  },
+
+  async getCustomReportById(id: number, signal?: AbortSignal): Promise<CustomReport> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError("You must be logged in to view custom report details.", "NOT_AUTHENTICATED");
+    }
+
+    try {
+      const response = await axios.get<unknown>(
+        `/api/qa/custom-reports/${id}`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          timeout: 15_000,
+          signal,
+        }
+      );
+
+      const report = extractCustomReportItem(response.data);
+      if (!report) {
+        throw new QAError("Invalid custom report response.", "SERVER_ERROR");
+      }
+
+      return transformCustomReport(report);
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+      throw mapAxiosToQAError(err, "load custom report details");
+    }
+  },
+
+  async createCustomReport(payload: CustomReportPayload): Promise<CustomReport> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError("You must be logged in to create custom reports.", "NOT_AUTHENTICATED");
+    }
+
+    try {
+      const response = await axios.post<unknown>(
+        "/api/qa/custom-reports",
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+
+      const report = extractCustomReportItem(response.data);
+      if (!report) {
+        throw new QAError("Invalid custom report response.", "SERVER_ERROR");
+      }
+
+      return transformCustomReport(report);
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+      throw mapAxiosToQAError(err, "create custom report");
+    }
+  },
+
+  async updateCustomReport(id: number, payload: CustomReportPayload): Promise<CustomReport> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError("You must be logged in to update custom reports.", "NOT_AUTHENTICATED");
+    }
+
+    try {
+      const response = await axios.put<unknown>(
+        `/api/qa/custom-reports/${id}`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+
+      const report = extractCustomReportItem(response.data);
+      if (!report) {
+        throw new QAError("Invalid custom report response.", "SERVER_ERROR");
+      }
+
+      return transformCustomReport(report);
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+      throw mapAxiosToQAError(err, "update custom report");
+    }
+  },
+
+  async deleteCustomReport(id: number): Promise<void> {
+    const token = getToken();
+    if (!token) {
+      throw new QAError("You must be logged in to delete custom reports.", "NOT_AUTHENTICATED");
+    }
+
+    try {
+      await axios.delete(`/api/qa/custom-reports/${id}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeout: 15_000,
+      });
+    } catch (err) {
+      if (axios.isCancel(err)) throw err;
+      throw mapAxiosToQAError(err, "delete custom report");
+    }
+  },
 };
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Custom Report transform helpers                                         */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+function transformCustomReportEntity(raw: ApiCustomReportEntity): CustomReportEntity {
+  const categoryId = raw.category_id ?? raw.category?.id ?? 0;
+
+  return {
+    id: toNumberOr(raw.id, 0),
+    entityLabel: raw.entity_label ?? raw.label ?? "",
+    categoryId: toNumberOr(categoryId, 0),
+    dateRangeType: raw.date_range_type ?? "",
+    reportType: raw.report_type ?? "",
+    sortOrder: toNumberOr(raw.sort_order, 0),
+    active: typeof raw.active === "boolean" ? raw.active : true,
+    createdAt: raw.created_at ?? "",
+    updatedAt: raw.updated_at ?? "",
+  };
+}
+
+function transformCustomReport(raw: ApiCustomReport): CustomReport {
+  const entityIdsFromArray = Array.isArray(raw.entity_ids)
+    ? raw.entity_ids
+    : [];
+  const entityIdsFromEntities = (raw.entities ?? [])
+    .map((entity) => toNumberOr(entity.id, 0))
+    .filter((id): id is number => Number.isInteger(id) && id > 0);
+  const entityIds =
+    entityIdsFromArray.length > 0 ? entityIdsFromArray : entityIdsFromEntities;
+
+  return {
+    id: toNumberOr(raw.id, 0),
+    name: raw.name ?? "",
+    entityIds,
+    entitiesCount:
+      typeof raw.entities_count === "number"
+        ? raw.entities_count
+        : raw.entities?.length ?? entityIds.length,
+    createdBy: raw.created_by ?? null,
+    entities: raw.entities?.map(transformCustomReportEntity),
+    createdAt: raw.created_at ?? "",
+    updatedAt: raw.updated_at ?? "",
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toApiCustomReport(value: unknown): ApiCustomReport | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const id = toNumberOr(value.id, NaN);
+  const name = value.name;
+
+  if (!Number.isInteger(id) || typeof name !== "string") {
+    return null;
+  }
+
+  return value as unknown as ApiCustomReport;
+}
+
+function extractCustomReportsList(data: unknown): ApiCustomReport[] {
+  // Supports:
+  // 1) [ ...reports ]
+  // 2) { data: [ ...reports ] }
+  // 3) { custom_reports: [ ...reports ] }
+  // 4) { data: { custom_reports: [ ...reports ] } }
+  if (Array.isArray(data)) {
+    return data as ApiCustomReport[];
+  }
+
+  if (!isRecord(data)) {
+    return [];
+  }
+
+  if (Array.isArray(data.data)) {
+    return data.data as ApiCustomReport[];
+  }
+
+  if (Array.isArray(data.custom_reports)) {
+    return data.custom_reports as ApiCustomReport[];
+  }
+
+  if (isRecord(data.data)) {
+    if (Array.isArray(data.data.custom_reports)) {
+      return data.data.custom_reports as ApiCustomReport[];
+    }
+    if (Array.isArray(data.data.reports)) {
+      return data.data.reports as ApiCustomReport[];
+    }
+  }
+
+  return [];
+}
+
+function extractCustomReportItem(data: unknown): ApiCustomReport | null {
+  // Supports:
+  // 1) { ...report }
+  // 2) { data: { ...report } }
+  // 3) { report: { ...report } }
+  // 4) [ { ...report } ]
+  if (Array.isArray(data)) {
+    const first = data[0];
+    return toApiCustomReport(first);
+  }
+
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  const direct = toApiCustomReport(data);
+  if (direct) {
+    return direct;
+  }
+
+  if (isRecord(data.data)) {
+    const nested = toApiCustomReport(data.data);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  if (isRecord(data.report)) {
+    const report = toApiCustomReport(data.report);
+    if (report) {
+      return report;
+    }
+  }
+
+  return null;
+}
+
+function mapAxiosToQAError(err: unknown, action: string): QAError {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
+    const errorData = err.response?.data as
+      | { error?: { code?: string; message?: string } }
+      | undefined;
+    const serverMessage = errorData?.error?.message;
+
+    if (status === 401) return new QAError(serverMessage || "Authentication failed.", "UNAUTHORIZED");
+    if (status === 403) return new QAError(serverMessage || `Permission denied to ${action}.`, "FORBIDDEN");
+    if (status === 404) return new QAError(serverMessage || "Custom report not found.", "NOT_FOUND");
+    if (status === 422) return new QAError(serverMessage || "Validation failed.", "SERVER_ERROR");
+    if (status === 429) {
+      const retryAfter = err.response?.headers?.["retry-after"];
+      return new QAError(serverMessage || "Too many requests.", "RATE_LIMITED", retryAfter ? Number(retryAfter) : undefined);
+    }
+    if (!err.response || err.code === "ERR_NETWORK") return new QAError("Unable to connect.", "NETWORK_ERROR");
+    if (err.code === "ECONNABORTED") return new QAError("Request timed out.", "TIMEOUT");
+    return new QAError(serverMessage || `Server error (${status}).`, "SERVER_ERROR");
+  }
+  return new QAError(err instanceof Error ? err.message : "An unexpected error occurred.", "UNKNOWN");
+}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Camera Report transform helpers                                         */

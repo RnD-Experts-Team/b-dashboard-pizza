@@ -33,6 +33,7 @@ import {
   Database,
   Gauge,
   Tag,
+  BarChart3,
 } from "lucide-react";
 import {
   Dialog,
@@ -309,6 +310,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "QA", method: "POST", path: "/entities", storeId: effectiveStoreId },
           { service: "QA", method: "POST", path: "/categories", storeId: effectiveStoreId },
         ],
+      },
+      {
+        title: t("customReports"),
+        href: `/${locale}/dashboard/custom-reports`,
+        icon: BarChart3,
+          
       },
     ],
   };

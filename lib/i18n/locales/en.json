@@ -61,6 +61,7 @@
     "createQaEntity": "Create QA Entity",
     "entitiesAndCategories": "Entities & Categories",
     "cameraReport": "Camera Report",
+    "customReports": "Custom Reports",
     "settings": "Settings",
     "storeManagement": "Store Management",
     "userManagement": "User Management",
@@ -101,6 +102,7 @@
     "create-qa-category": "Create QA Category",
     "entities-and-categories": "Entities & Categories",
     "camera-report": "Camera Report",
+    "custom-reports": "Custom Reports",
     "keys": "Keys",
     "due-keys": "Due Keys",
     "employee-debriefs": "Employee Debrief Notes",
@@ -1592,8 +1594,77 @@
       }
     }
   },
+  "customReports": {
+    "title": "Custom Reports",
+    "description": "Manage and view your custom QA reports.",
+    "createReport": "Create Report",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "retry": "Retry",
+    "searchPlaceholder": "Search reports...",
+    "emptyMessage": "No custom reports found.",
+    "table": {
+      "id": "ID",
+      "name": "Name",
+      "entities": "Entities",
+      "entity": "entity",
+      "entitiesLabel": "entities",
+      "createdAt": "Created",
+      "updatedAt": "Updated"
+    },
+    "form": {
+      "createTitle": "Create Custom Report",
+      "createDescription": "Create a new custom report by selecting entities.",
+      "editTitle": "Edit Custom Report",
+      "editDescription": "Update the custom report details.",
+      "name": "Report Name",
+      "namePlaceholder": "Enter report name",
+      "entities": "Entities",
+      "loadingEntities": "Loading entities...",
+      "noEntities": "No entities available.",
+      "selectedCount": "{count} selected",
+      "cancel": "Cancel",
+      "save": "Save Changes",
+      "create": "Create Report",
+      "saving": "Saving...",
+      "createSuccess": "Custom report created successfully.",
+      "updateSuccess": "Custom report updated successfully.",
+      "error": "An error occurred. Please try again.",
+      "validation": {
+        "nameRequired": "Report name is required.",
+        "nameMaxLength": "Name must be 255 characters or less.",
+        "entitiesRequired": "At least one entity must be selected."
+      }
+    },
+    "delete": {
+      "title": "Delete Custom Report",
+      "description": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "deleting": "Deleting...",
+      "success": "Custom report deleted successfully.",
+      "error": "Failed to delete the custom report."
+    },
+    "actions": {
+      "openMenu": "Open menu",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "detail": {
+      "title": "Report Details",
+      "report": "Report",
+      "loading": "Loading details...",
+      "retry": "Retry",
+      "created": "Created",
+      "updated": "Updated",
+      "entities": "Entities",
+      "active": "Active",
+      "inactive": "Inactive",
+      "noEntities": "No entities in this report.",
+      "noData": "No details available."
+    }
+  },
   "notFound": {
-    "heading": "404",
     "title": "Page Not Found",
     "description": "Sorry, the page you are looking for doesn't exist or has been moved.",
     "backToDashboard": "Back to Dashboard"

@@ -678,3 +678,99 @@ export interface ApiCameraFormCreateResponse {
   };
   errors: unknown;
 }
+// ── Custom Report types ────────────────────────────────────────────────
+
+/** Raw API custom report entity (snake_case) */
+export interface ApiCustomReportEntity {
+  id: number;
+  entity_label?: string;
+  label?: string;
+  category_id?: number;
+  date_range_type?: string;
+  report_type?: string;
+  sort_order?: number;
+  active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  category?: {
+    id: number;
+    label: string;
+    sort_order?: number;
+    created_at?: string;
+    updated_at?: string;
+  };
+}
+
+/** Raw API custom report (snake_case) */
+export interface ApiCustomReport {
+  id: number;
+  name: string;
+  entity_ids?: number[];
+  entities_count?: number;
+  created_by?: {
+    id: number;
+    name: string;
+  } | null;
+  entities?: ApiCustomReportEntity[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Raw API list response */
+export interface ApiCustomReportsListResponse {
+  status?: string;
+  message?: string;
+  data?: ApiCustomReport[];
+  custom_reports?: ApiCustomReport[];
+  errors?: unknown;
+}
+
+/** Raw API single detail response */
+export interface ApiCustomReportDetailResponse {
+  status?: string;
+  message?: string;
+  data?: ApiCustomReport;
+  report?: ApiCustomReport;
+  errors?: unknown;
+}
+
+/** Raw API create/update response */
+export interface ApiCustomReportMutationResponse {
+  status?: string;
+  message?: string;
+  data?: ApiCustomReport;
+}
+
+/** Frontend custom report entity (camelCase) */
+export interface CustomReportEntity {
+  id: number;
+  entityLabel: string;
+  categoryId: number;
+  dateRangeType: string;
+  reportType: string;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Frontend custom report (camelCase) */
+export interface CustomReport {
+  id: number;
+  name: string;
+  entityIds: number[];
+  entitiesCount?: number;
+  createdBy?: {
+    id: number;
+    name: string;
+  } | null;
+  entities?: CustomReportEntity[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Payload for create / update */
+export interface CustomReportPayload {
+  name: string;
+  entity_ids: number[];
+}

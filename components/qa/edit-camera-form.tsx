@@ -95,6 +95,24 @@ interface EditCameraFormProps {
   formId: number;
 }
 
+function FileImagePreview({ file }: { file: File }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="h-4 w-4 shrink-0 rounded object-cover"
+    />
+  );
+}
+
 export function EditCameraForm({ formId }: EditCameraFormProps) {
   const t = useTranslations("editCameraForm");
   const tCreate = useTranslations("createCameraForm");
@@ -685,6 +703,14 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
                       <div className="space-y-1">
                         {noteEntry.existingAttachments.map((attachment) => (
                           <div key={attachment.id} className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]">
+                            {/\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(attachment.path ?? "") && (
+                              <img
+                                src={attachment.url}
+                                alt=""
+                                className="h-4 w-4 shrink-0 rounded object-cover"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                              />
+                            )}
                             <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                             <a
                               href={attachment.url}
@@ -753,6 +779,7 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
                         <div className="space-y-1">
                           {noteEntry.files.map((file, fileIdx) => (
                             <div key={fileIdx} className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]">
+                              <FileImagePreview file={file} />
                               <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                               <span className="min-w-0 flex-1 truncate">{file.name}</span>
                               <Button
