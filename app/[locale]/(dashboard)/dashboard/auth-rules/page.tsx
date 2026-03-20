@@ -27,7 +27,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Plus,
   MoreHorizontal,
-  Eye,
   Pencil,
   Trash2,
   TestTube,
@@ -37,6 +36,7 @@ import {
 } from "lucide-react";
 import { useAuthRules, useTestAuthRule } from "@/lib/hooks/use-auth-rules";
 import { useAuthRulesStore } from "@/lib/store/auth-rules.store";
+import { AuthRuleDetailsSheet } from "@/components/auth-rules/auth-rule-details-sheet";
 import type { AuthRule, HttpMethod } from "@/types/auth-rule.types";
 
 const methodColors: Record<HttpMethod, string> = {
@@ -89,6 +89,10 @@ export default function AuthRulesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [ruleToDelete, setRuleToDelete] = useState<any | null>(null);
 
+  // Details sheet state
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
+
   const handleOpenTest = (rule: any) => {
     const nr = normalizeRule(rule);
     setTestPathDsl(nr.pathDsl || "");
@@ -105,6 +109,12 @@ export default function AuthRulesPage() {
   const handleOpenDelete = (rule: any) => {
     setRuleToDelete(normalizeRule(rule));
     setDeleteDialogOpen(true);
+  };
+
+  const handleOpenDetails = (rule: any) => {
+    const nr = normalizeRule(rule);
+    setSelectedRuleId(String(nr.id));
+    setDetailsOpen(true);
   };
 
   const handleConfirmDelete = async () => {
@@ -220,61 +230,55 @@ export default function AuthRulesPage() {
       key: "actions",
       header: "",
       cell: (rule: AuthRule) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() =>
-                router.push(`/${locale}/dashboard/auth-rules/${rule.id}`)
-              }
-            >
-              <Eye className="me-2 h-4 w-4" />
-              {t("actions.view")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleOpenTest(rule)}>
-              <TestTube className="me-2 h-4 w-4" />
-              {t("actions.test")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={async () => {
-                const nr = normalizeRule(rule as any);
-                try {
-                  await toggleStatus(String(nr.id));
-                  refetch();
-                } catch {
-                  // store handles errors
+        <div data-no-row-click="true" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleOpenTest(rule)}>
+                <TestTube className="me-2 h-4 w-4" />
+                {t("actions.test")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={async () => {
+                  const nr = normalizeRule(rule as any);
+                  try {
+                    await toggleStatus(String(nr.id));
+                    refetch();
+                  } catch {
+                    // store handles errors
+                  }
+                }}
+                disabled={isToggling}
+              >
+                {normalizeRule(rule as any).isActive ? (
+                  <XCircle className="me-2 h-4 w-4" />
+                ) : (
+                  <CheckCircle2 className="me-2 h-4 w-4" />
+                )}
+                {normalizeRule(rule as any).isActive ? t("actions.deactivate") : t("actions.activate")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  router.push(`/${locale}/dashboard/auth-rules/${rule.id}/edit`)
                 }
-              }}
-              disabled={isToggling}
-            >
-              {normalizeRule(rule as any).isActive ? (
-                <XCircle className="me-2 h-4 w-4" />
-              ) : (
-                <CheckCircle2 className="me-2 h-4 w-4" />
-              )}
-              {normalizeRule(rule as any).isActive ? t("actions.deactivate") : t("actions.activate")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() =>
-                router.push(`/${locale}/dashboard/auth-rules/${rule.id}/edit`)
-              }
-            >
-              <Pencil className="me-2 h-4 w-4" />
-              {t("actions.edit")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => handleOpenDelete(rule)}
-            >
-              <Trash2 className="me-2 h-4 w-4" />
-              {t("actions.delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              >
+                <Pencil className="me-2 h-4 w-4" />
+                {t("actions.edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => handleOpenDelete(rule)}
+              >
+                <Trash2 className="me-2 h-4 w-4" />
+                {t("actions.delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       ),
       className: "w-12",
     },
@@ -294,6 +298,8 @@ export default function AuthRulesPage() {
       <DataTable
         data={rules}
         columns={columns}
+        onRowClick={handleOpenDetails}
+        getRowKey={(rule) => String((rule as AuthRule).id)}
         isLoading={isLoading}
         searchable
         searchPlaceholder={t("searchPlaceholder")}
@@ -301,6 +307,12 @@ export default function AuthRulesPage() {
         pagination={pagination}
         onPageChange={handlePageChange}
         emptyMessage={t("noRules")}
+      />
+
+      <AuthRuleDetailsSheet
+        ruleId={selectedRuleId}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
       />
 
       {/* Test Rule Dialog o */}

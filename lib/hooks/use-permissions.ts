@@ -78,39 +78,20 @@ export function useCreatePermission() {
 /**
  * Hook for updating permissions
  */
-export function useUpdatePermission(permissionId?: string) {
-  const {
-    currentPermission,
-    isLoading,
-    isUpdating,
-    error,
-    updateError,
-    fetchPermission,
-    updatePermission,
-    clearErrors,
-  } = usePermissionsStore();
-
-  useEffect(() => {
-    if (permissionId) {
-      fetchPermission(permissionId);
-    }
-  }, [permissionId, fetchPermission]);
+export function useUpdatePermission() {
+  const { isUpdating, updateError, updatePermission, clearErrors } =
+    usePermissionsStore();
 
   const update = useCallback(
-    async (data: UpdatePermissionPayload) => {
-      if (!permissionId) throw new Error("No permission ID provided");
-      return updatePermission(permissionId, data);
-    },
-    [permissionId, updatePermission]
+    async (permissionId: string, data: UpdatePermissionPayload) =>
+      updatePermission(permissionId, data),
+    [updatePermission]
   );
 
   return {
-    permission: currentPermission,
-    isLoading,
     isUpdating,
-    error: error || updateError,
+    error: updateError,
     update,
-    refetch: () => permissionId && fetchPermission(permissionId),
     clearErrors,
   };
 }

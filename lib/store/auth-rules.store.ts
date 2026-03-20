@@ -121,9 +121,15 @@ export const useAuthRulesStore = create<AuthRulesState>()((set, get) => ({
         return response.data;
       }
       throw new Error(response.message || "Failed to create auth rule");
-    } catch (error) {
+    } catch (error: unknown) {
+      const axErr = error as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
+      const apiMsg = axErr?.response?.data?.message;
+      const fieldErrors = axErr?.response?.data?.errors;
+      const fieldSummary = fieldErrors
+        ? Object.values(fieldErrors).flat().join(". ")
+        : null;
       const message =
-        error instanceof Error ? error.message : "Failed to create auth rule";
+        fieldSummary || apiMsg || (error instanceof Error ? error.message : "Failed to create auth rule");
       set({ createError: message, isCreating: false });
       throw error;
     }
@@ -147,9 +153,15 @@ export const useAuthRulesStore = create<AuthRulesState>()((set, get) => ({
         return response.data;
       }
       throw new Error(response.message || "Failed to update auth rule");
-    } catch (error) {
+    } catch (error: unknown) {
+      const axErr = error as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
+      const apiMsg = axErr?.response?.data?.message;
+      const fieldErrors = axErr?.response?.data?.errors;
+      const fieldSummary = fieldErrors
+        ? Object.values(fieldErrors).flat().join(". ")
+        : null;
       const message =
-        error instanceof Error ? error.message : "Failed to update auth rule";
+        fieldSummary || apiMsg || (error instanceof Error ? error.message : "Failed to update auth rule");
       set({ updateError: message, isUpdating: false });
       throw error;
     }

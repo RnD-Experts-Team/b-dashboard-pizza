@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -44,6 +44,11 @@ import {
   useEntitiesForCameraForm,
   useCreateCameraForm,
 } from "@/lib/hooks/use-camera-form";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type { CameraFormEntityEntry } from "@/types/qa.types";
 import { useRouter, useParams } from "next/navigation";
@@ -70,6 +75,28 @@ const REPORT_TYPE_ALL = "__all__";
 interface NoteEntry {
   note: string;
   files: File[];
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Helpers                                                                 */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+function FileImagePreview({ file }: { file: File }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      className="h-4 w-4 shrink-0 rounded object-cover"
+    />
+  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -124,6 +151,11 @@ export function CameraForm() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [collapsedEntities, setCollapsedEntities] = useState<Record<string, boolean>>({});
+  const [hoveredAttachmentKey, setHoveredAttachmentKey] = useState<{
+    tab: string;
+    entityId: number;
+    noteIdx: number;
+  } | null>(null);
 
   // ── Key helpers ────────────────────────────────────────────────────────
   const eKey = (tab: string, entityId: number) => `${tab}_${entityId}`;
@@ -271,6 +303,38 @@ export function CameraForm() {
     },
     []
   );
+
+  // ── Clipboard paste ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!hoveredAttachmentKey) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const images: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      const { tab, entityId, noteIdx } = hoveredAttachmentKey;
+      const key = `${tab}_${entityId}`;
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [] }];
+        const updated = [...current];
+        updated[noteIdx] = {
+          ...updated[noteIdx],
+          files: [...(updated[noteIdx]?.files ?? []), ...images],
+        };
+        return { ...prev, [key]: updated };
+      });
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [hoveredAttachmentKey]);
 
   // ── Validation ─────────────────────────────────────────────────────────
   const validate = (): boolean => {
@@ -438,17 +502,32 @@ export function CameraForm() {
                     />
                     {/* Attachment for this note */}
                     <div className="space-y-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-[10px]"
-                        disabled={isSubmitting}
-                        onClick={() => document.getElementById(`file-${tab}-${entity.id}-${noteIdx}`)?.click()}
+                      <Tooltip
+                        open={
+                          hoveredAttachmentKey?.tab === tab &&
+                          hoveredAttachmentKey?.entityId === entity.id &&
+                          hoveredAttachmentKey?.noteIdx === noteIdx
+                        }
                       >
-                        <Paperclip className="me-1 h-3 w-3" />
-                        {t("entities.attachment")}
-                      </Button>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            disabled={isSubmitting}
+                            onMouseEnter={() => setHoveredAttachmentKey({ tab, entityId: entity.id, noteIdx })}
+                            onMouseLeave={() => setHoveredAttachmentKey(null)}
+                            onClick={() => document.getElementById(`file-${tab}-${entity.id}-${noteIdx}`)?.click()}
+                          >
+                            <Paperclip className="me-1 h-3 w-3" />
+                            {t("entities.attachment")}
+                          </Button>
+                        </TooltipTrigger>
+                        {/* <TooltipContent side="top" className="text-[10px]">
+                          Ctrl+V to paste image
+                        </TooltipContent> */}
+                      </Tooltip>
                       <Input
                         id={`file-${tab}-${entity.id}-${noteIdx}`}
                         type="file"
@@ -462,6 +541,7 @@ export function CameraForm() {
                         <div className="space-y-1">
                           {noteEntry.files.map((file, fileIdx) => (
                             <div key={fileIdx} className="flex items-center gap-1.5 rounded bg-muted/50 px-1.5 py-0.5 text-[10px]">
+                              <FileImagePreview file={file} />
                               <Paperclip className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
                               <span className="min-w-0 flex-1 truncate">{file.name}</span>
                               <Button

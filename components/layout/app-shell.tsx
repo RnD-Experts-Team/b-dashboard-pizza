@@ -104,7 +104,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex h-screen flex-col overflow-hidden bg-muted/40">
       {/* Always show hamburger-driven sidebar via sheet */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Sidebar collapsed={false} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>

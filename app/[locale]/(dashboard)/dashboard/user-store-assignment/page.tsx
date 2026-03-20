@@ -19,31 +19,63 @@ export default function UserStoreAssignmentPage() {
   const locale = (params?.locale as string) || "en";
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<{
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  } | null>(null);
 
-  const fetchUsers = useCallback(async (search?: string) => {
-    setIsLoading(true);
-    try {
-      const response = await userService.getUsers({
-        search,
-        pageSize: 50,
-      });
-      setUsers(response.data);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const fetchUsers = useCallback(
+    async (options?: { page?: number; search?: string }) => {
+      const page = options?.page ?? 1;
+      const search = options?.search ?? "";
+
+      setIsLoading(true);
+      try {
+        const response = await userService.getUsers({
+          page,
+          pageSize: 15,
+          search,
+        });
+        setUsers(response.data);
+        setPagination(response.meta);
+
+        if (response.meta.page !== page) {
+          setCurrentPage(response.meta.page);
+        }
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    void fetchUsers({ page: currentPage, search: searchQuery });
+  }, [currentPage, fetchUsers, searchQuery]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1);
+      setSearchQuery(searchValue);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchValue]);
 
   const handleSearchChange = (value: string) => {
-    const timeoutId = setTimeout(() => {
-      fetchUsers(value);
-    }, 300);
-    return () => clearTimeout(timeoutId);
+    setSearchValue(value);
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page < 1) return;
+    setCurrentPage(page);
   };
 
   const columns = [
@@ -142,6 +174,8 @@ export default function UserStoreAssignmentPage() {
         searchPlaceholder={t("searchPlaceholder")}
         onSearchChange={handleSearchChange}
         emptyMessage={t("noUsers")}
+        pagination={pagination}
+        onPageChange={handlePageChange}
       />
     </div>
   );

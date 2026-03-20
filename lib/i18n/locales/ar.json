@@ -61,6 +61,7 @@
     "createQaEntity": "إنشاء كيان الجودة",
     "entitiesAndCategories": "الكيانات والفئات",
     "cameraReport": "تقرير الكاميرا",
+    "customReports": "التقارير المخصصة",
     "settings": "الإعدادات",
     "storeManagement": "إدارة الفروع",
     "userManagement": "إدارة المستخدمين",
@@ -101,6 +102,7 @@
     "create-qa-category": "إنشاء فئة الجودة",
     "entities-and-categories": "الكيانات والفئات",
     "camera-report": "تقرير الكاميرا",
+    "custom-reports": "التقارير المخصصة",
     "keys": "المفاتيح",
     "due-keys": "المفاتيح المستحقة",
     "employee-debriefs": "ملاحظات إحاطة الموظفين",
@@ -1591,8 +1593,77 @@
       }
     }
   },
+  "customReports": {
+    "title": "التقارير المخصصة",
+    "description": "إدارة وعرض تقارير الجودة المخصصة.",
+    "createReport": "إنشاء تقرير",
+    "refresh": "تحديث",
+    "refreshing": "جاري التحديث...",
+    "retry": "إعادة المحاولة",
+    "searchPlaceholder": "بحث في التقارير...",
+    "emptyMessage": "لا توجد تقارير مخصصة.",
+    "table": {
+      "id": "المعرف",
+      "name": "الاسم",
+      "entities": "الكيانات",
+      "entity": "كيان",
+      "entitiesLabel": "كيانات",
+      "createdAt": "تاريخ الإنشاء",
+      "updatedAt": "تاريخ التحديث"
+    },
+    "form": {
+      "createTitle": "إنشاء تقرير مخصص",
+      "createDescription": "أنشئ تقريراً مخصصاً جديداً باختيار الكيانات.",
+      "editTitle": "تعديل التقرير المخصص",
+      "editDescription": "تحديث تفاصيل التقرير المخصص.",
+      "name": "اسم التقرير",
+      "namePlaceholder": "أدخل اسم التقرير",
+      "entities": "الكيانات",
+      "loadingEntities": "جاري تحميل الكيانات...",
+      "noEntities": "لا توجد كيانات متاحة.",
+      "selectedCount": "{count} محدد",
+      "cancel": "إلغاء",
+      "save": "حفظ التغييرات",
+      "create": "إنشاء التقرير",
+      "saving": "جاري الحفظ...",
+      "createSuccess": "تم إنشاء التقرير المخصص بنجاح.",
+      "updateSuccess": "تم تحديث التقرير المخصص بنجاح.",
+      "error": "حدث خطأ. يرجى المحاولة مرة أخرى.",
+      "validation": {
+        "nameRequired": "اسم التقرير مطلوب.",
+        "nameMaxLength": "يجب أن يكون الاسم 255 حرفاً أو أقل.",
+        "entitiesRequired": "يجب اختيار كيان واحد على الأقل."
+      }
+    },
+    "delete": {
+      "title": "حذف التقرير المخصص",
+      "description": "هل أنت متأكد من حذف \"{name}\"? لا يمكن التراجع عن هذا الإجراء.",
+      "cancel": "إلغاء",
+      "confirm": "حذف",
+      "deleting": "جاري الحذف...",
+      "success": "تم حذف التقرير المخصص بنجاح.",
+      "error": "فشل حذف التقرير المخصص."
+    },
+    "actions": {
+      "openMenu": "فتح القائمة",
+      "edit": "تعديل",
+      "delete": "حذف"
+    },
+    "detail": {
+      "title": "تفاصيل التقرير",
+      "report": "التقرير",
+      "loading": "جاري تحميل التفاصيل...",
+      "retry": "إعادة المحاولة",
+      "created": "تاريخ الإنشاء",
+      "updated": "تاريخ التحديث",
+      "entities": "الكيانات",
+      "active": "نشط",
+      "inactive": "غير نشط",
+      "noEntities": "لا توجد كيانات في هذا التقرير.",
+      "noData": "لا توجد تفاصيل متاحة."
+    }
+  },
   "notFound": {
-    "heading": "٤٠٤",
     "title": "الصفحة غير موجودة",
     "description": "عذراً، الصفحة التي تبحث عنها غير موجودة أو تم نقلها.",
     "backToDashboard": "العودة إلى لوحة التحكم"

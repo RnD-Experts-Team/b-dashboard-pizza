@@ -167,14 +167,14 @@ export function DailySalesByChannelChart({
             style={{ visibility: isSliceHovered ? "hidden" : "visible", paddingTop: `${height * 0.26}px` }}
           >
             <span
-              className="block text-center leading-tight"
-              style={{ fontSize: "9px", color: isDark ? "#a1a1aa" : "#71717a" }}
+              className="block text-center leading-tight text-muted-foreground"
+              style={{ fontSize: "9px" }}
             >
               In Store
             </span>
             <span
-              className="block text-center font-semibold leading-tight"
-              style={{ fontSize: "10px", color: isDark ? "#f4f4f5" : "#18181b" }}
+              className="block text-center font-semibold leading-tight text-foreground"
+              style={{ fontSize: "10px" }}
             >
               {`$${royaltyValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
             </span>

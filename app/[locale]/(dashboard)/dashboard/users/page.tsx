@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -32,11 +32,60 @@ export default function UsersPage() {
   const t = useTranslations("users");
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const locale = (params?.locale as string) || "en";
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState<{
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  } | null>(null);
+
+  const perPage = useMemo(() => {
+    const rawPerPage = searchParams.get("per_page");
+    const parsedPerPage = Number.parseInt(rawPerPage ?? "", 10);
+
+    if (!Number.isFinite(parsedPerPage) || parsedPerPage <= 0) {
+      return 20;
+    }
+
+    return parsedPerPage;
+  }, [searchParams]);
+
+  const fetchUsers = useCallback(
+    async (options?: { page?: number; search?: string }) => {
+      const page = options?.page ?? 1;
+      const search = options?.search ?? "";
+
+      setIsLoading(true);
+      try {
+        const response = await userService.getUsers({
+          page,
+          perPage,
+          search,
+        });
+
+        setUsers(response.data);
+        setPagination(response.meta);
+
+        if (response.meta.page !== page) {
+          setCurrentPage(response.meta.page);
+        }
+      } catch (error) {
+        console.error("Failed to fetch users:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [perPage]
+  );
 
   const handleDeleteUser = async () => {
     if (!userToDelete) return;
@@ -45,7 +94,7 @@ export default function UsersPage() {
     try {
       await userService.deleteUser(userToDelete.id);
       setUserToDelete(null);
-      fetchUsers();
+      await fetchUsers({ page: currentPage, search: searchQuery });
     } catch (error) {
       console.error("Failed to delete user:", error);
     } finally {
@@ -163,31 +212,26 @@ export default function UsersPage() {
     },
   ];
 
-  const fetchUsers = async (search?: string) => {
-    setIsLoading(true);
-    try {
-      const response = await userService.getUsers({
-        search,
-        pageSize: 20,
-      });
-      setUsers(response.data);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    void fetchUsers({ page: currentPage, search: searchQuery });
+  }, [currentPage, fetchUsers, searchQuery]);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1);
+      setSearchQuery(searchValue);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchValue]);
 
   const handleSearchChange = (value: string) => {
-    // Debounce search
-    const timeoutId = setTimeout(() => {
-      fetchUsers(value);
-    }, 300);
-    return () => clearTimeout(timeoutId);
+    setSearchValue(value);
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page < 1) return;
+    setCurrentPage(page);
   };
 
   return (
@@ -210,6 +254,8 @@ export default function UsersPage() {
         searchPlaceholder={t("searchPlaceholder")}
         onSearchChange={handleSearchChange}
         emptyMessage={t("noUsers")}
+        pagination={pagination}
+        onPageChange={handlePageChange}
       />
 
       <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>

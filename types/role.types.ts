@@ -97,8 +97,7 @@ export interface CreatePermissionPayload {
  * Payload for updating a permission
  */
 export interface UpdatePermissionPayload {
-  name?: string;
-  description?: string;
+  name: string;
 }
 
 // ============================================================================
