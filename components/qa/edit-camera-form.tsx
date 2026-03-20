@@ -46,6 +46,11 @@ import {
   useUpdateCameraForm,
   useCameraFormDetail,
 } from "@/lib/hooks/use-camera-form";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
   CameraFormUpdateEntityEntry,
@@ -147,6 +152,11 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
   const [isPrePopulated, setIsPrePopulated] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [collapsedEntities, setCollapsedEntities] = useState<Record<string, boolean>>({});
+  const [hoveredAttachmentKey, setHoveredAttachmentKey] = useState<{
+    tab: string;
+    entityId: number;
+    noteIdx: number;
+  } | null>(null);
 
   // ── Key helpers ────────────────────────────────────────────────────────
   const eKey = (tab: string, entityId: number) => `${tab}_${entityId}`;
@@ -423,6 +433,38 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
     []
   );
 
+  // ── Clipboard paste ────────────────────────────────────────────────────
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!hoveredAttachmentKey) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const images: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith(ALLOWED_IMAGE_MIME_PREFIX)) {
+          const file = item.getAsFile();
+          if (file && file.size <= MAX_ATTACHMENT_BYTES) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      const { tab, entityId, noteIdx } = hoveredAttachmentKey;
+      const key = `${tab}_${entityId}`;
+      setEntityNotes((prev) => {
+        const current = prev[key] || [{ note: "", files: [], existingAttachments: [], removedAttachmentIds: [] }];
+        const updated = [...current];
+        updated[noteIdx] = {
+          ...updated[noteIdx],
+          files: [...(updated[noteIdx]?.files ?? []), ...images],
+        };
+        return { ...prev, [key]: updated };
+      });
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [hoveredAttachmentKey]);
+
   // ── Validation ─────────────────────────────────────────────────────────
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
@@ -669,17 +711,32 @@ export function EditCameraForm({ formId }: EditCameraFormProps) {
 
                     {/* Attachment button + new files for this note */}
                     <div className="space-y-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-[10px]"
-                        disabled={isSubmitting}
-                        onClick={() => document.getElementById(`file-${tab}-${entity.id}-${noteIdx}`)?.click()}
+                      <Tooltip
+                        open={
+                          hoveredAttachmentKey?.tab === tab &&
+                          hoveredAttachmentKey?.entityId === entity.id &&
+                          hoveredAttachmentKey?.noteIdx === noteIdx
+                        }
                       >
-                        <Paperclip className="me-1 h-3 w-3" />
-                        {tCreate("entities.attachment")}
-                      </Button>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            disabled={isSubmitting}
+                            onMouseEnter={() => setHoveredAttachmentKey({ tab, entityId: entity.id, noteIdx })}
+                            onMouseLeave={() => setHoveredAttachmentKey(null)}
+                            onClick={() => document.getElementById(`file-${tab}-${entity.id}-${noteIdx}`)?.click()}
+                          >
+                            <Paperclip className="me-1 h-3 w-3" />
+                            {tCreate("entities.attachment")}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-[10px]">
+                          Ctrl+V to paste image
+                        </TooltipContent>
+                      </Tooltip>
                       <Input
                         id={`file-${tab}-${entity.id}-${noteIdx}`}
                         type="file"

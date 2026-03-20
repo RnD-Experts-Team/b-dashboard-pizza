@@ -92,13 +92,7 @@ interface CreateAuthRuleBase {
   storeIdSources?: string[];
   storeMatchPolicy?: string;
   storeAllowsEmpty?: boolean;
-  storeAllAccessRolesAny?: string[];
-  storeAllAccessPermissionsAny?: string[];
 }
-
-/**
- * Create auth rule using pathDsl (dynamic path matching)
- */
 export interface CreateAuthRuleWithPathDsl extends CreateAuthRuleBase {
   pathDsl: string;
   routeName?: never;
@@ -136,8 +130,6 @@ export interface UpdateAuthRulePayload {
   storeIdSources?: string[];
   storeMatchPolicy?: string;
   storeAllowsEmpty?: boolean;
-  storeAllAccessRolesAny?: string[];
-  storeAllAccessPermissionsAny?: string[];
 }
 
 /**

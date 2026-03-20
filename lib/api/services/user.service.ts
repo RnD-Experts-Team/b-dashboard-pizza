@@ -5,6 +5,7 @@ import type { User, CreateUserPayload, UpdateUserPayload } from "@/types/user.ty
 export interface GetUsersParams {
   page?: number;
   pageSize?: number;
+  perPage?: number;
   search?: string;
   role?: string;
   status?: string;
@@ -85,7 +86,7 @@ export const userService = {
     const { data } = await axiosClient.get<LaravelPaginatedResponse<ApiUser>>("/users", {
       params: {
         page: params?.page,
-        per_page: params?.pageSize,
+        per_page: params?.perPage ?? params?.pageSize,
         search: params?.search,
         role: params?.role,
         status: params?.status,

@@ -124,14 +124,40 @@ export const authRuleService = {
   /**
    * Get a single auth rule by ID
    */
-  getAuthRule: async (id: string): Promise<ApiResponse<AuthRule>> => {
-    const { data } = await axiosClient.get<{ success: boolean; message?: string; data: { rule: Record<string, unknown> } }>(
-      `/auth-rules/${id}`
-    );
+  getAuthRule: async (id: string, signal?: AbortSignal): Promise<ApiResponse<AuthRule>> => {
+    const { data } = await axiosClient.get<{
+      success?: boolean;
+      message?: string;
+      data?: Record<string, unknown>;
+      rule?: Record<string, unknown>;
+    }>(`/auth-rules/${id}`, {
+      signal,
+    });
+
+    const nestedData =
+      data.data && typeof data.data === "object" ? data.data : undefined;
+    const nestedDataInner =
+      nestedData?.["data"] && typeof nestedData["data"] === "object"
+        ? (nestedData["data"] as Record<string, unknown>)
+        : undefined;
+
+    const nestedRule =
+      (nestedData?.["rule"] as Record<string, unknown> | undefined) ??
+      (nestedData?.["auth_rule"] as Record<string, unknown> | undefined) ??
+      (nestedDataInner?.["rule"] as Record<string, unknown> | undefined) ??
+      (nestedDataInner?.["auth_rule"] as Record<string, unknown> | undefined);
+
+    const rawRule =
+      nestedRule ??
+      nestedDataInner ??
+      nestedData ??
+      (data.rule && typeof data.rule === "object" ? data.rule : undefined) ??
+      {};
+
     return {
-      success: data.success,
+      success: data.success ?? true,
       message: data.message,
-      data: normalizeAuthRule(data.data.rule),
+      data: normalizeAuthRule(rawRule),
     };
   },
 
@@ -155,8 +181,6 @@ export const authRuleService = {
       store_id_sources: payload.storeIdSources ?? [],
       store_match_policy: payload.storeMatchPolicy ?? "all",
       store_allows_empty: payload.storeAllowsEmpty ?? false,
-      store_all_access_roles_any: payload.storeAllAccessRolesAny || [],
-      store_all_access_permissions_any: payload.storeAllAccessPermissionsAny || [],
     };
 
     const { data } = await axiosClient.post<{ success: boolean; message?: string; data: { rule: Record<string, unknown> } }>(
@@ -191,8 +215,6 @@ export const authRuleService = {
       store_id_sources: payload.storeIdSources ?? [],
       store_match_policy: payload.storeMatchPolicy ?? "all",
       store_allows_empty: payload.storeAllowsEmpty ?? false,
-      store_all_access_roles_any: payload.storeAllAccessRolesAny || [],
-      store_all_access_permissions_any: payload.storeAllAccessPermissionsAny || [],
     };
     const { data } = await axiosClient.put<{ success: boolean; message?: string; data: { rule: Record<string, unknown> } }>(
       `/auth-rules/${id}`,

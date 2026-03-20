@@ -245,7 +245,6 @@ export const permissionService = {
       `/permissions/${id}`,
       {
         name: payload.name,
-        description: payload.description,
       }
     );
     return {

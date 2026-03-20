@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -23,14 +23,121 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, AlertCircle, X } from "lucide-react";
+import { Loader2, AlertCircle, Search, CheckSquare, Square } from "lucide-react";
 import { useCreateAuthRule, useUpdateAuthRule } from "@/lib/hooks/use-auth-rules";
 import { useRoles } from "@/lib/hooks/use-roles";
 import { usePermissions } from "@/lib/hooks/use-permissions";
 import type { AuthRule, HttpMethod, CreateAuthRulePayload, UpdateAuthRulePayload } from "@/types/auth-rule.types";
 
+// ── Multi-select checkbox panel ──────────────────────────────────
+interface MultiSelectPanelProps {
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+  searchPlaceholder?: string;
+  disabled?: boolean;
+}
+
+function MultiSelectPanel({
+  options,
+  selected,
+  onChange,
+  searchPlaceholder = "Search…",
+  disabled,
+}: MultiSelectPanelProps) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!query) return options;
+    const lc = query.toLowerCase();
+    return options.filter((o) => o.toLowerCase().includes(lc));
+  }, [options, query]);
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((o) => selected.includes(o));
+
+  const handleToggle = (item: string) => {
+    if (selected.includes(item)) {
+      onChange(selected.filter((s) => s !== item));
+    } else {
+      onChange([...selected, item]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    const merged = Array.from(new Set([...selected, ...filtered]));
+    onChange(merged);
+  };
+
+  const handleDeselectAll = () => {
+    const filteredSet = new Set(filtered);
+    onChange(selected.filter((s) => !filteredSet.has(s)));
+  };
+
+  return (
+    <div className="rounded-md border">
+      {/* Search + bulk actions */}
+      <div className="flex items-center gap-1 border-b px-2 py-1.5">
+        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <input
+          type="text"
+          className="h-7 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          disabled={disabled}
+        />
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+          onClick={allFilteredSelected ? handleDeselectAll : handleSelectAll}
+          disabled={disabled || filtered.length === 0}
+          title={allFilteredSelected ? "Deselect all" : "Select all"}
+        >
+          {allFilteredSelected ? (
+            <Square className="h-3 w-3" />
+          ) : (
+            <CheckSquare className="h-3 w-3" />
+          )}
+          {allFilteredSelected ? "None" : "All"}
+        </button>
+      </div>
+
+      {/* Options list */}
+      <div className="h-48 overflow-y-auto">
+        {filtered.length === 0 ? (
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+            No items found
+          </p>
+        ) : (
+          filtered.map((item) => {
+            const isChecked = selected.includes(item);
+            return (
+              <label
+                key={item}
+                className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent"
+              >
+                <Checkbox
+                  checked={isChecked}
+                  disabled={disabled}
+                  onCheckedChange={() => handleToggle(item)}
+                />
+                <span className="truncate">{item}</span>
+              </label>
+            );
+          })
+        )}
+      </div>
+
+      {/* Footer count */}
+      <div className="border-t px-2.5 py-1 text-[11px] text-muted-foreground">
+        {selected.length} selected
+      </div>
+    </div>
+  );
+}
+
+// ── Constants ────────────────────────────────────────────────────
 const HTTP_METHODS: HttpMethod[] = [
   "GET",
   "POST",
@@ -52,6 +159,11 @@ const STORE_ID_SOURCE_OPTIONS = [
   { value: "body", labelKey: "form.storeIdSource.body" },
 ] as const;
 
+const STORE_MATCH_POLICY_OPTIONS = [
+  { value: "all", labelKey: "form.storeMatchPolicies.all" },
+  { value: "any", labelKey: "form.storeMatchPolicies.any" },
+] as const;
+
 const SELECT_CONTENT_CLASS = "max-h-56 overflow-y-auto";
 
 // Local form state type that allows both pathDsl and routeName
@@ -70,8 +182,6 @@ interface AuthRuleFormData {
   storeIdSources?: string[];
   storeMatchPolicy?: string;
   storeAllowsEmpty?: boolean;
-  storeAllAccessRolesAny?: string[];
-  storeAllAccessPermissionsAny?: string[];
 }
 
 interface AuthRuleFormProps {
@@ -97,10 +207,6 @@ function buildInitialFormData(rule?: AuthRule): AuthRuleFormData {
     storeIdSources: rule?.storeIdSources || rule?.store_id_sources || [],
     storeMatchPolicy: rule?.storeMatchPolicy || rule?.store_match_policy || "all",
     storeAllowsEmpty: rule?.storeAllowsEmpty ?? rule?.store_allows_empty ?? false,
-    storeAllAccessRolesAny:
-      rule?.storeAllAccessRolesAny || rule?.store_all_access_roles_any || [],
-    storeAllAccessPermissionsAny:
-      rule?.storeAllAccessPermissionsAny || rule?.store_all_access_permissions_any || [],
   };
 }
 
@@ -131,12 +237,7 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
   );
 
   const [validationError, setValidationError] = useState<string>("");
-  // keys to force remount of Select components to clear their internal value after add
-  const [roleSelectKey, setRoleSelectKey] = useState(0);
-  const [storeRoleSelectKey, setStoreRoleSelectKey] = useState(0);
-  const [permissionAnySelectKey, setPermissionAnySelectKey] = useState(0);
-  const [permissionAllSelectKey, setPermissionAllSelectKey] = useState(0);
-  const [storePermissionSelectKey, setStorePermissionSelectKey] = useState(0);
+  const [submitError, setSubmitError] = useState<string>("");
 
   useEffect(() => {
     if (isEditMode && rule) {
@@ -148,88 +249,8 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAddRole = (roleName: string) => {
-    if (!formData.rolesAny?.includes(roleName)) {
-      setFormData((prev) => ({
-        ...prev,
-        rolesAny: [...(prev.rolesAny || []), roleName],
-      }));
-      // reset the select by remounting it
-      setRoleSelectKey((k) => k + 1);
-    }
-  };
-
-  const handleRemoveRole = (roleName: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      rolesAny: prev.rolesAny?.filter((name) => name !== roleName) || [],
-    }));
-    // reset the select in case it was showing the removed value
-    setRoleSelectKey((k) => k + 1);
-  };
-
-  const handleAddPermission = (
-    type: "permissionsAny" | "permissionsAll" | "storeAllAccessPermissionsAny",
-    value: string
-  ) => {
-    if (value && !formData[type]?.includes(value)) {
-      setFormData((prev) => ({
-        ...prev,
-        [type]: [...(prev[type] || []), value],
-      }));
-
-      if (type === "permissionsAny") {
-        setPermissionAnySelectKey((k) => k + 1);
-      } else if (type === "permissionsAll") {
-        setPermissionAllSelectKey((k) => k + 1);
-      } else {
-        setStorePermissionSelectKey((k) => k + 1);
-      }
-    }
-  };
-
-  const handleRemovePermission = (
-    type: "permissionsAny" | "permissionsAll",
-    permission: string
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [type]: prev[type]?.filter((p) => p !== permission) || [],
-    }));
-  };
-
-  // Store-scoped access handlers
-  const handleAddStoreRole = (roleName: string) => {
-    if (!formData.storeAllAccessRolesAny?.includes(roleName)) {
-      setFormData((prev) => ({
-        ...prev,
-        storeAllAccessRolesAny: [...(prev.storeAllAccessRolesAny || []), roleName],
-      }));
-      // reset the select by remounting it
-      setStoreRoleSelectKey((k) => k + 1);
-    }
-  };
-
-  const handleRemoveStoreRole = (roleName: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      storeAllAccessRolesAny:
-        prev.storeAllAccessRolesAny?.filter((name) => name !== roleName) || [],
-    }));
-    // reset the select in case it was showing the removed value
-    setStoreRoleSelectKey((k) => k + 1);
-  };
-
-  const handleRemoveStorePermission = (permission: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      storeAllAccessPermissionsAny:
-        prev.storeAllAccessPermissionsAny?.filter((p) => p !== permission) || [],
-    }));
-    setStorePermissionSelectKey((k) => k + 1);
-  };
-
-  const availablePermissions = permissions.map((permission) => permission.name);
+  const availableRoleNames = roles.map((r) => r.name);
+  const availablePermissions = permissions.map((p) => p.name);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,6 +270,7 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
     }
     
     setValidationError("");
+    setSubmitError("");
 
     try {
       let result: AuthRule;
@@ -269,8 +291,6 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
           storeIdSources: formData.storeIdSources,
           storeMatchPolicy: formData.storeMatchPolicy,
           storeAllowsEmpty: formData.storeAllowsEmpty,
-          storeAllAccessRolesAny: formData.storeAllAccessRolesAny && formData.storeAllAccessRolesAny.length > 0 ? formData.storeAllAccessRolesAny : [],
-          storeAllAccessPermissionsAny: formData.storeAllAccessPermissionsAny && formData.storeAllAccessPermissionsAny.length > 0 ? formData.storeAllAccessPermissionsAny : [],
         };
         result = await updateRule(updatePayload);
       } else {
@@ -289,8 +309,6 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               storeIdSources: formData.storeIdSources,
               storeMatchPolicy: formData.storeMatchPolicy,
               storeAllowsEmpty: formData.storeAllowsEmpty,
-              storeAllAccessRolesAny: formData.storeAllAccessRolesAny && formData.storeAllAccessRolesAny.length > 0 ? formData.storeAllAccessRolesAny : [],
-              storeAllAccessPermissionsAny: formData.storeAllAccessPermissionsAny && formData.storeAllAccessPermissionsAny.length > 0 ? formData.storeAllAccessPermissionsAny : [],
             }
           : {
               service: formData.service.trim(),
@@ -305,8 +323,6 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               storeIdSources: formData.storeIdSources,
               storeMatchPolicy: formData.storeMatchPolicy,
               storeAllowsEmpty: formData.storeAllowsEmpty,
-              storeAllAccessRolesAny: formData.storeAllAccessRolesAny && formData.storeAllAccessRolesAny.length > 0 ? formData.storeAllAccessRolesAny : [],
-              storeAllAccessPermissionsAny: formData.storeAllAccessPermissionsAny && formData.storeAllAccessPermissionsAny.length > 0 ? formData.storeAllAccessPermissionsAny : [],
             };
         result = await createRule(payload);
       }
@@ -316,17 +332,27 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
       } else {
         router.push(`/${locale}/dashboard/auth-rules`);
       }
-    } catch {
-      // Error is handled by the hook
+    } catch (err: unknown) {
+      // Show API error in the form — the store also captures it,
+      // but we surface it locally so users see it immediately.
+      const axErr = err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } };
+      const apiMsg = axErr?.response?.data?.message;
+      const fieldErrors = axErr?.response?.data?.errors;
+      const fieldSummary = fieldErrors
+        ? Object.values(fieldErrors).flat().join(". ")
+        : null;
+      const msg =
+        fieldSummary || apiMsg || (err instanceof Error ? err.message : "");
+      if (msg) setSubmitError(msg);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-      {(error || validationError) && (
+      {(error || validationError || submitError) && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error || validationError}</AlertDescription>
+          <AlertDescription>{validationError || submitError || error}</AlertDescription>
         </Alert>
       )}
 
@@ -427,36 +453,12 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               <Label>{t("form.rolesAny")}</Label>
               <span className="text-xs text-muted-foreground">{t("form.rolesAnyHint")}</span>
             </div>
-            {(formData.rolesAny?.length ?? 0) > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {formData.rolesAny?.map((roleName) => (
-                  <Badge key={roleName} variant="secondary" className="text-xs">
-                    {roleName}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRole(roleName)}
-                      className="ms-1 hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-            <Select key={`role-select-${roleSelectKey}`} onValueChange={handleAddRole}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={t("form.selectRolePlaceholder")} />
-              </SelectTrigger>
-              <SelectContent className={SELECT_CONTENT_CLASS}>
-                {roles
-                  .filter((r) => !formData.rolesAny?.includes(r.name))
-                  .map((role) => (
-                    <SelectItem key={role.id} value={role.name}>
-                      {role.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <MultiSelectPanel
+              options={availableRoleNames}
+              selected={formData.rolesAny || []}
+              onChange={(val) => handleChange("rolesAny", val)}
+              searchPlaceholder={t("form.selectRolePlaceholder")}
+            />
           </div>
 
           <Separator />
@@ -467,39 +469,13 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                 <Label>{t("form.permissionsAny")}</Label>
                 <span className="text-xs text-muted-foreground">{t("form.permissionsAnyHint")}</span>
               </div>
-              {(formData.permissionsAny?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {formData.permissionsAny?.map((permission) => (
-                    <Badge key={permission} variant="secondary" className="text-xs">
-                      {permission}
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePermission("permissionsAny", permission)}
-                        className="ms-1 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <Select
-                key={`permission-any-select-${permissionAnySelectKey}`}
-                onValueChange={(value) => handleAddPermission("permissionsAny", value)}
-              >
-                <SelectTrigger className="w-full" disabled={isLoadingPermissions}>
-                  <SelectValue placeholder={t("form.selectPermissionPlaceholder")} />
-                </SelectTrigger>
-                <SelectContent className={SELECT_CONTENT_CLASS}>
-                  {availablePermissions
-                    .filter((p) => !formData.permissionsAny?.includes(p))
-                    .map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectPanel
+                options={availablePermissions}
+                selected={formData.permissionsAny || []}
+                onChange={(val) => handleChange("permissionsAny", val)}
+                searchPlaceholder={t("form.selectPermissionPlaceholder")}
+                disabled={isLoadingPermissions}
+              />
             </div>
 
             <div className="space-y-2">
@@ -507,39 +483,13 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                 <Label>{t("form.permissionsAll")}</Label>
                 <span className="text-xs text-muted-foreground">{t("form.permissionsAllHint")}</span>
               </div>
-              {(formData.permissionsAll?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {formData.permissionsAll?.map((permission) => (
-                    <Badge key={permission} variant="secondary" className="text-xs">
-                      {permission}
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePermission("permissionsAll", permission)}
-                        className="ms-1 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <Select
-                key={`permission-all-select-${permissionAllSelectKey}`}
-                onValueChange={(value) => handleAddPermission("permissionsAll", value)}
-              >
-                <SelectTrigger className="w-full" disabled={isLoadingPermissions}>
-                  <SelectValue placeholder={t("form.selectPermissionPlaceholder")} />
-                </SelectTrigger>
-                <SelectContent className={SELECT_CONTENT_CLASS}>
-                  {availablePermissions
-                    .filter((p) => !formData.permissionsAll?.includes(p))
-                    .map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectPanel
+                options={availablePermissions}
+                selected={formData.permissionsAll || []}
+                onChange={(val) => handleChange("permissionsAll", val)}
+                searchPlaceholder={t("form.selectPermissionPlaceholder")}
+                disabled={isLoadingPermissions}
+              />
             </div>
           </div>
 
@@ -578,12 +528,21 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="storeMatchPolicy">{t("form.storeMatchPolicy")}</Label>
-              <Input
-                id="storeMatchPolicy"
-                value={formData.storeMatchPolicy || ""}
-                onChange={(e) => handleChange("storeMatchPolicy", e.target.value)}
-                placeholder={t("form.storeMatchPolicyPlaceholder")}
-              />
+              <Select
+                value={formData.storeMatchPolicy || "all"}
+                onValueChange={(value: string) => handleChange("storeMatchPolicy", value)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={SELECT_CONTENT_CLASS}>
+                  {STORE_MATCH_POLICY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {t(option.labelKey)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">{t("form.storeMatchPolicyHint")}</p>
             </div>
           </div>
@@ -628,87 +587,6 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
                 checked={!!formData.storeAllowsEmpty}
                 onCheckedChange={(checked) => handleChange("storeAllowsEmpty", checked)}
               />
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <Label>{t("form.storeAllAccessRolesAny")}</Label>
-                <span className="text-xs text-muted-foreground">{t("form.storeAllAccessRolesAnyHint")}</span>
-              </div>
-              {(formData.storeAllAccessRolesAny?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {formData.storeAllAccessRolesAny?.map((roleName) => (
-                    <Badge key={roleName} variant="secondary" className="text-xs">
-                      {roleName}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveStoreRole(roleName)}
-                        className="ms-1 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <Select key={`store-role-select-${storeRoleSelectKey}`} onValueChange={handleAddStoreRole}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={t("form.selectRolePlaceholder")} />
-                </SelectTrigger>
-                <SelectContent className={SELECT_CONTENT_CLASS}>
-                  {roles
-                    .filter((r) => !formData.storeAllAccessRolesAny?.includes(r.name))
-                    .map((role) => (
-                      <SelectItem key={role.id} value={role.name}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <Label>{t("form.storeAllAccessPermissionsAny")}</Label>
-                <span className="text-xs text-muted-foreground">{t("form.storeAllAccessPermissionsAnyHint")}</span>
-              </div>
-              {(formData.storeAllAccessPermissionsAny?.length ?? 0) > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {formData.storeAllAccessPermissionsAny?.map((permission) => (
-                    <Badge key={permission} variant="secondary" className="text-xs">
-                      {permission}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveStorePermission(permission)}
-                        className="ms-1 hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-              <Select
-                key={`store-permission-select-${storePermissionSelectKey}`}
-                onValueChange={(value) => handleAddPermission("storeAllAccessPermissionsAny", value)}
-              >
-                <SelectTrigger className="w-full" disabled={isLoadingPermissions}>
-                  <SelectValue placeholder={t("form.selectPermissionPlaceholder")} />
-                </SelectTrigger>
-                <SelectContent className={SELECT_CONTENT_CLASS}>
-                  {availablePermissions
-                    .filter((p) => !formData.storeAllAccessPermissionsAny?.includes(p))
-                    .map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {p}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardContent>

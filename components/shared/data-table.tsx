@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface Column<T> {
   key: string;
@@ -29,6 +30,9 @@ interface DataTableProps<T> {
   searchPlaceholder?: string;
   onSearchChange?: (value: string) => void;
   emptyMessage?: string;
+  onRowClick?: (item: T) => void;
+  getRowKey?: (item: T, index: number) => React.Key;
+  rowClassName?: string | ((item: T) => string);
   // Pagination props
   pagination?: {
     page: number;
@@ -47,6 +51,9 @@ export function DataTable<T extends object>({
   searchPlaceholder = "Search...",
   onSearchChange,
   emptyMessage = "No results found.",
+  onRowClick,
+  getRowKey,
+  rowClassName,
   pagination,
   onPageChange,
 }: DataTableProps<T>) {
@@ -142,7 +149,32 @@ export function DataTable<T extends object>({
               </TableRow>
             ) : (
               data.map((item, index) => (
-                <TableRow key={index}>
+                <TableRow
+                  key={getRowKey ? getRowKey(item, index) : index}
+                  className={cn(
+                    onRowClick && "cursor-pointer",
+                    typeof rowClassName === "function"
+                      ? rowClassName(item)
+                      : rowClassName
+                  )}
+                  onClick={(event) => {
+                    if (!onRowClick) return;
+                    const target = event.target as HTMLElement | null;
+                    if (target?.closest('[data-no-row-click="true"]')) return;
+                    onRowClick(item);
+                  }}
+                  role={onRowClick ? "button" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (!onRowClick) return;
+                    const target = event.target as HTMLElement | null;
+                    if (target?.closest('[data-no-row-click="true"]')) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onRowClick(item);
+                    }
+                  }}
+                >
                   {columns.map((column) => (
                     <TableCell key={column.key} className={column.className}>
                       {column.cell
