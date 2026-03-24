@@ -38,6 +38,37 @@ export interface UploadImportResponse {
   [key: string]: unknown;
 }
 
+/** A single file result entry from the progress endpoint */
+export interface ImportFileResult {
+  file: string;
+  status: string;
+  rows?: number;
+  dates?: string[];
+  duration?: number;
+  error?: string;
+}
+
+/** Shape returned by /data/manual-import/progress/:uploadId */
+export interface ImportProgressResponse {
+  success?: boolean;
+  progress?: {
+    status?: string;
+    total_files?: number;
+    processed_files?: number;
+    total_rows?: number;
+    current_file?: string;
+    results?: ImportFileResult[];
+  };
+  /** Fallback: some backends put fields at root level */
+  status?: string;
+  total_files?: number;
+  processed_files?: number;
+  total_rows?: number;
+  current_file?: string;
+  results?: ImportFileResult[];
+  [key: string]: unknown;
+}
+
 const PROCESSOR_FIELD_KEYS = [
   "processor_key",
   "processorKey",
@@ -321,7 +352,7 @@ export const manualImportService = {
     }
   },
 
-  async getImportProgress(uploadId: string): Promise<Record<string, unknown>> {
+  async getImportProgress(uploadId: string): Promise<ImportProgressResponse> {
     const token = getToken();
     if (!token) {
       throw new ManualImportError(
@@ -331,7 +362,7 @@ export const manualImportService = {
     }
 
     try {
-      const response = await axios.get<Record<string, unknown>>(
+      const response = await axios.get<ImportProgressResponse>(
         `/api/data/manual-import/progress/${encodeURIComponent(uploadId)}`,
         {
           headers: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, DragEvent } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback, DragEvent } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -43,12 +43,20 @@ import {
   FolderOpen,
   Loader2,
   Play,
+  CheckSquare,
+  Square,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  FileText,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import axios from "axios";
 import { dataExportService } from "@/lib/api/services/data-export.service";
 import { dsprService } from "@/lib/api/services/dspr.service";
 import { manualImportService } from "@/lib/api/services/manual-import.service";
+import type { ImportFileResult, ImportProgressResponse } from "@/lib/api/services/manual-import.service";
 import type { DsprResponse } from "@/types/dspr.types";
 
 const EXPORT_MODELS = [
@@ -160,17 +168,32 @@ function extractStringValue(payload: unknown, keys: string[]): string | null {
   if (!payload || typeof payload !== "object") return null;
   const source = payload as Record<string, unknown>;
 
-  for (const key of keys) {
-    const value = source[key];
-    if (typeof value === "string" && value.trim()) return value;
+  const pick = (record: Record<string, unknown>) => {
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value;
+    }
+    return null;
+  };
+
+  const direct = pick(source);
+  if (direct) return direct;
+
+  const progress = asRecord(source.progress);
+  if (progress) {
+    const progressMatch = pick(progress);
+    if (progressMatch) return progressMatch;
   }
 
-  const nested = source.data;
-  if (nested && typeof nested === "object") {
-    const nestedRecord = nested as Record<string, unknown>;
-    for (const key of keys) {
-      const value = nestedRecord[key];
-      if (typeof value === "string" && value.trim()) return value;
+  const nested = asRecord(source.data);
+  if (nested) {
+    const nestedMatch = pick(nested);
+    if (nestedMatch) return nestedMatch;
+
+    const nestedProgress = asRecord(nested.progress);
+    if (nestedProgress) {
+      const nestedProgressMatch = pick(nestedProgress);
+      if (nestedProgressMatch) return nestedProgressMatch;
     }
   }
 
@@ -178,12 +201,16 @@ function extractStringValue(payload: unknown, keys: string[]): string | null {
 }
 
 function extractProgressPercent(payload: unknown): number {
-  if (!payload || typeof payload !== "object") return 0;
-  const source = payload as Record<string, unknown>;
-  const possibleKeys = ["progress", "percentage", "percent", "processed_percent"];
+  const source = asRecord(payload);
+  if (!source) return 0;
 
+  const nested = asRecord(source.data);
+  const progress =
+    asRecord(source.progress) || asRecord(nested?.progress) || nested || source;
+
+  const possibleKeys = ["progress", "percentage", "percent", "processed_percent"];
   for (const key of possibleKeys) {
-    const value = source[key];
+    const value = progress[key] ?? source[key];
     if (typeof value === "number") return Math.max(0, Math.min(100, value));
     if (typeof value === "string") {
       const parsed = Number(value);
@@ -191,9 +218,25 @@ function extractProgressPercent(payload: unknown): number {
     }
   }
 
-  const nested = source.data;
-  if (nested && typeof nested === "object") {
-    return extractProgressPercent(nested);
+  // total_files / processed_files (import) OR total / processed (re-aggregation)
+  const totalFiles =
+    toNumber(progress.total_files ?? source.total_files) ??
+    toNumber(progress.total ?? source.total);
+  const processedFiles =
+    toNumber(progress.processed_files ?? source.processed_files) ??
+    toNumber(progress.processed ?? source.processed);
+  if (totalFiles && totalFiles > 0 && processedFiles !== null) {
+    return Math.max(0, Math.min(100, (processedFiles / totalFiles) * 100));
+  }
+
+  const results = Array.isArray(progress.results) ? progress.results : [];
+  if (results.length > 0 && totalFiles && totalFiles > 0) {
+    const completedFromResults = results.filter((entry) => {
+      const status = asRecord(entry)?.status;
+      return typeof status === "string" && ["success", "failed", "error"].includes(status.toLowerCase());
+    }).length;
+
+    return Math.max(0, Math.min(100, (completedFromResults / totalFiles) * 100));
   }
 
   return 0;
@@ -283,6 +326,7 @@ function isValidDateOnly(value: string) {
 }
 
 export default function ExportImportPage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
   const [isInspectingZip, setIsInspectingZip] = useState(false);
@@ -293,7 +337,7 @@ export default function ExportImportPage() {
   const [processorOptionsError, setProcessorOptionsError] = useState<string | null>(null);
 
   const [uploadId, setUploadId] = useState<string | null>(null);
-  const [uploadProgressData, setUploadProgressData] = useState<Record<string, unknown> | null>(null);
+  const [uploadProgressData, setUploadProgressData] = useState<ImportProgressResponse | null>(null);
 
   const [aggregationId, setAggregationId] = useState<string | null>(null);
   const [aggregationProgressData, setAggregationProgressData] = useState<Record<string, unknown> | null>(null);
@@ -327,6 +371,113 @@ export default function ExportImportPage() {
       null,
     [uploadProgressData]
   );
+  const uploadTotals = useMemo(() => {
+    const source = asRecord(uploadProgressData);
+    if (!source) {
+      return { processed: null as number | null, total: null as number | null, successCount: 0 };
+    }
+
+    const nested = asRecord(source.data);
+    const progress =
+      asRecord(source.progress) || asRecord(nested?.progress) || nested || source;
+
+    const processed = toNumber(progress.processed_files ?? source.processed_files);
+    const total = toNumber(progress.total_files ?? source.total_files);
+    const results = asRecordArray(progress.results);
+    const successCount = results.filter((item) => {
+      const status = item.status;
+      return typeof status === "string" && status.toLowerCase() === "success";
+    }).length;
+
+    return { processed, total, successCount };
+  }, [uploadProgressData]);
+
+  // ── Normalized progress details from the backend response ──
+  const normalizedProgress = useMemo(() => {
+    if (!uploadProgressData) {
+      return {
+        status: null as string | null,
+        totalFiles: null as number | null,
+        processedFiles: null as number | null,
+        totalRows: null as number | null,
+        currentFile: null as string | null,
+        results: [] as ImportFileResult[],
+        successCount: 0,
+        failedCount: 0,
+        pendingCount: 0,
+        avgDuration: null as number | null,
+      };
+    }
+
+    const source = uploadProgressData as Record<string, unknown>;
+    const nested = asRecord(source.data);
+    const progress =
+      asRecord(source.progress) || asRecord(nested?.progress) || nested || source;
+
+    const status =
+      extractStringValue(uploadProgressData, ["status", "state", "phase"])?.toLowerCase() ?? null;
+    const totalFiles = toNumber(progress.total_files ?? source.total_files);
+    const processedFiles = toNumber(progress.processed_files ?? source.processed_files);
+    const totalRows = toNumber(progress.total_rows ?? source.total_rows);
+    const currentFile =
+      (typeof progress.current_file === "string" ? progress.current_file : null) ??
+      (typeof source.current_file === "string" ? source.current_file : null);
+
+    const rawResults = Array.isArray(progress.results)
+      ? progress.results
+      : Array.isArray(source.results)
+        ? source.results
+        : [];
+
+    const results: ImportFileResult[] = rawResults.flatMap((entry) => {
+        const rec = asRecord(entry);
+        if (!rec) return [];
+        return [{
+          file: String(rec.file ?? rec.filename ?? rec.name ?? "unknown"),
+          status: String(rec.status ?? "pending"),
+          rows: toNumber(rec.rows) ?? undefined,
+          dates: Array.isArray(rec.dates) ? rec.dates.filter((d): d is string => typeof d === "string") : undefined,
+          duration: toNumber(rec.duration) ?? undefined,
+          error: typeof rec.error === "string" ? rec.error : undefined,
+        }];
+      });
+
+    const successCount = results.filter((r) => r.status === "success").length;
+    const failedCount = results.filter((r) => ["failed", "error"].includes(r.status)).length;
+    const pendingCount = results.length > 0 ? results.length - successCount - failedCount : 0;
+    const durationsArr = results.map((r) => r.duration).filter((d): d is number => d !== undefined);
+    const avgDuration = durationsArr.length > 0
+      ? durationsArr.reduce((a, b) => a + b, 0) / durationsArr.length
+      : null;
+
+    return {
+      status,
+      totalFiles,
+      processedFiles,
+      totalRows,
+      currentFile,
+      results,
+      successCount,
+      failedCount,
+      pendingCount,
+      avgDuration,
+    };
+  }, [uploadProgressData]);
+
+  // ── Select all / Deselect all helpers ──
+  const allSelected = queue.length > 0 && queue.every((item) => item.selected);
+  const noneSelected = queue.length === 0 || queue.every((item) => !item.selected);
+
+  const toggleSelectAll = useCallback(() => {
+    const target = !allSelected;
+    setQueue((prev) => prev.map((item) => ({ ...item, selected: target })));
+  }, [allSelected]);
+
+  const clearQueueAndInput = useCallback(() => {
+    setQueue([]);
+    setZipTempId(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
 
   const aggregationProgress = useMemo(
     () => extractProgressPercent(aggregationProgressData),
@@ -338,6 +489,21 @@ export default function ExportImportPage() {
       null,
     [aggregationProgressData]
   );
+
+  const normalizedAggregationProgress = useMemo(() => {
+    if (!aggregationProgressData) return null;
+    const source = aggregationProgressData as Record<string, unknown>;
+    const progress = asRecord(source.progress) ?? source;
+    return {
+      status: typeof progress.status === "string" ? progress.status : null,
+      type: typeof progress.type === "string" ? progress.type : null,
+      updatedAt: typeof progress.updated_at === "string" ? progress.updated_at : null,
+      total: toNumber(progress.total) ?? toNumber(progress.total_files),
+      processed: toNumber(progress.processed) ?? toNumber(progress.processed_files),
+      successful: toNumber(progress.successful),
+      failed: toNumber(progress.failed),
+    };
+  }, [aggregationProgressData]);
 
   const dsprDay = useMemo(() => asRecord(dsprData?.day), [dsprData]);
   const dsprSales = useMemo(() => asRecord(dsprData?.sales), [dsprData]);
@@ -450,6 +616,7 @@ export default function ExportImportPage() {
 
         if (isFinishedStatus(status)) {
           setUploadId(null);
+          clearQueueAndInput();
           toast.success("Import completed successfully.");
         } else if (isFailedStatus(status)) {
           setUploadId(null);
@@ -669,7 +836,7 @@ export default function ExportImportPage() {
       if (nextUploadId) {
         setUploadId(nextUploadId);
       }
-      setUploadProgressData(uploadResponse as Record<string, unknown>);
+      setUploadProgressData(uploadResponse as ImportProgressResponse);
       toast.success("Import request submitted successfully.");
     } catch (error) {
       const message =
@@ -1198,6 +1365,7 @@ export default function ExportImportPage() {
                   </div>
                   <div className="w-full max-w-xs">
                     <Input
+                      ref={fileInputRef}
                       type="file"
                       multiple
                       accept=".csv,.zip"
@@ -1226,6 +1394,29 @@ export default function ExportImportPage() {
                       {processorOptionsError}
                     </div>
                   )}
+
+                  {/* Select All / Deselect All controls */}
+                  {queue.length > 0 && (
+                    <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={() => toggleSelectAll()}
+                        aria-label={allSelected ? "Deselect all files" : "Select all files"}
+                      />
+                      <button
+                        type="button"
+                        className="text-sm font-medium hover:underline"
+                        onClick={toggleSelectAll}
+                        disabled={isUploading}
+                      >
+                        {allSelected ? "Deselect All" : "Select All"}
+                      </button>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {selectedItems.length} of {queue.length} selected
+                      </span>
+                    </div>
+                  )}
+
                   {queue.length === 0 ? (
                     <div className="rounded-lg border p-4 text-sm text-muted-foreground">
                       <p className="font-medium text-foreground">No files selected</p>
@@ -1316,10 +1507,7 @@ export default function ExportImportPage() {
 
                     <Button
                       variant="outline"
-                      onClick={() => {
-                        setQueue([]);
-                        setZipTempId(null);
-                      }}
+                      onClick={clearQueueAndInput}
                       disabled={queue.length === 0 || isUploading}
                     >
                       Clear
@@ -1336,12 +1524,118 @@ export default function ExportImportPage() {
                       {uploadId ? `Tracking upload ID: ${uploadId}` : "Latest import request"}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3 px-4">
+                  <CardContent className="space-y-4 px-4">
                     <Progress value={uploadProgress} />
+
+                    {/* Summary badges */}
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <Badge variant="outline">{uploadProgress.toFixed(0)}%</Badge>
                       {uploadStatus && <Badge variant="secondary">{uploadStatus}</Badge>}
+                      {uploadTotals.processed !== null && uploadTotals.total !== null && (
+                        <Badge variant="outline">
+                          {uploadTotals.processed}/{uploadTotals.total} files
+                        </Badge>
+                      )}
+                      {normalizedProgress.totalRows !== null && (
+                        <Badge variant="outline">
+                          {numberFormatter.format(normalizedProgress.totalRows)} total rows
+                        </Badge>
+                      )}
+                      {normalizedProgress.successCount > 0 && (
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                          <CheckCircle2 className="me-1 h-3 w-3" />
+                          {normalizedProgress.successCount} success
+                        </Badge>
+                      )}
+                      {normalizedProgress.failedCount > 0 && (
+                        <Badge variant="destructive">
+                          <AlertCircle className="me-1 h-3 w-3" />
+                          {normalizedProgress.failedCount} failed
+                        </Badge>
+                      )}
+                      {normalizedProgress.pendingCount > 0 && (
+                        <Badge variant="outline">
+                          <Clock className="me-1 h-3 w-3" />
+                          {normalizedProgress.pendingCount} pending
+                        </Badge>
+                      )}
+                      {normalizedProgress.avgDuration !== null && (
+                        <Badge variant="outline">
+                          <Timer className="me-1 h-3 w-3" />
+                          avg {normalizedProgress.avgDuration.toFixed(2)}s
+                        </Badge>
+                      )}
                     </div>
+
+                    {/* Current file being processed — only while polling is active */}
+                    {normalizedProgress.currentFile && uploadId && (
+                      <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        <span className="text-muted-foreground">Processing:</span>
+                        <span className="truncate font-medium">{normalizedProgress.currentFile}</span>
+                      </div>
+                    )}
+
+                    {/* Per-file results table */}
+                    {normalizedProgress.results.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="flex items-center gap-1.5 text-sm font-medium">
+                          <FileText className="h-4 w-4" />
+                          File Details
+                        </p>
+                        <div className="max-h-72 overflow-auto rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>File</TableHead>
+                                <TableHead className="w-24">Status</TableHead>
+                                <TableHead className="w-20 text-right">Rows</TableHead>
+                                <TableHead className="w-28">Date(s)</TableHead>
+                                <TableHead className="w-24 text-right">Duration</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {normalizedProgress.results.map((result, idx) => (
+                                <TableRow key={`${result.file}-${idx}`}>
+                                  <TableCell className="max-w-50 truncate text-sm font-medium">
+                                    {result.file}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge
+                                      variant={
+                                        result.status === "success"
+                                          ? "secondary"
+                                          : result.status === "failed" || result.status === "error"
+                                            ? "destructive"
+                                            : "outline"
+                                      }
+                                      className={cn(
+                                        "text-xs",
+                                        result.status === "success" &&
+                                          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                      )}
+                                    >
+                                      {result.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums">
+                                    {result.rows !== undefined ? numberFormatter.format(result.rows) : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    {result.dates && result.dates.length > 0
+                                      ? result.dates.join(", ")
+                                      : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right tabular-nums">
+                                    {result.duration !== undefined ? `${result.duration.toFixed(2)}s` : "—"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -1414,17 +1708,89 @@ export default function ExportImportPage() {
                   </Button>
 
                   {(aggregationProgressData || aggregationId) && (
-                    <div className="space-y-3 rounded-lg border p-3">
+                    <div className="space-y-4 rounded-lg border p-4">
                       <Progress value={aggregationProgress} />
+
+                      {/* Summary badges */}
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <Badge variant="outline">{aggregationProgress.toFixed(0)}%</Badge>
-                        {aggregationStatus && (
-                          <Badge variant="secondary">{aggregationStatus}</Badge>
+                        {normalizedAggregationProgress?.status && (
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              normalizedAggregationProgress.status === "completed" &&
+                                "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+                              ["failed", "error"].includes(normalizedAggregationProgress.status) &&
+                                "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            )}
+                          >
+                            {normalizedAggregationProgress.status === "completed" && (
+                              <CheckCircle2 className="me-1 h-3 w-3" />
+                            )}
+                            {normalizedAggregationProgress.status}
+                          </Badge>
+                        )}
+                        {normalizedAggregationProgress?.type && (
+                          <Badge variant="outline">{normalizedAggregationProgress.type}</Badge>
                         )}
                         {aggregationId && (
                           <Badge variant="outline">ID: {aggregationId}</Badge>
                         )}
                       </div>
+
+                      {/* Detail grid */}
+                      {normalizedAggregationProgress && (
+                        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                          {normalizedAggregationProgress.total !== null && (
+                            <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                              <p className="text-xs text-muted-foreground">Total</p>
+                              <p className="font-semibold tabular-nums">
+                                {numberFormatter.format(normalizedAggregationProgress.total!)}
+                              </p>
+                            </div>
+                          )}
+                          {normalizedAggregationProgress.processed !== null && (
+                            <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                              <p className="text-xs text-muted-foreground">Processed</p>
+                              <p className="font-semibold tabular-nums">
+                                {numberFormatter.format(normalizedAggregationProgress.processed!)}
+                              </p>
+                            </div>
+                          )}
+                          {normalizedAggregationProgress.successful !== null && (
+                            <div className="rounded-lg border bg-green-50 px-3 py-2 dark:bg-green-900/10">
+                              <p className="text-xs text-muted-foreground">Successful</p>
+                              <p className="font-semibold tabular-nums text-green-700 dark:text-green-400">
+                                {numberFormatter.format(normalizedAggregationProgress.successful!)}
+                              </p>
+                            </div>
+                          )}
+                          {normalizedAggregationProgress.failed !== null && (
+                            <div className={cn(
+                              "rounded-lg border px-3 py-2",
+                              normalizedAggregationProgress.failed! > 0
+                                ? "bg-red-50 dark:bg-red-900/10"
+                                : "bg-muted/30"
+                            )}>
+                              <p className="text-xs text-muted-foreground">Failed</p>
+                              <p className={cn(
+                                "font-semibold tabular-nums",
+                                normalizedAggregationProgress.failed! > 0 && "text-red-600 dark:text-red-400"
+                              )}>
+                                {numberFormatter.format(normalizedAggregationProgress.failed!)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Updated at timestamp */}
+                      {normalizedAggregationProgress?.updatedAt && (
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5" />
+                          Last updated: {new Date(normalizedAggregationProgress.updatedAt).toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>

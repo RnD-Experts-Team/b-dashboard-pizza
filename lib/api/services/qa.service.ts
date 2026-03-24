@@ -2011,7 +2011,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        timeout: 30_000,
+        timeout: 120_000,
       });
 
       return response.data;
@@ -2212,7 +2212,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        timeout: 30_000,
+        timeout: 120_000,
       });
 
       return response.data;
