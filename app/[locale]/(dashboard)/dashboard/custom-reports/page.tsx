@@ -66,6 +66,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { QAEntityWithCategory } from "@/types/qa.types";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
@@ -449,12 +451,16 @@ function DeleteReportDialog({
 interface RowActionsProps {
   report: CustomReport;
   onSuccess: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
-function RowActions({ report, onSuccess }: RowActionsProps) {
+function RowActions({ report, onSuccess, canEdit, canDelete }: RowActionsProps) {
   const t = useTranslations("customReports");
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  if (!canEdit && !canDelete) return null;
 
   return (
     <div data-no-row-click="true" onClick={(e) => e.stopPropagation()}>
@@ -470,33 +476,41 @@ function RowActions({ report, onSuccess }: RowActionsProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => setEditOpen(true)}>
-            <Pencil className="me-2 h-4 w-4" />
-            {t("actions.edit")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setDeleteOpen(true)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="me-2 h-4 w-4" />
-            {t("actions.delete")}
-          </DropdownMenuItem>
+          {canEdit && (
+            <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+              <Pencil className="me-2 h-4 w-4" />
+              {t("actions.edit")}
+            </DropdownMenuItem>
+          )}
+          {canDelete && (
+            <DropdownMenuItem
+              onSelect={() => setDeleteOpen(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="me-2 h-4 w-4" />
+              {t("actions.delete")}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ReportFormDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSuccess={onSuccess}
-        report={report}
-      />
+      {canEdit && (
+        <ReportFormDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          onSuccess={onSuccess}
+          report={report}
+        />
+      )}
 
-      <DeleteReportDialog
-        report={report}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onSuccess={onSuccess}
-      />
+      {canDelete && (
+        <DeleteReportDialog
+          report={report}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onSuccess={onSuccess}
+        />
+      )}
     </div>
   );
 }
@@ -643,10 +657,47 @@ function ReportDetailSheet({ reportId, open, onOpenChange }: DetailSheetProps) {
 export default function CustomReportsPage() {
   const t = useTranslations("customReports");
   const { reports, isLoading, error, refetch } = useCustomReports();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const storeNumericId = selectedStore?.id ?? overviewStores?.[0]?.id ?? null;
+  const createReportRequirements = [
+    {
+      service: "QA",
+      method: "POST",
+      path: "/custom-reports",
+      storeId: storeNumericId ? String(storeNumericId) : undefined,
+    },
+  ];
+  const canCreateCustomReport = createReportRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const editReportRequirements = [
+    {
+      service: "QA",
+      method: "PUT",
+      path: "/custom-reports/{id}",
+      storeId: storeNumericId ? String(storeNumericId) : undefined,
+    },
+  ];
+  const canEditCustomReport = editReportRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
+  const deleteReportRequirements = [
+    {
+      service: "QA",
+      method: "DELETE",
+      path: "/custom-reports/{id}",
+      storeId: storeNumericId ? String(storeNumericId) : undefined,
+    },
+  ];
+  const canDeleteCustomReport = deleteReportRequirements.some((requirement) =>
+    canAccessRoute(requirement)
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -712,7 +763,14 @@ export default function CustomReportsPage() {
       key: "actions",
       header: "",
       className: "w-12",
-      cell: (r: CustomReport) => <RowActions report={r} onSuccess={refetch} />,
+      cell: (r: CustomReport) => (
+        <RowActions
+          report={r}
+          onSuccess={refetch}
+          canEdit={canEditCustomReport}
+          canDelete={canDeleteCustomReport}
+        />
+      ),
     },
   ];
 
@@ -734,10 +792,12 @@ export default function CustomReportsPage() {
             />
             {isRefreshing ? t("refreshing") : t("refresh")}
           </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="me-2 h-4 w-4" />
-            {t("createReport")}
-          </Button>
+          {canCreateCustomReport && (
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="me-2 h-4 w-4" />
+              {t("createReport")}
+            </Button>
+          )}
         </div>
       </PageHeader>
 
