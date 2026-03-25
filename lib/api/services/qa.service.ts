@@ -326,6 +326,19 @@ function getToken(): string | null {
   }
 }
 
+function getSelectedStoreId(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("selected-store-storage");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const storeId = parsed?.state?.selectedStore?.storeId;
+    return typeof storeId === "string" && storeId.trim() ? storeId.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 const EXPORT_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -2255,6 +2268,7 @@ export const qaService = {
 
   async getCustomReports(signal?: AbortSignal): Promise<CustomReport[]> {
     const token = getToken();
+    const storeId = getSelectedStoreId();
     if (!token) {
       throw new QAError("You must be logged in to view custom reports.", "NOT_AUTHENTICATED");
     }
@@ -2263,7 +2277,11 @@ export const qaService = {
       const response = await axios.get<unknown>(
         "/api/qa/custom-reports",
         {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            ...(storeId && { "X-Store-Id": storeId }),
+          },
           timeout: 15_000,
           signal,
         }
@@ -2279,6 +2297,7 @@ export const qaService = {
 
   async getCustomReportById(id: number, signal?: AbortSignal): Promise<CustomReport> {
     const token = getToken();
+    const storeId = getSelectedStoreId();
     if (!token) {
       throw new QAError("You must be logged in to view custom report details.", "NOT_AUTHENTICATED");
     }
@@ -2287,7 +2306,11 @@ export const qaService = {
       const response = await axios.get<unknown>(
         `/api/qa/custom-reports/${id}`,
         {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            ...(storeId && { "X-Store-Id": storeId }),
+          },
           timeout: 15_000,
           signal,
         }
@@ -2307,6 +2330,7 @@ export const qaService = {
 
   async createCustomReport(payload: CustomReportPayload): Promise<CustomReport> {
     const token = getToken();
+    const storeId = getSelectedStoreId();
     if (!token) {
       throw new QAError("You must be logged in to create custom reports.", "NOT_AUTHENTICATED");
     }
@@ -2320,6 +2344,7 @@ export const qaService = {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
             "Content-Type": "application/json",
+            ...(storeId && { "X-Store-Id": storeId }),
           },
           timeout: 15_000,
         }
@@ -2339,6 +2364,7 @@ export const qaService = {
 
   async updateCustomReport(id: number, payload: CustomReportPayload): Promise<CustomReport> {
     const token = getToken();
+    const storeId = getSelectedStoreId();
     if (!token) {
       throw new QAError("You must be logged in to update custom reports.", "NOT_AUTHENTICATED");
     }
@@ -2352,6 +2378,7 @@ export const qaService = {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
             "Content-Type": "application/json",
+            ...(storeId && { "X-Store-Id": storeId }),
           },
           timeout: 15_000,
         }
@@ -2371,13 +2398,18 @@ export const qaService = {
 
   async deleteCustomReport(id: number): Promise<void> {
     const token = getToken();
+    const storeId = getSelectedStoreId();
     if (!token) {
       throw new QAError("You must be logged in to delete custom reports.", "NOT_AUTHENTICATED");
     }
 
     try {
       await axios.delete(`/api/qa/custom-reports/${id}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          ...(storeId && { "X-Store-Id": storeId }),
+        },
         timeout: 15_000,
       });
     } catch (err) {

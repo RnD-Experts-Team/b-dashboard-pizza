@@ -1,0 +1,188 @@
+import type { ScheduleEmployee } from "@/types/scheduling.types";
+
+export const DUMMY_EMPLOYEES: ScheduleEmployee[] = [
+  {
+    id: "emp-1",
+    name: "Marco Rossi",
+    age: 28,
+    avatar: "MR",
+    station: "Pizzaiolo",
+    totalHours: 0,
+  },
+  {
+    id: "emp-2",
+    name: "Sofia Kim",
+    age: 24,
+    avatar: "SK",
+    station: "Cashier",
+    totalHours: 0,
+  },
+  {
+    id: "emp-3",
+    name: "Leo Jenkins",
+    age: 31,
+    avatar: "LJ",
+    station: "Pizzaiolo",
+    totalHours: 0,
+  },
+  {
+    id: "emp-4",
+    name: "Elena Patel",
+    age: 26,
+    avatar: "EP",
+    station: "Prep Cook",
+    totalHours: 0,
+  },
+  {
+    id: "emp-5",
+    name: "David Chen",
+    age: 22,
+    avatar: "DC",
+    station: "Delivery",
+    totalHours: 0,
+  },
+  {
+    id: "emp-6",
+    name: "Maria Rodriguez",
+    age: 29,
+    avatar: "MG",
+    station: "Cashier",
+    totalHours: 0,
+  },
+  {
+    id: "emp-7",
+    name: "James Carter",
+    age: 35,
+    avatar: "JC",
+    station: "Prep Cook",
+    totalHours: 0,
+  },
+  {
+    id: "emp-8",
+    name: "Aisha Noor",
+    age: 27,
+    avatar: "AN",
+    station: "Delivery",
+    totalHours: 0,
+  },
+];
+
+export const DAYS_OF_WEEK = [
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+  "Monday",
+] as const;
+
+export const DAYS_SHORT = [
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+  "Sun",
+  "Mon",
+] as const;
+
+export const STATIONS = [
+  "Pizzaiolo",
+  "Cashier",
+  "Prep Cook",
+  "Delivery",
+  "Manager",
+] as const;
+
+/** Store hours: 9:00 AM to 12:00 AM (midnight) */
+export const STORE_OPEN = "09:00";
+export const STORE_CLOSE = "00:00";
+
+/** Grid time axis starts at 9 AM (hour 9) and ends at 12 AM (hour 24) → 15 hours */
+export const GRID_START_HOUR = 9;
+export const GRID_END_HOUR = 24; // represents midnight (00:00)
+export const GRID_TOTAL_HOURS = GRID_END_HOUR - GRID_START_HOUR; // 15
+
+/** Build time options from 9:00 AM to 12:00 AM in 30-minute intervals */
+export function getTimeOptions(): string[] {
+  const options: string[] = [];
+  // 9:00 to 23:30
+  for (let h = 9; h < 24; h++) {
+    options.push(`${String(h).padStart(2, "0")}:00`);
+    options.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  // Add midnight as end option
+  options.push("00:00");
+  return options;
+}
+
+/** Format 24h time string to 12h display */
+export function formatTime(time: string): string {
+  const [hStr, mStr] = time.split(":");
+  let h = parseInt(hStr, 10);
+  const m = mStr;
+  if (h === 0) return `12:${m} AM`;
+  if (h === 12) return `12:${m} PM`;
+  if (h > 12) return `${h - 12}:${m} PM`;
+  return `${h}:${m} AM`;
+}
+
+/** Calculate hours between two times (handles midnight wrap) */
+export function calcHours(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let startMin = sh * 60 + sm;
+  let endMin = eh * 60 + em;
+  if (endMin <= startMin) endMin += 24 * 60; // wrap past midnight
+  return (endMin - startMin) / 60;
+}
+
+/** Time labels for the left axis (9 AM through 12 AM) */
+export function getTimeLabels(): string[] {
+  const labels: string[] = [];
+  for (let h = GRID_START_HOUR; h <= GRID_END_HOUR; h++) {
+    const hour = h === 24 ? 0 : h; // 24 → midnight display
+    labels.push(formatTime(`${String(hour).padStart(2, "0")}:00`));
+  }
+  return labels;
+}
+
+/**
+ * Convert a time string to a top-% offset within the grid.
+ * "09:00" → 0%, "00:00" (midnight) → 100%.
+ */
+export function timeToPercent(time: string): number {
+  const [hStr, mStr] = time.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  // Treat midnight (0:00) as 24:00
+  if (h === 0 && m === 0) h = 24;
+  const minutesFromStart = (h - GRID_START_HOUR) * 60 + m;
+  const totalMinutes = GRID_TOTAL_HOURS * 60;
+  return Math.max(0, Math.min(100, (minutesFromStart / totalMinutes) * 100));
+}
+
+/**
+ * Convert a time range to { top%, height% } within the grid.
+ */
+export function shiftToPosition(
+  startTime: string,
+  endTime: string
+): { top: number; height: number } {
+  const top = timeToPercent(startTime);
+  const bottom = timeToPercent(endTime);
+  return { top, height: Math.max(bottom - top, 2) }; // min 2% so tiny shifts are visible
+}
+
+/** Palette of distinguishable colors for overlapping shifts */
+export const SHIFT_COLORS = [
+  { bg: "bg-blue-500/15 dark:bg-blue-400/20", border: "border-blue-500/40 dark:border-blue-400/40", text: "text-blue-700 dark:text-blue-300" },
+  { bg: "bg-emerald-500/15 dark:bg-emerald-400/20", border: "border-emerald-500/40 dark:border-emerald-400/40", text: "text-emerald-700 dark:text-emerald-300" },
+  { bg: "bg-violet-500/15 dark:bg-violet-400/20", border: "border-violet-500/40 dark:border-violet-400/40", text: "text-violet-700 dark:text-violet-300" },
+  { bg: "bg-amber-500/15 dark:bg-amber-400/20", border: "border-amber-500/40 dark:border-amber-400/40", text: "text-amber-700 dark:text-amber-300" },
+  { bg: "bg-rose-500/15 dark:bg-rose-400/20", border: "border-rose-500/40 dark:border-rose-400/40", text: "text-rose-700 dark:text-rose-300" },
+  { bg: "bg-cyan-500/15 dark:bg-cyan-400/20", border: "border-cyan-500/40 dark:border-cyan-400/40", text: "text-cyan-700 dark:text-cyan-300" },
+  { bg: "bg-orange-500/15 dark:bg-orange-400/20", border: "border-orange-500/40 dark:border-orange-400/40", text: "text-orange-700 dark:text-orange-300" },
+  { bg: "bg-pink-500/15 dark:bg-pink-400/20", border: "border-pink-500/40 dark:border-pink-400/40", text: "text-pink-700 dark:text-pink-300" },
+] as const;

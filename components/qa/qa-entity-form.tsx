@@ -360,7 +360,7 @@ export function QAEntityForm() {
 
       {/* Actions */}
       <div className="flex gap-3">
-        <Button type="submit" disabled={isCreating} className="min-w-[140px]">
+        <Button type="submit" disabled={isCreating} className="min-w-35">
           {isCreating ? (
             <>
               <Loader2 className="me-2 h-4 w-4 animate-spin" />
