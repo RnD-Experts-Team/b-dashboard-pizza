@@ -74,7 +74,7 @@ export function EmployeeDetailsDialog({
           <div>
             <h3 className="text-lg font-semibold">{employee.name}</h3>
             <p className="text-sm text-muted-foreground">
-              Age: {employee.age}
+              {employee.department}
             </p>
           </div>
         </div>
@@ -87,7 +87,7 @@ export function EmployeeDetailsDialog({
               Station
             </p>
             <Badge variant="secondary" className="mt-1">
-              {employee.station}
+              {employee.role}
             </Badge>
           </div>
           <div>
@@ -156,7 +156,7 @@ export function EmployeeDetailsDialog({
                       {formatTime(s.startTime)} - {formatTime(s.endTime)}
                     </span>
                     <Badge variant="outline" className="text-[10px]">
-                      {s.station}
+                      {s.label}
                     </Badge>
                   </div>
                 ))}

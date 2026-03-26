@@ -1,1 +1,1 @@
-export { SchedulingManager } from "./scheduling-manager";
+export { SchedulingManager } from "./scheduling-manager-new";

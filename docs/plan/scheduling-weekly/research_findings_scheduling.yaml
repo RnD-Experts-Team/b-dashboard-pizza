@@ -1,0 +1,650 @@
+plan_id: scheduling-weekly
+objective: Gather all context needed to build a new weekly employee scheduling page
+focus_area: scheduling
+created_at: "2026-03-26"
+created_by: gem-researcher
+status: completed
+
+tldr:
+  |
+  - Scheduling module is fully client-side with drag-and-drop shift creation on a 7-day grid (Tue-Mon), using mock data for 8 employees across 5 stations.
+  - Built with shadcn/ui components (Dialog, Card, Avatar, Badge, Select, ScrollArea, etc.), Tailwind CSS v4 with oklch theme variables, and native HTML5 drag-and-drop (not @dnd-kit).
+  - Key libraries available: date-fns v4, @dnd-kit (core+sortable), zustand, zod, react-hook-form, html2canvas-pro, lucide-react, next-intl, next-themes, sonner, apexcharts.
+  - Architecture: page.tsx renders SchedulingManager (barrel export), which orchestrates EmployeeSidebar, ScheduleGrid, AddShiftDialog, PublishedSchedules, EmployeeDetailsDialog.
+  - Grid uses absolute positioning with percentage-based time layout (9AM-midnight), greedy lane algorithm for overlapping shifts, and dynamic column widths.
+
+research_metadata:
+  methodology: "hybrid retrieval: file listing + targeted read_file for all scheduling files, package.json, globals.css, layout, i18n config, UI components directory"
+  scope: "Full scheduling module (7 files), types, lib/data, layout, theming, package dependencies, i18n config, UI component inventory"
+  confidence: high
+  coverage: 95
+
+files_analyzed:
+  - file: page.tsx
+    path: app/[locale]/(dashboard)/dashboard/scheduling/page.tsx
+    purpose: Entry point for scheduling route - renders SchedulingManager
+    key_elements:
+      - element: SchedulingPage
+        type: function
+        location: "page.tsx:4"
+        description: '"use client" page that renders <SchedulingManager /> via barrel import'
+    language: tsx
+    lines: 7
+
+  - file: scheduling-manager.tsx
+    path: components/scheduling/scheduling-manager.tsx
+    purpose: Main orchestrator component managing all scheduling state and interactions
+    key_elements:
+      - element: SchedulingManager
+        type: function
+        location: "scheduling-manager.tsx:60"
+        description: "Manages weekOffset, shifts[], publishedSchedules[], dialog state, screenshot/publish logic"
+      - element: getWeekDates
+        type: function
+        location: "scheduling-manager.tsx:19"
+        description: "Calculates Tue-Mon week span with offset, returns start/end dates, label, dayDates array"
+      - element: handleDropEmployee
+        type: function
+        location: "scheduling-manager.tsx:81"
+        description: "Callback when employee dropped on grid day - opens AddShiftDialog"
+      - element: handleConfirmShift
+        type: function
+        location: "scheduling-manager.tsx:88"
+        description: "Creates new Shift or updates existing one, uses Date.now() + random for IDs"
+      - element: handlePublish
+        type: function
+        location: "scheduling-manager.tsx:115"
+        description: "Dynamic imports html2canvas-pro, captures grid screenshot, stores as PublishedSchedule"
+      - element: handleScreenshot
+        type: function
+        location: "scheduling-manager.tsx:148"
+        description: "Downloads PNG screenshot of the schedule grid"
+    language: tsx
+    lines: 375
+
+  - file: schedule-grid.tsx
+    path: components/scheduling/schedule-grid.tsx
+    purpose: Visual time-based grid displaying 7 day columns with shift blocks
+    key_elements:
+      - element: ScheduleGrid
+        type: function
+        location: "schedule-grid.tsx:83"
+        description: "Renders sticky day headers + time gutter + day columns with positioned shift blocks. Uses native HTML5 drag/drop events."
+      - element: layoutShiftsInDay
+        type: function
+        location: "schedule-grid.tsx:32"
+        description: "Greedy column assignment algorithm for overlapping shifts within a single day"
+      - element: LANE_WIDTH
+        type: variable
+        location: "schedule-grid.tsx:73"
+        description: "131px per shift lane, dynamic column widths based on overlap count"
+      - element: HOUR_HEIGHT
+        type: variable
+        location: "schedule-grid.tsx:118"
+        description: "48px per hour, total grid height = GRID_TOTAL_HOURS * 48"
+    language: tsx
+    lines: 290
+
+  - file: employee-sidebar.tsx
+    path: components/scheduling/employee-sidebar.tsx
+    purpose: Searchable list of draggable employees with hours tracking
+    key_elements:
+      - element: EmployeeSidebar
+        type: function
+        location: "employee-sidebar.tsx:21"
+        description: "Filterable employee list with drag support, tracks weekly hours per employee, double-click opens details dialog"
+    language: tsx
+    lines: 105
+
+  - file: add-shift-dialog.tsx
+    path: components/scheduling/add-shift-dialog.tsx
+    purpose: Dialog for creating or editing a shift (start/end time + station)
+    key_elements:
+      - element: AddShiftDialog
+        type: function
+        location: "add-shift-dialog.tsx:32"
+        description: "Select-based form for start time, end time, station. Handles both add and edit modes via editingShift prop."
+    language: tsx
+    lines: 130
+
+  - file: published-schedules.tsx
+    path: components/scheduling/published-schedules.tsx
+    purpose: Grid display of previously published schedule screenshots
+    key_elements:
+      - element: PublishedSchedules
+        type: function
+        location: "published-schedules.tsx:18"
+        description: "Renders cards with screenshots, restore and delete buttons"
+    language: tsx
+    lines: 68
+
+  - file: employee-details-dialog.tsx
+    path: components/scheduling/employee-details-dialog.tsx
+    purpose: Dialog showing employee info, contact details, and scheduled shifts
+    key_elements:
+      - element: EmployeeDetailsDialog
+        type: function
+        location: "employee-details-dialog.tsx:54"
+        description: "Shows avatar, station, weekly hours, mock contact info (phone/email/address/emergency), list of shifts"
+      - element: MOCK_DETAILS
+        type: variable
+        location: "employee-details-dialog.tsx:15"
+        description: "Hardcoded contact info for 8 mock employees keyed by emp-1 through emp-8"
+    language: tsx
+    lines: 175
+
+  - file: index.ts
+    path: components/scheduling/index.ts
+    purpose: Barrel export for scheduling module
+    key_elements:
+      - element: barrel export
+        type: pattern
+        location: "index.ts:1"
+        description: 'export { SchedulingManager } from "./scheduling-manager"'
+    language: ts
+    lines: 1
+
+  - file: data.ts
+    path: lib/scheduling/data.ts
+    purpose: Mock data, constants, and utility functions for scheduling
+    key_elements:
+      - element: DUMMY_EMPLOYEES
+        type: variable
+        location: "data.ts:3"
+        description: "8 mock ScheduleEmployee entries with id, name, age, avatar initials, station, totalHours"
+      - element: DAYS_OF_WEEK
+        type: variable
+        location: "data.ts:60"
+        description: '["Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday","Monday"] - week starts Tuesday'
+      - element: DAYS_SHORT
+        type: variable
+        location: "data.ts:68"
+        description: '["Tue","Wed","Thu","Fri","Sat","Sun","Mon"]'
+      - element: STATIONS
+        type: variable
+        location: "data.ts:76"
+        description: '["Pizzaiolo","Cashier","Prep Cook","Delivery","Manager"]'
+      - element: GRID_START_HOUR / GRID_END_HOUR
+        type: variable
+        location: "data.ts:84-86"
+        description: "9 to 24 (midnight), total 15 hours for the time axis"
+      - element: getTimeOptions
+        type: function
+        location: "data.ts:89"
+        description: "Returns 30-min interval time strings from 09:00 to 00:00"
+      - element: formatTime
+        type: function
+        location: "data.ts:100"
+        description: "Converts 24h format to 12h AM/PM display string"
+      - element: calcHours
+        type: function
+        location: "data.ts:109"
+        description: "Calculates duration between two time strings, handles midnight wrap"
+      - element: timeToPercent
+        type: function
+        location: "data.ts:124"
+        description: "Converts time to vertical percentage position in grid"
+      - element: shiftToPosition
+        type: function
+        location: "data.ts:136"
+        description: "Returns {top%, height%} for a shift block in the grid"
+      - element: SHIFT_COLORS
+        type: variable
+        location: "data.ts:144"
+        description: "8-color palette with bg/border/text classes for light+dark mode"
+    language: ts
+    lines: 155
+
+  - file: scheduling.types.ts
+    path: types/scheduling.types.ts
+    purpose: TypeScript interfaces for scheduling domain
+    key_elements:
+      - element: ScheduleEmployee
+        type: interface
+        location: "scheduling.types.ts:1"
+        description: "id, name, age, avatar, station, totalHours"
+      - element: Shift
+        type: interface
+        location: "scheduling.types.ts:9"
+        description: "id, employeeId, dayIndex (0-6), startTime (HH:mm), endTime (HH:mm), station"
+      - element: PublishedSchedule
+        type: interface
+        location: "scheduling.types.ts:18"
+        description: "id, weekLabel, publishedAt, screenshotDataUrl, shifts[]"
+    language: ts
+    lines: 25
+
+  - file: layout.tsx
+    path: app/[locale]/(dashboard)/dashboard/layout.tsx
+    purpose: Dashboard layout with auth guard and AppShell wrapper
+    key_elements:
+      - element: DashboardLayout
+        type: function
+        location: "layout.tsx:9"
+        description: '"use client" layout that checks auth via useAuthStore, redirects to login if unauthenticated, wraps children in <AppShell>'
+    language: tsx
+    lines: 43
+
+  - file: page-header.tsx
+    path: components/layout/page-header.tsx
+    purpose: Reusable page header with title, description, and action slot
+    key_elements:
+      - element: PageHeader
+        type: function
+        location: "page-header.tsx:10"
+        description: "Renders title (h1), optional description (p), and children as action buttons in a responsive flex row"
+    language: tsx
+    lines: 28
+
+  - file: globals.css
+    path: app/globals.css
+    purpose: Theme variables, Tailwind imports, animations, base styles
+    key_elements:
+      - element: ":root CSS variables"
+        type: pattern
+        location: "globals.css:52-90"
+        description: "oklch-based light theme: background, foreground, card, primary, secondary, muted, accent, destructive, border, input, ring, chart-1..5, sidebar-*, skeleton-*, scrollbar-*"
+      - element: ".dark CSS variables"
+        type: pattern
+        location: "globals.css:98-138"
+        description: "Dark theme overrides for all variables"
+      - element: "skeleton-shimmer"
+        type: pattern
+        location: "globals.css:148"
+        description: "Pulse animation for skeleton loading states"
+    language: css
+    lines: 195
+
+  - file: config.ts
+    path: lib/i18n/config.ts
+    purpose: i18n configuration with locale definitions
+    key_elements:
+      - element: locales
+        type: variable
+        location: "config.ts:1"
+        description: '["en", "ar"] with types, directions (ltr/rtl), display names'
+    language: ts
+    lines: 20
+
+  - file: package.json
+    path: package.json
+    purpose: Project dependencies and scripts
+    key_elements:
+      - element: dependencies
+        type: variable
+        location: "package.json:13-52"
+        description: "Full dependency list including scheduling-relevant packages"
+    language: json
+    lines: 70
+
+patterns_found:
+  - category: architecture
+    pattern: "page-delegates-to-component"
+    description: "Route page.tsx files are thin wrappers that render a single feature component via barrel export"
+    examples:
+      - file: page.tsx
+        location: "app/[locale]/(dashboard)/dashboard/scheduling/page.tsx:4-7"
+        snippet: 'export default function SchedulingPage() { return <SchedulingManager />; }'
+    prevalence: common
+
+  - category: architecture
+    pattern: "barrel-export-per-feature"
+    description: "Each feature directory has an index.ts that re-exports only the main entry component"
+    examples:
+      - file: index.ts
+        location: "components/scheduling/index.ts:1"
+        snippet: 'export { SchedulingManager } from "./scheduling-manager";'
+    prevalence: common
+
+  - category: architecture
+    pattern: "client-side-only-pages"
+    description: "Dashboard pages use 'use client' directive, state management via React hooks (useState, useCallback, useMemo)"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/scheduling-manager.tsx:1"
+        snippet: '"use client"; import { useState, useCallback, useRef, useMemo } from "react";'
+    prevalence: common
+
+  - category: structure
+    pattern: "feature-directory-organization"
+    description: "Each feature has: components/<feature>/ (UI), lib/<feature>/ (data/utils), types/<feature>.types.ts"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/"
+        snippet: "7 component files + index.ts barrel"
+    prevalence: common
+
+  - category: naming
+    pattern: "kebab-case-files-PascalCase-components"
+    description: "File names use kebab-case (scheduling-manager.tsx), components use PascalCase (SchedulingManager)"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/scheduling-manager.tsx"
+        snippet: "export function SchedulingManager()"
+    prevalence: common
+
+  - category: naming
+    pattern: "UPPER_SNAKE_CASE-constants"
+    description: "Constants exported in UPPER_SNAKE_CASE"
+    examples:
+      - file: data.ts
+        location: "lib/scheduling/data.ts"
+        snippet: "DUMMY_EMPLOYEES, DAYS_OF_WEEK, STATIONS, GRID_START_HOUR, SHIFT_COLORS"
+    prevalence: common
+
+  - category: structure
+    pattern: "page-header-with-actions"
+    description: "Pages use <PageHeader title description> with action buttons as children"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/scheduling-manager.tsx:237"
+        snippet: '<PageHeader title="Weekly Schedule Manager" description="..."><Button>Publish</Button></PageHeader>'
+    prevalence: common
+
+  - category: structure
+    pattern: "shadcn-ui-composition"
+    description: "UI built by composing shadcn/ui primitives: Card+CardHeader+CardContent, Dialog+DialogContent+DialogHeader, etc."
+    examples:
+      - file: add-shift-dialog.tsx
+        location: "components/scheduling/add-shift-dialog.tsx"
+        snippet: "<Dialog><DialogContent><DialogHeader><DialogTitle>...</DialogTitle></DialogHeader>...</DialogContent></Dialog>"
+    prevalence: common
+
+  - category: structure
+    pattern: "toast-notifications-via-sonner"
+    description: "User feedback via sonner toast() calls: toast.success(), toast.info(), toast.warning(), toast.error()"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/scheduling-manager.tsx:108"
+        snippet: 'toast.success("Shift added successfully");'
+    prevalence: common
+
+  - category: error_handling
+    pattern: "try-catch-with-toast"
+    description: "Async operations wrapped in try/catch with toast.error() for failures"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/scheduling-manager.tsx:130"
+        snippet: 'catch { toast.error("Failed to capture schedule screenshot"); }'
+    prevalence: common
+
+  - category: architecture
+    pattern: "native-html5-drag-drop"
+    description: "Scheduling uses native HTML5 drag/drop (draggable, onDragStart, onDragOver, onDrop) rather than @dnd-kit"
+    examples:
+      - file: employee-sidebar.tsx
+        location: "components/scheduling/employee-sidebar.tsx:69"
+        snippet: 'draggable onDragStart={(e) => { e.dataTransfer.setData("employee-id", emp.id); }}'
+    prevalence: occasional
+
+  - category: architecture
+    pattern: "mock-data-in-lib-directory"
+    description: "Mock/dummy data defined as exported constants in lib/<feature>/data.ts"
+    examples:
+      - file: data.ts
+        location: "lib/scheduling/data.ts:3"
+        snippet: "export const DUMMY_EMPLOYEES: ScheduleEmployee[] = [...]"
+    prevalence: common
+
+  - category: structure
+    pattern: "tailwind-v4-oklch-theming"
+    description: "Theme uses CSS custom properties with oklch colors, @theme inline block, @custom-variant dark"
+    examples:
+      - file: globals.css
+        location: "app/globals.css:1-6"
+        snippet: '@import "tailwindcss"; @custom-variant dark (&:is(.dark *)); @theme inline { ... }'
+    prevalence: common
+
+  - category: structure
+    pattern: "cn-utility-for-classnames"
+    description: "Class merging via cn() from lib/utils (clsx + tailwind-merge)"
+    examples:
+      - file: schedule-grid.tsx
+        location: "components/scheduling/schedule-grid.tsx"
+        snippet: 'className={cn("absolute rounded-md border", color.bg, color.border)}'
+    prevalence: common
+
+  - category: structure
+    pattern: "responsive-layout-pattern"
+    description: "Mobile-first responsive: flex-col for mobile, lg:flex-row for desktop"
+    examples:
+      - file: scheduling-manager.tsx
+        location: "components/scheduling/scheduling-manager.tsx:278"
+        snippet: '<div className="flex flex-col gap-4 lg:flex-row">'
+    prevalence: common
+
+related_architecture:
+  components_relevant_to_domain:
+    - component: AppShell
+      responsibility: "Main dashboard shell (sidebar nav + content area)"
+      location: components/layout/app-shell.tsx
+      relationship_to_domain: "Parent wrapper - scheduling page renders inside this"
+    - component: PageHeader
+      responsibility: "Consistent page title/description/actions bar"
+      location: components/layout/page-header.tsx
+      relationship_to_domain: "Used at top of scheduling page"
+    - component: useAuthStore
+      responsibility: "Authentication state management via zustand"
+      location: lib/auth/auth.store.ts
+      relationship_to_domain: "Dashboard layout checks auth before rendering scheduling"
+  interfaces_used_by_domain:
+    - interface: ScheduleEmployee
+      location: types/scheduling.types.ts
+      usage_pattern: "Used for employee data in sidebar, grid, dialogs"
+    - interface: Shift
+      location: types/scheduling.types.ts
+      usage_pattern: "Core data model for all shift CRUD operations"
+    - interface: PublishedSchedule
+      location: types/scheduling.types.ts
+      usage_pattern: "Stores published schedule screenshots with shift data"
+  data_flow_involving_domain: |
+    SchedulingManager holds all state (shifts, publishedSchedules, weekOffset, dialog state).
+    EmployeeSidebar -> drag event -> ScheduleGrid -> onDropEmployee -> opens AddShiftDialog.
+    AddShiftDialog -> onConfirm -> creates/updates Shift in SchedulingManager state.
+    Publish flow: captures grid screenshot via html2canvas-pro -> stores as PublishedSchedule.
+    All data is ephemeral client-side state (no persistence/API calls).
+  key_relationships_to_domain:
+    - from: page.tsx
+      to: SchedulingManager
+      relationship: renders
+    - from: SchedulingManager
+      to: EmployeeSidebar
+      relationship: composes
+    - from: SchedulingManager
+      to: ScheduleGrid
+      relationship: composes
+    - from: SchedulingManager
+      to: AddShiftDialog
+      relationship: composes
+    - from: SchedulingManager
+      to: PublishedSchedules
+      relationship: composes
+    - from: EmployeeSidebar
+      to: EmployeeDetailsDialog
+      relationship: composes
+    - from: all components
+      to: lib/scheduling/data.ts
+      relationship: imports constants and utilities
+    - from: all components
+      to: types/scheduling.types.ts
+      relationship: imports type definitions
+
+related_technology_stack:
+  languages_used_in_domain:
+    - TypeScript
+    - TSX
+    - CSS (Tailwind v4)
+  frameworks_used_in_domain:
+    - name: Next.js 16
+      usage_in_domain: "App Router with [locale]/(dashboard) route groups, 'use client' pages"
+    - name: React 19
+      usage_in_domain: "Hooks-based state management (useState, useCallback, useMemo, useRef, useEffect)"
+    - name: Tailwind CSS v4
+      usage_in_domain: "Utility-first styling with oklch theme variables, @theme inline"
+  libraries_used_in_domain:
+    - name: shadcn/ui (radix primitives)
+      purpose_in_domain: "UI components: Dialog, Card, Button, Avatar, Badge, Select, ScrollArea, Input, Label, Separator, Tabs"
+    - name: lucide-react
+      purpose_in_domain: "Icons: ChevronLeft, ChevronRight, Send, Camera, X, Search, RotateCcw, Trash2"
+    - name: sonner
+      purpose_in_domain: "Toast notifications for user feedback"
+    - name: html2canvas-pro
+      purpose_in_domain: "Screenshot capture for publishing schedules (dynamic import)"
+    - name: next-intl
+      purpose_in_domain: "i18n - useTranslations() for localized strings (used in main dashboard, not yet in scheduling)"
+    - name: next-themes
+      purpose_in_domain: "Dark/light mode toggle"
+    - name: clsx + tailwind-merge (via cn())
+      purpose_in_domain: "Conditional class name composition"
+
+related_conventions:
+  naming_patterns_in_domain: "kebab-case files, PascalCase components, UPPER_SNAKE_CASE constants, camelCase functions/variables"
+  structure_of_domain: |
+    - Route: app/[locale]/(dashboard)/dashboard/scheduling/page.tsx (thin wrapper)
+    - Components: components/scheduling/ (7 files + barrel index.ts)
+    - Data/utils: lib/scheduling/data.ts (mock data, constants, helpers)
+    - Types: types/scheduling.types.ts (interfaces)
+  error_handling_in_domain: "try/catch with sonner toast.error() for async operations"
+  testing_in_domain: "No tests found for scheduling module"
+  documentation_in_domain: "JSDoc comments on key utility functions in data.ts"
+
+related_dependencies:
+  internal:
+    - component: "@/components/layout/page-header"
+      relationship_to_domain: "PageHeader used for page title bar"
+      direction: outbound
+    - component: "@/components/ui/*"
+      relationship_to_domain: "shadcn/ui primitives used throughout"
+      direction: outbound
+    - component: "@/lib/utils (cn)"
+      relationship_to_domain: "Class name merging utility"
+      direction: outbound
+  external:
+    - name: date-fns v4
+      purpose_for_domain: "Available but NOT currently used - scheduling uses manual Date calculations"
+    - name: "@dnd-kit/core + @dnd-kit/sortable"
+      purpose_for_domain: "Available but NOT used for scheduling - native HTML5 drag/drop used instead"
+    - name: zustand
+      purpose_for_domain: "Available for state management - scheduling currently uses local useState"
+    - name: zod
+      purpose_for_domain: "Available for validation - not currently used in scheduling"
+    - name: react-hook-form
+      purpose_for_domain: "Available for forms - scheduling dialog uses manual Select state"
+    - name: react-day-picker v9
+      purpose_for_domain: "Available - calendar component exists in components/ui/calendar.tsx"
+    - name: html2canvas-pro
+      purpose_for_domain: "Used for schedule screenshot/publish feature"
+    - name: apexcharts + react-apexcharts
+      purpose_for_domain: "Available for charting if needed in scheduling analytics"
+
+available_ui_components:
+  - alert-dialog.tsx
+  - alert.tsx
+  - avatar.tsx
+  - badge.tsx
+  - button.tsx
+  - calendar.tsx
+  - card.tsx
+  - checkbox.tsx
+  - collapsible.tsx
+  - dialog.tsx
+  - dropdown-menu.tsx
+  - form.tsx
+  - input.tsx
+  - label.tsx
+  - popover.tsx
+  - progress.tsx
+  - scroll-area.tsx
+  - select.tsx
+  - separator.tsx
+  - sheet.tsx
+  - skeleton.tsx
+  - sonner.tsx
+  - switch.tsx
+  - table.tsx
+  - tabs.tsx
+  - textarea.tsx
+  - tooltip.tsx
+
+available_dashboard_routes:
+  - assignments
+  - auth-rules
+  - camera-report
+  - custom-reports
+  - dev-tools
+  - due-keys
+  - employee-debriefs
+  - employees
+  - entities-and-categories
+  - export-import
+  - hierarchy
+  - keys
+  - maintenance
+  - permissions
+  - quality-assurance
+  - roles
+  - scheduling
+  - sensors
+  - service-clients
+  - settings
+  - stores
+  - tags
+  - user-store-assignment
+  - users
+
+mock_data_patterns:
+  employees: "8 dummy employees with id (emp-1..emp-8), name, age, avatar (initials), station, totalHours"
+  stations: "Pizzaiolo, Cashier, Prep Cook, Delivery, Manager"
+  week_structure: "Tuesday through Monday (not standard Mon-Sun)"
+  time_range: "9:00 AM to 12:00 AM midnight, 30-min intervals"
+  shift_ids: "Generated via Date.now() + random string"
+  employee_details: "Hardcoded MOCK_DETAILS record with phone, email, hireDate, address, emergencyContact"
+
+theme_variables:
+  light:
+    background: "oklch(1 0 0)"
+    foreground: "oklch(0.145 0 0)"
+    card: "oklch(1 0 0)"
+    primary: "oklch(0.205 0 0)"
+    secondary: "oklch(0.97 0 0)"
+    muted: "oklch(0.97 0 0)"
+    muted-foreground: "oklch(0.556 0 0)"
+    accent: "oklch(0.97 0 0)"
+    destructive: "oklch(0.577 0.245 27.325)"
+    border: "oklch(0.922 0 0)"
+  dark:
+    background: "oklch(0.145 0 0)"
+    foreground: "oklch(0.985 0 0)"
+    card: "oklch(0.205 0 0)"
+    primary: "oklch(0.922 0 0)"
+    secondary: "oklch(0.269 0 0)"
+    muted: "oklch(0.269 0 0)"
+    muted-foreground: "oklch(0.708 0 0)"
+    destructive: "oklch(0.704 0.191 22.216)"
+    border: "oklch(1 0 0 / 10%)"
+  radius: "0.625rem"
+  chart_colors: "5 chart-1 through chart-5 variables"
+  shift_colors: "8-color palette (blue, emerald, violet, amber, rose, cyan, orange, pink) with bg/border/text for both modes"
+
+open_questions:
+  - question: "Should the new weekly scheduling page replace the existing one or coexist as a new route?"
+    context: "Current scheduling lives at /dashboard/scheduling - need to know if this is a rebuild or addition"
+  - question: "Will the new page need API integration or continue with mock data?"
+    context: "Current implementation is fully client-side with no persistence"
+  - question: "Should i18n translations be added (useTranslations) - current scheduling has no internationalization"
+    context: "The main dashboard page uses next-intl but scheduling components have hardcoded English strings"
+  - question: "Is there a preference for @dnd-kit over native HTML5 drag-drop for the new implementation?"
+    context: "@dnd-kit is installed as a dependency but the current scheduling uses native drag/drop"
+  - question: "Should the week still start on Tuesday or switch to a standard Monday start?"
+    context: "Current DAYS_OF_WEEK starts Tuesday - this seems pizza-restaurant specific"
+
+gaps:
+  - area: "AppShell component internals"
+    description: "Did not read the full AppShell layout component to understand sidebar navigation structure"
+    impact: "Minor - the scheduling page renders inside AppShell but doesn't directly interact with it"
+  - area: "i18n message files"
+    description: "Did not read en.json/ar.json to check for existing scheduling translation keys"
+    impact: "Low - scheduling currently has no i18n, would need new keys regardless"
+  - area: "API layer patterns"
+    description: "Did not examine app/api/ routes to understand backend integration patterns"
+    impact: "Relevant only if the new page needs API persistence"

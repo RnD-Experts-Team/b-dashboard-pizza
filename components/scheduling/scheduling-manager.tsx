@@ -94,7 +94,7 @@ export function SchedulingManager() {
         setShifts((prev) =>
           prev.map((s) =>
             s.id === editingShift.id
-              ? { ...s, startTime, endTime, station }
+              ? { ...s, startTime, endTime, label: station, type: "custom" as const }
               : s
           )
         );
@@ -109,7 +109,8 @@ export function SchedulingManager() {
         dayIndex: pendingDrop.dayIndex,
         startTime,
         endTime,
-        station,
+        label: station,
+        type: "custom",
       };
       setShifts((prev) => [...prev, newShift]);
       setPendingDrop(null);

@@ -80,7 +80,7 @@ export function EmployeeSidebar({ employees, shifts }: EmployeeSidebarProps) {
                   </p>
                 </div>
                 <Badge variant="outline" className="text-[9px] px-1 py-0 shrink-0">
-                  {emp.station}
+                  {emp.role}
                 </Badge>
               </div>
             ))}

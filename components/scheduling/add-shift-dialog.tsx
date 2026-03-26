@@ -21,6 +21,9 @@ import {
 import type { ScheduleEmployee, Shift } from "@/types/scheduling.types";
 import { STATIONS, getTimeOptions, formatTime } from "@/lib/scheduling/data";
 
+// Compat: old dialog uses station field removed from types
+type LegacyShift = Shift & { station?: string };
+
 interface AddShiftDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,7 +45,7 @@ export function AddShiftDialog({
 }: AddShiftDialogProps) {
   const [startTime, setStartTime] = useState("10:00");
   const [endTime, setEndTime] = useState("18:00");
-  const [station, setStation] = useState(employee?.station ?? STATIONS[0]);
+  const [station, setStation] = useState(employee?.role ?? STATIONS[0]);
 
   const isEditing = !!editingShift;
   const timeOptions = getTimeOptions();
@@ -52,11 +55,11 @@ export function AddShiftDialog({
     if (editingShift) {
       setStartTime(editingShift.startTime);
       setEndTime(editingShift.endTime);
-      setStation(editingShift.station);
+      setStation(editingShift.label);
     } else if (employee) {
       setStartTime("10:00");
       setEndTime("18:00");
-      setStation(employee.station);
+      setStation(employee.role);
     }
   }, [editingShift, employee]);
 

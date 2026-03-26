@@ -270,7 +270,7 @@ export function ScheduleGrid({
                         variant="secondary"
                         className="mt-0.5 text-[8px] px-1 py-0 h-3.5"
                       >
-                        {shift.station}
+                        {shift.label}
                       </Badge>
                     </div>
                   );
