@@ -149,7 +149,7 @@ export function SalesChart({
       },
       yaxis: {
         labels: {
-          formatter: (val: number) => `${currencyPrefix}${val.toLocaleString()}`,
+          formatter: (val: number) => val == null ? "" : `${currencyPrefix}${val.toLocaleString()}`,
           style: { fontSize: "10px", colors: isDark ? "#a1a1aa" : "#71717a" },
         },
         title: { text: "Sales", style: { color: isDark ? "#a1a1aa" : "#71717a" } },
@@ -158,10 +158,42 @@ export function SalesChart({
         enabled: tooltip,
         shared: true,
         intersect: false,
-        theme: isDark ? "dark" : "light",
-        y: {
-          formatter: (val: number) =>
-            `${currencyPrefix}${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        // Custom tooltip to fix ApexCharts mixed-chart legend-toggle bug
+        // where hiding the line series breaks the shared tooltip for columns
+        custom: ({ dataPointIndex, w }: { series: number[][]; dataPointIndex: number; w: Record<string, Record<string, unknown[]>> }) => {
+          const globals = w.globals as Record<string, unknown[]>;
+          const cat = (globals.categoryLabels as string[])?.[dataPointIndex] ?? categories[dataPointIndex] ?? "";
+          const hiddenSet = new Set<number>([
+            ...((globals.collapsedSeriesIndices as number[]) ?? []),
+            ...((globals.ancillaryCollapsedSeriesIndices as number[]) ?? []),
+          ]);
+          const allSeries = (w.config as Record<string, { name: string; data: number[] }[]>).series;
+          const seriesColors = globals.colors as string[];
+
+          const bg = isDark ? "#1a1a1e" : "#fff";
+          const border = isDark ? "#333" : "#e4e4e7";
+          const textColor = isDark ? "#e4e4e7" : "#333";
+          const mutedColor = isDark ? "#a1a1aa" : "#71717a";
+
+          let rows = "";
+          for (let i = 0; i < allSeries.length; i++) {
+            if (hiddenSet.has(i)) continue;
+            const val = allSeries[i].data[dataPointIndex];
+            if (val == null) continue;
+            const color = seriesColors[i] ?? "#888";
+            const name = allSeries[i].name;
+            const formatted = `${currencyPrefix}${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            rows += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">
+              <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>
+              <span style="color:${mutedColor};font-size:11px">${name}:</span>
+              <span style="font-weight:600;font-size:11px;color:${textColor}">${formatted}</span>
+            </div>`;
+          }
+
+          return `<div style="background:${bg};border:1px solid ${border};border-radius:6px;padding:8px 10px;font-family:inherit;box-shadow:0 2px 8px rgba(0,0,0,.12)">
+            <div style="font-weight:600;font-size:11px;margin-bottom:4px;color:${textColor}">${cat}</div>
+            ${rows || `<div style="font-size:11px;color:${mutedColor}">No data</div>`}
+          </div>`;
         },
       },
       legend: {
