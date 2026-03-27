@@ -1,4 +1,4 @@
-import type { ScheduleEmployee, Shift } from "@/types/scheduling.types";
+import type { ScheduleEmployee, Shift, AvailabilityRule, TimeOffEntry } from "@/types/scheduling.types";
 
 export const DUMMY_EMPLOYEES: ScheduleEmployee[] = [
   { id: "emp-1", name: "Marco Rossi", role: "Pizzaiolo", department: "Kitchen", avatar: "MR", color: "blue" },
@@ -194,3 +194,21 @@ export const EMPLOYEE_COLORS: Record<string, { bg: string; border: string; text:
   indigo: { bg: "bg-indigo-50 dark:bg-indigo-950/40", border: "border-indigo-200 dark:border-indigo-800", text: "text-indigo-700 dark:text-indigo-300", hoverBg: "hover:bg-indigo-100 dark:hover:bg-indigo-950/60" },
   teal: { bg: "bg-teal-50 dark:bg-teal-950/40", border: "border-teal-200 dark:border-teal-800", text: "text-teal-700 dark:text-teal-300", hoverBg: "hover:bg-teal-100 dark:hover:bg-teal-950/60" },
 };
+
+/** Default overtime threshold in hours */
+export const DEFAULT_OVERTIME_THRESHOLD = 40;
+
+/** Mock availability rules — employees blocked on certain days */
+export const INITIAL_AVAILABILITY: AvailabilityRule[] = [
+  { id: "avail-1", employeeId: "emp-2", dayIndex: 4, allDay: true, reason: "Not available on Saturdays" },
+  { id: "avail-2", employeeId: "emp-5", dayIndex: 5, allDay: true, reason: "Unavailable Sundays" },
+  { id: "avail-3", employeeId: "emp-7", dayIndex: 6, allDay: false, startTime: "08:00", endTime: "12:00", reason: "Morning classes on Monday" },
+  { id: "avail-4", employeeId: "emp-3", dayIndex: 3, allDay: false, startTime: "18:00", endTime: "23:00", reason: "Family commitment Friday evenings" },
+];
+
+/** Mock time-off entries — approved PTO / sick / vacation */
+export const INITIAL_TIME_OFF: TimeOffEntry[] = [
+  { id: "to-1", employeeId: "emp-1", dayIndex: 3, type: "pto", label: "PTO" },
+  { id: "to-2", employeeId: "emp-6", dayIndex: 4, type: "vacation", label: "Vacation" },
+  { id: "to-3", employeeId: "emp-9", dayIndex: 5, type: "sick", label: "Sick Day" },
+];

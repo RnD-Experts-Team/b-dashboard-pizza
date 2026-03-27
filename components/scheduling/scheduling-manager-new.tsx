@@ -21,6 +21,10 @@ import {
   UserX,
   BookmarkPlus,
   FolderOpen,
+  AlertTriangle,
+  CalendarDays,
+  LayoutGrid,
+  CalendarRange,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,6 +52,8 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { ScheduleGrid } from "./schedule-grid-new";
 import { AddShiftDialogNew } from "./add-shift-dialog-new";
+import { DayView } from "./day-view";
+import { MonthOverview } from "./month-overview";
 import {
   DUMMY_EMPLOYEES,
   DAYS_OF_WEEK,
@@ -55,10 +61,25 @@ import {
   DEPARTMENTS,
   INITIAL_SHIFTS,
   PREVIOUS_WEEK_SHIFTS,
+  INITIAL_AVAILABILITY,
+  INITIAL_TIME_OFF,
+  DEFAULT_OVERTIME_THRESHOLD,
   calcHours,
   formatTime,
 } from "@/lib/scheduling/data";
-import type { Shift, WeekInfo, ScheduleTemplate } from "@/types/scheduling.types";
+import {
+  detectConflicts,
+  conflictedShiftIds,
+  overtimeEmployees,
+} from "@/lib/scheduling/utils";
+import type {
+  Shift,
+  WeekInfo,
+  ScheduleTemplate,
+  ScheduleViewMode,
+  AvailabilityRule,
+  TimeOffEntry,
+} from "@/types/scheduling.types";
 import {
   Dialog,
   DialogContent,
@@ -143,6 +164,15 @@ export function SchedulingManager() {
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
 
+  // View mode
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>("week");
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+
+  // Availability & time-off
+  const [availability] = useState<AvailabilityRule[]>(INITIAL_AVAILABILITY);
+  const [timeOff] = useState<TimeOffEntry[]>(INITIAL_TIME_OFF);
+  const [overtimeThreshold] = useState(DEFAULT_OVERTIME_THRESHOLD);
+
   const gridRef = useRef<HTMLDivElement>(null);
 
   // Shift dialog state
@@ -183,6 +213,14 @@ export function SchedulingManager() {
     };
   }, [shifts]);
 
+  // Conflict detection
+  const conflicts = useMemo(() => detectConflicts(shifts), [shifts]);
+  const conflictIds = useMemo(() => conflictedShiftIds(conflicts), [conflicts]);
+  const overtimeEmpIds = useMemo(
+    () => overtimeEmployees(shifts, overtimeThreshold),
+    [shifts, overtimeThreshold]
+  );
+
   // Dialog target employee
   const targetEmployee = useMemo(() => {
     const id = editingShift?.employeeId ?? pendingAdd?.employeeId;
@@ -212,12 +250,12 @@ export function SchedulingManager() {
   }, [setCurrentShifts]);
 
   const handleConfirmShift = useCallback(
-    (startTime: string, endTime: string, label: string, type: Shift["type"]) => {
+    (startTime: string, endTime: string, label: string, type: Shift["type"], isRecurring: boolean) => {
       if (editingShift) {
         setCurrentShifts((prev) =>
           prev.map((s) =>
             s.id === editingShift.id
-              ? { ...s, startTime, endTime, label, type }
+              ? { ...s, startTime, endTime, label, type, isRecurring, recurringGroupId: isRecurring ? (s.recurringGroupId ?? s.id) : undefined }
               : s
           )
         );
@@ -226,14 +264,17 @@ export function SchedulingManager() {
         return;
       }
       if (!pendingAdd) return;
+      const shiftId = `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const newShift: Shift = {
-        id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        id: shiftId,
         employeeId: pendingAdd.employeeId,
         dayIndex: pendingAdd.dayIndex,
         startTime,
         endTime,
         label,
         type,
+        isRecurring,
+        recurringGroupId: isRecurring ? shiftId : undefined,
       };
       setCurrentShifts((prev) => [...prev, newShift]);
       setPendingAdd(null);
@@ -484,10 +525,65 @@ export function SchedulingManager() {
                 Today
               </Button>
             )}
+
+            {/* View mode toggle */}
+            <div className="flex items-center rounded-md border bg-muted/40 p-0.5 ml-2">
+              <Button
+                variant={viewMode === "week" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 gap-1 text-xs px-2.5"
+                onClick={() => setViewMode("week")}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Week
+              </Button>
+              <Button
+                variant={viewMode === "day" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 gap-1 text-xs px-2.5"
+                onClick={() => setViewMode("day")}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                Day
+              </Button>
+              <Button
+                variant={viewMode === "month" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 gap-1 text-xs px-2.5"
+                onClick={() => setViewMode("month")}
+              >
+                <CalendarRange className="h-3.5 w-3.5" />
+                Month
+              </Button>
+            </div>
           </div>
 
           {/* Filters */}
           <div className="flex items-center gap-2">
+            {/* Day selector (visible in day view) */}
+            {viewMode === "day" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
+                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                    {DAYS_SHORT[selectedDayIndex]} {week.dayDates[selectedDayIndex]}
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {DAYS_SHORT.map((day, idx) => (
+                    <DropdownMenuItem
+                      key={idx}
+                      onSelect={() => setSelectedDayIndex(idx)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      {idx === selectedDayIndex && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                      <span className={idx === selectedDayIndex ? "font-medium" : "pl-3.5"}>{day} {week.dayDates[idx]}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -674,6 +770,25 @@ export function SchedulingManager() {
           </Card>
         </div>
 
+        {/* Conflict & overtime warnings */}
+        {conflicts.length > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-4 py-2.5">
+            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+            <p className="text-sm text-red-700 dark:text-red-300">
+              <strong>{conflicts.length}</strong> shift conflict{conflicts.length !== 1 ? "s" : ""} detected this week — overlapping shifts for the same employee.
+            </p>
+          </div>
+        )}
+
+        {overtimeEmpIds.size > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              <strong>{overtimeEmpIds.size}</strong> employee{overtimeEmpIds.size !== 1 ? "s" : ""} exceed{overtimeEmpIds.size === 1 ? "s" : ""} the {overtimeThreshold}h overtime threshold.
+            </p>
+          </div>
+        )}
+
         {/* Active filters badge */}
         {(search || department !== "All") && (
           <div className="flex items-center gap-2">
@@ -695,16 +810,56 @@ export function SchedulingManager() {
           </div>
         )}
 
-        {/* The schedule grid — the star of the show */}
+        {/* The schedule view — switches between week / day / month */}
         <div ref={gridRef}>
-          <ScheduleGrid
-            employees={filteredEmployees}
-            shifts={shifts}
-            week={week}
-            onAddShift={handleAddShift}
-            onEditShift={handleEditShift}
-            onDeleteShift={handleDeleteShift}
-          />
+          {viewMode === "week" && (
+            <ScheduleGrid
+              employees={filteredEmployees}
+              shifts={shifts}
+              week={week}
+              conflictIds={conflictIds}
+              overtimeEmpIds={overtimeEmpIds}
+              overtimeThreshold={overtimeThreshold}
+              availability={availability}
+              timeOff={timeOff}
+              onAddShift={handleAddShift}
+              onEditShift={handleEditShift}
+              onDeleteShift={handleDeleteShift}
+            />
+          )}
+
+          {viewMode === "day" && (
+            <DayView
+              employees={filteredEmployees}
+              shifts={shifts}
+              dayIndex={selectedDayIndex}
+              week={week}
+              conflictIds={conflictIds}
+              overtimeEmpIds={overtimeEmpIds}
+              availability={availability}
+              timeOff={timeOff}
+              onAddShift={handleAddShift}
+              onEditShift={handleEditShift}
+              onDeleteShift={handleDeleteShift}
+            />
+          )}
+
+          {viewMode === "month" && (
+            <MonthOverview
+              weekOffset={weekOffset}
+              allShifts={allShifts}
+              getWeekDates={getWeekDates}
+              onNavigateToWeek={(offset) => {
+                setWeekOffset(offset);
+                setViewMode("week");
+              }}
+              onNavigateToDay={(offset, dayIdx) => {
+                setWeekOffset(offset);
+                setSelectedDayIndex(dayIdx);
+                setViewMode("day");
+              }}
+            />
+          )}
         </div>
 
         {/* Quick actions footer */}
@@ -746,6 +901,10 @@ export function SchedulingManager() {
                 ? DAYS_OF_WEEK[pendingAdd.dayIndex]
                 : ""
           }
+          dayIndex={editingShift?.dayIndex ?? pendingAdd?.dayIndex ?? 0}
+          currentShifts={shifts}
+          availability={availability}
+          timeOff={timeOff}
           onConfirm={handleConfirmShift}
           editingShift={editingShift}
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,25 +20,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import type { ScheduleEmployee, Shift } from "@/types/scheduling.types";
+import { AlertTriangle, Repeat, Ban } from "lucide-react";
+import type {
+  ScheduleEmployee,
+  Shift,
+  AvailabilityRule,
+  TimeOffEntry,
+} from "@/types/scheduling.types";
 import {
   SHIFT_PRESETS,
   formatTime,
   calcHours,
   EMPLOYEE_COLORS,
 } from "@/lib/scheduling/data";
+import {
+  wouldConflict,
+  isBlockedByAvailability,
+  hasTimeOff,
+} from "@/lib/scheduling/utils";
 
 interface AddShiftDialogNewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employee: ScheduleEmployee | null;
   dayLabel: string;
+  dayIndex: number;
+  currentShifts: Shift[];
+  availability: AvailabilityRule[];
+  timeOff: TimeOffEntry[];
   onConfirm: (
     startTime: string,
     endTime: string,
     label: string,
-    type: Shift["type"]
+    type: Shift["type"],
+    isRecurring: boolean
   ) => void;
   editingShift?: Shift | null;
 }
@@ -48,6 +65,10 @@ export function AddShiftDialogNew({
   onOpenChange,
   employee,
   dayLabel,
+  dayIndex,
+  currentShifts,
+  availability,
+  timeOff: timeOffEntries,
   onConfirm,
   editingShift,
 }: AddShiftDialogNewProps) {
@@ -56,6 +77,7 @@ export function AddShiftDialogNew({
   const [label, setLabel] = useState("Morning");
   const [type, setType] = useState<Shift["type"]>("morning");
   const [activePreset, setActivePreset] = useState<number | null>(0);
+  const [isRecurring, setIsRecurring] = useState(false);
 
   const isEditing = !!editingShift;
 
@@ -66,6 +88,7 @@ export function AddShiftDialogNew({
       setEndTime(editingShift.endTime);
       setLabel(editingShift.label);
       setType(editingShift.type);
+      setIsRecurring(editingShift.isRecurring ?? false);
       // Find matching preset
       const presetIdx = SHIFT_PRESETS.findIndex(
         (p) =>
@@ -79,8 +102,40 @@ export function AddShiftDialogNew({
       setLabel("Morning");
       setType("morning");
       setActivePreset(0);
+      setIsRecurring(false);
     }
   }, [editingShift, open]);
+
+  // Conflict warning
+  const conflictWarning = useMemo(() => {
+    if (!employee) return false;
+    return wouldConflict(
+      startTime,
+      endTime,
+      employee.id,
+      dayIndex,
+      currentShifts,
+      editingShift?.id
+    );
+  }, [startTime, endTime, employee, dayIndex, currentShifts, editingShift]);
+
+  // Availability warning
+  const availabilityBlocked = useMemo(() => {
+    if (!employee) return false;
+    return isBlockedByAvailability(
+      employee.id,
+      dayIndex,
+      startTime,
+      endTime,
+      availability
+    );
+  }, [employee, dayIndex, startTime, endTime, availability]);
+
+  // Time-off warning
+  const timeOffBlocked = useMemo(() => {
+    if (!employee) return false;
+    return hasTimeOff(employee.id, dayIndex, timeOffEntries);
+  }, [employee, dayIndex, timeOffEntries]);
 
   const handlePresetClick = (idx: number) => {
     const preset = SHIFT_PRESETS[idx];
@@ -101,7 +156,7 @@ export function AddShiftDialogNew({
   };
 
   const handleSubmit = () => {
-    onConfirm(startTime, endTime, label, type);
+    onConfirm(startTime, endTime, label, type, isRecurring);
     onOpenChange(false);
   };
 
@@ -218,6 +273,51 @@ export function AddShiftDialogNew({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Recurring toggle */}
+          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Repeat className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Recurring weekly</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Repeat this shift every week
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={isRecurring}
+              onCheckedChange={setIsRecurring}
+            />
+          </div>
+
+          {/* Warnings */}
+          {conflictWarning && (
+            <div className="flex items-center gap-2 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-3 py-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+              <p className="text-xs text-red-700 dark:text-red-300">
+                This shift overlaps with an existing shift for {employee?.name}
+              </p>
+            </div>
+          )}
+
+          {availabilityBlocked && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+              <Ban className="h-4 w-4 text-amber-500 shrink-0" />
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                {employee?.name} is marked unavailable during this time
+              </p>
+            </div>
+          )}
+
+          {timeOffBlocked && (
+            <div className="flex items-center gap-2 rounded-md border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/30 px-3 py-2">
+              <Ban className="h-4 w-4 text-purple-500 shrink-0" />
+              <p className="text-xs text-purple-700 dark:text-purple-300">
+                {employee?.name} has time off on this day
+              </p>
+            </div>
+          )}
 
           {/* Duration preview */}
           <div className="rounded-md bg-muted/50 px-3 py-2 text-center">
