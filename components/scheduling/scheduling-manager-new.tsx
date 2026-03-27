@@ -26,13 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
@@ -65,7 +58,18 @@ import {
   calcHours,
   formatTime,
 } from "@/lib/scheduling/data";
-import type { Shift, WeekInfo } from "@/types/scheduling.types";
+import type { Shift, WeekInfo, ScheduleTemplate } from "@/types/scheduling.types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 /**
  * Returns the week range starting on Tuesday and ending on Monday.
@@ -131,6 +135,13 @@ export function SchedulingManager() {
   const [isTakingScreenshot, setIsTakingScreenshot] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
+
+  // Template state
+  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
 
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -258,6 +269,58 @@ export function SchedulingManager() {
 
   /** Derived: does the previous week have any shifts? Used to disable the menu item. */
   const hasPreviousWeekShifts = (allShifts[weekOffset - 1] ?? []).length > 0;
+
+  /** Save the current week's shifts as a reusable template */
+  const handleSaveTemplate = useCallback(() => {
+    if (!templateName.trim()) {
+      toast.warning("Please enter a template name");
+      return;
+    }
+    if (shifts.length === 0) {
+      toast.warning("No shifts to save as a template");
+      return;
+    }
+    const totalHours = shifts.reduce(
+      (acc, s) => acc + calcHours(s.startTime, s.endTime),
+      0
+    );
+    const template: ScheduleTemplate = {
+      id: `tmpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: templateName.trim(),
+      description: templateDescription.trim(),
+      createdAt: new Date().toISOString(),
+      shifts: shifts.map(({ id: _id, ...rest }) => rest),
+      shiftCount: shifts.length,
+      totalHours,
+    };
+    setTemplates((prev) => [template, ...prev]);
+    setSaveTemplateOpen(false);
+    setTemplateName("");
+    setTemplateDescription("");
+    toast.success(`Template "${template.name}" saved`);
+  }, [templateName, templateDescription, shifts]);
+
+  /** Load a template's shifts into the current week */
+  const handleLoadTemplate = useCallback(
+    (template: ScheduleTemplate) => {
+      const loaded: Shift[] = template.shifts.map((s) => ({
+        ...s,
+        id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      }));
+      setAllShifts((all) => ({ ...all, [weekOffset]: loaded }));
+      setLoadTemplateOpen(false);
+      toast.success(
+        `Loaded template "${template.name}" — ${loaded.length} shift${loaded.length !== 1 ? "s" : ""}`
+      );
+    },
+    [weekOffset]
+  );
+
+  /** Delete a saved template */
+  const handleDeleteTemplate = useCallback((templateId: string) => {
+    setTemplates((prev) => prev.filter((t) => t.id !== templateId));
+    toast.info("Template deleted");
+  }, []);
 
   /** Export the schedule as a CSV file that Excel opens natively */
   const handleExportExcel = useCallback(async () => {
@@ -435,33 +498,27 @@ export function SchedulingManager() {
               />
             </div>
 
-            <Select value={department} onValueChange={setDepartment}>
-              <SelectTrigger className="h-8 w-40 text-sm">
-                <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                  {department}
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
                 {DEPARTMENTS.map((dept) => (
-                  <SelectItem key={dept} value={dept}>
-                    {dept}
-                  </SelectItem>
+                  <DropdownMenuItem
+                    key={dept}
+                    onSelect={() => setDepartment(dept)}
+                    className="gap-2 cursor-pointer"
+                  >
+                    {dept === department && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    <span className={dept === department ? "font-medium" : "pl-3.5"}>{dept}</span>
+                  </DropdownMenuItem>
                 ))}
-              </SelectContent>
-            </Select>
-
-            {(search || department !== "All") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => {
-                  setSearch("");
-                  setDepartment("All");
-                }}
-              >
-                Clear
-              </Button>
-            )}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Actions dropdown */}
             <DropdownMenu>
@@ -497,11 +554,19 @@ export function SchedulingManager() {
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Templates</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled className="gap-2 cursor-not-allowed opacity-60">
+                <DropdownMenuItem
+                  disabled={shifts.length === 0}
+                  onSelect={() => setSaveTemplateOpen(true)}
+                  className="gap-2 cursor-pointer"
+                >
                   <BookmarkPlus className="h-4 w-4 text-violet-500" />
                   Save as Template
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled className="gap-2 cursor-not-allowed opacity-60">
+                <DropdownMenuItem
+                  disabled={templates.length === 0}
+                  onSelect={() => setLoadTemplateOpen(true)}
+                  className="gap-2 cursor-pointer"
+                >
                   <FolderOpen className="h-4 w-4 text-indigo-500" />
                   Load Week Template
                 </DropdownMenuItem>
@@ -542,7 +607,7 @@ export function SchedulingManager() {
 
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card>
+          <Card className="h-fit p-0">
             <CardContent className="flex items-center gap-3 py-3 px-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <Clock className="h-4 w-4 text-primary" />
@@ -558,7 +623,7 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-fit p-0">
             <CardContent className="flex items-center gap-3 py-3 px-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
                 <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
@@ -574,7 +639,7 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-fit p-0">
             <CardContent className="flex items-center gap-3 py-3 px-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
                 <Users className="h-4 w-4 text-violet-600 dark:text-violet-400" />
@@ -590,7 +655,7 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-fit p-0">
             <CardContent className="flex items-center gap-3 py-3 px-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10">
                 <span className="text-sm font-bold text-amber-600 dark:text-amber-400">$</span>
@@ -711,6 +776,145 @@ export function SchedulingManager() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Save as Template dialog */}
+        <Dialog
+          open={saveTemplateOpen}
+          onOpenChange={(open) => {
+            setSaveTemplateOpen(open);
+            if (!open) {
+              setTemplateName("");
+              setTemplateDescription("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Save as Template</DialogTitle>
+              <DialogDescription>
+                Save the current week&apos;s {shifts.length} shift{shifts.length !== 1 ? "s" : ""} as a reusable template.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="template-name">Template Name</Label>
+                <Input
+                  id="template-name"
+                  placeholder="e.g. Standard Week, Holiday Coverage..."
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveTemplate();
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="template-desc">Description (optional)</Label>
+                <Textarea
+                  id="template-desc"
+                  placeholder="Add any notes about this schedule template..."
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSaveTemplateOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveTemplate} disabled={!templateName.trim()}>
+                <BookmarkPlus className="h-4 w-4 mr-1.5" />
+                Save Template
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Load Week Template dialog */}
+        <Dialog open={loadTemplateOpen} onOpenChange={setLoadTemplateOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Load Week Template</DialogTitle>
+              <DialogDescription>
+                Choose a saved template to load into <strong>{week.label}</strong>.
+                This will replace all current shifts.
+              </DialogDescription>
+            </DialogHeader>
+            {templates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <FolderOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground">
+                  No templates saved yet.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use &quot;Save as Template&quot; to create one from any week.
+                </p>
+              </div>
+            ) : (
+              <ScrollArea className="max-h-80">
+                <div className="space-y-2 pr-3">
+                  {templates.map((tmpl) => (
+                    <div
+                      key={tmpl.id}
+                      className="group flex items-start gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 mt-0.5">
+                        <FolderOpen className="h-4 w-4 text-indigo-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{tmpl.name}</p>
+                        {tmpl.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {tmpl.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 mt-1.5">
+                          <span className="text-[10px] text-muted-foreground">
+                            {tmpl.shiftCount} shift{tmpl.shiftCount !== 1 ? "s" : ""}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {tmpl.totalHours.toFixed(1)}h
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(tmpl.createdAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteTemplate(tmpl.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => handleLoadTemplate(tmpl)}
+                        >
+                          Load
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setLoadTemplateOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

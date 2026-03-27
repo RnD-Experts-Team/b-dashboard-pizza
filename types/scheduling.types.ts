@@ -32,3 +32,13 @@ export interface WeekInfo {
   dayDates: string[];
   fullDates: Date[];
 }
+
+export interface ScheduleTemplate {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string; // ISO string
+  shifts: Omit<Shift, "id">[];
+  shiftCount: number;
+  totalHours: number;
+}
