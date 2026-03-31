@@ -2024,7 +2024,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        timeout: 120_000,
+        timeout: 600_000,
       });
 
       return response.data;
@@ -2225,7 +2225,7 @@ export const qaService = {
           Authorization: `Bearer ${token}`,
           Accept: "application/json",
         },
-        timeout: 120_000,
+        timeout: 600_000,
       });
 
       return response.data;

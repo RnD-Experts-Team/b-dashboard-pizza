@@ -245,11 +245,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         requiredPermission: "manage user role assignments",
 
       },
-      {
-        title: t("scheduling"),
-        href: `/${locale}/dashboard/scheduling`,
-        icon: CalendarDays,
-      },
+      // {
+      //   title: t("scheduling"),
+      //   href: `/${locale}/dashboard/scheduling`,
+      //   icon: CalendarDays,
+      // },
     ],
   };
 
