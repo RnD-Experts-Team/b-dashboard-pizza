@@ -56,6 +56,12 @@ function errorResponse(
   );
 }
 
+function getNormalizedStoreId(value: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Fetch utilities                                                         */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -202,6 +208,7 @@ export async function GET(request: NextRequest) {
   const upstreamAuth = QA_API_TOKEN
     ? `Bearer ${QA_API_TOKEN}`
     : authorization ?? "";
+  const xStoreId = getNormalizedStoreId(request.headers.get("X-Store-Id"));
   const targetUrl = `${QA_BASE_URL}/custom-reports`;
 
   try {
@@ -212,6 +219,7 @@ export async function GET(request: NextRequest) {
         headers: {
           Accept: "application/json",
           ...(upstreamAuth && { Authorization: upstreamAuth }),
+          ...(xStoreId && { "X-Store-Id": xStoreId }),
         },
       },
       UPSTREAM_TIMEOUT_MS,
@@ -266,6 +274,7 @@ export async function POST(request: NextRequest) {
   const upstreamAuth = QA_API_TOKEN
     ? `Bearer ${QA_API_TOKEN}`
     : authorization ?? "";
+  const xStoreId = getNormalizedStoreId(request.headers.get("X-Store-Id"));
   const targetUrl = `${QA_BASE_URL}/custom-reports`;
 
   const upstreamBody = JSON.stringify({
@@ -282,6 +291,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Accept: "application/json",
           ...(upstreamAuth && { Authorization: upstreamAuth }),
+          ...(xStoreId && { "X-Store-Id": xStoreId }),
         },
         body: upstreamBody,
       },

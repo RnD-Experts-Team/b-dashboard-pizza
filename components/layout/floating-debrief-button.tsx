@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CalendarDays, KeyRound, PenLine, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
 import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
 import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
@@ -85,12 +84,12 @@ function renderValuePreview(item: DueKeyItem): string {
 
 export function FloatingDebriefButton() {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"debrief" | "due-keys">("debrief");
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [position, setPosition] = useState<"top" | "bottom">("bottom");
+  const [activeNav, setActiveNav] = useState<"debrief" | "due-keys">("debrief");
 
-  // ── Due Keys tab state ─────────────────────────────────────────────────
+  // ── Due Keys state ─────────────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(formatTodayDate());
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [dueKeySheetOpen, setDueKeySheetOpen] = useState(false);
@@ -99,6 +98,9 @@ export function FloatingDebriefButton() {
 
   const hasDragged = useRef(false);
   const dragStartY = useRef(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const debriefSectionRef = useRef<HTMLDivElement>(null);
+  const dueKeysSectionRef = useRef<HTMLDivElement>(null);
 
   const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
@@ -119,7 +121,6 @@ export function FloatingDebriefButton() {
   } = useCreateEmployeeDebrief();
 
   // ── Due Keys hooks ─────────────────────────────────────────────────────
-  const isDueKeysTabActive = isOpen && activeTab === "due-keys";
   const {
     data: dueKeysData,
     isLoading: isDueKeysLoading,
@@ -127,7 +128,7 @@ export function FloatingDebriefButton() {
     refetch: refetchDueKeys,
   } = useDueKeys(
     selectedStoreId,
-    isDueKeysTabActive ? selectedDate : null,
+    isOpen ? selectedDate : null,
     selectedTagIds.length > 0 ? selectedTagIds : undefined
   );
 
@@ -234,6 +235,28 @@ export function FloatingDebriefButton() {
     );
   };
 
+  const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
+    const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveNav(section);
+  }, []);
+
+  // Track which section is in view to highlight the active nav button
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !isOpen) return;
+
+    const handleScroll = () => {
+      const containerTop = container.scrollTop;
+      const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
+      // offset by a small threshold so nav switches a bit before the section hits the very top
+      setActiveNav(containerTop + 40 >= dueKeysTop ? "due-keys" : "debrief");
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [isOpen]);
+
   return (
     <>
       {/* Backdrop — closes the panel on click */}
@@ -274,60 +297,81 @@ export function FloatingDebriefButton() {
             </div>
           </div>
 
-          {/* Store picker */}
+          {/* Store picker + Section navigation — same row */}
           <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40">
-            <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Store</Label>
-            <Select
-              value={selectedStoreId ?? ""}
-              onValueChange={(v) => setSelectedStoreId(v || null)}
-              disabled={stores.length === 0}
-            >
-              <SelectTrigger className="h-8 text-xs mt-1.5 border-gray-200/60 dark:border-gray-700/60">
-                <SelectValue
-                  placeholder={stores.length === 0 ? "No stores found" : "Select store"}
-                />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                style={{ maxHeight: "160px", overflowY: "auto" }}
-                className="scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-              >
-                {stores.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-end gap-2">
+              {/* Store */}
+              <div className="flex-1 min-w-0">
+                <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Store</Label>
+                <Select
+                  value={selectedStoreId ?? ""}
+                  onValueChange={(v) => setSelectedStoreId(v || null)}
+                  disabled={stores.length === 0}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1.5 border-gray-200/60 dark:border-gray-700/60">
+                    <SelectValue
+                      placeholder={stores.length === 0 ? "No stores found" : "Select store"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    style={{ maxHeight: "160px", overflowY: "auto" }}
+                    className="scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+                  >
+                    {stores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Jump-to navigation */}
+              <div className="w-32 shrink-0">
+                <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Jump to</Label>
+                <Select
+                  value={activeNav}
+                  onValueChange={(v) => scrollToSection(v as "debrief" | "due-keys")}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1.5 border-gray-200/60 dark:border-gray-700/60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="debrief">
+                      <span className="flex items-center gap-1.5">
+                        <PenLine className="h-3 w-3" />
+                        Debrief
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="due-keys">
+                      <span className="flex items-center gap-1.5">
+                        <KeyRound className="h-3 w-3" />
+                        Due Keys
+                        {unfilledItems.length > 0 && (
+                          <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
+                            {unfilledItems.length}
+                          </span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
 
-          {/* Tabs */}
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "debrief" | "due-keys")}
-            className="flex flex-col flex-1 min-h-0"
+          {/* Scrollable sections container */}
+          <div
+            ref={scrollContainerRef}
+            className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
           >
-            <TabsList className="shrink-0 mx-4 mt-3 mb-0 grid w-[calc(100%-2rem)] grid-cols-2 h-9">
-              <TabsTrigger value="debrief" className="text-xs gap-1.5">
-                <PenLine className="h-3.5 w-3.5" />
-                Debrief
-              </TabsTrigger>
-              <TabsTrigger value="due-keys" className="text-xs gap-1.5">
-                <KeyRound className="h-3.5 w-3.5" />
-                Due Keys
-                {unfilledItems.length > 0 && (
-                  <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
-                    {unfilledItems.length}
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            {/* ── Debrief Tab ─────────────────────────────────────────── */}
-            <TabsContent
-              value="debrief"
-              className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent px-4 py-3 mt-0"
-            >
+            {/* ── Debrief Section ─────────────────────────────────────── */}
+            <div ref={debriefSectionRef} className="px-4 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
+              </div>
               <CreateEmployeeDebriefForm
                 storeId={selectedStoreId}
                 isSubmitting={isSubmitting}
@@ -342,15 +386,20 @@ export function FloatingDebriefButton() {
                   return success;
                 }}
               />
-            </TabsContent>
+            </div>
 
-            {/* ── Due Keys Tab ─────────────────────────────────────────── */}
-            <TabsContent
-              value="due-keys"
-              className="flex-1 min-h-0 mt-0 flex flex-col"
-            >
+            {/* Divider */}
+            <div className="mx-4 border-t border-gray-200/60 dark:border-gray-700/60" />
+
+            {/* ── Due Keys Section ─────────────────────────────────────── */}
+            <div ref={dueKeysSectionRef} className="py-4">
+              <div className="flex items-center gap-2 mb-3 px-4">
+                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Due Keys</h4>
+              </div>
+
               {/* Date picker */}
-              <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40">
+              <div className="px-4 pb-3 border-b border-gray-100/40 dark:border-gray-800/40">
                 <div className="flex items-center gap-2 mb-1.5">
                   <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Date</Label>
@@ -365,7 +414,7 @@ export function FloatingDebriefButton() {
 
               {/* Tag filter pills */}
               {(availableTags.length > 0 || selectedTagIds.length > 0) && (
-                <div className="shrink-0 px-4 py-2.5 border-b border-gray-100/40 dark:border-gray-800/40">
+                <div className="px-4 py-2.5 border-b border-gray-100/40 dark:border-gray-800/40">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                     Filter by Tag
                   </p>
@@ -405,7 +454,7 @@ export function FloatingDebriefButton() {
               )}
 
               {/* Sub-header: stats + Fill All Keys */}
-              <div className="shrink-0 px-4 py-2 border-b border-gray-100/40 dark:border-gray-800/40 flex items-center justify-between gap-2">
+              <div className="px-4 py-2 border-b border-gray-100/40 dark:border-gray-800/40 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   {isDueKeysLoading || isDueKeysRefreshing ? (
                     <span className="inline-flex items-center gap-1.5">
@@ -433,7 +482,7 @@ export function FloatingDebriefButton() {
               </div>
 
               {/* Key list */}
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+              <div>
                 {isDueKeysLoading && !dueKeysData ? (
                   <div className="px-4 py-3 space-y-1">
                     {[1, 2, 3, 4].map((i) => (
@@ -488,8 +537,8 @@ export function FloatingDebriefButton() {
                   </div>
                 )}
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         </div>
       )}
 

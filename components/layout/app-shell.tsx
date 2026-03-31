@@ -39,7 +39,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           <Topbar onMenuClick={() => setMobileOpen(true)} />
           <main className="flex-1 overflow-auto px-4 py-4 md:px-6 md:py-6 pb-2">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+            <div className={cn("mx-auto w-full transition-[max-width] duration-300", sidebarCollapsed ? "max-w-400" : "max-w-7xl")}>{children}</div>
           </main>
         </div>
         <FloatingDebriefButton />
@@ -60,7 +60,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           <Topbar onMenuClick={() => setMobileOpen(true)} />
           <div className="flex-1 overflow-auto p-3 md:p-4">
-            <main className="mx-auto h-full w-full max-w-7xl rounded-xl bg-background shadow-sm ring-1 ring-border/50 overflow-auto">
+            <main className={cn("h-full w-full rounded-xl bg-background shadow-sm ring-1 ring-border/50 overflow-auto mx-auto transition-[max-width] duration-300", sidebarCollapsed ? "max-w-400" : "max-w-7xl")}>
               <div className="px-4 py-4 md:px-6 md:py-6">
                 {children}
               </div>
@@ -89,7 +89,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="flex flex-1 flex-col overflow-hidden rounded-2xl bg-background shadow-md ring-1 ring-border/30">
           <Topbar onMenuClick={() => setMobileOpen(true)} />
           <main className="flex-1 overflow-auto px-4 py-4 md:px-6 md:py-6 pb-2">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+            <div className={cn("mx-auto w-full transition-[max-width] duration-300", sidebarCollapsed ? "max-w-400" : "max-w-7xl")}>{children}</div>
           </main>
         </div>
         <FloatingDebriefButton />

@@ -149,6 +149,7 @@ export function HourlyChannelsChart({
         axisTicks: { color: isDark ? "#3f3f46" : "#e4e4e7" },
       },
       yaxis: {
+        min: 0,
         labels: {
           formatter: (val: number) => `${currencyPrefix}${val.toFixed(0)}`,
           style: { fontSize: "9px", colors: isDark ? "#a1a1aa" : "#71717a" },
