@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Pencil, Trash2, AlertTriangle, Repeat } from "lucide-react";
+import { Clock, Pencil, Trash2, AlertTriangle, Repeat, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -76,6 +76,13 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             </div>
           )}
 
+          {/* Note indicator */}
+          {shift.note && (
+            <div className={cn("absolute bottom-0.5 right-0.5 z-5")}>
+              <StickyNote className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400" />
+            </div>
+          )}
+
           {/* Time range */}
           <div className={cn(
             "flex items-center gap-1 font-semibold leading-tight",
@@ -107,6 +114,9 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
         )}
         {shift.isRecurring && (
           <p className="text-indigo-500">↻ Recurring weekly</p>
+        )}
+        {shift.note && (
+          <p className="text-amber-600 dark:text-amber-400 italic">📝 {shift.note}</p>
         )}
       </TooltipContent>
     </Tooltip>

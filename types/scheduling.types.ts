@@ -17,6 +17,7 @@ export interface Shift {
   type: "morning" | "evening" | "night" | "split" | "custom";
   isRecurring?: boolean;
   recurringGroupId?: string;
+  note?: string;
 }
 
 export interface AvailabilityRule {

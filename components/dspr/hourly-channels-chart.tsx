@@ -104,6 +104,9 @@ export function HourlyChannelsChart({
   const visibleSeriesData = series.filter((s) => !hiddenSeries.has(s.name));
   const channelColors = visibleKeys.map((c, i) => (colors ? baseColors[i] : c.color));
 
+  // ApexCharts crashes with an empty series/colors array — guard against it
+  const allHidden = visibleSeriesData.length === 0;
+
   const options: ApexOptions = useMemo(
     () => ({
       chart: {
@@ -117,7 +120,7 @@ export function HourlyChannelsChart({
         foreColor: isDark ? "#a1a1aa" : "#71717a",
       },
       theme: { mode: isDark ? "dark" : "light" },
-      colors: channelColors,
+      colors: channelColors.length > 0 ? channelColors : ["#94a3b8"],
       plotOptions: {
         bar: {
           horizontal,
@@ -226,12 +229,21 @@ export function HourlyChannelsChart({
         </div>
       </CardHeader>
       <CardContent className="px-0 pb-0">
-        <ReactApexChart
-          options={options}
-          series={visibleSeriesData}
-          type="bar"
-          height={height}
-        />
+        {allHidden ? (
+          <div
+            className="flex items-center justify-center text-[11px] text-muted-foreground"
+            style={{ height }}
+          >
+            No channels selected
+          </div>
+        ) : (
+          <ReactApexChart
+            options={options}
+            series={visibleSeriesData}
+            type="bar"
+            height={height}
+          />
+        )}
       </CardContent>
     </Card>
   );

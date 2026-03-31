@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Ban, Palmtree, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DAYS_SHORT, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
 import { ShiftCard } from "./shift-card";
+import { EmployeeProfileDialog } from "./employee-profile-dialog";
 import type {
   ScheduleEmployee,
   Shift,
@@ -33,6 +34,9 @@ interface ScheduleGridProps {
   onAddShift: (employeeId: string, dayIndex: number) => void;
   onEditShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
+  onEmployeeClick?: (employee: ScheduleEmployee) => void;
+  /** When true, hides hours column, daily-totals row, time-off & availability blocks (employee-facing screenshot) */
+  employeeView?: boolean;
 }
 
 export function ScheduleGrid({
@@ -47,7 +51,10 @@ export function ScheduleGrid({
   onAddShift,
   onEditShift,
   onDeleteShift,
+  onEmployeeClick,
+  employeeView,
 }: ScheduleGridProps) {
+  const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
   // Group shifts by employee + day for O(1) lookup
   const shiftMap = useMemo(() => {
     const map: Record<string, Shift[]> = {};
@@ -148,11 +155,13 @@ export function ScheduleGrid({
               ))}
 
               {/* Hours column */}
+              {!employeeView && (
               <th className="w-20 min-w-20 px-2 py-2.5 text-center">
                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Hours
                 </span>
               </th>
+              )}
             </tr>
           </thead>
 
@@ -188,13 +197,20 @@ export function ScheduleGrid({
                       </Avatar>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium leading-tight truncate">
+                          <button
+                            type="button"
+                            className="text-sm font-medium leading-tight truncate text-left hover:underline hover:text-primary transition-colors cursor-pointer"
+                            onClick={() => {
+                              setProfileEmp(emp);
+                              onEmployeeClick?.(emp);
+                            }}
+                          >
                             {emp.name}
-                          </p>
+                          </button>
                           {isOvertime && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                                <span className="shrink-0 flex items-center gap-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300 cursor-default">
                                   <AlertTriangle className="h-2.5 w-2.5" />
                                   OT
                                 </span>
@@ -236,7 +252,7 @@ export function ScheduleGrid({
                       >
                         <div className="flex flex-col gap-1 min-h-13">
                           {/* Time-off block */}
-                          {empTimeOff && (
+                          {empTimeOff && !employeeView && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <div className="rounded-md border border-dashed border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 px-2 py-2 text-center">
@@ -254,7 +270,7 @@ export function ScheduleGrid({
                           )}
 
                           {/* Unavailable block (all-day only when no time-off) */}
-                          {!empTimeOff && empUnavailable.some((r) => r.allDay) && (
+                          {!empTimeOff && !employeeView && empUnavailable.some((r) => r.allDay) && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <div className="rounded-md border border-dashed border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/40 px-2 py-2 text-center">
@@ -272,7 +288,7 @@ export function ScheduleGrid({
                           )}
 
                           {/* Partial unavailability indicator (non-blocking) */}
-                          {!empTimeOff && !empUnavailable.some((r) => r.allDay) && empUnavailable.length > 0 && (
+                          {!empTimeOff && !employeeView && !empUnavailable.some((r) => r.allDay) && empUnavailable.length > 0 && (
                             <div className="rounded bg-slate-100 dark:bg-slate-800/30 px-1 py-0.5 text-center">
                               <p className="text-[9px] text-slate-400">
                                 Partial block
@@ -281,7 +297,7 @@ export function ScheduleGrid({
                           )}
 
                           {/* Existing shifts (only when not fully blocked) */}
-                          {!isFullDayBlocked &&
+                          {(!isFullDayBlocked || employeeView) &&
                             cellShifts.map((shift) => (
                               <ShiftCard
                                 key={shift.id}
@@ -293,8 +309,8 @@ export function ScheduleGrid({
                               />
                             ))}
 
-                          {/* Add shift button (hidden when fully blocked) */}
-                          {!isFullDayBlocked && (
+                          {/* Add shift button (hidden when fully blocked or employee view) */}
+                          {!isFullDayBlocked && !employeeView && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -324,6 +340,7 @@ export function ScheduleGrid({
                   })}
 
                   {/* Hours total */}
+                  {!employeeView && (
                   <td className={cn(
                     "px-2 py-2 text-center",
                     isOvertime && "bg-amber-50/60 dark:bg-amber-950/20"
@@ -343,12 +360,14 @@ export function ScheduleGrid({
                       </p>
                     )}
                   </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
 
           {/* Footer totals row */}
+          {!employeeView && (
           <tfoot>
             <tr className="border-t bg-muted/20">
               <td className="sticky left-0 z-10 bg-muted/20 border-r px-3 py-2">
@@ -385,8 +404,20 @@ export function ScheduleGrid({
               </td>
             </tr>
           </tfoot>
+          )}
         </table>
       </div>
+
+      <EmployeeProfileDialog
+        open={!!profileEmp}
+        onOpenChange={(open) => { if (!open) setProfileEmp(null); }}
+        employee={profileEmp}
+        shifts={shifts}
+        availability={availability}
+        timeOff={timeOff}
+        isOvertime={profileEmp ? overtimeEmpIds.has(profileEmp.id) : false}
+        overtimeThreshold={overtimeThreshold}
+      />
     </div>
   );
 }
