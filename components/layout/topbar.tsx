@@ -3,11 +3,15 @@
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Menu, PanelLeft, Search } from "lucide-react";
+import { Menu, PanelLeft, Search, Zap, Megaphone } from "lucide-react";
 import { useUIStore } from "@/lib/store/ui.store";
+import { useNotificationStore } from "@/lib/store/notification.store";
+import { useAnnouncementStore } from "@/lib/store/announcement.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
+import { NotificationBell } from "@/components/notifications/notification-bell";
+import { showNotificationToast } from "@/components/notifications/notification-toast";
 import { Breadcrumbs } from "./breadcrumbs";
 import { Feature } from "@/lib/config";
 
@@ -88,6 +92,58 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
           </div>
         </div>
       </Feature> */}
+
+      {/* Notifications */}
+      <div className="flex items-center gap-1">
+        <NotificationBell />
+        {/* Test button — triggers a random slide-in notification */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            const types = ['info', 'warning', 'success', 'error'] as const;
+            const titles = [
+              'New Order Received',
+              'Delivery Delayed',
+              'Payment Confirmed',
+              'Equipment Alert',
+            ];
+            const messages = [
+              'Order #9821 placed for Store #3.',
+              'Delivery for Order #4210 is running 15 minutes late.',
+              'Payment of $45.99 received for Order #8812.',
+              'Refrigerator temperature warning at Store #7.',
+            ];
+            const idx = Math.floor(Math.random() * types.length);
+            const notification = useNotificationStore.getState().addNotification({
+              type: types[idx],
+              title: titles[idx],
+              message: messages[idx],
+              priority: 'medium',
+            });
+            showNotificationToast(notification);
+          }}
+          aria-label="Trigger test notification"
+        >
+          <Zap className="h-[1.2rem] w-[1.2rem]" />
+        </Button>
+        {/* Announcement trigger — simulates receiving a new announcement popup */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            const store = useAnnouncementStore.getState();
+            // Pick the first unseen announcement, or the most recent one
+            const target =
+              store.announcements.find((a) => !a.seen) ??
+              store.announcements[0];
+            if (target) store.setActivePopup(target);
+          }}
+          aria-label="Trigger test announcement popup"
+        >
+          <Megaphone className="h-[1.2rem] w-[1.2rem]" />
+        </Button>
+      </div>
 
       {/* Theme toggle - conditionally rendered */}
       <Feature name="darkMode">

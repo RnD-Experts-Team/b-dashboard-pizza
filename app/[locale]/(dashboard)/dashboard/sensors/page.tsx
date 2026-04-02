@@ -52,8 +52,8 @@ function round1(n: number): string {
 
 /**
  * Format a temperature value.
- * The API now returns the correct unit based on our `unit` parameter,
- * so we no longer need to manually convert on the client.
+ * Live sensor payloads are normalized in the service layer to the
+ * requested display unit, so this helper only formats the value.
  */
 function formatTemp(value: number | string | null | undefined, useCelsius: boolean): string {
   // Explicitly guard null/undefined before parseFloat — isNaN(null) returns false

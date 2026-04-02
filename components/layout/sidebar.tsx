@@ -35,6 +35,7 @@ import {
   Tag,
   BarChart3,
   CalendarDays,
+  Megaphone,
 } from "lucide-react";
 import {
   Dialog,
@@ -415,6 +416,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         requirements: [
           { service: "Sensors", method: "GET", path: "/stores/*/reports", storeId: effectiveStoreId }
         ],
+      },
+      {
+        title: "Announcements",
+        href: `/${locale}/dashboard/announcements`,
+        icon: Megaphone,
       },
     ],
   };

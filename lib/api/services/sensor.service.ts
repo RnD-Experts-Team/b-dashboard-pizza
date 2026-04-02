@@ -1,5 +1,6 @@
 import axios from "axios";
 import type {
+  SensorDevice,
   SensorsResponse,
   ReportsResponse,
   HistoryResponse,
@@ -8,6 +9,7 @@ import type {
   HistoryQueryParams,
   AlertsQueryParams,
   SensorErrorCode,
+  TemperatureUnit,
 } from "@/types/sensor.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -80,6 +82,84 @@ function buildHeaders() {
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
+function parseTemperatureUnit(unit?: string | null): TemperatureUnit | null {
+  const normalized = unit?.toUpperCase();
+  return normalized === "C" || normalized === "F" ? normalized : null;
+}
+
+function getRequestedTemperatureUnit(unit?: "c" | "f"): TemperatureUnit {
+  return unit === "f" ? "F" : "C";
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function celsiusToFahrenheit(value: number): number {
+  return (value * 9) / 5 + 32;
+}
+
+function shouldConvertStateTemperatures(
+  displayTemp: number | null,
+  rawStateTemp: number | null,
+  unit: TemperatureUnit,
+): boolean {
+  if (unit !== "F" || displayTemp == null || rawStateTemp == null) {
+    return false;
+  }
+
+  return Math.abs(celsiusToFahrenheit(rawStateTemp) - displayTemp) < 0.25;
+}
+
+function normalizeLiveSensor(device: SensorDevice, responseUnit: TemperatureUnit): SensorDevice {
+  const deviceUnit = parseTemperatureUnit(device.temperature_unit) ?? responseUnit;
+  const displayTemp = toFiniteNumber(device.temperature);
+  const rawStateTemp = toFiniteNumber(device.state?.temperature);
+  const convertStateTemperatures = shouldConvertStateTemperatures(
+    displayTemp,
+    rawStateTemp,
+    deviceUnit,
+  );
+
+  return {
+    ...device,
+    temperature: displayTemp ?? rawStateTemp,
+    temperature_unit: deviceUnit,
+    state: device.state
+      ? {
+          ...device.state,
+          temperature: displayTemp ?? device.state.temperature,
+          tempLimit: convertStateTemperatures
+            ? {
+                min: celsiusToFahrenheit(device.state.tempLimit.min),
+                max: celsiusToFahrenheit(device.state.tempLimit.max),
+              }
+            : device.state.tempLimit,
+        }
+      : null,
+  };
+}
+
+function normalizeSensorsResponse(data: SensorsResponse, requestedUnit?: "c" | "f"): SensorsResponse {
+  const responseUnit = parseTemperatureUnit(data.temperature_unit) ?? getRequestedTemperatureUnit(requestedUnit);
+
+  return {
+    ...data,
+    temperature_unit: responseUnit,
+    hub: normalizeLiveSensor(data.hub, responseUnit),
+    sensors: data.sensors.map((sensor) => normalizeLiveSensor(sensor, responseUnit)),
+  };
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Service                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -96,7 +176,7 @@ export const sensorService = {
         `/api/sensors/${encodeURIComponent(storeId)}`,
         { params: { unit }, headers: buildHeaders(), timeout: 15_000, signal },
       );
-      return data;
+      return normalizeSensorsResponse(data, unit);
     } catch (err) {
       throw mapAxiosError(err);
     }

@@ -1,0 +1,649 @@
+plan_id: notif_system_20260402
+objective: |
+  Add a notification system to the dashboard with: bell button beside theme toggle in topbar,
+  unread indicator (red badge with count), slide-in toast notifications from the side when new
+  notifications arrive, popup panel (Popover) on bell click with All/Unread tabs and mark-as-read,
+  announcements section placeholder, click-on-toast opens popup or dismiss by drag/close, mock data,
+  and a test trigger button beside the bell.
+created_at: "2026-04-02"
+created_by: gem-planner
+status: pending_approval
+research_confidence: high
+
+plan_metrics:
+  wave_1_task_count: 2
+  total_dependencies: 8
+  risk_score: low
+
+tldr: |
+  7 tasks across 5 waves to build a notification system with mock data:
+  Wave 1 creates types + Zustand store (parallel). Wave 2 builds NotificationItem + NotificationToast
+  components (parallel). Wave 3 assembles the NotificationPanel popup. Wave 4 creates the NotificationBell
+  button with unread badge. Wave 5 integrates everything into the topbar with a test trigger button.
+  All components use shadcn/ui primitives, Sonner for toasts, Zustand for state, and follow existing
+  project conventions (naming, i18n, Feature flags, "use client" directive).
+
+open_questions:
+  - "Should the notification panel use Popover (desktop) + Sheet (mobile) or Popover only? Plan assumes Popover-only for simplicity; can extend later."
+  - "Should a 'notifications' feature flag be registered? Plan includes it as part of topbar integration task."
+  - "Is <Toaster /> already mounted in the root layout? If not, wave 5 task must add it."
+
+pre_mortem:
+  overall_risk_level: low
+  critical_failure_modes:
+    - scenario: "Sonner Toaster not mounted in root layout — slide-in toasts won't appear"
+      likelihood: medium
+      impact: medium
+      mitigation: "Wave 5 integration task verifies Toaster is in app layout; if missing, adds it"
+    - scenario: "Popover z-index conflict with sidebar Sheet or other overlays"
+      likelihood: low
+      impact: medium
+      mitigation: "Use explicit z-50 on Popover content; test with sidebar open"
+    - scenario: "Zustand persist rehydration causes flash of wrong unread count on SSR"
+      likelihood: low
+      impact: low
+      mitigation: "Use noopStorage SSR fallback pattern from ui.store.ts; mount badge client-side only"
+  assumptions:
+    - "All shadcn/ui primitives (Popover, Tabs, Badge, ScrollArea, Button, Separator) are already installed"
+    - "Sonner is installed and its Toaster component is rendered somewhere in the app layout tree"
+    - "Feature flag system supports adding new flags without config changes (or config change is trivial)"
+    - "Mock data is sufficient — no backend API integration needed for this phase"
+    - "RTL support handled automatically by Tailwind logical properties (ms-, me-, ps-, pe-) already used in codebase"
+
+implementation_specification:
+  code_structure: |
+    New files organized by domain convention:
+    - types/notification.types.ts — type definitions
+    - lib/store/notification.store.ts — Zustand store + mock data
+    - components/notifications/ — all UI components (notification-item, notification-toast, notification-panel, notification-bell)
+    Existing file modified:
+    - components/layout/topbar.tsx — import and render NotificationBell + test trigger button
+    - lib/store/index.ts — barrel export for notification store
+  affected_areas:
+    - types/ (new file)
+    - lib/store/ (new file + barrel update)
+    - components/notifications/ (new directory with 4 files)
+    - components/layout/topbar.tsx (modification)
+  component_details:
+    - component: NotificationTypes
+      responsibility: "Define Notification, NotificationType, NotificationPriority, and NotificationStore interfaces"
+      interfaces:
+        - "Notification — id, type, title, message, timestamp, read, priority, actionUrl?"
+        - "NotificationType — 'info' | 'warning' | 'success' | 'error' | 'announcement'"
+        - "NotificationPriority — 'low' | 'medium' | 'high'"
+        - "NotificationState — notifications[], unreadCount, computed getters"
+        - "NotificationActions — addNotification, markAsRead, markAllAsRead, removeNotification, clearAll"
+    - component: NotificationStore
+      responsibility: "Zustand store managing notification state with persist middleware, mock data seeder, and derived unread count"
+      interfaces:
+        - "useNotificationStore() — hook returning state + actions"
+        - "MOCK_NOTIFICATIONS — seed data array"
+    - component: NotificationItem
+      responsibility: "Single notification row with icon, title, message snippet, timestamp, read/unread styling, and mark-as-read button"
+      interfaces:
+        - "NotificationItemProps — { notification: Notification, onMarkAsRead: (id) => void, onClick?: (id) => void }"
+    - component: NotificationToast
+      responsibility: "Slide-in toast wrapper using Sonner custom toast; shows notification title + keyword snippet; click opens panel, swipe/close dismisses"
+      interfaces:
+        - "showNotificationToast(notification: Notification) — function triggering Sonner custom toast"
+    - component: NotificationPanel
+      responsibility: "Popover content with Tabs (All / Unread), ScrollArea list of NotificationItems, mark-all-as-read button, announcements placeholder section"
+      interfaces:
+        - "NotificationPanelProps — { notifications: Notification[], onMarkAsRead, onMarkAllAsRead }"
+    - component: NotificationBell
+      responsibility: "Bell icon button with unread badge count, Popover trigger, renders NotificationPanel as Popover content"
+      interfaces:
+        - "<NotificationBell /> — self-contained component reading from useNotificationStore"
+  dependencies:
+    - component: NotificationStore
+      relationship: "imports types from NotificationTypes"
+    - component: NotificationItem
+      relationship: "imports Notification type; used by NotificationPanel"
+    - component: NotificationToast
+      relationship: "imports Notification type and useNotificationStore; uses Sonner toast()"
+    - component: NotificationPanel
+      relationship: "composes NotificationItem; imports types and store"
+    - component: NotificationBell
+      relationship: "composes NotificationPanel via Popover; imports store for unread count; triggers NotificationToast"
+    - component: Topbar
+      relationship: "imports and renders NotificationBell + test trigger button"
+  integration_points:
+    - "Topbar — NotificationBell inserted before <Feature name='darkMode'> block (line ~97)"
+    - "lib/store/index.ts — add barrel export for useNotificationStore"
+    - "Sonner Toaster — verify mounted in root layout for toast support"
+
+contracts:
+  - from_task: task_1_types
+    to_task: task_2_store
+    interface: "Notification, NotificationType, NotificationPriority, NotificationState, NotificationActions types"
+    format: "TypeScript interfaces/types exported from types/notification.types.ts"
+  - from_task: task_1_types
+    to_task: task_3_item
+    interface: "Notification type for component props"
+    format: "TypeScript interface"
+  - from_task: task_2_store
+    to_task: task_4_toast
+    interface: "useNotificationStore hook, Notification type"
+    format: "Zustand hook + TypeScript interface"
+  - from_task: task_3_item
+    to_task: task_5_panel
+    interface: "NotificationItem component with NotificationItemProps"
+    format: "React component"
+  - from_task: task_2_store
+    to_task: task_5_panel
+    interface: "useNotificationStore for reading/writing notification state"
+    format: "Zustand hook"
+  - from_task: task_5_panel
+    to_task: task_6_bell
+    interface: "NotificationPanel component to render inside Popover content"
+    format: "React component"
+  - from_task: task_4_toast
+    to_task: task_6_bell
+    interface: "showNotificationToast function for triggering toasts"
+    format: "Function export"
+  - from_task: task_6_bell
+    to_task: task_7_topbar
+    interface: "NotificationBell component + useNotificationStore for test trigger"
+    format: "React component + Zustand hook"
+
+tasks:
+  # ── Wave 1: Foundation (parallel, no dependencies) ──────────────────────
+  - id: task_1_types
+    title: "Create notification type definitions"
+    description: |
+      Create types/notification.types.ts with all notification domain types:
+      - NotificationType union: 'info' | 'warning' | 'success' | 'error' | 'announcement'
+      - NotificationPriority union: 'low' | 'medium' | 'high'
+      - Notification interface: id (string), type (NotificationType), title (string),
+        message (string), timestamp (Date | string), read (boolean), priority (NotificationPriority),
+        actionUrl (optional string)
+      - NotificationState interface: notifications array, unreadCount number
+      - NotificationActions interface: addNotification, markAsRead(id), markAllAsRead,
+        removeNotification(id), clearAll
+
+      Follow conventions:
+      - JSDoc section headers (see types/store.types.ts pattern)
+      - Export all types
+      - Barrel re-export from types/index.ts
+    wave: 1
+    agent: gem-implementer
+    priority: high
+    status: pending
+    dependencies: []
+    context_files:
+      - types/store.types.ts: "Reference for JSDoc section headers and type file structure"
+      - types/index.ts: "Barrel file to add notification types export"
+    estimated_effort: small
+    estimated_files: 2
+    estimated_lines: 50
+    focus_area: types
+    verification:
+      - "types/notification.types.ts compiles without errors"
+      - "All 5 types/interfaces are exported"
+      - "types/index.ts re-exports notification types"
+    acceptance_criteria:
+      - "Notification interface has all 8 fields (id, type, title, message, timestamp, read, priority, actionUrl?)"
+      - "NotificationType covers info, warning, success, error, announcement"
+      - "NotificationActions covers addNotification, markAsRead, markAllAsRead, removeNotification, clearAll"
+      - "JSDoc section headers present"
+      - "Barrel export added to types/index.ts"
+    failure_modes:
+      - scenario: "Type naming conflicts with existing types"
+        likelihood: low
+        impact: low
+        mitigation: "Prefix with Notification namespace if conflict found"
+    tech_stack:
+      - TypeScript
+    test_coverage: null
+    requires_review: false
+    review_depth: null
+    review_security_sensitive: false
+    validation_matrix: []
+    environment: null
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []
+
+  - id: task_2_store
+    title: "Create notification Zustand store with mock data"
+    description: |
+      Create lib/store/notification.store.ts following the Zustand persist pattern from ui.store.ts:
+      - Import types from types/notification.types.ts
+      - Define MOCK_NOTIFICATIONS array (5-8 varied notifications with different types, priorities,
+        read/unread states, realistic timestamps)
+      - Create useNotificationStore with persist middleware:
+        - State: notifications (initialized with MOCK_NOTIFICATIONS), unreadCount (computed on init and after mutations)
+        - Actions: addNotification (prepend + update count), markAsRead(id), markAllAsRead,
+          removeNotification(id), clearAll
+        - Persist config: name 'notification-storage', SSR-safe noopStorage fallback
+      - Update unreadCount on every mutation that changes read state
+      - Add barrel export to lib/store/index.ts
+
+      Follow exact patterns from ui.store.ts:
+      - noopStorage for SSR safety
+      - createJSONStorage(() => typeof window !== 'undefined' ? localStorage : noopStorage)
+    wave: 1
+    agent: gem-implementer
+    priority: high
+    status: pending
+    dependencies: []
+    context_files:
+      - lib/store/ui.store.ts: "Reference for Zustand persist pattern, noopStorage, createJSONStorage"
+      - lib/store/index.ts: "Barrel file to add notification store export"
+      - types/notification.types.ts: "Types to import (created by task_1_types, but store can define inline if needed)"
+    estimated_effort: medium
+    estimated_files: 2
+    estimated_lines: 120
+    focus_area: state
+    verification:
+      - "Store compiles without errors"
+      - "useNotificationStore() returns notifications array and all actions"
+      - "Mock data contains 5-8 notifications with varied types and read states"
+      - "unreadCount matches actual unread notifications count"
+    acceptance_criteria:
+      - "Store uses persist middleware with noopStorage SSR fallback (matching ui.store.ts pattern)"
+      - "MOCK_NOTIFICATIONS has 5-8 items with mixed types (info, warning, success, error, announcement)"
+      - "addNotification prepends to array and updates unreadCount"
+      - "markAsRead sets read=true for given id and decrements unreadCount"
+      - "markAllAsRead sets all read=true and sets unreadCount=0"
+      - "removeNotification removes by id and updates unreadCount if removed item was unread"
+      - "clearAll empties array and sets unreadCount=0"
+      - "Barrel export added to lib/store/index.ts"
+    failure_modes:
+      - scenario: "Persist rehydration stale data overrides mock data on new deploys"
+        likelihood: medium
+        impact: low
+        mitigation: "Use version field in persist config to bust stale storage"
+    tech_stack:
+      - TypeScript
+      - Zustand 5
+    test_coverage: null
+    requires_review: false
+    review_depth: null
+    review_security_sensitive: false
+    validation_matrix: []
+    environment: null
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []
+
+  # ── Wave 2: Atomic UI components (depend on types + store) ─────────────
+  - id: task_3_item
+    title: "Create NotificationItem component"
+    description: |
+      Create components/notifications/notification-item.tsx:
+      - "use client" directive
+      - Props: notification (Notification), onMarkAsRead (id: string) => void, onClick? (id: string) => void
+      - Renders: icon based on notification.type (lucide-react: Info, AlertTriangle, CheckCircle, XCircle, Megaphone),
+        title, truncated message (1-2 lines), relative timestamp, read/unread visual state
+      - Unread: slightly highlighted background (bg-muted/50 or similar), bold title
+      - Read: normal background, regular weight title
+      - Mark-as-read button (Check icon) visible on hover for unread items
+      - onClick handler for navigating or opening detail
+      - Use cn() for conditional classes
+      - Use semantic Tailwind classes consistent with project (text-muted-foreground, etc.)
+      - Support RTL via logical properties (ms-, me-, ps-, pe-)
+    wave: 2
+    agent: gem-implementer
+    priority: high
+    status: pending
+    dependencies:
+      - task_1_types
+    context_files:
+      - types/notification.types.ts: "Notification type for props"
+      - components/shared/ThemeToggleAnimated.tsx: "Reference for component structure (use client, Button usage)"
+      - lib/utils.ts: "cn() utility import path"
+    estimated_effort: medium
+    estimated_files: 1
+    estimated_lines: 80
+    focus_area: components
+    verification:
+      - "Component renders without errors"
+      - "Icon changes based on notification.type"
+      - "Visual distinction between read and unread notifications"
+      - "Mark-as-read button appears on hover for unread items"
+    acceptance_criteria:
+      - "Renders icon, title, message snippet, and relative timestamp for each notification"
+      - "Unread notifications have distinct visual styling (background highlight, bold title)"
+      - "Mark-as-read button visible on hover for unread items, calls onMarkAsRead(id)"
+      - "onClick prop is called when clicking the notification row"
+      - "Uses cn() for class merging, logical properties for RTL"
+      - "Has 'use client' directive"
+    failure_modes:
+      - scenario: "Icon mapping incomplete for all notification types"
+        likelihood: low
+        impact: low
+        mitigation: "Use a fallback Bell icon for unmapped types"
+    tech_stack:
+      - TypeScript
+      - React 19
+      - shadcn/ui (Button)
+      - lucide-react
+      - Tailwind CSS v4
+    test_coverage: null
+    requires_review: false
+    review_depth: null
+    review_security_sensitive: false
+    validation_matrix: []
+    environment: null
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []
+
+  - id: task_4_toast
+    title: "Create NotificationToast slide-in component"
+    description: |
+      Create components/notifications/notification-toast.tsx:
+      - "use client" directive
+      - Export showNotificationToast(notification: Notification) function
+      - Uses Sonner's toast.custom() to render a custom slide-in toast with:
+        - Notification icon (matching type), title, and short message keyword snippet
+        - Close button (X icon)
+        - Click handler that could open the notification panel (via callback or store action)
+        - Auto-dismiss after ~5 seconds
+        - Sonner handles swipe-to-dismiss natively
+      - Style the custom toast content with Tailwind (bg-background, border, shadow-lg, rounded-lg)
+      - Import toast from 'sonner' directly
+      - Keep it simple — the custom render is a small card with icon + text + close
+
+      Reference: Sonner's toast.custom() API for custom JSX rendering.
+    wave: 2
+    agent: gem-implementer
+    priority: medium
+    status: pending
+    dependencies:
+      - task_1_types
+    context_files:
+      - components/ui/sonner.tsx: "Sonner Toaster configuration reference"
+      - types/notification.types.ts: "Notification type"
+    estimated_effort: medium
+    estimated_files: 1
+    estimated_lines: 70
+    focus_area: components
+    verification:
+      - "showNotificationToast() triggers a visible Sonner toast"
+      - "Toast displays notification title and message snippet"
+      - "Toast auto-dismisses after ~5 seconds"
+      - "Close button dismisses the toast"
+    acceptance_criteria:
+      - "Exports showNotificationToast(notification) function"
+      - "Uses Sonner toast.custom() for custom JSX rendering"
+      - "Toast shows icon (by type), title, and truncated message"
+      - "Close button (X) dismisses toast via toast.dismiss()"
+      - "Toast auto-dismisses after configurable duration (~5s)"
+      - "Styled consistently with project (bg-background, border, shadow-lg, rounded-lg)"
+    failure_modes:
+      - scenario: "Sonner Toaster not mounted — toasts invisible"
+        likelihood: medium
+        impact: high
+        mitigation: "Wave 5 integration verifies Toaster mount; fallback to adding it if missing"
+    tech_stack:
+      - TypeScript
+      - React 19
+      - Sonner 2
+      - lucide-react
+      - Tailwind CSS v4
+    test_coverage: null
+    requires_review: false
+    review_depth: null
+    review_security_sensitive: false
+    validation_matrix: []
+    environment: null
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []
+
+  # ── Wave 3: Panel composition (depends on item component) ──────────────
+  - id: task_5_panel
+    title: "Create NotificationPanel popup component"
+    description: |
+      Create components/notifications/notification-panel.tsx:
+      - "use client" directive
+      - This is the Popover CONTENT (not the full Popover — that's in NotificationBell)
+      - Structure:
+        - Header: "Notifications" title + "Mark all as read" button
+        - Tabs component with two tabs: "All" and "Unread"
+        - "All" tab: ScrollArea with all notifications rendered via NotificationItem
+        - "Unread" tab: ScrollArea with filtered unread notifications via NotificationItem
+        - Empty state: centered text when no notifications / no unread
+        - Separator
+        - Announcements section: placeholder with Megaphone icon and "No announcements" text
+        - Footer: optional "Clear all" link
+      - Reads from useNotificationStore directly (or accepts props — prefer store for simplicity)
+      - Fixed max height (e.g., max-h-[400px]) with ScrollArea for overflow
+      - Width: w-80 or w-[360px]
+      - Uses shadcn/ui: Tabs, TabsList, TabsTrigger, TabsContent, ScrollArea, Button, Separator
+    wave: 3
+    agent: gem-implementer
+    priority: high
+    status: pending
+    dependencies:
+      - task_3_item
+      - task_2_store
+    context_files:
+      - components/notifications/notification-item.tsx: "NotificationItem component to compose"
+      - lib/store/notification.store.ts: "useNotificationStore for reading state"
+      - components/ui/tabs.tsx: "Tabs component API"
+      - components/ui/scroll-area.tsx: "ScrollArea component API"
+      - components/ui/separator.tsx: "Separator component"
+    estimated_effort: medium
+    estimated_files: 1
+    estimated_lines: 120
+    focus_area: components
+    verification:
+      - "Panel renders All and Unread tabs correctly"
+      - "All tab shows all notifications, Unread tab shows only unread"
+      - "Mark all as read button works and updates store"
+      - "Empty states display correctly"
+      - "Announcements placeholder section is visible"
+    acceptance_criteria:
+      - "Header shows 'Notifications' title + 'Mark all as read' button"
+      - "Tabs with 'All' and 'Unread' switch correctly"
+      - "'All' tab renders all notifications via NotificationItem"
+      - "'Unread' tab renders only unread notifications"
+      - "Empty state shown when no notifications/no unread"
+      - "Announcements placeholder with Megaphone icon present"
+      - "ScrollArea constrains list height (max-h-[400px])"
+      - "Fixed width w-80 or w-[360px]"
+      - "'Mark all as read' calls store.markAllAsRead()"
+    failure_modes:
+      - scenario: "Tab state resets on popover close/reopen"
+        likelihood: low
+        impact: low
+        mitigation: "Use defaultValue='all' on Tabs; acceptable UX to reset"
+    tech_stack:
+      - TypeScript
+      - React 19
+      - shadcn/ui (Tabs, ScrollArea, Button, Separator)
+      - Zustand 5
+      - Tailwind CSS v4
+    test_coverage: null
+    requires_review: false
+    review_depth: null
+    review_security_sensitive: false
+    validation_matrix: []
+    environment: null
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []
+
+  # ── Wave 4: Bell button with badge (depends on panel + toast) ──────────
+  - id: task_6_bell
+    title: "Create NotificationBell button with unread badge"
+    description: |
+      Create components/notifications/notification-bell.tsx:
+      - "use client" directive
+      - Self-contained component that:
+        - Renders a Button (variant='ghost', size='icon') with Bell icon from lucide-react
+        - Shows red unread badge/dot when unreadCount > 0 (absolute positioned, top-right)
+          - If count > 0 and ≤ 9, show count number
+          - If count > 9, show "9+"
+          - If count = 0, hide badge
+        - Wraps in Popover from shadcn/ui:
+          - PopoverTrigger = the bell button
+          - PopoverContent = NotificationPanel component
+          - Popover aligned to end (align="end") to avoid overflow
+        - Reads unreadCount from useNotificationStore
+      - Badge styling: small red circle (bg-destructive text-destructive-foreground) with text-xs,
+        absolute positioned with -top-1 -end-1
+      - Button aria-label for accessibility
+    wave: 4
+    agent: gem-implementer
+    priority: high
+    status: pending
+    dependencies:
+      - task_5_panel
+      - task_4_toast
+    context_files:
+      - components/notifications/notification-panel.tsx: "Panel to render in Popover content"
+      - components/notifications/notification-toast.tsx: "Toast function for potential integration"
+      - lib/store/notification.store.ts: "useNotificationStore for unreadCount"
+      - components/ui/popover.tsx: "Popover, PopoverTrigger, PopoverContent API"
+      - components/ui/button.tsx: "Button variant='ghost' size='icon' pattern"
+      - components/shared/ThemeToggleAnimated.tsx: "Reference for icon button pattern"
+    estimated_effort: medium
+    estimated_files: 1
+    estimated_lines: 70
+    focus_area: components
+    verification:
+      - "Bell icon renders correctly"
+      - "Red badge shows unread count when > 0, hidden when 0"
+      - "Badge shows '9+' when count > 9"
+      - "Clicking bell opens Popover with NotificationPanel"
+      - "Popover closes on outside click"
+    acceptance_criteria:
+      - "Renders Bell icon button matching ThemeToggle style (ghost, icon size)"
+      - "Red badge with count visible when unreadCount > 0"
+      - "Badge hidden when unreadCount = 0"
+      - "Badge shows '9+' for counts > 9"
+      - "Popover opens on click with NotificationPanel content"
+      - "Popover align='end' to prevent right-edge overflow"
+      - "Accessible: aria-label on button"
+    failure_modes:
+      - scenario: "Badge positioning breaks in RTL layout"
+        likelihood: medium
+        impact: medium
+        mitigation: "Use logical property -end-1 instead of -right-1 for RTL support"
+    tech_stack:
+      - TypeScript
+      - React 19
+      - shadcn/ui (Popover, Button)
+      - lucide-react (Bell)
+      - Zustand 5
+      - Tailwind CSS v4
+    test_coverage: null
+    requires_review: false
+    review_depth: null
+    review_security_sensitive: false
+    validation_matrix: []
+    environment: null
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []
+
+  # ── Wave 5: Topbar integration (depends on bell) ───────────────────────
+  - id: task_7_topbar
+    title: "Integrate NotificationBell and test trigger button into topbar"
+    description: |
+      Modify components/layout/topbar.tsx:
+      - Import NotificationBell from @/components/notifications/notification-bell
+      - Import showNotificationToast from @/components/notifications/notification-toast
+      - Import useNotificationStore from @/lib/store/notification.store (or barrel)
+      - Insert BEFORE the <Feature name="darkMode"> block (~line 97):
+        1. NotificationBell component (optionally wrapped in <Feature name="notifications">)
+        2. A small test trigger button (Button variant='ghost' size='icon' with Plus or Zap icon)
+           that on click:
+           - Creates a random test notification via store.addNotification()
+           - Fires showNotificationToast() with that notification
+      - Ensure both new elements are in a flex row with gap-1 alongside the theme toggle
+      - Verify Sonner <Toaster /> is mounted in app layout; if not, add it
+
+      Integration approach:
+      - Wrap notification elements in a div with className="flex items-center gap-1"
+      - Place before the darkMode Feature block
+      - Test trigger button is for development only (can be feature-flagged or removed later)
+    wave: 5
+    agent: gem-implementer
+    priority: high
+    status: pending
+    dependencies:
+      - task_6_bell
+    context_files:
+      - components/layout/topbar.tsx: "File to modify — insert before line 97 Feature darkMode block"
+      - components/notifications/notification-bell.tsx: "NotificationBell component to import"
+      - components/notifications/notification-toast.tsx: "showNotificationToast to import"
+      - lib/store/notification.store.ts: "useNotificationStore for test trigger"
+      - app/[locale]/layout.tsx: "Check if Sonner Toaster is mounted here"
+    estimated_effort: small
+    estimated_files: 2
+    estimated_lines: 40
+    focus_area: integration
+    verification:
+      - "NotificationBell appears in topbar beside theme toggle"
+      - "Test trigger button appears beside bell"
+      - "Clicking test trigger adds notification to store and shows toast"
+      - "Toast slides in from edge of screen"
+      - "Bell badge updates when test trigger adds notification"
+      - "All existing topbar functionality unchanged"
+    acceptance_criteria:
+      - "NotificationBell renders before theme toggle in topbar"
+      - "Test trigger button renders beside bell with distinguishable icon"
+      - "Clicking test trigger: creates notification in store + shows slide-in toast"
+      - "Bell unread badge updates immediately after test trigger"
+      - "Toast auto-dismisses after ~5 seconds"
+      - "Sonner Toaster confirmed mounted in app layout (added if missing)"
+      - "No regression to existing topbar (sidebar toggle, breadcrumbs, theme toggle)"
+      - "Works in all 4 layout variants (classic, inset, floating, topnav)"
+    failure_modes:
+      - scenario: "Topbar layout breaks with additional elements"
+        likelihood: low
+        impact: high
+        mitigation: "Use flex gap-1 container; test all 4 layout variants"
+      - scenario: "Sonner Toaster not in layout tree"
+        likelihood: medium
+        impact: high
+        mitigation: "Check app/[locale]/layout.tsx for Toaster; add if missing"
+    tech_stack:
+      - TypeScript
+      - React 19
+      - Next.js 16
+      - Sonner 2
+      - lucide-react
+    test_coverage: null
+    requires_review: true
+    review_depth: standard
+    review_security_sensitive: false
+    validation_matrix:
+      - scenario: "Bell + test trigger visible in all layout variants"
+        steps:
+          - "Navigate to dashboard in each layout variant (classic, inset, floating, topnav)"
+          - "Verify bell icon and test trigger button are visible in topbar"
+        expected_result: "Both buttons visible and correctly positioned in all 4 variants"
+      - scenario: "Full notification flow"
+        steps:
+          - "Click test trigger button"
+          - "Observe slide-in toast appears"
+          - "Click bell to open panel"
+          - "Verify new notification appears in All and Unread tabs"
+          - "Click mark as read on the notification"
+          - "Switch to Unread tab — notification should not appear"
+          - "Badge count should update"
+        expected_result: "Complete flow works: trigger → toast → panel → mark read → badge updates"
+    environment: development
+    requires_approval: false
+    devops_security_sensitive: false
+    task_type: null
+    audience: null
+    coverage_matrix: []

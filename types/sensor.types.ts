@@ -1,6 +1,6 @@
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Sensor API Types                                                        */
-/*  Mirror the JSON shapes returned by the sensors.pnefoods.com API.        */
+/*  Mirror and normalize the JSON shapes returned by sensors.pnefoods.com.  */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /* ── Shared ────────────────────────────────────────────────────────────── */
@@ -9,6 +9,8 @@ export interface SensorStoreInfo {
   store_number: string;
   store_name: string;
 }
+
+export type TemperatureUnit = "C" | "F";
 
 /* ── GET /stores/:id/sensors ───────────────────────────────────────────── */
 
@@ -45,7 +47,7 @@ export interface SensorState {
   state: string;
   tempCorrection: number;
   tempLimit: SensorLimit;
-  /** Current temperature reading (respects 'unit' param from API) */
+  /** Current temperature reading normalized for the selected display unit */
   temperature: number;
   version: string;
 }
@@ -57,6 +59,8 @@ export interface SensorDevice {
   model_name: string;
   is_hub: boolean;
   online: boolean;
+  temperature?: number | null;
+  temperature_unit?: TemperatureUnit | null;
   state: SensorState | null;
   reported_at: string | null;
   success: boolean;
@@ -66,6 +70,7 @@ export interface SensorDevice {
 export interface SensorsResponse {
   success: boolean;
   store: SensorStoreInfo;
+  temperature_unit?: TemperatureUnit | null;
   hub: SensorDevice;
   sensors: SensorDevice[];
   count: number;

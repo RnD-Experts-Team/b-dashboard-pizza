@@ -7,3 +7,5 @@ export * from "./auth-rule.types";
 export * from "./assignment.types";
 export * from "./hierarchy.types";
 export * from "./due-key.types";
+export * from "./notification.types";
+export * from "./announcement.types";
