@@ -65,6 +65,8 @@
     "settings": "Settings",
     "storeManagement": "Store Management",
     "userManagement": "User Management",
+    "hiringManagement": "Hiring Management",
+    "hiringRequest": "Hiring Request",
     "qaManagement": "QA Management",
     "highLevelMgmt": "High Level MGMT",
     "dataManagement": "Data Management",

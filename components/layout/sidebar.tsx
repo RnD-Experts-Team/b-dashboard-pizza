@@ -395,6 +395,23 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
+  const hiringManagementGroup: NavGroup = {
+    label: t("hiringManagement"),
+    icon: Briefcase,
+    items: [
+      {
+        title: t("hiringRequest"),
+        href: `/${locale}/dashboard/hiring-management/hiring-request`,
+        icon: ClipboardList,
+      },
+      {
+        title: t("employees"),
+        href: `/${locale}/dashboard/hiring-management/employees`,
+        icon: Users,
+      },
+    ],
+  };
+
   const Reports: NavGroup = {
     label: "Reports",
     icon: FileText,
@@ -517,6 +534,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleDataManagementGroup = filterGroup(dataManagementGroup);
   const visibleReports = filterGroup(Reports);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
+  const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
 
   /* ---- Helper: render a single flat nav link ---- */
   const renderNavLink = (item: NavItem) => {
@@ -702,7 +720,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 7. High Level Management */}
+          {/* 7. Hiring Management */}
+          {visibleHiringManagementGroup && (
+            <SidebarNavGroup
+              group={visibleHiringManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
+
+          {/* 8. High Level Management */}
           {visibleHighLevelMgmtGroup && (
             <SidebarNavGroup
               group={visibleHighLevelMgmtGroup}

@@ -1,0 +1,489 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { PageHeader } from "@/components/layout/page-header";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Plus,
+  RefreshCw,
+  AlertCircle,
+  Users,
+  UserPlus,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  ClipboardCheck,
+} from "lucide-react";
+import { toast } from "sonner";
+import { CreateHiringRequestDialog } from "@/components/hiring/create-hiring-request-dialog";
+import { EditHiringRequestDialog } from "@/components/hiring/edit-hiring-request-dialog";
+import { HiringReviewDialog } from "@/components/hiring/hiring-review-dialog";
+import { HiringRequestSheet } from "@/components/hiring/hiring-request-sheet";
+import { hiringService } from "@/lib/api/services/hiring.service";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import type { HiringRequestRecord } from "@/types/hiring.types";
+
+const AVAILABILITY_LABELS: Record<string, string> = {
+  weekday: "Weekday",
+  weekends: "Weekends",
+  open_availability: "Open Availability",
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const lower = status.toLowerCase();
+  const variant =
+    lower === "approved"
+      ? "default"
+      : lower === "rejected"
+        ? "destructive"
+        : "secondary";
+  return (
+    <Badge variant={variant} className="capitalize">
+      {status}
+    </Badge>
+  );
+}
+
+function StatusIndicator({ color }: { color: "green" | "red" | "none" }) {
+  return (
+    <span
+      className={`inline-block h-2.5 w-2.5 rounded-full ${
+        color === "green"
+          ? "bg-green-500"
+          : color === "red"
+            ? "bg-red-500"
+            : "bg-muted-foreground/30"
+      }`}
+    />
+  );
+}
+
+function TableSkeleton() {
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {["Store", "Date of Request", "Desired Start", "Manager", "Supervisor", "Review"].map(
+              (h) => (
+                <TableHead key={h}>{h}</TableHead>
+              ),
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <TableRow key={i}>
+              {Array.from({ length: 7 }).map((_, j) => (
+                <TableCell key={j}>
+                  <Skeleton className="h-4 w-full" />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+export default function HiringRequestPage() {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const { selectedStore } = useSelectedStoreStore();
+
+  /* Edit dialog */
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editRequestId, setEditRequestId] = useState<number | null>(null);
+
+  /* Hiring review dialog */
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewRequestId, setReviewRequestId] = useState<number | null>(null);
+
+  /* Delete confirmation */
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [rows, setRows] = useState<HiringRequestRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchData = useCallback(
+    async (targetPage: number) => {
+      if (!selectedStore?.storeId) return;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await hiringService.getHiringRequests(
+          selectedStore.storeId,
+          targetPage,
+          controller.signal,
+        );
+        setRows(res.data);
+        setTotalPages(res.last_page);
+        setPage(res.current_page);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "CanceledError") return;
+        setError(
+          err instanceof Error ? err.message : "Failed to load hiring requests.",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [selectedStore?.storeId],
+  );
+
+  useEffect(() => {
+    fetchData(1);
+    return () => abortRef.current?.abort();
+  }, [fetchData]);
+
+  const isEmpty = !isLoading && !error && rows.length === 0;
+
+  async function handleDelete() {
+    if (deleteRequestId === null || !selectedStore?.storeId) return;
+    setIsDeleting(true);
+    try {
+      await hiringService.deleteHiringRequest(selectedStore.storeId, deleteRequestId);
+      toast.success("Hiring request deleted.");
+      setDeleteConfirmOpen(false);
+      setDeleteRequestId(null);
+      fetchData(page);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete hiring request.",
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Hiring Request"
+        description="Manage hiring requests for your stores."
+      >
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => fetchData(page)}
+          disabled={isLoading}
+          aria-label="Refresh"
+        >
+          <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+        </Button>
+        <Button onClick={() => setDialogOpen(true)}>
+          <Plus className="me-2 h-4 w-4" />
+          Create Hiring Request
+        </Button>
+      </PageHeader>
+
+      {/* Error */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+            <span>{error}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchData(page)}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Loading skeleton */}
+      {isLoading && <TableSkeleton />}
+
+      {/* Empty state */}
+      {isEmpty && (
+        <div className="rounded-lg border p-10 text-center text-muted-foreground text-sm">
+        </div>
+      )}
+
+      {/* Table */}
+      {!isLoading && !error && rows.length > 0 && (
+        <div className="rounded-lg border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Store</TableHead>
+                <TableHead>Date of Request</TableHead>
+                <TableHead>Desired Start</TableHead>
+                <TableHead>Manager</TableHead>
+                {/* <TableHead>
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5" />
+                    Candidates
+                  </span>
+                </TableHead>
+                <TableHead>
+                  <span className="flex items-center gap-1">
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Positions
+                  </span>
+                </TableHead> */}
+                <TableHead className="text-center">Supervisor</TableHead>
+                <TableHead className="text-center">Review</TableHead>
+                <TableHead className="w-12">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((req) => (
+                <TableRow
+                  key={req.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => {
+                    setSelectedRequestId(req.id);
+                    setSheetOpen(true);
+                  }}
+                >
+                  <TableCell>
+                    <div className="text-sm font-medium leading-none">
+                      {req.store.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {req.store.store_number}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {req.date_of_request}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {req.desired_start_date}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm font-medium leading-none">
+                      {req.store_manager.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {req.store_manager.email}
+                    </div>
+                  </TableCell>
+                  {/* <TableCell>
+                    <div className="flex flex-col gap-1 min-w-40">
+                      {req.candidates.map((c) => (
+                        <div key={c.id} className="flex items-center gap-2">
+                          <span className="text-sm truncate max-w-30">
+                            {c.name}
+                          </span>
+                          <StatusBadge status={c.approve_status} />
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 min-w-45">
+                      {req.new_hires.map((h) => (
+                        <div key={h.id} className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-muted-foreground">
+                            {h.shift?.shift ?? `Shift ${h.shift_id}`}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {AVAILABILITY_LABELS[h.availability_needed] ?? h.availability_needed}
+                          </Badge>
+                          <StatusBadge status={h.approved_status} />
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell> */}
+                  <TableCell className="text-center">
+                    <StatusIndicator
+                      color={
+                        req.supervisor_approve === null
+                          ? "none"
+                          : req.supervisor_approve.approve_status === 1
+                            ? "green"
+                            : "red"
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <StatusIndicator
+                      color={
+                        req.hiring_review === null
+                          ? "none"
+                          : req.hiring_review.is_completed === 1
+                            ? "green"
+                            : "red"
+                      }
+                    />
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Actions</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditRequestId(req.id);
+                            setEditDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="me-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={req.supervisor_approve === null}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReviewRequestId(req.id);
+                            setReviewDialogOpen(true);
+                          }}
+                        >
+                          <ClipboardCheck className="me-2 h-4 w-4" />
+                          Hiring Review
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteRequestId(req.id);
+                            setDeleteConfirmOpen(true);
+                          }}
+                        >
+                          <Trash2 className="me-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && !isLoading && !error && (
+        <div className="flex items-center justify-end gap-2 text-sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchData(page - 1)}
+            disabled={page <= 1}
+          >
+            Previous
+          </Button>
+          <span className="text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchData(page + 1)}
+            disabled={page >= totalPages}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+
+      <CreateHiringRequestDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSuccess={() => fetchData(1)}
+      />
+
+      <EditHiringRequestDialog
+        requestId={editRequestId}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onSuccess={() => fetchData(page)}
+      />
+
+      <HiringReviewDialog
+        requestId={reviewRequestId}
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        onSuccess={() => fetchData(page)}
+      />
+
+      <HiringRequestSheet
+        requestId={selectedRequestId}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        onSuccess={() => fetchData(page)}
+      />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete hiring request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The hiring request #{deleteRequestId}{" "}
+              will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

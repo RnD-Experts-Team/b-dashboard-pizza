@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAnnouncementStore } from "@/lib/store/announcement.store";
-import type { CreateAnnouncementInput, AnnouncementPriority, AnnouncementMediaType } from "@/types/announcement.types";
+import type { AnnouncementType, CreateAnnouncementPayload } from "@/types/announcement.types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -22,198 +22,228 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Megaphone } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { Megaphone, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "sonner";
 
 interface CreateAnnouncementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
-const initialForm: CreateAnnouncementInput = {
+function toRFC3339(localDatetime: string): string {
+  // localDatetime from <input type="datetime-local"> is "YYYY-MM-DDTHH:mm"
+  // Convert to UTC ISO string (RFC 3339)
+  return new Date(localDatetime).toISOString();
+}
+
+function defaultDatetime(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  // Format as "YYYY-MM-DDTHH:mm" for datetime-local input
+  return d.toISOString().slice(0, 16);
+}
+
+const initialForm = {
   title: "",
-  content: "",
-  priority: "normal",
-  media: undefined,
+  body: "",
+  type: "general" as AnnouncementType,
+  starts_at: defaultDatetime(0),
+  ends_at: defaultDatetime(7),
+  is_active: true,
+  is_pinned: false,
+  version: "",
 };
 
 export function CreateAnnouncementDialog({
   open,
   onOpenChange,
+  onSuccess,
 }: CreateAnnouncementDialogProps) {
-  const { addAnnouncement } = useAnnouncementStore();
-  const [form, setForm] = useState<CreateAnnouncementInput>(initialForm);
-  const [hasMedia, setHasMedia] = useState(false);
-  const [mediaType, setMediaType] = useState<AnnouncementMediaType>("image");
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [mediaAlt, setMediaAlt] = useState("");
+  const { createAnnouncement, isCreating, createError } = useAnnouncementStore();
+  const [form, setForm] = useState(initialForm);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) return;
+    if (!form.title.trim() || !form.body || form.body === "<p></p>") return;
 
-    const input: CreateAnnouncementInput = {
-      ...form,
-      media:
-        hasMedia && mediaUrl.trim()
-          ? { type: mediaType, url: mediaUrl.trim(), alt: mediaAlt.trim() || undefined }
-          : undefined,
+    const payload: CreateAnnouncementPayload = {
+      title: form.title.trim(),
+      body: form.body,
+      type: form.type,
+      starts_at: toRFC3339(form.starts_at),
+      ends_at: toRFC3339(form.ends_at),
+      is_active: form.is_active,
+      is_pinned: form.is_pinned,
+      ...(form.version.trim() && { version: form.version.trim() }),
     };
 
-    addAnnouncement(input);
-    handleClose();
+    const ok = await createAnnouncement(payload);
+    if (ok) {
+      toast.success("Announcement posted successfully.");
+      handleClose();
+      onSuccess?.();
+    }
   }
 
   function handleClose() {
     setForm(initialForm);
-    setHasMedia(false);
-    setMediaType("image");
-    setMediaUrl("");
-    setMediaAlt("");
     onOpenChange(false);
   }
 
-  const isValid = form.title.trim().length > 0 && form.content.trim().length > 0;
+  const isValid =
+    form.title.trim().length > 0 &&
+    form.body.length > 0 &&
+    form.body !== "<p></p>" &&
+    form.starts_at &&
+    form.ends_at;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-full max-w-lg sm:max-w-xl">
+      <DialogContent className="w-full max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Megaphone className="h-5 w-5 text-primary" />
             Create Announcement
           </DialogTitle>
           <DialogDescription>
-            Post an announcement visible to all dashboard users.
+            Post an announcement to all dashboard users.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {createError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{createError}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Title */}
           <div className="space-y-1.5">
-            <Label htmlFor="ann-title">Title</Label>
+            <Label htmlFor="ann-title">
+              Title <span className="text-destructive">*</span>
+            </Label>
             <Input
               id="ann-title"
               placeholder="Announcement title..."
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              maxLength={120}
+              maxLength={255}
+              required
             />
           </div>
 
-          {/* Content */}
+          {/* Body — Rich Text Editor */}
           <div className="space-y-1.5">
-            <Label htmlFor="ann-content">Message</Label>
-            <Textarea
-              id="ann-content"
+            <Label>
+              Body <span className="text-destructive">*</span>
+            </Label>
+            <RichTextEditor
+              value={form.body}
+              onChange={(html) => setForm((f) => ({ ...f, body: html }))}
               placeholder="Write your announcement..."
-              value={form.content}
-              onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-              rows={4}
-              maxLength={1500}
-              className="resize-none"
             />
-            <p className="text-xs text-muted-foreground text-end">
-              {form.content.length}/1500
-            </p>
           </div>
 
-          {/* Priority */}
+          {/* Type */}
           <div className="space-y-1.5">
-            <Label htmlFor="ann-priority">Priority</Label>
+            <Label htmlFor="ann-type">Type</Label>
             <Select
-              value={form.priority}
-              onValueChange={(v) =>
-                setForm((f) => ({ ...f, priority: v as AnnouncementPriority }))
-              }
+              value={form.type}
+              onValueChange={(v) => setForm((f) => ({ ...f, type: v as AnnouncementType }))}
             >
-              <SelectTrigger id="ann-priority">
+              <SelectTrigger id="ann-type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="important">Important</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
                 <SelectItem value="urgent">Urgent</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Media toggle */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="has-media"
-                checked={hasMedia}
-                onChange={(e) => setHasMedia(e.target.checked)}
-                className="h-4 w-4 rounded accent-primary"
-              />
-              <Label htmlFor="has-media" className="cursor-pointer">
-                Attach media (image, GIF, or video)
+          {/* Date range */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="ann-starts">
+                Starts at <span className="text-destructive">*</span>
               </Label>
+              <Input
+                id="ann-starts"
+                type="datetime-local"
+                value={form.starts_at}
+                onChange={(e) => setForm((f) => ({ ...f, starts_at: e.target.value }))}
+                required
+              />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ann-ends">
+                Ends at <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="ann-ends"
+                type="datetime-local"
+                value={form.ends_at}
+                onChange={(e) => setForm((f) => ({ ...f, ends_at: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
 
-            {hasMedia && (
-              <div className="space-y-3 rounded-lg border p-3 bg-muted/30">
-                {/* Media type */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="media-type">Media type</Label>
-                  <Select
-                    value={mediaType}
-                    onValueChange={(v) => setMediaType(v as AnnouncementMediaType)}
-                  >
-                    <SelectTrigger id="media-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="image">Image</SelectItem>
-                      <SelectItem value="gif">GIF</SelectItem>
-                      <SelectItem value="video">Video (embed URL)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+          {/* Version (optional) */}
+          <div className="space-y-1.5">
+            <Label htmlFor="ann-version">
+              Version <span className="text-muted-foreground font-normal text-xs">(optional)</span>
+            </Label>
+            <Input
+              id="ann-version"
+              placeholder="e.g. 1.0.0"
+              value={form.version}
+              onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
+              maxLength={50}
+            />
+          </div>
 
-                {/* Media URL */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="media-url">
-                    {mediaType === "video" ? "YouTube embed URL" : "Image URL"}
-                  </Label>
-                  <Input
-                    id="media-url"
-                    placeholder={
-                      mediaType === "video"
-                        ? "https://www.youtube.com/embed/..."
-                        : "https://example.com/image.jpg"
-                    }
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                  />
-                </div>
-
-                {/* Alt text */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="media-alt">
-                    Alt text{" "}
-                    <span className="text-muted-foreground font-normal">(optional)</span>
-                  </Label>
-                  <Input
-                    id="media-alt"
-                    placeholder="Describe the media..."
-                    value={mediaAlt}
-                    onChange={(e) => setMediaAlt(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
+          {/* Toggles */}
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="ann-active"
+                checked={form.is_active}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))}
+              />
+              <Label htmlFor="ann-active" className="cursor-pointer">Active</Label>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="ann-pinned"
+                checked={form.is_pinned}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, is_pinned: v }))}
+              />
+              <Label htmlFor="ann-pinned" className="cursor-pointer">Pinned</Label>
+            </div>
           </div>
 
           <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isCreating}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!isValid}>
-              <Megaphone className="h-4 w-4 me-1.5" />
-              Post Announcement
+            <Button type="submit" disabled={!isValid || isCreating}>
+              {isCreating ? (
+                <>
+                  <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin me-1.5" />
+                  Posting...
+                </>
+              ) : (
+                <>
+                  <Megaphone className="h-4 w-4 me-1.5" />
+                  Post Announcement
+                </>
+              )}
             </Button>
           </DialogFooter>
         </form>
@@ -221,3 +251,4 @@ export function CreateAnnouncementDialog({
     </Dialog>
   );
 }
+

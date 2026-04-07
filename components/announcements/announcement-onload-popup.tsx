@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { useAnnouncementStore } from "@/lib/store/announcement.store";
+import { useEffect, useState, useCallback } from "react";
+import { announcementService } from "@/lib/api/services/announcement.service";
 import type { Announcement, AnnouncementType } from "@/types/announcement.types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { X, AlertTriangle, Info, Wrench, Eye, Calendar, Pin } from "lucide-react";
+import { AlertTriangle, Info, Wrench, Eye, Loader2, Calendar, Pin } from "lucide-react";
 import { format } from "date-fns";
 
 const typeConfig: Record<
@@ -48,37 +48,66 @@ const typeConfig: Record<
   },
 };
 
-export function AnnouncementPopup() {
-  const { activePopupAnnouncement, setActivePopup, markSeen } = useAnnouncementStore();
+/**
+ * On mount, fetches visible announcements and shows the newest one
+ * in a mandatory popup. The only way to close is "Mark as Seen".
+ */
+export function AnnouncementOnLoadPopup() {
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [isMarking, setIsMarking] = useState(false);
 
-  const handleDismiss = useCallback(() => {
-    setActivePopup(null);
-  }, [setActivePopup]);
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    announcementService
+      .getVisibleAnnouncements(controller.signal)
+      .then((list) => {
+        if (cancelled || list.length === 0) return;
+        const sorted = [...list].sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        setAnnouncement(sorted[0]);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
 
   const handleMarkSeen = useCallback(async () => {
-    if (!activePopupAnnouncement) return;
+    if (!announcement) return;
     setIsMarking(true);
-    await markSeen([activePopupAnnouncement.id]);
-    setIsMarking(false);
-    setActivePopup(null);
-  }, [activePopupAnnouncement, markSeen, setActivePopup]);
+    try {
+      await announcementService.markAnnouncementsSeen([announcement.id]);
+      setAnnouncement(null);
+    } catch {
+      setAnnouncement(null);
+    } finally {
+      setIsMarking(false);
+    }
+  }, [announcement]);
 
-  if (!activePopupAnnouncement) return null;
+  if (!announcement) return null;
 
-  const current: Announcement = activePopupAnnouncement;
-  const config = typeConfig[current.type] ?? typeConfig.general;
+  const config = typeConfig[announcement.type] ?? typeConfig.general;
   const TypeIcon = config.icon;
 
   return (
-    <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
+    <Dialog open>
       <DialogContent
         showCloseButton={false}
-        className="w-full max-w-lg sm:max-w-xl md:max-w-2xl p-0 gap-0 mt-5"
+        className="w-full max-w-[calc(100%-2rem)] sm:max-w-lg md:max-w-xl p-0 gap-0 mt-5"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
       >
-        <DialogTitle className="sr-only">{current.title}</DialogTitle>
+        <DialogTitle className="sr-only">{announcement.title}</DialogTitle>
         <DialogDescription className="sr-only">
-          Announcement popup
+          New announcement — mark as seen to continue
         </DialogDescription>
 
         <div className="relative">
@@ -98,72 +127,62 @@ export function AnnouncementPopup() {
             </span>
           </div>
 
-          {/* Close button */}
-          <button
-            onClick={handleDismiss}
-            className="absolute top-3 end-3 z-10 rounded-full h-8 w-8 flex items-center justify-center bg-background/80 backdrop-blur-sm border shadow-sm hover:bg-muted transition-colors"
-            aria-label="Dismiss announcement"
-          >
-            <X className="h-4 w-4" />
-          </button>
-
           <div className="px-5 pt-10 pb-5 sm:px-6 sm:pb-6 space-y-3">
             {/* Meta row: pinned + created date */}
             <div className="flex items-center gap-2 flex-wrap">
-              {current.is_pinned && (
+              {announcement.is_pinned && (
                 <Badge variant="outline" className="gap-1 text-[11px] font-medium">
                   <Pin className="h-3 w-3" />
                   Pinned
                 </Badge>
               )}
               <span className="text-xs text-muted-foreground ml-auto">
-                {format(new Date(current.created_at), "MMMM d, yyyy")}
+                {format(new Date(announcement.created_at), "MMMM d, yyyy")}
               </span>
             </div>
 
             {/* Title */}
             <h2 className="text-lg sm:text-xl font-bold leading-tight tracking-tight">
-              {current.title}
+              {announcement.title}
             </h2>
 
             {/* Body */}
             <div
-              className="text-sm text-muted-foreground leading-relaxed announcement-body"
-              dangerouslySetInnerHTML={{ __html: current.body }}
+              className="text-sm text-muted-foreground leading-relaxed max-h-[50vh] overflow-y-auto announcement-body"
+              dangerouslySetInnerHTML={{ __html: announcement.body }}
             />
 
             {/* Divider */}
             <div className="border-t" />
 
-            {/* Footer: date range + actions */}
+            {/* Footer: date range + Mark as Seen */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5 shrink-0" />
                 <span>
-                  {format(new Date(current.starts_at), "MMMM d, yyyy")}
+                  {format(new Date(announcement.starts_at), "MMMM d, yyyy")}
                   {" – "}
-                  {format(new Date(current.ends_at), "MMMM d, yyyy")}
+                  {format(new Date(announcement.ends_at), "MMMM d, yyyy")}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={handleDismiss}>
-                  Dismiss
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "gap-1.5 rounded-full text-xs font-medium",
-                    config.pillText,
-                    config.pillBorder,
-                  )}
-                  disabled={isMarking}
-                  onClick={handleMarkSeen}
-                >
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "gap-1.5 rounded-full text-xs font-medium",
+                  config.pillText,
+                  config.pillBorder,
+                )}
+                disabled={isMarking}
+                onClick={handleMarkSeen}
+              >
+                {isMarking ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
                   <Eye className="h-3.5 w-3.5" />
-                  {isMarking ? "Marking…" : "Mark as Seen"}
-                </Button>
-              </div>
+                )}
+                {isMarking ? "Marking…" : "Mark as Seen"}
+              </Button>
             </div>
           </div>
         </div>

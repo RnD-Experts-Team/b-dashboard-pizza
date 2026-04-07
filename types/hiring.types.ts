@@ -1,0 +1,153 @@
+export type AvailabilityNeeded = "weekday" | "weekends" | "open_availability";
+
+/** Shape used when creating a request (POST body) */
+export interface HiringCandidate {
+  name: string;
+  email: string;
+  contact_number: string;
+  id?: number;
+  notes?: string;
+}
+
+export interface NewHire {
+  availability_needed: AvailabilityNeeded;
+  shift_id: number;
+  id?: number;
+  notes?: string;
+}
+
+export interface CreateHiringRequestPayload {
+  /** Full-date string (YYYY-MM-DD) per RFC 3339 §5.6 */
+  desired_start_date: string;
+  candidates: HiringCandidate[];
+  new_hires: NewHire[];
+}
+
+/** Shapes returned by the server GET endpoint */
+export interface HiringCandidateRecord {
+  id: number;
+  hiring_request_id: number;
+  name: string;
+  contact_number: string;
+  email: string;
+  notes: string | null;
+  approve_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftRecord {
+  id: number;
+  shift: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewHireRecord {
+  id: number;
+  hiring_request_id: number;
+  shift_id: number;
+  availability_needed: AvailabilityNeeded;
+  notes: string | null;
+  approved_status: string;
+  created_at: string;
+  updated_at: string;
+  shift: ShiftRecord | null;
+}
+
+export interface StoreManagerRecord {
+  id: number;
+  name: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreRecord {
+  id: number;
+  name: string;
+  store_number: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupervisorApproveRecord {
+  id: number;
+  approved_by: { id: number; name: string; email: string; created_at: string; updated_at: string };
+  hiring_request_id: number;
+  approve_status: 0 | 1;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HiringReviewRecord {
+  id: number;
+  hiring_request_id: number;
+  reviewed_by: { id: number; name: string; email: string; created_at: string; updated_at: string };
+  is_completed: 0 | 1;
+  date_of_request: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HiringRequestRecord {
+  id: number;
+  store_manager_id: number;
+  store_id: number;
+  date_of_request: string;
+  desired_start_date: string;
+  created_at: string;
+  updated_at: string;
+  store_manager: StoreManagerRecord;
+  store: StoreRecord;
+  candidates: HiringCandidateRecord[];
+  new_hires: NewHireRecord[];
+  supervisor_approve: SupervisorApproveRecord | null;
+  hiring_review: HiringReviewRecord | null;
+}
+
+export interface HiringRequestsResponse {
+  status: number;
+  message: string;
+  data: HiringRequestRecord[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  from: number;
+  to: number;
+}
+
+/** Legacy shape kept for the POST response */
+export interface HiringRequest extends CreateHiringRequestPayload {
+  id: number;
+  store_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HiringRequestSingleResponse {
+  status: number;
+  message: string;
+  data: HiringRequestRecord;
+}
+
+/** Payload for POST .../hiring-review */
+export interface HiringReviewPayload {
+  is_completed: boolean;
+  notes?: string;
+}
+
+/** Payload for POST .../supervisor-decision */
+export interface SupervisorDecisionPayload {
+  approve_status: boolean;
+  candidates: { id: number; status: "approved" | "rejected" }[];
+  new_hires: { id: number; status: "approved" | "rejected" }[];
+}
+
+/** Response from GET .../create-employee-page */
+export interface CreateEmployeePageData {
+  shifts: ShiftRecord[];
+}

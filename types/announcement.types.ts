@@ -4,66 +4,74 @@
  */
 
 // ============================================================================
-// Core Types
+// API Types — match the notifications API response exactly
 // ============================================================================
 
-export type AnnouncementMediaType = "image" | "gif" | "video";
+export type AnnouncementType = "general" | "maintenance" | "urgent";
+
+export interface Announcement {
+  id: number;
+  type: AnnouncementType;
+  title: string;
+  body: string;
+  version: string | null;
+  is_active: boolean;
+  is_pinned: boolean;
+  starts_at: string;
+  ends_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnouncementPaginatedResponse {
+  current_page: number;
+  data: Announcement[];
+  total: number;
+  per_page: number;
+  last_page: number;
+  next_page_url: string | null;
+  prev_page_url: string | null;
+}
+
+export interface CreateAnnouncementPayload {
+  title: string;
+  body: string;
+  type: AnnouncementType;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+  is_pinned: boolean;
+  version?: string;
+}
+
+export interface UpdateAnnouncementPayload {
+  title?: string;
+  body?: string;
+  type?: string;
+  starts_at?: string;
+  ends_at?: string;
+  is_active?: boolean;
+  is_pinned?: boolean;
+  version?: string;
+}
+
+// ============================================================================
+// Legacy form types (kept for backwards-compat with create dialog)
+// ============================================================================
 
 export type AnnouncementPriority = "normal" | "important" | "urgent";
-
-// ============================================================================
-// Entity Types
-// ============================================================================
+export type AnnouncementMediaType = "image" | "gif" | "video";
 
 export interface AnnouncementMedia {
   type: AnnouncementMediaType;
   url: string;
-  /** Thumbnail URL for videos */
   thumbnail?: string;
   alt?: string;
 }
-
-export interface AnnouncementAuthor {
-  name: string;
-  role: string;
-  avatar?: string;
-}
-
-export interface Announcement {
-  id: string;
-  title: string;
-  content: string;
-  media?: AnnouncementMedia;
-  author: AnnouncementAuthor;
-  createdAt: string;
-  priority: AnnouncementPriority;
-  seen: boolean;
-}
-
-// ============================================================================
-// Form Types
-// ============================================================================
 
 export interface CreateAnnouncementInput {
   title: string;
   content: string;
   media?: AnnouncementMedia;
   priority: AnnouncementPriority;
-}
-
-// ============================================================================
-// State Types
-// ============================================================================
-
-export interface AnnouncementState {
-  announcements: Announcement[];
-  /** The announcement currently shown in the popup (null if none) */
-  activePopupAnnouncement: Announcement | null;
-}
-
-export interface AnnouncementActions {
-  addAnnouncement: (input: CreateAnnouncementInput) => Announcement;
-  markAsSeen: (id: string) => void;
-  markAllAsSeen: () => void;
-  setActivePopup: (announcement: Announcement | null) => void;
 }

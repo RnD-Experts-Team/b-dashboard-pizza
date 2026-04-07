@@ -128,21 +128,21 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
           <Zap className="h-[1.2rem] w-[1.2rem]" />
         </Button>
         {/* Announcement trigger — simulates receiving a new announcement popup */}
-        <Button
+        {/* <Button
           variant="ghost"
           size="icon"
           onClick={() => {
             const store = useAnnouncementStore.getState();
             // Pick the first unseen announcement, or the most recent one
             const target =
-              store.announcements.find((a) => !a.seen) ??
+              store.announcements.find((a) => a.is_pinned) ??
               store.announcements[0];
             if (target) store.setActivePopup(target);
           }}
           aria-label="Trigger test announcement popup"
         >
           <Megaphone className="h-[1.2rem] w-[1.2rem]" />
-        </Button>
+        </Button> */}
       </div>
 
       {/* Theme toggle - conditionally rendered */}

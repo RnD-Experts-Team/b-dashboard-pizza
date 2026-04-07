@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { Announcement } from "@/types/announcement.types";
+import type { Announcement, AnnouncementType } from "@/types/announcement.types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertTriangle, Star, Info, Pizza } from "lucide-react";
+import { AlertTriangle, Info, Wrench, Pin, Eye, Calendar, CheckCheck, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { format } from "date-fns";
 
 function getRelativeTime(timestamp: string): string {
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -15,118 +16,241 @@ function getRelativeTime(timestamp: string): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
 }
 
-const priorityConfig = {
+const typeConfig: Record<
+  AnnouncementType,
+  {
+    label: string;
+    pillBg: string;
+    pillText: string;
+    pillBorder: string;
+    icon: typeof Info;
+  }
+> = {
+  general: {
+    label: "General",
+    pillBg: "bg-blue-100 dark:bg-blue-500/15",
+    pillText: "text-blue-700 dark:text-blue-400",
+    pillBorder: "border-blue-300 dark:border-blue-500/40",
+    icon: Info,
+  },
+  maintenance: {
+    label: "Maintenance",
+    pillBg: "bg-yellow-100 dark:bg-yellow-500/15",
+    pillText: "text-yellow-700 dark:text-yellow-400",
+    pillBorder: "border-yellow-300 dark:border-yellow-500/40",
+    icon: Wrench,
+  },
   urgent: {
     label: "Urgent",
-    className: "bg-destructive/10 text-destructive border-destructive/20",
+    pillBg: "bg-red-100 dark:bg-red-500/15",
+    pillText: "text-red-700 dark:text-red-400",
+    pillBorder: "border-red-300 dark:border-red-500/40",
     icon: AlertTriangle,
-  },
-  important: {
-    label: "Important",
-    className: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
-    icon: Star,
-  },
-  normal: {
-    label: "Announcement",
-    className: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
-    icon: Info,
   },
 };
 
 interface AnnouncementCardProps {
   announcement: Announcement;
-  onMarkSeen?: (id: string) => void;
+  isUserView?: boolean;
+  isSeen?: boolean;
+  onMarkSeen?: (id: number) => void;
+  isMarkingSeen?: boolean;
+  onEdit?: (id: number) => void;
+  onDelete?: (id: number) => void;
+  isDeleting?: boolean;
+  onView?: () => void;
 }
 
-export function AnnouncementCard({ announcement, onMarkSeen }: AnnouncementCardProps) {
-  const config = priorityConfig[announcement.priority];
-  const PriorityIcon = config.icon;
+export function AnnouncementCard({
+  announcement,
+  isUserView = false,
+  isSeen = false,
+  onMarkSeen,
+  isMarkingSeen = false,
+  onEdit,
+  onDelete,
+  isDeleting = false,
+  onView,
+}: AnnouncementCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const config = typeConfig[announcement.type] ?? typeConfig.general;
+  const TypeIcon = config.icon;
 
   return (
-    <Card
+    <div
       className={cn(
-        "overflow-hidden transition-all",
-        !announcement.seen && "ring-1 ring-primary/20"
+        "relative pt-4",
+        isSeen && "opacity-50",
+        isUserView && onView && "cursor-pointer group",
       )}
+      onClick={isUserView && onView ? onView : undefined}
+      role={isUserView && onView ? "button" : undefined}
+      tabIndex={isUserView && onView ? 0 : undefined}
+      onKeyDown={
+        isUserView && onView
+          ? (e) => e.key === "Enter" && onView()
+          : undefined
+      }
     >
-      {/* Media */}
-      {announcement.media && (
-        <div className="relative w-full aspect-video bg-muted overflow-hidden">
-          {announcement.media.type === "video" ? (
-            <iframe
-              src={announcement.media.url}
-              title={announcement.media.alt ?? announcement.title}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="w-full h-full border-0"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-muted">
-              <Pizza className="h-16 w-16 text-muted-foreground/30" />
-            </div>
+      {/* Floating type pill — centered on top edge */}
+      <div className="absolute top-0 inset-x-0 flex justify-center z-10">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wider shadow-sm",
+            "bg-background",
+            config.pillBg,
+            config.pillText,
+            config.pillBorder,
           )}
-        </div>
-      )}
+        >
+          <TypeIcon className="h-3.5 w-3.5" />
+          {config.label}
+        </span>
+      </div>
 
-      <CardContent className="p-4 sm:p-5 space-y-3">
-        {/* Priority badge + unseen dot */}
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <Badge
-            variant="outline"
-            className={cn("gap-1 text-xs font-medium", config.className)}
-          >
-            <PriorityIcon className="h-3 w-3" />
-            {config.label}
-          </Badge>
-          {!announcement.seen && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
-              <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-              New
+      {/* Card body */}
+      <div className={cn(
+        "rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden",
+        isUserView && onView && "transition-colors group-hover:border-border/80 group-hover:bg-card/80",
+      )}>
+        <div className="px-5 pt-8 pb-5 sm:px-6 sm:pt-9 sm:pb-6 space-y-3">
+          {/* Meta row: badges + relative time */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {announcement.is_pinned && (
+                <Badge variant="outline" className="gap-1 text-[11px] font-medium">
+                  <Pin className="h-3 w-3" />
+                  Pinned
+                </Badge>
+              )}
+              {isSeen && (
+                <Badge
+                  variant="outline"
+                  className="gap-1 text-[11px] font-medium text-muted-foreground"
+                >
+                  <CheckCheck className="h-3 w-3" />
+                  Read
+                </Badge>
+              )}
+            </div>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {getRelativeTime(announcement.created_at)}
             </span>
-          )}
-        </div>
-
-        {/* Title */}
-        <h2 className={cn("text-base sm:text-lg font-semibold leading-snug", !announcement.seen && "text-foreground")}>
-          {announcement.title}
-        </h2>
-
-        {/* Content */}
-        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-          {announcement.content}
-        </p>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-          <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
-              {announcement.author.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="text-xs">
-              <span className="font-medium">{announcement.author.name}</span>
-              <span className="text-muted-foreground"> · {announcement.author.role}</span>
-            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {getRelativeTime(announcement.createdAt)}
-            </span>
-            {!announcement.seen && onMarkSeen && (
+
+          {/* Title */}
+          <h2 className="text-lg sm:text-xl font-bold leading-tight tracking-tight">
+            {announcement.title}
+          </h2>
+
+          {/* Body */}
+          <div
+            className={cn(
+              "text-sm text-muted-foreground leading-relaxed announcement-body",
+              !isExpanded && "line-clamp-3",
+            )}
+            dangerouslySetInnerHTML={{ __html: announcement.body }}
+          />
+
+          {/* Admin: Read more / Show less toggle */}
+          {!isUserView && (
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded((v) => !v);
+              }}
+            >
+              {isExpanded ? (
+                <><ChevronUp className="h-3.5 w-3.5" />Show less</>
+              ) : (
+                <><ChevronDown className="h-3.5 w-3.5" />Read more</>
+              )}
+            </button>
+          )}
+
+          {/* Divider */}
+          <div className="border-t" />
+
+          {/* Footer */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Calendar className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                {format(new Date(announcement.starts_at), "MMMM d, yyyy")}
+                {" – "}
+                {format(new Date(announcement.ends_at), "MMMM d, yyyy")}
+              </span>
+            </div>
+
+            {isUserView && onMarkSeen && (
               <Button
-                variant="ghost"
+                variant={isSeen ? "ghost" : "outline"}
                 size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => onMarkSeen(announcement.id)}
+                className={cn(
+                  "gap-1.5 rounded-full text-xs font-medium",
+                  !isSeen && config.pillText,
+                  !isSeen && config.pillBorder,
+                )}
+                disabled={isMarkingSeen || isSeen}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isSeen) onMarkSeen(announcement.id);
+                }}
               >
-                Mark as seen
+                {isSeen ? (
+                  <>
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    Read
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-3.5 w-3.5" />
+                    Mark as Read
+                  </>
+                )}
               </Button>
+            )}
+
+            {!isUserView && (
+              <div className="flex items-center gap-2">
+                {onEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "gap-1.5 rounded-full text-xs font-medium",
+                      config.pillText,
+                      config.pillBorder,
+                    )}
+                    onClick={() => onEdit(announcement.id)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 rounded-full text-xs font-medium text-destructive border-destructive/40 hover:bg-destructive/10"
+                    disabled={isDeleting}
+                    onClick={() => onDelete(announcement.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

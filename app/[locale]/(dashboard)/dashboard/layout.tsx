@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { AppShell } from "@/components/layout/app-shell";
 import { AnnouncementPopup } from "@/components/announcements/announcement-popup";
+import { AnnouncementOnLoadPopup } from "@/components/announcements/announcement-onload-popup";
 
 export default function DashboardLayout({
   children,
@@ -40,6 +41,7 @@ export default function DashboardLayout({
     <>
       <AppShell>{children}</AppShell>
       <AnnouncementPopup />
+      <AnnouncementOnLoadPopup />
     </>
   );
 }
