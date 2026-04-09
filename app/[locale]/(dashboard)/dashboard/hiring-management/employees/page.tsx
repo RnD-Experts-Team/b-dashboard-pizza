@@ -22,7 +22,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, RefreshCw, AlertCircle, Search, X, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  AlertCircle,
+  Search,
+  X,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,12 +54,64 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CreateEmployeeDialog } from "@/components/hiring/create-employee-dialog";
 import { EditEmployeeDialog } from "@/components/hiring/edit-employee-dialog";
+import { EmployeeDetailsSheet } from "@/components/hiring/employee-details-sheet";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { toast } from "sonner";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type { EmployeeRecord, LegalStatus } from "@/types/employee.types";
+import type {
+  EmployeeRecord,
+  GetEmployeesParams,
+  LegalStatus,
+} from "@/types/employee.types";
 import type { EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
+
+type EmployeeFilterOptions = {
+  search?: string;
+  legal_status?: LegalStatus | "all";
+  position_id?: string;
+  emp_status_id?: string;
+  paychecks_id?: string;
+  city?: string;
+  page?: string;
+};
+
+function buildEmployeeRequest(opts?: EmployeeFilterOptions): {
+  params: GetEmployeesParams;
+  pageNum: number;
+} {
+  const positionId =
+    opts?.position_id && opts.position_id !== "all"
+      ? parseInt(opts.position_id, 10)
+      : undefined;
+  const empStatusId =
+    opts?.emp_status_id && opts.emp_status_id !== "all"
+      ? parseInt(opts.emp_status_id, 10)
+      : undefined;
+  const paychecksIdNum =
+    opts?.paychecks_id && opts.paychecks_id.trim()
+      ? parseInt(opts.paychecks_id, 10)
+      : undefined;
+  const parsedPage =
+    opts?.page && opts.page.trim()
+      ? parseInt(opts.page, 10)
+      : 1;
+  const pageNum = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+  const params: GetEmployeesParams = {
+    ...(opts?.search?.trim() ? { search: opts.search.trim() } : {}),
+    ...(Number.isFinite(positionId) ? { position_id: positionId } : {}),
+    ...(Number.isFinite(empStatusId) ? { emp_status_id: empStatusId } : {}),
+    ...(opts?.legal_status && opts.legal_status !== "all"
+      ? { legal_status: opts.legal_status }
+      : {}),
+    ...(Number.isFinite(paychecksIdNum) ? { paychecks_id: paychecksIdNum } : {}),
+    ...(opts?.city?.trim() ? { city: opts.city.trim() } : {}),
+    page: pageNum,
+  };
+
+  return { params, pageNum };
+}
 
 function TableSkeleton() {
   return (
@@ -54,7 +119,7 @@ function TableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {["ID", "Name", "Gender", "Birth Date", "Position", "Status", "Legal Status"].map(
+            {["Name", "Gender", "Birth Date", "Position", "Status", "Legal Status"].map(
               (h) => (
                 <TableHead key={h}>{h}</TableHead>
               ),
@@ -64,7 +129,7 @@ function TableSkeleton() {
         <TableBody>
           {Array.from({ length: 5 }).map((_, i) => (
             <TableRow key={i}>
-              {Array.from({ length: 7 }).map((_, j) => (
+              {Array.from({ length: 6 }).map((_, j) => (
                 <TableCell key={j}>
                   <Skeleton className="h-4 w-full" />
                 </TableCell>
@@ -83,12 +148,25 @@ function legalStatusLabel(status: string) {
   return status;
 }
 
+function employeeStatusLabel(status: string) {
+  return status
+    .split(" ")
+    .filter(Boolean)
+    .map((word) =>
+      word === word.toUpperCase()
+        ? word
+        : `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`,
+    )
+    .join(" ");
+}
+
 function getPositionName(positionId: number, positions: PositionRecord[]): string {
   return positions.find((p) => p.id === positionId)?.position_name ?? `Unknown (${positionId})`;
 }
 
 function getStatusName(statusId: number, statuses: EmployeeStatusRecord[]): string {
-  return statuses.find((s) => s.id === statusId)?.emp_status ?? `Unknown (${statusId})`;
+  const status = statuses.find((s) => s.id === statusId)?.emp_status;
+  return status ? employeeStatusLabel(status) : `Unknown (${statusId})`;
 }
 
 export default function EmployeesPage() {
@@ -96,24 +174,70 @@ export default function EmployeesPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
   const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
+  const [editEmployee, setEditEmployee] = useState<EmployeeRecord | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [rows, setRows] = useState<EmployeeRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMetadataLoading, setIsMetadataLoading] = useState(false);
+  const [isStoreHydrated, setIsStoreHydrated] = useState(
+    () => useSelectedStoreStore.persist.hasHydrated(),
+  );
+  const [resolvedStoreId, setResolvedStoreId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
   const [positions, setPositions] = useState<PositionRecord[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
 
   /* Filters */
   const [search, setSearch] = useState("");
   const [legalStatus, setLegalStatus] = useState<LegalStatus | "all">("all");
+  const [positionFilter, setPositionFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [paychecksId, setPaychecksId] = useState("");
+  const [city, setCity] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
 
+  function getCurrentFilters() {
+    return {
+      search,
+      legal_status: legalStatus,
+      position_id: positionFilter,
+      emp_status_id: statusFilter,
+      paychecks_id: paychecksId,
+      city,
+      page: String(page),
+    };
+  }
+
+  useEffect(() => {
+    const persistApi = useSelectedStoreStore.persist;
+    setIsStoreHydrated(persistApi.hasHydrated());
+
+    const unsubscribeHydrate = persistApi.onHydrate(() => {
+      setIsStoreHydrated(false);
+    });
+    const unsubscribeFinishHydration = persistApi.onFinishHydration(() => {
+      setIsStoreHydrated(true);
+    });
+
+    return () => {
+      unsubscribeHydrate();
+      unsubscribeFinishHydration();
+    };
+  }, []);
+
   const fetchData = useCallback(
-    async (opts?: { search?: string; legal_status?: LegalStatus | "all" }) => {
+    async (opts?: EmployeeFilterOptions) => {
       if (!selectedStore?.storeId) {
         setIsLoading(false);
         return;
@@ -127,17 +251,18 @@ export default function EmployeesPage() {
       setError(null);
 
       try {
+        const { params, pageNum } = buildEmployeeRequest(opts);
+
         const res = await employeeService.getEmployees(
           selectedStore.storeId,
-          {
-            ...(opts?.search ? { search: opts.search } : {}),
-            ...(opts?.legal_status && opts.legal_status !== "all"
-              ? { legal_status: opts.legal_status }
-              : {}),
-          },
+          params,
           controller.signal,
         );
         setRows(res.data.employees);
+        setTotalPages(res.last_page ?? 1);
+        setPage(res.current_page ?? pageNum);
+        setTotalItems(res.total ?? res.data.employees.length);
+        setPageSize(res.per_page ?? Math.max(res.data.employees.length, 1));
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         setError(
@@ -150,45 +275,143 @@ export default function EmployeesPage() {
     [selectedStore?.storeId],
   );
 
-  /* Initial load - fetch employees and metadata */
+  /* Initial load - wait for persisted store hydration, then bootstrap page data */
   useEffect(() => {
-    fetchData({ search, legal_status: legalStatus });
-    
-    if (selectedStore?.storeId) {
-      hiringService
-        .getCreateEmployeePage(selectedStore.storeId)
+    if (!isStoreHydrated) return;
+
+    if (!selectedStore?.storeId) {
+      abortRef.current?.abort();
+      setRows([]);
+      setEmployeeStatuses([]);
+      setPositions([]);
+      setError(null);
+      setIsLoading(false);
+      setIsMetadataLoading(false);
+      setResolvedStoreId(null);
+      setTotalPages(1);
+      setPage(1);
+      setTotalItems(0);
+      return;
+    }
+
+    const storeId = selectedStore.storeId;
+    const { params, pageNum } = buildEmployeeRequest(getCurrentFilters());
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let cancelled = false;
+
+    const bootstrapPage = async () => {
+      setIsLoading(true);
+      setIsMetadataLoading(true);
+      setError(null);
+
+      const metadataPromise = hiringService
+        .getCreateEmployeePage(storeId)
         .then((data) => {
+          if (cancelled) return;
           setEmployeeStatuses(data.employeeStatuses);
           setPositions(data.positions);
         })
-        .catch(() => {});
-    }
-    
-    return () => abortRef.current?.abort();
+        .catch(() => {
+          if (cancelled) return;
+          setEmployeeStatuses([]);
+          setPositions([]);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsMetadataLoading(false);
+          }
+        });
+
+      try {
+        const res = await employeeService.getEmployees(
+          storeId,
+          params,
+          controller.signal,
+        );
+
+        if (cancelled) return;
+
+        setRows(res.data.employees);
+        setTotalPages(res.last_page ?? 1);
+        setPage(res.current_page ?? pageNum);
+        setTotalItems(res.total ?? res.data.employees.length);
+        setPageSize(res.per_page ?? Math.max(res.data.employees.length, 1));
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "CanceledError") return;
+        if (cancelled) return;
+
+        setRows([]);
+        setTotalPages(1);
+        setPage(pageNum);
+        setTotalItems(0);
+        setPageSize(20);
+        setError(
+          err instanceof Error ? err.message : "Failed to load employees.",
+        );
+      } finally {
+        await metadataPromise;
+        if (!cancelled) {
+          setIsLoading(false);
+          setResolvedStoreId(storeId);
+        }
+      }
+    };
+
+    void bootstrapPage();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchData, selectedStore?.storeId]);
+  }, [isStoreHydrated, selectedStore?.storeId]);
 
   const hasStore = !!selectedStore?.storeId;
-  const isEmpty = hasStore && !isLoading && !error && rows.length === 0;
+  const isBootstrappingCurrentStore =
+    hasStore && resolvedStoreId !== selectedStore?.storeId;
+  const shouldShowSkeleton =
+    !isStoreHydrated || (hasStore && (isLoading || isMetadataLoading || isBootstrappingCurrentStore));
+  const isEmpty = hasStore && !shouldShowSkeleton && !error && rows.length === 0;
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    fetchData({ search, legal_status: legalStatus });
+    fetchData(getCurrentFilters());
   }
 
   function handleLegalStatusChange(value: string) {
-    const next = value as LegalStatus | "all";
-    setLegalStatus(next);
-    fetchData({ search, legal_status: next });
+    setLegalStatus(value as LegalStatus | "all");
   }
 
   function handleClearFilters() {
     setSearch("");
     setLegalStatus("all");
-    fetchData({});
+    setPositionFilter("all");
+    setStatusFilter("all");
+    setPaychecksId("");
+    setCity("");
+    setPage(1);
+    fetchData({
+      search: "",
+      legal_status: "all",
+      position_id: "all",
+      emp_status_id: "all",
+      paychecks_id: "",
+      city: "",
+      page: "1",
+    });
   }
 
-  const isFiltered = search !== "" || legalStatus !== "all";
+  const isFiltered =
+    search !== "" ||
+    legalStatus !== "all" ||
+    positionFilter !== "all" ||
+    statusFilter !== "all" ||
+    paychecksId !== "" ||
+    city !== "";
 
   async function handleDelete() {
     if (deleteEmployeeId === null || !selectedStore?.storeId) return;
@@ -198,7 +421,7 @@ export default function EmployeesPage() {
       toast.success("Employee deleted.");
       setDeleteConfirmOpen(false);
       setDeleteEmployeeId(null);
-      fetchData({ search, legal_status: legalStatus });
+      fetchData(getCurrentFilters());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete employee.");
     } finally {
@@ -215,11 +438,11 @@ export default function EmployeesPage() {
         <Button
           variant="outline"
           size="icon"
-          onClick={() => fetchData({ search, legal_status: legalStatus })}
-          disabled={isLoading}
+          onClick={() => fetchData(getCurrentFilters())}
+          disabled={shouldShowSkeleton}
           aria-label="Refresh"
         >
-          <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+          <RefreshCw className={shouldShowSkeleton ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
         </Button>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
@@ -230,41 +453,85 @@ export default function EmployeesPage() {
       {/* Filters */}
       <form
         onSubmit={handleSearch}
-        className="flex flex-wrap items-center gap-3"
+        className="rounded-lg border bg-card/40 p-4"
       >
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="relative min-w-0 xl:col-span-1">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="ps-9"
+              placeholder="Search by name, email, or SSN..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           <Input
-            className="ps-9"
-            placeholder="Search by name or email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            placeholder="City"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+          <Input
+            type="number"
+            min={1}
+            placeholder="Paycheck ID"
+            value={paychecksId}
+            onChange={(e) => setPaychecksId(e.target.value)}
           />
         </div>
-        <Select value={legalStatus} onValueChange={handleLegalStatusChange}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Legal status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="w2">W-2</SelectItem>
-            <SelectItem value="1099">1099</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button type="submit" variant="secondary" size="sm">
-          Search
-        </Button>
-        {isFiltered && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleClearFilters}
-          >
-            <X className="me-1 h-4 w-4" />
-            Clear
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.85fr)_auto_auto] xl:items-center">
+          <Select value={positionFilter} onValueChange={setPositionFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Position" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All positions</SelectItem>
+              {positions.map((position) => (
+                <SelectItem key={position.id} value={String(position.id)}>
+                  {position.position_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Employee status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All employee statuses</SelectItem>
+              {employeeStatuses.map((status) => (
+                <SelectItem key={status.id} value={String(status.id)}>
+                  {employeeStatusLabel(status.emp_status)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={legalStatus} onValueChange={handleLegalStatusChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Legal status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="w2">W-2</SelectItem>
+              <SelectItem value="1099">1099</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button type="submit" variant="secondary" size="sm" className="xl:justify-self-end">
+            Search
           </Button>
-        )}
+          {isFiltered && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="xl:justify-self-start"
+              onClick={handleClearFilters}
+            >
+              <X className="me-1 h-4 w-4" />
+              Clear
+            </Button>
+          )}
+        </div>
       </form>
 
       {/* Error */}
@@ -276,7 +543,7 @@ export default function EmployeesPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchData({ search, legal_status: legalStatus })}
+              onClick={() => fetchData(getCurrentFilters())}
             >
               Retry
             </Button>
@@ -285,10 +552,10 @@ export default function EmployeesPage() {
       )}
 
       {/* Skeleton */}
-      {isLoading && <TableSkeleton />}
+      {shouldShowSkeleton && <TableSkeleton />}
 
       {/* No store */}
-      {!isLoading && !hasStore && (
+      {isStoreHydrated && !shouldShowSkeleton && !hasStore && (
         <div className="rounded-lg border p-10 text-center text-muted-foreground text-sm">
           Select a store to view employees.
         </div>
@@ -304,123 +571,226 @@ export default function EmployeesPage() {
       )}
 
       {/* Table */}
-      {!isLoading && !error && rows.length > 0 && (
-        <div className="rounded-lg border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead className="hidden sm:table-cell">Gender</TableHead>
-                <TableHead className="hidden md:table-cell">Birth Date</TableHead>
-                <TableHead className="hidden sm:table-cell">Position</TableHead>
-                <TableHead className="hidden md:table-cell">Status</TableHead>
-                <TableHead>Legal Status</TableHead>
-                <TableHead className="w-12">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((emp) => {
-                const profile = emp.employee_profile;
-                const fullName = profile
-                  ? [profile.first_name, profile.middle_name, profile.last_name]
-                      .filter(Boolean)
-                      .join(" ")
-                  : `Employee #${emp.id}`;
+      {!shouldShowSkeleton && !error && rows.length > 0 && (
+        <>
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="hidden sm:table-cell">Gender</TableHead>
+                  <TableHead className="hidden md:table-cell">Birth Date</TableHead>
+                  <TableHead className="hidden sm:table-cell">Position</TableHead>
+                  <TableHead className="hidden md:table-cell">Status</TableHead>
+                  <TableHead>Legal Status</TableHead>
+                  <TableHead className="w-12">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((emp) => {
+                  const profile = emp.employee_profile;
+                  const fullName = profile
+                    ? [profile.first_name, profile.middle_name, profile.last_name]
+                        .filter(Boolean)
+                        .join(" ")
+                    : `Employee #${emp.id}`;
 
-                const legalStatuses = emp.employee_paychecks_info.map(
-                  (p) => p.legal_status,
-                );
-                const primaryPaycheck =
-                  emp.employee_paychecks_info.find((p) => p.is_primary) ??
-                  emp.employee_paychecks_info[0];
+                  const primaryPaycheck =
+                    emp.employee_paychecks_info.find((p) => p.is_primary) ??
+                    emp.employee_paychecks_info[0];
 
-                return (
-                  <TableRow key={emp.id}>
-                    <TableCell className="font-mono text-muted-foreground text-xs">
-                      {emp.id}
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-sm">{fullName}</div>
-                      {profile && (
-                        <div className="text-xs text-muted-foreground capitalize mt-0.5 sm:hidden">
-                          {profile.gender}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell capitalize text-sm">
-                      {profile?.gender ?? "—"}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm whitespace-nowrap">
-                      {profile?.birth_date ?? "—"}
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-sm">
-                      {getPositionName(emp.position_id, positions)}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">
-                      {getStatusName(emp.emp_status_id, employeeStatuses)}
-                    </TableCell>
-                    <TableCell>
-                      {primaryPaycheck?.legal_status ? (
-                        <Badge variant="secondary" className="text-xs">
-                          {legalStatusLabel(primaryPaycheck.legal_status)}
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Actions</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setEditEmployeeId(emp.id);
-                              setEditDialogOpen(true);
-                            }}
-                          >
-                            <Pencil className="me-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => {
-                              setDeleteEmployeeId(emp.id);
-                              setDeleteConfirmOpen(true);
-                            }}
-                          >
-                            <Trash2 className="me-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                  return (
+                    <TableRow
+                      key={emp.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => {
+                        setSelectedEmployee(emp);
+                        setSelectedEmployeeId(emp.id);
+                        setDetailsOpen(true);
+                      }}
+                    >
+                      <TableCell>
+                        <div className="font-medium text-sm">{fullName}</div>
+                        {profile && (
+                          <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">
+                            {profile.gender ? `${profile.gender.charAt(0).toUpperCase()}${profile.gender.slice(1)}` : "—"}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell capitalize text-sm">
+                        {profile?.gender ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm whitespace-nowrap">
+                        {profile?.birth_date ?? "—"}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-sm">
+                        {getPositionName(emp.position_id, positions)}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm">
+                        {getStatusName(emp.emp_status_id, employeeStatuses)}
+                      </TableCell>
+                      <TableCell>
+                        {primaryPaycheck?.legal_status ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {legalStatusLabel(primaryPaycheck.legal_status)}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditEmployee(emp);
+                                setEditEmployeeId(emp.id);
+                                setEditDialogOpen(true);
+                              }}
+                            >
+                              <Pencil className="me-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => {
+                                setDeleteEmployeeId(emp.id);
+                                setDeleteConfirmOpen(true);
+                              }}
+                            >
+                              <Trash2 className="me-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-2">
+              <div className="flex-1 text-sm text-muted-foreground">
+                {totalItems > 0 ? (
+                  <>
+                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, totalItems)} of {totalItems} entries
+                  </>
+                ) : (
+                  "0 entries"
+                )}
+              </div>
+              <div className="flex items-center space-x-6 lg:space-x-8">
+                <div className="flex w-25 items-center justify-center text-sm font-medium">
+                  Page {page} of {totalPages}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() =>
+                      fetchData({
+                        ...getCurrentFilters(),
+                        page: "1",
+                      })
+                    }
+                    disabled={page <= 1}
+                  >
+                    <span className="sr-only">Go to first page</span>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    onClick={() =>
+                      fetchData({
+                        ...getCurrentFilters(),
+                        page: String(page - 1),
+                      })
+                    }
+                    disabled={page <= 1}
+                  >
+                    <span className="sr-only">Go to previous page</span>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    onClick={() =>
+                      fetchData({
+                        ...getCurrentFilters(),
+                        page: String(page + 1),
+                      })
+                    }
+                    disabled={page >= totalPages}
+                  >
+                    <span className="sr-only">Go to next page</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() =>
+                      fetchData({
+                        ...getCurrentFilters(),
+                        page: String(totalPages),
+                      })
+                    }
+                    disabled={page >= totalPages}
+                  >
+                    <span className="sr-only">Go to last page</span>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <CreateEmployeeDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onSuccess={() => fetchData({ search, legal_status: legalStatus })}
+        onSuccess={() => fetchData(getCurrentFilters())}
+      />
+
+      <EmployeeDetailsSheet
+        employeeId={selectedEmployeeId}
+        employee={selectedEmployee}
+        open={detailsOpen}
+        onOpenChange={(nextOpen) => {
+          setDetailsOpen(nextOpen);
+          if (!nextOpen) {
+            setSelectedEmployeeId(null);
+            setSelectedEmployee(null);
+          }
+        }}
+        positions={positions}
+        employeeStatuses={employeeStatuses}
       />
 
       <EditEmployeeDialog
         employeeId={editEmployeeId}
+        employee={editEmployee}
         open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onSuccess={() => fetchData({ search, legal_status: legalStatus })}
+        onOpenChange={(nextOpen) => {
+          setEditDialogOpen(nextOpen);
+          if (!nextOpen) {
+            setEditEmployeeId(null);
+            setEditEmployee(null);
+          }
+        }}
+        onSuccess={() => fetchData(getCurrentFilters())}
       />
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

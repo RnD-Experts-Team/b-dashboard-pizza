@@ -58,10 +58,11 @@ import type {
   EmployeeStatusHistory,
   EmployeeRecord,
 } from "@/types/employee.types";
-import type { ShiftRecord } from "@/types/hiring.types";
+import type { ShiftRecord, EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
 
 interface EditEmployeeDialogProps {
   employeeId: number | null;
+  employee: EmployeeRecord | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -131,6 +132,7 @@ const ALL_DAYS: DayOfWeek[] = [
 /* ------------------------------------------------------------------ */
 export function EditEmployeeDialog({
   employeeId,
+  employee,
   open,
   onOpenChange,
   onSuccess,
@@ -166,6 +168,8 @@ export function EditEmployeeDialog({
 
   /* ── Shifts from API ── */
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
+  const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
+  const [positions, setPositions] = useState<PositionRecord[]>([]);
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
 
   /* ── Populate form from record ── */
@@ -191,6 +195,17 @@ export function EditEmployeeDialog({
 
   /* ── Load employee data when dialog opens ── */
   useEffect(() => {
+    if (!open) return;
+
+    if (employee) {
+      setLoadError(null);
+      setSubmitError(null);
+      setActiveTab("personal");
+      populateForm(employee);
+      setIsLoadingEmployee(false);
+      return;
+    }
+
     if (!open || !employeeId || !selectedStore?.storeId) return;
     let cancelled = false;
 
@@ -217,7 +232,7 @@ export function EditEmployeeDialog({
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, employeeId, selectedStore?.storeId]);
+  }, [employee, open, employeeId, selectedStore?.storeId]);
 
   /* ── Load shifts ── */
   useEffect(() => {
@@ -226,7 +241,13 @@ export function EditEmployeeDialog({
     setIsLoadingShifts(true);
     hiringService
       .getCreateEmployeePage(selectedStore.storeId)
-      .then((data) => { if (!cancelled) setShifts(data.shifts); })
+      .then((data) => {
+        if (!cancelled) {
+          setShifts(data.shifts);
+          setEmployeeStatuses(data.employeeStatuses);
+          setPositions(data.positions);
+        }
+      })
       .catch(() => {})
       .finally(() => { if (!cancelled) setIsLoadingShifts(false); });
     return () => { cancelled = true; };
@@ -421,24 +442,40 @@ export function EditEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Employee Status ID <span className="text-destructive">*</span></Label>
-            <Input
-              type="number"
-              min={1}
-              value={empStatusId || ""}
-              onChange={(e) => setEmpStatusId(parseInt(e.target.value) || 0)}
-              placeholder="e.g. 1"
-            />
+            <Label>Employee Status <span className="text-destructive">*</span></Label>
+            <Select
+              value={empStatusId ? String(empStatusId) : ""}
+              onValueChange={(v) => setEmpStatusId(parseInt(v, 10))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select employee status" />
+              </SelectTrigger>
+              <SelectContent>
+                {employeeStatuses.map((status) => (
+                  <SelectItem key={status.id} value={String(status.id)}>
+                    {status.emp_status}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Position ID <span className="text-destructive">*</span></Label>
-            <Input
-              type="number"
-              min={1}
-              value={positionId || ""}
-              onChange={(e) => setPositionId(parseInt(e.target.value) || 0)}
-              placeholder="e.g. 1"
-            />
+            <Label>Position <span className="text-destructive">*</span></Label>
+            <Select
+              value={positionId ? String(positionId) : ""}
+              onValueChange={(v) => setPositionId(parseInt(v, 10))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select position" />
+              </SelectTrigger>
+              <SelectContent>
+                {positions.map((position) => (
+                  <SelectItem key={position.id} value={String(position.id)}>
+                    {position.position_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -833,14 +870,24 @@ export function EditEmployeeDialog({
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label>Status Type ID</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={sh.status_type_id || ""}
-                    onChange={(e) => updateItem(setStatusHistory, idx, "status_type_id", parseInt(e.target.value) || 0)}
-                    placeholder="e.g. 1"
-                  />
+                  <Label>Status Type</Label>
+                  <Select
+                    value={sh.status_type_id && sh.status_type_id > 0 ? String(sh.status_type_id) : ""}
+                    onValueChange={(v) =>
+                      updateItem(setStatusHistory, idx, "status_type_id", parseInt(v, 10) || 0)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employeeStatuses.map((status) => (
+                        <SelectItem key={status.id} value={String(status.id)}>
+                          {status.emp_status}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Status Date</Label>
@@ -872,7 +919,7 @@ export function EditEmployeeDialog({
   /* ---------------------------------------------------------------- */
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex w-[95vw] max-w-5xl flex-col h-[92vh]">
+      <DialogContent className="flex h-[92vh] w-[95vw] max-w-[calc(100%-1rem)] flex-col text-[13px] sm:w-[92vw] sm:max-w-280 **:data-[slot=label]:text-xs **:data-[slot=input]:text-sm **:data-[slot=textarea]:text-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Pencil className="h-5 w-5 text-primary" />
@@ -919,11 +966,11 @@ export function EditEmployeeDialog({
             onValueChange={setActiveTab}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="personal">Personal Info</TabsTrigger>
-              <TabsTrigger value="availability">Availability</TabsTrigger>
-              <TabsTrigger value="compensation">Compensation</TabsTrigger>
-              <TabsTrigger value="notes">Notes &amp; Status</TabsTrigger>
+            <TabsList className="grid h-9 w-full grid-cols-4 p-1">
+              <TabsTrigger className="text-xs" value="personal">Personal Info</TabsTrigger>
+              <TabsTrigger className="text-xs" value="availability">Availability</TabsTrigger>
+              <TabsTrigger className="text-xs" value="compensation">Compensation</TabsTrigger>
+              <TabsTrigger className="text-xs" value="notes">Notes &amp; Status</TabsTrigger>
             </TabsList>
 
             <ScrollArea className="flex-1 min-h-0 mt-4">

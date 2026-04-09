@@ -59,6 +59,14 @@ const AVAILABILITY_LABELS: Record<string, string> = {
   open_availability: "Open Availability",
 };
 
+const MIN_INITIAL_SKELETON_MS = 300;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 function StatusBadge({ status }: { status: string }) {
   const lower = status.toLowerCase();
   const variant =
@@ -118,6 +126,7 @@ function TableSkeleton() {
 }
 
 export default function HiringRequestPage() {
+  const [activeTab, setActiveTab] = useState("hiring");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
@@ -137,15 +146,39 @@ export default function HiringRequestPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [rows, setRows] = useState<HiringRequestRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
+  const [isStoreHydrated, setIsStoreHydrated] = useState(
+    () => useSelectedStoreStore.persist.hasHydrated(),
+  );
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
 
+  useEffect(() => {
+    const persistApi = useSelectedStoreStore.persist;
+    setIsStoreHydrated(persistApi.hasHydrated());
+
+    const unsubscribeHydrate = persistApi.onHydrate(() => {
+      setIsStoreHydrated(false);
+    });
+    const unsubscribeFinishHydration = persistApi.onFinishHydration(() => {
+      setIsStoreHydrated(true);
+    });
+
+    return () => {
+      unsubscribeHydrate();
+      unsubscribeFinishHydration();
+    };
+  }, []);
+
   const fetchData = useCallback(
     async (targetPage: number) => {
-      if (!selectedStore?.storeId) return;
+      if (!selectedStore?.storeId) {
+        setIsLoading(false);
+        return;
+      }
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -176,11 +209,60 @@ export default function HiringRequestPage() {
   );
 
   useEffect(() => {
-    fetchData(1);
-    return () => abortRef.current?.abort();
-  }, [fetchData]);
+    if (!isStoreHydrated) return;
 
-  const isEmpty = !isLoading && !error && rows.length === 0;
+    if (activeTab !== "hiring") {
+      return;
+    }
+
+    if (!selectedStore?.storeId) {
+      abortRef.current?.abort();
+      setRows([]);
+      setError(null);
+      setIsLoading(false);
+      setIsInitialLoadComplete(true);
+      setTotalPages(1);
+      setPage(1);
+      return;
+    }
+
+    let cancelled = false;
+
+    const bootstrapHiringTab = async () => {
+      setIsInitialLoadComplete(false);
+      const startedAt = Date.now();
+
+      await fetchData(1);
+
+      const elapsed = Date.now() - startedAt;
+      const remaining = MIN_INITIAL_SKELETON_MS - elapsed;
+      if (remaining > 0) {
+        await delay(remaining);
+      }
+
+      if (!cancelled) {
+        setIsInitialLoadComplete(true);
+      }
+    };
+
+    void bootstrapHiringTab();
+
+    return () => {
+      cancelled = true;
+      abortRef.current?.abort();
+    };
+  }, [activeTab, fetchData, isStoreHydrated, selectedStore?.storeId]);
+
+  const hasStore = !!selectedStore?.storeId;
+  const shouldShowSkeleton =
+    activeTab === "hiring" && (!isStoreHydrated || !isInitialLoadComplete);
+  const isEmpty =
+    activeTab === "hiring" &&
+    hasStore &&
+    isInitialLoadComplete &&
+    !isLoading &&
+    !error &&
+    rows.length === 0;
 
   async function handleDelete() {
     if (deleteRequestId === null || !selectedStore?.storeId) return;
@@ -207,7 +289,11 @@ export default function HiringRequestPage() {
         description="Manage hiring and separation requests for your stores."
       />
 
-      <Tabs defaultValue="hiring" className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
           <TabsTrigger value="hiring" className="gap-2">
             <UserPlus className="h-4 w-4" />
@@ -230,7 +316,7 @@ export default function HiringRequestPage() {
                 variant="outline"
                 size="icon"
                 onClick={() => fetchData(page)}
-                disabled={isLoading}
+                disabled={!isStoreHydrated || isLoading}
                 aria-label="Refresh"
               >
                 <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
@@ -260,7 +346,7 @@ export default function HiringRequestPage() {
             )}
 
             {/* Loading skeleton */}
-            {isLoading && <TableSkeleton />}
+            {shouldShowSkeleton && <TableSkeleton />}
 
             {/* Empty state */}
             {isEmpty && (
@@ -270,7 +356,7 @@ export default function HiringRequestPage() {
             )}
 
             {/* Table */}
-            {!isLoading && !error && rows.length > 0 && (
+            {isInitialLoadComplete && !error && rows.length > 0 && (
               <div className="rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -397,13 +483,13 @@ export default function HiringRequestPage() {
             )}
 
             {/* Pagination */}
-            {totalPages > 1 && !isLoading && !error && (
+            {totalPages > 1 && isInitialLoadComplete && !error && rows.length > 0 && (
               <div className="flex items-center justify-end gap-2 text-sm">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => fetchData(page - 1)}
-                  disabled={page <= 1}
+                  disabled={page <= 1 || isLoading}
                 >
                   Previous
                 </Button>
@@ -414,7 +500,7 @@ export default function HiringRequestPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => fetchData(page + 1)}
-                  disabled={page >= totalPages}
+                  disabled={page >= totalPages || isLoading}
                 >
                   Next
                 </Button>
@@ -425,7 +511,7 @@ export default function HiringRequestPage() {
 
         {/* ── Separation Request Tab ── */}
         <TabsContent value="separation" className="mt-4">
-          <SeparationRequestTab />
+          <SeparationRequestTab active={activeTab === "separation"} />
         </TabsContent>
       </Tabs>
 

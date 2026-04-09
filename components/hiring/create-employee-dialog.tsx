@@ -1007,7 +1007,7 @@ export function CreateEmployeeDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="flex w-[95vw] max-w-5xl flex-col h-[92vh]">
+        <DialogContent className="flex h-[92vh] w-[95vw] max-w-[calc(100%-1rem)] flex-col text-[13px] sm:w-[92vw] sm:max-w-280 **:data-[slot=label]:text-xs **:data-[slot=input]:text-sm **:data-[slot=textarea]:text-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-primary" />
@@ -1032,11 +1032,11 @@ export function CreateEmployeeDialog({
             onValueChange={setActiveTab}
             className="flex min-h-0 flex-1 flex-col"
           >
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="personal">Personal Info</TabsTrigger>
-              <TabsTrigger value="availability">Availability</TabsTrigger>
-              <TabsTrigger value="compensation">Compensation</TabsTrigger>
-              <TabsTrigger value="notes">Notes &amp; Status</TabsTrigger>
+            <TabsList className="grid h-9 w-full grid-cols-4 p-1">
+              <TabsTrigger className="text-xs" value="personal">Personal Info</TabsTrigger>
+              <TabsTrigger className="text-xs" value="availability">Availability</TabsTrigger>
+              <TabsTrigger className="text-xs" value="compensation">Compensation</TabsTrigger>
+              <TabsTrigger className="text-xs" value="notes">Notes &amp; Status</TabsTrigger>
             </TabsList>
 
             <ScrollArea className="flex-1 min-h-0 mt-4">

@@ -30,8 +30,12 @@ function appendBoolean(formData: FormData, key: string, value: boolean | undefin
   formData.append(key, value ? "1" : "0");
 }
 
-function buildCreateEmployeeFormData(payload: CreateEmployeePayload): FormData {
+function buildEmployeeFormData(
+  payload: CreateEmployeePayload,
+  options?: { includePaychecksInfo?: boolean },
+): FormData {
   const formData = new FormData();
+  const includePaychecksInfo = options?.includePaychecksInfo ?? true;
 
   formData.append("birth_date", payload.birth_date);
   formData.append("emp_status_id", String(payload.emp_status_id));
@@ -52,6 +56,8 @@ function buildCreateEmployeeFormData(payload: CreateEmployeePayload): FormData {
     appendIfDefined(formData, `addresses[${i}][state]`, address.state);
     appendIfDefined(formData, `addresses[${i}][address_line_2]`, (address as { address_line_2?: string }).address_line_2);
     appendBoolean(formData, `addresses[${i}][is_primary]`, address.is_primary === true);
+    appendIfDefined(formData, `addresses[${i}][latitude]`, address.latitude);
+    appendIfDefined(formData, `addresses[${i}][longitude]`, address.longitude);
     appendIfDefined(formData, `addresses[${i}][zip_code]`, (address as { zip_code?: string }).zip_code);
   });
 
@@ -85,12 +91,14 @@ function buildCreateEmployeeFormData(payload: CreateEmployeePayload): FormData {
     appendIfDefined(formData, `notes[${i}][notes]`, note.notes);
   });
 
-  payload.paychecks_info?.forEach((paycheck, i) => {
-    appendIfDefined(formData, `paychecks_info[${i}][paychecks_id]`, paycheck.paychecks_id);
-    const legalStatus = normalizeLegalStatus(paycheck.legal_status);
-    appendIfDefined(formData, `paychecks_info[${i}][legal_status]`, legalStatus);
-    appendBoolean(formData, `paychecks_info[${i}][is_primary]`, paycheck.is_primary === true);
-  });
+  if (includePaychecksInfo) {
+    payload.paychecks_info?.forEach((paycheck, i) => {
+      appendIfDefined(formData, `paychecks_info[${i}][paychecks_id]`, paycheck.paychecks_id);
+      const legalStatus = normalizeLegalStatus(paycheck.legal_status);
+      appendIfDefined(formData, `paychecks_info[${i}][legal_status]`, legalStatus);
+      appendBoolean(formData, `paychecks_info[${i}][is_primary]`, paycheck.is_primary === true);
+    });
+  }
 
   payload.payment_info?.forEach((payment, i) => {
     appendIfDefined(formData, `payment_info[${i}][account_number]`, payment.account_number);
@@ -145,9 +153,16 @@ export const employeeService = {
   ): Promise<EmployeesResponse> {
     const query = new URLSearchParams();
     if (params?.search) query.set("search", params.search);
-    if (params?.legal_status) query.set("legal_status", params.legal_status);
+    if (params?.position_id != null)
+      query.set("position_id", String(params.position_id));
+    if (params?.emp_status_id != null)
+      query.set("emp_status_id", String(params.emp_status_id));
+    if (params?.legal_status)
+      query.set("legal_status", String(params.legal_status).toLowerCase());
     if (params?.paychecks_id != null)
       query.set("paychecks_id", String(params.paychecks_id));
+    if (params?.city) query.set("city", params.city);
+    if (params?.page != null) query.set("page", String(params.page));
     const qs = query.toString();
     const { data } = await axios.get<EmployeesResponse>(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees${qs ? `?${qs}` : ""}`,
@@ -195,10 +210,11 @@ export const employeeService = {
     employeeId: number,
     payload: CreateEmployeePayload,
   ): Promise<unknown> {
+    const formData = buildEmployeeFormData(payload, { includePaychecksInfo: false });
     const { data } = await axios.post(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees/${employeeId}`,
-      payload,
-      { headers: { ...buildHeaders(), "Content-Type": "application/json" }, timeout: 15_000 },
+      formData,
+      { headers: buildHeaders(), timeout: 15_000 },
     );
     return data;
   },
@@ -211,7 +227,7 @@ export const employeeService = {
     storeId: string,
     payload: CreateEmployeePayload,
   ): Promise<unknown> {
-    const formData = buildCreateEmployeeFormData(payload);
+    const formData = buildEmployeeFormData(payload, { includePaychecksInfo: true });
     const { data } = await axios.post(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees`,
       formData,

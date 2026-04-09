@@ -125,7 +125,7 @@ function SepTableSkeleton() {
   );
 }
 
-export function SeparationRequestTab() {
+export function SeparationRequestTab({ active = true }: { active?: boolean }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedSeparationId, setSelectedSeparationId] = useState<number | null>(null);
@@ -141,7 +141,7 @@ export function SeparationRequestTab() {
   const [reviewSeparationId, setReviewSeparationId] = useState<number | null>(null);
 
   const [rows, setRows] = useState<SeparationRequestRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
@@ -182,9 +182,10 @@ export function SeparationRequestTab() {
   );
 
   useEffect(() => {
+    if (!active) return;
     fetchData(1);
     return () => abortRef.current?.abort();
-  }, [fetchData]);
+  }, [active, fetchData]);
 
   const isEmpty = !isLoading && !error && rows.length === 0;
 

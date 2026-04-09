@@ -3,11 +3,19 @@
 /* ------------------------------------------------------------------ */
 
 export interface EmployeeAddress {
+  id?: number;
+  employee_id?: number;
   address_line_1?: string;
+  address_line_2?: string | null;
   city?: string;
   state?: string;
+  zip_code?: string | null;
   country?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   is_primary?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type DayOfWeek =
@@ -20,26 +28,44 @@ export type DayOfWeek =
   | "sunday";
 
 export interface EmployeeAvailability {
+  id?: number;
+  employee_id?: number;
   days?: DayOfWeek[];
   shift_id?: number;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type ContactType = "email" | "phone";
 
 export interface EmployeeContact {
+  id?: number;
+  employee_id?: number;
   contact_type?: ContactType;
   contact_value?: string;
   is_primary?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EmployeeFile {
+  id?: number;
+  employee_id?: number;
   file?: File | string;
   notes?: string;
   type_id?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EmployeeNote {
+  id?: number;
+  employee_id?: number;
+  created_by?: number;
   notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type LegalStatus = "W2" | "w2" | "1099";
@@ -53,22 +79,34 @@ export interface EmployeePaycheckInfo {
 export type AccountType = "checking" | "saving" | "savings";
 
 export interface EmployeePaymentInfo {
+  id?: number;
+  employee_id?: number;
   account_number?: string;
   account_type?: AccountType;
   is_primary?: boolean;
   routing_number?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EmployeeSalaryInfo {
+  id?: number;
+  employee_id?: number;
   base_pay?: number;
   performance_pay?: number;
   salary_date?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface EmployeeStatusHistory {
+  id?: number;
+  employee_id?: number;
   notes?: string;
   status_date?: string;
   status_type_id?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type Gender = "male" | "female" | "other";
@@ -115,6 +153,12 @@ export interface EmployeesResponse {
   data: {
     employees: EmployeeRecord[];
   };
+  current_page?: number;
+  last_page?: number;
+  per_page?: number;
+  total?: number;
+  from?: number;
+  to?: number;
 }
 
 export interface EmployeeSingleResponse {
@@ -125,8 +169,12 @@ export interface EmployeeSingleResponse {
 
 export interface GetEmployeesParams {
   search?: string;
+  position_id?: number;
+  emp_status_id?: number;
   legal_status?: LegalStatus;
   paychecks_id?: number;
+  city?: string;
+  page?: number;
 }
 
 export interface CreateEmployeePayload {
