@@ -400,10 +400,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     icon: Briefcase,
     items: [
       {
-        title: t("hiringRequest"),
+        title: t("manageRequests"),
         href: `/${locale}/dashboard/hiring-management/hiring-request`,
         icon: ClipboardList,
       },
+      // {
+      //   title: t("separationRequest"),
+      //   href: `/${locale}/dashboard/hiring-management/separation-request`,
+      //   icon: FileText,
+      // },
       {
         title: t("employees"),
         href: `/${locale}/dashboard/hiring-management/employees`,

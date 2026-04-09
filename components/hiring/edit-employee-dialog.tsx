@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import {
   Plus,
   Trash2,
-  UserPlus,
+  Pencil,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -15,16 +16,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Tabs,
   TabsContent,
@@ -46,6 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { hiringService } from "@/lib/api/services/hiring.service";
@@ -64,10 +56,12 @@ import type {
   EmployeePaymentInfo,
   EmployeeSalaryInfo,
   EmployeeStatusHistory,
+  EmployeeRecord,
 } from "@/types/employee.types";
-import type { ShiftRecord, EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
+import type { ShiftRecord } from "@/types/hiring.types";
 
-interface CreateEmployeeDialogProps {
+interface EditEmployeeDialogProps {
+  employeeId: number | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -135,11 +129,12 @@ const ALL_DAYS: DayOfWeek[] = [
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
-export function CreateEmployeeDialog({
+export function EditEmployeeDialog({
+  employeeId,
   open,
   onOpenChange,
   onSuccess,
-}: CreateEmployeeDialogProps) {
+}: EditEmployeeDialogProps) {
   const { selectedStore } = useSelectedStoreStore();
 
   /* ── Required fields ── */
@@ -164,90 +159,80 @@ export function CreateEmployeeDialog({
 
   /* ── UI state ── */
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showConfirmExit, setShowConfirmExit] = useState(false);
+  const [isLoadingEmployee, setIsLoadingEmployee] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("personal");
 
   /* ── Shifts from API ── */
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
-  const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
-  const [positions, setPositions] = useState<PositionRecord[]>([]);
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
 
+  /* ── Populate form from record ── */
+  function populateForm(emp: EmployeeRecord) {
+    const profile = emp.employee_profile;
+    setFirstName(profile?.first_name ?? "");
+    setMiddleName(profile?.middle_name ?? "");
+    setLastName(profile?.last_name ?? "");
+    setBirthDate(profile?.birth_date ?? "");
+    setGender((profile?.gender as Gender) || "");
+    setSsnNumber(emp.SSN_number ?? "");
+    setEmpStatusId(emp.emp_status_id);
+    setPositionId(emp.position_id);
+    setAddresses(emp.employee_addresses ?? []);
+    setAvailability(emp.employee_availability ?? []);
+    setContacts(emp.employee_contacts ?? []);
+    setNotes(emp.employee_notes ?? []);
+    setPaychecksInfo(emp.employee_paychecks_info ?? []);
+    setPaymentInfo(emp.employee_payment_info ? [emp.employee_payment_info] : []);
+    setSalaryInfo(emp.employee_salary_info ? [emp.employee_salary_info] : []);
+    setStatusHistory(emp.employee_status_history ?? []);
+  }
+
+  /* ── Load employee data when dialog opens ── */
+  useEffect(() => {
+    if (!open || !employeeId || !selectedStore?.storeId) return;
+    let cancelled = false;
+
+    setIsLoadingEmployee(true);
+    setLoadError(null);
+    setSubmitError(null);
+    setActiveTab("personal");
+
+    employeeService
+      .getEmployee(selectedStore.storeId, employeeId)
+      .then((res) => {
+        if (!cancelled) populateForm(res.data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof Error && err.name === "CanceledError") return;
+        setLoadError(
+          err instanceof Error ? err.message : "Failed to load employee data.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingEmployee(false);
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, employeeId, selectedStore?.storeId]);
+
+  /* ── Load shifts ── */
   useEffect(() => {
     if (!open || !selectedStore?.storeId) return;
     let cancelled = false;
     setIsLoadingShifts(true);
     hiringService
       .getCreateEmployeePage(selectedStore.storeId)
-      .then((data) => {
-        if (!cancelled) {
-          setShifts(data.shifts);
-          setEmployeeStatuses(data.employeeStatuses);
-          setPositions(data.positions);
-        }
-      })
+      .then((data) => { if (!cancelled) setShifts(data.shifts); })
       .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setIsLoadingShifts(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .finally(() => { if (!cancelled) setIsLoadingShifts(false); });
+    return () => { cancelled = true; };
   }, [open, selectedStore?.storeId]);
 
-  /* ── Dirty check ── */
-  const isDirty =
-    firstName !== "" ||
-    lastName !== "" ||
-    middleName !== "" ||
-    birthDate !== "" ||
-    gender !== "" ||
-    ssnNumber !== "" ||
-    empStatusId !== 0 ||
-    positionId !== 0 ||
-    addresses.length > 0 ||
-    availability.length > 0 ||
-    contacts.length > 0 ||
-    notes.length > 0 ||
-    paychecksInfo.length > 0 ||
-    paymentInfo.length > 0 ||
-    salaryInfo.length > 0 ||
-    statusHistory.length > 0;
-
-  function resetForm() {
-    setFirstName("");
-    setLastName("");
-    setMiddleName("");
-    setBirthDate("");
-    setGender("");
-    setSsnNumber("");
-    setEmpStatusId(0);
-    setPositionId(0);
-    setAddresses([]);
-    setAvailability([]);
-    setContacts([]);
-    setNotes([]);
-    setPaychecksInfo([]);
-    setPaymentInfo([]);
-    setSalaryInfo([]);
-    setStatusHistory([]);
-    setError(null);
-    setActiveTab("personal");
-  }
-
   function handleClose() {
-    if (isDirty && !isSubmitting) {
-      setShowConfirmExit(true);
-      return;
-    }
-    resetForm();
-    onOpenChange(false);
-  }
-
-  function confirmExit() {
-    setShowConfirmExit(false);
-    resetForm();
     onOpenChange(false);
   }
 
@@ -264,16 +249,16 @@ export function CreateEmployeeDialog({
   /* ── Submit ── */
   async function handleSubmit() {
     if (!isFormValid) return;
-    if (!selectedStore?.storeId) {
-      setError("No store selected.");
+    if (!selectedStore?.storeId || !employeeId) {
+      setSubmitError("No store or employee selected.");
       return;
     }
 
     setIsSubmitting(true);
-    setError(null);
+    setSubmitError(null);
 
     try {
-      await employeeService.createEmployee(selectedStore.storeId, {
+      await employeeService.updateEmployee(selectedStore.storeId, employeeId, {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         ...(middleName.trim() ? { middle_name: middleName.trim() } : {}),
@@ -292,14 +277,13 @@ export function CreateEmployeeDialog({
         ...(statusHistory.length > 0 ? { status_history: statusHistory } : {}),
       });
 
-      toast.success("Employee created successfully.");
-      resetForm();
+      toast.success("Employee updated successfully.");
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
       if (err instanceof Error && err.name === "CanceledError") return;
-      setError(
-        err instanceof Error ? err.message : "Failed to create employee.",
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to update employee.",
       );
     } finally {
       setIsSubmitting(false);
@@ -326,7 +310,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* helper to render an "Add" button */
   function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     return (
       <Button type="button" variant="outline" size="sm" onClick={onClick}>
@@ -336,7 +319,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* helper to render a "Remove" button */
   function RemoveButton({ onClick }: { onClick: () => void }) {
     return (
       <Button
@@ -352,7 +334,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* helper to render a section divider with label */
   function SectionDivider({ label }: { label: string }) {
     return (
       <div className="flex items-center gap-3">
@@ -365,18 +346,28 @@ export function CreateEmployeeDialog({
   }
 
   /* ---------------------------------------------------------------- */
+  /*  Loading / error skeletons                                       */
+  /* ---------------------------------------------------------------- */
+  function renderLoadingSkeleton() {
+    return (
+      <div className="space-y-4 p-1">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  /* ---------------------------------------------------------------- */
   /*  TAB CONTENT RENDERERS                                           */
   /* ---------------------------------------------------------------- */
 
-  /* 1) Basic Info */
   function renderBasicTab() {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
-            <Label>
-              First Name <span className="text-destructive">*</span>
-            </Label>
+            <Label>First Name <span className="text-destructive">*</span></Label>
             <Input
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
@@ -392,9 +383,7 @@ export function CreateEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>
-              Last Name <span className="text-destructive">*</span>
-            </Label>
+            <Label>Last Name <span className="text-destructive">*</span></Label>
             <Input
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
@@ -402,9 +391,7 @@ export function CreateEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>
-              Birth Date <span className="text-destructive">*</span>
-            </Label>
+            <Label>Birth Date <span className="text-destructive">*</span></Label>
             <Input
               type="date"
               value={birthDate}
@@ -413,13 +400,8 @@ export function CreateEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>
-              Gender <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={gender}
-              onValueChange={(v) => setGender(v as Gender)}
-            >
+            <Label>Gender <span className="text-destructive">*</span></Label>
+            <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select gender" />
               </SelectTrigger>
@@ -431,9 +413,7 @@ export function CreateEmployeeDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>
-              SSN Number <span className="text-destructive">*</span>
-            </Label>
+            <Label>SSN Number <span className="text-destructive">*</span></Label>
             <Input
               value={ssnNumber}
               onChange={(e) => setSsnNumber(e.target.value)}
@@ -441,58 +421,35 @@ export function CreateEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>
-              Employee Status <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={empStatusId ? String(empStatusId) : ""}
-              onValueChange={(v) => setEmpStatusId(parseInt(v, 10))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select employee status" />
-              </SelectTrigger>
-              <SelectContent>
-                {employeeStatuses.map((status) => (
-                  <SelectItem key={status.id} value={String(status.id)}>
-                    {status.emp_status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Employee Status ID <span className="text-destructive">*</span></Label>
+            <Input
+              type="number"
+              min={1}
+              value={empStatusId || ""}
+              onChange={(e) => setEmpStatusId(parseInt(e.target.value) || 0)}
+              placeholder="e.g. 1"
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>
-              Position <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={positionId ? String(positionId) : ""}
-              onValueChange={(v) => setPositionId(parseInt(v, 10))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select position" />
-              </SelectTrigger>
-              <SelectContent>
-                {positions.map((position) => (
-                  <SelectItem key={position.id} value={String(position.id)}>
-                    {position.position_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Position ID <span className="text-destructive">*</span></Label>
+            <Input
+              type="number"
+              min={1}
+              value={positionId || ""}
+              onChange={(e) => setPositionId(parseInt(e.target.value) || 0)}
+              placeholder="e.g. 1"
+            />
           </div>
         </div>
       </div>
     );
   }
 
-  /* 2) Contacts */
   function renderContactsTab() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Add email or phone contacts.
-          </p>
+          <p className="text-sm text-muted-foreground">Add email or phone contacts.</p>
           <AddButton label="Add Contact" onClick={() => addItem(setContacts, emptyContact)} />
         </div>
         {contacts.length === 0 && (
@@ -509,13 +466,9 @@ export function CreateEmployeeDialog({
                 <Label>Type</Label>
                 <Select
                   value={c.contact_type ?? "phone"}
-                  onValueChange={(v) =>
-                    updateItem(setContacts, idx, "contact_type", v as ContactType)
-                  }
+                  onValueChange={(v) => updateItem(setContacts, idx, "contact_type", v as ContactType)}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="phone">Phone</SelectItem>
                     <SelectItem value="email">Email</SelectItem>
@@ -526,18 +479,14 @@ export function CreateEmployeeDialog({
                 <Label>Value</Label>
                 <Input
                   value={c.contact_value ?? ""}
-                  onChange={(e) =>
-                    updateItem(setContacts, idx, "contact_value", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setContacts, idx, "contact_value", e.target.value)}
                   placeholder={c.contact_type === "email" ? "email@example.com" : "+1 555 000 0000"}
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={c.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setContacts, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setContacts, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -548,7 +497,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 3) Addresses */
   function renderAddressesTab() {
     return (
       <div className="space-y-4">
@@ -570,9 +518,7 @@ export function CreateEmployeeDialog({
                 <Label>Address Line 1</Label>
                 <Input
                   value={a.address_line_1 ?? ""}
-                  onChange={(e) =>
-                    updateItem(setAddresses, idx, "address_line_1", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setAddresses, idx, "address_line_1", e.target.value)}
                   placeholder="123 Main St"
                 />
               </div>
@@ -603,9 +549,7 @@ export function CreateEmployeeDialog({
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={a.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setAddresses, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setAddresses, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -616,23 +560,15 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 4) Availability */
   function renderAvailabilityTab() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Shifts and day availability.
-          </p>
-          <AddButton
-            label="Add Availability"
-            onClick={() => addItem(setAvailability, emptyAvailability)}
-          />
+          <p className="text-sm text-muted-foreground">Shifts and day availability.</p>
+          <AddButton label="Add Availability" onClick={() => addItem(setAvailability, emptyAvailability)} />
         </div>
         {availability.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            No availability added.
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-6">No availability added.</p>
         )}
         {availability.map((av, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
@@ -644,15 +580,11 @@ export function CreateEmployeeDialog({
               <Label>Shift</Label>
               <Select
                 value={av.shift_id && av.shift_id > 0 ? av.shift_id.toString() : ""}
-                onValueChange={(v) =>
-                  updateItem(setAvailability, idx, "shift_id", parseInt(v, 10))
-                }
+                onValueChange={(v) => updateItem(setAvailability, idx, "shift_id", parseInt(v, 10))}
                 disabled={isLoadingShifts}
               >
                 <SelectTrigger>
-                  <SelectValue
-                    placeholder={isLoadingShifts ? "Loading shifts…" : "Select a shift"}
-                  />
+                  <SelectValue placeholder={isLoadingShifts ? "Loading shifts…" : "Select a shift"} />
                 </SelectTrigger>
                 <SelectContent>
                   {shifts.map((s) => (
@@ -674,9 +606,7 @@ export function CreateEmployeeDialog({
                         checked={checked}
                         onCheckedChange={(v) => {
                           const current = av.days ?? [];
-                          const next = v
-                            ? [...current, day]
-                            : current.filter((d) => d !== day);
+                          const next = v ? [...current, day] : current.filter((d) => d !== day);
                           updateItem(setAvailability, idx, "days", next as DayOfWeek[]);
                         }}
                       />
@@ -692,7 +622,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 5) Payment Info */
   function renderPaymentTab() {
     return (
       <div className="space-y-4">
@@ -714,9 +643,7 @@ export function CreateEmployeeDialog({
                 <Label>Account Number</Label>
                 <Input
                   value={p.account_number ?? ""}
-                  onChange={(e) =>
-                    updateItem(setPaymentInfo, idx, "account_number", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setPaymentInfo, idx, "account_number", e.target.value)}
                   placeholder="Account number"
                 />
               </div>
@@ -724,9 +651,7 @@ export function CreateEmployeeDialog({
                 <Label>Routing Number</Label>
                 <Input
                   value={p.routing_number ?? ""}
-                  onChange={(e) =>
-                    updateItem(setPaymentInfo, idx, "routing_number", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setPaymentInfo, idx, "routing_number", e.target.value)}
                   placeholder="Routing number"
                 />
               </div>
@@ -734,13 +659,9 @@ export function CreateEmployeeDialog({
                 <Label>Account Type</Label>
                 <Select
                   value={p.account_type ?? "checking"}
-                  onValueChange={(v) =>
-                    updateItem(setPaymentInfo, idx, "account_type", v as AccountType)
-                  }
+                  onValueChange={(v) => updateItem(setPaymentInfo, idx, "account_type", v as AccountType)}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="checking">Checking</SelectItem>
                     <SelectItem value="savings">Savings</SelectItem>
@@ -750,9 +671,7 @@ export function CreateEmployeeDialog({
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={p.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setPaymentInfo, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setPaymentInfo, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -763,7 +682,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 6) Salary */
   function renderSalaryTab() {
     return (
       <div className="space-y-4">
@@ -788,9 +706,7 @@ export function CreateEmployeeDialog({
                   min={0}
                   step="0.01"
                   value={s.base_pay || ""}
-                  onChange={(e) =>
-                    updateItem(setSalaryInfo, idx, "base_pay", parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(e) => updateItem(setSalaryInfo, idx, "base_pay", parseFloat(e.target.value) || 0)}
                   placeholder="0.00"
                 />
               </div>
@@ -801,14 +717,7 @@ export function CreateEmployeeDialog({
                   min={0}
                   step="0.01"
                   value={s.performance_pay || ""}
-                  onChange={(e) =>
-                    updateItem(
-                      setSalaryInfo,
-                      idx,
-                      "performance_pay",
-                      parseFloat(e.target.value) || 0,
-                    )
-                  }
+                  onChange={(e) => updateItem(setSalaryInfo, idx, "performance_pay", parseFloat(e.target.value) || 0)}
                   placeholder="0.00"
                 />
               </div>
@@ -817,9 +726,7 @@ export function CreateEmployeeDialog({
                 <Input
                   type="date"
                   value={s.salary_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setSalaryInfo, idx, "salary_date", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setSalaryInfo, idx, "salary_date", e.target.value)}
                 />
               </div>
             </div>
@@ -829,7 +736,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 7) Paychecks */
   function renderPaychecksTab() {
     return (
       <div className="space-y-4">
@@ -853,14 +759,7 @@ export function CreateEmployeeDialog({
                   type="number"
                   min={1}
                   value={pc.paychecks_id || ""}
-                  onChange={(e) =>
-                    updateItem(
-                      setPaychecksInfo,
-                      idx,
-                      "paychecks_id",
-                      parseInt(e.target.value) || 0,
-                    )
-                  }
+                  onChange={(e) => updateItem(setPaychecksInfo, idx, "paychecks_id", parseInt(e.target.value) || 0)}
                   placeholder="e.g. 1"
                 />
               </div>
@@ -868,13 +767,9 @@ export function CreateEmployeeDialog({
                 <Label>Legal Status</Label>
                 <Select
                   value={pc.legal_status ?? "w2"}
-                  onValueChange={(v) =>
-                    updateItem(setPaychecksInfo, idx, "legal_status", v as LegalStatus)
-                  }
+                  onValueChange={(v) => updateItem(setPaychecksInfo, idx, "legal_status", v as LegalStatus)}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="w2">W-2</SelectItem>
                     <SelectItem value="1099">1099</SelectItem>
@@ -884,9 +779,7 @@ export function CreateEmployeeDialog({
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={pc.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setPaychecksInfo, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setPaychecksInfo, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -897,11 +790,9 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 8) Notes & Status History */
   function renderNotesTab() {
     return (
       <div className="space-y-6">
-        {/* Notes */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Notes</p>
@@ -926,19 +817,13 @@ export function CreateEmployeeDialog({
           ))}
         </div>
 
-        {/* Status History */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Status History</p>
-            <AddButton
-              label="Add Status"
-              onClick={() => addItem(setStatusHistory, emptyStatusHistory)}
-            />
+            <AddButton label="Add Status" onClick={() => addItem(setStatusHistory, emptyStatusHistory)} />
           </div>
           {statusHistory.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No status history added.
-            </p>
+            <p className="text-sm text-muted-foreground text-center py-4">No status history added.</p>
           )}
           {statusHistory.map((sh, idx) => (
             <div key={idx} className="rounded-lg border p-4 space-y-3">
@@ -948,47 +833,28 @@ export function CreateEmployeeDialog({
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
-                  <Label>Status Type</Label>
-                  <Select
-                    value={sh.status_type_id && sh.status_type_id > 0 ? String(sh.status_type_id) : ""}
-                    onValueChange={(v) =>
-                      updateItem(
-                        setStatusHistory,
-                        idx,
-                        "status_type_id",
-                        parseInt(v) || 0,
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employeeStatuses.map((status) => (
-                        <SelectItem key={status.id} value={String(status.id)}>
-                          {status.emp_status}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Status Type ID</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={sh.status_type_id || ""}
+                    onChange={(e) => updateItem(setStatusHistory, idx, "status_type_id", parseInt(e.target.value) || 0)}
+                    placeholder="e.g. 1"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Status Date</Label>
                   <Input
                     type="date"
                     value={sh.status_date ?? ""}
-                    onChange={(e) =>
-                      updateItem(setStatusHistory, idx, "status_date", e.target.value)
-                    }
+                    onChange={(e) => updateItem(setStatusHistory, idx, "status_date", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-3">
                   <Label>Notes</Label>
                   <Textarea
                     value={sh.notes ?? ""}
-                    onChange={(e) =>
-                      updateItem(setStatusHistory, idx, "notes", e.target.value)
-                    }
+                    onChange={(e) => updateItem(setStatusHistory, idx, "notes", e.target.value)}
                     placeholder="Optional notes"
                     rows={2}
                   />
@@ -1005,28 +871,49 @@ export function CreateEmployeeDialog({
   /*  RENDER                                                          */
   /* ---------------------------------------------------------------- */
   return (
-    <>
-      <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="flex w-[95vw] max-w-5xl flex-col h-[92vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-primary" />
-              Add Employee
-            </DialogTitle>
-            <DialogDescription>
-              Create a new employee for{" "}
-              {selectedStore?.name ?? "your store"}.
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="flex w-[95vw] max-w-5xl flex-col h-[92vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-primary" />
+            Edit Employee
+            {employeeId && (
+              <span className="text-sm font-normal text-muted-foreground">
+                #{employeeId}
+              </span>
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            Update employee details for {selectedStore?.name ?? "your store"}.
+          </DialogDescription>
+        </DialogHeader>
 
-          {/* Error banner */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        {/* Load error */}
+        {loadError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
 
+        {/* Submit error */}
+        {submitError && !loadError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{submitError}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Loading overlay */}
+        {isLoadingEmployee ? (
+          <div className="flex-1 flex flex-col gap-4 p-1 overflow-hidden">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading employee data…
+            </div>
+            {renderLoadingSkeleton()}
+          </div>
+        ) : !loadError ? (
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
@@ -1042,7 +929,6 @@ export function CreateEmployeeDialog({
             <ScrollArea className="flex-1 min-h-0 mt-4">
               <div className="pe-3 pb-4">
 
-                {/* ── Tab 1: Personal Info (Basic + Contacts + Addresses) ── */}
                 <TabsContent value="personal" className="mt-0 space-y-8">
                   <div className="space-y-4">
                     <SectionDivider label="Basic Information" />
@@ -1058,12 +944,10 @@ export function CreateEmployeeDialog({
                   </div>
                 </TabsContent>
 
-                {/* ── Tab 2: Availability ── */}
                 <TabsContent value="availability" className="mt-0">
                   {renderAvailabilityTab()}
                 </TabsContent>
 
-                {/* ── Tab 3: Compensation (Payment + Salary + Paychecks) ── */}
                 <TabsContent value="compensation" className="mt-0 space-y-8">
                   <div className="space-y-4">
                     <SectionDivider label="Bank Accounts" />
@@ -1079,7 +963,6 @@ export function CreateEmployeeDialog({
                   </div>
                 </TabsContent>
 
-                {/* ── Tab 4: Notes & Status ── */}
                 <TabsContent value="notes" className="mt-0">
                   {renderNotesTab()}
                 </TabsContent>
@@ -1087,48 +970,26 @@ export function CreateEmployeeDialog({
               </div>
             </ScrollArea>
           </Tabs>
+        ) : null}
 
-          <DialogFooter className="border-t pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!isFormValid || isSubmitting}
-            >
-              {isSubmitting ? "Submitting…" : "Create Employee"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Exit confirmation */}
-      <AlertDialog open={showConfirmExit} onOpenChange={setShowConfirmExit}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. If you close now, all entered data will
-              be lost. Are you sure you want to exit?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmExit}
-            >
-              Discard &amp; Close
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+        <DialogFooter className="border-t pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!isFormValid || isSubmitting || isLoadingEmployee || !!loadError}
+          >
+            {isSubmitting ? "Saving…" : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

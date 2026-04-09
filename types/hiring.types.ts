@@ -43,6 +43,20 @@ export interface ShiftRecord {
   updated_at: string;
 }
 
+export interface EmployeeStatusRecord {
+  id: number;
+  emp_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PositionRecord {
+  id: number;
+  position_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NewHireRecord {
   id: number;
   hiring_request_id: number;
@@ -145,9 +159,19 @@ export interface SupervisorDecisionPayload {
   approve_status: boolean;
   candidates: { id: number; status: "approved" | "rejected" }[];
   new_hires: { id: number; status: "approved" | "rejected" }[];
+  notes?: string | null;
 }
 
 /** Response from GET .../create-employee-page */
 export interface CreateEmployeePageData {
   shifts: ShiftRecord[];
+  employeeStatuses: EmployeeStatusRecord[];
+  positions: PositionRecord[];
+  separationReasons: {
+    id: number;
+    reason_type: string;
+    reason_title: string;
+    created_at: string | null;
+    updated_at: string | null;
+  }[];
 }

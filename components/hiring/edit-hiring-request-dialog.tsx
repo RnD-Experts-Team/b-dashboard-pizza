@@ -152,7 +152,7 @@ export function EditHiringRequestDialog({
     setIsLoadingShifts(true);
     hiringService
       .getCreateEmployeePage(selectedStore.storeId)
-      .then((data) => { if (!cancelled) setShifts(data); })
+      .then((data) => { if (!cancelled) setShifts(data.shifts); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setIsLoadingShifts(false); });
     return () => { cancelled = true; };

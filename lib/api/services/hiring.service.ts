@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   CreateHiringRequestPayload,
+  CreateEmployeePageData,
   HiringRequest,
   HiringRequestRecord,
   HiringRequestsResponse,
@@ -8,6 +9,8 @@ import type {
   HiringReviewPayload,
   SupervisorDecisionPayload,
   ShiftRecord,
+  EmployeeStatusRecord,
+  PositionRecord,
 } from "@/types/hiring.types";
 
 function getToken(): string | null {
@@ -140,14 +143,20 @@ export const hiringService = {
   },
 
   /**
-   * Get data for the create-employee page (shifts, etc.).
+   * Get data for the create-employee page (shifts, employee statuses, positions, separation reasons, etc.).
    * Proxied through GET /api/hiring-management/[storeId]/create-employee-page
    */
-  async getCreateEmployeePage(storeId: string): Promise<ShiftRecord[]> {
+  async getCreateEmployeePage(storeId: string): Promise<CreateEmployeePageData> {
     const { data } = await axios.get(
       `/api/hiring-management/${encodeURIComponent(storeId)}/create-employee-page`,
       { headers: buildHeaders(), timeout: 15_000 },
     );
-    return (data?.data?.shifts ?? data?.shifts ?? []) as ShiftRecord[];
+    const d = data?.data ?? data ?? {};
+    return {
+      shifts: (d.shifts ?? []) as ShiftRecord[],
+      employeeStatuses: (d.employeeStatuses ?? []) as EmployeeStatusRecord[],
+      positions: (d.positions ?? []) as PositionRecord[],
+      separationReasons: (d.separationReasons ?? []),
+    };
   },
 };

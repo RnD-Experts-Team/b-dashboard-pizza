@@ -67,6 +67,8 @@
     "userManagement": "User Management",
     "hiringManagement": "Hiring Management",
     "hiringRequest": "Hiring Request",
+    "separationRequest": "Separation Request",
+    "manageRequests": "Manage Requests",
     "qaManagement": "QA Management",
     "highLevelMgmt": "High Level MGMT",
     "dataManagement": "Data Management",

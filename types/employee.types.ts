@@ -33,7 +33,7 @@ export interface EmployeeContact {
 }
 
 export interface EmployeeFile {
-  file?: string;
+  file?: File | string;
   notes?: string;
   type_id?: number;
 }
@@ -42,7 +42,7 @@ export interface EmployeeNote {
   notes?: string;
 }
 
-export type LegalStatus = "w2" | "1099";
+export type LegalStatus = "W2" | "w2" | "1099";
 
 export interface EmployeePaycheckInfo {
   is_primary?: boolean;
@@ -50,7 +50,7 @@ export interface EmployeePaycheckInfo {
   paychecks_id?: number;
 }
 
-export type AccountType = "checking" | "savings";
+export type AccountType = "checking" | "saving" | "savings";
 
 export interface EmployeePaymentInfo {
   account_number?: string;
@@ -73,6 +73,62 @@ export interface EmployeeStatusHistory {
 
 export type Gender = "male" | "female" | "other";
 
+/* ------------------------------------------------------------------ */
+/*  API response shapes                                                */
+/* ------------------------------------------------------------------ */
+
+export interface EmployeeProfile {
+  id: number;
+  employee_id: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  gender: Gender;
+  birth_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeRecord {
+  id: number;
+  store_id: number;
+  position_id: number;
+  emp_status_id: number;
+  SSN_number: string;
+  created_at: string;
+  updated_at: string;
+  employee_profile: EmployeeProfile | null;
+  employee_addresses: EmployeeAddress[];
+  employee_contacts: EmployeeContact[];
+  employee_notes: EmployeeNote[];
+  employee_files: EmployeeFile[];
+  employee_payment_info: EmployeePaymentInfo | null;
+  employee_salary_info: EmployeeSalaryInfo | null;
+  employee_status_history: EmployeeStatusHistory[];
+  employee_availability: EmployeeAvailability[];
+  employee_paychecks_info: EmployeePaycheckInfo[];
+}
+
+export interface EmployeesResponse {
+  status: number;
+  message: string;
+  data: {
+    employees: EmployeeRecord[];
+  };
+}
+
+export interface EmployeeSingleResponse {
+  status: number;
+  message: string;
+  data: EmployeeRecord;
+}
+
+export interface GetEmployeesParams {
+  search?: string;
+  legal_status?: LegalStatus;
+  paychecks_id?: number;
+}
+
 export interface CreateEmployeePayload {
   birth_date: string;
   emp_status_id: number;
@@ -80,7 +136,8 @@ export interface CreateEmployeePayload {
   gender: Gender;
   last_name: string;
   position_id: number;
-  SSN_number: string;
+  ssn_number: string;
+  SSN_number?: string;
   middle_name?: string;
   addresses?: EmployeeAddress[];
   availability?: EmployeeAvailability[];

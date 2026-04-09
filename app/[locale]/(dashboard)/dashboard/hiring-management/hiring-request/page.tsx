@@ -30,12 +30,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   RefreshCw,
   AlertCircle,
   Users,
   UserPlus,
+  UserMinus,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -46,6 +48,7 @@ import { CreateHiringRequestDialog } from "@/components/hiring/create-hiring-req
 import { EditHiringRequestDialog } from "@/components/hiring/edit-hiring-request-dialog";
 import { HiringReviewDialog } from "@/components/hiring/hiring-review-dialog";
 import { HiringRequestSheet } from "@/components/hiring/hiring-request-sheet";
+import { SeparationRequestTab } from "@/components/hiring/separation-request-tab";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { HiringRequestRecord } from "@/types/hiring.types";
@@ -200,241 +203,233 @@ export default function HiringRequestPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Hiring Request"
-        description="Manage hiring requests for your stores."
-      >
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => fetchData(page)}
-          disabled={isLoading}
-          aria-label="Refresh"
-        >
-          <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-        </Button>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="me-2 h-4 w-4" />
-          Create Hiring Request
-        </Button>
-      </PageHeader>
+        title="Manage Requests"
+        description="Manage hiring and separation requests for your stores."
+      />
 
-      {/* Error */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
-            <span>{error}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchData(page)}
-            >
-              Retry
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+      <Tabs defaultValue="hiring" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
+          <TabsTrigger value="hiring" className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Hiring Request</span>
+            <span className="sm:hidden">Hiring</span>
+          </TabsTrigger>
+          <TabsTrigger value="separation" className="gap-2">
+            <UserMinus className="h-4 w-4" />
+            <span className="hidden sm:inline">Separation Request</span>
+            <span className="sm:hidden">Separation</span>
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Loading skeleton */}
-      {isLoading && <TableSkeleton />}
+        {/* ── Hiring Request Tab ── */}
+        <TabsContent value="hiring" className="mt-4">
+          <div className="flex flex-col gap-4">
+            {/* Actions row */}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fetchData(page)}
+                disabled={isLoading}
+                aria-label="Refresh"
+              >
+                <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              </Button>
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="me-2 h-4 w-4" />
+                <span className="hidden sm:inline">Create Hiring Request</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </div>
 
-      {/* Empty state */}
-      {isEmpty && (
-        <div className="rounded-lg border p-10 text-center text-muted-foreground text-sm">
-        </div>
-      )}
+            {/* Error */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+                  <span>{error}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchData(page)}
+                  >
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
-      {/* Table */}
-      {!isLoading && !error && rows.length > 0 && (
-        <div className="rounded-lg border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Store</TableHead>
-                <TableHead>Date of Request</TableHead>
-                <TableHead>Desired Start</TableHead>
-                <TableHead>Manager</TableHead>
-                {/* <TableHead>
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" />
-                    Candidates
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="flex items-center gap-1">
-                    <UserPlus className="h-3.5 w-3.5" />
-                    Positions
-                  </span>
-                </TableHead> */}
-                <TableHead className="text-center">Supervisor</TableHead>
-                <TableHead className="text-center">Review</TableHead>
-                <TableHead className="w-12">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((req) => (
-                <TableRow
-                  key={req.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => {
-                    setSelectedRequestId(req.id);
-                    setSheetOpen(true);
-                  }}
+            {/* Loading skeleton */}
+            {isLoading && <TableSkeleton />}
+
+            {/* Empty state */}
+            {isEmpty && (
+              <div className="rounded-lg border p-10 text-center text-muted-foreground text-sm">
+                No hiring requests found.
+              </div>
+            )}
+
+            {/* Table */}
+            {!isLoading && !error && rows.length > 0 && (
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Store</TableHead>
+                      <TableHead className="hidden sm:table-cell">Date of Request</TableHead>
+                      <TableHead className="hidden md:table-cell">Desired Start</TableHead>
+                      <TableHead className="hidden lg:table-cell">Manager</TableHead>
+                      <TableHead className="text-center">Supervisor</TableHead>
+                      <TableHead className="text-center">Review</TableHead>
+                      <TableHead className="w-12">
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((req) => (
+                      <TableRow
+                        key={req.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => {
+                          setSelectedRequestId(req.id);
+                          setSheetOpen(true);
+                        }}
+                      >
+                        <TableCell>
+                          <div className="text-sm font-medium leading-none">
+                            {req.store.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {req.store.store_number}
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap hidden sm:table-cell">
+                          {req.date_of_request}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap hidden md:table-cell">
+                          {req.desired_start_date}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          <div className="text-sm font-medium leading-none">
+                            {req.store_manager.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {req.store_manager.email}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <StatusIndicator
+                            color={
+                              req.supervisor_approve === null
+                                ? "none"
+                                : req.supervisor_approve.approve_status === 1
+                                  ? "green"
+                                  : "red"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <StatusIndicator
+                            color={
+                              req.hiring_review === null
+                                ? "none"
+                                : req.hiring_review.is_completed === 1
+                                  ? "green"
+                                  : "red"
+                            }
+                          />
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditRequestId(req.id);
+                                  setEditDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="me-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={req.supervisor_approve === null}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReviewRequestId(req.id);
+                                  setReviewDialogOpen(true);
+                                }}
+                              >
+                                <ClipboardCheck className="me-2 h-4 w-4" />
+                                Hiring Review
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteRequestId(req.id);
+                                  setDeleteConfirmOpen(true);
+                                }}
+                              >
+                                <Trash2 className="me-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && !isLoading && !error && (
+              <div className="flex items-center justify-end gap-2 text-sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchData(page - 1)}
+                  disabled={page <= 1}
                 >
-                  <TableCell>
-                    <div className="text-sm font-medium leading-none">
-                      {req.store.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {req.store.store_number}
-                    </div>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {req.date_of_request}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {req.desired_start_date}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm font-medium leading-none">
-                      {req.store_manager.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {req.store_manager.email}
-                    </div>
-                  </TableCell>
-                  {/* <TableCell>
-                    <div className="flex flex-col gap-1 min-w-40">
-                      {req.candidates.map((c) => (
-                        <div key={c.id} className="flex items-center gap-2">
-                          <span className="text-sm truncate max-w-30">
-                            {c.name}
-                          </span>
-                          <StatusBadge status={c.approve_status} />
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1 min-w-45">
-                      {req.new_hires.map((h) => (
-                        <div key={h.id} className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs text-muted-foreground">
-                            {h.shift?.shift ?? `Shift ${h.shift_id}`}
-                          </span>
-                          <Badge variant="outline" className="text-xs">
-                            {AVAILABILITY_LABELS[h.availability_needed] ?? h.availability_needed}
-                          </Badge>
-                          <StatusBadge status={h.approved_status} />
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell> */}
-                  <TableCell className="text-center">
-                    <StatusIndicator
-                      color={
-                        req.supervisor_approve === null
-                          ? "none"
-                          : req.supervisor_approve.approve_status === 1
-                            ? "green"
-                            : "red"
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <StatusIndicator
-                      color={
-                        req.hiring_review === null
-                          ? "none"
-                          : req.hiring_review.is_completed === 1
-                            ? "green"
-                            : "red"
-                      }
-                    />
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditRequestId(req.id);
-                            setEditDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="me-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={req.supervisor_approve === null}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReviewRequestId(req.id);
-                            setReviewDialogOpen(true);
-                          }}
-                        >
-                          <ClipboardCheck className="me-2 h-4 w-4" />
-                          Hiring Review
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteRequestId(req.id);
-                            setDeleteConfirmOpen(true);
-                          }}
-                        >
-                          <Trash2 className="me-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                  Previous
+                </Button>
+                <span className="text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchData(page + 1)}
+                  disabled={page >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+          </div>
+        </TabsContent>
 
-      {/* Pagination */}
-      {totalPages > 1 && !isLoading && !error && (
-        <div className="flex items-center justify-end gap-2 text-sm">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchData(page - 1)}
-            disabled={page <= 1}
-          >
-            Previous
-          </Button>
-          <span className="text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchData(page + 1)}
-            disabled={page >= totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      )}
+        {/* ── Separation Request Tab ── */}
+        <TabsContent value="separation" className="mt-4">
+          <SeparationRequestTab />
+        </TabsContent>
+      </Tabs>
 
+      {/* Hiring dialogs / sheets */}
       <CreateHiringRequestDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}

@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, User, UserPlus, Building2, CalendarDays, Clock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -243,23 +245,113 @@ export function HiringRequestSheet({
             <Separator />
 
             {/* ── Supervisor Decision ── */}
-            <SupervisorDecisionSection
-              data={data}
-              onSuccess={() => {
-                /* Refetch the sheet data */
-                if (selectedStore?.storeId && requestId !== null) {
-                  hiringService
-                    .getHiringRequest(selectedStore.storeId, requestId)
-                    .then(setData)
-                    .catch(() => {});
-                }
-                onSuccess?.();
-              }}
-            />
+            {data.supervisor_approve ? (
+              <SupervisorDecisionDetails data={data} />
+            ) : (
+              <SupervisorDecisionSection
+                data={data}
+                onSuccess={() => {
+                  onSuccess?.();
+                  onOpenChange(false);
+                }}
+              />
+            )}
+
+            {/* ── Hiring Review ── */}
+            {data.hiring_review && (
+              <>
+                <Separator />
+                <section className="space-y-3">
+                  <SectionTitle icon={ShieldCheck} label="Hiring Review" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <DetailRow
+                      label="Completed"
+                      value={
+                        <Badge variant={data.hiring_review.is_completed ? "default" : "secondary"}>
+                          {data.hiring_review.is_completed ? "Yes" : "No"}
+                        </Badge>
+                      }
+                    />
+                    <DetailRow
+                      label="Reviewed By"
+                      value={data.hiring_review.reviewed_by?.name ?? "—"}
+                    />
+                    <DetailRow label="Date" value={data.hiring_review.date_of_request} />
+                    <DetailRow label="Notes" value={data.hiring_review.notes ?? "—"} />
+                  </div>
+                </section>
+              </>
+            )}
           </div>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/* ── Supervisor Decision Details (read-only) ── */
+function SupervisorDecisionDetails({ data }: { data: HiringRequestRecord }) {
+  const sa = data.supervisor_approve!;
+  return (
+    <>
+      <Separator />
+      <section className="space-y-3">
+        <SectionTitle icon={ShieldCheck} label="Supervisor Decision" />
+        <div className="grid grid-cols-2 gap-3">
+          <DetailRow
+            label="Overall Status"
+            value={
+              <Badge variant={sa.approve_status ? "default" : "destructive"}>
+                {sa.approve_status ? "Approved" : "Rejected"}
+              </Badge>
+            }
+          />
+          <DetailRow
+            label="Approved By"
+            value={sa.approved_by?.name ?? "—"}
+          />
+          <DetailRow label="Notes" value={sa.notes ?? "—"} />
+          <DetailRow
+            label="Date"
+            value={new Date(sa.created_at).toLocaleDateString()}
+          />
+        </div>
+
+        {/* Individual candidate statuses */}
+        {data.candidates.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-semibold text-muted-foreground">Candidates</p>
+            {data.candidates.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-3 rounded-lg border p-2.5"
+              >
+                <span className="text-sm flex-1 min-w-0 truncate">{c.name}</span>
+                <StatusBadge status={c.approve_status} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Individual new-hire statuses */}
+        {data.new_hires.length > 0 && (
+          <div className="space-y-2 pt-1">
+            <p className="text-xs font-semibold text-muted-foreground">Positions</p>
+            {data.new_hires.map((h) => (
+              <div
+                key={h.id}
+                className="flex items-center justify-between gap-3 rounded-lg border p-2.5"
+              >
+                <span className="text-sm flex-1 min-w-0 truncate">
+                  {h.shift?.shift ?? `Shift ${h.shift_id}`}
+                </span>
+                <StatusBadge status={h.approved_status} />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -280,6 +372,7 @@ function SupervisorDecisionSection({
   const [hireStatuses, setHireStatuses] = useState<
     Record<number, "approved" | "rejected" | undefined>
   >({});
+  const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /* Reset selections when data changes */
@@ -287,6 +380,7 @@ function SupervisorDecisionSection({
     setCandidateStatuses({});
     setHireStatuses({});
     setApproveAll(undefined);
+    setNotes("");
   }, [data.id]);
 
   const allSelected =
@@ -308,6 +402,7 @@ function SupervisorDecisionSection({
         id: h.id,
         status: hireStatuses[h.id] as "approved" | "rejected",
       })),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
     };
 
     try {
@@ -415,6 +510,19 @@ function SupervisorDecisionSection({
           ))}
         </div>
       )}
+
+      {/* Notes */}
+      <div className="space-y-2">
+        <Label htmlFor="supervisor_decision_notes">Notes</Label>
+        <Textarea
+          id="supervisor_decision_notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Optional notes…"
+          maxLength={255}
+          rows={3}
+        />
+      </div>
 
       <Button
         className="w-full"

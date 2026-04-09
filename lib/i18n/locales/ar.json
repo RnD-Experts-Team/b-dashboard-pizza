@@ -67,6 +67,8 @@
     "userManagement": "إدارة المستخدمين",
     "hiringManagement": "إدارة التوظيف",
     "hiringRequest": "طلب توظيف",
+    "separationRequest": "طلب فصل",
+    "manageRequests": "إدارة الطلبات",
     "qaManagement": "إدارة الجودة",
     "highLevelMgmt": "الإدارة العليا",
     "dataManagement": "إدارة البيانات",
