@@ -11,6 +11,7 @@ import type {
   ShiftRecord,
   EmployeeStatusRecord,
   PositionRecord,
+  EmployeeFileTypeRecord,
 } from "@/types/hiring.types";
 
 function getToken(): string | null {
@@ -29,6 +30,23 @@ function buildHeaders() {
   const token = getToken();
   if (!token) throw new Error("Not logged in.");
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
+}
+
+function extractFilename(contentDisposition?: string): string | null {
+  if (!contentDisposition) return null;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const plainMatch = contentDisposition.match(/filename=([^;]+)/i);
+  return plainMatch?.[1]?.trim() ?? null;
 }
 
 export const hiringService = {
@@ -156,7 +174,37 @@ export const hiringService = {
       shifts: (d.shifts ?? []) as ShiftRecord[],
       employeeStatuses: (d.employeeStatuses ?? []) as EmployeeStatusRecord[],
       positions: (d.positions ?? []) as PositionRecord[],
+      employeeFileTypes: (d.employeeFileTypes ?? []) as EmployeeFileTypeRecord[],
       separationReasons: (d.separationReasons ?? []),
     };
+  },
+
+  /**
+   * Export hiring requests and trigger file download in the browser.
+   * Proxied through GET /api/stores/[storeId]/exports/hiring-requests
+   */
+  async exportHiringRequests(storeId: string): Promise<void> {
+    const response = await axios.get(
+      `/api/stores/${encodeURIComponent(storeId)}/exports/hiring-requests`,
+      {
+        headers: buildHeaders(),
+        responseType: "blob",
+        timeout: 5 * 60_000,
+      },
+    );
+
+    const filename =
+      extractFilename(response.headers["content-disposition"]) ||
+      "hiring-requests-export.xlsx";
+
+    const blob = response.data as Blob;
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
   },
 };

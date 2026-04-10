@@ -4,6 +4,9 @@ import type {
   EmployeesResponse,
   EmployeeSingleResponse,
   GetEmployeesParams,
+  EmployeePaymentInfo,
+  EmployeeSalaryInfo,
+  EmployeeRecord,
 } from "@/types/employee.types";
 
 function normalizeLegalStatus(value?: string): "W2" | "1099" | undefined {
@@ -32,7 +35,7 @@ function appendBoolean(formData: FormData, key: string, value: boolean | undefin
 
 function buildEmployeeFormData(
   payload: CreateEmployeePayload,
-  options?: { includePaychecksInfo?: boolean },
+  options?: { includePaychecksInfo?: boolean; isUpdate?: boolean },
 ): FormData {
   const formData = new FormData();
   const includePaychecksInfo = options?.includePaychecksInfo ?? true;
@@ -75,17 +78,45 @@ function buildEmployeeFormData(
     appendBoolean(formData, `contacts[${i}][is_primary]`, contact.is_primary === true);
   });
 
-  payload.files?.forEach((file, i) => {
-    if (file.file) {
-      if (file.file instanceof Blob) {
-        formData.append(`files[${i}][file]`, file.file);
-      } else {
-        formData.append(`files[${i}][file]`, file.file);
+  if (options?.isUpdate) {
+    // New files to upload
+    payload.files?.forEach((file, i) => {
+      if (file.file instanceof File) {
+        formData.append(`files[${i}][file]`, file.file, file.file.name);
       }
-    }
-    appendIfDefined(formData, `files[${i}][type_id]`, file.type_id);
-    appendIfDefined(formData, `files[${i}][notes]`, file.notes);
-  });
+      appendIfDefined(formData, `files[${i}][type_id]`, file.type_id);
+      appendIfDefined(formData, `files[${i}][notes]`, file.notes);
+    });
+    // Deleted image IDs
+    payload.deletedImage?.forEach((id, i) => {
+      formData.append(`deletedImage[${i}]`, String(id));
+    });
+    // Kept image IDs
+    payload.keptImage?.forEach((id, i) => {
+      formData.append(`keptImage[${i}]`, String(id));
+    });
+    // Updated image metadata
+    payload.updatedImage?.forEach((item, i) => {
+      formData.append(`updatedImage[${i}][file]`, item.file);
+      formData.append(`updatedImage[${i}][type_id]`, String(item.type_id));
+      if (item.notes != null) {
+        formData.append(`updatedImage[${i}][notes]`, item.notes);
+      }
+    });
+  } else {
+    payload.files?.forEach((file, i) => {
+      if (file.file) {
+        formData.append(`files[${i}][file]`, file.file instanceof Blob ? file.file : file.file);
+      } else if (file.file_path) {
+        appendIfDefined(formData, `files[${i}][file_path]`, file.file_path);
+      }
+      if (file.id) {
+        appendIfDefined(formData, `files[${i}][id]`, file.id);
+      }
+      appendIfDefined(formData, `files[${i}][type_id]`, file.type_id);
+      appendIfDefined(formData, `files[${i}][notes]`, file.notes);
+    });
+  }
 
   payload.notes?.forEach((note, i) => {
     appendIfDefined(formData, `notes[${i}][notes]`, note.notes);
@@ -141,6 +172,61 @@ function buildHeaders() {
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
+function extractFilename(contentDisposition?: string): string | null {
+  if (!contentDisposition) return null;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const plainMatch = contentDisposition.match(/filename=([^;]+)/i);
+  return plainMatch?.[1]?.trim() ?? null;
+}
+
+function normalizeSingleItem<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
+}
+
+function normalizeEmployeeRecord(record: EmployeeRecord): EmployeeRecord {
+  return {
+    ...record,
+    employee_payment_info: normalizeSingleItem(
+      record.employee_payment_info as EmployeePaymentInfo | EmployeePaymentInfo[] | null,
+    ),
+    employee_salary_info: normalizeSingleItem(
+      record.employee_salary_info as EmployeeSalaryInfo | EmployeeSalaryInfo[] | null,
+    ),
+  };
+}
+
+function normalizeEmployeesResponse(response: EmployeesResponse): EmployeesResponse {
+  return {
+    ...response,
+    data: {
+      ...response.data,
+      employees: response.data.employees.map(normalizeEmployeeRecord),
+    },
+  };
+}
+
+function normalizeEmployeeSingleResponse(
+  response: EmployeeSingleResponse,
+): EmployeeSingleResponse {
+  return {
+    ...response,
+    data: normalizeEmployeeRecord(response.data),
+  };
+}
+
 export const employeeService = {
   /**
    * Fetch employees for the given store.
@@ -168,7 +254,7 @@ export const employeeService = {
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees${qs ? `?${qs}` : ""}`,
       { headers: buildHeaders(), timeout: 15_000, signal },
     );
-    return data;
+    return normalizeEmployeesResponse(data);
   },
 
   /**
@@ -184,7 +270,23 @@ export const employeeService = {
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       { headers: buildHeaders(), timeout: 15_000, signal },
     );
-    return data;
+    return normalizeEmployeeSingleResponse(data);
+  },
+
+  /**
+   * Fetch a single employee details record by ID.
+   * Proxied through GET /api/stores/[storeId]/employees/[employeeId]
+   */
+  async getEmployeeDetails(
+    storeId: string,
+    employeeId: number,
+    signal?: AbortSignal,
+  ): Promise<EmployeeSingleResponse> {
+    const { data } = await axios.get<EmployeeSingleResponse>(
+      `/api/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return normalizeEmployeeSingleResponse(data);
   },
 
   /**
@@ -210,7 +312,7 @@ export const employeeService = {
     employeeId: number,
     payload: CreateEmployeePayload,
   ): Promise<unknown> {
-    const formData = buildEmployeeFormData(payload, { includePaychecksInfo: false });
+    const formData = buildEmployeeFormData(payload, { includePaychecksInfo: false, isUpdate: true });
     const { data } = await axios.post(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       formData,
@@ -234,5 +336,56 @@ export const employeeService = {
       { headers: buildHeaders(), timeout: 15_000 },
     );
     return data;
+  },
+
+  /**
+   * Import employees from CSV/Excel.
+   * Proxied through POST /api/stores/[storeId]/imports/employees
+   */
+  async importEmployees(
+    storeId: string,
+    file: File,
+  ): Promise<unknown> {
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+
+    const { data } = await axios.post(
+      `/api/stores/${encodeURIComponent(storeId)}/imports/employees`,
+      formData,
+      { headers: buildHeaders(), timeout: 120_000 },
+    );
+
+    return data;
+  },
+
+  /**
+   * Export employees and trigger file download in the browser.
+   * Proxied through GET /api/stores/[storeId]/exports/employees
+   */
+  async exportEmployees(
+    storeId: string,
+  ): Promise<void> {
+    const response = await axios.get(
+      `/api/stores/${encodeURIComponent(storeId)}/exports/employees`,
+      {
+        headers: buildHeaders(),
+        responseType: "blob",
+        timeout: 5 * 60_000,
+      },
+    );
+
+    const filename =
+      extractFilename(response.headers["content-disposition"]) ||
+      "employees-export.xlsx";
+
+    const blob = response.data as Blob;
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
   },
 };

@@ -58,11 +58,15 @@ import type {
   EmployeeStatusHistory,
   EmployeeRecord,
 } from "@/types/employee.types";
-import type { ShiftRecord, EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
+import type {
+  ShiftRecord,
+  EmployeeStatusRecord,
+  PositionRecord,
+  EmployeeFileTypeRecord,
+} from "@/types/hiring.types";
 
 interface EditEmployeeDialogProps {
   employeeId: number | null;
-  employee: EmployeeRecord | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -90,11 +94,34 @@ const emptyContact = (): EmployeeContact => ({
   is_primary: false,
 });
 
+/* ---- Existing-file entry (loaded from API) ---- */
+interface ExistingFileEntry {
+  id: number;
+  file_path: string;
+  type_id: number;
+  notes: string;
+  originalTypeId: number;
+  originalNotes: string;
+  deleted: boolean;
+}
+
+/* ---- New-file entry (being uploaded) ---- */
+interface NewFileEntry {
+  file?: File;
+  type_id: number;
+  notes: string;
+}
+
+const emptyNewFile = (): NewFileEntry => ({
+  type_id: 0,
+  notes: "",
+});
+
 const emptyNote = (): EmployeeNote => ({ notes: "" });
 
 const emptyPaycheck = (): EmployeePaycheckInfo => ({
   is_primary: false,
-  legal_status: "w2",
+  legal_status: "W2",
   paychecks_id: 0,
 });
 
@@ -127,12 +154,19 @@ const ALL_DAYS: DayOfWeek[] = [
   "sunday",
 ];
 
+function formatFileTypeLabel(fileType: string) {
+  return fileType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 export function EditEmployeeDialog({
   employeeId,
-  employee,
   open,
   onOpenChange,
   onSuccess,
@@ -153,6 +187,8 @@ export function EditEmployeeDialog({
   const [addresses, setAddresses] = useState<EmployeeAddress[]>([]);
   const [availability, setAvailability] = useState<EmployeeAvailability[]>([]);
   const [contacts, setContacts] = useState<EmployeeContact[]>([]);
+  const [existingFiles, setExistingFiles] = useState<ExistingFileEntry[]>([]);
+  const [newFiles, setNewFiles] = useState<NewFileEntry[]>([]);
   const [notes, setNotes] = useState<EmployeeNote[]>([]);
   const [paychecksInfo, setPaychecksInfo] = useState<EmployeePaycheckInfo[]>([]);
   const [paymentInfo, setPaymentInfo] = useState<EmployeePaymentInfo[]>([]);
@@ -170,6 +206,7 @@ export function EditEmployeeDialog({
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
   const [positions, setPositions] = useState<PositionRecord[]>([]);
+  const [employeeFileTypes, setEmployeeFileTypes] = useState<EmployeeFileTypeRecord[]>([]);
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
 
   /* ── Populate form from record ── */
@@ -183,29 +220,44 @@ export function EditEmployeeDialog({
     setSsnNumber(emp.SSN_number ?? "");
     setEmpStatusId(emp.emp_status_id);
     setPositionId(emp.position_id);
-    setAddresses(emp.employee_addresses ?? []);
-    setAvailability(emp.employee_availability ?? []);
-    setContacts(emp.employee_contacts ?? []);
+    setAddresses((emp.employee_addresses ?? []).map(a => ({ ...a, is_primary: !!a.is_primary })));
+    setAvailability((emp.employee_availability ?? []).map(av => ({ ...av, days: av.days ?? [] })));
+    setContacts((emp.employee_contacts ?? []).map(c => ({ ...c, is_primary: !!c.is_primary })));
+    setExistingFiles(
+      (emp.employee_files ?? []).map((f) => ({
+        id: f.id!,
+        file_path: f.file_path ?? "",
+        type_id: f.type_id ?? 0,
+        notes: f.notes ?? "",
+        originalTypeId: f.type_id ?? 0,
+        originalNotes: f.notes ?? "",
+        deleted: false,
+      })),
+    );
+    setNewFiles([]);
     setNotes(emp.employee_notes ?? []);
-    setPaychecksInfo(emp.employee_paychecks_info ?? []);
-    setPaymentInfo(emp.employee_payment_info ? [emp.employee_payment_info] : []);
+    setPaychecksInfo((emp.employee_paychecks_info ?? []).map(pc => ({
+      ...pc,
+      is_primary: !!pc.is_primary,
+      legal_status: pc.legal_status?.toUpperCase() === "W2" ? "W2" : pc.legal_status,
+    })));
+    if (emp.employee_payment_info) {
+      setPaymentInfo([{
+        ...emp.employee_payment_info,
+        routing_number: String(emp.employee_payment_info.routing_number ?? ""),
+        account_number: String(emp.employee_payment_info.account_number ?? ""),
+        account_type: (emp.employee_payment_info.account_type === "savings" ? "saving" : emp.employee_payment_info.account_type) as AccountType,
+        is_primary: !!emp.employee_payment_info.is_primary,
+      }]);
+    } else {
+      setPaymentInfo([]);
+    }
     setSalaryInfo(emp.employee_salary_info ? [emp.employee_salary_info] : []);
     setStatusHistory(emp.employee_status_history ?? []);
   }
 
   /* ── Load employee data when dialog opens ── */
   useEffect(() => {
-    if (!open) return;
-
-    if (employee) {
-      setLoadError(null);
-      setSubmitError(null);
-      setActiveTab("personal");
-      populateForm(employee);
-      setIsLoadingEmployee(false);
-      return;
-    }
-
     if (!open || !employeeId || !selectedStore?.storeId) return;
     let cancelled = false;
 
@@ -213,9 +265,11 @@ export function EditEmployeeDialog({
     setLoadError(null);
     setSubmitError(null);
     setActiveTab("personal");
+    setExistingFiles([]);
+    setNewFiles([]);
 
     employeeService
-      .getEmployee(selectedStore.storeId, employeeId)
+      .getEmployeeDetails(selectedStore.storeId, employeeId)
       .then((res) => {
         if (!cancelled) populateForm(res.data);
       })
@@ -231,8 +285,7 @@ export function EditEmployeeDialog({
       });
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employee, open, employeeId, selectedStore?.storeId]);
+  }, [open, employeeId, selectedStore?.storeId]);
 
   /* ── Load shifts ── */
   useEffect(() => {
@@ -246,6 +299,7 @@ export function EditEmployeeDialog({
           setShifts(data.shifts);
           setEmployeeStatuses(data.employeeStatuses);
           setPositions(data.positions);
+          setEmployeeFileTypes(data.employeeFileTypes);
         }
       })
       .catch(() => {})
@@ -279,6 +333,17 @@ export function EditEmployeeDialog({
     setSubmitError(null);
 
     try {
+      const deletedImage = existingFiles.filter((f) => f.deleted).map((f) => f.id);
+      const keptImage = existingFiles
+        .filter((f) => !f.deleted && f.type_id === f.originalTypeId && f.notes === f.originalNotes)
+        .map((f) => f.id);
+      const updatedImageItems = existingFiles
+        .filter((f) => !f.deleted && (f.type_id !== f.originalTypeId || f.notes !== f.originalNotes))
+        .map((f) => ({ file: f.file_path, type_id: f.type_id, notes: f.notes || null }));
+      const uploadedFiles = newFiles
+        .filter((f) => f.file instanceof File)
+        .map((f) => ({ file: f.file as File, type_id: f.type_id, notes: f.notes }));
+
       await employeeService.updateEmployee(selectedStore.storeId, employeeId, {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -291,6 +356,10 @@ export function EditEmployeeDialog({
         ...(addresses.length > 0 ? { addresses } : {}),
         ...(availability.length > 0 ? { availability } : {}),
         ...(contacts.length > 0 ? { contacts } : {}),
+        ...(uploadedFiles.length > 0 ? { files: uploadedFiles } : {}),
+        ...(deletedImage.length > 0 ? { deletedImage } : {}),
+        ...(keptImage.length > 0 ? { keptImage } : {}),
+        ...(updatedImageItems.length > 0 ? { updatedImage: updatedImageItems } : {}),
         ...(notes.length > 0 ? { notes } : {}),
         ...(paychecksInfo.length > 0 ? { paychecks_info: paychecksInfo } : {}),
         ...(paymentInfo.length > 0 ? { payment_info: paymentInfo } : {}),
@@ -634,21 +703,26 @@ export function EditEmployeeDialog({
             </div>
             <div className="space-y-2">
               <Label>Days</Label>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-1.5">
                 {ALL_DAYS.map((day) => {
-                  const checked = av.days?.includes(day) ?? false;
+                  const selected = av.days?.includes(day) ?? false;
                   return (
-                    <label key={day} className="flex items-center gap-1.5 text-sm capitalize">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(v) => {
-                          const current = av.days ?? [];
-                          const next = v ? [...current, day] : current.filter((d) => d !== day);
-                          updateItem(setAvailability, idx, "days", next as DayOfWeek[]);
-                        }}
-                      />
-                      {day}
-                    </label>
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      className="h-8 px-3 text-xs capitalize"
+                      onClick={() => {
+                        const current = av.days ?? [];
+                        const next = selected
+                          ? current.filter((d) => d !== day)
+                          : [...current, day];
+                        updateItem(setAvailability, idx, "days", next as DayOfWeek[]);
+                      }}
+                    >
+                      {day.slice(0, 3)}
+                    </Button>
                   );
                 })}
               </div>
@@ -701,7 +775,7 @@ export function EditEmployeeDialog({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="checking">Checking</SelectItem>
-                    <SelectItem value="savings">Savings</SelectItem>
+                    <SelectItem value="saving">Savings</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -803,12 +877,12 @@ export function EditEmployeeDialog({
               <div className="space-y-1.5">
                 <Label>Legal Status</Label>
                 <Select
-                  value={pc.legal_status ?? "w2"}
+                  value={pc.legal_status?.toUpperCase() === "W2" ? "W2" : (pc.legal_status ?? "W2")}
                   onValueChange={(v) => updateItem(setPaychecksInfo, idx, "legal_status", v as LegalStatus)}
                 >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="w2">W-2</SelectItem>
+                    <SelectItem value="W2">W-2</SelectItem>
                     <SelectItem value="1099">1099</SelectItem>
                   </SelectContent>
                 </Select>
@@ -830,6 +904,174 @@ export function EditEmployeeDialog({
   function renderNotesTab() {
     return (
       <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">Files</p>
+            <AddButton
+              label="Add File"
+              onClick={() => setNewFiles((prev) => [...prev, emptyNewFile()])}
+            />
+          </div>
+          {existingFiles.length === 0 && newFiles.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No files added.</p>
+          )}
+          {existingFiles.map((f, idx) => (
+            <div
+              key={f.id}
+              className={`rounded-lg border p-4 space-y-3 transition-opacity ${f.deleted ? "opacity-50" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant={f.deleted ? "destructive" : "secondary"}>
+                    {f.deleted ? "Deleted" : `File #${f.id}`}
+                  </Badge>
+                  {!f.deleted &&
+                    (f.type_id !== f.originalTypeId || f.notes !== f.originalNotes) && (
+                      <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">
+                        Modified
+                      </Badge>
+                    )}
+                </div>
+                {f.deleted ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setExistingFiles((prev) =>
+                        prev.map((item, i) =>
+                          i === idx ? { ...item, deleted: false } : item,
+                        ),
+                      )
+                    }
+                  >
+                    Restore
+                  </Button>
+                ) : (
+                  <RemoveButton
+                    onClick={() =>
+                      setExistingFiles((prev) =>
+                        prev.map((item, i) =>
+                          i === idx ? { ...item, deleted: true } : item,
+                        ),
+                      )
+                    }
+                  />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {decodeURIComponent(f.file_path.split("/").pop() ?? "file")}
+              </p>
+              {!f.deleted && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>File Type</Label>
+                    <Select
+                      value={f.type_id > 0 ? String(f.type_id) : ""}
+                      onValueChange={(v) =>
+                        setExistingFiles((prev) =>
+                          prev.map((item, i) =>
+                            i === idx ? { ...item, type_id: parseInt(v, 10) || 0 } : item,
+                          ),
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select file type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {employeeFileTypes.map((fileType) => (
+                          <SelectItem key={fileType.id} value={String(fileType.id)}>
+                            {formatFileTypeLabel(fileType.file_type)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Notes</Label>
+                    <Input
+                      value={f.notes}
+                      onChange={(e) =>
+                        setExistingFiles((prev) =>
+                          prev.map((item, i) =>
+                            i === idx ? { ...item, notes: e.target.value } : item,
+                          ),
+                        )
+                      }
+                      placeholder="Optional notes"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {newFiles.map((f, idx) => (
+            <div key={idx} className="rounded-lg border border-dashed p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Badge variant="outline">New File {idx + 1}</Badge>
+                <RemoveButton
+                  onClick={() => setNewFiles((prev) => prev.filter((_, i) => i !== idx))}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5 sm:col-span-3">
+                  <Label>File <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="file"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0];
+                      setNewFiles((prev) =>
+                        prev.map((item, i) =>
+                          i === idx ? { ...item, file: picked } : item,
+                        ),
+                      );
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>File Type <span className="text-destructive">*</span></Label>
+                  <Select
+                    value={f.type_id > 0 ? String(f.type_id) : ""}
+                    onValueChange={(v) =>
+                      setNewFiles((prev) =>
+                        prev.map((item, i) =>
+                          i === idx ? { ...item, type_id: parseInt(v, 10) || 0 } : item,
+                        ),
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select file type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employeeFileTypes.map((fileType) => (
+                        <SelectItem key={fileType.id} value={String(fileType.id)}>
+                          {formatFileTypeLabel(fileType.file_type)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Notes</Label>
+                  <Input
+                    value={f.notes}
+                    onChange={(e) =>
+                      setNewFiles((prev) =>
+                        prev.map((item, i) =>
+                          i === idx ? { ...item, notes: e.target.value } : item,
+                        ),
+                      )
+                    }
+                    placeholder="Optional notes"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Notes</p>

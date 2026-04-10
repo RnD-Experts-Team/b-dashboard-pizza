@@ -20,6 +20,12 @@ export interface SeparationAttachmentInput {
   note?: string | null;
 }
 
+/** An existing attachment to update (metadata only) */
+export interface UpdatedAttachmentItem {
+  file: string;
+  note: string | null;
+}
+
 /** Payload for creating a separation request (POST, multipart/form-data) */
 export interface CreateSeparationRequestPayload {
   final_work_date: string;
@@ -186,10 +192,13 @@ export interface SeparationRequestDetail {
   date_of_request: string;
   separation_type: string;
   final_work_date: string;
+  reason_type?: SeparationReasonType | null;
+  reason_id?: number | null;
+  reason_title?: string | null;
   other_notes: string | null;
   termination_letter: string | null;
   employee: SeparationEmployee;
-  separationAttachments: SeparationAttachmentRecord[];
+  separation_attachments: SeparationAttachmentRecord[];
   supervisor_approve: SeparationSupervisorApprove | null;
   hiring_review: SeparationHiringReview | null;
 }
@@ -198,6 +207,21 @@ export interface SeparationRequestDetailResponse {
   status: number;
   message: string;
   data: SeparationRequestDetail;
+}
+
+/** Payload for POST /stores/{storeId}/separation-requests/{separationId} (edit) */
+export interface UpdateSeparationRequestPayload {
+  final_work_date?: string;
+  other_notes?: string | null;
+  reason_id?: number | null;
+  reason_title?: string | null;
+  reason_type?: SeparationReasonType;
+  separation_type?: SeparationType;
+  termination_letter?: string | null;
+  attachments?: SeparationAttachmentInput[];
+  deletedAttachment?: number[] | null;
+  keptAttachment?: number[] | null;
+  updatedAttachment?: UpdatedAttachmentItem[] | null;
 }
 
 /** Payload for POST .../supervisor-decision */

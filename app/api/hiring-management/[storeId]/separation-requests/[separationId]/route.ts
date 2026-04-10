@@ -75,6 +75,61 @@ export async function GET(
 }
 
 /**
+ * POST /api/hiring-management/[storeId]/separation-requests/[separationId]
+ * Proxy → POST {HIRING_BASE_URL}/stores/{storeId}/separation-requests/{separationId}
+ * Body is multipart/form-data (forwarded as-is).
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ storeId: string; separationId: string }> },
+) {
+  const authError = requireAuthorization(request);
+  if (authError) return authError;
+
+  const authorization = getAuthorizationHeader(request)!;
+  const { storeId, separationId } = await params;
+
+  try {
+    const formData = await request.formData();
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
+    const upstream = await fetch(upstreamUrl(storeId, separationId), {
+      method: "POST",
+      headers: {
+        Authorization: authorization,
+        Accept: "application/json",
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+
+    const responseBody = await upstream.text();
+
+    return new NextResponse(responseBody, {
+      status: upstream.status,
+      headers: {
+        "Content-Type":
+          upstream.headers.get("Content-Type") || "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return errorResponse("TIMEOUT", "Upstream request timed out", 504);
+    }
+    return errorResponse(
+      "UPSTREAM_ERROR",
+      "Failed to reach hiring service",
+      502,
+    );
+  }
+}
+
+/**
  * DELETE /api/hiring-management/[storeId]/separation-requests/[separationId]
  */
 export async function DELETE(

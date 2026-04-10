@@ -53,10 +53,17 @@ export interface EmployeeFile {
   id?: number;
   employee_id?: number;
   file?: File | string;
+  file_path?: string;
   notes?: string;
   type_id?: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface UpdatedImageItem {
+  file: string;
+  type_id: number;
+  notes?: string | null;
 }
 
 export interface EmployeeNote {
@@ -196,4 +203,8 @@ export interface CreateEmployeePayload {
   payment_info?: EmployeePaymentInfo[];
   salary_info?: EmployeeSalaryInfo[];
   status_history?: EmployeeStatusHistory[];
+  // Update-only file operation fields
+  deletedImage?: number[] | null;
+  keptImage?: number[] | null;
+  updatedImage?: UpdatedImageItem[] | null;
 }

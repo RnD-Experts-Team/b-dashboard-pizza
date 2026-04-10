@@ -57,6 +57,13 @@ export interface PositionRecord {
   updated_at: string;
 }
 
+export interface EmployeeFileTypeRecord {
+  id: number;
+  file_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NewHireRecord {
   id: number;
   hiring_request_id: number;
@@ -167,6 +174,7 @@ export interface CreateEmployeePageData {
   shifts: ShiftRecord[];
   employeeStatuses: EmployeeStatusRecord[];
   positions: PositionRecord[];
+  employeeFileTypes: EmployeeFileTypeRecord[];
   separationReasons: {
     id: number;
     reason_type: string;

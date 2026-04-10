@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText } from "lucide-react";
+import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText, Image as ImageIcon } from "lucide-react";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { EmployeeRecord } from "@/types/employee.types";
@@ -20,7 +20,6 @@ import type { EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types"
 
 interface EmployeeDetailsSheetProps {
   employeeId: number | null;
-  employee: EmployeeRecord | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   positions: PositionRecord[];
@@ -70,9 +69,28 @@ function legalStatusLabel(status?: string | null) {
   return status;
 }
 
+function isImageFilePath(path?: string | null) {
+  if (!path) return false;
+  const cleanPath = path.split("?")[0].toLowerCase();
+  return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".avif"].some((ext) =>
+    cleanPath.endsWith(ext),
+  );
+}
+
+function fileNameFromPath(path?: string | null) {
+  if (!path) return "file";
+  try {
+    const url = new URL(path);
+    const segment = url.pathname.split("/").filter(Boolean).pop();
+    return segment ? decodeURIComponent(segment) : path;
+  } catch {
+    const segment = path.split("/").filter(Boolean).pop();
+    return segment ? decodeURIComponent(segment) : path;
+  }
+}
+
 export function EmployeeDetailsSheet({
   employeeId,
-  employee,
   open,
   onOpenChange,
   positions,
@@ -82,16 +100,15 @@ export function EmployeeDetailsSheet({
   const [data, setData] = useState<EmployeeRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const resolvedEmployeeId = employeeId;
 
   useEffect(() => {
-    if (employee) {
-      setData(employee);
+    if (!open || resolvedEmployeeId === null || !selectedStore?.storeId) {
+      setData(null);
       setError(null);
       setIsLoading(false);
       return;
     }
-
-    if (!open || employeeId === null || !selectedStore?.storeId) return;
 
     let cancelled = false;
     setIsLoading(true);
@@ -99,7 +116,7 @@ export function EmployeeDetailsSheet({
     setData(null);
 
     employeeService
-      .getEmployee(selectedStore.storeId, employeeId)
+      .getEmployeeDetails(selectedStore.storeId, resolvedEmployeeId)
       .then((res) => {
         if (!cancelled) setData(res.data);
       })
@@ -115,7 +132,7 @@ export function EmployeeDetailsSheet({
     return () => {
       cancelled = true;
     };
-  }, [employee, open, employeeId, selectedStore?.storeId]);
+  }, [open, resolvedEmployeeId, selectedStore?.storeId]);
 
   const profile = data?.employee_profile;
   const fullName = profile
@@ -134,7 +151,7 @@ export function EmployeeDetailsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader className="pb-4">
-          <SheetTitle>Employee #{employeeId}</SheetTitle>
+          <SheetTitle>Employee #{resolvedEmployeeId ?? "-"}</SheetTitle>
           <SheetDescription>Full details for the selected employee.</SheetDescription>
         </SheetHeader>
 
@@ -278,6 +295,56 @@ export function EmployeeDetailsSheet({
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <SectionTitle icon={ImageIcon} label={`Files (${data.employee_files.length})`} />
+              {data.employee_files.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No files.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.employee_files.map((f, idx) => {
+                    const path = f.file_path || (typeof f.file === "string" ? f.file : "");
+                    const isImage = isImageFilePath(path);
+                    return (
+                      <div key={idx} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-sm">Type #{f.type_id ?? "-"}</p>
+                            <p className="text-xs text-muted-foreground break-all">
+                              {fileNameFromPath(path)}
+                            </p>
+                            {f.notes && (
+                              <p className="text-xs text-muted-foreground italic">{f.notes}</p>
+                            )}
+                            {path ? (
+                              <a
+                                href={path}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-primary underline-offset-2 hover:underline"
+                              >
+                                Open file
+                              </a>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">No file URL available.</p>
+                            )}
+                          </div>
+                          {isImage && path && (
+                            <img
+                              src={path}
+                              alt={fileNameFromPath(path)}
+                              className="h-16 w-16 rounded-md border object-cover"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>

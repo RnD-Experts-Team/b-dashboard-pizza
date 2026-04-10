@@ -219,16 +219,16 @@ export function SeparationRequestSheet({
             )}
 
             {/* ── Attachments ── */}
-            {data.separationAttachments?.length > 0 && (
+            {data.separation_attachments?.length > 0 && (
               <>
                 <Separator />
                 <section className="space-y-3">
                   <SectionTitle
                     icon={Paperclip}
-                    label={`Attachments (${data.separationAttachments.length})`}
+                    label={`Attachments (${data.separation_attachments.length})`}
                   />
                   <div className="space-y-2">
-                    {data.separationAttachments.map((att) => (
+                    {data.separation_attachments.map((att) => (
                       <div key={att.id} className="rounded-lg border p-3 space-y-1">
                         <div className="flex items-center justify-between gap-2">
                           <a

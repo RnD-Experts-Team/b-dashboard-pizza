@@ -27,6 +27,8 @@ import {
   RefreshCw,
   AlertCircle,
   Search,
+  Upload,
+  Download,
   X,
   MoreHorizontal,
   Pencil,
@@ -176,12 +178,12 @@ export default function EmployeesPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
   const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
-  const [editEmployee, setEditEmployee] = useState<EmployeeRecord | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [rows, setRows] = useState<EmployeeRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
@@ -206,6 +208,7 @@ export default function EmployeesPage() {
   const [city, setCity] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   function getCurrentFilters() {
     return {
@@ -428,6 +431,50 @@ export default function EmployeesPage() {
       setIsDeleting(false);
     }
   }
+  
+  function openImportPicker() {
+    importFileInputRef.current?.click();
+  }
+
+  async function handleImportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!selectedStore?.storeId) {
+      toast.error("Select a store before importing employees.");
+      event.target.value = "";
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      await employeeService.importEmployees(selectedStore.storeId, file);
+      toast.success("Employees imported successfully.");
+      await fetchData({ ...getCurrentFilters(), page: "1" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to import employees.");
+    } finally {
+      setIsImporting(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleExportEmployees() {
+    if (!selectedStore?.storeId) {
+      toast.error("Select a store before exporting employees.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await employeeService.exportEmployees(selectedStore.storeId);
+      toast.success("Employees export started.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to export employees.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -435,6 +482,13 @@ export default function EmployeesPage() {
         title="Employees"
         description="Manage employees for your stores."
       >
+        <input
+          ref={importFileInputRef}
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          className="hidden"
+          onChange={handleImportFileChange}
+        />
         <Button
           variant="outline"
           size="icon"
@@ -444,6 +498,37 @@ export default function EmployeesPage() {
         >
           <RefreshCw className={shouldShowSkeleton ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              disabled={!hasStore || isImporting || isExporting}
+            >
+              {(isImporting || isExporting) ? (
+                <RefreshCw className="me-2 h-4 w-4 animate-spin" />
+              ) : (
+                <MoreHorizontal className="me-2 h-4 w-4" />
+              )}
+              Import / Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={openImportPicker}
+              disabled={!hasStore || isImporting || isExporting}
+            >
+              <Upload className="me-2 h-4 w-4" />
+              {isImporting ? "Importing..." : "Import Employees"}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleExportEmployees}
+              disabled={!hasStore || isImporting || isExporting}
+            >
+              <Download className="me-2 h-4 w-4" />
+              {isExporting ? "Exporting..." : "Export Employees"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
           Add Employee
@@ -606,7 +691,6 @@ export default function EmployeesPage() {
                       key={emp.id}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => {
-                        setSelectedEmployee(emp);
                         setSelectedEmployeeId(emp.id);
                         setDetailsOpen(true);
                       }}
@@ -651,7 +735,6 @@ export default function EmployeesPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               onClick={() => {
-                                setEditEmployee(emp);
                                 setEditEmployeeId(emp.id);
                                 setEditDialogOpen(true);
                               }}
@@ -766,13 +849,11 @@ export default function EmployeesPage() {
 
       <EmployeeDetailsSheet
         employeeId={selectedEmployeeId}
-        employee={selectedEmployee}
         open={detailsOpen}
         onOpenChange={(nextOpen) => {
           setDetailsOpen(nextOpen);
           if (!nextOpen) {
             setSelectedEmployeeId(null);
-            setSelectedEmployee(null);
           }
         }}
         positions={positions}
@@ -781,13 +862,11 @@ export default function EmployeesPage() {
 
       <EditEmployeeDialog
         employeeId={editEmployeeId}
-        employee={editEmployee}
         open={editDialogOpen}
         onOpenChange={(nextOpen) => {
           setEditDialogOpen(nextOpen);
           if (!nextOpen) {
             setEditEmployeeId(null);
-            setEditEmployee(null);
           }
         }}
         onSuccess={() => fetchData(getCurrentFilters())}

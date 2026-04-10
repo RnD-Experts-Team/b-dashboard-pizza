@@ -29,9 +29,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, RefreshCw, AlertCircle, MoreHorizontal, Trash2, ClipboardCheck } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  AlertCircle,
+  MoreHorizontal,
+  Trash2,
+  ClipboardCheck,
+  Download,
+  Pencil,
+} from "lucide-react";
 import { toast } from "sonner";
 import { CreateSeparationRequestDialog } from "@/components/hiring/create-separation-request-dialog";
+import { EditSeparationRequestDialog } from "@/components/hiring/edit-separation-request-dialog";
 import { SeparationRequestSheet } from "@/components/hiring/separation-request-sheet";
 import { SeparationReviewDialog } from "@/components/hiring/separation-review-dialog";
 import { separationService } from "@/lib/api/services/separation.service";
@@ -125,7 +135,13 @@ function SepTableSkeleton() {
   );
 }
 
-export function SeparationRequestTab({ active = true }: { active?: boolean }) {
+export function SeparationRequestTab({
+  active = true,
+  showExportButton = false,
+}: {
+  active?: boolean;
+  showExportButton?: boolean;
+}) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedSeparationId, setSelectedSeparationId] = useState<number | null>(null);
@@ -135,6 +151,11 @@ export function SeparationRequestTab({ active = true }: { active?: boolean }) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  /* Edit dialog */
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editSeparationId, setEditSeparationId] = useState<number | null>(null);
 
   /* Separation review dialog */
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
@@ -207,6 +228,25 @@ export function SeparationRequestTab({ active = true }: { active?: boolean }) {
     }
   }
 
+  async function handleExportSeparations() {
+    if (!selectedStore?.storeId) {
+      toast.error("Select a store before exporting separations.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await separationService.exportSeparations(selectedStore.storeId);
+      toast.success("Separations export started.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to export separations.",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Actions row */}
@@ -215,13 +255,23 @@ export function SeparationRequestTab({ active = true }: { active?: boolean }) {
           variant="outline"
           size="icon"
           onClick={() => fetchData(page)}
-          disabled={isLoading}
+          disabled={isLoading || isExporting}
           aria-label="Refresh"
         >
           <RefreshCw
             className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
           />
         </Button>
+        {showExportButton && (
+          <Button
+            variant="outline"
+            onClick={handleExportSeparations}
+            disabled={!selectedStore?.storeId || isLoading || isExporting}
+          >
+            <Download className="me-2 h-4 w-4" />
+            {isExporting ? "Exporting..." : "Export"}
+          </Button>
+        )}
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
           <span className="hidden sm:inline">Create Separation Request</span>
@@ -352,6 +402,16 @@ export function SeparationRequestTab({ active = true }: { active?: boolean }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditSeparationId(req.id);
+                            setEditDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="me-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           disabled={req.supervisor_approve === null || req.supervisor_approve === undefined}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -415,6 +475,13 @@ export function SeparationRequestTab({ active = true }: { active?: boolean }) {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSuccess={() => fetchData(1)}
+      />
+
+      <EditSeparationRequestDialog
+        separationId={editSeparationId}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        onSuccess={() => fetchData(page)}
       />
 
       <SeparationRequestSheet

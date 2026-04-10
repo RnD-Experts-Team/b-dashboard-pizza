@@ -59,13 +59,19 @@ import type {
   EmployeeAddress,
   EmployeeAvailability,
   EmployeeContact,
+  EmployeeFile,
   EmployeeNote,
   EmployeePaycheckInfo,
   EmployeePaymentInfo,
   EmployeeSalaryInfo,
   EmployeeStatusHistory,
 } from "@/types/employee.types";
-import type { ShiftRecord, EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
+import type {
+  ShiftRecord,
+  EmployeeStatusRecord,
+  PositionRecord,
+  EmployeeFileTypeRecord,
+} from "@/types/hiring.types";
 
 interface CreateEmployeeDialogProps {
   open: boolean;
@@ -93,6 +99,12 @@ const emptyContact = (): EmployeeContact => ({
   contact_type: "phone",
   contact_value: "",
   is_primary: false,
+});
+
+const emptyFile = (): EmployeeFile => ({
+  file: undefined,
+  type_id: 0,
+  notes: "",
 });
 
 const emptyNote = (): EmployeeNote => ({ notes: "" });
@@ -132,6 +144,14 @@ const ALL_DAYS: DayOfWeek[] = [
   "sunday",
 ];
 
+function formatFileTypeLabel(fileType: string) {
+  return fileType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -156,6 +176,7 @@ export function CreateEmployeeDialog({
   const [addresses, setAddresses] = useState<EmployeeAddress[]>([]);
   const [availability, setAvailability] = useState<EmployeeAvailability[]>([]);
   const [contacts, setContacts] = useState<EmployeeContact[]>([]);
+  const [files, setFiles] = useState<EmployeeFile[]>([]);
   const [notes, setNotes] = useState<EmployeeNote[]>([]);
   const [paychecksInfo, setPaychecksInfo] = useState<EmployeePaycheckInfo[]>([]);
   const [paymentInfo, setPaymentInfo] = useState<EmployeePaymentInfo[]>([]);
@@ -172,6 +193,7 @@ export function CreateEmployeeDialog({
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
   const [positions, setPositions] = useState<PositionRecord[]>([]);
+  const [employeeFileTypes, setEmployeeFileTypes] = useState<EmployeeFileTypeRecord[]>([]);
   const [isLoadingShifts, setIsLoadingShifts] = useState(false);
 
   useEffect(() => {
@@ -185,6 +207,7 @@ export function CreateEmployeeDialog({
           setShifts(data.shifts);
           setEmployeeStatuses(data.employeeStatuses);
           setPositions(data.positions);
+          setEmployeeFileTypes(data.employeeFileTypes);
         }
       })
       .catch(() => {})
@@ -209,6 +232,7 @@ export function CreateEmployeeDialog({
     addresses.length > 0 ||
     availability.length > 0 ||
     contacts.length > 0 ||
+    files.length > 0 ||
     notes.length > 0 ||
     paychecksInfo.length > 0 ||
     paymentInfo.length > 0 ||
@@ -227,6 +251,7 @@ export function CreateEmployeeDialog({
     setAddresses([]);
     setAvailability([]);
     setContacts([]);
+    setFiles([]);
     setNotes([]);
     setPaychecksInfo([]);
     setPaymentInfo([]);
@@ -285,6 +310,7 @@ export function CreateEmployeeDialog({
         ...(addresses.length > 0 ? { addresses } : {}),
         ...(availability.length > 0 ? { availability } : {}),
         ...(contacts.length > 0 ? { contacts } : {}),
+        ...(files.length > 0 ? { files } : {}),
         ...(notes.length > 0 ? { notes } : {}),
         ...(paychecksInfo.length > 0 ? { paychecks_info: paychecksInfo } : {}),
         ...(paymentInfo.length > 0 ? { payment_info: paymentInfo } : {}),
@@ -665,23 +691,26 @@ export function CreateEmployeeDialog({
             </div>
             <div className="space-y-2">
               <Label>Days</Label>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-1.5">
                 {ALL_DAYS.map((day) => {
-                  const checked = av.days?.includes(day) ?? false;
+                  const selected = av.days?.includes(day) ?? false;
                   return (
-                    <label key={day} className="flex items-center gap-1.5 text-sm capitalize">
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(v) => {
-                          const current = av.days ?? [];
-                          const next = v
-                            ? [...current, day]
-                            : current.filter((d) => d !== day);
-                          updateItem(setAvailability, idx, "days", next as DayOfWeek[]);
-                        }}
-                      />
-                      {day}
-                    </label>
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={selected ? "default" : "outline"}
+                      className="h-8 px-3 text-xs capitalize"
+                      onClick={() => {
+                        const current = av.days ?? [];
+                        const next = selected
+                          ? current.filter((d) => d !== day)
+                          : [...current, day];
+                        updateItem(setAvailability, idx, "days", next as DayOfWeek[]);
+                      }}
+                    >
+                      {day.slice(0, 3)}
+                    </Button>
                   );
                 })}
               </div>
@@ -901,6 +930,67 @@ export function CreateEmployeeDialog({
   function renderNotesTab() {
     return (
       <div className="space-y-6">
+        {/* Files */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">Files</p>
+            <AddButton label="Add File" onClick={() => addItem(setFiles, emptyFile)} />
+          </div>
+          {files.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No files added.</p>
+          )}
+          {files.map((f, idx) => (
+            <div key={idx} className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary">File {idx + 1}</Badge>
+                <RemoveButton onClick={() => removeItem(setFiles, idx)} />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5 sm:col-span-3">
+                  <Label>File <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="file"
+                    onChange={(e) => {
+                      const picked = e.target.files?.[0];
+                      if (!picked) return;
+                      updateItem(setFiles, idx, "file", picked);
+                    }}
+                  />
+                  {typeof f.file === "string" && f.file && (
+                    <p className="text-xs text-muted-foreground">Existing file attached</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>File Type <span className="text-destructive">*</span></Label>
+                  <Select
+                    value={f.type_id && f.type_id > 0 ? String(f.type_id) : ""}
+                    onValueChange={(v) => updateItem(setFiles, idx, "type_id", parseInt(v, 10) || 0)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select file type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employeeFileTypes.map((fileType) => (
+                        <SelectItem key={fileType.id} value={String(fileType.id)}>
+                          {formatFileTypeLabel(fileType.file_type)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Notes</Label>
+                  <Input
+                    value={f.notes ?? ""}
+                    onChange={(e) => updateItem(setFiles, idx, "notes", e.target.value)}
+                    placeholder="Optional notes"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* Notes */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
