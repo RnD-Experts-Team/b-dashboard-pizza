@@ -6,6 +6,7 @@ import {
   Trash2,
   UserPlus,
   AlertCircle,
+  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -150,6 +151,35 @@ function formatFileTypeLabel(fileType: string) {
     .filter(Boolean)
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+}
+
+const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+
+function NewFileThumb({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImg = IMAGE_EXTS.test(file.name);
+
+  useEffect(() => {
+    if (!isImg) return;
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file, isImg]);
+
+  if (isImg && url) {
+    return (
+      <img
+        src={url}
+        alt={file.name}
+        className="h-8 w-8 rounded object-cover shrink-0 mt-1"
+      />
+    );
+  }
+  return (
+    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 mt-1">
+      <FileText className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -602,6 +632,16 @@ export function CreateEmployeeDialog({
                   placeholder="123 Main St"
                 />
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Address Line 2</Label>
+                <Input
+                  value={a.address_line_2 ?? ""}
+                  onChange={(e) =>
+                    updateItem(setAddresses, idx, "address_line_2", e.target.value || null)
+                  }
+                  placeholder="Apt, suite, unit, etc."
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label>City</Label>
                 <Input
@@ -624,6 +664,16 @@ export function CreateEmployeeDialog({
                   value={a.country ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "country", e.target.value)}
                   placeholder="Country"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Zip Code</Label>
+                <Input
+                  value={a.zip_code ?? ""}
+                  onChange={(e) =>
+                    updateItem(setAddresses, idx, "zip_code", e.target.value || null)
+                  }
+                  placeholder="12345"
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
@@ -714,6 +764,17 @@ export function CreateEmployeeDialog({
                   );
                 })}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={av.notes ?? ""}
+                onChange={(e) =>
+                  updateItem(setAvailability, idx, "notes", e.target.value || null)
+                }
+                placeholder="Optional notes"
+                rows={2}
+              />
             </div>
           </div>
         ))}
@@ -948,14 +1009,18 @@ export function CreateEmployeeDialog({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5 sm:col-span-3">
                   <Label>File <span className="text-destructive">*</span></Label>
-                  <Input
-                    type="file"
-                    onChange={(e) => {
-                      const picked = e.target.files?.[0];
-                      if (!picked) return;
-                      updateItem(setFiles, idx, "file", picked);
-                    }}
-                  />
+                  <div className="flex items-start gap-2">
+                    {f.file instanceof File && <NewFileThumb file={f.file} />}
+                    <Input
+                      type="file"
+                      className="flex-1"
+                      onChange={(e) => {
+                        const picked = e.target.files?.[0];
+                        if (!picked) return;
+                        updateItem(setFiles, idx, "file", picked);
+                      }}
+                    />
+                  </div>
                   {typeof f.file === "string" && f.file && (
                     <p className="text-xs text-muted-foreground">Existing file attached</p>
                   )}

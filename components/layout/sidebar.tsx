@@ -401,7 +401,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     items: [
       {
         title: t("manageRequests"),
-        href: `/${locale}/dashboard/hiring-management/hiring-request`,
+        href: `/${locale}/dashboard/hiring-request`,
         icon: ClipboardList,
       },
       // {
@@ -411,7 +411,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       // },
       {
         title: t("employees"),
-        href: `/${locale}/dashboard/hiring-management/employees`,
+        href: `/${locale}/dashboard/employees`,
         icon: Users,
       },
     ],

@@ -7,6 +7,7 @@ import {
   Pencil,
   X,
   Loader2,
+  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -70,6 +71,53 @@ const SEPARATION_TYPES: { value: SeparationType; label: string }[] = [
   { value: "termination", label: "Termination" },
   { value: "resignation", label: "Resignation" },
 ];
+
+const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+
+function ExistingFileThumb({ url }: { url: string }) {
+  const isImg = IMAGE_EXTS.test(url.split("?")[0]);
+  if (isImg) {
+    return (
+      <img
+        src={url}
+        alt="attachment"
+        className="h-8 w-8 rounded object-cover shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0">
+      <FileText className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
+
+function NewAttachmentThumb({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImg = IMAGE_EXTS.test(file.name);
+
+  useEffect(() => {
+    if (!isImg) return;
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file, isImg]);
+
+  if (isImg && url) {
+    return (
+      <img
+        src={url}
+        alt={file.name}
+        className="h-8 w-8 rounded object-cover shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0">
+      <FileText className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
 
 export function EditSeparationRequestDialog({
   separationId,
@@ -203,6 +251,7 @@ export function EditSeparationRequestDialog({
     if (separationType === "termination" || separationType === "resignation") {
       setReasonType((prev) => (prev === "other" ? prev : separationType));
       setReasonId("");
+      setReasonTitle("");
     }
   }, [separationType, isDirty]);
 
@@ -251,12 +300,16 @@ export function EditSeparationRequestDialog({
     );
   }
 
+  const activeAttachmentsCount =
+    existingAttachments.filter((a) => !a.deleted).length + newAttachments.length;
+
   const isFormValid =
     finalWorkDate.trim() !== "" &&
     separationType !== "" &&
     reasonType !== "" &&
     (reasonType === "other" || reasonId !== "") &&
-    (separationType !== "termination" || terminationLetter.trim() !== "");
+    (separationType !== "termination" || terminationLetter.trim() !== "") &&
+    activeAttachmentsCount > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -404,85 +457,6 @@ export function EditSeparationRequestDialog({
                 </Select>
               </div>
 
-              {/* Reason dropdown */}
-              {reasonType !== "" && reasonType !== "other" && (
-                <div className="space-y-2">
-                  <Label>
-                    Reason <span className="text-destructive">*</span>
-                  </Label>
-                  <Select
-                    value={reasonId}
-                    onValueChange={(v) => {
-                      markDirty();
-                      setReasonId(v);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a reason" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredReasons.map((r) => (
-                        <SelectItem key={r.id} value={String(r.id)}>
-                          {r.reason_title}
-                        </SelectItem>
-                      ))}
-                      {filteredReasons.length === 0 && (
-                        <SelectItem value="_none" disabled>
-                          No reasons available
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* "Other" reason checkbox */}
-              {separationType !== "" && (
-                <div className="flex items-center gap-2">
-                  <input
-                    id="edit-sep-reason-other"
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-input"
-                    checked={reasonType === "other"}
-                    onChange={(e) => {
-                      markDirty();
-                      if (e.target.checked) {
-                        setReasonType("other");
-                        setReasonId("");
-                      } else {
-                        setReasonType(separationType as SeparationReasonType);
-                      }
-                    }}
-                  />
-                  <Label
-                    htmlFor="edit-sep-reason-other"
-                    className="text-sm font-normal"
-                  >
-                    Other reason (specify below)
-                  </Label>
-                </div>
-              )}
-
-              {/* Reason Title — when reason_type is "other" */}
-              {reasonType === "other" && (
-                <div className="space-y-2">
-                  <Label htmlFor="edit-sep-reason-title">
-                    Reason Title{" "}
-                    <span className="text-muted-foreground text-xs">(max 255)</span>
-                  </Label>
-                  <Input
-                    id="edit-sep-reason-title"
-                    value={reasonTitle}
-                    onChange={(e) => {
-                      markDirty();
-                      setReasonTitle(e.target.value);
-                    }}
-                    placeholder="Brief title for the reason"
-                    maxLength={255}
-                  />
-                </div>
-              )}
-
               {/* Termination Letter — required when termination */}
               {separationType === "termination" && (
                 <div className="space-y-2">
@@ -506,6 +480,265 @@ export function EditSeparationRequestDialog({
                 </div>
               )}
 
+              {/* ── Reason & Attachments ─────────────────────────────── */}
+              {separationType !== "" && (
+                <div className="rounded-md border p-4 space-y-4">
+                  <p className="text-sm font-medium leading-none">
+                    Reason &amp; Attachments
+                  </p>
+
+                  {/* "Other" reason toggle */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="edit-sep-reason-other"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={reasonType === "other"}
+                      onChange={(e) => {
+                        markDirty();
+                        if (e.target.checked) {
+                          setReasonType("other");
+                          setReasonId("");
+                        } else {
+                          setReasonType(separationType as SeparationReasonType);
+                          setReasonId("");
+                          setReasonTitle("");
+                        }
+                      }}
+                    />
+                    <Label
+                      htmlFor="edit-sep-reason-other"
+                      className="text-sm font-normal"
+                    >
+                      Other reason
+                    </Label>
+                  </div>
+
+                  {/* Standard reason dropdown (termination | resignation) */}
+                  {reasonType !== "" && reasonType !== "other" && (
+                    <div className="space-y-2">
+                      <Label>
+                        Reason <span className="text-destructive">*</span>
+                      </Label>
+                      <Select
+                        value={reasonId}
+                        onValueChange={(v) => {
+                          markDirty();
+                          setReasonId(v);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredReasons.map((r) => (
+                            <SelectItem key={r.id} value={String(r.id)}>
+                              {r.reason_title}
+                            </SelectItem>
+                          ))}
+                          {filteredReasons.length === 0 && (
+                            <SelectItem value="_none" disabled>
+                              No reasons available
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* "Other" mode — optional existing other-type reasons + free-text title */}
+                  {reasonType === "other" && (
+                    <>
+                      {filteredReasons.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>
+                            Available Other Reasons{" "}
+                            <span className="text-muted-foreground text-xs">
+                              (optional)
+                            </span>
+                          </Label>
+                          <Select
+                            value={reasonId}
+                            onValueChange={(v) => {
+                              markDirty();
+                              setReasonId(v);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select an existing reason" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredReasons.map((r) => (
+                                <SelectItem key={r.id} value={String(r.id)}>
+                                  {r.reason_title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-sep-reason-title">
+                          Reason Title{" "}
+                          <span className="text-muted-foreground text-xs">
+                            (max 255)
+                          </span>
+                        </Label>
+                        <Input
+                          id="edit-sep-reason-title"
+                          value={reasonTitle}
+                          onChange={(e) => {
+                            markDirty();
+                            setReasonTitle(e.target.value);
+                          }}
+                          placeholder="Brief title for the reason"
+                          maxLength={255}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Existing attachments */}
+                  {existingAttachments.length > 0 && (
+                    <ul className="space-y-2">
+                      {existingAttachments.map((att, i) => (
+                        <li
+                          key={att.id}
+                          className={`flex flex-col gap-1 rounded-md border p-2 transition-opacity ${
+                            att.deleted ? "opacity-50" : ""
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <ExistingFileThumb url={att.attatchment_path} />
+                            <span className="truncate text-sm flex-1">
+                              {decodeURIComponent(
+                                att.attatchment_path.split("/").pop() ?? "file",
+                              )}
+                            </span>
+                            {att.deleted ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="ms-auto h-6 px-2 text-xs"
+                                onClick={() =>
+                                  setExistingAttachments((prev) =>
+                                    prev.map((a, j) =>
+                                      j === i ? { ...a, deleted: false } : a,
+                                    ),
+                                  )
+                                }
+                              >
+                                Restore
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 shrink-0 ms-auto"
+                                onClick={() => {
+                                  markDirty();
+                                  setExistingAttachments((prev) =>
+                                    prev.map((a, j) =>
+                                      j === i ? { ...a, deleted: true } : a,
+                                    ),
+                                  );
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                          {!att.deleted && (
+                            <Input
+                              placeholder="Note (optional, max 255)"
+                              value={att.attatchment_note}
+                              onChange={(e) => {
+                                markDirty();
+                                setExistingAttachments((prev) =>
+                                  prev.map((a, j) =>
+                                    j === i
+                                      ? { ...a, attatchment_note: e.target.value }
+                                      : a,
+                                  ),
+                                );
+                              }}
+                              maxLength={255}
+                              className="h-8 text-xs"
+                            />
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {/* Add new attachments */}
+                  <div className="space-y-2">
+                    <Label>
+                      Attachments <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Paperclip className="me-2 h-4 w-4" />
+                        Add Files
+                      </Button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </div>
+                    {newAttachments.length > 0 && (
+                      <ul className="space-y-2 mt-2">
+                        {newAttachments.map((att, i) => (
+                          <li
+                            key={`${att.file.name}-${i}`}
+                            className="flex flex-col gap-1 rounded-md border border-dashed p-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <NewAttachmentThumb file={att.file} />
+                              <span className="truncate text-sm flex-1">{att.file.name}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 shrink-0 ms-auto"
+                                onClick={() => removeNewAttachment(i)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <Input
+                              placeholder="Note (optional, max 255)"
+                              value={att.note}
+                              onChange={(e) =>
+                                updateNewAttachmentNote(i, e.target.value)
+                              }
+                              maxLength={255}
+                              className="h-8 text-xs"
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {activeAttachmentsCount === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        At least one attachment is required.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Other Notes */}
               <div className="space-y-2">
                 <Label htmlFor="edit-sep-other-notes">
@@ -523,139 +756,6 @@ export function EditSeparationRequestDialog({
                   rows={3}
                   maxLength={255}
                 />
-              </div>
-
-              {/* Attachments */}
-              <div className="space-y-2">
-                <Label>Attachments</Label>
-
-                {/* Existing attachments */}
-                {existingAttachments.length > 0 && (
-                  <ul className="space-y-2">
-                    {existingAttachments.map((att, i) => (
-                      <li
-                        key={att.id}
-                        className={`flex flex-col gap-1 rounded-md border p-2 transition-opacity ${
-                          att.deleted ? "opacity-50" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="truncate text-sm">
-                            {decodeURIComponent(
-                              att.attatchment_path.split("/").pop() ?? "file",
-                            )}
-                          </span>
-                          {att.deleted ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="ms-auto h-6 px-2 text-xs"
-                              onClick={() =>
-                                setExistingAttachments((prev) =>
-                                  prev.map((a, j) =>
-                                    j === i ? { ...a, deleted: false } : a,
-                                  ),
-                                )
-                              }
-                            >
-                              Restore
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 shrink-0 ms-auto"
-                              onClick={() => {
-                                markDirty();
-                                setExistingAttachments((prev) =>
-                                  prev.map((a, j) =>
-                                    j === i ? { ...a, deleted: true } : a,
-                                  ),
-                                );
-                              }}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-                        {!att.deleted && (
-                          <Input
-                            placeholder="Note (optional, max 255)"
-                            value={att.attatchment_note}
-                            onChange={(e) => {
-                              markDirty();
-                              setExistingAttachments((prev) =>
-                                prev.map((a, j) =>
-                                  j === i
-                                    ? { ...a, attatchment_note: e.target.value }
-                                    : a,
-                                ),
-                              );
-                            }}
-                            maxLength={255}
-                            className="h-8 text-xs"
-                          />
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {/* Add new attachments */}
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Paperclip className="me-2 h-4 w-4" />
-                    Add Files
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </div>
-                {newAttachments.length > 0 && (
-                  <ul className="space-y-2 mt-2">
-                    {newAttachments.map((att, i) => (
-                      <li
-                        key={`${att.file.name}-${i}`}
-                        className="flex flex-col gap-1 rounded-md border border-dashed p-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="truncate text-sm">{att.file.name}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 shrink-0 ms-auto"
-                            onClick={() => removeNewAttachment(i)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <Input
-                          placeholder="Note (optional, max 255)"
-                          value={att.note}
-                          onChange={(e) =>
-                            updateNewAttachmentNote(i, e.target.value)
-                          }
-                          maxLength={255}
-                          className="h-8 text-xs"
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">

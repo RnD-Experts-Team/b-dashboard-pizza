@@ -182,6 +182,7 @@ export interface GetEmployeesParams {
   paychecks_id?: number;
   city?: string;
   page?: number;
+  limit?: number;
 }
 
 export interface CreateEmployeePayload {

@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText, Image as ImageIcon } from "lucide-react";
+import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText, Image as ImageIcon, Clock } from "lucide-react";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { EmployeeRecord } from "@/types/employee.types";
@@ -201,9 +201,42 @@ export function EmployeeDetailsSheet({
                       )}
                       <p className="text-xs text-muted-foreground">
                         {a.city ?? "-"}, {a.state ?? "-"}, {a.country ?? "-"}
+                        {(a as { zip_code?: string | null }).zip_code
+                          ? ` ${(a as { zip_code?: string | null }).zip_code}`
+                          : ""}
                       </p>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <SectionTitle icon={Clock} label={`Availability (${data.employee_availability.length})`} />
+              {data.employee_availability.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No availability.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.employee_availability.map((av, idx) => {
+                    const rawDays = av.days as Array<{ day_of_week?: string } | string> | undefined;
+                    const dayLabels = (rawDays ?? [])
+                      .map((d) =>
+                        typeof d === "string" ? d : (d.day_of_week ?? ""),
+                      )
+                      .filter(Boolean);
+                    return (
+                      <div key={idx} className="rounded-lg border p-3 space-y-1">
+                        <p className="text-sm capitalize">{dayLabels.join(", ") || "-"}</p>
+                        {(av as { notes?: string | null }).notes && (
+                          <p className="text-xs text-muted-foreground italic">
+                            {(av as { notes?: string | null }).notes}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>

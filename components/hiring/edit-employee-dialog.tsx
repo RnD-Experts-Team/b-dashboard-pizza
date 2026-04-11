@@ -7,6 +7,7 @@ import {
   Pencil,
   AlertCircle,
   Loader2,
+  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -162,6 +163,53 @@ function formatFileTypeLabel(fileType: string) {
     .join(" ");
 }
 
+const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+
+function ExistingFileThumb({ url }: { url: string }) {
+  const isImg = IMAGE_EXTS.test(url.split("?")[0]);
+  if (isImg) {
+    return (
+      <img
+        src={url}
+        alt="file"
+        className="h-8 w-8 rounded object-cover shrink-0 mt-1"
+      />
+    );
+  }
+  return (
+    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 mt-1">
+      <FileText className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
+
+function NewFileThumb({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImg = IMAGE_EXTS.test(file.name);
+
+  useEffect(() => {
+    if (!isImg) return;
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file, isImg]);
+
+  if (isImg && url) {
+    return (
+      <img
+        src={url}
+        alt={file.name}
+        className="h-8 w-8 rounded object-cover shrink-0 mt-1"
+      />
+    );
+  }
+  return (
+    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 mt-1">
+      <FileText className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -221,7 +269,15 @@ export function EditEmployeeDialog({
     setEmpStatusId(emp.emp_status_id);
     setPositionId(emp.position_id);
     setAddresses((emp.employee_addresses ?? []).map(a => ({ ...a, is_primary: !!a.is_primary })));
-    setAvailability((emp.employee_availability ?? []).map(av => ({ ...av, days: av.days ?? [] })));
+    setAvailability((emp.employee_availability ?? []).map(av => ({
+      ...av,
+      notes: av.notes ?? null,
+      days: Array.isArray(av.days)
+        ? (av.days as Array<{ day_of_week?: string } | string>)
+            .map((d) => (typeof d === "string" ? d : (d.day_of_week ?? "")).toLowerCase())
+            .filter(Boolean) as DayOfWeek[]
+        : [],
+    })));
     setContacts((emp.employee_contacts ?? []).map(c => ({ ...c, is_primary: !!c.is_primary })));
     setExistingFiles(
       (emp.employee_files ?? []).map((f) => ({
@@ -628,6 +684,14 @@ export function EditEmployeeDialog({
                   placeholder="123 Main St"
                 />
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Address Line 2</Label>
+                <Input
+                  value={a.address_line_2 ?? ""}
+                  onChange={(e) => updateItem(setAddresses, idx, "address_line_2", e.target.value || null)}
+                  placeholder="Apt, suite, unit, etc."
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label>City</Label>
                 <Input
@@ -650,6 +714,14 @@ export function EditEmployeeDialog({
                   value={a.country ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "country", e.target.value)}
                   placeholder="Country"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Zip Code</Label>
+                <Input
+                  value={a.zip_code ?? ""}
+                  onChange={(e) => updateItem(setAddresses, idx, "zip_code", e.target.value || null)}
+                  placeholder="12345"
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
@@ -726,6 +798,17 @@ export function EditEmployeeDialog({
                   );
                 })}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                value={av.notes ?? ""}
+                onChange={(e) =>
+                  updateItem(setAvailability, idx, "notes", e.target.value || null)
+                }
+                placeholder="Optional notes"
+                rows={2}
+              />
             </div>
           </div>
         ))}
@@ -959,9 +1042,12 @@ export function EditEmployeeDialog({
                   />
                 )}
               </div>
-              <p className="text-xs text-muted-foreground truncate">
-                {decodeURIComponent(f.file_path.split("/").pop() ?? "file")}
-              </p>
+              <div className="flex items-start gap-2">
+                <ExistingFileThumb url={f.file_path} />
+                <p className="text-xs text-muted-foreground truncate pt-2">
+                  {decodeURIComponent(f.file_path.split("/").pop() ?? "file")}
+                </p>
+              </div>
               {!f.deleted && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
@@ -1017,17 +1103,21 @@ export function EditEmployeeDialog({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5 sm:col-span-3">
                   <Label>File <span className="text-destructive">*</span></Label>
-                  <Input
-                    type="file"
-                    onChange={(e) => {
-                      const picked = e.target.files?.[0];
-                      setNewFiles((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, file: picked } : item,
-                        ),
-                      );
-                    }}
-                  />
+                  <div className="flex items-start gap-2">
+                    {f.file instanceof File && <NewFileThumb file={f.file} />}
+                    <Input
+                      type="file"
+                      className="flex-1"
+                      onChange={(e) => {
+                        const picked = e.target.files?.[0];
+                        setNewFiles((prev) =>
+                          prev.map((item, i) =>
+                            i === idx ? { ...item, file: picked } : item,
+                          ),
+                        );
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>File Type <span className="text-destructive">*</span></Label>

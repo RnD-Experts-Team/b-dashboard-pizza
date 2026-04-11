@@ -163,6 +163,7 @@ export function SeparationRequestTab({
 
   const [rows, setRows] = useState<SeparationRequestRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
@@ -203,12 +204,21 @@ export function SeparationRequestTab({
   );
 
   useEffect(() => {
-    if (!active) return;
-    fetchData(1);
-    return () => abortRef.current?.abort();
+    if (!active) {
+      setIsInitialLoadComplete(false);
+      return;
+    }
+    let cancelled = false;
+    fetchData(1).finally(() => {
+      if (!cancelled) setIsInitialLoadComplete(true);
+    });
+    return () => {
+      cancelled = true;
+      abortRef.current?.abort();
+    };
   }, [active, fetchData]);
 
-  const isEmpty = !isLoading && !error && rows.length === 0;
+  const isEmpty = isInitialLoadComplete && !isLoading && !error && rows.length === 0;
 
   async function handleDelete() {
     if (deleteRequestId === null || !selectedStore?.storeId) return;
@@ -297,7 +307,7 @@ export function SeparationRequestTab({
       )}
 
       {/* Loading skeleton */}
-      {isLoading && <SepTableSkeleton />}
+      {(!isInitialLoadComplete || isLoading) && <SepTableSkeleton />}
 
       {/* Empty state */}
       {isEmpty && (

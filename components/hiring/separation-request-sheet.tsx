@@ -32,6 +32,26 @@ import { separationService } from "@/lib/api/services/separation.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { SeparationRequestDetail } from "@/types/separation.types";
 
+const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+
+function AttachmentThumb({ url }: { url: string }) {
+  const isImg = IMAGE_EXTS.test(url.split("?")[0]);
+  if (isImg) {
+    return (
+      <img
+        src={url}
+        alt="attachment"
+        className="h-16 w-16 rounded object-cover shrink-0"
+      />
+    );
+  }
+  return (
+    <div className="h-16 w-16 rounded bg-muted flex items-center justify-center shrink-0">
+      <FileText className="h-6 w-6 text-muted-foreground" />
+    </div>
+  );
+}
+
 function SectionTitle({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -229,29 +249,33 @@ export function SeparationRequestSheet({
                   />
                   <div className="space-y-2">
                     {data.separation_attachments.map((att) => (
-                      <div key={att.id} className="rounded-lg border p-3 space-y-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <a
-                            href={att.attatchment_path}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
-                          >
-                            <FileText className="h-3.5 w-3.5 shrink-0" />
-                            Attachment #{att.id}
-                            <ExternalLink className="h-3 w-3 shrink-0" />
-                          </a>
-                          {att.reason && (
-                            <Badge variant="outline" className="text-xs capitalize shrink-0">
-                              {att.reason.reason_title}
-                            </Badge>
-                          )}
+                      <div key={att.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-start gap-3">
+                          <AttachmentThumb url={att.attatchment_path} />
+                          <div className="flex-1 min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <a
+                                href={att.attatchment_path}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
+                              >
+                                Attachment #{att.id}
+                                <ExternalLink className="h-3 w-3 shrink-0" />
+                              </a>
+                              {att.reason && (
+                                <Badge variant="outline" className="text-xs capitalize shrink-0">
+                                  {att.reason.reason_title}
+                                </Badge>
+                              )}
+                            </div>
+                            {att.attatchment_note && (
+                              <p className="text-xs text-muted-foreground italic">
+                                {att.attatchment_note}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        {att.attatchment_note && (
-                          <p className="text-xs text-muted-foreground italic">
-                            {att.attatchment_note}
-                          </p>
-                        )}
                       </div>
                     ))}
                   </div>
