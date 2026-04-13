@@ -210,7 +210,10 @@ export function EditSeparationRequestDialog({
               ? String(firstAttachment.reason.id)
               : "";
 
-        setReasonType(resolvedReasonType);
+        // If the stored reason_type is "other", keep the checkbox unchecked and
+        // let the reason be selected from the standard dropdown (which already
+        // includes "other"-type reasons via standardReasons).
+        setReasonType(resolvedReasonType === "other" ? sepType : resolvedReasonType);
         setReasonId(resolvedReasonId);
         setReasonTitle(detail.reason_title ?? "");
         setOtherNotes(detail.other_notes ?? "");
@@ -255,8 +258,10 @@ export function EditSeparationRequestDialog({
     }
   }, [separationType, isDirty]);
 
-  const filteredReasons = separationReasons.filter(
-    (r) => r.reason_type === reasonType,
+  const standardReasons = separationReasons.filter(
+    (r) =>
+      r.reason_type === (separationType as SeparationReasonType) ||
+      r.reason_type === "other",
   );
 
   function markDirty() {
@@ -307,6 +312,7 @@ export function EditSeparationRequestDialog({
     finalWorkDate.trim() !== "" &&
     separationType !== "" &&
     reasonType !== "" &&
+    (reasonType !== "other" || reasonTitle.trim() !== "") &&
     (reasonType === "other" || reasonId !== "") &&
     (separationType !== "termination" || terminationLetter.trim() !== "") &&
     activeAttachmentsCount > 0;
@@ -487,39 +493,41 @@ export function EditSeparationRequestDialog({
                     Reason &amp; Attachments
                   </p>
 
-                  {/* "Other" reason toggle */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="edit-sep-reason-other"
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-input"
-                      checked={reasonType === "other"}
-                      onChange={(e) => {
-                        markDirty();
-                        if (e.target.checked) {
-                          setReasonType("other");
-                          setReasonId("");
-                        } else {
-                          setReasonType(separationType as SeparationReasonType);
-                          setReasonId("");
-                          setReasonTitle("");
-                        }
-                      }}
-                    />
-                    <Label
-                      htmlFor="edit-sep-reason-other"
-                      className="text-sm font-normal"
-                    >
-                      Other reason
-                    </Label>
-                  </div>
-
-                  {/* Standard reason dropdown (termination | resignation) */}
-                  {reasonType !== "" && reasonType !== "other" && (
-                    <div className="space-y-2">
+                  {/* Reason row: label + "Other reason" checkbox inline */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
                       <Label>
                         Reason <span className="text-destructive">*</span>
                       </Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="edit-sep-reason-other"
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={reasonType === "other"}
+                          onChange={(e) => {
+                            markDirty();
+                            if (e.target.checked) {
+                              setReasonType("other");
+                              setReasonId("");
+                            } else {
+                              setReasonType(separationType as SeparationReasonType);
+                              setReasonId("");
+                              setReasonTitle("");
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor="edit-sep-reason-other"
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          Other reason
+                        </Label>
+                      </div>
+                    </div>
+
+                    {/* Standard dropdown — type-specific + "other" type reasons */}
+                    {reasonType !== "other" && (
                       <Select
                         value={reasonId}
                         onValueChange={(v) => {
@@ -531,73 +539,34 @@ export function EditSeparationRequestDialog({
                           <SelectValue placeholder="Select a reason" />
                         </SelectTrigger>
                         <SelectContent>
-                          {filteredReasons.map((r) => (
+                          {standardReasons.map((r) => (
                             <SelectItem key={r.id} value={String(r.id)}>
                               {r.reason_title}
                             </SelectItem>
                           ))}
-                          {filteredReasons.length === 0 && (
+                          {standardReasons.length === 0 && (
                             <SelectItem value="_none" disabled>
                               No reasons available
                             </SelectItem>
                           )}
                         </SelectContent>
                       </Select>
-                    </div>
-                  )}
+                    )}
 
-                  {/* "Other" mode — optional existing other-type reasons + free-text title */}
-                  {reasonType === "other" && (
-                    <>
-                      {filteredReasons.length > 0 && (
-                        <div className="space-y-2">
-                          <Label>
-                            Available Other Reasons{" "}
-                            <span className="text-muted-foreground text-xs">
-                              (optional)
-                            </span>
-                          </Label>
-                          <Select
-                            value={reasonId}
-                            onValueChange={(v) => {
-                              markDirty();
-                              setReasonId(v);
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select an existing reason" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filteredReasons.map((r) => (
-                                <SelectItem key={r.id} value={String(r.id)}>
-                                  {r.reason_title}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <Label htmlFor="edit-sep-reason-title">
-                          Reason Title{" "}
-                          <span className="text-muted-foreground text-xs">
-                            (max 255)
-                          </span>
-                        </Label>
-                        <Input
-                          id="edit-sep-reason-title"
-                          value={reasonTitle}
-                          onChange={(e) => {
-                            markDirty();
-                            setReasonTitle(e.target.value);
-                          }}
-                          placeholder="Brief title for the reason"
-                          maxLength={255}
-                        />
-                      </div>
-                    </>
-                  )}
+                    {/* "Other" mode — free-text title only (required) */}
+                    {reasonType === "other" && (
+                      <Input
+                        id="edit-sep-reason-title"
+                        value={reasonTitle}
+                        onChange={(e) => {
+                          markDirty();
+                          setReasonTitle(e.target.value);
+                        }}
+                        placeholder="Enter reason title…"
+                        maxLength={255}
+                      />
+                    )}
+                  </div>
 
                   {/* Existing attachments */}
                   {existingAttachments.length > 0 && (

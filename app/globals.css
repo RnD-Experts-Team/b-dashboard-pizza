@@ -200,6 +200,53 @@
   100% { transform: translateX(400%); }
 }
 
+@keyframes pizza-loader-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.75));
+  }
+  50% {
+    opacity: 0.72;
+    filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.55));
+  }
+}
+
+@keyframes pizza-loader-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pizza-loader-bar {
+  0% {
+    left: -40%;
+    width: 30%;
+  }
+  50% {
+    width: 60%;
+  }
+  100% {
+    left: 110%;
+    width: 30%;
+  }
+}
+
+.pizza-loader-pulse {
+  animation: pizza-loader-pulse 1.8s ease-in-out infinite;
+}
+
+.pizza-loader-orbit {
+  animation: pizza-loader-orbit 8s linear infinite;
+}
+
+.pizza-loader-bar {
+  animation: pizza-loader-bar 1.9s ease-in-out infinite;
+}
+
 /* DSPR: when `.no-section-backgrounds` is present on the dashboard wrapper,
    remove gradient background-images applied by Tailwind utilities from
    card slots so sections render without gradients. */
