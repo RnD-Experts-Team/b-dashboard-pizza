@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { locales, localeDirections, type Locale } from "@/lib/i18n/config";
 import { createFOUCPreventionScript } from "@/lib/theme";
 import { isFeatureEnabled } from "@/lib/config";
+import "../globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
