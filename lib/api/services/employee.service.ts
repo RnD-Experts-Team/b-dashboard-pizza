@@ -249,7 +249,7 @@ export const employeeService = {
       query.set("paychecks_id", String(params.paychecks_id));
     if (params?.city) query.set("city", params.city);
     if (params?.page != null) query.set("page", String(params.page));
-    if (params?.limit != null) query.set("limit", String(params.limit));
+    if (params?.per_page != null) query.set("per_page", String(params.per_page));
     const qs = query.toString();
     const { data } = await axios.get<EmployeesResponse>(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees${qs ? `?${qs}` : ""}`,

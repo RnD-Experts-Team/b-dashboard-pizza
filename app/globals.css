@@ -6,7 +6,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--app-font-sans, var(--font-geist-sans));
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -44,6 +44,20 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+}
+
+/* Font variant switching via data attribute */
+html[data-font-variant="spaceGrotesk"] body {
+  --app-font-sans: var(--font-space-grotesk);
+  font-family: var(--font-space-grotesk);
+}
+html[data-font-variant="playfairDisplay"] body {
+  --app-font-sans: var(--font-playfair-display);
+  font-family: var(--font-playfair-display);
+}
+html[data-font-variant="ibmPlexMono"] body {
+  --app-font-sans: var(--font-ibm-plex-mono);
+  font-family: var(--font-ibm-plex-mono);
 }
 
 :root {

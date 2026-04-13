@@ -139,7 +139,7 @@ export function CreateSeparationRequestDialog({
     setLoadError(null);
 
     Promise.all([
-      employeeService.getEmployees(selectedStore.storeId, { limit: 50 }),
+      employeeService.getEmployees(selectedStore.storeId, { per_page: 50 }),
       hiringService.getCreateEmployeePage(selectedStore.storeId),
     ])
       .then(([empRes, pageData]) => {
@@ -172,11 +172,9 @@ export function CreateSeparationRequestDialog({
     }
   }, [separationType]);
 
-  // Standard reasons: type-specific + always include "other" type
-  const standardReasons = separationReasons.filter(
-    (r) =>
-      r.reason_type === (separationType as SeparationReasonType) ||
-      r.reason_type === "other",
+  // Filter reasons based on selected reason type
+  const filteredReasons = separationReasons.filter(
+    (r) => r.reason_type === reasonType,
   );
 
   const isDirty =
@@ -245,9 +243,7 @@ export function CreateSeparationRequestDialog({
     finalWorkDate.trim() !== "" &&
     separationType !== "" &&
     reasonType !== "" &&
-    // when "other", reason_title is required
-    (reasonType !== "other" || reasonTitle.trim() !== "") &&
-    // when not "other", a reason must be selected
+    // reason_id required unless reason_type is "other"
     (reasonType === "other" || reasonId !== "") &&
     // termination_letter required if separation_type is "termination"
     (separationType !== "termination" || terminationLetter.trim() !== "") &&
@@ -494,67 +490,101 @@ export function CreateSeparationRequestDialog({
                     Reason &amp; Attachments
                   </p>
 
-                  {/* Reason row: label + "Other reason" checkbox inline */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
+                  {/* "Other" reason toggle */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="sep-reason-other"
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={reasonType === "other"}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setReasonType("other");
+                          setReasonId("");
+                        } else {
+                          setReasonType(separationType as SeparationReasonType);
+                          setReasonId("");
+                          setReasonTitle("");
+                        }
+                      }}
+                    />
+                    <Label htmlFor="sep-reason-other" className="text-sm font-normal">
+                      Other reason
+                    </Label>
+                  </div>
+
+                  {/* Standard reason — filtered by reason_type (termination | resignation) */}
+                  {reasonType !== "" && reasonType !== "other" && (
+                    <div className="space-y-2">
                       <Label>
                         Reason <span className="text-destructive">*</span>
                       </Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="sep-reason-other"
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-input"
-                          checked={reasonType === "other"}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setReasonType("other");
-                              setReasonId("");
-                            } else {
-                              setReasonType(separationType as SeparationReasonType);
-                              setReasonId("");
-                              setReasonTitle("");
-                            }
-                          }}
-                        />
-                        <Label htmlFor="sep-reason-other" className="text-sm font-normal cursor-pointer">
-                          Other reason
-                        </Label>
-                      </div>
-                    </div>
-
-                    {/* Standard dropdown — type-specific + "other" type reasons */}
-                    {reasonType !== "other" && (
                       <Select value={reasonId} onValueChange={setReasonId}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a reason" />
                         </SelectTrigger>
                         <SelectContent>
-                          {standardReasons.map((r) => (
+                          {filteredReasons.map((r) => (
                             <SelectItem key={r.id} value={String(r.id)}>
                               {r.reason_title}
                             </SelectItem>
                           ))}
-                          {standardReasons.length === 0 && (
+                          {filteredReasons.length === 0 && (
                             <SelectItem value="_none" disabled>
                               No reasons available
                             </SelectItem>
                           )}
                         </SelectContent>
                       </Select>
-                    )}
+                    </div>
+                  )}
 
-                    {/* "Other" mode — free-text title only (required) */}
-                    {reasonType === "other" && (
-                      <Input
-                        id="sep-reason-title"
-                        value={reasonTitle}
-                        onChange={(e) => setReasonTitle(e.target.value)}
-                        placeholder="Enter reason title…"
-                        maxLength={255}
-                      />
-                    )}
-                  </div>
+                  {/* "Other" reason — show available other-type reasons + free-text title */}
+                  {reasonType === "other" && (
+                    <>
+                      {filteredReasons.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>
+                            Available Other Reasons{" "}
+                            <span className="text-muted-foreground text-xs">
+                              (optional)
+                            </span>
+                          </Label>
+                          <Select
+                            value={reasonId}
+                            onValueChange={setReasonId}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select an existing reason" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredReasons.map((r) => (
+                                <SelectItem key={r.id} value={String(r.id)}>
+                                  {r.reason_title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="sep-reason-title">
+                          Reason Title{" "}
+                          <span className="text-muted-foreground text-xs">
+                            (max 255)
+                          </span>
+                        </Label>
+                        <Input
+                          id="sep-reason-title"
+                          value={reasonTitle}
+                          onChange={(e) => setReasonTitle(e.target.value)}
+                          placeholder="Brief title for the reason"
+                          maxLength={255}
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* Attachments (required) */}
                   <div className="space-y-2">
