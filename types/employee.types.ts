@@ -27,10 +27,18 @@ export type DayOfWeek =
   | "saturday"
   | "sunday";
 
+export interface AvailabilityDay {
+  id?: number;
+  emp_availability_id?: number;
+  day_of_week: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface EmployeeAvailability {
   id?: number;
   employee_id?: number;
-  days?: DayOfWeek[];
+  days?: (DayOfWeek | AvailabilityDay)[];
   shift_id?: number;
   notes?: string | null;
   created_at?: string;
@@ -118,6 +126,20 @@ export interface EmployeeStatusHistory {
 
 export type Gender = "male" | "female" | "other";
 
+export type EmploymentType = "W2" | "1099";
+
+export type TShirtSize = "XS" | "S" | "M" | "L" | "XL" | "XXL";
+
+export interface EmployeeCertification {
+  certification_name: string;
+}
+
+export interface EmployeeIdInfo {
+  employee_id_type_id: number;
+  id_number: string;
+  is_primary?: boolean | null;
+}
+
 /* ------------------------------------------------------------------ */
 /*  API response shapes                                                */
 /* ------------------------------------------------------------------ */
@@ -134,11 +156,40 @@ export interface EmployeeProfile {
   updated_at: string;
 }
 
+export interface EmployeeIdTypeInfo {
+  id: number;
+  type_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeIdRecord {
+  id: number;
+  employee_id: number;
+  employee_id_type_id: number;
+  id_number: number | string;
+  is_primary: number | boolean;
+  created_at: string;
+  updated_at: string;
+  employee_id_type?: EmployeeIdTypeInfo;
+}
+
+export interface CreatedCertificationRecord {
+  id: number;
+  employee_id: number;
+  certification_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EmployeeRecord {
   id: number;
   store_id: number;
   position_id: number;
   emp_status_id: number;
+  marital_status_id?: number | null;
+  employement_type?: EmploymentType | null;
+  T_shirt_size?: TShirtSize | null;
   SSN_number: string;
   created_at: string;
   updated_at: string;
@@ -147,11 +198,35 @@ export interface EmployeeRecord {
   employee_contacts: EmployeeContact[];
   employee_notes: EmployeeNote[];
   employee_files: EmployeeFile[];
-  employee_payment_info: EmployeePaymentInfo | null;
-  employee_salary_info: EmployeeSalaryInfo | null;
+  employee_payment_info: EmployeePaymentInfo[];
+  employee_salary_info: EmployeeSalaryInfo[];
   employee_status_history: EmployeeStatusHistory[];
   employee_availability: EmployeeAvailability[];
-  employee_paychecks_info: EmployeePaycheckInfo[];
+  employee_ids: EmployeeIdRecord[];
+  created_certifications_info: CreatedCertificationRecord[];
+}
+
+export interface SeparationReasonRecord {
+  id: number;
+  reason_type: string;
+  reason_title: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface EmployeeFileTypeRecord {
+  id: number;
+  file_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeesFiltersKeys {
+  separationReason?: SeparationReasonRecord[];
+  position?: { id: number; position_name: string; created_at: string; updated_at: string }[];
+  stores?: { id: number; name: string; store_number: string; created_at: string; updated_at: string }[];
+  employeeStatus?: { id: number; emp_status: string; created_at: string; updated_at: string }[];
+  employeeFilesType?: EmployeeFileTypeRecord[];
 }
 
 export interface EmployeesResponse {
@@ -159,6 +234,7 @@ export interface EmployeesResponse {
   message: string;
   data: {
     employees: EmployeeRecord[];
+    filtersKeys?: EmployeesFiltersKeys;
   };
   current_page?: number;
   last_page?: number;
@@ -178,8 +254,9 @@ export interface GetEmployeesParams {
   search?: string;
   position_id?: number;
   emp_status_id?: number;
-  legal_status?: LegalStatus;
-  paychecks_id?: number;
+  employement_type?: "W2" | "1099";
+  paychecks_id?: string;
+  altemitrix_id?: string;
   city?: string;
   page?: number;
   per_page?: number;
@@ -195,10 +272,15 @@ export interface CreateEmployeePayload {
   ssn_number: string;
   SSN_number?: string;
   middle_name?: string;
+  employement_type?: EmploymentType;
+  marital_status_id?: number;
+  T_shirt_size?: TShirtSize | null;
   addresses?: EmployeeAddress[];
   availability?: EmployeeAvailability[];
+  certifications_info?: EmployeeCertification[];
   contacts?: EmployeeContact[];
   files?: EmployeeFile[];
+  ids_info?: EmployeeIdInfo[];
   notes?: EmployeeNote[];
   paychecks_info?: EmployeePaycheckInfo[];
   payment_info?: EmployeePaymentInfo[];

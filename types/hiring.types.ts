@@ -64,6 +64,20 @@ export interface EmployeeFileTypeRecord {
   updated_at: string;
 }
 
+export interface MaritalStatusRecord {
+  id: number;
+  marital_status_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeIdTypeRecord {
+  id: number;
+  type_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NewHireRecord {
   id: number;
   hiring_request_id: number;
@@ -182,4 +196,6 @@ export interface CreateEmployeePageData {
     created_at: string | null;
     updated_at: string | null;
   }[];
+  employeeMaritalStatuses: MaritalStatusRecord[];
+  employeeIdTypes: EmployeeIdTypeRecord[];
 }

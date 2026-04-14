@@ -51,6 +51,19 @@ function buildEmployeeFormData(
   formData.append("ssn_number", ssnValue);
 
   appendIfDefined(formData, "middle_name", payload.middle_name);
+  appendIfDefined(formData, "employement_type", payload.employement_type);
+  appendIfDefined(formData, "marital_status_id", payload.marital_status_id != null ? String(payload.marital_status_id) : undefined);
+  appendIfDefined(formData, "T_shirt_size", payload.T_shirt_size);
+
+  payload.certifications_info?.forEach((cert, i) => {
+    appendIfDefined(formData, `certifications_info[${i}][certification_name]`, cert.certification_name);
+  });
+
+  payload.ids_info?.forEach((idEntry, i) => {
+    appendIfDefined(formData, `ids_info[${i}][employee_id_type_id]`, idEntry.employee_id_type_id);
+    appendIfDefined(formData, `ids_info[${i}][id_number]`, idEntry.id_number);
+    appendBoolean(formData, `ids_info[${i}][is_primary]`, idEntry.is_primary === true);
+  });
 
   payload.addresses?.forEach((address, i) => {
     appendIfDefined(formData, `addresses[${i}][address_line_1]`, address.address_line_1);
@@ -199,12 +212,18 @@ function normalizeSingleItem<T>(value: T | T[] | null | undefined): T | null {
 function normalizeEmployeeRecord(record: EmployeeRecord): EmployeeRecord {
   return {
     ...record,
-    employee_payment_info: normalizeSingleItem(
-      record.employee_payment_info as EmployeePaymentInfo | EmployeePaymentInfo[] | null,
-    ),
-    employee_salary_info: normalizeSingleItem(
-      record.employee_salary_info as EmployeeSalaryInfo | EmployeeSalaryInfo[] | null,
-    ),
+    employee_payment_info: Array.isArray(record.employee_payment_info)
+      ? record.employee_payment_info
+      : record.employee_payment_info != null
+        ? [record.employee_payment_info as EmployeePaymentInfo]
+        : [],
+    employee_salary_info: Array.isArray(record.employee_salary_info)
+      ? record.employee_salary_info
+      : record.employee_salary_info != null
+        ? [record.employee_salary_info as EmployeeSalaryInfo]
+        : [],
+    employee_ids: record.employee_ids ?? [],
+    created_certifications_info: record.created_certifications_info ?? [],
   };
 }
 
@@ -243,10 +262,10 @@ export const employeeService = {
       query.set("position_id", String(params.position_id));
     if (params?.emp_status_id != null)
       query.set("emp_status_id", String(params.emp_status_id));
-    if (params?.legal_status)
-      query.set("legal_status", String(params.legal_status).toLowerCase());
-    if (params?.paychecks_id != null)
-      query.set("paychecks_id", String(params.paychecks_id));
+    if (params?.employement_type)
+      query.set("employement_type", params.employement_type);
+    if (params?.paychecks_id) query.set("paychecks_id", params.paychecks_id);
+    if (params?.altemitrix_id) query.set("altemitrix_id", params.altemitrix_id);
     if (params?.city) query.set("city", params.city);
     if (params?.page != null) query.set("page", String(params.page));
     if (params?.per_page != null) query.set("per_page", String(params.per_page));

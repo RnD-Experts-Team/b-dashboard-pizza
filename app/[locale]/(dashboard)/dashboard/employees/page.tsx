@@ -58,22 +58,21 @@ import { CreateEmployeeDialog } from "@/components/hiring/create-employee-dialog
 import { EditEmployeeDialog } from "@/components/hiring/edit-employee-dialog";
 import { EmployeeDetailsSheet } from "@/components/hiring/employee-details-sheet";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { hiringService } from "@/lib/api/services/hiring.service";
 import { toast } from "sonner";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type {
   EmployeeRecord,
   GetEmployeesParams,
-  LegalStatus,
 } from "@/types/employee.types";
 import type { EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
 
 type EmployeeFilterOptions = {
   search?: string;
-  legal_status?: LegalStatus | "all";
+  employement_type?: "W2" | "1099" | "all";
   position_id?: string;
   emp_status_id?: string;
   paychecks_id?: string;
+  altemitrix_id?: string;
   city?: string;
   page?: string;
 };
@@ -90,10 +89,6 @@ function buildEmployeeRequest(opts?: EmployeeFilterOptions): {
     opts?.emp_status_id && opts.emp_status_id !== "all"
       ? parseInt(opts.emp_status_id, 10)
       : undefined;
-  const paychecksIdNum =
-    opts?.paychecks_id && opts.paychecks_id.trim()
-      ? parseInt(opts.paychecks_id, 10)
-      : undefined;
   const parsedPage =
     opts?.page && opts.page.trim()
       ? parseInt(opts.page, 10)
@@ -104,10 +99,11 @@ function buildEmployeeRequest(opts?: EmployeeFilterOptions): {
     ...(opts?.search?.trim() ? { search: opts.search.trim() } : {}),
     ...(Number.isFinite(positionId) ? { position_id: positionId } : {}),
     ...(Number.isFinite(empStatusId) ? { emp_status_id: empStatusId } : {}),
-    ...(opts?.legal_status && opts.legal_status !== "all"
-      ? { legal_status: opts.legal_status }
+    ...(opts?.employement_type && opts.employement_type !== "all"
+      ? { employement_type: opts.employement_type as "W2" | "1099" }
       : {}),
-    ...(Number.isFinite(paychecksIdNum) ? { paychecks_id: paychecksIdNum } : {}),
+    ...(opts?.paychecks_id?.trim() ? { paychecks_id: opts.paychecks_id.trim() } : {}),
+    ...(opts?.altemitrix_id?.trim() ? { altemitrix_id: opts.altemitrix_id.trim() } : {}),
     ...(opts?.city?.trim() ? { city: opts.city.trim() } : {}),
     page: pageNum,
   };
@@ -121,7 +117,7 @@ function TableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {["Name", "Gender", "Birth Date", "Position", "Status", "Legal Status"].map(
+            {["Name", "Gender", "Birth Date", "Position", "Status", "Employment Type"].map(
               (h) => (
                 <TableHead key={h}>{h}</TableHead>
               ),
@@ -142,12 +138,6 @@ function TableSkeleton() {
       </Table>
     </div>
   );
-}
-
-function legalStatusLabel(status: string) {
-  if (status === "w2") return "W-2";
-  if (status === "1099") return "1099";
-  return status;
 }
 
 function employeeStatusLabel(status: string) {
@@ -186,7 +176,6 @@ export default function EmployeesPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [rows, setRows] = useState<EmployeeRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMetadataLoading, setIsMetadataLoading] = useState(false);
   const [isStoreHydrated, setIsStoreHydrated] = useState(
     () => useSelectedStoreStore.persist.hasHydrated(),
   );
@@ -201,10 +190,11 @@ export default function EmployeesPage() {
 
   /* Filters */
   const [search, setSearch] = useState("");
-  const [legalStatus, setLegalStatus] = useState<LegalStatus | "all">("all");
+  const [employmentType, setEmploymentType] = useState<"W2" | "1099" | "all">("all");
   const [positionFilter, setPositionFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [paychecksId, setPaychecksId] = useState("");
+  const [altemitrixId, setAltemitrixId] = useState("");
   const [city, setCity] = useState("");
 
   const abortRef = useRef<AbortController | null>(null);
@@ -213,10 +203,11 @@ export default function EmployeesPage() {
   function getCurrentFilters() {
     return {
       search,
-      legal_status: legalStatus,
+      employement_type: employmentType,
       position_id: positionFilter,
       emp_status_id: statusFilter,
       paychecks_id: paychecksId,
+      altemitrix_id: altemitrixId,
       city,
       page: String(page),
     };
@@ -266,6 +257,9 @@ export default function EmployeesPage() {
         setPage(res.current_page ?? pageNum);
         setTotalItems(res.total ?? res.data.employees.length);
         setPageSize(res.per_page ?? Math.max(res.data.employees.length, 1));
+        const fk = res.data.filtersKeys;
+        if (fk?.position) setPositions(fk.position);
+        if (fk?.employeeStatus) setEmployeeStatuses(fk.employeeStatus);
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         setError(
@@ -289,7 +283,6 @@ export default function EmployeesPage() {
       setPositions([]);
       setError(null);
       setIsLoading(false);
-      setIsMetadataLoading(false);
       setResolvedStoreId(null);
       setTotalPages(1);
       setPage(1);
@@ -308,26 +301,7 @@ export default function EmployeesPage() {
 
     const bootstrapPage = async () => {
       setIsLoading(true);
-      setIsMetadataLoading(true);
       setError(null);
-
-      const metadataPromise = hiringService
-        .getCreateEmployeePage(storeId)
-        .then((data) => {
-          if (cancelled) return;
-          setEmployeeStatuses(data.employeeStatuses);
-          setPositions(data.positions);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setEmployeeStatuses([]);
-          setPositions([]);
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setIsMetadataLoading(false);
-          }
-        });
 
       try {
         const res = await employeeService.getEmployees(
@@ -343,6 +317,10 @@ export default function EmployeesPage() {
         setPage(res.current_page ?? pageNum);
         setTotalItems(res.total ?? res.data.employees.length);
         setPageSize(res.per_page ?? Math.max(res.data.employees.length, 1));
+
+        const fk = res.data.filtersKeys;
+        if (fk?.position) setPositions(fk.position);
+        if (fk?.employeeStatus) setEmployeeStatuses(fk.employeeStatus);
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         if (cancelled) return;
@@ -356,7 +334,6 @@ export default function EmployeesPage() {
           err instanceof Error ? err.message : "Failed to load employees.",
         );
       } finally {
-        await metadataPromise;
         if (!cancelled) {
           setIsLoading(false);
           setResolvedStoreId(storeId);
@@ -377,7 +354,7 @@ export default function EmployeesPage() {
   const isBootstrappingCurrentStore =
     hasStore && resolvedStoreId !== selectedStore?.storeId;
   const shouldShowSkeleton =
-    !isStoreHydrated || (hasStore && (isLoading || isMetadataLoading || isBootstrappingCurrentStore));
+    !isStoreHydrated || (hasStore && (isLoading || isBootstrappingCurrentStore));
   const isEmpty = hasStore && !shouldShowSkeleton && !error && rows.length === 0;
 
   function handleSearch(e: React.FormEvent) {
@@ -385,24 +362,22 @@ export default function EmployeesPage() {
     fetchData(getCurrentFilters());
   }
 
-  function handleLegalStatusChange(value: string) {
-    setLegalStatus(value as LegalStatus | "all");
-  }
-
   function handleClearFilters() {
     setSearch("");
-    setLegalStatus("all");
+    setEmploymentType("all");
     setPositionFilter("all");
     setStatusFilter("all");
     setPaychecksId("");
+    setAltemitrixId("");
     setCity("");
     setPage(1);
     fetchData({
       search: "",
-      legal_status: "all",
+      employement_type: "all",
       position_id: "all",
       emp_status_id: "all",
       paychecks_id: "",
+      altemitrix_id: "",
       city: "",
       page: "1",
     });
@@ -410,10 +385,11 @@ export default function EmployeesPage() {
 
   const isFiltered =
     search !== "" ||
-    legalStatus !== "all" ||
+    employmentType !== "all" ||
     positionFilter !== "all" ||
     statusFilter !== "all" ||
     paychecksId !== "" ||
+    altemitrixId !== "" ||
     city !== "";
 
   async function handleDelete() {
@@ -540,8 +516,8 @@ export default function EmployeesPage() {
         onSubmit={handleSearch}
         className="rounded-lg border bg-card/40 p-4"
       >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="relative min-w-0 xl:col-span-1">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 items-end">
+          <div className="relative min-w-0">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               className="ps-9"
@@ -556,15 +532,15 @@ export default function EmployeesPage() {
             onChange={(e) => setCity(e.target.value)}
           />
           <Input
-            type="number"
-            min={1}
             placeholder="Paycheck ID"
             value={paychecksId}
             onChange={(e) => setPaychecksId(e.target.value)}
           />
-        </div>
-
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.85fr)_auto_auto] xl:items-center">
+          <Input
+            placeholder="Altemitrix ID"
+            value={altemitrixId}
+            onChange={(e) => setAltemitrixId(e.target.value)}
+          />
           <Select value={positionFilter} onValueChange={setPositionFilter}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Position" />
@@ -591,17 +567,17 @@ export default function EmployeesPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={legalStatus} onValueChange={handleLegalStatusChange}>
+          <Select value={employmentType} onValueChange={(v) => setEmploymentType(v as "W2" | "1099" | "all")}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Legal status" />
+              <SelectValue placeholder="Employment type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="w2">W-2</SelectItem>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="W2">W2</SelectItem>
               <SelectItem value="1099">1099</SelectItem>
             </SelectContent>
           </Select>
-          <Button type="submit" variant="secondary" size="sm" className="xl:justify-self-end">
+          <Button type="submit" variant="secondary" size="sm">
             Search
           </Button>
           {isFiltered && (
@@ -609,7 +585,6 @@ export default function EmployeesPage() {
               type="button"
               variant="ghost"
               size="sm"
-              className="xl:justify-self-start"
               onClick={handleClearFilters}
             >
               <X className="me-1 h-4 w-4" />
@@ -667,7 +642,7 @@ export default function EmployeesPage() {
                   <TableHead className="hidden md:table-cell">Birth Date</TableHead>
                   <TableHead className="hidden sm:table-cell">Position</TableHead>
                   <TableHead className="hidden md:table-cell">Status</TableHead>
-                  <TableHead>Legal Status</TableHead>
+                  <TableHead>Emp. Type</TableHead>
                   <TableHead className="w-12">
                     <span className="sr-only">Actions</span>
                   </TableHead>
@@ -681,10 +656,6 @@ export default function EmployeesPage() {
                         .filter(Boolean)
                         .join(" ")
                     : `Employee #${emp.id}`;
-
-                  const primaryPaycheck =
-                    emp.employee_paychecks_info.find((p) => p.is_primary) ??
-                    emp.employee_paychecks_info[0];
 
                   return (
                     <TableRow
@@ -716,9 +687,9 @@ export default function EmployeesPage() {
                         {getStatusName(emp.emp_status_id, employeeStatuses)}
                       </TableCell>
                       <TableCell>
-                        {primaryPaycheck?.legal_status ? (
+                        {emp.employement_type ? (
                           <Badge variant="secondary" className="text-xs">
-                            {legalStatusLabel(primaryPaycheck.legal_status)}
+                            {emp.employement_type}
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>

@@ -12,11 +12,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText, Image as ImageIcon, Clock } from "lucide-react";
+import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText, Image as ImageIcon, Clock, IdCard, Award } from "lucide-react";
 import { employeeService } from "@/lib/api/services/employee.service";
+import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { EmployeeRecord } from "@/types/employee.types";
-import type { EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
+import type { EmployeeStatusRecord, MaritalStatusRecord, PositionRecord } from "@/types/hiring.types";
 
 interface EmployeeDetailsSheetProps {
   employeeId: number | null;
@@ -63,12 +64,6 @@ function toPrimaryBadge(value: unknown) {
   return normalized ? "Primary" : "Secondary";
 }
 
-function legalStatusLabel(status?: string | null) {
-  if (!status) return "-";
-  if (status.toLowerCase() === "w2") return "W-2";
-  return status;
-}
-
 function isImageFilePath(path?: string | null) {
   if (!path) return false;
   const cleanPath = path.split("?")[0].toLowerCase();
@@ -98,6 +93,7 @@ export function EmployeeDetailsSheet({
 }: EmployeeDetailsSheetProps) {
   const { selectedStore } = useSelectedStoreStore();
   const [data, setData] = useState<EmployeeRecord | null>(null);
+  const [maritalStatuses, setMaritalStatuses] = useState<MaritalStatusRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const resolvedEmployeeId = employeeId;
@@ -115,10 +111,18 @@ export function EmployeeDetailsSheet({
     setError(null);
     setData(null);
 
-    employeeService
-      .getEmployeeDetails(selectedStore.storeId, resolvedEmployeeId)
-      .then((res) => {
-        if (!cancelled) setData(res.data);
+    Promise.all([
+      employeeService.getEmployeeDetails(selectedStore.storeId, resolvedEmployeeId),
+      maritalStatuses.length === 0
+        ? hiringService.getCreateEmployeePage(selectedStore.storeId)
+        : Promise.resolve(null),
+    ])
+      .then(([empRes, pageRes]) => {
+        if (cancelled) return;
+        setData(empRes.data);
+        if (pageRes?.employeeMaritalStatuses) {
+          setMaritalStatuses(pageRes.employeeMaritalStatuses);
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -175,6 +179,17 @@ export function EmployeeDetailsSheet({
                 <DetailRow label="SSN" value={data.SSN_number ?? "-"} />
                 <DetailRow label="Position" value={positionName} />
                 <DetailRow label="Status" value={statusName} />
+                <DetailRow label="Employment Type" value={data.employement_type ?? "-"} />
+                <DetailRow label="T-Shirt Size" value={data.T_shirt_size ?? "-"} />
+                {data.marital_status_id != null && (
+                  <DetailRow
+                    label="Marital Status"
+                    value={
+                      maritalStatuses.find((ms) => ms.id === data.marital_status_id)
+                        ?.marital_status_name ?? `Status #${data.marital_status_id}`
+                    }
+                  />
+                )}
               </div>
             </section>
 
@@ -268,40 +283,37 @@ export function EmployeeDetailsSheet({
 
             <section className="space-y-3">
               <SectionTitle icon={Wallet} label="Compensation" />
-              <div className="grid grid-cols-2 gap-3">
-                <DetailRow
-                  label="Legal Status"
-                  value={legalStatusLabel(data.employee_paychecks_info[0]?.legal_status)}
-                />
-                <DetailRow
-                  label="Paychecks ID"
-                  value={data.employee_paychecks_info[0]?.paychecks_id ?? "-"}
-                />
-                <DetailRow
-                  label="Account Type"
-                  value={(data.employee_payment_info as { account_type?: string } | null)?.account_type ?? "-"}
-                />
-                <DetailRow
-                  label="Account Number"
-                  value={String((data.employee_payment_info as { account_number?: unknown } | null)?.account_number ?? "-")}
-                />
-                <DetailRow
-                  label="Routing Number"
-                  value={String((data.employee_payment_info as { routing_number?: unknown } | null)?.routing_number ?? "-")}
-                />
-                <DetailRow
-                  label="Salary Date"
-                  value={(data.employee_salary_info as { salary_date?: string } | null)?.salary_date ?? "-"}
-                />
-                <DetailRow
-                  label="Base Pay"
-                  value={String((data.employee_salary_info as { base_pay?: unknown } | null)?.base_pay ?? "-")}
-                />
-                <DetailRow
-                  label="Performance Pay"
-                  value={String((data.employee_salary_info as { performance_pay?: unknown } | null)?.performance_pay ?? "-")}
-                />
-              </div>
+              {data.employee_payment_info.length === 0 && data.employee_salary_info.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No compensation info.</p>
+              ) : (
+                <div className="space-y-3">
+                  {data.employee_payment_info.map((payment, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-muted-foreground">Bank Account</span>
+                        <Badge variant="outline" className="text-xs">
+                          {toPrimaryBadge((payment as { is_primary?: unknown }).is_primary)}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <DetailRow label="Account Type" value={payment.account_type ?? "-"} />
+                        <DetailRow label="Account Number" value={String(payment.account_number ?? "-")} />
+                        <DetailRow label="Routing Number" value={String(payment.routing_number ?? "-")} />
+                      </div>
+                    </div>
+                  ))}
+                  {data.employee_salary_info.map((salary, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 space-y-2">
+                      <span className="text-xs font-medium text-muted-foreground">Salary</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <DetailRow label="Salary Date" value={salary.salary_date ?? "-"} />
+                        <DetailRow label="Base Pay" value={String(salary.base_pay ?? "-")} />
+                        <DetailRow label="Performance Pay" value={String(salary.performance_pay ?? "-")} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             <Separator />
@@ -393,6 +405,46 @@ export function EmployeeDetailsSheet({
                   {data.employee_notes.map((n, idx) => (
                     <div key={idx} className="rounded-lg border p-3 text-sm">
                       {(n as { notes?: string }).notes ?? "-"}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <SectionTitle icon={IdCard} label={`Employee IDs (${data.employee_ids?.length ?? 0})`} />
+              {!data.employee_ids?.length ? (
+                <p className="text-xs text-muted-foreground">No employee IDs.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.employee_ids.map((eid, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm">{eid.employee_id_type?.type_name ?? `Type #${eid.employee_id_type_id}`}</p>
+                        <p className="text-xs text-muted-foreground">{String(eid.id_number)}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {toPrimaryBadge(eid.is_primary)}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <SectionTitle icon={Award} label={`Certifications (${data.created_certifications_info?.length ?? 0})`} />
+              {!data.created_certifications_info?.length ? (
+                <p className="text-xs text-muted-foreground">No certifications.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.created_certifications_info.map((cert, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 text-sm">
+                      {cert.certification_name}
                     </div>
                   ))}
                 </div>

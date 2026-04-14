@@ -56,13 +56,15 @@ import type {
   DayOfWeek,
   ContactType,
   AccountType,
-  LegalStatus,
+  EmploymentType,
+  TShirtSize,
   EmployeeAddress,
   EmployeeAvailability,
+  EmployeeCertification,
   EmployeeContact,
   EmployeeFile,
+  EmployeeIdInfo,
   EmployeeNote,
-  EmployeePaycheckInfo,
   EmployeePaymentInfo,
   EmployeeSalaryInfo,
   EmployeeStatusHistory,
@@ -72,6 +74,8 @@ import type {
   EmployeeStatusRecord,
   PositionRecord,
   EmployeeFileTypeRecord,
+  MaritalStatusRecord,
+  EmployeeIdTypeRecord,
 } from "@/types/hiring.types";
 
 interface CreateEmployeeDialogProps {
@@ -110,12 +114,6 @@ const emptyFile = (): EmployeeFile => ({
 
 const emptyNote = (): EmployeeNote => ({ notes: "" });
 
-const emptyPaycheck = (): EmployeePaycheckInfo => ({
-  is_primary: false,
-  legal_status: "w2",
-  paychecks_id: 0,
-});
-
 const emptyPayment = (): EmployeePaymentInfo => ({
   account_number: "",
   account_type: "checking",
@@ -135,15 +133,27 @@ const emptyStatusHistory = (): EmployeeStatusHistory => ({
   status_type_id: 0,
 });
 
+const emptyCertification = (): EmployeeCertification => ({
+  certification_name: "",
+});
+
+const emptyIdInfo = (): EmployeeIdInfo => ({
+  employee_id_type_id: 0,
+  id_number: "",
+  is_primary: false,
+});
+
 const ALL_DAYS: DayOfWeek[] = [
+  "sunday",
   "monday",
   "tuesday",
   "wednesday",
   "thursday",
   "friday",
   "saturday",
-  "sunday",
 ];
+
+const T_SHIRT_SIZES: TShirtSize[] = ["XS", "S", "M", "L", "XL", "XXL"];
 
 function formatFileTypeLabel(fileType: string) {
   return fileType
@@ -192,7 +202,7 @@ export function CreateEmployeeDialog({
 }: CreateEmployeeDialogProps) {
   const { selectedStore } = useSelectedStoreStore();
 
-  /* ── Required fields ── */
+  /* â”€â”€ Required fields â”€â”€ */
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -201,35 +211,41 @@ export function CreateEmployeeDialog({
   const [ssnNumber, setSsnNumber] = useState("");
   const [empStatusId, setEmpStatusId] = useState<number>(0);
   const [positionId, setPositionId] = useState<number>(0);
+  const [employmentType, setEmploymentType] = useState<EmploymentType | "">("");
+  const [maritalStatusId, setMaritalStatusId] = useState<number>(0);
+  const [tShirtSize, setTShirtSize] = useState<TShirtSize | "">("");
 
-  /* ── Optional arrays ── */
+  /* â”€â”€ Optional arrays â”€â”€ */
   const [addresses, setAddresses] = useState<EmployeeAddress[]>([]);
   const [availability, setAvailability] = useState<EmployeeAvailability[]>([]);
+  const [certificationsInfo, setCertificationsInfo] = useState<EmployeeCertification[]>([]);
   const [contacts, setContacts] = useState<EmployeeContact[]>([]);
   const [files, setFiles] = useState<EmployeeFile[]>([]);
+  const [idsInfo, setIdsInfo] = useState<EmployeeIdInfo[]>([]);
   const [notes, setNotes] = useState<EmployeeNote[]>([]);
-  const [paychecksInfo, setPaychecksInfo] = useState<EmployeePaycheckInfo[]>([]);
   const [paymentInfo, setPaymentInfo] = useState<EmployeePaymentInfo[]>([]);
   const [salaryInfo, setSalaryInfo] = useState<EmployeeSalaryInfo[]>([]);
   const [statusHistory, setStatusHistory] = useState<EmployeeStatusHistory[]>([]);
 
-  /* ── UI state ── */
+  /* â”€â”€ UI state â”€â”€ */
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirmExit, setShowConfirmExit] = useState(false);
   const [activeTab, setActiveTab] = useState("personal");
 
-  /* ── Shifts from API ── */
+  /* â”€â”€ Metadata from API â”€â”€ */
   const [shifts, setShifts] = useState<ShiftRecord[]>([]);
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
   const [positions, setPositions] = useState<PositionRecord[]>([]);
   const [employeeFileTypes, setEmployeeFileTypes] = useState<EmployeeFileTypeRecord[]>([]);
-  const [isLoadingShifts, setIsLoadingShifts] = useState(false);
+  const [maritalStatuses, setMaritalStatuses] = useState<MaritalStatusRecord[]>([]);
+  const [employeeIdTypes, setEmployeeIdTypes] = useState<EmployeeIdTypeRecord[]>([]);
+  const [isLoadingMeta, setIsLoadingMeta] = useState(false);
 
   useEffect(() => {
     if (!open || !selectedStore?.storeId) return;
     let cancelled = false;
-    setIsLoadingShifts(true);
+    setIsLoadingMeta(true);
     hiringService
       .getCreateEmployeePage(selectedStore.storeId)
       .then((data) => {
@@ -238,18 +254,20 @@ export function CreateEmployeeDialog({
           setEmployeeStatuses(data.employeeStatuses);
           setPositions(data.positions);
           setEmployeeFileTypes(data.employeeFileTypes);
+          setMaritalStatuses(data.employeeMaritalStatuses);
+          setEmployeeIdTypes(data.employeeIdTypes);
         }
       })
       .catch(() => {})
       .finally(() => {
-        if (!cancelled) setIsLoadingShifts(false);
+        if (!cancelled) setIsLoadingMeta(false);
       });
     return () => {
       cancelled = true;
     };
   }, [open, selectedStore?.storeId]);
 
-  /* ── Dirty check ── */
+  /* â”€â”€ Dirty check â”€â”€ */
   const isDirty =
     firstName !== "" ||
     lastName !== "" ||
@@ -259,12 +277,16 @@ export function CreateEmployeeDialog({
     ssnNumber !== "" ||
     empStatusId !== 0 ||
     positionId !== 0 ||
+    employmentType !== "" ||
+    maritalStatusId !== 0 ||
+    tShirtSize !== "" ||
     addresses.length > 0 ||
     availability.length > 0 ||
+    certificationsInfo.length > 0 ||
     contacts.length > 0 ||
     files.length > 0 ||
+    idsInfo.length > 0 ||
     notes.length > 0 ||
-    paychecksInfo.length > 0 ||
     paymentInfo.length > 0 ||
     salaryInfo.length > 0 ||
     statusHistory.length > 0;
@@ -278,12 +300,16 @@ export function CreateEmployeeDialog({
     setSsnNumber("");
     setEmpStatusId(0);
     setPositionId(0);
+    setEmploymentType("");
+    setMaritalStatusId(0);
+    setTShirtSize("");
     setAddresses([]);
     setAvailability([]);
+    setCertificationsInfo([]);
     setContacts([]);
     setFiles([]);
+    setIdsInfo([]);
     setNotes([]);
-    setPaychecksInfo([]);
     setPaymentInfo([]);
     setSalaryInfo([]);
     setStatusHistory([]);
@@ -306,17 +332,17 @@ export function CreateEmployeeDialog({
     onOpenChange(false);
   }
 
-  /* ── Validation ── */
+  /* â”€â”€ Validation â”€â”€ */
   const isFormValid =
     firstName.trim() !== "" &&
     lastName.trim() !== "" &&
-    birthDate.trim() !== "" &&
-    gender !== "" &&
-    ssnNumber.trim() !== "" &&
+    ssnNumber.trim().length === 9 &&
     empStatusId > 0 &&
-    positionId > 0;
+    positionId > 0 &&
+    employmentType !== "" &&
+    maritalStatusId > 0;
 
-  /* ── Submit ── */
+  /* â”€â”€ Submit â”€â”€ */
   async function handleSubmit() {
     if (!isFormValid) return;
     if (!selectedStore?.storeId) {
@@ -332,17 +358,25 @@ export function CreateEmployeeDialog({
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         ...(middleName.trim() ? { middle_name: middleName.trim() } : {}),
-        birth_date: birthDate,
-        gender: gender as Gender,
+        ...(birthDate ? { birth_date: birthDate } : { birth_date: "" }),
+        gender: (gender as Gender) || "other",
         ssn_number: ssnNumber.trim(),
         emp_status_id: empStatusId,
         position_id: positionId,
+        employement_type: employmentType as EmploymentType,
+        marital_status_id: maritalStatusId,
+        ...(tShirtSize ? { T_shirt_size: tShirtSize as TShirtSize } : {}),
         ...(addresses.length > 0 ? { addresses } : {}),
         ...(availability.length > 0 ? { availability } : {}),
+        ...(certificationsInfo.length > 0
+          ? { certifications_info: certificationsInfo.filter((c) => c.certification_name.trim()) }
+          : {}),
         ...(contacts.length > 0 ? { contacts } : {}),
         ...(files.length > 0 ? { files } : {}),
+        ...(idsInfo.length > 0
+          ? { ids_info: idsInfo.filter((id) => id.employee_id_type_id > 0 && id.id_number.trim()) }
+          : {}),
         ...(notes.length > 0 ? { notes } : {}),
-        ...(paychecksInfo.length > 0 ? { paychecks_info: paychecksInfo } : {}),
         ...(paymentInfo.length > 0 ? { payment_info: paymentInfo } : {}),
         ...(salaryInfo.length > 0 ? { salary_info: salaryInfo } : {}),
         ...(statusHistory.length > 0 ? { status_history: statusHistory } : {}),
@@ -362,7 +396,7 @@ export function CreateEmployeeDialog({
     }
   }
 
-  /* ── Generic array helpers ── */
+  /* â”€â”€ Generic array helpers â”€â”€ */
   function addItem<T>(setter: React.Dispatch<React.SetStateAction<T[]>>, factory: () => T) {
     setter((prev) => [...prev, factory()]);
   }
@@ -382,7 +416,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* helper to render an "Add" button */
   function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     return (
       <Button type="button" variant="outline" size="sm" onClick={onClick}>
@@ -392,7 +425,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* helper to render a "Remove" button */
   function RemoveButton({ onClick }: { onClick: () => void }) {
     return (
       <Button
@@ -408,7 +440,6 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* helper to render a section divider with label */
   function SectionDivider({ label }: { label: string }) {
     return (
       <div className="flex items-center gap-3">
@@ -429,6 +460,7 @@ export function CreateEmployeeDialog({
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Name */}
           <div className="space-y-1.5">
             <Label>
               First Name <span className="text-destructive">*</span>
@@ -436,6 +468,7 @@ export function CreateEmployeeDialog({
             <Input
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
+              maxLength={30}
               placeholder="First name"
             />
           </div>
@@ -444,6 +477,7 @@ export function CreateEmployeeDialog({
             <Input
               value={middleName}
               onChange={(e) => setMiddleName(e.target.value)}
+              maxLength={30}
               placeholder="Middle name"
             />
           </div>
@@ -454,24 +488,40 @@ export function CreateEmployeeDialog({
             <Input
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
+              maxLength={30}
               placeholder="Last name"
             />
           </div>
+
+          {/* SSN */}
           <div className="space-y-1.5">
             <Label>
-              Birth Date <span className="text-destructive">*</span>
+              SSN Number <span className="text-destructive">*</span>
             </Label>
+            <Input
+              value={ssnNumber}
+              onChange={(e) => setSsnNumber(e.target.value.replace(/\D/g, "").slice(0, 9))}
+              placeholder="9-digit SSN"
+              maxLength={9}
+            />
+            {ssnNumber.length > 0 && ssnNumber.length < 9 && (
+              <p className="text-xs text-destructive">{9 - ssnNumber.length} more digits required</p>
+            )}
+          </div>
+
+          {/* Birth Date */}
+          <div className="space-y-1.5">
+            <Label>Birth Date</Label>
             <Input
               type="date"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
-              className="max-w-xs"
             />
           </div>
+
+          {/* Gender */}
           <div className="space-y-1.5">
-            <Label>
-              Gender <span className="text-destructive">*</span>
-            </Label>
+            <Label>Gender</Label>
             <Select
               value={gender}
               onValueChange={(v) => setGender(v as Gender)}
@@ -486,16 +536,8 @@ export function CreateEmployeeDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1.5">
-            <Label>
-              SSN Number <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={ssnNumber}
-              onChange={(e) => setSsnNumber(e.target.value)}
-              placeholder="SSN"
-            />
-          </div>
+
+          {/* Employee Status */}
           <div className="space-y-1.5">
             <Label>
               Employee Status <span className="text-destructive">*</span>
@@ -503,19 +545,22 @@ export function CreateEmployeeDialog({
             <Select
               value={empStatusId ? String(empStatusId) : ""}
               onValueChange={(v) => setEmpStatusId(parseInt(v, 10))}
+              disabled={isLoadingMeta}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select employee status" />
+                <SelectValue placeholder={isLoadingMeta ? "Loadingâ€¦" : "Select status"} />
               </SelectTrigger>
               <SelectContent>
-                {employeeStatuses.map((status) => (
-                  <SelectItem key={status.id} value={String(status.id)}>
-                    {status.emp_status}
+                {employeeStatuses.map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.emp_status.charAt(0).toUpperCase() + s.emp_status.slice(1)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Position */}
           <div className="space-y-1.5">
             <Label>
               Position <span className="text-destructive">*</span>
@@ -523,14 +568,77 @@ export function CreateEmployeeDialog({
             <Select
               value={positionId ? String(positionId) : ""}
               onValueChange={(v) => setPositionId(parseInt(v, 10))}
+              disabled={isLoadingMeta}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select position" />
+                <SelectValue placeholder={isLoadingMeta ? "Loadingâ€¦" : "Select position"} />
               </SelectTrigger>
               <SelectContent>
-                {positions.map((position) => (
-                  <SelectItem key={position.id} value={String(position.id)}>
-                    {position.position_name}
+                {positions.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.position_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Employment Type */}
+          <div className="space-y-1.5">
+            <Label>
+              Employment Type <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              value={employmentType}
+              onValueChange={(v) => setEmploymentType(v as EmploymentType)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="W2">W-2</SelectItem>
+                <SelectItem value="1099">1099</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Marital Status */}
+          <div className="space-y-1.5">
+            <Label>
+              Marital Status <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              value={maritalStatusId ? String(maritalStatusId) : ""}
+              onValueChange={(v) => setMaritalStatusId(parseInt(v, 10))}
+              disabled={isLoadingMeta}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={isLoadingMeta ? "Loadingâ€¦" : "Select marital status"} />
+              </SelectTrigger>
+              <SelectContent>
+                {maritalStatuses.map((ms) => (
+                  <SelectItem key={ms.id} value={String(ms.id)}>
+                    {ms.marital_status_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* T-Shirt Size */}
+          <div className="space-y-1.5">
+            <Label>T-Shirt Size</Label>
+            <Select
+              value={tShirtSize}
+              onValueChange={(v) => setTShirtSize(v as TShirtSize)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select size" />
+              </SelectTrigger>
+              <SelectContent>
+                {T_SHIRT_SIZES.map((size) => (
+                  <SelectItem key={size} value={size}>
+                    {size}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -546,9 +654,7 @@ export function CreateEmployeeDialog({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Add email or phone contacts.
-          </p>
+          <p className="text-sm text-muted-foreground">Add email or phone contacts.</p>
           <AddButton label="Add Contact" onClick={() => addItem(setContacts, emptyContact)} />
         </div>
         {contacts.length === 0 && (
@@ -562,7 +668,7 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label>Type</Label>
+                <Label>Type <span className="text-destructive">*</span></Label>
                 <Select
                   value={c.contact_type ?? "phone"}
                   onValueChange={(v) =>
@@ -579,7 +685,7 @@ export function CreateEmployeeDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Value</Label>
+                <Label>Value <span className="text-destructive">*</span></Label>
                 <Input
                   value={c.contact_value ?? ""}
                   onChange={(e) =>
@@ -591,9 +697,7 @@ export function CreateEmployeeDialog({
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={c.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setContacts, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setContacts, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -623,12 +727,11 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Address Line 1</Label>
+                <Label>Address Line 1 <span className="text-destructive">*</span></Label>
                 <Input
                   value={a.address_line_1 ?? ""}
-                  onChange={(e) =>
-                    updateItem(setAddresses, idx, "address_line_1", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setAddresses, idx, "address_line_1", e.target.value)}
+                  maxLength={255}
                   placeholder="123 Main St"
                 />
               </div>
@@ -639,30 +742,34 @@ export function CreateEmployeeDialog({
                   onChange={(e) =>
                     updateItem(setAddresses, idx, "address_line_2", e.target.value || null)
                   }
+                  maxLength={255}
                   placeholder="Apt, suite, unit, etc."
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>City</Label>
+                <Label>City <span className="text-destructive">*</span></Label>
                 <Input
                   value={a.city ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "city", e.target.value)}
+                  maxLength={100}
                   placeholder="City"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>State</Label>
+                <Label>State <span className="text-destructive">*</span></Label>
                 <Input
                   value={a.state ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "state", e.target.value)}
+                  maxLength={100}
                   placeholder="State"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Country</Label>
+                <Label>Country <span className="text-destructive">*</span></Label>
                 <Input
                   value={a.country ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "country", e.target.value)}
+                  maxLength={100}
                   placeholder="Country"
                 />
               </div>
@@ -673,15 +780,14 @@ export function CreateEmployeeDialog({
                   onChange={(e) =>
                     updateItem(setAddresses, idx, "zip_code", e.target.value || null)
                   }
+                  maxLength={20}
                   placeholder="12345"
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={a.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setAddresses, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setAddresses, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -697,18 +803,14 @@ export function CreateEmployeeDialog({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Shifts and day availability.
-          </p>
+          <p className="text-sm text-muted-foreground">Shifts and day availability.</p>
           <AddButton
             label="Add Availability"
             onClick={() => addItem(setAvailability, emptyAvailability)}
           />
         </div>
         {availability.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">
-            No availability added.
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-6">No availability added.</p>
         )}
         {availability.map((av, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
@@ -717,18 +819,16 @@ export function CreateEmployeeDialog({
               <RemoveButton onClick={() => removeItem(setAvailability, idx)} />
             </div>
             <div className="space-y-2">
-              <Label>Shift</Label>
+              <Label>Shift <span className="text-destructive">*</span></Label>
               <Select
                 value={av.shift_id && av.shift_id > 0 ? av.shift_id.toString() : ""}
                 onValueChange={(v) =>
                   updateItem(setAvailability, idx, "shift_id", parseInt(v, 10))
                 }
-                disabled={isLoadingShifts}
+                disabled={isLoadingMeta}
               >
                 <SelectTrigger>
-                  <SelectValue
-                    placeholder={isLoadingShifts ? "Loading shifts…" : "Select a shift"}
-                  />
+                  <SelectValue placeholder={isLoadingMeta ? "Loading shiftsâ€¦" : "Select a shift"} />
                 </SelectTrigger>
                 <SelectContent>
                   {shifts.map((s) => (
@@ -740,7 +840,7 @@ export function CreateEmployeeDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Days</Label>
+              <Label>Days <span className="text-destructive">*</span></Label>
               <div className="flex flex-wrap gap-1.5">
                 {ALL_DAYS.map((day) => {
                   const selected = av.days?.includes(day) ?? false;
@@ -801,27 +901,29 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Account Number</Label>
+                <Label>Account Number <span className="text-destructive">*</span></Label>
                 <Input
                   value={p.account_number ?? ""}
                   onChange={(e) =>
                     updateItem(setPaymentInfo, idx, "account_number", e.target.value)
                   }
+                  maxLength={50}
                   placeholder="Account number"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Routing Number</Label>
+                <Label>Routing Number <span className="text-destructive">*</span></Label>
                 <Input
                   value={p.routing_number ?? ""}
                   onChange={(e) =>
                     updateItem(setPaymentInfo, idx, "routing_number", e.target.value)
                   }
+                  maxLength={50}
                   placeholder="Routing number"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Account Type</Label>
+                <Label>Account Type <span className="text-destructive">*</span></Label>
                 <Select
                   value={p.account_type ?? "checking"}
                   onValueChange={(v) =>
@@ -833,16 +935,14 @@ export function CreateEmployeeDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="checking">Checking</SelectItem>
-                    <SelectItem value="savings">Savings</SelectItem>
+                    <SelectItem value="saving">Saving</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
                   checked={p.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setPaymentInfo, idx, "is_primary", !!v)
-                  }
+                  onCheckedChange={(v) => updateItem(setPaymentInfo, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -907,9 +1007,7 @@ export function CreateEmployeeDialog({
                 <Input
                   type="date"
                   value={s.salary_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setSalaryInfo, idx, "salary_date", e.target.value)
-                  }
+                  onChange={(e) => updateItem(setSalaryInfo, idx, "salary_date", e.target.value)}
                 />
               </div>
             </div>
@@ -919,64 +1017,60 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 7) Paychecks */
-  function renderPaychecksTab() {
+  /* 7) Employee IDs */
+  function renderIdsTab() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Paycheck configuration.</p>
-          <AddButton label="Add Paycheck" onClick={() => addItem(setPaychecksInfo, emptyPaycheck)} />
+          <p className="text-sm text-muted-foreground">
+            Employee ID references (e.g., Paychecks ID, Altemitrix ID).
+          </p>
+          <AddButton label="Add ID" onClick={() => addItem(setIdsInfo, emptyIdInfo)} />
         </div>
-        {paychecksInfo.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No paycheck info added.</p>
+        {idsInfo.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-6">No IDs added.</p>
         )}
-        {paychecksInfo.map((pc, idx) => (
+        {idsInfo.map((id, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <Badge variant="secondary">Paycheck {idx + 1}</Badge>
-              <RemoveButton onClick={() => removeItem(setPaychecksInfo, idx)} />
+              <Badge variant="secondary">ID {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setIdsInfo, idx)} />
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label>Paychecks ID</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={pc.paychecks_id || ""}
-                  onChange={(e) =>
-                    updateItem(
-                      setPaychecksInfo,
-                      idx,
-                      "paychecks_id",
-                      parseInt(e.target.value) || 0,
-                    )
-                  }
-                  placeholder="e.g. 1"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Legal Status</Label>
+                <Label>ID Type <span className="text-destructive">*</span></Label>
                 <Select
-                  value={pc.legal_status ?? "w2"}
+                  value={id.employee_id_type_id > 0 ? String(id.employee_id_type_id) : ""}
                   onValueChange={(v) =>
-                    updateItem(setPaychecksInfo, idx, "legal_status", v as LegalStatus)
+                    updateItem(setIdsInfo, idx, "employee_id_type_id", parseInt(v, 10))
                   }
+                  disabled={isLoadingMeta}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={isLoadingMeta ? "Loadingâ€¦" : "Select ID type"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="w2">W-2</SelectItem>
-                    <SelectItem value="1099">1099</SelectItem>
+                    {employeeIdTypes.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.type_name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label>ID Number <span className="text-destructive">*</span></Label>
+                <Input
+                  value={id.id_number}
+                  onChange={(e) => updateItem(setIdsInfo, idx, "id_number", e.target.value)}
+                  maxLength={255}
+                  placeholder="e.g. 123456"
+                />
+              </div>
               <div className="flex items-end gap-2 pb-0.5">
                 <Checkbox
-                  checked={pc.is_primary ?? false}
-                  onCheckedChange={(v) =>
-                    updateItem(setPaychecksInfo, idx, "is_primary", !!v)
-                  }
+                  checked={id.is_primary ?? false}
+                  onCheckedChange={(v) => updateItem(setIdsInfo, idx, "is_primary", !!v)}
                 />
                 <Label className="text-sm">Primary</Label>
               </div>
@@ -987,7 +1081,7 @@ export function CreateEmployeeDialog({
     );
   }
 
-  /* 8) Notes & Status History */
+  /* 8) Notes, Files, Status History & Certifications */
   function renderNotesTab() {
     return (
       <div className="space-y-6">
@@ -1021,9 +1115,6 @@ export function CreateEmployeeDialog({
                       }}
                     />
                   </div>
-                  {typeof f.file === "string" && f.file && (
-                    <p className="text-xs text-muted-foreground">Existing file attached</p>
-                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>File Type <span className="text-destructive">*</span></Label>
@@ -1035,9 +1126,9 @@ export function CreateEmployeeDialog({
                       <SelectValue placeholder="Select file type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {employeeFileTypes.map((fileType) => (
-                        <SelectItem key={fileType.id} value={String(fileType.id)}>
-                          {formatFileTypeLabel(fileType.file_type)}
+                      {employeeFileTypes.map((ft) => (
+                        <SelectItem key={ft.id} value={String(ft.id)}>
+                          {formatFileTypeLabel(ft.file_type)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1051,6 +1142,39 @@ export function CreateEmployeeDialog({
                     placeholder="Optional notes"
                   />
                 </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Certifications */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold">Certifications</p>
+            <AddButton
+              label="Add Certification"
+              onClick={() => addItem(setCertificationsInfo, emptyCertification)}
+            />
+          </div>
+          {certificationsInfo.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">No certifications added.</p>
+          )}
+          {certificationsInfo.map((cert, idx) => (
+            <div key={idx} className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary">Certification {idx + 1}</Badge>
+                <RemoveButton onClick={() => removeItem(setCertificationsInfo, idx)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Certification Name <span className="text-destructive">*</span></Label>
+                <Input
+                  value={cert.certification_name}
+                  onChange={(e) =>
+                    updateItem(setCertificationsInfo, idx, "certification_name", e.target.value)
+                  }
+                  maxLength={255}
+                  placeholder="e.g. Food Handler Certificate"
+                />
               </div>
             </div>
           ))}
@@ -1074,7 +1198,7 @@ export function CreateEmployeeDialog({
               <Textarea
                 value={n.notes ?? ""}
                 onChange={(e) => updateItem(setNotes, idx, "notes", e.target.value)}
-                placeholder="Write a note…"
+                placeholder="Write a note..."
                 rows={3}
               />
             </div>
@@ -1091,9 +1215,7 @@ export function CreateEmployeeDialog({
             />
           </div>
           {statusHistory.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No status history added.
-            </p>
+            <p className="text-sm text-muted-foreground text-center py-4">No status history added.</p>
           )}
           {statusHistory.map((sh, idx) => (
             <div key={idx} className="rounded-lg border p-4 space-y-3">
@@ -1107,21 +1229,17 @@ export function CreateEmployeeDialog({
                   <Select
                     value={sh.status_type_id && sh.status_type_id > 0 ? String(sh.status_type_id) : ""}
                     onValueChange={(v) =>
-                      updateItem(
-                        setStatusHistory,
-                        idx,
-                        "status_type_id",
-                        parseInt(v) || 0,
-                      )
+                      updateItem(setStatusHistory, idx, "status_type_id", parseInt(v) || 0)
                     }
+                    disabled={isLoadingMeta}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select status type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {employeeStatuses.map((status) => (
-                        <SelectItem key={status.id} value={String(status.id)}>
-                          {status.emp_status}
+                      {employeeStatuses.map((s) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.emp_status.charAt(0).toUpperCase() + s.emp_status.slice(1)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1141,9 +1259,7 @@ export function CreateEmployeeDialog({
                   <Label>Notes</Label>
                   <Textarea
                     value={sh.notes ?? ""}
-                    onChange={(e) =>
-                      updateItem(setStatusHistory, idx, "notes", e.target.value)
-                    }
+                    onChange={(e) => updateItem(setStatusHistory, idx, "notes", e.target.value)}
                     placeholder="Optional notes"
                     rows={2}
                   />
@@ -1191,13 +1307,13 @@ export function CreateEmployeeDialog({
               <TabsTrigger className="text-xs" value="personal">Personal Info</TabsTrigger>
               <TabsTrigger className="text-xs" value="availability">Availability</TabsTrigger>
               <TabsTrigger className="text-xs" value="compensation">Compensation</TabsTrigger>
-              <TabsTrigger className="text-xs" value="notes">Notes &amp; Status</TabsTrigger>
+              <TabsTrigger className="text-xs" value="notes">Notes &amp; Files</TabsTrigger>
             </TabsList>
 
             <ScrollArea className="flex-1 min-h-0 mt-4">
               <div className="pe-3 pb-4">
 
-                {/* ── Tab 1: Personal Info (Basic + Contacts + Addresses) ── */}
+                {/* â”€â”€ Tab 1: Personal Info â”€â”€ */}
                 <TabsContent value="personal" className="mt-0 space-y-8">
                   <div className="space-y-4">
                     <SectionDivider label="Basic Information" />
@@ -1213,12 +1329,12 @@ export function CreateEmployeeDialog({
                   </div>
                 </TabsContent>
 
-                {/* ── Tab 2: Availability ── */}
+                {/* â”€â”€ Tab 2: Availability â”€â”€ */}
                 <TabsContent value="availability" className="mt-0">
                   {renderAvailabilityTab()}
                 </TabsContent>
 
-                {/* ── Tab 3: Compensation (Payment + Salary + Paychecks) ── */}
+                {/* â”€â”€ Tab 3: Compensation â”€â”€ */}
                 <TabsContent value="compensation" className="mt-0 space-y-8">
                   <div className="space-y-4">
                     <SectionDivider label="Bank Accounts" />
@@ -1229,12 +1345,12 @@ export function CreateEmployeeDialog({
                     {renderSalaryTab()}
                   </div>
                   <div className="space-y-4">
-                    <SectionDivider label="Paychecks" />
-                    {renderPaychecksTab()}
+                    <SectionDivider label="Employee IDs" />
+                    {renderIdsTab()}
                   </div>
                 </TabsContent>
 
-                {/* ── Tab 4: Notes & Status ── */}
+                {/* â”€â”€ Tab 4: Notes & Files â”€â”€ */}
                 <TabsContent value="notes" className="mt-0">
                   {renderNotesTab()}
                 </TabsContent>
@@ -1257,7 +1373,7 @@ export function CreateEmployeeDialog({
               onClick={handleSubmit}
               disabled={!isFormValid || isSubmitting}
             >
-              {isSubmitting ? "Submitting…" : "Create Employee"}
+              {isSubmitting ? "Submittingâ€¦" : "Create Employee"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1287,3 +1403,4 @@ export function CreateEmployeeDialog({
     </>
   );
 }
+

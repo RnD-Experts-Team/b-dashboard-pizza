@@ -12,6 +12,8 @@ import type {
   EmployeeStatusRecord,
   PositionRecord,
   EmployeeFileTypeRecord,
+  MaritalStatusRecord,
+  EmployeeIdTypeRecord,
 } from "@/types/hiring.types";
 
 function getToken(): string | null {
@@ -176,6 +178,8 @@ export const hiringService = {
       positions: (d.positions ?? []) as PositionRecord[],
       employeeFileTypes: (d.employeeFileTypes ?? []) as EmployeeFileTypeRecord[],
       separationReasons: (d.separationReasons ?? []),
+      employeeMaritalStatuses: (d.employeeMaritalStatuses ?? []) as MaritalStatusRecord[],
+      employeeIdTypes: (d.employeeIdTypes ?? []) as EmployeeIdTypeRecord[],
     };
   },
 
