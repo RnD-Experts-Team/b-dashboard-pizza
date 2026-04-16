@@ -78,6 +78,66 @@ export interface EmployeeIdTypeRecord {
   updated_at: string;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Reference Catalog                                                  */
+/* ------------------------------------------------------------------ */
+
+export interface ReferenceCatalogItem {
+  /** Present for existing rows; omit to create a new row */
+  id?: number | null;
+  label: string;
+  description?: string | null;
+}
+
+export interface ReferenceCatalogPayload {
+  attachment_type_delete_ids?: number[];
+  attachment_types?: ReferenceCatalogItem[];
+
+  id_type_delete_ids?: number[];
+  id_types?: ReferenceCatalogItem[];
+
+  marital_status_delete_ids?: number[];
+  marital_statuses?: ReferenceCatalogItem[];
+
+  position_delete_ids?: number[];
+  positions?: ReferenceCatalogItem[];
+
+  tag_delete_ids?: number[];
+  tags?: ReferenceCatalogItem[];
+}
+
+export interface ReferenceCatalogResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    attachment_types?: ReferenceCatalogItem[];
+    id_types?: ReferenceCatalogItem[];
+    marital_statuses?: ReferenceCatalogItem[];
+    positions?: ReferenceCatalogItem[];
+    tags?: ReferenceCatalogItem[];
+  };
+}
+
+/** Shape of a single record returned by GET /v1/reference-catalog */
+export interface ReferenceCatalogRecord {
+  id: number;
+  label: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Response body from GET /v1/reference-catalog */
+export interface GetReferenceCatalogResponse {
+  data: {
+    positions: ReferenceCatalogRecord[];
+    marital_statuses: ReferenceCatalogRecord[];
+    id_types: ReferenceCatalogRecord[];
+    attachment_types: ReferenceCatalogRecord[];
+    tags: ReferenceCatalogRecord[];
+  };
+}
+
 export interface NewHireRecord {
   id: number;
   hiring_request_id: number;

@@ -7,32 +7,38 @@ import { Button } from "@/components/ui/button";
 import {
   Info,
   AlertTriangle,
-  CheckCircle,
-  XCircle,
   Megaphone,
+  Bell,
   X,
 } from "lucide-react";
 
-const iconMap = {
-  info: Info,
-  warning: AlertTriangle,
-  success: CheckCircle,
-  error: XCircle,
-  announcement: Megaphone,
-};
+function getToastVisuals(type: string) {
+  if (type.startsWith("announcement")) {
+    return { Icon: Megaphone, color: "text-purple-600 dark:text-purple-400" };
+  }
+  if (type.includes("warning") || type.includes("alert")) {
+    return { Icon: AlertTriangle, color: "text-yellow-600 dark:text-yellow-400" };
+  }
+  if (type.includes("error") || type.includes("fail")) {
+    return { Icon: AlertTriangle, color: "text-destructive" };
+  }
+  if (type.includes("info")) {
+    return { Icon: Info, color: "text-blue-600 dark:text-blue-400" };
+  }
+  return { Icon: Bell, color: "text-blue-600 dark:text-blue-400" };
+}
 
-const colorMap = {
-  info: "text-blue-600 dark:text-blue-400",
-  warning: "text-yellow-600 dark:text-yellow-400",
-  success: "text-green-600 dark:text-green-400",
-  error: "text-destructive",
-  announcement: "text-purple-600 dark:text-purple-400",
-};
+/** Strip HTML tags for plain-text toast preview */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "");
+}
 
 export function showNotificationToast(
   notification: Notification,
   onClickOpen?: () => void
 ) {
+  const { Icon, color } = getToastVisuals(notification.type);
+
   toast.custom(
     (t) => (
       <div
@@ -45,10 +51,7 @@ export function showNotificationToast(
         }}
       >
         {/* Icon */}
-        {(() => {
-          const Icon = iconMap[notification.type] ?? Info;
-          return <Icon className={cn("h-5 w-5 mt-0.5 shrink-0", colorMap[notification.type])} />;
-        })()}
+        <Icon className={cn("h-5 w-5 mt-0.5 shrink-0", color)} />
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -56,7 +59,7 @@ export function showNotificationToast(
             {notification.title}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-            {notification.message}
+            {stripHtml(notification.body)}
           </p>
         </div>
 

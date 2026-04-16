@@ -37,6 +37,8 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  SlidersHorizontal,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -54,61 +56,134 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { CreateEmployeeDialog } from "@/components/hiring/create-employee-dialog";
 import { EditEmployeeDialog } from "@/components/hiring/edit-employee-dialog";
 import { EmployeeDetailsSheet } from "@/components/hiring/employee-details-sheet";
+import { ReferenceCatalogDialog } from "@/components/hiring/reference-catalog-dialog";
 import { employeeService } from "@/lib/api/services/employee.service";
+import { referenceCatalogService } from "@/lib/api/services/reference-catalog.service";
 import { toast } from "sonner";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type {
-  EmployeeRecord,
-  GetEmployeesParams,
-} from "@/types/employee.types";
+import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
+import type { EmployeeV1Record } from "@/types/employee.types";
 import type { EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
 
 type EmployeeFilterOptions = {
-  search?: string;
-  employement_type?: "W2" | "1099" | "all";
+  q?: string;
+  employee_id?: string;
+  gender?: "male" | "female" | "all";
+  employment_type?: "W2" | "1099" | "all";
+  status?: string;
   position_id?: string;
-  emp_status_id?: string;
-  paychecks_id?: string;
-  altemitrix_id?: string;
-  city?: string;
-  page?: string;
+  marital_id?: string;
+  id_type_id?: string;
+  attachment_type_id?: string;
+  day_of_week?: string;
+  shift_type?: "AM" | "PM" | "OP" | "all";
+  base_pay_min?: string;
+  base_pay_max?: string;
+  performance_pay_min?: string;
+  performance_pay_max?: string;
+  effective_pay_from?: string;
+  effective_pay_to?: string;
+  birth_from?: string;
+  birth_to?: string;
+  race?: string;
+  religion?: string;
+  account_type?: "checking" | "savings" | "all";
+  has_primary_email?: "true" | "false" | "all";
+  has_primary_phone?: "true" | "false" | "all";
+  is_active?: "true" | "false" | "all";
+  created_from?: string;
+  created_to?: string;
+  updated_from?: string;
+  updated_to?: string;
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
+  per_page?: number;
+  page?: number;
 };
 
-function buildEmployeeRequest(opts?: EmployeeFilterOptions): {
-  params: GetEmployeesParams;
-  pageNum: number;
-} {
-  const positionId =
-    opts?.position_id && opts.position_id !== "all"
-      ? parseInt(opts.position_id, 10)
-      : undefined;
-  const empStatusId =
-    opts?.emp_status_id && opts.emp_status_id !== "all"
-      ? parseInt(opts.emp_status_id, 10)
-      : undefined;
-  const parsedPage =
-    opts?.page && opts.page.trim()
-      ? parseInt(opts.page, 10)
-      : 1;
-  const pageNum = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+const DEFAULT_FILTERS: EmployeeFilterOptions = {
+  q: "",
+  employee_id: "",
+  gender: "all",
+  employment_type: "all",
+  status: "all",
+  position_id: "",
+  marital_id: "",
+  id_type_id: "",
+  attachment_type_id: "",
+  day_of_week: "all",
+  shift_type: "all",
+  base_pay_min: "",
+  base_pay_max: "",
+  performance_pay_min: "",
+  performance_pay_max: "",
+  effective_pay_from: "",
+  effective_pay_to: "",
+  birth_from: "",
+  birth_to: "",
+  race: "all",
+  religion: "all",
+  account_type: "all",
+  has_primary_email: "all",
+  has_primary_phone: "all",
+  is_active: "all",
+  created_from: "",
+  created_to: "",
+  updated_from: "",
+  updated_to: "",
+  sort_by: "none",
+  sort_dir: "desc",
+  per_page: 25,
+  page: 1,
+};
 
-  const params: GetEmployeesParams = {
-    ...(opts?.search?.trim() ? { search: opts.search.trim() } : {}),
-    ...(Number.isFinite(positionId) ? { position_id: positionId } : {}),
-    ...(Number.isFinite(empStatusId) ? { emp_status_id: empStatusId } : {}),
-    ...(opts?.employement_type && opts.employement_type !== "all"
-      ? { employement_type: opts.employement_type as "W2" | "1099" }
-      : {}),
-    ...(opts?.paychecks_id?.trim() ? { paychecks_id: opts.paychecks_id.trim() } : {}),
-    ...(opts?.altemitrix_id?.trim() ? { altemitrix_id: opts.altemitrix_id.trim() } : {}),
-    ...(opts?.city?.trim() ? { city: opts.city.trim() } : {}),
-    page: pageNum,
-  };
-
-  return { params, pageNum };
+function buildV1Params(opts?: EmployeeFilterOptions): Record<string, string | number | boolean> {
+  const p: Record<string, string | number | boolean> = {};
+  if (opts?.q?.trim()) p.q = opts.q.trim();
+  if (opts?.employee_id?.trim()) p.employee_id = opts.employee_id.trim();
+  if (opts?.gender && opts.gender !== "all") p.gender = opts.gender;
+  if (opts?.employment_type && opts.employment_type !== "all") p.employment_type = opts.employment_type;
+  if (opts?.status && opts.status !== "all") p.status = opts.status;
+  if (opts?.position_id?.trim()) p.position_id = opts.position_id.trim();
+  if (opts?.marital_id?.trim()) p.marital_id = opts.marital_id.trim();
+  if (opts?.id_type_id?.trim()) p.id_type_id = opts.id_type_id.trim();
+  if (opts?.attachment_type_id?.trim()) p.attachment_type_id = opts.attachment_type_id.trim();
+  if (opts?.day_of_week && opts.day_of_week !== "all") p.day_of_week = opts.day_of_week;
+  if (opts?.shift_type && opts.shift_type !== "all") p.shift_type = opts.shift_type;
+  if (opts?.base_pay_min?.trim()) p.base_pay_min = opts.base_pay_min.trim();
+  if (opts?.base_pay_max?.trim()) p.base_pay_max = opts.base_pay_max.trim();
+  if (opts?.performance_pay_min?.trim()) p.performance_pay_min = opts.performance_pay_min.trim();
+  if (opts?.performance_pay_max?.trim()) p.performance_pay_max = opts.performance_pay_max.trim();
+  if (opts?.effective_pay_from?.trim()) p.effective_pay_from = opts.effective_pay_from.trim();
+  if (opts?.effective_pay_to?.trim()) p.effective_pay_to = opts.effective_pay_to.trim();
+  if (opts?.birth_from?.trim()) p.birth_from = opts.birth_from.trim();
+  if (opts?.birth_to?.trim()) p.birth_to = opts.birth_to.trim();
+  if (opts?.race && opts.race !== "all") p.race = opts.race;
+  if (opts?.religion && opts.religion !== "all") p.religion = opts.religion;
+  if (opts?.account_type && opts.account_type !== "all") p.account_type = opts.account_type;
+  if (opts?.has_primary_email && opts.has_primary_email !== "all") p.has_primary_email = opts.has_primary_email === "true";
+  if (opts?.has_primary_phone && opts.has_primary_phone !== "all") p.has_primary_phone = opts.has_primary_phone === "true";
+  if (opts?.is_active && opts.is_active !== "all") p.is_active = opts.is_active === "true";
+  if (opts?.created_from?.trim()) p.created_from = opts.created_from.trim();
+  if (opts?.created_to?.trim()) p.created_to = opts.created_to.trim();
+  if (opts?.updated_from?.trim()) p.updated_from = opts.updated_from.trim();
+  if (opts?.updated_to?.trim()) p.updated_to = opts.updated_to.trim();
+  if (opts?.sort_by && opts.sort_by !== "none") p.sort_by = opts.sort_by;
+  if (opts?.sort_dir) p.sort_dir = opts.sort_dir;
+  if (opts?.per_page) p.per_page = opts.per_page;
+  p.page = opts?.page ?? 1;
+  return p;
 }
 
 function TableSkeleton() {
@@ -117,17 +192,15 @@ function TableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {["Name", "Gender", "Birth Date", "Position", "Status", "Employment Type"].map(
-              (h) => (
-                <TableHead key={h}>{h}</TableHead>
-              ),
-            )}
+            {["Name", "Gender", "Emp. Type", "Created"].map((h) => (
+              <TableHead key={h}>{h}</TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {Array.from({ length: 5 }).map((_, i) => (
             <TableRow key={i}>
-              {Array.from({ length: 6 }).map((_, j) => (
+              {Array.from({ length: 4 }).map((_, j) => (
                 <TableCell key={j}>
                   <Skeleton className="h-4 w-full" />
                 </TableCell>
@@ -140,29 +213,11 @@ function TableSkeleton() {
   );
 }
 
-function employeeStatusLabel(status: string) {
-  return status
-    .split(" ")
-    .filter(Boolean)
-    .map((word) =>
-      word === word.toUpperCase()
-        ? word
-        : `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`,
-    )
-    .join(" ");
-}
-
-function getPositionName(positionId: number, positions: PositionRecord[]): string {
-  return positions.find((p) => p.id === positionId)?.position_name ?? `Unknown (${positionId})`;
-}
-
-function getStatusName(statusId: number, statuses: EmployeeStatusRecord[]): string {
-  const status = statuses.find((s) => s.id === statusId)?.emp_status;
-  return status ? employeeStatusLabel(status) : `Unknown (${statusId})`;
-}
 
 export default function EmployeesPage() {
   const { selectedStore } = useSelectedStoreStore();
+  const { setData: setCatalogData, setLoading: setCatalogLoading, setError: setCatalogError } =
+    useReferenceCatalogStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -172,45 +227,32 @@ export default function EmployeesPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [rows, setRows] = useState<EmployeeRecord[]>([]);
+  const [rows, setRows] = useState<EmployeeV1Record[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStoreHydrated, setIsStoreHydrated] = useState(
     () => useSelectedStoreStore.persist.hasHydrated(),
   );
   const [resolvedStoreId, setResolvedStoreId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
-  const [positions, setPositions] = useState<PositionRecord[]>([]);
+  const [employeeStatuses] = useState<EmployeeStatusRecord[]>([]);
+  const [positions] = useState<PositionRecord[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
   /* Filters */
-  const [search, setSearch] = useState("");
-  const [employmentType, setEmploymentType] = useState<"W2" | "1099" | "all">("all");
-  const [positionFilter, setPositionFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [paychecksId, setPaychecksId] = useState("");
-  const [altemitrixId, setAltemitrixId] = useState("");
-  const [city, setCity] = useState("");
+  const [filters, setFilters] = useState<EmployeeFilterOptions>({ ...DEFAULT_FILTERS });
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function getCurrentFilters() {
-    return {
-      search,
-      employement_type: employmentType,
-      position_id: positionFilter,
-      emp_status_id: statusFilter,
-      paychecks_id: paychecksId,
-      altemitrix_id: altemitrixId,
-      city,
-      page: String(page),
-    };
+  function getCurrentFilters(): EmployeeFilterOptions {
+    return { ...filters, page };
   }
 
   useEffect(() => {
@@ -230,6 +272,24 @@ export default function EmployeesPage() {
     };
   }, []);
 
+  /* Fetch reference catalog on every page mount */
+  useEffect(() => {
+    const controller = new AbortController();
+    setCatalogLoading(true);
+    referenceCatalogService
+      .getAll(controller.signal)
+      .then((res) => setCatalogData(res.data))
+      .catch((err) => {
+        if (err instanceof Error && err.name === "CanceledError") return;
+        console.error("[ReferenceCatalog] Failed to load:", err);
+        setCatalogError(
+          err instanceof Error ? err.message : "Failed to load reference catalog.",
+        );
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchData = useCallback(
     async (opts?: EmployeeFilterOptions) => {
       if (!selectedStore?.storeId) {
@@ -245,21 +305,18 @@ export default function EmployeesPage() {
       setError(null);
 
       try {
-        const { params, pageNum } = buildEmployeeRequest(opts);
+        const params = buildV1Params(opts);
 
-        const res = await employeeService.getEmployees(
+        const res = await employeeService.getEmployeesV1(
           selectedStore.storeId,
           params,
           controller.signal,
         );
-        setRows(res.data.employees);
+        setRows(res.data);
         setTotalPages(res.last_page ?? 1);
-        setPage(res.current_page ?? pageNum);
-        setTotalItems(res.total ?? res.data.employees.length);
-        setPageSize(res.per_page ?? Math.max(res.data.employees.length, 1));
-        const fk = res.data.filtersKeys;
-        if (fk?.position) setPositions(fk.position);
-        if (fk?.employeeStatus) setEmployeeStatuses(fk.employeeStatus);
+        setPage(res.current_page ?? (Number(params.page) || 1));
+        setTotalItems(res.total ?? res.data.length);
+        setPageSize(res.per_page ?? Math.max(res.data.length, 1));
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         setError(
@@ -279,8 +336,6 @@ export default function EmployeesPage() {
     if (!selectedStore?.storeId) {
       abortRef.current?.abort();
       setRows([]);
-      setEmployeeStatuses([]);
-      setPositions([]);
       setError(null);
       setIsLoading(false);
       setResolvedStoreId(null);
@@ -291,7 +346,7 @@ export default function EmployeesPage() {
     }
 
     const storeId = selectedStore.storeId;
-    const { params, pageNum } = buildEmployeeRequest(getCurrentFilters());
+    const params = buildV1Params(getCurrentFilters());
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -304,7 +359,7 @@ export default function EmployeesPage() {
       setError(null);
 
       try {
-        const res = await employeeService.getEmployees(
+        const res = await employeeService.getEmployeesV1(
           storeId,
           params,
           controller.signal,
@@ -312,22 +367,18 @@ export default function EmployeesPage() {
 
         if (cancelled) return;
 
-        setRows(res.data.employees);
+        setRows(res.data);
         setTotalPages(res.last_page ?? 1);
-        setPage(res.current_page ?? pageNum);
-        setTotalItems(res.total ?? res.data.employees.length);
-        setPageSize(res.per_page ?? Math.max(res.data.employees.length, 1));
-
-        const fk = res.data.filtersKeys;
-        if (fk?.position) setPositions(fk.position);
-        if (fk?.employeeStatus) setEmployeeStatuses(fk.employeeStatus);
+        setPage(res.current_page ?? (Number(params.page) || 1));
+        setTotalItems(res.total ?? res.data.length);
+        setPageSize(res.per_page ?? Math.max(res.data.length, 1));
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "CanceledError") return;
         if (cancelled) return;
 
         setRows([]);
         setTotalPages(1);
-        setPage(pageNum);
+        setPage(Number(params.page) || 1);
         setTotalItems(0);
         setPageSize(20);
         setError(
@@ -363,34 +414,45 @@ export default function EmployeesPage() {
   }
 
   function handleClearFilters() {
-    setSearch("");
-    setEmploymentType("all");
-    setPositionFilter("all");
-    setStatusFilter("all");
-    setPaychecksId("");
-    setAltemitrixId("");
-    setCity("");
+    const reset = { ...DEFAULT_FILTERS, page: 1 };
+    setFilters(reset);
     setPage(1);
-    fetchData({
-      search: "",
-      employement_type: "all",
-      position_id: "all",
-      emp_status_id: "all",
-      paychecks_id: "",
-      altemitrix_id: "",
-      city: "",
-      page: "1",
-    });
+    fetchData(reset);
   }
 
-  const isFiltered =
-    search !== "" ||
-    employmentType !== "all" ||
-    positionFilter !== "all" ||
-    statusFilter !== "all" ||
-    paychecksId !== "" ||
-    altemitrixId !== "" ||
-    city !== "";
+  const activeFilterCount = [
+    filters.q?.trim(),
+    filters.employee_id?.trim(),
+    filters.gender !== "all" ? filters.gender : null,
+    filters.employment_type !== "all" ? filters.employment_type : null,
+    filters.status && filters.status !== "all" ? filters.status : null,
+    filters.position_id?.trim(),
+    filters.marital_id?.trim(),
+    filters.id_type_id?.trim(),
+    filters.attachment_type_id?.trim(),
+    filters.day_of_week && filters.day_of_week !== "all" ? filters.day_of_week : null,
+    filters.shift_type !== "all" ? filters.shift_type : null,
+    filters.base_pay_min?.trim(),
+    filters.base_pay_max?.trim(),
+    filters.performance_pay_min?.trim(),
+    filters.performance_pay_max?.trim(),
+    filters.effective_pay_from?.trim(),
+    filters.effective_pay_to?.trim(),
+    filters.birth_from?.trim(),
+    filters.birth_to?.trim(),
+    filters.race !== "all" ? filters.race : null,
+    filters.religion !== "all" ? filters.religion : null,
+    filters.account_type !== "all" ? filters.account_type : null,
+    filters.has_primary_email !== "all" ? filters.has_primary_email : null,
+    filters.has_primary_phone !== "all" ? filters.has_primary_phone : null,
+    filters.is_active !== "all" ? filters.is_active : null,
+    filters.created_from?.trim(),
+    filters.created_to?.trim(),
+    filters.updated_from?.trim(),
+    filters.updated_to?.trim(),
+  ].filter(Boolean).length;
+
+  const isFiltered = activeFilterCount > 0;
 
   async function handleDelete() {
     if (deleteEmployeeId === null || !selectedStore?.storeId) return;
@@ -426,7 +488,7 @@ export default function EmployeesPage() {
     try {
       await employeeService.importEmployees(selectedStore.storeId, file);
       toast.success("Employees imported successfully.");
-      await fetchData({ ...getCurrentFilters(), page: "1" });
+      await fetchData({ ...getCurrentFilters(), page: 1 });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to import employees.");
     } finally {
@@ -505,6 +567,13 @@ export default function EmployeesPage() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          variant="outline"
+          onClick={() => setCatalogDialogOpen(true)}
+        >
+          <RefreshCw className="me-2 h-4 w-4" />
+          Sync Catalog
+        </Button>
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
           Add Employee
@@ -512,86 +581,544 @@ export default function EmployeesPage() {
       </PageHeader>
 
       {/* Filters */}
-      <form
-        onSubmit={handleSearch}
-        className="rounded-lg border bg-card/40 p-4"
-      >
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 items-end">
-          <div className="relative min-w-0">
+      <form onSubmit={handleSearch} className="flex flex-col gap-3">
+        {/* Top bar */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-48">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               className="ps-9"
-              placeholder="Search by name, email, or SSN..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or SSN..."
+              value={filters.q ?? ""}
+              onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
             />
           </div>
-          <Input
-            placeholder="City"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-          />
-          <Input
-            placeholder="Paycheck ID"
-            value={paychecksId}
-            onChange={(e) => setPaychecksId(e.target.value)}
-          />
-          <Input
-            placeholder="Altemitrix ID"
-            value={altemitrixId}
-            onChange={(e) => setAltemitrixId(e.target.value)}
-          />
-          <Select value={positionFilter} onValueChange={setPositionFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Position" />
+
+          {/* Sort controls */}
+          <Select
+            value={filters.sort_by ?? "none"}
+            onValueChange={(v) => setFilters((f) => ({ ...f, sort_by: v }))}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All positions</SelectItem>
-              {positions.map((position) => (
-                <SelectItem key={position.id} value={String(position.id)}>
-                  {position.position_name}
-                </SelectItem>
-              ))}
+              <SelectItem value="none">Sort by…</SelectItem>
+              <SelectItem value="id">ID</SelectItem>
+              <SelectItem value="first_name">First name</SelectItem>
+              <SelectItem value="last_name">Last name</SelectItem>
+              <SelectItem value="employment_type">Emp. type</SelectItem>
+              <SelectItem value="gender">Gender</SelectItem>
+              <SelectItem value="created_at">Created</SelectItem>
+              <SelectItem value="updated_at">Updated</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Employee status" />
+
+          <Select
+            value={filters.sort_dir ?? "desc"}
+            onValueChange={(v) => setFilters((f) => ({ ...f, sort_dir: v as "asc" | "desc" }))}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All employee statuses</SelectItem>
-              {employeeStatuses.map((status) => (
-                <SelectItem key={status.id} value={String(status.id)}>
-                  {employeeStatusLabel(status.emp_status)}
-                </SelectItem>
-              ))}
+              <SelectItem value="asc">Asc ↑</SelectItem>
+              <SelectItem value="desc">Desc ↓</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={employmentType} onValueChange={(v) => setEmploymentType(v as "W2" | "1099" | "all")}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Employment type" />
+
+          <Select
+            value={String(filters.per_page ?? 25)}
+            onValueChange={(v) => setFilters((f) => ({ ...f, per_page: Number(v) }))}
+          >
+            <SelectTrigger className="w-24">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="W2">W2</SelectItem>
-              <SelectItem value="1099">1099</SelectItem>
+              <SelectItem value="10">10 / page</SelectItem>
+              <SelectItem value="25">25 / page</SelectItem>
+              <SelectItem value="50">50 / page</SelectItem>
+              <SelectItem value="100">100 / page</SelectItem>
             </SelectContent>
           </Select>
-          <Button type="submit" variant="secondary" size="sm">
-            Search
+
+          <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen} className="contents">
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="outline" className="gap-2">
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <Badge className="h-5 min-w-5 px-1 text-xs">{activeFilterCount}</Badge>
+                )}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+          </Collapsible>
+
+          <Button type="submit" variant="default" size="default">
+            Apply
           </Button>
+
           {isFiltered && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleClearFilters}
-            >
+            <Button type="button" variant="ghost" size="default" onClick={handleClearFilters}>
               <X className="me-1 h-4 w-4" />
-              Clear
+              Clear all
             </Button>
           )}
         </div>
+
+        {/* Expandable panel */}
+        <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <CollapsibleContent className="rounded-lg border bg-card/40">
+            <Tabs defaultValue="employee" className="w-full">
+              <div className="px-4 pt-3 pb-0 border-b">
+                <TabsList className="h-9 bg-transparent gap-1 p-0">
+                  {[
+                    { value: "employee", label: "Employee" },
+                    { value: "personal", label: "Personal" },
+                    { value: "schedule", label: "Schedule" },
+                    { value: "pay", label: "Pay" },
+                    { value: "dates", label: "Dates & Flags" },
+                  ].map((tab) => (
+                    <TabsTrigger
+                      key={tab.value}
+                      value={tab.value}
+                      className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none h-9 px-3 text-sm"
+                    >
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+
+              {/* ── Employee tab ── */}
+              <TabsContent value="employee" className="p-4 mt-0">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {/* Employee ID */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Employee ID</Label>
+                    <Input
+                      placeholder="e.g. 42"
+                      value={filters.employee_id ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, employee_id: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Position ID */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Position ID</Label>
+                    <Input
+                      placeholder="e.g. 3"
+                      value={filters.position_id ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, position_id: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Gender */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Gender</Label>
+                    <div className="flex rounded-md border overflow-hidden h-9">
+                      {(["all", "male", "female"] as const).map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setFilters((f) => ({ ...f, gender: v }))}
+                          className={`flex-1 text-xs capitalize transition-colors ${
+                            filters.gender === v
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {v === "all" ? "All" : v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Employment Type */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Employment Type</Label>
+                    <div className="flex rounded-md border overflow-hidden h-9">
+                      {(["all", "W2", "1099"] as const).map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setFilters((f) => ({ ...f, employment_type: v }))}
+                          className={`flex-1 text-xs transition-colors ${
+                            filters.employment_type === v
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {v === "all" ? "All" : v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Status</Label>
+                    <Select
+                      value={filters.status ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="hired">Hired</SelectItem>
+                        <SelectItem value="resigned">Resigned</SelectItem>
+                        <SelectItem value="terminated">Terminated</SelectItem>
+                        <SelectItem value="rehired">Rehired</SelectItem>
+                        <SelectItem value="OJE">OJE</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ── Personal tab ── */}
+              <TabsContent value="personal" className="p-4 mt-0">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {/* Race */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Race</Label>
+                    <Select
+                      value={filters.race ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, race: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="Caucasian">Caucasian</SelectItem>
+                        <SelectItem value="African American">African American</SelectItem>
+                        <SelectItem value="Hispanic">Hispanic</SelectItem>
+                        <SelectItem value="Asian">Asian</SelectItem>
+                        <SelectItem value="Native American">Native American</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Religion */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Religion</Label>
+                    <Select
+                      value={filters.religion ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, religion: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="Christianity">Christianity</SelectItem>
+                        <SelectItem value="Islam">Islam</SelectItem>
+                        <SelectItem value="Judaism">Judaism</SelectItem>
+                        <SelectItem value="Buddhism">Buddhism</SelectItem>
+                        <SelectItem value="Hinduism">Hinduism</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Marital ID */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Marital ID</Label>
+                    <Input
+                      placeholder="e.g. 1"
+                      value={filters.marital_id ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, marital_id: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* ID Type ID */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">ID Type ID</Label>
+                    <Input
+                      placeholder="e.g. 2"
+                      value={filters.id_type_id ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, id_type_id: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Attachment Type ID */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Attachment Type ID</Label>
+                    <Input
+                      placeholder="e.g. 5"
+                      value={filters.attachment_type_id ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, attachment_type_id: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Birth From */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Birth — From</Label>
+                    <Input
+                      type="date"
+                      value={filters.birth_from ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, birth_from: e.target.value }))}
+                    />
+                  </div>
+
+                  {/* Birth To */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Birth — To</Label>
+                    <Input
+                      type="date"
+                      value={filters.birth_to ?? ""}
+                      onChange={(e) => setFilters((f) => ({ ...f, birth_to: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ── Schedule tab ── */}
+              <TabsContent value="schedule" className="p-4 mt-0">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Day of week */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Day of Week</Label>
+                    <Select
+                      value={filters.day_of_week ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, day_of_week: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Any day" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Any day</SelectItem>
+                        {["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].map((d) => (
+                          <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Shift Type */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Shift Type</Label>
+                    <div className="flex rounded-md border overflow-hidden h-9">
+                      {(["all", "AM", "PM", "OP"] as const).map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setFilters((f) => ({ ...f, shift_type: v }))}
+                          className={`flex-1 text-xs transition-colors ${
+                            filters.shift_type === v
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {v === "all" ? "All" : v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ── Pay tab ── */}
+              <TabsContent value="pay" className="p-4 mt-0">
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {/* Base Pay */}
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs text-muted-foreground font-medium">Base Pay ($)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Min"
+                        value={filters.base_pay_min ?? ""}
+                        onChange={(e) => setFilters((f) => ({ ...f, base_pay_min: e.target.value }))}
+                      />
+                      <span className="text-muted-foreground text-sm">—</span>
+                      <Input
+                        type="number"
+                        placeholder="Max"
+                        value={filters.base_pay_max ?? ""}
+                        onChange={(e) => setFilters((f) => ({ ...f, base_pay_max: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Performance Pay */}
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs text-muted-foreground font-medium">Performance Pay ($)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        placeholder="Min"
+                        value={filters.performance_pay_min ?? ""}
+                        onChange={(e) => setFilters((f) => ({ ...f, performance_pay_min: e.target.value }))}
+                      />
+                      <span className="text-muted-foreground text-sm">—</span>
+                      <Input
+                        type="number"
+                        placeholder="Max"
+                        value={filters.performance_pay_max ?? ""}
+                        onChange={(e) => setFilters((f) => ({ ...f, performance_pay_max: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Effective Pay From */}
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-xs text-muted-foreground font-medium">Effective Pay Date</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={filters.effective_pay_from ?? ""}
+                        onChange={(e) => setFilters((f) => ({ ...f, effective_pay_from: e.target.value }))}
+                      />
+                      <span className="text-muted-foreground text-sm">—</span>
+                      <Input
+                        type="date"
+                        value={filters.effective_pay_to ?? ""}
+                        onChange={(e) => setFilters((f) => ({ ...f, effective_pay_to: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* ── Dates & Flags tab ── */}
+              <TabsContent value="dates" className="p-4 mt-0">
+                <div className="flex flex-col gap-5">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Created */}
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-xs text-muted-foreground font-medium">Created</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={filters.created_from ?? ""}
+                          onChange={(e) => setFilters((f) => ({ ...f, created_from: e.target.value }))}
+                        />
+                        <span className="text-muted-foreground text-sm">—</span>
+                        <Input
+                          type="date"
+                          value={filters.created_to ?? ""}
+                          onChange={(e) => setFilters((f) => ({ ...f, created_to: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Updated */}
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-xs text-muted-foreground font-medium">Updated</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={filters.updated_from ?? ""}
+                          onChange={(e) => setFilters((f) => ({ ...f, updated_from: e.target.value }))}
+                        />
+                        <span className="text-muted-foreground text-sm">—</span>
+                        <Input
+                          type="date"
+                          value={filters.updated_to ?? ""}
+                          onChange={(e) => setFilters((f) => ({ ...f, updated_to: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {/* Account Type */}
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Account Type</Label>
+                      <div className="flex rounded-md border overflow-hidden h-9">
+                        {(["all", "checking", "savings"] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setFilters((f) => ({ ...f, account_type: v }))}
+                            className={`flex-1 text-xs capitalize transition-colors ${
+                              filters.account_type === v
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-background hover:bg-muted"
+                            }`}
+                          >
+                            {v === "all" ? "All" : v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Has Primary Email */}
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Has Primary Email</Label>
+                      <div className="flex rounded-md border overflow-hidden h-9">
+                        {(["all", "true", "false"] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setFilters((f) => ({ ...f, has_primary_email: v }))}
+                            className={`flex-1 text-xs transition-colors ${
+                              filters.has_primary_email === v
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-background hover:bg-muted"
+                            }`}
+                          >
+                            {v === "all" ? "Any" : v === "true" ? "Yes" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Has Primary Phone */}
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Has Primary Phone</Label>
+                      <div className="flex rounded-md border overflow-hidden h-9">
+                        {(["all", "true", "false"] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setFilters((f) => ({ ...f, has_primary_phone: v }))}
+                            className={`flex-1 text-xs transition-colors ${
+                              filters.has_primary_phone === v
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-background hover:bg-muted"
+                            }`}
+                          >
+                            {v === "all" ? "Any" : v === "true" ? "Yes" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Is Active */}
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs text-muted-foreground">Is Active</Label>
+                      <div className="flex rounded-md border overflow-hidden h-9">
+                        {(["all", "true", "false"] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setFilters((f) => ({ ...f, is_active: v }))}
+                            className={`flex-1 text-xs transition-colors ${
+                              filters.is_active === v
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-background hover:bg-muted"
+                            }`}
+                          >
+                            {v === "all" ? "Any" : v === "true" ? "Yes" : "No"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </CollapsibleContent>
+        </Collapsible>
       </form>
 
       {/* Error */}
@@ -639,10 +1166,8 @@ export default function EmployeesPage() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead className="hidden sm:table-cell">Gender</TableHead>
-                  <TableHead className="hidden md:table-cell">Birth Date</TableHead>
-                  <TableHead className="hidden sm:table-cell">Position</TableHead>
-                  <TableHead className="hidden md:table-cell">Status</TableHead>
                   <TableHead>Emp. Type</TableHead>
+                  <TableHead className="hidden md:table-cell">Created</TableHead>
                   <TableHead className="w-12">
                     <span className="sr-only">Actions</span>
                   </TableHead>
@@ -650,12 +1175,13 @@ export default function EmployeesPage() {
               </TableHeader>
               <TableBody>
                 {rows.map((emp) => {
-                  const profile = emp.employee_profile;
-                  const fullName = profile
-                    ? [profile.first_name, profile.middle_name, profile.last_name]
-                        .filter(Boolean)
-                        .join(" ")
-                    : `Employee #${emp.id}`;
+                  const fullName = [emp.first_name, emp.middle_name, emp.last_name]
+                    .filter(Boolean)
+                    .join(" ") || `Employee #${emp.id}`;
+
+                  const createdDate = emp.created_at
+                    ? new Date(emp.created_at).toLocaleDateString()
+                    : "—";
 
                   return (
                     <TableRow
@@ -668,32 +1194,24 @@ export default function EmployeesPage() {
                     >
                       <TableCell>
                         <div className="font-medium text-sm">{fullName}</div>
-                        {profile && (
-                          <div className="mt-0.5 text-xs text-muted-foreground sm:hidden">
-                            {profile.gender ? `${profile.gender.charAt(0).toUpperCase()}${profile.gender.slice(1)}` : "—"}
-                          </div>
-                        )}
+                        <div className="mt-0.5 text-xs text-muted-foreground sm:hidden capitalize">
+                          {emp.gender ?? "—"}
+                        </div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell capitalize text-sm">
-                        {profile?.gender ?? "—"}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-sm whitespace-nowrap">
-                        {profile?.birth_date ?? "—"}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell text-sm">
-                        {getPositionName(emp.position_id, positions)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-sm">
-                        {getStatusName(emp.emp_status_id, employeeStatuses)}
+                        {emp.gender ?? "—"}
                       </TableCell>
                       <TableCell>
-                        {emp.employement_type ? (
+                        {emp.employment_type ? (
                           <Badge variant="secondary" className="text-xs">
-                            {emp.employement_type}
+                            {emp.employment_type}
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm whitespace-nowrap">
+                        {createdDate}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
@@ -755,7 +1273,7 @@ export default function EmployeesPage() {
                     onClick={() =>
                       fetchData({
                         ...getCurrentFilters(),
-                        page: "1",
+                        page: 1,
                       })
                     }
                     disabled={page <= 1}
@@ -769,7 +1287,7 @@ export default function EmployeesPage() {
                     onClick={() =>
                       fetchData({
                         ...getCurrentFilters(),
-                        page: String(page - 1),
+                        page: page - 1,
                       })
                     }
                     disabled={page <= 1}
@@ -783,7 +1301,7 @@ export default function EmployeesPage() {
                     onClick={() =>
                       fetchData({
                         ...getCurrentFilters(),
-                        page: String(page + 1),
+                        page: page + 1,
                       })
                     }
                     disabled={page >= totalPages}
@@ -797,7 +1315,7 @@ export default function EmployeesPage() {
                     onClick={() =>
                       fetchData({
                         ...getCurrentFilters(),
-                        page: String(totalPages),
+                        page: totalPages,
                       })
                     }
                     disabled={page >= totalPages}
@@ -827,8 +1345,6 @@ export default function EmployeesPage() {
             setSelectedEmployeeId(null);
           }
         }}
-        positions={positions}
-        employeeStatuses={employeeStatuses}
       />
 
       <EditEmployeeDialog
@@ -841,6 +1357,11 @@ export default function EmployeesPage() {
           }
         }}
         onSuccess={() => fetchData(getCurrentFilters())}
+      />
+
+      <ReferenceCatalogDialog
+        open={catalogDialogOpen}
+        onOpenChange={setCatalogDialogOpen}
       />
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

@@ -262,6 +262,43 @@ export interface GetEmployeesParams {
   per_page?: number;
 }
 
+/* ------------------------------------------------------------------ */
+/*  V1 Employees list API types                                        */
+/* ------------------------------------------------------------------ */
+
+export interface EmployeeV1Record {
+  id: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  gender: string;
+  employment_type: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeesV1PaginatedResponse {
+  current_page: number;
+  data: EmployeeV1Record[];
+
+  first_page_url: string | null;
+  from: number | null;
+  last_page: number;
+  last_page_url: string | null;
+  links: Array<{
+    url: string | null;
+    label: string;
+    page: number | null;
+    active: boolean;
+  }>;
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number | null;
+  total: number;
+}
+
 export interface CreateEmployeePayload {
   birth_date: string;
   emp_status_id: number;
@@ -291,3 +328,303 @@ export interface CreateEmployeePayload {
   keptImage?: number[] | null;
   updatedImage?: UpdatedImageItem[] | null;
 }
+
+/* ------------------------------------------------------------------ */
+/*  V1 Create Employee API types                                       */
+/* ------------------------------------------------------------------ */
+
+export interface CreateEmployeeV1Address {
+  address_name?: string;
+  address_1?: string;
+  address_2?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  country?: string;
+  is_primary?: boolean;
+}
+
+export interface CreateEmployeeV1AvailabilityTime {
+  available_from: string;
+  available_to: string;
+}
+
+export interface CreateEmployeeV1Availability {
+  day_of_week: string;
+  shift_type: string;
+  times: CreateEmployeeV1AvailabilityTime[];
+}
+
+export interface CreateEmployeeV1Contact {
+  contact_name?: string;
+  contact_type: string;
+  contact_value: string;
+  is_primary?: boolean;
+}
+
+export interface CreateEmployeeV1EmployeeId {
+  id_type_id: number;
+  id_value: string;
+}
+
+export interface CreateEmployeeV1FinancialInfo {
+  account_number: string;
+  account_type: string;
+  effective_date?: string;
+  routing_number: string;
+}
+
+export interface CreateEmployeeV1Obsession {
+  birth_date?: string;
+  image_path?: string;
+  notes?: string;
+  race?: string;
+  religion?: string;
+  t_shirt?: string;
+}
+
+export interface CreateEmployeeV1MaritalHistory {
+  effective_date?: string;
+  marital_id?: number;
+}
+
+export interface CreateEmployeeV1PayHistory {
+  base_pay: number;
+  effective_date?: string;
+  performance_pay?: number;
+}
+
+export interface CreateEmployeeV1Position {
+  effective_date?: string;
+  position_id: number;
+}
+
+export interface CreateEmployeeV1StatusHistory {
+  effective_date?: string;
+  status: string;
+  notes?: string;
+  store_id?: number;
+}
+
+export interface CreateEmployeeV1StoreAssignment {
+  effective_date?: string;
+  store_id: number;
+}
+
+export interface CreateEmployeeV1Attachment {
+  type_id: number;
+}
+
+export interface CreateEmployeeV1Payload {
+  addresses?: CreateEmployeeV1Address[];
+  attachments?: CreateEmployeeV1Attachment[];
+  availability?: CreateEmployeeV1Availability[];
+  contacts?: CreateEmployeeV1Contact[];
+  employee_ids?: CreateEmployeeV1EmployeeId[];
+  employment_type?: string;
+  financial_info?: CreateEmployeeV1FinancialInfo[];
+  first_name: string;
+  gender?: string;
+  last_name: string;
+  marital_history?: CreateEmployeeV1MaritalHistory[];
+  middle_name?: string;
+  obsession?: CreateEmployeeV1Obsession;
+  pay_history?: CreateEmployeeV1PayHistory[];
+  positions?: CreateEmployeeV1Position[];
+  ssn?: string;
+  status_history?: CreateEmployeeV1StatusHistory[];
+  store_assignments?: CreateEmployeeV1StoreAssignment[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  V1 Employee Detail types                                           */
+/* ------------------------------------------------------------------ */
+
+export interface EmployeeV1ObsessionDetail {
+  id: number;
+  employee_id: number;
+  t_shirt: string | null;
+  birth_date: string | null;
+  image_path: string | null;
+  religion: string | null;
+  race: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1StoreRef {
+  id: number;
+  store_number: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface EmployeeV1StatusHistoryDetail {
+  id: number;
+  employee_id: number;
+  status: string;
+  effective_date: string;
+  store_id: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  store?: EmployeeV1StoreRef;
+}
+
+export interface EmployeeV1PayHistoryDetail {
+  id: number;
+  employee_id: number;
+  base_pay: string;
+  performance_pay: string;
+  effective_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1ContactDetail {
+  id: number;
+  employee_id: number;
+  contact_name: string | null;
+  contact_type: string;
+  contact_value: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1AddressDetail {
+  id: number;
+  employee_id: number;
+  address_name: string | null;
+  address_1: string;
+  address_2: string | null;
+  city: string;
+  state: string;
+  zip_code: string;
+  country: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1AvailabilityTimeDetail {
+  id: number;
+  availability_day_id: number;
+  available_from: string;
+  available_to: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1AvailabilityDayDetail {
+  id: number;
+  employee_id: number;
+  day_of_week: string;
+  shift_type: string | null;
+  created_at: string;
+  updated_at: string;
+  times: EmployeeV1AvailabilityTimeDetail[];
+}
+
+export interface EmployeeV1FinancialInfoDetail {
+  id: number;
+  employee_id: number;
+  account_type: string;
+  effective_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1PositionRef {
+  id: number;
+  label: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1PositionDetail {
+  id: number;
+  position_id: number;
+  employee_id: number;
+  effective_date: string;
+  created_at: string;
+  updated_at: string;
+  position: EmployeeV1PositionRef;
+}
+
+export interface EmployeeV1StoreAssignmentDetail {
+  id: number;
+  store_id: number;
+  employee_id: number;
+  effective_date: string;
+  created_at: string;
+  updated_at: string;
+  store: EmployeeV1StoreRef;
+}
+
+export interface EmployeeV1MaritalStatusRef {
+  id: number;
+  label: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeV1MaritalDetail {
+  id: number;
+  emp_id: number;
+  marital_id: number;
+  effective_date: string;
+  created_at: string;
+  updated_at: string;
+  marital_status: EmployeeV1MaritalStatusRef;
+}
+
+export interface EmployeeV1IdDetail {
+  id?: number;
+  employee_id?: number;
+  id_type_id?: number;
+  id_value?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EmployeeV1AttachmentDetail {
+  id?: number;
+  employee_id?: number;
+  type_id?: number;
+  file_path?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EmployeeV1DetailRecord {
+  id: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  gender: string;
+  employment_type: string | null;
+  created_at: string;
+  updated_at: string;
+  status_histories: EmployeeV1StatusHistoryDetail[];
+  pay_histories: EmployeeV1PayHistoryDetail[];
+  contacts: EmployeeV1ContactDetail[];
+  addresses: EmployeeV1AddressDetail[];
+  availability_days: EmployeeV1AvailabilityDayDetail[];
+  financial_infos: EmployeeV1FinancialInfoDetail[];
+  ids: EmployeeV1IdDetail[];
+  obsession: EmployeeV1ObsessionDetail | null;
+  positions: EmployeeV1PositionDetail[];
+  stores: EmployeeV1StoreAssignmentDetail[];
+  maritals: EmployeeV1MaritalDetail[];
+  attachments: EmployeeV1AttachmentDetail[];
+}
+
+export interface EmployeeV1DetailResponse {
+  data: EmployeeV1DetailRecord;
+}
+

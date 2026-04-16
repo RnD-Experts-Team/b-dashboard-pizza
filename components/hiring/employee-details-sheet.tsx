@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -12,19 +12,29 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, User, MapPin, Phone, Wallet, CalendarDays, FileText, Image as ImageIcon, Clock, IdCard, Award } from "lucide-react";
+import {
+  AlertCircle,
+  User,
+  MapPin,
+  Phone,
+  Wallet,
+  CalendarDays,
+  FileText,
+  Clock,
+  IdCard,
+  Building2,
+  Briefcase,
+  Heart,
+} from "lucide-react";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type { EmployeeRecord } from "@/types/employee.types";
-import type { EmployeeStatusRecord, MaritalStatusRecord, PositionRecord } from "@/types/hiring.types";
+import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
+import type { EmployeeV1DetailRecord } from "@/types/employee.types";
 
 interface EmployeeDetailsSheetProps {
   employeeId: number | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  positions: PositionRecord[];
-  employeeStatuses: EmployeeStatusRecord[];
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -57,30 +67,20 @@ function SheetSkeleton() {
 
 function toPrimaryBadge(value: unknown) {
   const normalized =
-    value === true ||
-    value === 1 ||
-    value === "1" ||
-    value === "true";
+    value === true || value === 1 || value === "1" || value === "true";
   return normalized ? "Primary" : "Secondary";
 }
 
-function isImageFilePath(path?: string | null) {
-  if (!path) return false;
-  const cleanPath = path.split("?")[0].toLowerCase();
-  return [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".avif"].some((ext) =>
-    cleanPath.endsWith(ext),
-  );
-}
-
-function fileNameFromPath(path?: string | null) {
-  if (!path) return "file";
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return "-";
   try {
-    const url = new URL(path);
-    const segment = url.pathname.split("/").filter(Boolean).pop();
-    return segment ? decodeURIComponent(segment) : path;
+    return new Date(dateStr).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   } catch {
-    const segment = path.split("/").filter(Boolean).pop();
-    return segment ? decodeURIComponent(segment) : path;
+    return dateStr;
   }
 }
 
@@ -88,18 +88,15 @@ export function EmployeeDetailsSheet({
   employeeId,
   open,
   onOpenChange,
-  positions,
-  employeeStatuses,
 }: EmployeeDetailsSheetProps) {
   const { selectedStore } = useSelectedStoreStore();
-  const [data, setData] = useState<EmployeeRecord | null>(null);
-  const [maritalStatuses, setMaritalStatuses] = useState<MaritalStatusRecord[]>([]);
+  const { idTypes, attachmentTypes } = useReferenceCatalogStore();
+  const [data, setData] = useState<EmployeeV1DetailRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const resolvedEmployeeId = employeeId;
 
   useEffect(() => {
-    if (!open || resolvedEmployeeId === null || !selectedStore?.storeId) {
+    if (!open || employeeId === null || !selectedStore?.storeId) {
       setData(null);
       setError(null);
       setIsLoading(false);
@@ -111,23 +108,14 @@ export function EmployeeDetailsSheet({
     setError(null);
     setData(null);
 
-    Promise.all([
-      employeeService.getEmployeeDetails(selectedStore.storeId, resolvedEmployeeId),
-      maritalStatuses.length === 0
-        ? hiringService.getCreateEmployeePage(selectedStore.storeId)
-        : Promise.resolve(null),
-    ])
-      .then(([empRes, pageRes]) => {
-        if (cancelled) return;
-        setData(empRes.data);
-        if (pageRes?.employeeMaritalStatuses) {
-          setMaritalStatuses(pageRes.employeeMaritalStatuses);
-        }
+    employeeService
+      .getEmployeeDetailsV1(selectedStore.storeId, employeeId)
+      .then((res) => {
+        if (!cancelled) setData(res.data);
       })
       .catch((err) => {
-        if (!cancelled) {
+        if (!cancelled)
           setError(err instanceof Error ? err.message : "Failed to load employee details.");
-        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -136,26 +124,20 @@ export function EmployeeDetailsSheet({
     return () => {
       cancelled = true;
     };
-  }, [open, resolvedEmployeeId, selectedStore?.storeId]);
+  }, [open, employeeId, selectedStore?.storeId]);
 
-  const profile = data?.employee_profile;
-  const fullName = profile
-    ? [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(" ")
+  const fullName = data
+    ? [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ")
     : "-";
-  const positionName =
-    data?.position_id != null
-      ? positions.find((p) => p.id === data.position_id)?.position_name ?? `Position #${data.position_id}`
-      : "-";
-  const statusName =
-    data?.emp_status_id != null
-      ? employeeStatuses.find((s) => s.id === data.emp_status_id)?.emp_status ?? `Status #${data.emp_status_id}`
-      : "-";
+
+  const currentPosition = data?.positions?.[0]?.position?.label ?? "-";
+  const currentMarital = data?.maritals?.[0]?.marital_status?.label ?? "-";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader className="pb-4">
-          <SheetTitle>Employee #{resolvedEmployeeId ?? "-"}</SheetTitle>
+          <SheetTitle>Employee #{employeeId ?? "-"}</SheetTitle>
           <SheetDescription>Full details for the selected employee.</SheetDescription>
         </SheetHeader>
 
@@ -170,56 +152,65 @@ export function EmployeeDetailsSheet({
 
         {data && (
           <div className="space-y-6 p-4 text-sm">
+            {/* â”€â”€ Profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
               <SectionTitle icon={User} label="Profile" />
               <div className="grid grid-cols-2 gap-3">
                 <DetailRow label="Name" value={fullName} />
-                <DetailRow label="Gender" value={profile?.gender ?? "-"} />
-                <DetailRow label="Birth Date" value={profile?.birth_date ?? "-"} />
-                <DetailRow label="SSN" value={data.SSN_number ?? "-"} />
-                <DetailRow label="Position" value={positionName} />
-                <DetailRow label="Status" value={statusName} />
-                <DetailRow label="Employment Type" value={data.employement_type ?? "-"} />
-                <DetailRow label="T-Shirt Size" value={data.T_shirt_size ?? "-"} />
-                {data.marital_status_id != null && (
-                  <DetailRow
-                    label="Marital Status"
-                    value={
-                      maritalStatuses.find((ms) => ms.id === data.marital_status_id)
-                        ?.marital_status_name ?? `Status #${data.marital_status_id}`
-                    }
-                  />
-                )}
+                <DetailRow label="Gender" value={data.gender ?? "-"} />
+                <DetailRow label="Employment Type" value={data.employment_type ?? "-"} />
+                <DetailRow label="Position" value={currentPosition} />
+                <DetailRow label="Marital Status" value={currentMarital} />
               </div>
             </section>
 
+            {/* â”€â”€ Obsession (personal info) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {data.obsession && (
+              <>
+                <Separator />
+                <section className="space-y-3">
+                  <SectionTitle icon={FileText} label="Personal Info" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <DetailRow label="Birth Date" value={formatDate(data.obsession.birth_date)} />
+                    <DetailRow label="T-Shirt Size" value={data.obsession.t_shirt ?? "-"} />
+                    <DetailRow label="Religion" value={data.obsession.religion ?? "-"} />
+                    <DetailRow label="Race" value={data.obsession.race ?? "-"} />
+                    {data.obsession.notes && (
+                      <div className="col-span-2">
+                        <DetailRow label="Notes" value={data.obsession.notes} />
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
+
             <Separator />
 
+            {/* â”€â”€ Status History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
-              <SectionTitle icon={MapPin} label={`Addresses (${data.employee_addresses.length})`} />
-              {data.employee_addresses.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No addresses.</p>
+              <SectionTitle
+                icon={CalendarDays}
+                label={`Status History (${data.status_histories.length})`}
+              />
+              {data.status_histories.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No status history.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.employee_addresses.map((a, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm">{a.address_line_1 ?? "-"}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {toPrimaryBadge((a as { is_primary?: unknown }).is_primary)}
-                        </Badge>
-                      </div>
-                      {(a as { address_line_2?: string | null }).address_line_2 && (
+                  {data.status_histories.map((s, idx) => (
+                    <div key={idx} className="rounded-lg border p-3">
+                      <p className="text-sm capitalize">{s.status}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Effective: {formatDate(s.effective_date)}
+                      </p>
+                      {s.store && (
                         <p className="text-xs text-muted-foreground">
-                          {(a as { address_line_2?: string | null }).address_line_2}
+                          Store: {s.store.store_number}
                         </p>
                       )}
-                      <p className="text-xs text-muted-foreground">
-                        {a.city ?? "-"}, {a.state ?? "-"}, {a.country ?? "-"}
-                        {(a as { zip_code?: string | null }).zip_code
-                          ? ` ${(a as { zip_code?: string | null }).zip_code}`
-                          : ""}
-                      </p>
+                      {s.notes && (
+                        <p className="text-xs text-muted-foreground italic mt-1">{s.notes}</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -228,50 +219,58 @@ export function EmployeeDetailsSheet({
 
             <Separator />
 
+            {/* â”€â”€ Pay History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
-              <SectionTitle icon={Clock} label={`Availability (${data.employee_availability.length})`} />
-              {data.employee_availability.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No availability.</p>
+              <SectionTitle
+                icon={Wallet}
+                label={`Pay History (${data.pay_histories.length})`}
+              />
+              {data.pay_histories.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No pay history.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.employee_availability.map((av, idx) => {
-                    const rawDays = av.days as Array<{ day_of_week?: string } | string> | undefined;
-                    const dayLabels = (rawDays ?? [])
-                      .map((d) =>
-                        typeof d === "string" ? d : (d.day_of_week ?? ""),
-                      )
-                      .filter(Boolean);
-                    return (
-                      <div key={idx} className="rounded-lg border p-3 space-y-1">
-                        <p className="text-sm capitalize">{dayLabels.join(", ") || "-"}</p>
-                        {(av as { notes?: string | null }).notes && (
-                          <p className="text-xs text-muted-foreground italic">
-                            {(av as { notes?: string | null }).notes}
-                          </p>
-                        )}
+                  {data.pay_histories.map((p, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <DetailRow label="Base Pay" value={`$${p.base_pay}`} />
+                        <DetailRow label="Performance Pay" value={`$${p.performance_pay}`} />
+                        <DetailRow
+                          label="Effective Date"
+                          value={formatDate(p.effective_date)}
+                        />
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
 
             <Separator />
 
+            {/* â”€â”€ Contacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
-              <SectionTitle icon={Phone} label={`Contacts (${data.employee_contacts.length})`} />
-              {data.employee_contacts.length === 0 ? (
+              <SectionTitle
+                icon={Phone}
+                label={`Contacts (${data.contacts.length})`}
+              />
+              {data.contacts.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No contacts.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.employee_contacts.map((c, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 flex items-center justify-between gap-2">
+                  {data.contacts.map((c, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-lg border p-3 flex items-center justify-between gap-2"
+                    >
                       <div>
+                        {c.contact_name && (
+                          <p className="text-sm font-medium">{c.contact_name}</p>
+                        )}
                         <p className="text-sm capitalize">{c.contact_type ?? "-"}</p>
                         <p className="text-xs text-muted-foreground">{c.contact_value ?? "-"}</p>
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {toPrimaryBadge((c as { is_primary?: unknown }).is_primary)}
+                        {toPrimaryBadge(c.is_primary)}
                       </Badge>
                     </div>
                   ))}
@@ -281,35 +280,35 @@ export function EmployeeDetailsSheet({
 
             <Separator />
 
+            {/* â”€â”€ Addresses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
-              <SectionTitle icon={Wallet} label="Compensation" />
-              {data.employee_payment_info.length === 0 && data.employee_salary_info.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No compensation info.</p>
+              <SectionTitle
+                icon={MapPin}
+                label={`Addresses (${data.addresses.length})`}
+              />
+              {data.addresses.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No addresses.</p>
               ) : (
-                <div className="space-y-3">
-                  {data.employee_payment_info.map((payment, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-2">
+                <div className="space-y-2">
+                  {data.addresses.map((a, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-medium text-muted-foreground">Bank Account</span>
-                        <Badge variant="outline" className="text-xs">
-                          {toPrimaryBadge((payment as { is_primary?: unknown }).is_primary)}
+                        {a.address_name && (
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {a.address_name}
+                          </span>
+                        )}
+                        <Badge variant="outline" className="text-xs ml-auto">
+                          {toPrimaryBadge(a.is_primary)}
                         </Badge>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <DetailRow label="Account Type" value={payment.account_type ?? "-"} />
-                        <DetailRow label="Account Number" value={String(payment.account_number ?? "-")} />
-                        <DetailRow label="Routing Number" value={String(payment.routing_number ?? "-")} />
-                      </div>
-                    </div>
-                  ))}
-                  {data.employee_salary_info.map((salary, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-2">
-                      <span className="text-xs font-medium text-muted-foreground">Salary</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <DetailRow label="Salary Date" value={salary.salary_date ?? "-"} />
-                        <DetailRow label="Base Pay" value={String(salary.base_pay ?? "-")} />
-                        <DetailRow label="Performance Pay" value={String(salary.performance_pay ?? "-")} />
-                      </div>
+                      <p className="text-sm">{a.address_1 ?? "-"}</p>
+                      {a.address_2 && (
+                        <p className="text-xs text-muted-foreground">{a.address_2}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        {[a.city, a.state, a.zip_code, a.country].filter(Boolean).join(", ")}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -318,25 +317,34 @@ export function EmployeeDetailsSheet({
 
             <Separator />
 
+            {/* â”€â”€ Availability â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
-              <SectionTitle icon={CalendarDays} label={`Status History (${data.employee_status_history.length})`} />
-              {data.employee_status_history.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No status history.</p>
+              <SectionTitle
+                icon={Clock}
+                label={`Availability (${data.availability_days.length})`}
+              />
+              {data.availability_days.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No availability.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.employee_status_history.map((s, idx) => (
-                    <div key={idx} className="rounded-lg border p-3">
-                      <p className="text-sm">
-                        {
-                          employeeStatuses.find((item) => item.id === (s as { status_type_id?: number }).status_type_id)
-                            ?.emp_status ?? `Status #${(s as { status_type_id?: number }).status_type_id ?? "-"}`
-                        }
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {(s as { status_date?: string }).status_date ?? "-"}
-                      </p>
-                      {(s as { notes?: string }).notes && (
-                        <p className="text-xs text-muted-foreground italic mt-1">{(s as { notes?: string }).notes}</p>
+                  {data.availability_days.map((av, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm capitalize">{av.day_of_week}</p>
+                        {av.shift_type && (
+                          <Badge variant="secondary" className="text-xs">
+                            {av.shift_type}
+                          </Badge>
+                        )}
+                      </div>
+                      {av.times.length > 0 && (
+                        <div className="space-y-0.5">
+                          {av.times.map((t, ti) => (
+                            <p key={ti} className="text-xs text-muted-foreground">
+                              {t.available_from} â€“ {t.available_to}
+                            </p>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))}
@@ -346,110 +354,177 @@ export function EmployeeDetailsSheet({
 
             <Separator />
 
+            {/* â”€â”€ Financial Info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
             <section className="space-y-3">
-              <SectionTitle icon={ImageIcon} label={`Files (${data.employee_files.length})`} />
-              {data.employee_files.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No files.</p>
+              <SectionTitle
+                icon={Wallet}
+                label={`Financial Info (${data.financial_infos.length})`}
+              />
+              {data.financial_infos.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No financial info.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.employee_files.map((f, idx) => {
-                    const path = f.file_path || (typeof f.file === "string" ? f.file : "");
-                    const isImage = isImageFilePath(path);
-                    return (
-                      <div key={idx} className="rounded-lg border p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <p className="text-sm">Type #{f.type_id ?? "-"}</p>
-                            <p className="text-xs text-muted-foreground break-all">
-                              {fileNameFromPath(path)}
-                            </p>
-                            {f.notes && (
-                              <p className="text-xs text-muted-foreground italic">{f.notes}</p>
-                            )}
-                            {path ? (
-                              <a
-                                href={path}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs text-primary underline-offset-2 hover:underline"
-                              >
-                                Open file
-                              </a>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">No file URL available.</p>
-                            )}
+                  {data.financial_infos.map((f, idx) => (
+                    <div key={idx} className="rounded-lg border p-3 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <DetailRow label="Account Type" value={f.account_type ?? "-"} />
+                        <DetailRow
+                          label="Effective Date"
+                          value={formatDate(f.effective_date)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            {/* â”€â”€ Positions History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            <section className="space-y-3">
+              <SectionTitle
+                icon={Briefcase}
+                label={`Positions (${data.positions.length})`}
+              />
+              {data.positions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No position history.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.positions.map((pos, idx) => (
+                    <div key={idx} className="rounded-lg border p-3">
+                      <p className="text-sm">{pos.position?.label ?? `Position #${pos.position_id}`}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Effective: {formatDate(pos.effective_date)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            {/* â”€â”€ Store Assignments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            <section className="space-y-3">
+              <SectionTitle
+                icon={Building2}
+                label={`Store Assignments (${data.stores.length})`}
+              />
+              {data.stores.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No store assignments.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.stores.map((s, idx) => (
+                    <div key={idx} className="rounded-lg border p-3">
+                      <p className="text-sm">{s.store?.store_number ?? `Store #${s.store_id}`}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Effective: {formatDate(s.effective_date)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <Separator />
+
+            {/* â”€â”€ Marital History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            <section className="space-y-3">
+              <SectionTitle
+                icon={Heart}
+                label={`Marital History (${data.maritals.length})`}
+              />
+              {data.maritals.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No marital history.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.maritals.map((m, idx) => (
+                    <div key={idx} className="rounded-lg border p-3">
+                      <p className="text-sm">
+                        {m.marital_status?.label ?? `Marital #${m.marital_id}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Effective: {formatDate(m.effective_date)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* â”€â”€ Employee IDs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {data.ids.length > 0 && (
+              <>
+                <Separator />
+                <section className="space-y-3">
+                  <SectionTitle
+                    icon={IdCard}
+                    label={`Employee IDs (${data.ids.length})`}
+                  />
+                  <div className="space-y-2">
+                    {data.ids.map((eid, idx) => {
+                      const typeName =
+                        eid.id_type_id != null
+                          ? (idTypes.find((t) => t.id === eid.id_type_id)?.label ??
+                            `ID Type #${eid.id_type_id}`)
+                          : "-";
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-lg border p-3 flex items-center justify-between gap-2"
+                        >
+                          <div>
+                            <p className="text-sm">{typeName}</p>
+                            <p className="text-xs text-muted-foreground">{eid.id_value ?? "-"}</p>
                           </div>
-                          {isImage && path && (
-                            <img
-                              src={path}
-                              alt={fileNameFromPath(path)}
-                              className="h-16 w-16 rounded-md border object-cover"
-                            />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* â”€â”€ Attachments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {data.attachments.length > 0 && (
+              <>
+                <Separator />
+                <section className="space-y-3">
+                  <SectionTitle
+                    icon={FileText}
+                    label={`Attachments (${data.attachments.length})`}
+                  />
+                  <div className="space-y-2">
+                    {data.attachments.map((att, idx) => {
+                      const typeName =
+                        att.type_id != null
+                          ? (attachmentTypes.find((t) => t.id === att.type_id)?.label ??
+                            `Type #${att.type_id}`)
+                          : "-";
+                      return (
+                        <div key={idx} className="rounded-lg border p-3 space-y-1">
+                          <p className="text-sm">{typeName}</p>
+                          {att.file_path && (
+                            <a
+                              href={att.file_path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-primary underline-offset-2 hover:underline"
+                            >
+                              Open file
+                            </a>
+                          )}
+                          {att.notes && (
+                            <p className="text-xs text-muted-foreground italic">{att.notes}</p>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            <section className="space-y-3">
-              <SectionTitle icon={FileText} label={`Notes (${data.employee_notes.length})`} />
-              {data.employee_notes.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No notes.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.employee_notes.map((n, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 text-sm">
-                      {(n as { notes?: string }).notes ?? "-"}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            <section className="space-y-3">
-              <SectionTitle icon={IdCard} label={`Employee IDs (${data.employee_ids?.length ?? 0})`} />
-              {!data.employee_ids?.length ? (
-                <p className="text-xs text-muted-foreground">No employee IDs.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.employee_ids.map((eid, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm">{eid.employee_id_type?.type_name ?? `Type #${eid.employee_id_type_id}`}</p>
-                        <p className="text-xs text-muted-foreground">{String(eid.id_number)}</p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {toPrimaryBadge(eid.is_primary)}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            <section className="space-y-3">
-              <SectionTitle icon={Award} label={`Certifications (${data.created_certifications_info?.length ?? 0})`} />
-              {!data.created_certifications_info?.length ? (
-                <p className="text-xs text-muted-foreground">No certifications.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.created_certifications_info.map((cert, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 text-sm">
-                      {cert.certification_name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                      );
+                    })}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
         )}
       </SheetContent>

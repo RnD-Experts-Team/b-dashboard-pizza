@@ -131,7 +131,7 @@ export function SeparationReviewDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !isCompleted}>
               {isSubmitting ? "Submitting…" : "Submit Review"}
             </Button>
           </DialogFooter>

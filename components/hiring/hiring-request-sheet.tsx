@@ -431,9 +431,18 @@ function SupervisorDecisionSection({
         <span className="text-sm font-medium">Overall Decision</span>
         <Select
           value={approveAll ?? ""}
-          onValueChange={(v) =>
-            setApproveAll(v as "approved" | "rejected")
-          }
+          onValueChange={(v) => {
+            const decision = v as "approved" | "rejected";
+            setApproveAll(decision);
+            if (decision === "rejected") {
+              setCandidateStatuses(
+                Object.fromEntries(data.candidates.map((c) => [c.id, "rejected"])),
+              );
+              setHireStatuses(
+                Object.fromEntries(data.new_hires.map((h) => [h.id, "rejected"])),
+              );
+            }
+          }}
         >
           <SelectTrigger className="w-36">
             <SelectValue placeholder="Select…" />

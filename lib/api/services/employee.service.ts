@@ -1,12 +1,15 @@
 import axios from "axios";
 import type {
   CreateEmployeePayload,
+  CreateEmployeeV1Payload,
   EmployeesResponse,
   EmployeeSingleResponse,
   GetEmployeesParams,
   EmployeePaymentInfo,
   EmployeeSalaryInfo,
   EmployeeRecord,
+  EmployeesV1PaginatedResponse,
+  EmployeeV1DetailResponse,
 } from "@/types/employee.types";
 
 function normalizeLegalStatus(value?: string): "W2" | "1099" | undefined {
@@ -278,6 +281,31 @@ export const employeeService = {
   },
 
   /**
+   * Fetch employees for the given store using the V1 paginated endpoint.
+   * Proxied through GET /api/v1/stores/[storeId]/employees
+   */
+  async getEmployeesV1(
+    storeId: string,
+    params?: Record<string, string | number | boolean | undefined | null>,
+    signal?: AbortSignal,
+  ): Promise<EmployeesV1PaginatedResponse> {
+    const query = new URLSearchParams();
+    if (params) {
+      for (const [key, val] of Object.entries(params)) {
+        if (val !== undefined && val !== null && val !== "") {
+          query.set(key, String(val));
+        }
+      }
+    }
+    const qs = query.toString();
+    const { data } = await axios.get<EmployeesV1PaginatedResponse>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees${qs ? `?${qs}` : ""}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
+  /**
    * Fetch a single employee by ID.
    * Proxied through GET /api/hiring-management/[storeId]/employees/[employeeId]
    */
@@ -407,5 +435,40 @@ export const employeeService = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  /**
+   * Create a new employee using the V1 JSON API.
+   * Proxied through POST /api/v1/stores/[storeId]/employees
+   */
+  async createEmployeeV1(
+    storeId: string,
+    payload: CreateEmployeeV1Payload,
+  ): Promise<unknown> {
+    const { data } = await axios.post(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees`,
+      payload,
+      {
+        headers: { ...buildHeaders(), "Content-Type": "application/json" },
+        timeout: 15_000,
+      },
+    );
+    return data;
+  },
+
+  /**
+   * Fetch detailed employee record using the V1 endpoint.
+   * Proxied through GET /api/v1/stores/[storeId]/employees/[employeeId]
+   */
+  async getEmployeeDetailsV1(
+    storeId: string,
+    employeeId: number,
+    signal?: AbortSignal,
+  ): Promise<EmployeeV1DetailResponse> {
+    const { data } = await axios.get<EmployeeV1DetailResponse>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
   },
 };
