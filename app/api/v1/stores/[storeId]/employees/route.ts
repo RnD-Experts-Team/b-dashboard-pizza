@@ -70,7 +70,7 @@ export async function GET(
  * POST /api/v1/stores/[storeId]/employees
  * Proxy → POST {HIRING_BASE_URL}/v1/stores/{storeId}/employees
  *
- * Sends the request body as application/json.
+ * Forwards the request body (multipart/form-data or JSON) transparently.
  */
 export async function POST(
   request: NextRequest,
@@ -83,7 +83,8 @@ export async function POST(
   const { storeId } = await params;
 
   try {
-    const body = await request.text();
+    const body = await request.arrayBuffer();
+    const contentType = request.headers.get("Content-Type") ?? "application/json";
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
@@ -95,7 +96,7 @@ export async function POST(
         headers: {
           Authorization: authorization,
           Accept: "application/json",
-          "Content-Type": "application/json",
+          "Content-Type": contentType,
         },
         body,
         signal: controller.signal,

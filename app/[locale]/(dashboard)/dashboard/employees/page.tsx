@@ -33,6 +33,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  UserCog,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -68,13 +69,13 @@ import { CreateEmployeeDialog } from "@/components/hiring/create-employee-dialog
 import { EditEmployeeDialog } from "@/components/hiring/edit-employee-dialog";
 import { EmployeeDetailsSheet } from "@/components/hiring/employee-details-sheet";
 import { ReferenceCatalogDialog } from "@/components/hiring/reference-catalog-dialog";
+import { ChangeEmployeeStatusDialog } from "@/components/hiring/change-employee-status-dialog";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { referenceCatalogService } from "@/lib/api/services/reference-catalog.service";
 import { toast } from "sonner";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import type { EmployeeV1Record } from "@/types/employee.types";
-import type { EmployeeStatusRecord, PositionRecord } from "@/types/hiring.types";
 
 type EmployeeFilterOptions = {
   q?: string;
@@ -216,8 +217,15 @@ function TableSkeleton() {
 
 export default function EmployeesPage() {
   const { selectedStore } = useSelectedStoreStore();
-  const { setData: setCatalogData, setLoading: setCatalogLoading, setError: setCatalogError } =
-    useReferenceCatalogStore();
+  const {
+    positions: catalogPositions,
+    maritalStatuses: catalogMaritalStatuses,
+    idTypes: catalogIdTypes,
+    attachmentTypes: catalogAttachmentTypes,
+    setData: setCatalogData,
+    setLoading: setCatalogLoading,
+    setError: setCatalogError,
+  } = useReferenceCatalogStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -227,6 +235,8 @@ export default function EmployeesPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteEmployeeId, setDeleteEmployeeId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [changeStatusOpen, setChangeStatusOpen] = useState(false);
+  const [changeStatusEmployeeId, setChangeStatusEmployeeId] = useState<number | null>(null);
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -237,8 +247,6 @@ export default function EmployeesPage() {
   );
   const [resolvedStoreId, setResolvedStoreId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [employeeStatuses] = useState<EmployeeStatusRecord[]>([]);
-  const [positions] = useState<PositionRecord[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -704,29 +712,40 @@ export default function EmployeesPage() {
                     />
                   </div>
 
-                  {/* Position ID */}
+                  {/* Position */}
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Position ID</Label>
-                    <Input
-                      placeholder="e.g. 3"
-                      value={filters.position_id ?? ""}
-                      onChange={(e) => setFilters((f) => ({ ...f, position_id: e.target.value }))}
-                    />
+                    <Label className="text-xs text-muted-foreground">Position</Label>
+                    <Select
+                      value={filters.position_id ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, position_id: v === "all" ? "" : v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All positions" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All positions</SelectItem>
+                        {catalogPositions.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Gender */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">Gender</Label>
-                    <div className="flex rounded-md border overflow-hidden h-9">
+                    <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                       {(["all", "male", "female"] as const).map((v) => (
                         <button
                           key={v}
                           type="button"
                           onClick={() => setFilters((f) => ({ ...f, gender: v }))}
-                          className={`flex-1 text-xs capitalize transition-colors ${
+                          className={`flex-1 text-xs capitalize rounded-md transition-all ${
                             filters.gender === v
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-background hover:bg-muted"
+                              ? "bg-white text-gray-900 shadow-sm font-medium"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {v === "all" ? "All" : v}
@@ -738,16 +757,16 @@ export default function EmployeesPage() {
                   {/* Employment Type */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">Employment Type</Label>
-                    <div className="flex rounded-md border overflow-hidden h-9">
+                    <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                       {(["all", "W2", "1099"] as const).map((v) => (
                         <button
                           key={v}
                           type="button"
                           onClick={() => setFilters((f) => ({ ...f, employment_type: v }))}
-                          className={`flex-1 text-xs transition-colors ${
+                          className={`flex-1 text-xs rounded-md transition-all ${
                             filters.employment_type === v
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-background hover:bg-muted"
+                              ? "bg-white text-gray-900 shadow-sm font-medium"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {v === "all" ? "All" : v}
@@ -826,34 +845,67 @@ export default function EmployeesPage() {
                     </Select>
                   </div>
 
-                  {/* Marital ID */}
+                  {/* Marital Status */}
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Marital ID</Label>
-                    <Input
-                      placeholder="e.g. 1"
-                      value={filters.marital_id ?? ""}
-                      onChange={(e) => setFilters((f) => ({ ...f, marital_id: e.target.value }))}
-                    />
+                    <Label className="text-xs text-muted-foreground">Marital Status</Label>
+                    <Select
+                      value={filters.marital_id ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, marital_id: v === "all" ? "" : v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {catalogMaritalStatuses.map((m) => (
+                          <SelectItem key={m.id} value={String(m.id)}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* ID Type ID */}
+                  {/* ID Type */}
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs text-muted-foreground">ID Type ID</Label>
-                    <Input
-                      placeholder="e.g. 2"
-                      value={filters.id_type_id ?? ""}
-                      onChange={(e) => setFilters((f) => ({ ...f, id_type_id: e.target.value }))}
-                    />
+                    <Label className="text-xs text-muted-foreground">ID Type</Label>
+                    <Select
+                      value={filters.id_type_id ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, id_type_id: v === "all" ? "" : v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {catalogIdTypes.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id)}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Attachment Type ID */}
+                  {/* Attachment Type */}
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Attachment Type ID</Label>
-                    <Input
-                      placeholder="e.g. 5"
-                      value={filters.attachment_type_id ?? ""}
-                      onChange={(e) => setFilters((f) => ({ ...f, attachment_type_id: e.target.value }))}
-                    />
+                    <Label className="text-xs text-muted-foreground">Attachment Type</Label>
+                    <Select
+                      value={filters.attachment_type_id ?? "all"}
+                      onValueChange={(v) => setFilters((f) => ({ ...f, attachment_type_id: v === "all" ? "" : v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {catalogAttachmentTypes.map((a) => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            {a.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* Birth From */}
@@ -903,16 +955,16 @@ export default function EmployeesPage() {
                   {/* Shift Type */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">Shift Type</Label>
-                    <div className="flex rounded-md border overflow-hidden h-9">
+                    <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                       {(["all", "AM", "PM", "OP"] as const).map((v) => (
                         <button
                           key={v}
                           type="button"
                           onClick={() => setFilters((f) => ({ ...f, shift_type: v }))}
-                          className={`flex-1 text-xs transition-colors ${
+                          className={`flex-1 text-xs rounded-md transition-all ${
                             filters.shift_type === v
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-background hover:bg-muted"
+                              ? "bg-white text-gray-900 shadow-sm font-medium"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {v === "all" ? "All" : v}
@@ -1033,16 +1085,16 @@ export default function EmployeesPage() {
                     {/* Account Type */}
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs text-muted-foreground">Account Type</Label>
-                      <div className="flex rounded-md border overflow-hidden h-9">
+                      <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                         {(["all", "checking", "savings"] as const).map((v) => (
                           <button
                             key={v}
                             type="button"
                             onClick={() => setFilters((f) => ({ ...f, account_type: v }))}
-                            className={`flex-1 text-xs capitalize transition-colors ${
+                            className={`flex-1 text-xs capitalize rounded-md transition-all ${
                               filters.account_type === v
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-background hover:bg-muted"
+                                ? "bg-white text-gray-900 shadow-sm font-medium"
+                                : "text-muted-foreground hover:text-foreground"
                             }`}
                           >
                             {v === "all" ? "All" : v}
@@ -1054,16 +1106,16 @@ export default function EmployeesPage() {
                     {/* Has Primary Email */}
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs text-muted-foreground">Has Primary Email</Label>
-                      <div className="flex rounded-md border overflow-hidden h-9">
+                      <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                         {(["all", "true", "false"] as const).map((v) => (
                           <button
                             key={v}
                             type="button"
                             onClick={() => setFilters((f) => ({ ...f, has_primary_email: v }))}
-                            className={`flex-1 text-xs transition-colors ${
+                            className={`flex-1 text-xs rounded-md transition-all ${
                               filters.has_primary_email === v
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-background hover:bg-muted"
+                                ? "bg-white text-gray-900 shadow-sm font-medium"
+                                : "text-muted-foreground hover:text-foreground"
                             }`}
                           >
                             {v === "all" ? "Any" : v === "true" ? "Yes" : "No"}
@@ -1075,16 +1127,16 @@ export default function EmployeesPage() {
                     {/* Has Primary Phone */}
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs text-muted-foreground">Has Primary Phone</Label>
-                      <div className="flex rounded-md border overflow-hidden h-9">
+                      <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                         {(["all", "true", "false"] as const).map((v) => (
                           <button
                             key={v}
                             type="button"
                             onClick={() => setFilters((f) => ({ ...f, has_primary_phone: v }))}
-                            className={`flex-1 text-xs transition-colors ${
+                            className={`flex-1 text-xs rounded-md transition-all ${
                               filters.has_primary_phone === v
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-background hover:bg-muted"
+                                ? "bg-white text-gray-900 shadow-sm font-medium"
+                                : "text-muted-foreground hover:text-foreground"
                             }`}
                           >
                             {v === "all" ? "Any" : v === "true" ? "Yes" : "No"}
@@ -1096,16 +1148,16 @@ export default function EmployeesPage() {
                     {/* Is Active */}
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs text-muted-foreground">Is Active</Label>
-                      <div className="flex rounded-md border overflow-hidden h-9">
+                      <div className="flex rounded-lg bg-muted/60 p-0.5 h-9 gap-0.5">
                         {(["all", "true", "false"] as const).map((v) => (
                           <button
                             key={v}
                             type="button"
                             onClick={() => setFilters((f) => ({ ...f, is_active: v }))}
-                            className={`flex-1 text-xs transition-colors ${
+                            className={`flex-1 text-xs rounded-md transition-all ${
                               filters.is_active === v
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-background hover:bg-muted"
+                                ? "bg-white text-gray-900 shadow-sm font-medium"
+                                : "text-muted-foreground hover:text-foreground"
                             }`}
                           >
                             {v === "all" ? "Any" : v === "true" ? "Yes" : "No"}
@@ -1230,6 +1282,15 @@ export default function EmployeesPage() {
                             >
                               <Pencil className="me-2 h-4 w-4" />
                               Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setChangeStatusEmployeeId(emp.id);
+                                setChangeStatusOpen(true);
+                              }}
+                            >
+                              <UserCog className="me-2 h-4 w-4" />
+                              Change Employee Status
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
@@ -1362,6 +1423,16 @@ export default function EmployeesPage() {
       <ReferenceCatalogDialog
         open={catalogDialogOpen}
         onOpenChange={setCatalogDialogOpen}
+      />
+
+      <ChangeEmployeeStatusDialog
+        employeeId={changeStatusEmployeeId}
+        open={changeStatusOpen}
+        onOpenChange={(nextOpen) => {
+          setChangeStatusOpen(nextOpen);
+          if (!nextOpen) setChangeStatusEmployeeId(null);
+        }}
+        onSuccess={() => fetchData(getCurrentFilters())}
       />
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

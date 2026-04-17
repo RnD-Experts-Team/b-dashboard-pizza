@@ -52,7 +52,7 @@ import { HiringRequestSheet } from "@/components/hiring/hiring-request-sheet";
 import { SeparationRequestTab } from "@/components/hiring/separation-request-tab";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type { HiringRequestRecord } from "@/types/hiring.types";
+import type { StoreRequest } from "@/types/hiring.types";
 
 const AVAILABILITY_LABELS: Record<string, string> = {
   weekday: "Weekday",
@@ -103,7 +103,7 @@ function TableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {["Store", "Date of Request", "Desired Start", "Manager", "Supervisor", "Review"].map(
+            {["ID", "Date of Request", "Desired Start", "Status", "Decision"].map(
               (h) => (
                 <TableHead key={h}>{h}</TableHead>
               ),
@@ -113,7 +113,7 @@ function TableSkeleton() {
         <TableBody>
           {Array.from({ length: 4 }).map((_, i) => (
             <TableRow key={i}>
-              {Array.from({ length: 7 }).map((_, j) => (
+              {Array.from({ length: 6 }).map((_, j) => (
                 <TableCell key={j}>
                   <Skeleton className="h-4 w-full" />
                 </TableCell>
@@ -130,7 +130,7 @@ export default function HiringRequestPage() {
   const [activeTab, setActiveTab] = useState("hiring");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<import("@/types/hiring.types").StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
 
   /* Edit dialog */
@@ -147,7 +147,7 @@ export default function HiringRequestPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const [rows, setRows] = useState<HiringRequestRecord[]>([]);
+  const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [isStoreHydrated, setIsStoreHydrated] = useState(
@@ -190,12 +190,12 @@ export default function HiringRequestPage() {
       setError(null);
 
       try {
-        const res = await hiringService.getHiringRequests(
+        const res = await hiringService.getStoreRequests(
           selectedStore.storeId,
           targetPage,
           controller.signal,
         );
-        setRows(res.data);
+        setRows(res.data.filter((r) => r.request_type === "hiring"));
         setTotalPages(res.last_page);
         setPage(res.current_page);
       } catch (err: unknown) {
@@ -390,12 +390,10 @@ export default function HiringRequestPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Store</TableHead>
                       <TableHead className="hidden sm:table-cell">Date of Request</TableHead>
                       <TableHead className="hidden md:table-cell">Desired Start</TableHead>
-                      <TableHead className="hidden lg:table-cell">Manager</TableHead>
-                      <TableHead className="text-center">Supervisor</TableHead>
-                      <TableHead className="text-center">Review</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="hidden lg:table-cell">Decision</TableHead>
                       <TableHead className="w-12">
                         <span className="sr-only">Actions</span>
                       </TableHead>
@@ -407,53 +405,38 @@ export default function HiringRequestPage() {
                         key={req.id}
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => {
-                          setSelectedRequestId(req.id);
+                          setSelectedRequest(req);
                           setSheetOpen(true);
                         }}
                       >
-                        <TableCell>
-                          <div className="text-sm font-medium leading-none">
-                            {req.store.name}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {req.store.store_number}
-                          </div>
-                        </TableCell>
                         <TableCell className="whitespace-nowrap hidden sm:table-cell">
-                          {req.date_of_request}
+                          {req.requested_at
+                            ? new Date(req.requested_at).toLocaleDateString()
+                            : "—"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap hidden md:table-cell">
-                          {req.desired_start_date}
+                          {req.hiring_request?.desired_start_date
+                            ? new Date(req.hiring_request.desired_start_date).toLocaleDateString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={req.workflow_status} />
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          <div className="text-sm font-medium leading-none">
-                            {req.store_manager.name}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            {req.store_manager.email}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <StatusIndicator
-                            color={
-                              req.supervisor_approve === null
-                                ? "none"
-                                : req.supervisor_approve.approve_status === 1
-                                  ? "green"
-                                  : "red"
-                            }
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <StatusIndicator
-                            color={
-                              req.hiring_review === null
-                                ? "none"
-                                : req.hiring_review.is_completed === 1
-                                  ? "green"
-                                  : "red"
-                            }
-                          />
+                          {req.latest_decision ? (
+                            <div className="text-sm">
+                              <span className="capitalize font-medium">
+                                {req.latest_decision.decision}
+                              </span>
+                              {req.latest_decision.number_hired != null && (
+                                <span className="text-muted-foreground ms-1">
+                                  ({req.latest_decision.number_hired} hired)
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
@@ -480,7 +463,6 @@ export default function HiringRequestPage() {
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={req.supervisor_approve === null}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setReviewRequestId(req.id);
@@ -569,7 +551,7 @@ export default function HiringRequestPage() {
       />
 
       <HiringRequestSheet
-        requestId={selectedRequestId}
+        request={selectedRequest}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         onSuccess={() => fetchData(page)}

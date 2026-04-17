@@ -48,13 +48,18 @@ type ItemState = {
   id?: number | null;
   label: string;
   description: string;
+  /** Tag IDs linked to this item (attachment_types only) */
+  tagIds: number[];
   /** True = will be sent in the delete_ids array and hidden in the UI */
   pendingDelete: boolean;
   /** True = currently being edited */
   editing: boolean;
+  /** True = existing row was edited and confirmed */
+  modified: boolean;
   /** Draft values while editing */
   draftLabel: string;
   draftDescription: string;
+  draftTagIds: number[];
 };
 
 type CatalogKey =
@@ -81,10 +86,13 @@ function toItemState(raw: ReferenceCatalogItem | ReferenceCatalogRecord): ItemSt
     id: raw.id ?? null,
     label: raw.label,
     description: raw.description ?? "",
+    tagIds: (raw as unknown as { tag_ids?: number[] }).tag_ids ?? [],
     pendingDelete: false,
     editing: false,
+    modified: false,
     draftLabel: raw.label,
     draftDescription: raw.description ?? "",
+    draftTagIds: (raw as unknown as { tag_ids?: number[] }).tag_ids ?? [],
   };
 }
 
@@ -94,10 +102,13 @@ function emptyItemState(): ItemState {
     id: null,
     label: "",
     description: "",
+    tagIds: [],
     pendingDelete: false,
     editing: true,
+    modified: false,
     draftLabel: "",
     draftDescription: "",
+    draftTagIds: [],
   };
 }
 
@@ -111,7 +122,7 @@ const EMPTY_CATALOG: CatalogState = {
 
 function hasChanges(state: CatalogState): boolean {
   return (Object.keys(state) as CatalogKey[]).some((key) =>
-    state[key].some((item) => item.pendingDelete || !item.id),
+    state[key].some((item) => item.pendingDelete || !item.id || item.modified),
   );
 }
 
@@ -161,22 +172,29 @@ const TABS: {
 /*  Sub-component: single catalog tab                                  */
 /* ------------------------------------------------------------------ */
 
+type TagOption = { id: number; label: string };
+
 function CatalogTab({
   items,
+  availableTags,
   onAdd,
   onConfirmEdit,
   onCancelEdit,
   onStartEdit,
   onDelete,
   onDraftChange,
+  onDraftTagsChange,
 }: {
   items: ItemState[];
+  /** Pass only for the attachment_types tab */
+  availableTags?: TagOption[];
   onAdd: () => void;
   onConfirmEdit: (key: string) => void;
   onCancelEdit: (key: string) => void;
   onStartEdit: (key: string) => void;
   onDelete: (key: string) => void;
   onDraftChange: (key: string, field: "label" | "description", value: string) => void;
+  onDraftTagsChange?: (key: string, tagIds: number[]) => void;
 }) {
   const visible = items.filter((i) => !i.pendingDelete);
   const deletedCount = items.filter((i) => i.pendingDelete && i.id).length;
@@ -233,6 +251,49 @@ function CatalogTab({
                     className="resize-none"
                   />
                 </div>
+
+                {/* Tag selector — attachment_types only */}
+                {availableTags !== undefined && (
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-medium">
+                      Tags{" "}
+                      <span className="text-muted-foreground font-normal">(optional)</span>
+                    </Label>
+                    {availableTags.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        No tags yet — add tags in the Tags tab first.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableTags.map((tag) => {
+                          const selected = item.draftTagIds.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              type="button"
+                              onClick={() => {
+                                if (!onDraftTagsChange) return;
+                                const next = selected
+                                  ? item.draftTagIds.filter((id) => id !== tag.id)
+                                  : [...item.draftTagIds, tag.id];
+                                onDraftTagsChange(item._key, next);
+                              }}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                                selected
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background text-muted-foreground border-border hover:bg-muted"
+                              }`}
+                            >
+                              <Tag className="h-3 w-3" />
+                              {tag.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
@@ -256,11 +317,19 @@ function CatalogTab({
               /* ---- display row ---- */
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{item.label}</span>
                     {!item.id && (
                       <Badge variant="secondary" className="text-xs shrink-0">
                         New
+                      </Badge>
+                    )}
+                    {item.modified && !!item.id && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs shrink-0 text-amber-600 border-amber-300"
+                      >
+                        Edited
                       </Badge>
                     )}
                   </div>
@@ -268,6 +337,24 @@ function CatalogTab({
                     <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
                       {item.description}
                     </p>
+                  )}
+                  {/* Tag chips — attachment_types only */}
+                  {availableTags !== undefined && item.tagIds.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {item.tagIds.map((tagId) => {
+                        const tag = availableTags.find((t) => t.id === tagId);
+                        return (
+                          <Badge
+                            key={tagId}
+                            variant="secondary"
+                            className="gap-1 text-xs"
+                          >
+                            <Tag className="h-3 w-3" />
+                            {tag?.label ?? `#${tagId}`}
+                          </Badge>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -423,16 +510,26 @@ export function ReferenceCatalogDialog({
 
   function handleConfirmEdit(key: CatalogKey, itemKey: string) {
     updateItems(key, (items) =>
-      items.map((item) =>
-        item._key === itemKey
-          ? {
-              ...item,
-              label: item.draftLabel.trim(),
-              description: item.draftDescription.trim(),
-              editing: false,
-            }
-          : item,
-      ),
+      items.map((item) => {
+        if (item._key !== itemKey) return item;
+        const newLabel = item.draftLabel.trim();
+        const newDescription = item.draftDescription.trim();
+        const newTagIds = [...item.draftTagIds];
+        const wasModified =
+          !!item.id &&
+          (newLabel !== item.label ||
+            newDescription !== item.description ||
+            JSON.stringify([...newTagIds].sort((a, b) => a - b)) !==
+              JSON.stringify([...item.tagIds].sort((a, b) => a - b)));
+        return {
+          ...item,
+          label: newLabel,
+          description: newDescription,
+          tagIds: newTagIds,
+          editing: false,
+          modified: item.modified || wasModified,
+        };
+      }),
     );
   }
 
@@ -463,8 +560,17 @@ export function ReferenceCatalogDialog({
               editing: true,
               draftLabel: item.label,
               draftDescription: item.description,
+              draftTagIds: [...item.tagIds],
             }
           : item,
+      ),
+    );
+  }
+
+  function handleDraftTagsChange(key: CatalogKey, itemKey: string, tagIds: number[]) {
+    updateItems(key, (items) =>
+      items.map((item) =>
+        item._key === itemKey ? { ...item, draftTagIds: tagIds } : item,
       ),
     );
   }
@@ -516,6 +622,10 @@ export function ReferenceCatalogDialog({
           ...(i.id ? { id: i.id } : {}),
           label: i.label.trim(),
           ...(i.description.trim() ? { description: i.description.trim() } : {}),
+          // Include tag_ids only for attachment_types
+          ...(key === "attachment_types" && i.tagIds.length > 0
+            ? { tag_ids: i.tagIds }
+            : {}),
         }));
 
       if (deleteIds.length > 0) payload[deleteKey] = deleteIds;
@@ -564,12 +674,21 @@ export function ReferenceCatalogDialog({
     const items = catalog[key];
     const newCount = items.filter((i) => !i.id && !i.pendingDelete).length;
     const deleteCount = items.filter((i) => i.pendingDelete).length;
-    if (newCount === 0 && deleteCount === 0) return null;
+    const editCount = items.filter((i) => i.modified && !!i.id && !i.pendingDelete).length;
+    if (newCount === 0 && deleteCount === 0 && editCount === 0) return null;
     return (
       <span className="ms-1.5 inline-flex items-center gap-0.5">
         {newCount > 0 && (
           <Badge variant="secondary" className="h-4 px-1 text-[10px] leading-none">
             +{newCount}
+          </Badge>
+        )}
+        {editCount > 0 && (
+          <Badge
+            variant="outline"
+            className="h-4 px-1 text-[10px] leading-none text-amber-600 border-amber-300"
+          >
+            ~{editCount}
           </Badge>
         )}
         {deleteCount > 0 && (
@@ -652,6 +771,13 @@ export function ReferenceCatalogDialog({
                     ) : (
                       <CatalogTab
                         items={catalog[key]}
+                        availableTags={
+                          key === "attachment_types"
+                            ? catalog.tags
+                                .filter((t) => !t.pendingDelete && !!t.id)
+                                .map((t) => ({ id: t.id!, label: t.label }))
+                            : undefined
+                        }
                         onAdd={() => handleAdd(key)}
                         onConfirmEdit={(itemKey) => handleConfirmEdit(key, itemKey)}
                         onCancelEdit={(itemKey) => handleCancelEdit(key, itemKey)}
@@ -659,6 +785,9 @@ export function ReferenceCatalogDialog({
                         onDelete={(itemKey) => handleDelete(key, itemKey)}
                         onDraftChange={(itemKey, field, value) =>
                           handleDraftChange(key, itemKey, field, value)
+                        }
+                        onDraftTagsChange={(itemKey, tagIds) =>
+                          handleDraftTagsChange(key, itemKey, tagIds)
                         }
                       />
                     )}

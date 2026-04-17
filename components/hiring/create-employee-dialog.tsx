@@ -64,8 +64,12 @@ import type {
   CreateEmployeeV1Position,
   CreateEmployeeV1StatusHistory,
   CreateEmployeeV1StoreAssignment,
-  CreateEmployeeV1Attachment,
 } from "@/types/employee.types";
+
+interface AttachmentDraft {
+  type_id: number;
+  file: File | null;
+}
 
 interface CreateEmployeeDialogProps {
   open: boolean;
@@ -145,8 +149,9 @@ const emptyStoreAssignment = (): CreateEmployeeV1StoreAssignment => ({
   store_id: 0,
 });
 
-const emptyAttachment = (): CreateEmployeeV1Attachment => ({
+const emptyAttachment = (): AttachmentDraft => ({
   type_id: 0,
+  file: null,
 });
 
 const DAYS_OF_WEEK = [
@@ -211,7 +216,7 @@ export function CreateEmployeeDialog({
   /* -- Obsession (top-level) -- */
   const [obsession, setObsession] = useState<CreateEmployeeV1Obsession>({
     birth_date: "",
-    image_path: "",
+    image: null,
     notes: "",
     race: "",
     religion: "",
@@ -229,7 +234,7 @@ export function CreateEmployeeDialog({
   const [positions, setPositions] = useState<CreateEmployeeV1Position[]>([]);
   const [statusHistory, setStatusHistory] = useState<CreateEmployeeV1StatusHistory[]>([]);
   const [storeAssignments, setStoreAssignments] = useState<CreateEmployeeV1StoreAssignment[]>([]);
-  const [attachments, setAttachments] = useState<CreateEmployeeV1Attachment[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
 
   /* -- UI state -- */
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -248,7 +253,7 @@ export function CreateEmployeeDialog({
     ssn !== "" ||
     employmentType !== "" ||
     obsession.birth_date !== "" ||
-    obsession.image_path !== "" ||
+    obsession.image !== null ||
     obsession.notes !== "" ||
     obsession.race !== "" ||
     obsession.religion !== "" ||
@@ -272,7 +277,7 @@ export function CreateEmployeeDialog({
     setGender("");
     setSsn("");
     setEmploymentType("");
-    setObsession({ birth_date: "", image_path: "", notes: "", race: "", religion: "", t_shirt: "" });
+    setObsession({ birth_date: "", image: null, notes: "", race: "", religion: "", t_shirt: "" });
     setAddresses([]);
     setAvailability([]);
     setContacts([]);
@@ -304,7 +309,12 @@ export function CreateEmployeeDialog({
   }
 
   /* -- Validation -- */
-  const isFormValid = firstName.trim() !== "" && lastName.trim() !== "";
+  const isFormValid =
+    firstName.trim() !== "" &&
+    lastName.trim() !== "" &&
+    employmentType !== "" &&
+    gender !== "" &&
+    ssn.trim() !== "";
 
   /* -- Submit -- */
   async function handleSubmit() {
@@ -317,19 +327,24 @@ export function CreateEmployeeDialog({
     setIsSubmitting(true);
     setError(null);
 
-    /* Build obsession only if any field is set */
-    const hasObsession =
-      obsession.birth_date || obsession.image_path || obsession.notes ||
-      obsession.race || obsession.religion || obsession.t_shirt;
+    /* Build obsession only if birth_date is set (it is required within obsession) */
+    const hasObsession = !!obsession.birth_date;
 
     const payload: CreateEmployeeV1Payload = {
+      employment_type: employmentType,
       first_name: firstName.trim(),
+      gender,
       last_name: lastName.trim(),
+      ssn: ssn.trim(),
       ...(middleName.trim() ? { middle_name: middleName.trim() } : {}),
-      ...(gender ? { gender } : {}),
-      ...(ssn.trim() ? { ssn: ssn.trim() } : {}),
-      ...(employmentType ? { employment_type: employmentType } : {}),
-      ...(hasObsession ? { obsession } : {}),
+      ...(hasObsession ? { obsession: {
+        birth_date: obsession.birth_date,
+        ...(obsession.image ? { image: obsession.image } : {}),
+        ...(obsession.notes ? { notes: obsession.notes } : {}),
+        ...(obsession.race ? { race: obsession.race } : {}),
+        ...(obsession.religion ? { religion: obsession.religion } : {}),
+        ...(obsession.t_shirt ? { t_shirt: obsession.t_shirt } : {}),
+      } } : {}),
       ...(addresses.length > 0 ? { addresses } : {}),
       ...(availability.length > 0
         ? {
@@ -363,8 +378,8 @@ export function CreateEmployeeDialog({
       ...(storeAssignments.filter((s) => s.store_id > 0).length > 0
         ? { store_assignments: storeAssignments.filter((s) => s.store_id > 0) }
         : {}),
-      ...(attachments.filter((a) => a.type_id > 0).length > 0
-        ? { attachments: attachments.filter((a) => a.type_id > 0) }
+      ...(attachments.filter((a) => a.type_id > 0 && a.file !== null).length > 0
+        ? { attachments: attachments.filter((a) => a.type_id > 0 && a.file !== null) as import("@/types/employee.types").CreateEmployeeV1Attachment[] }
         : {}),
     };
 
@@ -479,7 +494,9 @@ export function CreateEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Gender</Label>
+            <Label>
+              Gender <span className="text-destructive">*</span>
+            </Label>
             <Select value={gender} onValueChange={setGender}>
               <SelectTrigger>
                 <SelectValue placeholder="Select gender" />
@@ -491,7 +508,9 @@ export function CreateEmployeeDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>SSN</Label>
+            <Label>
+              SSN <span className="text-destructive">*</span>
+            </Label>
             <Input
               value={ssn}
               onChange={(e) => setSsn(e.target.value.replace(/\D/g, "").slice(0, 20))}
@@ -500,7 +519,9 @@ export function CreateEmployeeDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Employment Type</Label>
+            <Label>
+              Employment Type <span className="text-destructive">*</span>
+            </Label>
             <Select value={employmentType} onValueChange={setEmploymentType}>
               <SelectTrigger>
                 <SelectValue placeholder="Select type" />
@@ -522,7 +543,9 @@ export function CreateEmployeeDialog({
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
-            <Label>Birth Date</Label>
+            <Label>
+              Birth Date <span className="text-destructive">*</span>
+            </Label>
             <Input
               type="date"
               value={obsession.birth_date ?? ""}
@@ -584,13 +607,17 @@ export function CreateEmployeeDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Image Path</Label>
+            <Label>Profile Image</Label>
             <Input
-              value={obsession.image_path ?? ""}
-              onChange={(e) => setObsession((prev) => ({ ...prev, image_path: e.target.value }))}
-              maxLength={255}
-              placeholder="e.g. /images/photo.jpg"
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setObsession((prev) => ({ ...prev, image: e.target.files?.[0] ?? null }))
+              }
             />
+            {obsession.image && (
+              <p className="text-xs text-muted-foreground truncate">{obsession.image.name}</p>
+            )}
           </div>
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
             <Label>Notes</Label>
@@ -684,7 +711,9 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1.5">
-                <Label>Contact Name</Label>
+                <Label>
+                  Contact Name <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={c.contact_name ?? ""}
                   onChange={(e) => updateItem(setContacts, idx, "contact_name", e.target.value)}
@@ -1381,26 +1410,42 @@ export function CreateEmployeeDialog({
               <Badge variant="secondary">Attachment {idx + 1}</Badge>
               <RemoveButton onClick={() => removeItem(setAttachments, idx)} />
             </div>
-            <div className="space-y-1.5">
-              <Label>
-                Type <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={att.type_id > 0 ? String(att.type_id) : ""}
-                onValueChange={(v) => updateItem(setAttachments, idx, "type_id", parseInt(v, 10))}
-                disabled={isLoadingMeta}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select type"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {employeeFileTypes.map((ft) => (
-                    <SelectItem key={ft.id} value={String(ft.id)}>
-                      {ft.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Type <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={att.type_id > 0 ? String(att.type_id) : ""}
+                  onValueChange={(v) => updateItem(setAttachments, idx, "type_id", parseInt(v, 10))}
+                  disabled={isLoadingMeta}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select type"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employeeFileTypes.map((ft) => (
+                      <SelectItem key={ft.id} value={String(ft.id)}>
+                        {ft.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  File <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="file"
+                  onChange={(e) =>
+                    updateItem(setAttachments, idx, "file", e.target.files?.[0] ?? null)
+                  }
+                />
+                {att.file && (
+                  <p className="text-xs text-muted-foreground truncate">{att.file.name}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}

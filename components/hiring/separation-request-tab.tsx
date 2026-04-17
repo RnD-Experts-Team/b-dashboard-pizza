@@ -45,18 +45,12 @@ import { EditSeparationRequestDialog } from "@/components/hiring/edit-separation
 import { SeparationRequestSheet } from "@/components/hiring/separation-request-sheet";
 import { SeparationReviewDialog } from "@/components/hiring/separation-review-dialog";
 import { separationService } from "@/lib/api/services/separation.service";
+import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import type { StoreRequest } from "@/types/hiring.types";
 import type {
-  SeparationRequestRecord,
-  SeparationReasonType,
   SeparationType,
 } from "@/types/separation.types";
-
-const REASON_LABELS: Record<SeparationReasonType, string> = {
-  other: "Other",
-  resignation: "Resignation",
-  termination: "Termination",
-};
 
 const SEPARATION_LABELS: Record<SeparationType, string> = {
   termination: "Termination",
@@ -77,28 +71,18 @@ function SeparationTypeBadge({ type }: { type: SeparationType }) {
   );
 }
 
-function ReasonBadge({ reason }: { reason?: SeparationReasonType }) {
-  if (!reason) {
-    return <span className="text-muted-foreground">—</span>;
-  }
+function WorkflowStatusBadge({ status }: { status: string }) {
+  const lower = status.toLowerCase();
+  const variant =
+    lower === "completed"
+      ? "default"
+      : lower === "rejected"
+        ? "destructive"
+        : "secondary";
   return (
-    <Badge variant="outline" className="capitalize">
-      {REASON_LABELS[reason] ?? reason}
+    <Badge variant={variant} className="capitalize">
+      {status}
     </Badge>
-  );
-}
-
-function StatusIndicator({ color }: { color: "green" | "red" | "none" }) {
-  return (
-    <span
-      className={`inline-block h-2.5 w-2.5 rounded-full ${
-        color === "green"
-          ? "bg-green-500"
-          : color === "red"
-            ? "bg-red-500"
-            : "bg-muted-foreground/30"
-      }`}
-    />
   );
 }
 
@@ -108,12 +92,11 @@ function SepTableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {[
-              "Final Work Date",              "Employee",              "Separation Type",
+            {["Final Work Date",
+              "Employee",
+              "Separation Type",
               "Reason",
-              "Reason Title",
-              "Supervisor",
-              "Review",
+              "Status",
             ].map((h) => (
               <TableHead key={h}>{h}</TableHead>
             ))}
@@ -122,7 +105,7 @@ function SepTableSkeleton() {
         <TableBody>
           {Array.from({ length: 4 }).map((_, i) => (
             <TableRow key={i}>
-              {Array.from({ length: 8 }).map((_, j) => (
+              {Array.from({ length: 6 }).map((_, j) => (
                 <TableCell key={j}>
                   <Skeleton className="h-4 w-full" />
                 </TableCell>
@@ -144,7 +127,7 @@ export function SeparationRequestTab({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedSeparationId, setSelectedSeparationId] = useState<number | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
 
   /* Delete confirmation */
@@ -161,7 +144,7 @@ export function SeparationRequestTab({
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewSeparationId, setReviewSeparationId] = useState<number | null>(null);
 
-  const [rows, setRows] = useState<SeparationRequestRecord[]>([]);
+  const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,12 +164,12 @@ export function SeparationRequestTab({
       setError(null);
 
       try {
-        const res = await separationService.getSeparationRequests(
+        const res = await hiringService.getStoreRequests(
           selectedStore.storeId,
           targetPage,
           controller.signal,
         );
-        setRows(res.data);
+        setRows(res.data.filter((r) => r.request_type === "separation"));
         setTotalPages(res.last_page);
         setPage(res.current_page);
       } catch (err: unknown) {
@@ -326,136 +309,109 @@ export function SeparationRequestTab({
                 <TableHead>Employee</TableHead>
                 <TableHead>Separation Type</TableHead>
                 <TableHead>Reason</TableHead>
-                <TableHead className="hidden md:table-cell">
-                  Reason Title
-                </TableHead>
-                <TableHead className="text-center">Supervisor</TableHead>
-                <TableHead className="text-center">Review</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="w-12">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((req) => (
-                <TableRow
-                  key={req.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => {
-                    setSelectedSeparationId(req.id);
-                    setSheetOpen(true);
-                  }}
-                >
-                  {(() => {
-                    const profile = req.employee?.employee_profile ?? req.employee_profile;
-                    const employeeName = profile
-                      ? [profile.first_name, profile.middle_name, profile.last_name]
-                          .filter(Boolean)
-                          .join(" ")
-                      : "—";
-                    const derivedReason =
-                      req.reason_type ?? req.separation_attachments?.find((a) => a.reason)?.reason?.reason_type;
-                    const derivedReasonTitle =
-                      req.reason_title ?? req.separation_attachments?.find((a) => a.reason)?.reason?.reason_title;
-
-                    return (
-                      <>
-                  <TableCell className="whitespace-nowrap">
-                    {req.final_work_date}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">
-                    {employeeName}
-                  </TableCell>
-                  <TableCell>
-                    <SeparationTypeBadge type={req.separation_type} />
-                  </TableCell>
-                  <TableCell>
-                    <ReasonBadge reason={derivedReason} />
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell max-w-50 truncate">
-                    {derivedReasonTitle ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <StatusIndicator
-                      color={
-                        req.supervisor_approve === null || req.supervisor_approve === undefined
-                          ? "none"
-                          : req.supervisor_approve.accept_status
-                            ? "green"
-                            : "red"
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <StatusIndicator
-                      color={
-                        req.hiring_review === null || req.hiring_review === undefined
-                          ? "none"
-                          : req.hiring_review.is_completed
-                            ? "green"
-                            : "red"
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditSeparationId(req.id);
-                            setEditDialogOpen(true);
-                          }}
-                        >
-                          <Pencil className="me-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          disabled={req.supervisor_approve === null || req.supervisor_approve === undefined}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReviewSeparationId(req.id);
-                            setReviewDialogOpen(true);
-                          }}
-                        >
-                          <ClipboardCheck className="me-2 h-4 w-4" />
-                          Separation Review
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteRequestId(req.id);
-                            setDeleteConfirmOpen(true);
-                          }}
-                        >
-                          <Trash2 className="me-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                      </>
-                    );
-                  })()}
-                </TableRow>
-              ))}
+              {rows.map((req) => {
+                const sep = req.separation_request;
+                const reason = sep?.resignation_reason ?? sep?.termination_reason ?? null;
+                return (
+                  <TableRow
+                    key={req.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => {
+                      setSelectedRequest(req);
+                      setSheetOpen(true);
+                    }}
+                  >
+                    <TableCell className="whitespace-nowrap">
+                      {sep?.final_working_day
+                        ? new Date(sep.final_working_day).toLocaleDateString()
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {sep?.employee
+                        ? `${sep.employee.first_name} ${sep.employee.last_name}`
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {sep?.separation_type ? (
+                        <SeparationTypeBadge type={sep.separation_type} />
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {reason ? (
+                        <span className="capitalize text-sm">
+                          {reason.replace(/_/g, " ")}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <WorkflowStatusBadge status={req.workflow_status} />
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditSeparationId(req.id);
+                              setEditDialogOpen(true);
+                            }}
+                          >
+                            <Pencil className="me-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReviewSeparationId(req.id);
+                              setReviewDialogOpen(true);
+                            }}
+                          >
+                            <ClipboardCheck className="me-2 h-4 w-4" />
+                            Separation Review
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteRequestId(req.id);
+                              setDeleteConfirmOpen(true);
+                            }}
+                          >
+                            <Trash2 className="me-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       )}
-
       {/* Pagination */}
       {totalPages > 1 && !isLoading && !error && (
         <div className="flex items-center justify-end gap-2 text-sm">
@@ -495,7 +451,7 @@ export function SeparationRequestTab({
       />
 
       <SeparationRequestSheet
-        separationId={selectedSeparationId}
+        request={selectedRequest}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         onSuccess={() => fetchData(page)}

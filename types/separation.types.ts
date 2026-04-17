@@ -5,6 +5,24 @@
 export type SeparationReasonType = "other" | "resignation" | "termination";
 export type SeparationType = "termination" | "resignation";
 
+export type ResignationReason =
+  | "found_another_job"
+  | "school_schedule_conflict"
+  | "relocation"
+  | "personal_reasons"
+  | "health_family_reasons"
+  | "cognito_form"
+  | "other";
+
+export type TerminationReason =
+  | "performance_issues"
+  | "policy_violation_misconduct"
+  | "attendance_issues"
+  | "no_call_no_show_more_than_2_times_job_abandonment"
+  | "end_of_trial_period"
+  | "reach_the_limits_of_caps_needed"
+  | "other";
+
 /** A reason record returned by the create-employee-page endpoint */
 export interface SeparationReasonRecord {
   id: number;
@@ -26,16 +44,18 @@ export interface UpdatedAttachmentItem {
   note: string | null;
 }
 
-/** Payload for creating a separation request (POST, multipart/form-data) */
+/** Payload for creating a separation request (POST /stores/{storeNumber}/separation-requests) */
 export interface CreateSeparationRequestPayload {
-  final_work_date: string;
-  reason_type: SeparationReasonType;
+  employee_id: number;
+  final_working_day: string;
   separation_type: SeparationType;
-  reason_id?: number | null;
-  reason_title?: string;
-  other_notes?: string;
-  termination_letter?: string;
-  attachments?: SeparationAttachmentInput[];
+  additional_notes?: string | null;
+  attachments?: File[];
+  resignation_reason?: ResignationReason | null;
+  resignation_reason_details?: string | null;
+  termination_letter?: string | null;
+  termination_reason?: TerminationReason | null;
+  termination_reason_details?: string | null;
 }
 
 /** Shape returned by GET /stores/{storeId}/separation-requests */

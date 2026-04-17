@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -11,26 +11,21 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  AlertCircle,
   User,
   CalendarDays,
   FileText,
   ShieldCheck,
-  ClipboardCheck,
-  MapPin,
-  Phone,
   Paperclip,
   ExternalLink,
+  ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type { SeparationRequestDetail } from "@/types/separation.types";
+import type { StoreRequest } from "@/types/hiring.types";
 
 const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
 
@@ -52,7 +47,13 @@ function AttachmentThumb({ url }: { url: string }) {
   );
 }
 
-function SectionTitle({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
+function SectionTitle({
+  icon: Icon,
+  label,
+}: {
+  icon: React.ElementType;
+  label: string;
+}) {
   return (
     <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
       <Icon className="h-4 w-4 text-muted-foreground" />
@@ -61,219 +62,194 @@ function SectionTitle({ icon: Icon, label }: { icon: React.ElementType; label: s
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm">{value ?? "—"}</span>
-    </div>
-  );
-}
-
-function SheetSkeleton() {
-  return (
-    <div className="space-y-4 pt-2 p-4">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <Skeleton key={i} className="h-5 w-full" />
-      ))}
+      <span className="text-sm">{value ?? "â€”"}</span>
     </div>
   );
 }
 
 interface SeparationRequestSheetProps {
-  separationId: number | null;
+  request: StoreRequest | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
 
 export function SeparationRequestSheet({
-  separationId,
+  request,
   open,
   onOpenChange,
   onSuccess,
 }: SeparationRequestSheetProps) {
-  const { selectedStore } = useSelectedStoreStore();
-  const [data, setData] = useState<SeparationRequestDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open || separationId === null || !selectedStore?.storeId) return;
-
-    let cancelled = false;
-    setIsLoading(true);
-    setError(null);
-    setData(null);
-
-    separationService
-      .getSeparationRequest(selectedStore.storeId, separationId)
-      .then((record) => {
-        if (!cancelled) setData(record);
-      })
-      .catch((err) => {
-        if (!cancelled)
-          setError(
-            err instanceof Error ? err.message : "Failed to load separation request details.",
-          );
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, separationId, selectedStore?.storeId]);
-
-  const profile = data?.employee?.employee_profile;
-  const employeeName = profile
-    ? [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(" ")
+  const sep = request?.separation_request ?? null;
+  const emp = sep?.employee ?? null;
+  const employeeName = emp
+    ? [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(" ")
     : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader className="pb-4">
-          <SheetTitle>Separation Request #{separationId}</SheetTitle>
+          <SheetTitle>Separation Request #{request?.id}</SheetTitle>
           <SheetDescription>Details of the selected separation request.</SheetDescription>
         </SheetHeader>
 
-        {isLoading && <SheetSkeleton />}
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {data && (
+        {request && sep && (
           <div className="space-y-6 p-4 text-sm">
-            {/* ── Overview ── */}
+            {/* â”€â”€ Overview â”€â”€ */}
             <section className="space-y-3">
               <SectionTitle icon={CalendarDays} label="Overview" />
               <div className="grid grid-cols-2 gap-3">
                 <DetailRow
                   label="Date of Request"
-                  value={new Date(data.date_of_request).toLocaleDateString()}
+                  value={
+                    request.requested_at
+                      ? new Date(request.requested_at).toLocaleDateString()
+                      : "â€”"
+                  }
                 />
-                <DetailRow label="Final Work Date" value={data.final_work_date} />
+                <DetailRow
+                  label="Final Working Day"
+                  value={
+                    sep.final_working_day
+                      ? new Date(sep.final_working_day).toLocaleDateString()
+                      : "â€”"
+                  }
+                />
                 <DetailRow
                   label="Separation Type"
                   value={
                     <Badge
-                      variant={data.separation_type === "termination" ? "destructive" : "secondary"}
+                      variant={
+                        sep.separation_type === "termination"
+                          ? "destructive"
+                          : "secondary"
+                      }
                       className="capitalize"
                     >
-                      {data.separation_type}
+                      {sep.separation_type}
                     </Badge>
                   }
                 />
-                <DetailRow label="Other Notes" value={data.other_notes} />
-              </div>
-              {data.termination_letter && (
                 <DetailRow
-                  label="Termination Letter"
-                  value={data.termination_letter}
+                  label="Status"
+                  value={<Badge variant="secondary" className="capitalize">{request.workflow_status}</Badge>}
                 />
-              )}
-            </section>
-
-            <Separator />
-
-            {/* ── Employee Info ── */}
-            <section className="space-y-3">
-              <SectionTitle icon={User} label="Employee" />
-              <div className="grid grid-cols-2 gap-3">
-                <DetailRow label="Name" value={employeeName} />
-                <DetailRow label="Gender" value={profile?.gender} />
-                <DetailRow label="Birth Date" value={profile?.birth_date} />
-                <DetailRow label="Employee ID" value={data.employee?.id} />
+                {sep.resignation_reason && (
+                  <DetailRow
+                    label="Resignation Reason"
+                    value={
+                      <span className="capitalize">
+                        {sep.resignation_reason.replace(/_/g, " ")}
+                      </span>
+                    }
+                  />
+                )}
+                {sep.resignation_reason_details && (
+                  <div className="col-span-2">
+                    <DetailRow
+                      label="Resignation Details"
+                      value={sep.resignation_reason_details}
+                    />
+                  </div>
+                )}
+                {sep.termination_reason && (
+                  <DetailRow
+                    label="Termination Reason"
+                    value={
+                      <span className="capitalize">
+                        {sep.termination_reason.replace(/_/g, " ")}
+                      </span>
+                    }
+                  />
+                )}
+                {sep.termination_reason_details && (
+                  <div className="col-span-2">
+                    <DetailRow
+                      label="Termination Details"
+                      value={sep.termination_reason_details}
+                    />
+                  </div>
+                )}
+                {sep.termination_letter && (
+                  <div className="col-span-2">
+                    <DetailRow label="Termination Letter" value={sep.termination_letter} />
+                  </div>
+                )}
+                {sep.additional_notes && (
+                  <div className="col-span-2">
+                    <DetailRow label="Additional Notes" value={sep.additional_notes} />
+                  </div>
+                )}
               </div>
             </section>
 
-            {/* ── Contacts ── */}
-            {data.employee?.employeeContacts?.length > 0 && (
+            {/* â”€â”€ Employee â”€â”€ */}
+            {emp && (
               <>
                 <Separator />
                 <section className="space-y-3">
-                  <SectionTitle icon={Phone} label="Contacts" />
-                  <div className="space-y-2">
-                    {data.employee.employeeContacts.map((c) => (
-                      <div
-                        key={c.id}
-                        className="flex items-center justify-between rounded-lg border p-2.5"
-                      >
-                        <span className="text-xs text-muted-foreground capitalize">
-                          {c.contact_type}
-                        </span>
-                        <span className="text-sm">{c.contact_value}</span>
-                      </div>
-                    ))}
+                  <SectionTitle icon={User} label="Employee" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <DetailRow label="Name" value={employeeName} />
+                    <DetailRow label="Gender" value={emp.gender} />
+                    <DetailRow label="Employment Type" value={emp.employment_type} />
                   </div>
                 </section>
               </>
             )}
 
-            {/* ── Addresses ── */}
-            {data.employee?.employeeAddresses?.length > 0 && (
+            {/* â”€â”€ Requested By â”€â”€ */}
+            {sep.user && (
               <>
                 <Separator />
                 <section className="space-y-3">
-                  <SectionTitle icon={MapPin} label="Addresses" />
-                  <div className="space-y-2">
-                    {data.employee.employeeAddresses.map((a) => (
-                      <div key={a.id} className="rounded-lg border p-3 space-y-1 text-sm">
-                        <p>{a.address_line_1}</p>
-                        {a.address_line_2 && <p>{a.address_line_2}</p>}
-                        <p>
-                          {a.city}, {a.state} {a.zip_code}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{a.country}</p>
-                      </div>
-                    ))}
+                  <SectionTitle icon={User} label="Requested By" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <DetailRow label="Name" value={sep.user.name} />
+                    <DetailRow label="Email" value={sep.user.email} />
                   </div>
                 </section>
               </>
             )}
 
-            {/* ── Attachments ── */}
-            {data.separation_attachments?.length > 0 && (
+            {/* â”€â”€ Attachments â”€â”€ */}
+            {sep.attachments.length > 0 && (
               <>
                 <Separator />
                 <section className="space-y-3">
                   <SectionTitle
                     icon={Paperclip}
-                    label={`Attachments (${data.separation_attachments.length})`}
+                    label={`Attachments (${sep.attachments.length})`}
                   />
                   <div className="space-y-2">
-                    {data.separation_attachments.map((att) => (
+                    {sep.attachments.map((att) => (
                       <div key={att.id} className="rounded-lg border p-3 space-y-2">
                         <div className="flex items-start gap-3">
-                          <AttachmentThumb url={att.attatchment_path} />
+                          <AttachmentThumb url={att.file_path} />
                           <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <a
-                                href={att.attatchment_path}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
-                              >
-                                Attachment #{att.id}
-                                <ExternalLink className="h-3 w-3 shrink-0" />
-                              </a>
-                              {att.reason && (
-                                <Badge variant="outline" className="text-xs capitalize shrink-0">
-                                  {att.reason.reason_title}
-                                </Badge>
-                              )}
-                            </div>
-                            {att.attatchment_note && (
-                              <p className="text-xs text-muted-foreground italic">
-                                {att.attatchment_note}
-                              </p>
-                            )}
+                            <a
+                              href={att.file_path}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
+                            >
+                              {att.original_name || `Attachment #${att.id}`}
+                              <ExternalLink className="h-3 w-3 shrink-0" />
+                            </a>
+                            <p className="text-xs text-muted-foreground">
+                              {(att.file_size / 1024).toFixed(1)} KB
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -283,92 +259,43 @@ export function SeparationRequestSheet({
               </>
             )}
 
-            {/* ── Supervisor Approval ── */}
-            {data.supervisor_approve ? (
+            {/* â”€â”€ Latest Decision â”€â”€ */}
+            {request.latest_decision && (
               <>
                 <Separator />
                 <section className="space-y-3">
-                  <SectionTitle icon={ShieldCheck} label="Supervisor Approval" />
+                  <SectionTitle icon={ClipboardList} label="Latest Decision" />
                   <div className="grid grid-cols-2 gap-3">
                     <DetailRow
-                      label="Status"
+                      label="Decision"
                       value={
-                        <Badge
-                          variant={data.supervisor_approve.accept_status === 1 ? "default" : "destructive"}
-                        >
-                          {data.supervisor_approve.accept_status === 1 ? "Approved" : "Rejected"}
-                        </Badge>
+                        <span className="capitalize font-medium">
+                          {request.latest_decision.decision}
+                        </span>
                       }
                     />
                     <DetailRow
-                      label="Approved By"
-                      value={data.supervisor_approve.approved_by?.name ?? "—"}
-                    />
-                    <DetailRow label="Notes" value={data.supervisor_approve.notes} />
-                    <DetailRow
                       label="Date"
-                      value={new Date(data.supervisor_approve.created_at).toLocaleDateString()}
+                      value={new Date(
+                        request.latest_decision.decided_at,
+                      ).toLocaleDateString()}
                     />
                   </div>
                 </section>
               </>
-            ) : (
+            )}
+
+            {/* â”€â”€ Supervisor Decision (pending) â”€â”€ */}
+            {!request.latest_decision && (
               <>
                 <Separator />
                 <SupervisorDecisionSection
-                  separationId={data.id}
+                  separationId={sep.id}
                   onSuccess={() => {
                     onSuccess?.();
                     onOpenChange(false);
                   }}
                 />
-              </>
-            )}
-
-            {/* ── Hiring Review ── */}
-            {data.hiring_review && (
-              <>
-                <Separator />
-                <section className="space-y-3">
-                  <SectionTitle icon={ClipboardCheck} label="Hiring Review" />
-                  <div className="grid grid-cols-2 gap-3">
-                    <DetailRow
-                      label="Completed"
-                      value={
-                        <Badge
-                          variant={data.hiring_review.is_completed === 1 ? "default" : "secondary"}
-                        >
-                          {data.hiring_review.is_completed === 1 ? "Yes" : "No"}
-                        </Badge>
-                      }
-                    />
-                    <DetailRow
-                      label="Date"
-                      value={new Date(data.hiring_review.date_of_request).toLocaleDateString()}
-                    />
-                    <DetailRow label="Notes" value={data.hiring_review.notes} />
-                  </div>
-                </section>
-              </>
-            )}
-
-            {/* ── Employee Notes ── */}
-            {data.employee?.employeeNotes?.length > 0 && (
-              <>
-                <Separator />
-                <section className="space-y-3">
-                  <SectionTitle icon={FileText} label="Employee Notes" />
-                  <div className="space-y-2">
-                    {data.employee.employeeNotes.map((n) => (
-                      <div key={n.id} className="rounded-lg border p-3 space-y-1">
-                        <p className="text-sm">{n.notes}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(n.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </section>
               </>
             )}
           </div>
@@ -378,7 +305,7 @@ export function SeparationRequestSheet({
   );
 }
 
-/* ── Supervisor Decision Sub-component ── */
+/* -- Approve / Reject Decision Sub-component -- */
 function SupervisorDecisionSection({
   separationId,
   onSuccess,
@@ -388,24 +315,24 @@ function SupervisorDecisionSection({
 }) {
   const { selectedStore } = useSelectedStoreStore();
 
-  const [acceptStatus, setAcceptStatus] = useState<boolean | null>(null);
+  const [decision, setDecision] = useState<"completed" | "rejected" | null>(null);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit() {
-    if (acceptStatus === null || !selectedStore?.storeId) return;
+    if (decision === null || !selectedStore?.storeId) return;
     setIsSubmitting(true);
 
     try {
-      await separationService.submitSupervisorDecision(
+      await separationService.submitSeparationDecision(
         selectedStore.storeId,
         separationId,
         {
-          accept_status: acceptStatus,
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          decision,
+          notes: notes.trim() || null,
         },
       );
-      toast.success("Supervisor decision submitted.");
+      toast.success("Decision submitted.");
       onSuccess();
     } catch (err) {
       toast.error(
@@ -418,21 +345,21 @@ function SupervisorDecisionSection({
 
   return (
     <section className="space-y-4">
-      <SectionTitle icon={ShieldCheck} label="Supervisor Decision" />
+      <SectionTitle icon={ShieldCheck} label="Approve / Reject" />
 
       <div className="flex gap-2">
         <Button
-          variant={acceptStatus === true ? "default" : "outline"}
+          variant={decision === "completed" ? "default" : "outline"}
           className="flex-1"
-          onClick={() => setAcceptStatus(true)}
+          onClick={() => setDecision("completed")}
           type="button"
         >
           Approve
         </Button>
         <Button
-          variant={acceptStatus === false ? "destructive" : "outline"}
+          variant={decision === "rejected" ? "destructive" : "outline"}
           className="flex-1"
-          onClick={() => setAcceptStatus(false)}
+          onClick={() => setDecision("rejected")}
           type="button"
         >
           Reject
@@ -440,13 +367,13 @@ function SupervisorDecisionSection({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supervisor_notes">Notes</Label>
+        <Label htmlFor="decision_notes">Notes</Label>
         <Textarea
-          id="supervisor_notes"
+          id="decision_notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder="Optional notes…"
-          maxLength={255}
+          placeholder="Optional notes..."
+          maxLength={2000}
           rows={3}
         />
       </div>
@@ -454,9 +381,9 @@ function SupervisorDecisionSection({
       <Button
         className="w-full"
         onClick={handleSubmit}
-        disabled={isSubmitting || acceptStatus === null}
+        disabled={isSubmitting || decision === null}
       >
-        {isSubmitting ? "Submitting…" : "Submit Decision"}
+        {isSubmitting ? "Submitting..." : "Submit Decision"}
       </Button>
     </section>
   );

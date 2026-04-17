@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   CreateHiringRequestPayload,
+  CreateHiringRequestPayloadV1,
   CreateEmployeePageData,
   HiringRequest,
   HiringRequestRecord,
@@ -14,6 +15,8 @@ import type {
   EmployeeFileTypeRecord,
   MaritalStatusRecord,
   EmployeeIdTypeRecord,
+  StoreRequestsResponse,
+  StoreRequestEmployee,
 } from "@/types/hiring.types";
 
 function getToken(): string | null {
@@ -85,18 +88,18 @@ export const hiringService = {
 
   /**
    * Create a hiring request for the given store.
-   * Proxied through POST /api/hiring-management/[storeId]/hiring-requests
+   * Proxied through POST /api/v1/stores/[storeId]/hiring-requests
+   * → POST {HIRING_BASE_URL}/v1/stores/{storeId}/hiring-requests
    */
   async createHiringRequest(
     storeId: string,
-    payload: CreateHiringRequestPayload,
-  ): Promise<HiringRequest> {
-    const { data } = await axios.post<HiringRequest>(
-      `/api/hiring-management/${encodeURIComponent(storeId)}/hiring-requests`,
+    payload: CreateHiringRequestPayloadV1,
+  ): Promise<void> {
+    await axios.post(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/hiring-requests`,
       payload,
       { headers: buildHeaders(), timeout: 15_000 },
     );
-    return data;
   },
 
   /**
@@ -210,5 +213,64 @@ export const hiringService = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  /**
+   * Fetch all requests (hiring + separation) for a store.
+   * Proxied through GET /api/v1/stores/[storeId]/requests
+   * → GET {HIRING_BASE_URL}/v1/stores/{storeId}/requests
+   */
+  async getStoreRequests(
+    storeId: string,
+    page = 1,
+    signal?: AbortSignal,
+  ): Promise<StoreRequestsResponse> {
+    const { data } = await axios.get<StoreRequestsResponse>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/requests?page=${page}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
+  /**
+   * Submit a hiring decision (complete hiring).
+   * Proxied through POST /api/v1/stores/[storeId]/hiring-requests/[requestId]/decision
+   */
+  async submitHiringDecision(
+    storeId: string,
+    requestId: number,
+    payload: { employee_ids: number[]; number_hired: number },
+  ): Promise<void> {
+    await axios.post(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/hiring-requests/${requestId}/decision`,
+      payload,
+      { headers: buildHeaders(), timeout: 15_000 },
+    );
+  },
+
+  /**
+   * Fetch all employees for a store.
+   * Proxied through GET /api/v1/stores/[storeId]/employees
+   */
+  async getStoreEmployees(
+    storeId: string,
+    signal?: AbortSignal,
+  ): Promise<StoreRequestEmployee[]> {
+    const first = await axios.get<{ data: StoreRequestEmployee[]; last_page: number }>(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees?page=1`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    const { data: firstData, last_page } = first.data;
+    if (last_page <= 1) return firstData;
+
+    const rest = await Promise.all(
+      Array.from({ length: last_page - 1 }, (_, i) =>
+        axios.get<{ data: StoreRequestEmployee[] }>(
+          `/api/v1/stores/${encodeURIComponent(storeId)}/employees?page=${i + 2}`,
+          { headers: buildHeaders(), timeout: 15_000, signal },
+        ),
+      ),
+    );
+    return [...firstData, ...rest.flatMap((r) => r.data.data)];
   },
 };

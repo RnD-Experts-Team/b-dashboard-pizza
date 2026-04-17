@@ -47,16 +47,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
-import { hiringService } from "@/lib/api/services/hiring.service";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type {
-  SeparationReasonType,
   SeparationType,
-  SeparationReasonRecord,
-  SeparationAttachmentInput,
+  ResignationReason,
+  TerminationReason,
 } from "@/types/separation.types";
-import type { EmployeeRecord } from "@/types/employee.types";
+import type { EmployeeV1Record } from "@/types/employee.types";
 
 interface CreateSeparationRequestDialogProps {
   open: boolean;
@@ -67,6 +65,29 @@ interface CreateSeparationRequestDialogProps {
 const SEPARATION_TYPES: { value: SeparationType; label: string }[] = [
   { value: "termination", label: "Termination" },
   { value: "resignation", label: "Resignation" },
+];
+
+const RESIGNATION_REASONS: { value: ResignationReason; label: string }[] = [
+  { value: "found_another_job", label: "Found Another Job" },
+  { value: "school_schedule_conflict", label: "School Schedule Conflict" },
+  { value: "relocation", label: "Relocation" },
+  { value: "personal_reasons", label: "Personal Reasons" },
+  { value: "health_family_reasons", label: "Health / Family Reasons" },
+  { value: "cognito_form", label: "Cognito Form" },
+  { value: "other", label: "Other" },
+];
+
+const TERMINATION_REASONS: { value: TerminationReason; label: string }[] = [
+  { value: "performance_issues", label: "Performance Issues" },
+  { value: "policy_violation_misconduct", label: "Policy Violation / Misconduct" },
+  { value: "attendance_issues", label: "Attendance Issues" },
+  {
+    value: "no_call_no_show_more_than_2_times_job_abandonment",
+    label: "No Call / No Show (2+ times) – Job Abandonment",
+  },
+  { value: "end_of_trial_period", label: "End of Trial Period" },
+  { value: "reach_the_limits_of_caps_needed", label: "Reached Caps Needed Limit" },
+  { value: "other", label: "Other" },
 ];
 
 const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
@@ -105,9 +126,8 @@ export function CreateSeparationRequestDialog({
 }: CreateSeparationRequestDialogProps) {
   const { selectedStore } = useSelectedStoreStore();
 
-  // Dropdown data
-  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
-  const [separationReasons, setSeparationReasons] = useState<SeparationReasonRecord[]>([]);
+  // Employees
+  const [employees, setEmployees] = useState<EmployeeV1Record[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -117,41 +137,64 @@ export function CreateSeparationRequestDialog({
 
   // Form fields
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
-  const [finalWorkDate, setFinalWorkDate] = useState("");
+  const [finalWorkingDay, setFinalWorkingDay] = useState("");
   const [separationType, setSeparationType] = useState<SeparationType | "">("");
-  const [reasonType, setReasonType] = useState<SeparationReasonType | "">("");
-  const [reasonId, setReasonId] = useState<string>("");
-  const [reasonTitle, setReasonTitle] = useState("");
-  const [otherNotes, setOtherNotes] = useState("");
+
+  // Resignation-specific
+  const [resignationReason, setResignationReason] = useState<ResignationReason | "">("");
+  const [resignationReasonDetails, setResignationReasonDetails] = useState("");
+
+  // Termination-specific
   const [terminationLetter, setTerminationLetter] = useState("");
-  const [attachments, setAttachments] = useState<{ file: File; note: string }[]>([]);
+  const [terminationReason, setTerminationReason] = useState<TerminationReason | "">("");
+  const [terminationReasonDetails, setTerminationReasonDetails] = useState("");
+
+  // Shared
+  const [additionalNotes, setAdditionalNotes] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirmExit, setShowConfirmExit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch employees + separation reasons when dialog opens
+  // Reset type-specific fields when separation type changes
+  useEffect(() => {
+    setResignationReason("");
+    setResignationReasonDetails("");
+    setTerminationLetter("");
+    setTerminationReason("");
+    setTerminationReasonDetails("");
+  }, [separationType]);
+
+  // Reset resignation details when reason is no longer "other"
+  useEffect(() => {
+    if (resignationReason !== "other") setResignationReasonDetails("");
+  }, [resignationReason]);
+
+  // Reset termination details when reason is no longer "other"
+  useEffect(() => {
+    if (terminationReason !== "other") setTerminationReasonDetails("");
+  }, [terminationReason]);
+
+  // Fetch employees when dialog opens
   useEffect(() => {
     if (!open || !selectedStore?.storeId) return;
     let cancelled = false;
     setIsLoadingData(true);
     setLoadError(null);
 
-    Promise.all([
-      employeeService.getEmployees(selectedStore.storeId, { per_page: 50 }),
-      hiringService.getCreateEmployeePage(selectedStore.storeId),
-    ])
-      .then(([empRes, pageData]) => {
+    employeeService
+      .getEmployeesV1(selectedStore.storeId, { per_page: 99 })
+      .then((res) => {
         if (cancelled) return;
-        setEmployees(empRes.data.employees);
-        setSeparationReasons(pageData.separationReasons as SeparationReasonRecord[]);
+        setEmployees(res.data);
       })
       .catch((err) => {
         if (cancelled) return;
         if (err instanceof Error && err.name === "CanceledError") return;
         setLoadError(
-          err instanceof Error ? err.message : "Failed to load form data.",
+          err instanceof Error ? err.message : "Failed to load employees.",
         );
       })
       .finally(() => {
@@ -163,41 +206,30 @@ export function CreateSeparationRequestDialog({
     };
   }, [open, selectedStore?.storeId]);
 
-  // When separation type changes, auto-set reason_type to match and reset reason selection
-  useEffect(() => {
-    if (separationType === "termination" || separationType === "resignation") {
-      setReasonType(separationType);
-      setReasonId("");
-      setReasonTitle("");
-    }
-  }, [separationType]);
-
-  // Filter reasons based on selected reason type
-  const filteredReasons = separationReasons.filter(
-    (r) => r.reason_type === reasonType,
-  );
-
   const isDirty =
     selectedEmployeeId !== "" ||
-    finalWorkDate !== "" ||
-    reasonType !== "" ||
+    finalWorkingDay !== "" ||
     separationType !== "" ||
-    reasonTitle !== "" ||
-    otherNotes !== "" ||
+    resignationReason !== "" ||
+    resignationReasonDetails !== "" ||
     terminationLetter !== "" ||
+    terminationReason !== "" ||
+    terminationReasonDetails !== "" ||
+    additionalNotes !== "" ||
     attachments.length > 0;
 
   function resetForm() {
     setSelectedEmployeeId("");
     setEmployeeSearch("");
     setEmployeeDropdownOpen(false);
-    setFinalWorkDate("");
-    setReasonType("");
+    setFinalWorkingDay("");
     setSeparationType("");
-    setReasonId("");
-    setReasonTitle("");
-    setOtherNotes("");
+    setResignationReason("");
+    setResignationReasonDetails("");
     setTerminationLetter("");
+    setTerminationReason("");
+    setTerminationReasonDetails("");
+    setAdditionalNotes("");
     setAttachments([]);
     setError(null);
   }
@@ -220,10 +252,7 @@ export function CreateSeparationRequestDialog({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (files) {
-      setAttachments((prev) => [
-        ...prev,
-        ...Array.from(files).map((f) => ({ file: f, note: "" })),
-      ]);
+      setAttachments((prev) => [...prev, ...Array.from(files)]);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -232,23 +261,17 @@ export function CreateSeparationRequestDialog({
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateAttachmentNote(index: number, note: string) {
-    setAttachments((prev) =>
-      prev.map((a, i) => (i === index ? { ...a, note } : a)),
-    );
-  }
-
   const isFormValid =
     selectedEmployeeId !== "" &&
-    finalWorkDate.trim() !== "" &&
+    finalWorkingDay.trim() !== "" &&
     separationType !== "" &&
-    reasonType !== "" &&
-    // reason_id required unless reason_type is "other"
-    (reasonType === "other" || reasonId !== "") &&
-    // termination_letter required if separation_type is "termination"
-    (separationType !== "termination" || terminationLetter.trim() !== "") &&
-    // attachments are required
-    attachments.length > 0;
+    (separationType !== "resignation" ||
+      (resignationReason !== "" &&
+        (resignationReason !== "other" || resignationReasonDetails.trim() !== ""))) &&
+    (separationType !== "termination" ||
+      (terminationLetter.trim() !== "" &&
+        terminationReason !== "" &&
+        (terminationReason !== "other" || terminationReasonDetails.trim() !== "")));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -263,29 +286,28 @@ export function CreateSeparationRequestDialog({
     setError(null);
 
     try {
-      const attPayload: SeparationAttachmentInput[] | undefined =
-        attachments.length > 0
-          ? attachments.map((a) => ({
-              file: a.file,
-              note: a.note || null,
-            }))
-          : undefined;
-
-      await separationService.createSeparationRequest(
-        selectedStore.storeId,
-        Number(selectedEmployeeId),
-        {
-          final_work_date: finalWorkDate,
-          reason_type: reasonType as SeparationReasonType,
-          separation_type: separationType as SeparationType,
-          reason_id: reasonType !== "other" && reasonId ? Number(reasonId) : null,
-          reason_title: reasonTitle || undefined,
-          other_notes: otherNotes || undefined,
-          termination_letter:
-            separationType === "termination" ? terminationLetter : undefined,
-          attachments: attPayload,
-        },
-      );
+      await separationService.createSeparationRequest(selectedStore.storeId, {
+        employee_id: Number(selectedEmployeeId),
+        final_working_day: finalWorkingDay,
+        separation_type: separationType as SeparationType,
+        additional_notes: additionalNotes || null,
+        attachments: attachments.length > 0 ? attachments : undefined,
+        ...(separationType === "resignation"
+          ? {
+              resignation_reason: resignationReason as ResignationReason,
+              resignation_reason_details:
+                resignationReason === "other" ? resignationReasonDetails : null,
+            }
+          : {}),
+        ...(separationType === "termination"
+          ? {
+              termination_letter: terminationLetter,
+              termination_reason: terminationReason as TerminationReason,
+              termination_reason_details:
+                terminationReason === "other" ? terminationReasonDetails : null,
+            }
+          : {}),
+      });
 
       toast.success("Separation request created successfully.");
       resetForm();
@@ -310,24 +332,21 @@ export function CreateSeparationRequestDialog({
           <DialogHeader>
             <DialogTitle>Create Separation Request</DialogTitle>
             <DialogDescription>
-              Fill in the details to create a new separation request.
+              Initiate a separation workflow for an employee assigned to this store.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Load error */}
           {loadError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
-                <span>{loadError}</span>
-              </AlertDescription>
+              <AlertDescription>{loadError}</AlertDescription>
             </Alert>
           )}
 
           {isLoadingData ? (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading form data…
+              Loading employees…
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -338,12 +357,15 @@ export function CreateSeparationRequestDialog({
                 </Alert>
               )}
 
-              {/* Employee */}
+              {/* ── Employee ── */}
               <div className="space-y-2">
                 <Label>
                   Employee <span className="text-destructive">*</span>
                 </Label>
-                <Popover open={employeeDropdownOpen} onOpenChange={setEmployeeDropdownOpen}>
+                <Popover
+                  open={employeeDropdownOpen}
+                  onOpenChange={setEmployeeDropdownOpen}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
@@ -355,9 +377,11 @@ export function CreateSeparationRequestDialog({
                       <span className="truncate text-sm">
                         {selectedEmployeeId
                           ? (() => {
-                              const emp = employees.find((e) => String(e.id) === selectedEmployeeId);
-                              return emp?.employee_profile
-                                ? `${emp.employee_profile.first_name} ${emp.employee_profile.last_name}`
+                              const emp = employees.find(
+                                (e) => String(e.id) === selectedEmployeeId,
+                              );
+                              return emp
+                                ? `${emp.first_name} ${emp.last_name}`
                                 : `Employee #${selectedEmployeeId}`;
                             })()
                           : "Select an employee"}
@@ -365,7 +389,10 @@ export function CreateSeparationRequestDialog({
                       <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <PopoverContent
+                    className="w-[--radix-popover-trigger-width] p-0"
+                    align="start"
+                  >
                     <div className="border-b p-2">
                       <Input
                         placeholder="Search employees…"
@@ -379,9 +406,7 @@ export function CreateSeparationRequestDialog({
                         const filtered = employees.filter((emp) => {
                           if (!employeeSearch.trim()) return true;
                           const q = employeeSearch.toLowerCase();
-                          const name = emp.employee_profile
-                            ? `${emp.employee_profile.first_name} ${emp.employee_profile.last_name}`.toLowerCase()
-                            : "";
+                          const name = `${emp.first_name} ${emp.last_name}`.toLowerCase();
                           return name.includes(q) || String(emp.id).includes(q);
                         });
                         if (filtered.length === 0) {
@@ -392,16 +417,16 @@ export function CreateSeparationRequestDialog({
                           );
                         }
                         return filtered.map((emp) => {
-                          const name = emp.employee_profile
-                            ? `${emp.employee_profile.first_name} ${emp.employee_profile.last_name}`
-                            : `Employee #${emp.id}`;
+                          const name = `${emp.first_name} ${emp.last_name}`;
                           const isSelected = String(emp.id) === selectedEmployeeId;
                           return (
                             <button
                               key={emp.id}
                               type="button"
                               className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
-                                isSelected ? "bg-accent text-accent-foreground" : ""
+                                isSelected
+                                  ? "bg-accent text-accent-foreground"
+                                  : ""
                               }`}
                               onClick={() => {
                                 setSelectedEmployeeId(String(emp.id));
@@ -415,9 +440,6 @@ export function CreateSeparationRequestDialog({
                                 }`}
                               />
                               <span className="truncate">{name}</span>
-                              {/* <span className="ms-auto text-xs text-muted-foreground shrink-0">
-                                #{emp.id}
-                              </span> */}
                             </button>
                           );
                         });
@@ -427,21 +449,21 @@ export function CreateSeparationRequestDialog({
                 </Popover>
               </div>
 
-              {/* Final Work Date */}
+              {/* ── Final Working Day ── */}
               <div className="space-y-2">
-                <Label htmlFor="sep-final-work-date">
-                  Final Work Date <span className="text-destructive">*</span>
+                <Label htmlFor="sep-final-working-day">
+                  Final Working Day <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="sep-final-work-date"
+                  id="sep-final-working-day"
                   type="date"
-                  value={finalWorkDate}
-                  onChange={(e) => setFinalWorkDate(e.target.value)}
+                  value={finalWorkingDay}
+                  onChange={(e) => setFinalWorkingDay(e.target.value)}
                   required
                 />
               </div>
 
-              {/* Separation Type */}
+              {/* ── Separation Type ── */}
               <div className="space-y-2">
                 <Label>
                   Separation Type <span className="text-destructive">*</span>
@@ -463,208 +485,188 @@ export function CreateSeparationRequestDialog({
                 </Select>
               </div>
 
-              {/* Termination Letter — required when separation_type = termination */}
-              {separationType === "termination" && (
-                <div className="space-y-2">
-                  <Label htmlFor="sep-termination-letter">
-                    Termination Letter{" "}
-                    <span className="text-destructive">*</span>
-                    <span className="text-muted-foreground text-xs ms-1">
-                      (max 255)
-                    </span>
-                  </Label>
-                  <Input
-                    id="sep-termination-letter"
-                    value={terminationLetter}
-                    onChange={(e) => setTerminationLetter(e.target.value)}
-                    placeholder="Reason for termination to be included in the letter"
-                    maxLength={255}
-                  />
-                </div>
-              )}
-
-              {/* ── Reason & Attachments ─────────────────────────────── */}
-              {separationType !== "" && (
+              {/* ── Resignation fields ── */}
+              {separationType === "resignation" && (
                 <div className="rounded-md border p-4 space-y-4">
                   <p className="text-sm font-medium leading-none">
-                    Reason &amp; Attachments
+                    Resignation Details
                   </p>
 
-                  {/* "Other" reason toggle */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="sep-reason-other"
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-input"
-                      checked={reasonType === "other"}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setReasonType("other");
-                          setReasonId("");
-                        } else {
-                          setReasonType(separationType as SeparationReasonType);
-                          setReasonId("");
-                          setReasonTitle("");
-                        }
-                      }}
-                    />
-                    <Label htmlFor="sep-reason-other" className="text-sm font-normal">
-                      Other reason
-                    </Label>
-                  </div>
-
-                  {/* Standard reason — filtered by reason_type (termination | resignation) */}
-                  {reasonType !== "" && reasonType !== "other" && (
-                    <div className="space-y-2">
-                      <Label>
-                        Reason <span className="text-destructive">*</span>
-                      </Label>
-                      <Select value={reasonId} onValueChange={setReasonId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a reason" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {filteredReasons.map((r) => (
-                            <SelectItem key={r.id} value={String(r.id)}>
-                              {r.reason_title}
-                            </SelectItem>
-                          ))}
-                          {filteredReasons.length === 0 && (
-                            <SelectItem value="_none" disabled>
-                              No reasons available
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* "Other" reason — show available other-type reasons + free-text title */}
-                  {reasonType === "other" && (
-                    <>
-                      {filteredReasons.length > 0 && (
-                        <div className="space-y-2">
-                          <Label>
-                            Available Other Reasons{" "}
-                            <span className="text-muted-foreground text-xs">
-                              (optional)
-                            </span>
-                          </Label>
-                          <Select
-                            value={reasonId}
-                            onValueChange={setReasonId}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select an existing reason" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filteredReasons.map((r) => (
-                                <SelectItem key={r.id} value={String(r.id)}>
-                                  {r.reason_title}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <Label htmlFor="sep-reason-title">
-                          Reason Title{" "}
-                          <span className="text-muted-foreground text-xs">
-                            (max 255)
-                          </span>
-                        </Label>
-                        <Input
-                          id="sep-reason-title"
-                          value={reasonTitle}
-                          onChange={(e) => setReasonTitle(e.target.value)}
-                          placeholder="Brief title for the reason"
-                          maxLength={255}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Attachments (required) */}
                   <div className="space-y-2">
                     <Label>
-                      Attachments <span className="text-destructive">*</span>
+                      Resignation Reason{" "}
+                      <span className="text-destructive">*</span>
                     </Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <Paperclip className="me-2 h-4 w-4" />
-                        Add Files
-                      </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={handleFileChange}
+                    <Select
+                      value={resignationReason}
+                      onValueChange={(v) =>
+                        setResignationReason(v as ResignationReason)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RESIGNATION_REASONS.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {resignationReason === "other" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="sep-resignation-details">
+                        Resignation Reason Details{" "}
+                        <span className="text-destructive">*</span>{" "}
+                        <span className="text-muted-foreground text-xs">
+                          (max 1000)
+                        </span>
+                      </Label>
+                      <Textarea
+                        id="sep-resignation-details"
+                        value={resignationReasonDetails}
+                        onChange={(e) =>
+                          setResignationReasonDetails(e.target.value)
+                        }
+                        placeholder="Describe the reason…"
+                        rows={3}
+                        maxLength={1000}
                       />
                     </div>
-                    {attachments.length > 0 ? (
-                      <ul className="space-y-2 mt-2">
-                        {attachments.map((att, i) => (
-                          <li
-                            key={`${att.file.name}-${i}`}
-                            className="flex flex-col gap-1 rounded-md border p-2"
-                          >
-                            <div className="flex items-center gap-2">
-                              <NewAttachmentThumb file={att.file} />
-                              <span className="truncate text-sm flex-1">
-                                {att.file.name}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 shrink-0 ms-auto"
-                                onClick={() => removeAttachment(i)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                            <Input
-                              placeholder="Note (optional, max 255)"
-                              value={att.note}
-                              onChange={(e) =>
-                                updateAttachmentNote(i, e.target.value)
-                              }
-                              maxLength={255}
-                              className="h-8 text-xs"
-                            />
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        At least one attachment is required.
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
 
-              {/* Other Notes */}
+              {/* ── Termination fields ── */}
+              {separationType === "termination" && (
+                <div className="rounded-md border p-4 space-y-4">
+                  <p className="text-sm font-medium leading-none">
+                    Termination Details
+                  </p>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sep-termination-letter">
+                      Termination Letter{" "}
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Textarea
+                      id="sep-termination-letter"
+                      value={terminationLetter}
+                      onChange={(e) => setTerminationLetter(e.target.value)}
+                      placeholder="Letter content…"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>
+                      Termination Reason{" "}
+                      <span className="text-destructive">*</span>
+                    </Label>
+                    <Select
+                      value={terminationReason}
+                      onValueChange={(v) =>
+                        setTerminationReason(v as TerminationReason)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TERMINATION_REASONS.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {terminationReason === "other" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="sep-termination-details">
+                        Termination Reason Details{" "}
+                        <span className="text-destructive">*</span>{" "}
+                        <span className="text-muted-foreground text-xs">
+                          (max 1000)
+                        </span>
+                      </Label>
+                      <Textarea
+                        id="sep-termination-details"
+                        value={terminationReasonDetails}
+                        onChange={(e) =>
+                          setTerminationReasonDetails(e.target.value)
+                        }
+                        placeholder="Describe the reason…"
+                        rows={3}
+                        maxLength={1000}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Attachments ── */}
               <div className="space-y-2">
-                <Label htmlFor="sep-other-notes">
-                  Other Notes{" "}
-                  <span className="text-muted-foreground text-xs">(max 255)</span>
+                <Label>Attachments</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="me-2 h-4 w-4" />
+                    Add Files
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </div>
+                {attachments.length > 0 && (
+                  <ul className="space-y-2 mt-2">
+                    {attachments.map((file, i) => (
+                      <li
+                        key={`${file.name}-${i}`}
+                        className="flex items-center gap-2 rounded-md border p-2"
+                      >
+                        <NewAttachmentThumb file={file} />
+                        <span className="truncate text-sm flex-1">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 shrink-0 ms-auto"
+                          onClick={() => removeAttachment(i)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* ── Additional Notes ── */}
+              <div className="space-y-2">
+                <Label htmlFor="sep-additional-notes">
+                  Additional Notes{" "}
+                  <span className="text-muted-foreground text-xs">(max 2000)</span>
                 </Label>
                 <Textarea
-                  id="sep-other-notes"
-                  value={otherNotes}
-                  onChange={(e) => setOtherNotes(e.target.value)}
-                  placeholder="Additional notes..."
+                  id="sep-additional-notes"
+                  value={additionalNotes}
+                  onChange={(e) => setAdditionalNotes(e.target.value)}
+                  placeholder="Any additional notes…"
                   rows={3}
-                  maxLength={255}
+                  maxLength={2000}
                 />
               </div>
 

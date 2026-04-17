@@ -7,7 +7,6 @@ import {
   Pencil,
   AlertCircle,
   Loader2,
-  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -41,34 +40,27 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import type {
-  Gender,
-  DayOfWeek,
-  ContactType,
-  AccountType,
-  EmploymentType,
-  TShirtSize,
-  EmployeeAddress,
-  EmployeeAvailability,
-  EmployeeCertification,
-  EmployeeContact,
-  EmployeeIdInfo,
-  EmployeeNote,
-  EmployeePaymentInfo,
-  EmployeeSalaryInfo,
-  EmployeeStatusHistory,
-  EmployeeRecord,
+  CreateEmployeeV1Address,
+  CreateEmployeeV1Availability,
+  CreateEmployeeV1AvailabilityTime,
+  CreateEmployeeV1Contact,
+  CreateEmployeeV1EmployeeId,
+  CreateEmployeeV1FinancialInfo,
+  CreateEmployeeV1MaritalHistory,
+  CreateEmployeeV1Obsession,
+  CreateEmployeeV1PayHistory,
+  CreateEmployeeV1Position,
+  CreateEmployeeV1StatusHistory,
+  CreateEmployeeV1StoreAssignment,
 } from "@/types/employee.types";
-import type {
-  ShiftRecord,
-  EmployeeStatusRecord,
-  PositionRecord,
-  EmployeeFileTypeRecord,
-  MaritalStatusRecord,
-  EmployeeIdTypeRecord,
-} from "@/types/hiring.types";
+
+interface AttachmentDraft {
+  type_id: number;
+  file: File | null;
+}
 
 interface EditEmployeeDialogProps {
   employeeId: number | null;
@@ -78,82 +70,9 @@ interface EditEmployeeDialogProps {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Defaults                                                           */
+/*  Constants                                                          */
 /* ------------------------------------------------------------------ */
-const emptyAddress = (): EmployeeAddress => ({
-  address_line_1: "",
-  city: "",
-  state: "",
-  country: "",
-  is_primary: false,
-});
-
-const emptyAvailability = (): EmployeeAvailability => ({
-  days: [],
-  shift_id: 0,
-});
-
-const emptyContact = (): EmployeeContact => ({
-  contact_type: "phone",
-  contact_value: "",
-  is_primary: false,
-});
-
-const emptyNote = (): EmployeeNote => ({ notes: "" });
-
-const emptyPayment = (): EmployeePaymentInfo => ({
-  account_number: "",
-  account_type: "checking",
-  is_primary: false,
-  routing_number: "",
-});
-
-const emptySalary = (): EmployeeSalaryInfo => ({
-  base_pay: 0,
-  performance_pay: 0,
-  salary_date: "",
-});
-
-const emptyStatusHistory = (): EmployeeStatusHistory => ({
-  notes: "",
-  status_date: "",
-  status_type_id: 0,
-});
-
-const emptyCertification = (): EmployeeCertification => ({
-  certification_name: "",
-});
-
-const emptyIdInfo = (): EmployeeIdInfo => ({
-  employee_id_type_id: 0,
-  id_number: "",
-  is_primary: false,
-});
-
-/* ---- Existing-file entry (loaded from API) ---- */
-interface ExistingFileEntry {
-  id: number;
-  file_path: string;
-  type_id: number;
-  notes: string;
-  originalTypeId: number;
-  originalNotes: string;
-  deleted: boolean;
-}
-
-/* ---- New-file entry (being uploaded) ---- */
-interface NewFileEntry {
-  file?: File;
-  type_id: number;
-  notes: string;
-}
-
-const emptyNewFile = (): NewFileEntry => ({
-  type_id: 0,
-  notes: "",
-});
-
-const ALL_DAYS: DayOfWeek[] = [
+const DAYS_OF_WEEK = [
   "sunday",
   "monday",
   "tuesday",
@@ -161,63 +80,123 @@ const ALL_DAYS: DayOfWeek[] = [
   "thursday",
   "friday",
   "saturday",
-];
+] as const;
 
-const T_SHIRT_SIZES: TShirtSize[] = ["XS", "S", "M", "L", "XL", "XXL"];
+const SHIFT_TYPES = ["AM", "PM", "OP"] as const;
+const STATUS_OPTIONS = ["hired", "resigned", "terminated", "rehired", "OJE"] as const;
 
-function formatFileTypeLabel(fileType: string) {
-  return fileType
-    .split("_")
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-}
+const RACE_OPTIONS = [
+  "Caucasian",
+  "African American",
+  "Hispanic",
+  "Asian",
+  "Native American",
+  "Other",
+] as const;
 
-const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
+const RELIGION_OPTIONS = [
+  "Christianity",
+  "Islam",
+  "Judaism",
+  "Buddhism",
+  "Hinduism",
+  "Other",
+] as const;
 
-function ExistingFileThumb({ url }: { url: string }) {
-  const isImg = IMAGE_EXTS.test(url.split("?")[0]);
-  if (isImg) {
-    return (
-      <img
-        src={url}
-        alt="file"
-        className="h-8 w-8 rounded object-cover shrink-0 mt-1"
-      />
-    );
-  }
-  return (
-    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 mt-1">
-      <FileText className="h-4 w-4 text-muted-foreground" />
-    </div>
-  );
-}
+const TSHIRT_OPTIONS = [
+  "XS",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "2XL",
+  "3XL",
+  "4XL",
+  "5XL",
+  "6XL",
+] as const;
 
-function NewFileThumb({ file }: { file: File }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const isImg = IMAGE_EXTS.test(file.name);
+/* ------------------------------------------------------------------ */
+/*  Defaults                                                           */
+/* ------------------------------------------------------------------ */
+const emptyAddress = (): CreateEmployeeV1Address => ({
+  address_name: "",
+  address_1: "",
+  address_2: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  country: "",
+  is_primary: false,
+});
 
-  useEffect(() => {
-    if (!isImg) return;
-    const u = URL.createObjectURL(file);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [file, isImg]);
+const emptyAvailabilityTime = (): CreateEmployeeV1AvailabilityTime => ({
+  available_from: "",
+  available_to: "",
+});
 
-  if (isImg && url) {
-    return (
-      <img
-        src={url}
-        alt={file.name}
-        className="h-8 w-8 rounded object-cover shrink-0 mt-1"
-      />
-    );
-  }
-  return (
-    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 mt-1">
-      <FileText className="h-4 w-4 text-muted-foreground" />
-    </div>
-  );
+const emptyAvailability = (): CreateEmployeeV1Availability => ({
+  day_of_week: "",
+  shift_type: "",
+  times: [emptyAvailabilityTime()],
+});
+
+const emptyContact = (): CreateEmployeeV1Contact => ({
+  contact_name: "",
+  contact_type: "phone",
+  contact_value: "",
+  is_primary: false,
+});
+
+const emptyEmployeeId = (): CreateEmployeeV1EmployeeId => ({
+  id_type_id: 0,
+  id_value: "",
+});
+
+const emptyFinancialInfo = (): CreateEmployeeV1FinancialInfo => ({
+  account_number: "",
+  account_type: "checking",
+  effective_date: "",
+  routing_number: "",
+});
+
+const emptyMaritalHistory = (): CreateEmployeeV1MaritalHistory => ({
+  effective_date: "",
+  marital_id: 0,
+});
+
+const emptyPayHistory = (): CreateEmployeeV1PayHistory => ({
+  base_pay: 0,
+  effective_date: "",
+  performance_pay: 0,
+});
+
+const emptyPosition = (): CreateEmployeeV1Position => ({
+  effective_date: "",
+  position_id: 0,
+});
+
+const emptyStatusHistory = (): CreateEmployeeV1StatusHistory => ({
+  effective_date: "",
+  status: "",
+  notes: "",
+  store_id: 0,
+});
+
+const emptyStoreAssignment = (): CreateEmployeeV1StoreAssignment => ({
+  effective_date: "",
+  store_id: 0,
+});
+
+const emptyAttachment = (): AttachmentDraft => ({
+  type_id: 0,
+  file: null,
+});
+
+/** Strip time portion from ISO datetime string for <input type="date"> */
+function isoToDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  return iso.split("T")[0] ?? "";
 }
 
 /* ------------------------------------------------------------------ */
@@ -230,32 +209,45 @@ export function EditEmployeeDialog({
   onSuccess,
 }: EditEmployeeDialogProps) {
   const { selectedStore } = useSelectedStoreStore();
+  const {
+    positions: positionOptions,
+    maritalStatuses,
+    idTypes: employeeIdTypes,
+    attachmentTypes: employeeFileTypes,
+    isLoading: isLoadingMeta,
+  } = useReferenceCatalogStore();
 
-  /* -- Required fields -- */
+  /* -- Basic fields -- */
   const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [middleName, setMiddleName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState<Gender | "">("");
-  const [ssnNumber, setSsnNumber] = useState("");
-  const [empStatusId, setEmpStatusId] = useState<number>(0);
-  const [positionId, setPositionId] = useState<number>(0);
-  const [employmentType, setEmploymentType] = useState<EmploymentType | "">("");
-  const [maritalStatusId, setMaritalStatusId] = useState<number>(0);
-  const [tShirtSize, setTShirtSize] = useState<TShirtSize | "">("");
+  const [lastName, setLastName] = useState("");
+  const [gender, setGender] = useState("");
+  const [ssn, setSsn] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
 
-  /* -- Optional arrays -- */
-  const [addresses, setAddresses] = useState<EmployeeAddress[]>([]);
-  const [availability, setAvailability] = useState<EmployeeAvailability[]>([]);
-  const [certificationsInfo, setCertificationsInfo] = useState<EmployeeCertification[]>([]);
-  const [contacts, setContacts] = useState<EmployeeContact[]>([]);
-  const [existingFiles, setExistingFiles] = useState<ExistingFileEntry[]>([]);
-  const [newFiles, setNewFiles] = useState<NewFileEntry[]>([]);
-  const [idsInfo, setIdsInfo] = useState<EmployeeIdInfo[]>([]);
-  const [notes, setNotes] = useState<EmployeeNote[]>([]);
-  const [paymentInfo, setPaymentInfo] = useState<EmployeePaymentInfo[]>([]);
-  const [salaryInfo, setSalaryInfo] = useState<EmployeeSalaryInfo[]>([]);
-  const [statusHistory, setStatusHistory] = useState<EmployeeStatusHistory[]>([]);
+  /* -- Obsession -- */
+  const [obsession, setObsession] = useState<CreateEmployeeV1Obsession>({
+    birth_date: "",
+    image: null,
+    notes: "",
+    race: "",
+    religion: "",
+    t_shirt: "",
+  });
+
+  /* -- Array fields -- */
+  const [addresses, setAddresses] = useState<CreateEmployeeV1Address[]>([]);
+  const [availability, setAvailability] = useState<CreateEmployeeV1Availability[]>([]);
+  const [contacts, setContacts] = useState<CreateEmployeeV1Contact[]>([]);
+  const [employeeIds, setEmployeeIds] = useState<CreateEmployeeV1EmployeeId[]>([]);
+  const [financialInfo, setFinancialInfo] = useState<CreateEmployeeV1FinancialInfo[]>([]);
+  const [maritalHistory, setMaritalHistory] = useState<CreateEmployeeV1MaritalHistory[]>([]);
+  const [payHistory, setPayHistory] = useState<CreateEmployeeV1PayHistory[]>([]);
+  const [positions, setPositions] = useState<CreateEmployeeV1Position[]>([]);
+  const [statusHistory, setStatusHistory] = useState<CreateEmployeeV1StatusHistory[]>([]);
+  const [storeAssignments, setStoreAssignments] = useState<CreateEmployeeV1StoreAssignment[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
+  const [existingAttachments, setExistingAttachments] = useState<import("@/types/employee.types").EmployeeV1AttachmentDetail[]>([]);
 
   /* -- UI state -- */
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -264,78 +256,118 @@ export function EditEmployeeDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("personal");
 
-  /* -- Metadata from API -- */
-  const [shifts, setShifts] = useState<ShiftRecord[]>([]);
-  const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeStatusRecord[]>([]);
-  const [positions, setPositions] = useState<PositionRecord[]>([]);
-  const [employeeFileTypes, setEmployeeFileTypes] = useState<EmployeeFileTypeRecord[]>([]);
-  const [maritalStatuses, setMaritalStatuses] = useState<MaritalStatusRecord[]>([]);
-  const [employeeIdTypes, setEmployeeIdTypes] = useState<EmployeeIdTypeRecord[]>([]);
-  const [isLoadingMeta, setIsLoadingMeta] = useState(false);
+  const storeIdNum = selectedStore?.id ? parseInt(selectedStore.id, 10) : 0;
 
-  /* -- Populate form from record -- */
-  function populateForm(emp: EmployeeRecord) {
-    const profile = emp.employee_profile;
-    setFirstName(profile?.first_name ?? "");
-    setMiddleName(profile?.middle_name ?? "");
-    setLastName(profile?.last_name ?? "");
-    setBirthDate(profile?.birth_date ?? "");
-    setGender((profile?.gender as Gender) || "");
-    setSsnNumber(emp.SSN_number ?? "");
-    setEmpStatusId(emp.emp_status_id);
-    setPositionId(emp.position_id);
-    setEmploymentType((emp.employement_type as EmploymentType) || "");
-    setMaritalStatusId(emp.marital_status_id ?? 0);
-    setTShirtSize((emp.T_shirt_size as TShirtSize) || "");
-    setAddresses((emp.employee_addresses ?? []).map((a) => ({ ...a, is_primary: !!a.is_primary })));
+  /* -- Populate form from V1 detail record -- */
+  function populateForm(emp: import("@/types/employee.types").EmployeeV1DetailRecord) {
+    setFirstName(emp.first_name ?? "");
+    setMiddleName(emp.middle_name ?? "");
+    setLastName(emp.last_name ?? "");
+    setGender(emp.gender ?? "");
+    setSsn(emp.ssn ?? "");
+    setEmploymentType(emp.employment_type ?? "");
+
+    setObsession({
+      birth_date: isoToDate(emp.obsession?.birth_date),
+      image: null,
+      notes: emp.obsession?.notes ?? "",
+      race: emp.obsession?.race ?? "",
+      religion: emp.obsession?.religion ?? "",
+      t_shirt: emp.obsession?.t_shirt ?? "",
+    });
+
+    setAddresses(
+      (emp.addresses ?? []).map((a) => ({
+        address_name: a.address_name ?? "",
+        address_1: a.address_1 ?? "",
+        address_2: a.address_2 ?? "",
+        city: a.city ?? "",
+        state: a.state ?? "",
+        zip_code: a.zip_code ?? "",
+        country: a.country ?? "",
+        is_primary: a.is_primary ?? false,
+      })),
+    );
+
     setAvailability(
-      (emp.employee_availability ?? []).map((av) => ({
-        ...av,
-        notes: av.notes ?? null,
-        days: Array.isArray(av.days)
-          ? (av.days as Array<{ day_of_week?: string } | string>)
-              .map((d) => (typeof d === "string" ? d : (d.day_of_week ?? "")).toLowerCase())
-              .filter(Boolean) as DayOfWeek[]
-          : [],
+      (emp.availability_days ?? []).map((av) => ({
+        day_of_week: av.day_of_week ?? "",
+        shift_type: av.shift_type ?? "",
+        times:
+          av.times && av.times.length > 0
+            ? av.times.map((t) => ({
+                available_from: t.available_from ?? "",
+                available_to: t.available_to ?? "",
+              }))
+            : [emptyAvailabilityTime()],
       })),
     );
-    setContacts((emp.employee_contacts ?? []).map((c) => ({ ...c, is_primary: !!c.is_primary })));
-    setExistingFiles(
-      (emp.employee_files ?? []).map((f) => ({
-        id: f.id!,
-        file_path: f.file_path ?? "",
-        type_id: f.type_id ?? 0,
-        notes: f.notes ?? "",
-        originalTypeId: f.type_id ?? 0,
-        originalNotes: f.notes ?? "",
-        deleted: false,
+
+    setContacts(
+      (emp.contacts ?? []).map((c) => ({
+        contact_name: c.contact_name ?? "",
+        contact_type: c.contact_type ?? "phone",
+        contact_value: c.contact_value ?? "",
+        is_primary: c.is_primary ?? false,
       })),
     );
-    setNewFiles([]);
-    setCertificationsInfo(
-      (emp.created_certifications_info ?? []).map((c) => ({
-        certification_name: c.certification_name,
+
+    setEmployeeIds(
+      (emp.ids ?? []).map((id) => ({
+        id_type_id: id.id_type_id ?? 0,
+        id_value: id.id_value ?? "",
       })),
     );
-    setIdsInfo(
-      (emp.employee_ids ?? []).map((id) => ({
-        employee_id_type_id: id.employee_id_type_id,
-        id_number: String(id.id_number),
-        is_primary: !!id.is_primary,
+
+    setFinancialInfo(
+      (emp.financial_infos ?? []).map((fi) => ({
+        account_number: fi.account_number ?? "",
+        routing_number: fi.routing_number ?? "",
+        account_type: fi.account_type ?? "checking",
+        effective_date: isoToDate(fi.effective_date),
       })),
     );
-    setNotes(emp.employee_notes ?? []);
-    setPaymentInfo(
-      (emp.employee_payment_info ?? []).map((p) => ({
-        ...p,
-        routing_number: String(p.routing_number ?? ""),
-        account_number: String(p.account_number ?? ""),
-        account_type: (p.account_type === "savings" ? "saving" : p.account_type) as AccountType,
-        is_primary: !!p.is_primary,
+
+    setMaritalHistory(
+      (emp.maritals ?? []).map((mh) => ({
+        effective_date: isoToDate(mh.effective_date),
+        marital_id: mh.marital_id ?? 0,
       })),
     );
-    setSalaryInfo(emp.employee_salary_info ?? []);
-    setStatusHistory(emp.employee_status_history ?? []);
+
+    setPayHistory(
+      (emp.pay_histories ?? []).map((ph) => ({
+        base_pay: parseFloat(ph.base_pay) || 0,
+        effective_date: isoToDate(ph.effective_date),
+        performance_pay: parseFloat(ph.performance_pay) || 0,
+      })),
+    );
+
+    setPositions(
+      (emp.positions ?? []).map((p) => ({
+        effective_date: isoToDate(p.effective_date),
+        position_id: p.position_id ?? 0,
+      })),
+    );
+
+    setStatusHistory(
+      (emp.status_histories ?? []).map((sh) => ({
+        effective_date: isoToDate(sh.effective_date),
+        status: sh.status ?? "",
+        notes: sh.notes ?? "",
+        store_id: sh.store_id ?? storeIdNum,
+      })),
+    );
+
+    setStoreAssignments(
+      (emp.stores ?? []).map((sa) => ({
+        effective_date: isoToDate(sa.effective_date),
+        store_id: sa.store_id ?? 0,
+      })),
+    );
+
+    setExistingAttachments(emp.attachments ?? []);
+    setAttachments([]);
   }
 
   /* -- Load employee data when dialog opens -- */
@@ -349,7 +381,7 @@ export function EditEmployeeDialog({
     setActiveTab("personal");
 
     employeeService
-      .getEmployeeDetails(selectedStore.storeId, employeeId)
+      .getEmployeeDetailsV1(selectedStore.storeId, employeeId)
       .then((res) => {
         if (!cancelled) populateForm(res.data);
       })
@@ -370,32 +402,6 @@ export function EditEmployeeDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, employeeId, selectedStore?.storeId]);
 
-  /* -- Load metadata -- */
-  useEffect(() => {
-    if (!open || !selectedStore?.storeId) return;
-    let cancelled = false;
-    setIsLoadingMeta(true);
-    hiringService
-      .getCreateEmployeePage(selectedStore.storeId)
-      .then((data) => {
-        if (!cancelled) {
-          setShifts(data.shifts);
-          setEmployeeStatuses(data.employeeStatuses);
-          setPositions(data.positions);
-          setEmployeeFileTypes(data.employeeFileTypes);
-          setMaritalStatuses(data.employeeMaritalStatuses);
-          setEmployeeIdTypes(data.employeeIdTypes);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setIsLoadingMeta(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, selectedStore?.storeId]);
-
   function handleClose() {
     onOpenChange(false);
   }
@@ -404,11 +410,8 @@ export function EditEmployeeDialog({
   const isFormValid =
     firstName.trim() !== "" &&
     lastName.trim() !== "" &&
-    ssnNumber.trim().length === 9 &&
-    empStatusId > 0 &&
-    positionId > 0 &&
-    employmentType !== "" &&
-    maritalStatusId > 0;
+    gender !== "" &&
+    employmentType !== "";
 
   /* -- Submit -- */
   async function handleSubmit() {
@@ -421,61 +424,70 @@ export function EditEmployeeDialog({
     setIsSubmitting(true);
     setSubmitError(null);
 
-    try {
-      const deletedImage = existingFiles.filter((f) => f.deleted).map((f) => f.id);
-      const keptImage = existingFiles
-        .filter(
-          (f) =>
-            !f.deleted && f.type_id === f.originalTypeId && f.notes === f.originalNotes,
-        )
-        .map((f) => f.id);
-      const updatedImageItems = existingFiles
-        .filter(
-          (f) =>
-            !f.deleted && (f.type_id !== f.originalTypeId || f.notes !== f.originalNotes),
-        )
-        .map((f) => ({ file: f.file_path, type_id: f.type_id, notes: f.notes || null }));
-      const uploadedFiles = newFiles
-        .filter((f) => f.file instanceof File)
-        .map((f) => ({ file: f.file as File, type_id: f.type_id, notes: f.notes }));
+    const hasObsession = !!obsession.birth_date;
 
-      await employeeService.updateEmployee(selectedStore.storeId, employeeId, {
+    try {
+      await employeeService.updateEmployeeV1(selectedStore.storeId, employeeId, {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         ...(middleName.trim() ? { middle_name: middleName.trim() } : {}),
-        ...(birthDate ? { birth_date: birthDate } : { birth_date: "" }),
-        gender: (gender as Gender) || "other",
-        ssn_number: ssnNumber.trim(),
-        emp_status_id: empStatusId,
-        position_id: positionId,
-        employement_type: employmentType as EmploymentType,
-        marital_status_id: maritalStatusId,
-        ...(tShirtSize ? { T_shirt_size: tShirtSize as TShirtSize } : {}),
-        ...(addresses.length > 0 ? { addresses } : {}),
-        ...(availability.length > 0 ? { availability } : {}),
-        ...(certificationsInfo.length > 0
+        gender,
+        ...(ssn.trim() ? { ssn: ssn.trim() } : {}),
+        employment_type: employmentType,
+        ...(hasObsession
           ? {
-              certifications_info: certificationsInfo.filter((c) =>
-                c.certification_name.trim(),
-              ),
+              obsession: {
+                birth_date: obsession.birth_date,
+                ...(obsession.image ? { image: obsession.image } : {}),
+                ...(obsession.notes ? { notes: obsession.notes } : {}),
+                ...(obsession.race ? { race: obsession.race } : {}),
+                ...(obsession.religion ? { religion: obsession.religion } : {}),
+                ...(obsession.t_shirt ? { t_shirt: obsession.t_shirt } : {}),
+              },
+            }
+          : {}),
+        ...(addresses.length > 0 ? { addresses } : {}),
+        ...(availability.length > 0
+          ? {
+              availability: availability.map((av) => ({
+                ...av,
+                times: (av.times ?? []).map((t) => ({
+                  available_from: t.available_from,
+                  available_to: t.available_to,
+                })),
+              })),
             }
           : {}),
         ...(contacts.length > 0 ? { contacts } : {}),
-        ...(uploadedFiles.length > 0 ? { files: uploadedFiles } : {}),
-        ...(deletedImage.length > 0 ? { deletedImage } : {}),
-        ...(keptImage.length > 0 ? { keptImage } : {}),
-        ...(updatedImageItems.length > 0 ? { updatedImage: updatedImageItems } : {}),
-        ...(idsInfo.length > 0
+        ...(employeeIds.filter((e) => e.id_type_id > 0 && e.id_value.trim()).length > 0
+          ? { employee_ids: employeeIds.filter((e) => e.id_type_id > 0 && e.id_value.trim()) }
+          : {}),
+        ...(financialInfo.filter((f) => f.account_number.trim() && f.routing_number.trim()).length > 0
+          ? { financial_info: financialInfo.filter((f) => f.account_number.trim() && f.routing_number.trim()) }
+          : {}),
+        ...(maritalHistory.length > 0 ? { marital_history: maritalHistory } : {}),
+        ...(payHistory.length > 0 ? { pay_history: payHistory } : {}),
+        ...(positions.filter((p) => p.position_id > 0).length > 0
+          ? { positions: positions.filter((p) => p.position_id > 0) }
+          : {}),
+        ...(statusHistory.length > 0
           ? {
-              ids_info: idsInfo.filter(
-                (id) => id.employee_id_type_id > 0 && id.id_number.trim(),
-              ),
+              status_history: statusHistory.map((sh) => ({
+                ...sh,
+                store_id: sh.store_id || storeIdNum,
+              })),
             }
           : {}),
-        ...(notes.length > 0 ? { notes } : {}),
-        ...(paymentInfo.length > 0 ? { payment_info: paymentInfo } : {}),
-        ...(salaryInfo.length > 0 ? { salary_info: salaryInfo } : {}),
-        ...(statusHistory.length > 0 ? { status_history: statusHistory } : {}),
+        ...(storeAssignments.filter((s) => s.store_id > 0).length > 0
+          ? { store_assignments: storeAssignments.filter((s) => s.store_id > 0) }
+          : {}),
+        ...(attachments.filter((a) => a.type_id > 0 && a.file !== null).length > 0
+          ? {
+              attachments: attachments.filter(
+                (a) => a.type_id > 0 && a.file !== null,
+              ) as import("@/types/employee.types").CreateEmployeeV1Attachment[],
+            }
+          : {}),
       });
 
       toast.success("Employee updated successfully.");
@@ -511,6 +523,7 @@ export function EditEmployeeDialog({
     );
   }
 
+  /* -- Sub-component helpers -- */
   function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     return (
       <Button type="button" variant="outline" size="sm" onClick={onClick}>
@@ -564,7 +577,7 @@ export function EditEmployeeDialog({
   /* ---------------------------------------------------------------- */
 
   /* 1) Basic Info */
-  function renderBasicTab() {
+  function renderBasicSection() {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -575,7 +588,7 @@ export function EditEmployeeDialog({
             <Input
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              maxLength={30}
+              maxLength={100}
               placeholder="First name"
             />
           </div>
@@ -584,7 +597,7 @@ export function EditEmployeeDialog({
             <Input
               value={middleName}
               onChange={(e) => setMiddleName(e.target.value)}
-              maxLength={30}
+              maxLength={100}
               placeholder="Middle name"
             />
           </div>
@@ -595,148 +608,44 @@ export function EditEmployeeDialog({
             <Input
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              maxLength={30}
+              maxLength={100}
               placeholder="Last name"
             />
           </div>
-
           <div className="space-y-1.5">
             <Label>
-              SSN Number <span className="text-destructive">*</span>
+              Gender <span className="text-destructive">*</span>
             </Label>
-            <Input
-              value={ssnNumber}
-              onChange={(e) => setSsnNumber(e.target.value.replace(/\D/g, "").slice(0, 9))}
-              placeholder="9-digit SSN"
-              maxLength={9}
-            />
-            {ssnNumber.length > 0 && ssnNumber.length < 9 && (
-              <p className="text-xs text-destructive">{9 - ssnNumber.length} more digits required</p>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Birth Date</Label>
-            <Input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Gender</Label>
-            <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
+            <Select value={gender} onValueChange={setGender}>
               <SelectTrigger>
                 <SelectValue placeholder="Select gender" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="male">Male</SelectItem>
                 <SelectItem value="female">Female</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
-
           <div className="space-y-1.5">
-            <Label>
-              Employee Status <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={empStatusId ? String(empStatusId) : ""}
-              onValueChange={(v) => setEmpStatusId(parseInt(v, 10))}
-              disabled={isLoadingMeta}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select status"} />
-              </SelectTrigger>
-              <SelectContent>
-                {employeeStatuses.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    {s.emp_status.charAt(0).toUpperCase() + s.emp_status.slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>SSN</Label>
+            <Input
+              value={ssn}
+              onChange={(e) => setSsn(e.target.value.replace(/\D/g, "").slice(0, 20))}
+              placeholder="SSN"
+              maxLength={20}
+            />
           </div>
-
-          <div className="space-y-1.5">
-            <Label>
-              Position <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={positionId ? String(positionId) : ""}
-              onValueChange={(v) => setPositionId(parseInt(v, 10))}
-              disabled={isLoadingMeta}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select position"} />
-              </SelectTrigger>
-              <SelectContent>
-                {positions.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>
-                    {p.position_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-1.5">
             <Label>
               Employment Type <span className="text-destructive">*</span>
             </Label>
-            <Select
-              value={employmentType}
-              onValueChange={(v) => setEmploymentType(v as EmploymentType)}
-            >
+            <Select value={employmentType} onValueChange={setEmploymentType}>
               <SelectTrigger>
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="W2">W-2</SelectItem>
+                <SelectItem value="W2">W2</SelectItem>
                 <SelectItem value="1099">1099</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>
-              Marital Status <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={maritalStatusId ? String(maritalStatusId) : ""}
-              onValueChange={(v) => setMaritalStatusId(parseInt(v, 10))}
-              disabled={isLoadingMeta}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select marital status"} />
-              </SelectTrigger>
-              <SelectContent>
-                {maritalStatuses.map((ms) => (
-                  <SelectItem key={ms.id} value={String(ms.id)}>
-                    {ms.marital_status_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>T-Shirt Size</Label>
-            <Select
-              value={tShirtSize}
-              onValueChange={(v) => setTShirtSize(v as TShirtSize)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select size" />
-              </SelectTrigger>
-              <SelectContent>
-                {T_SHIRT_SIZES.map((size) => (
-                  <SelectItem key={size} value={size}>
-                    {size}
-                  </SelectItem>
-                ))}
               </SelectContent>
             </Select>
           </div>
@@ -745,16 +654,169 @@ export function EditEmployeeDialog({
     );
   }
 
-  /* 2) Contacts */
-  function renderContactsTab() {
+  /* 2) Obsession */
+  function renderObsessionSection() {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>Birth Date</Label>
+            <Input
+              type="date"
+              value={obsession.birth_date ?? ""}
+              onChange={(e) => setObsession((prev) => ({ ...prev, birth_date: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Race</Label>
+            <Select
+              value={obsession.race ?? ""}
+              onValueChange={(v) => setObsession((prev) => ({ ...prev, race: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select race" />
+              </SelectTrigger>
+              <SelectContent>
+                {RACE_OPTIONS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Religion</Label>
+            <Select
+              value={obsession.religion ?? ""}
+              onValueChange={(v) => setObsession((prev) => ({ ...prev, religion: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select religion" />
+              </SelectTrigger>
+              <SelectContent>
+                {RELIGION_OPTIONS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>T-Shirt Size</Label>
+            <Select
+              value={obsession.t_shirt ?? ""}
+              onValueChange={(v) => setObsession((prev) => ({ ...prev, t_shirt: v }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select size" />
+              </SelectTrigger>
+              <SelectContent>
+                {TSHIRT_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Profile Image</Label>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) =>
+                setObsession((prev) => ({ ...prev, image: e.target.files?.[0] ?? null }))
+              }
+            />
+            {obsession.image && (
+              <p className="text-xs text-muted-foreground truncate">{obsession.image.name}</p>
+            )}
+          </div>
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+            <Label>Notes</Label>
+            <Textarea
+              value={obsession.notes ?? ""}
+              onChange={(e) => setObsession((prev) => ({ ...prev, notes: e.target.value }))}
+              placeholder="Optional notes"
+              rows={2}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* 3) Marital History */
+  function renderMaritalHistorySection() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Add email or phone contacts.</p>
+          <p className="text-sm text-muted-foreground">Marital history records.</p>
+          <AddButton
+            label="Add Marital Record"
+            onClick={() => addItem(setMaritalHistory, emptyMaritalHistory)}
+          />
+        </div>
+        {maritalHistory.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No marital history added.</p>
+        )}
+        {maritalHistory.map((mh, idx) => (
+          <div key={idx} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Marital Record {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setMaritalHistory, idx)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Marital Status</Label>
+                <Select
+                  value={mh.marital_id && mh.marital_id > 0 ? String(mh.marital_id) : ""}
+                  onValueChange={(v) =>
+                    updateItem(setMaritalHistory, idx, "marital_id", parseInt(v, 10))
+                  }
+                  disabled={isLoadingMeta}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select status"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {maritalStatuses.map((ms) => (
+                      <SelectItem key={ms.id} value={String(ms.id)}>
+                        {ms.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Effective Date</Label>
+                <Input
+                  type="date"
+                  value={mh.effective_date ?? ""}
+                  onChange={(e) =>
+                    updateItem(setMaritalHistory, idx, "effective_date", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* 4) Contacts */
+  function renderContactsSection() {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Add email, phone, or emergency contacts.</p>
           <AddButton label="Add Contact" onClick={() => addItem(setContacts, emptyContact)} />
         </div>
         {contacts.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No contacts added.</p>
+          <p className="text-sm text-muted-foreground text-center py-4">No contacts added.</p>
         )}
         {contacts.map((c, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
@@ -762,14 +824,25 @@ export function EditEmployeeDialog({
               <Badge variant="secondary">Contact {idx + 1}</Badge>
               <RemoveButton onClick={() => removeItem(setContacts, idx)} />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-1.5">
-                <Label>Type <span className="text-destructive">*</span></Label>
+                <Label>
+                  Contact Name <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={c.contact_name ?? ""}
+                  onChange={(e) => updateItem(setContacts, idx, "contact_name", e.target.value)}
+                  maxLength={100}
+                  placeholder="Contact name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  Type <span className="text-destructive">*</span>
+                </Label>
                 <Select
-                  value={c.contact_type ?? "phone"}
-                  onValueChange={(v) =>
-                    updateItem(setContacts, idx, "contact_type", v as ContactType)
-                  }
+                  value={c.contact_type}
+                  onValueChange={(v) => updateItem(setContacts, idx, "contact_type", v)}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -777,17 +850,21 @@ export function EditEmployeeDialog({
                   <SelectContent>
                     <SelectItem value="phone">Phone</SelectItem>
                     <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="emergency_contact">Emergency Contact</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Value <span className="text-destructive">*</span></Label>
+                <Label>
+                  Value <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  value={c.contact_value ?? ""}
-                  onChange={(e) =>
-                    updateItem(setContacts, idx, "contact_value", e.target.value)
+                  value={c.contact_value}
+                  onChange={(e) => updateItem(setContacts, idx, "contact_value", e.target.value)}
+                  maxLength={255}
+                  placeholder={
+                    c.contact_type === "email" ? "email@example.com" : "+1 555 000 0000"
                   }
-                  placeholder={c.contact_type === "email" ? "email@example.com" : "+1 555 000 0000"}
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
@@ -804,8 +881,8 @@ export function EditEmployeeDialog({
     );
   }
 
-  /* 3) Addresses */
-  function renderAddressesTab() {
+  /* 5) Addresses */
+  function renderAddressesSection() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -813,7 +890,7 @@ export function EditEmployeeDialog({
           <AddButton label="Add Address" onClick={() => addItem(setAddresses, emptyAddress)} />
         </div>
         {addresses.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No addresses added.</p>
+          <p className="text-sm text-muted-foreground text-center py-4">No addresses added.</p>
         )}
         {addresses.map((a, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
@@ -823,27 +900,40 @@ export function EditEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Address Line 1 <span className="text-destructive">*</span></Label>
+                <Label>
+                  Address Name <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  value={a.address_line_1 ?? ""}
-                  onChange={(e) => updateItem(setAddresses, idx, "address_line_1", e.target.value)}
+                  value={a.address_name ?? ""}
+                  onChange={(e) => updateItem(setAddresses, idx, "address_name", e.target.value)}
+                  maxLength={100}
+                  placeholder="e.g. Home, Work"
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>
+                  Address 1 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={a.address_1 ?? ""}
+                  onChange={(e) => updateItem(setAddresses, idx, "address_1", e.target.value)}
                   maxLength={255}
                   placeholder="123 Main St"
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Address Line 2</Label>
+                <Label>Address 2</Label>
                 <Input
-                  value={a.address_line_2 ?? ""}
-                  onChange={(e) =>
-                    updateItem(setAddresses, idx, "address_line_2", e.target.value || null)
-                  }
+                  value={a.address_2 ?? ""}
+                  onChange={(e) => updateItem(setAddresses, idx, "address_2", e.target.value)}
                   maxLength={255}
                   placeholder="Apt, suite, unit, etc."
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>City <span className="text-destructive">*</span></Label>
+                <Label>
+                  City <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.city ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "city", e.target.value)}
@@ -852,7 +942,9 @@ export function EditEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>State <span className="text-destructive">*</span></Label>
+                <Label>
+                  State <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.state ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "state", e.target.value)}
@@ -861,23 +953,23 @@ export function EditEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Country <span className="text-destructive">*</span></Label>
+                <Label>
+                  Zip Code <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={a.zip_code ?? ""}
+                  onChange={(e) => updateItem(setAddresses, idx, "zip_code", e.target.value)}
+                  maxLength={20}
+                  placeholder="12345"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Country</Label>
                 <Input
                   value={a.country ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "country", e.target.value)}
                   maxLength={100}
                   placeholder="Country"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Zip Code</Label>
-                <Input
-                  value={a.zip_code ?? ""}
-                  onChange={(e) =>
-                    updateItem(setAddresses, idx, "zip_code", e.target.value || null)
-                  }
-                  maxLength={20}
-                  placeholder="12345"
                 />
               </div>
               <div className="flex items-end gap-2 pb-0.5">
@@ -894,12 +986,14 @@ export function EditEmployeeDialog({
     );
   }
 
-  /* 4) Availability */
-  function renderAvailabilityTab() {
+  /* 6) Availability */
+  function renderAvailabilitySection() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Shifts and day availability.</p>
+          <p className="text-sm text-muted-foreground">
+            Availability per day with shift type and time windows.
+          </p>
           <AddButton
             label="Add Availability"
             onClick={() => addItem(setAvailability, emptyAvailability)}
@@ -914,133 +1008,170 @@ export function EditEmployeeDialog({
               <Badge variant="secondary">Availability {idx + 1}</Badge>
               <RemoveButton onClick={() => removeItem(setAvailability, idx)} />
             </div>
-            <div className="space-y-2">
-              <Label>Shift <span className="text-destructive">*</span></Label>
-              <Select
-                value={av.shift_id && av.shift_id > 0 ? av.shift_id.toString() : ""}
-                onValueChange={(v) =>
-                  updateItem(setAvailability, idx, "shift_id", parseInt(v, 10))
-                }
-                disabled={isLoadingMeta}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={isLoadingMeta ? "Loading shifts..." : "Select a shift"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {shifts.map((s) => (
-                    <SelectItem key={s.id} value={s.id.toString()}>
-                      {s.shift}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Days <span className="text-destructive">*</span></Label>
-              <div className="flex flex-wrap gap-1.5">
-                {ALL_DAYS.map((day) => {
-                  const selected = av.days?.includes(day) ?? false;
-                  return (
-                    <Button
-                      key={day}
-                      type="button"
-                      size="sm"
-                      variant={selected ? "default" : "outline"}
-                      className="h-8 px-3 text-xs capitalize"
-                      onClick={() => {
-                        const current = av.days ?? [];
-                        const next = selected
-                          ? current.filter((d) => d !== day)
-                          : [...current, day];
-                        updateItem(setAvailability, idx, "days", next as DayOfWeek[]);
-                      }}
-                    >
-                      {day.slice(0, 3)}
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                value={av.notes ?? ""}
-                onChange={(e) =>
-                  updateItem(setAvailability, idx, "notes", e.target.value || null)
-                }
-                placeholder="Optional notes"
-                rows={2}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  /* 5) Payment Info */
-  function renderPaymentTab() {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Bank account details.</p>
-          <AddButton label="Add Account" onClick={() => addItem(setPaymentInfo, emptyPayment)} />
-        </div>
-        {paymentInfo.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No payment info added.</p>
-        )}
-        {paymentInfo.map((p, idx) => (
-          <div key={idx} className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">Account {idx + 1}</Badge>
-              <RemoveButton onClick={() => removeItem(setPaymentInfo, idx)} />
-            </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Account Number <span className="text-destructive">*</span></Label>
-                <Input
-                  value={p.account_number ?? ""}
-                  onChange={(e) =>
-                    updateItem(setPaymentInfo, idx, "account_number", e.target.value)
-                  }
-                  maxLength={50}
-                  placeholder="Account number"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Routing Number <span className="text-destructive">*</span></Label>
-                <Input
-                  value={p.routing_number ?? ""}
-                  onChange={(e) =>
-                    updateItem(setPaymentInfo, idx, "routing_number", e.target.value)
-                  }
-                  maxLength={50}
-                  placeholder="Routing number"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Account Type <span className="text-destructive">*</span></Label>
+                <Label>
+                  Day of Week <span className="text-destructive">*</span>
+                </Label>
                 <Select
-                  value={p.account_type ?? "checking"}
-                  onValueChange={(v) =>
-                    updateItem(setPaymentInfo, idx, "account_type", v as AccountType)
-                  }
+                  value={av.day_of_week}
+                  onValueChange={(v) => updateItem(setAvailability, idx, "day_of_week", v)}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select day" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="checking">Checking</SelectItem>
-                    <SelectItem value="saving">Saving</SelectItem>
+                    {DAYS_OF_WEEK.map((d) => (
+                      <SelectItem key={d} value={d} className="capitalize">
+                        {d.charAt(0).toUpperCase() + d.slice(1)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-end gap-2 pb-0.5">
-                <Checkbox
-                  checked={p.is_primary ?? false}
-                  onCheckedChange={(v) => updateItem(setPaymentInfo, idx, "is_primary", !!v)}
+              <div className="space-y-1.5">
+                <Label>
+                  Shift Type <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={av.shift_type}
+                  onValueChange={(v) => updateItem(setAvailability, idx, "shift_type", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select shift" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SHIFT_TYPES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Time Windows
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() =>
+                    updateItem(setAvailability, idx, "times", [
+                      ...(av.times ?? []),
+                      emptyAvailabilityTime(),
+                    ])
+                  }
+                >
+                  <Plus className="me-1 h-3 w-3" />
+                  Add Time
+                </Button>
+              </div>
+              {(av.times ?? []).map((t, tIdx) => (
+                <div key={tIdx} className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="text-xs">From</Label>
+                    <Input
+                      type="time"
+                      value={t.available_from}
+                      onChange={(e) => {
+                        const newTimes = (av.times ?? []).map((tm, ti) =>
+                          ti === tIdx ? { ...tm, available_from: e.target.value } : tm,
+                        );
+                        updateItem(setAvailability, idx, "times", newTimes);
+                      }}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="text-xs">To</Label>
+                    <Input
+                      type="time"
+                      value={t.available_to}
+                      onChange={(e) => {
+                        const newTimes = (av.times ?? []).map((tm, ti) =>
+                          ti === tIdx ? { ...tm, available_to: e.target.value } : tm,
+                        );
+                        updateItem(setAvailability, idx, "times", newTimes);
+                      }}
+                    />
+                  </div>
+                  {(av.times ?? []).length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:text-destructive shrink-0"
+                      onClick={() => {
+                        const newTimes = (av.times ?? []).filter((_, ti) => ti !== tIdx);
+                        updateItem(setAvailability, idx, "times", newTimes);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* 7) Positions */
+  function renderPositionsSection() {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Employee position assignments.</p>
+          <AddButton label="Add Position" onClick={() => addItem(setPositions, emptyPosition)} />
+        </div>
+        {positions.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No positions added.</p>
+        )}
+        {positions.map((p, idx) => (
+          <div key={idx} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Position {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setPositions, idx)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Position <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={p.position_id > 0 ? String(p.position_id) : ""}
+                  onValueChange={(v) =>
+                    updateItem(setPositions, idx, "position_id", parseInt(v, 10))
+                  }
+                  disabled={isLoadingMeta}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select position"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {positionOptions.map((po) => (
+                      <SelectItem key={po.id} value={String(po.id)}>
+                        {po.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Effective Date</Label>
+                <Input
+                  type="date"
+                  value={p.effective_date ?? ""}
+                  onChange={(e) =>
+                    updateItem(setPositions, idx, "effective_date", e.target.value)
+                  }
                 />
-                <Label className="text-sm">Primary</Label>
               </div>
             </div>
           </div>
@@ -1049,22 +1180,25 @@ export function EditEmployeeDialog({
     );
   }
 
-  /* 6) Salary */
-  function renderSalaryTab() {
+  /* 8) Pay History */
+  function renderPayHistorySection() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Salary information.</p>
-          <AddButton label="Add Salary" onClick={() => addItem(setSalaryInfo, emptySalary)} />
+          <p className="text-sm text-muted-foreground">Pay history records.</p>
+          <AddButton
+            label="Add Pay Record"
+            onClick={() => addItem(setPayHistory, emptyPayHistory)}
+          />
         </div>
-        {salaryInfo.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No salary info added.</p>
+        {payHistory.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No pay history added.</p>
         )}
-        {salaryInfo.map((s, idx) => (
+        {payHistory.map((ph, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <Badge variant="secondary">Salary {idx + 1}</Badge>
-              <RemoveButton onClick={() => removeItem(setSalaryInfo, idx)} />
+              <Badge variant="secondary">Pay Record {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setPayHistory, idx)} />
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
@@ -1073,9 +1207,9 @@ export function EditEmployeeDialog({
                   type="number"
                   min={0}
                   step="0.01"
-                  value={s.base_pay || ""}
+                  value={ph.base_pay || ""}
                   onChange={(e) =>
-                    updateItem(setSalaryInfo, idx, "base_pay", parseFloat(e.target.value) || 0)
+                    updateItem(setPayHistory, idx, "base_pay", parseFloat(e.target.value) || 0)
                   }
                   placeholder="0.00"
                 />
@@ -1086,10 +1220,10 @@ export function EditEmployeeDialog({
                   type="number"
                   min={0}
                   step="0.01"
-                  value={s.performance_pay || ""}
+                  value={ph.performance_pay || ""}
                   onChange={(e) =>
                     updateItem(
-                      setSalaryInfo,
+                      setPayHistory,
                       idx,
                       "performance_pay",
                       parseFloat(e.target.value) || 0,
@@ -1099,11 +1233,13 @@ export function EditEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Salary Date</Label>
+                <Label>Effective Date</Label>
                 <Input
                   type="date"
-                  value={s.salary_date ?? ""}
-                  onChange={(e) => updateItem(setSalaryInfo, idx, "salary_date", e.target.value)}
+                  value={ph.effective_date ?? ""}
+                  onChange={(e) =>
+                    updateItem(setPayHistory, idx, "effective_date", e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -1113,32 +1249,115 @@ export function EditEmployeeDialog({
     );
   }
 
-  /* 7) Employee IDs */
-  function renderIdsTab() {
+  /* 9) Financial Info */
+  function renderFinancialInfoSection() {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Bank account / financial details.</p>
+          <AddButton
+            label="Add Financial Info"
+            onClick={() => addItem(setFinancialInfo, emptyFinancialInfo)}
+          />
+        </div>
+        {financialInfo.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No financial info added.</p>
+        )}
+        {financialInfo.map((fi, idx) => (
+          <div key={idx} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Account {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setFinancialInfo, idx)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Account Number <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={fi.account_number}
+                  onChange={(e) =>
+                    updateItem(setFinancialInfo, idx, "account_number", e.target.value)
+                  }
+                  maxLength={255}
+                  placeholder="Account number"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  Routing Number <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={fi.routing_number}
+                  onChange={(e) =>
+                    updateItem(setFinancialInfo, idx, "routing_number", e.target.value)
+                  }
+                  maxLength={255}
+                  placeholder="Routing number"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  Account Type <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={fi.account_type}
+                  onValueChange={(v) => updateItem(setFinancialInfo, idx, "account_type", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="checking">Checking</SelectItem>
+                    <SelectItem value="savings">Savings</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Effective Date</Label>
+                <Input
+                  type="date"
+                  value={fi.effective_date ?? ""}
+                  onChange={(e) =>
+                    updateItem(setFinancialInfo, idx, "effective_date", e.target.value)
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* 10) Employee IDs */
+  function renderEmployeeIdsSection() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             Employee ID references (e.g., Paychecks ID, Altemitrix ID).
           </p>
-          <AddButton label="Add ID" onClick={() => addItem(setIdsInfo, emptyIdInfo)} />
+          <AddButton label="Add ID" onClick={() => addItem(setEmployeeIds, emptyEmployeeId)} />
         </div>
-        {idsInfo.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-6">No IDs added.</p>
+        {employeeIds.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No IDs added.</p>
         )}
-        {idsInfo.map((id, idx) => (
+        {employeeIds.map((eid, idx) => (
           <div key={idx} className="rounded-lg border p-4 space-y-3">
             <div className="flex items-center justify-between">
               <Badge variant="secondary">ID {idx + 1}</Badge>
-              <RemoveButton onClick={() => removeItem(setIdsInfo, idx)} />
+              <RemoveButton onClick={() => removeItem(setEmployeeIds, idx)} />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>ID Type <span className="text-destructive">*</span></Label>
+                <Label>
+                  ID Type <span className="text-destructive">*</span>
+                </Label>
                 <Select
-                  value={id.employee_id_type_id > 0 ? String(id.employee_id_type_id) : ""}
+                  value={eid.id_type_id > 0 ? String(eid.id_type_id) : ""}
                   onValueChange={(v) =>
-                    updateItem(setIdsInfo, idx, "employee_id_type_id", parseInt(v, 10))
+                    updateItem(setEmployeeIds, idx, "id_type_id", parseInt(v, 10))
                   }
                   disabled={isLoadingMeta}
                 >
@@ -1148,27 +1367,22 @@ export function EditEmployeeDialog({
                   <SelectContent>
                     {employeeIdTypes.map((t) => (
                       <SelectItem key={t.id} value={String(t.id)}>
-                        {t.type_name}
+                        {t.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>ID Number <span className="text-destructive">*</span></Label>
+                <Label>
+                  ID Value <span className="text-destructive">*</span>
+                </Label>
                 <Input
-                  value={id.id_number}
-                  onChange={(e) => updateItem(setIdsInfo, idx, "id_number", e.target.value)}
+                  value={eid.id_value}
+                  onChange={(e) => updateItem(setEmployeeIds, idx, "id_value", e.target.value)}
                   maxLength={255}
                   placeholder="e.g. 123456"
                 />
-              </div>
-              <div className="flex items-end gap-2 pb-0.5">
-                <Checkbox
-                  checked={id.is_primary ?? false}
-                  onCheckedChange={(v) => updateItem(setIdsInfo, idx, "is_primary", !!v)}
-                />
-                <Label className="text-sm">Primary</Label>
               </div>
             </div>
           </div>
@@ -1177,307 +1391,235 @@ export function EditEmployeeDialog({
     );
   }
 
-  /* 8) Notes, Files, Certifications & Status History */
-  function renderNotesTab() {
+  /* 11) Status History */
+  function renderStatusHistorySection() {
     return (
-      <div className="space-y-6">
-        {/* Files */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Files</p>
-            <AddButton
-              label="Add File"
-              onClick={() => setNewFiles((prev) => [...prev, emptyNewFile()])}
-            />
-          </div>
-          {existingFiles.length === 0 && newFiles.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No files added.</p>
-          )}
-          {existingFiles.map((f, idx) => (
-            <div
-              key={f.id}
-              className={`rounded-lg border p-4 space-y-3 transition-opacity ${f.deleted ? "opacity-50" : ""}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant={f.deleted ? "destructive" : "secondary"}>
-                    {f.deleted ? "Deleted" : `File #${f.id}`}
-                  </Badge>
-                  {!f.deleted &&
-                    (f.type_id !== f.originalTypeId || f.notes !== f.originalNotes) && (
-                      <Badge variant="outline" className="text-amber-600 border-amber-400 text-xs">
-                        Modified
-                      </Badge>
-                    )}
-                </div>
-                {f.deleted ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setExistingFiles((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, deleted: false } : item,
-                        ),
-                      )
-                    }
-                  >
-                    Restore
-                  </Button>
-                ) : (
-                  <RemoveButton
-                    onClick={() =>
-                      setExistingFiles((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, deleted: true } : item,
-                        ),
-                      )
-                    }
-                  />
-                )}
-              </div>
-              <div className="flex items-start gap-2">
-                <ExistingFileThumb url={f.file_path} />
-                <p className="text-xs text-muted-foreground truncate pt-2">
-                  {decodeURIComponent(f.file_path.split("/").pop() ?? "file")}
-                </p>
-              </div>
-              {!f.deleted && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label>File Type</Label>
-                    <Select
-                      value={f.type_id > 0 ? String(f.type_id) : ""}
-                      onValueChange={(v) =>
-                        setExistingFiles((prev) =>
-                          prev.map((item, i) =>
-                            i === idx ? { ...item, type_id: parseInt(v, 10) || 0 } : item,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select file type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employeeFileTypes.map((ft) => (
-                          <SelectItem key={ft.id} value={String(ft.id)}>
-                            {formatFileTypeLabel(ft.file_type)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Notes</Label>
-                    <Input
-                      value={f.notes}
-                      onChange={(e) =>
-                        setExistingFiles((prev) =>
-                          prev.map((item, i) =>
-                            i === idx ? { ...item, notes: e.target.value } : item,
-                          ),
-                        )
-                      }
-                      placeholder="Optional notes"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {newFiles.map((f, idx) => (
-            <div key={idx} className="rounded-lg border border-dashed p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Badge variant="outline">New File {idx + 1}</Badge>
-                <RemoveButton
-                  onClick={() => setNewFiles((prev) => prev.filter((_, i) => i !== idx))}
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5 sm:col-span-3">
-                  <Label>File <span className="text-destructive">*</span></Label>
-                  <div className="flex items-start gap-2">
-                    {f.file instanceof File && <NewFileThumb file={f.file} />}
-                    <Input
-                      type="file"
-                      className="flex-1"
-                      onChange={(e) => {
-                        const picked = e.target.files?.[0];
-                        setNewFiles((prev) =>
-                          prev.map((item, i) =>
-                            i === idx ? { ...item, file: picked } : item,
-                          ),
-                        );
-                      }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>File Type <span className="text-destructive">*</span></Label>
-                  <Select
-                    value={f.type_id > 0 ? String(f.type_id) : ""}
-                    onValueChange={(v) =>
-                      setNewFiles((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, type_id: parseInt(v, 10) || 0 } : item,
-                        ),
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select file type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employeeFileTypes.map((ft) => (
-                        <SelectItem key={ft.id} value={String(ft.id)}>
-                          {formatFileTypeLabel(ft.file_type)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label>Notes</Label>
-                  <Input
-                    value={f.notes}
-                    onChange={(e) =>
-                      setNewFiles((prev) =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, notes: e.target.value } : item,
-                        ),
-                      )
-                    }
-                    placeholder="Optional notes"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Status history records.</p>
+          <AddButton
+            label="Add Status"
+            onClick={() =>
+              setStatusHistory((prev) => [
+                ...prev,
+                { ...emptyStatusHistory(), store_id: storeIdNum },
+              ])
+            }
+          />
         </div>
-
-        {/* Certifications */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Certifications</p>
-            <AddButton
-              label="Add Certification"
-              onClick={() => addItem(setCertificationsInfo, emptyCertification)}
-            />
-          </div>
-          {certificationsInfo.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No certifications added.</p>
-          )}
-          {certificationsInfo.map((cert, idx) => (
-            <div key={idx} className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary">Certification {idx + 1}</Badge>
-                <RemoveButton onClick={() => removeItem(setCertificationsInfo, idx)} />
+        {statusHistory.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No status history added.</p>
+        )}
+        {statusHistory.map((sh, idx) => (
+          <div key={idx} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Status {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setStatusHistory, idx)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Status <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={sh.status}
+                  onValueChange={(v) => updateItem(setStatusHistory, idx, "status", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Certification Name <span className="text-destructive">*</span></Label>
+                <Label>Effective Date</Label>
                 <Input
-                  value={cert.certification_name}
+                  type="date"
+                  value={sh.effective_date ?? ""}
                   onChange={(e) =>
-                    updateItem(setCertificationsInfo, idx, "certification_name", e.target.value)
+                    updateItem(setStatusHistory, idx, "effective_date", e.target.value)
                   }
-                  maxLength={255}
-                  placeholder="e.g. Food Handler Certificate"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Store ID</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={sh.store_id || ""}
+                  onChange={(e) =>
+                    updateItem(
+                      setStatusHistory,
+                      idx,
+                      "store_id",
+                      parseInt(e.target.value, 10) || 0,
+                    )
+                  }
+                  placeholder={storeIdNum > 0 ? String(storeIdNum) : "Store ID"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Notes</Label>
+                <Textarea
+                  value={sh.notes ?? ""}
+                  onChange={(e) => updateItem(setStatusHistory, idx, "notes", e.target.value)}
+                  placeholder="Optional notes"
+                  rows={2}
                 />
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Notes */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Notes</p>
-            <AddButton label="Add Note" onClick={() => addItem(setNotes, emptyNote)} />
           </div>
-          {notes.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No notes added.</p>
-          )}
-          {notes.map((n, idx) => (
-            <div key={idx} className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary">Note {idx + 1}</Badge>
-                <RemoveButton onClick={() => removeItem(setNotes, idx)} />
-              </div>
-              <Textarea
-                value={n.notes ?? ""}
-                onChange={(e) => updateItem(setNotes, idx, "notes", e.target.value)}
-                placeholder="Write a note..."
-                rows={3}
-              />
+        ))}
+      </div>
+    );
+  }
+
+  /* 12) Store Assignments */
+  function renderStoreAssignmentsSection() {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Store assignment records.</p>
+          <AddButton
+            label="Add Assignment"
+            onClick={() => addItem(setStoreAssignments, emptyStoreAssignment)}
+          />
+        </div>
+        {storeAssignments.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No store assignments added.
+          </p>
+        )}
+        {storeAssignments.map((sa, idx) => (
+          <div key={idx} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Assignment {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setStoreAssignments, idx)} />
             </div>
-          ))}
-        </div>
-
-        {/* Status History */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Status History</p>
-            <AddButton
-              label="Add Status"
-              onClick={() => addItem(setStatusHistory, emptyStatusHistory)}
-            />
-          </div>
-          {statusHistory.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No status history added.</p>
-          )}
-          {statusHistory.map((sh, idx) => (
-            <div key={idx} className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary">Status {idx + 1}</Badge>
-                <RemoveButton onClick={() => removeItem(setStatusHistory, idx)} />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Store ID <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={sa.store_id || ""}
+                  onChange={(e) =>
+                    updateItem(
+                      setStoreAssignments,
+                      idx,
+                      "store_id",
+                      parseInt(e.target.value, 10) || 0,
+                    )
+                  }
+                  placeholder="Store ID"
+                />
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label>Status Type</Label>
-                  <Select
-                    value={sh.status_type_id && sh.status_type_id > 0 ? String(sh.status_type_id) : ""}
-                    onValueChange={(v) =>
-                      updateItem(setStatusHistory, idx, "status_type_id", parseInt(v) || 0)
-                    }
-                    disabled={isLoadingMeta}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employeeStatuses.map((s) => (
-                        <SelectItem key={s.id} value={String(s.id)}>
-                          {s.emp_status.charAt(0).toUpperCase() + s.emp_status.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Status Date</Label>
-                  <Input
-                    type="date"
-                    value={sh.status_date ?? ""}
-                    onChange={(e) =>
-                      updateItem(setStatusHistory, idx, "status_date", e.target.value)
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5 sm:col-span-3">
-                  <Label>Notes</Label>
-                  <Textarea
-                    value={sh.notes ?? ""}
-                    onChange={(e) => updateItem(setStatusHistory, idx, "notes", e.target.value)}
-                    placeholder="Optional notes"
-                    rows={2}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label>Effective Date</Label>
+                <Input
+                  type="date"
+                  value={sa.effective_date ?? ""}
+                  onChange={(e) =>
+                    updateItem(setStoreAssignments, idx, "effective_date", e.target.value)
+                  }
+                />
               </div>
             </div>
-          ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* 13) Attachments */
+  function renderAttachmentsSection() {
+    return (
+      <div className="space-y-4">
+        {existingAttachments.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Existing Attachments</p>
+            {existingAttachments.map((att, idx) => (
+              <div key={idx} className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                <span className="shrink-0 rounded bg-secondary px-2 py-0.5 text-xs font-medium">
+                  {att.attachment_type?.label ?? `Type ${att.type_id ?? "?"}`}
+                </span>
+                <span className="flex-1 truncate text-muted-foreground">
+                  {att.original_name ?? att.file_path ?? "file"}
+                </span>
+                {att.file_size != null && (
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {(att.file_size / 1024).toFixed(1)} KB
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">Upload new file attachments.</p>
+          <AddButton
+            label="Add Attachment"
+            onClick={() => addItem(setAttachments, emptyAttachment)}
+          />
         </div>
+        {attachments.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-4">No new attachments added.</p>
+        )}
+        {attachments.map((att, idx) => (
+          <div key={idx} className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Badge variant="secondary">Attachment {idx + 1}</Badge>
+              <RemoveButton onClick={() => removeItem(setAttachments, idx)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>
+                  Type <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={att.type_id > 0 ? String(att.type_id) : ""}
+                  onValueChange={(v) =>
+                    updateItem(setAttachments, idx, "type_id", parseInt(v, 10))
+                  }
+                  disabled={isLoadingMeta}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={isLoadingMeta ? "Loading..." : "Select type"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employeeFileTypes.map((ft) => (
+                      <SelectItem key={ft.id} value={String(ft.id)}>
+                        {ft.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  File <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  type="file"
+                  onChange={(e) =>
+                    updateItem(setAttachments, idx, "file", e.target.files?.[0] ?? null)
+                  }
+                />
+                {att.file && (
+                  <p className="text-xs text-muted-foreground truncate">{att.file.name}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -1493,9 +1635,7 @@ export function EditEmployeeDialog({
             <Pencil className="h-5 w-5 text-primary" />
             Edit Employee
             {employeeId && (
-              <span className="text-sm font-normal text-muted-foreground">
-                #{employeeId}
-              </span>
+              <span className="text-sm font-normal text-muted-foreground">#{employeeId}</span>
             )}
           </DialogTitle>
           <DialogDescription>
@@ -1503,7 +1643,6 @@ export function EditEmployeeDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Load error */}
         {loadError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -1511,7 +1650,6 @@ export function EditEmployeeDialog({
           </Alert>
         )}
 
-        {/* Submit error */}
         {submitError && !loadError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -1519,7 +1657,6 @@ export function EditEmployeeDialog({
           </Alert>
         )}
 
-        {/* Loading overlay */}
         {isLoadingEmployee ? (
           <div className="flex-1 flex flex-col gap-4 p-1 overflow-hidden">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1535,51 +1672,86 @@ export function EditEmployeeDialog({
             className="flex min-h-0 flex-1 flex-col"
           >
             <TabsList className="grid h-9 w-full grid-cols-4 p-1">
-              <TabsTrigger className="text-xs" value="personal">Personal Info</TabsTrigger>
-              <TabsTrigger className="text-xs" value="availability">Availability</TabsTrigger>
-              <TabsTrigger className="text-xs" value="compensation">Compensation</TabsTrigger>
-              <TabsTrigger className="text-xs" value="notes">Notes &amp; Files</TabsTrigger>
+              <TabsTrigger className="text-xs" value="personal">
+                Personal
+              </TabsTrigger>
+              <TabsTrigger className="text-xs" value="availability">
+                Availability
+              </TabsTrigger>
+              <TabsTrigger className="text-xs" value="compensation">
+                Compensation
+              </TabsTrigger>
+              <TabsTrigger className="text-xs" value="admin">
+                Admin
+              </TabsTrigger>
             </TabsList>
 
             <ScrollArea className="flex-1 min-h-0 mt-4">
               <div className="pe-3 pb-4">
 
+                {/* Tab 1: Personal */}
                 <TabsContent value="personal" className="mt-0 space-y-8">
                   <div className="space-y-4">
                     <SectionDivider label="Basic Information" />
-                    {renderBasicTab()}
+                    {renderBasicSection()}
+                  </div>
+                  <div className="space-y-4">
+                    <SectionDivider label="Personal Details" />
+                    {renderObsessionSection()}
+                  </div>
+                  <div className="space-y-4">
+                    <SectionDivider label="Marital History" />
+                    {renderMaritalHistorySection()}
                   </div>
                   <div className="space-y-4">
                     <SectionDivider label="Contacts" />
-                    {renderContactsTab()}
+                    {renderContactsSection()}
                   </div>
                   <div className="space-y-4">
                     <SectionDivider label="Addresses" />
-                    {renderAddressesTab()}
+                    {renderAddressesSection()}
                   </div>
                 </TabsContent>
 
+                {/* Tab 2: Availability */}
                 <TabsContent value="availability" className="mt-0">
-                  {renderAvailabilityTab()}
+                  {renderAvailabilitySection()}
                 </TabsContent>
 
+                {/* Tab 3: Compensation */}
                 <TabsContent value="compensation" className="mt-0 space-y-8">
                   <div className="space-y-4">
-                    <SectionDivider label="Bank Accounts" />
-                    {renderPaymentTab()}
+                    <SectionDivider label="Positions" />
+                    {renderPositionsSection()}
                   </div>
                   <div className="space-y-4">
-                    <SectionDivider label="Salary" />
-                    {renderSalaryTab()}
+                    <SectionDivider label="Pay History" />
+                    {renderPayHistorySection()}
                   </div>
                   <div className="space-y-4">
-                    <SectionDivider label="Employee IDs" />
-                    {renderIdsTab()}
+                    <SectionDivider label="Financial Info" />
+                    {renderFinancialInfoSection()}
                   </div>
                 </TabsContent>
 
-                <TabsContent value="notes" className="mt-0">
-                  {renderNotesTab()}
+                {/* Tab 4: Admin */}
+                <TabsContent value="admin" className="mt-0 space-y-8">
+                  <div className="space-y-4">
+                    <SectionDivider label="Employee IDs" />
+                    {renderEmployeeIdsSection()}
+                  </div>
+                  <div className="space-y-4">
+                    <SectionDivider label="Status History" />
+                    {renderStatusHistorySection()}
+                  </div>
+                  <div className="space-y-4">
+                    <SectionDivider label="Store Assignments" />
+                    {renderStoreAssignmentsSection()}
+                  </div>
+                  <div className="space-y-4">
+                    <SectionDivider label="Attachments" />
+                    {renderAttachmentsSection()}
+                  </div>
                 </TabsContent>
 
               </div>

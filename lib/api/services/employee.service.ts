@@ -2,6 +2,7 @@ import axios from "axios";
 import type {
   CreateEmployeePayload,
   CreateEmployeeV1Payload,
+  UpdateEmployeeV1Payload,
   EmployeesResponse,
   EmployeeSingleResponse,
   GetEmployeesParams,
@@ -438,20 +439,110 @@ export const employeeService = {
   },
 
   /**
-   * Create a new employee using the V1 JSON API.
+   * Create a new employee using the V1 multipart/form-data API.
    * Proxied through POST /api/v1/stores/[storeId]/employees
    */
   async createEmployeeV1(
     storeId: string,
     payload: CreateEmployeeV1Payload,
   ): Promise<unknown> {
+    const fd = new FormData();
+
+    fd.append("employment_type", payload.employment_type);
+    fd.append("first_name", payload.first_name);
+    fd.append("gender", payload.gender);
+    fd.append("last_name", payload.last_name);
+    fd.append("ssn", payload.ssn);
+
+    if (payload.middle_name) fd.append("middle_name", payload.middle_name);
+
+    if (payload.obsession) {
+      fd.append("obsession[birth_date]", payload.obsession.birth_date);
+      if (payload.obsession.image) {
+        fd.append("obsession[image]", payload.obsession.image, payload.obsession.image.name);
+      }
+      if (payload.obsession.notes) fd.append("obsession[notes]", payload.obsession.notes);
+      if (payload.obsession.race) fd.append("obsession[race]", payload.obsession.race);
+      if (payload.obsession.religion) fd.append("obsession[religion]", payload.obsession.religion);
+      if (payload.obsession.t_shirt) fd.append("obsession[t_shirt]", payload.obsession.t_shirt);
+    }
+
+    payload.addresses?.forEach((a, i) => {
+      fd.append(`addresses[${i}][address_name]`, a.address_name);
+      fd.append(`addresses[${i}][address_1]`, a.address_1);
+      fd.append(`addresses[${i}][city]`, a.city);
+      fd.append(`addresses[${i}][state]`, a.state);
+      fd.append(`addresses[${i}][zip_code]`, a.zip_code);
+      if (a.address_2) fd.append(`addresses[${i}][address_2]`, a.address_2);
+      if (a.country) fd.append(`addresses[${i}][country]`, a.country);
+      if (a.is_primary !== undefined) fd.append(`addresses[${i}][is_primary]`, a.is_primary ? "1" : "0");
+    });
+
+    payload.attachments?.forEach((att, i) => {
+      fd.append(`attachments[${i}][file]`, att.file, att.file.name);
+      fd.append(`attachments[${i}][type_id]`, String(att.type_id));
+    });
+
+    payload.availability?.forEach((av, i) => {
+      fd.append(`availability[${i}][day_of_week]`, av.day_of_week);
+      fd.append(`availability[${i}][shift_type]`, av.shift_type);
+      av.times.forEach((t, ti) => {
+        fd.append(`availability[${i}][times][${ti}][available_from]`, t.available_from);
+        fd.append(`availability[${i}][times][${ti}][available_to]`, t.available_to);
+      });
+    });
+
+    payload.contacts?.forEach((c, i) => {
+      fd.append(`contacts[${i}][contact_name]`, c.contact_name);
+      fd.append(`contacts[${i}][contact_type]`, c.contact_type);
+      fd.append(`contacts[${i}][contact_value]`, c.contact_value);
+      if (c.is_primary !== undefined) fd.append(`contacts[${i}][is_primary]`, c.is_primary ? "1" : "0");
+    });
+
+    payload.employee_ids?.forEach((eid, i) => {
+      fd.append(`employee_ids[${i}][id_type_id]`, String(eid.id_type_id));
+      fd.append(`employee_ids[${i}][id_value]`, eid.id_value);
+    });
+
+    payload.financial_info?.forEach((fi, i) => {
+      fd.append(`financial_info[${i}][account_number]`, fi.account_number);
+      fd.append(`financial_info[${i}][account_type]`, fi.account_type);
+      fd.append(`financial_info[${i}][effective_date]`, fi.effective_date);
+      fd.append(`financial_info[${i}][routing_number]`, fi.routing_number);
+    });
+
+    payload.marital_history?.forEach((mh, i) => {
+      fd.append(`marital_history[${i}][effective_date]`, mh.effective_date);
+      fd.append(`marital_history[${i}][marital_id]`, String(mh.marital_id));
+    });
+
+    payload.pay_history?.forEach((ph, i) => {
+      fd.append(`pay_history[${i}][base_pay]`, String(ph.base_pay));
+      fd.append(`pay_history[${i}][effective_date]`, ph.effective_date);
+      fd.append(`pay_history[${i}][performance_pay]`, String(ph.performance_pay));
+    });
+
+    payload.positions?.forEach((p, i) => {
+      fd.append(`positions[${i}][effective_date]`, p.effective_date);
+      fd.append(`positions[${i}][position_id]`, String(p.position_id));
+    });
+
+    payload.status_history?.forEach((sh, i) => {
+      fd.append(`status_history[${i}][effective_date]`, sh.effective_date);
+      fd.append(`status_history[${i}][status]`, sh.status);
+      if (sh.notes) fd.append(`status_history[${i}][notes]`, sh.notes);
+      if (sh.store_id) fd.append(`status_history[${i}][store_id]`, String(sh.store_id));
+    });
+
+    payload.store_assignments?.forEach((sa, i) => {
+      fd.append(`store_assignments[${i}][effective_date]`, sa.effective_date);
+      fd.append(`store_assignments[${i}][store_id]`, String(sa.store_id));
+    });
+
     const { data } = await axios.post(
       `/api/v1/stores/${encodeURIComponent(storeId)}/employees`,
-      payload,
-      {
-        headers: { ...buildHeaders(), "Content-Type": "application/json" },
-        timeout: 15_000,
-      },
+      fd,
+      { headers: buildHeaders(), timeout: 15_000 },
     );
     return data;
   },
@@ -468,6 +559,139 @@ export const employeeService = {
     const { data } = await axios.get<EmployeeV1DetailResponse>(
       `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+  
+  /**
+   * Update an employee using the V1 multipart/form-data API.
+   * Proxied through PUT /api/v1/stores/[storeId]/employees/[employeeId]
+   */
+  async updateEmployeeV1(
+    storeId: string,
+    employeeId: number,
+    payload: UpdateEmployeeV1Payload,
+  ): Promise<unknown> {
+    const fd = new FormData();
+
+    if (payload.first_name) fd.append("first_name", payload.first_name);
+    if (payload.last_name) fd.append("last_name", payload.last_name);
+    if (payload.gender) fd.append("gender", payload.gender);
+    if (payload.ssn) fd.append("ssn", payload.ssn);
+    if (payload.employment_type) fd.append("employment_type", payload.employment_type);
+    if (payload.middle_name != null) fd.append("middle_name", payload.middle_name);
+
+    if (payload.obsession) {
+      fd.append("obsession[birth_date]", payload.obsession.birth_date);
+      if (payload.obsession.image) {
+        fd.append("obsession[image]", payload.obsession.image, payload.obsession.image.name);
+      }
+      if (payload.obsession.notes) fd.append("obsession[notes]", payload.obsession.notes);
+      if (payload.obsession.race) fd.append("obsession[race]", payload.obsession.race);
+      if (payload.obsession.religion) fd.append("obsession[religion]", payload.obsession.religion);
+      if (payload.obsession.t_shirt) fd.append("obsession[t_shirt]", payload.obsession.t_shirt);
+    }
+
+    payload.addresses?.forEach((a, i) => {
+      fd.append(`addresses[${i}][address_name]`, a.address_name);
+      fd.append(`addresses[${i}][address_1]`, a.address_1);
+      fd.append(`addresses[${i}][city]`, a.city);
+      fd.append(`addresses[${i}][state]`, a.state);
+      fd.append(`addresses[${i}][zip_code]`, a.zip_code);
+      if (a.address_2) fd.append(`addresses[${i}][address_2]`, a.address_2);
+      if (a.country) fd.append(`addresses[${i}][country]`, a.country);
+      if (a.is_primary !== undefined) fd.append(`addresses[${i}][is_primary]`, a.is_primary ? "1" : "0");
+    });
+
+    payload.attachments?.forEach((att, i) => {
+      fd.append(`attachments[${i}][file]`, att.file, att.file.name);
+      fd.append(`attachments[${i}][type_id]`, String(att.type_id));
+    });
+
+    payload.availability?.forEach((av, i) => {
+      fd.append(`availability[${i}][day_of_week]`, av.day_of_week);
+      fd.append(`availability[${i}][shift_type]`, av.shift_type);
+      av.times.forEach((t, ti) => {
+        fd.append(`availability[${i}][times][${ti}][available_from]`, t.available_from);
+        fd.append(`availability[${i}][times][${ti}][available_to]`, t.available_to);
+      });
+    });
+
+    payload.contacts?.forEach((c, i) => {
+      fd.append(`contacts[${i}][contact_name]`, c.contact_name);
+      fd.append(`contacts[${i}][contact_type]`, c.contact_type);
+      fd.append(`contacts[${i}][contact_value]`, c.contact_value);
+      if (c.is_primary !== undefined) fd.append(`contacts[${i}][is_primary]`, c.is_primary ? "1" : "0");
+    });
+
+    payload.employee_ids?.forEach((eid, i) => {
+      fd.append(`employee_ids[${i}][id_type_id]`, String(eid.id_type_id));
+      fd.append(`employee_ids[${i}][id_value]`, eid.id_value);
+    });
+
+    payload.financial_info?.forEach((fi, i) => {
+      fd.append(`financial_info[${i}][account_number]`, fi.account_number);
+      fd.append(`financial_info[${i}][account_type]`, fi.account_type);
+      fd.append(`financial_info[${i}][effective_date]`, fi.effective_date);
+      fd.append(`financial_info[${i}][routing_number]`, fi.routing_number);
+    });
+
+    payload.marital_history?.forEach((mh, i) => {
+      fd.append(`marital_history[${i}][effective_date]`, mh.effective_date);
+      fd.append(`marital_history[${i}][marital_id]`, String(mh.marital_id));
+    });
+
+    payload.pay_history?.forEach((ph, i) => {
+      fd.append(`pay_history[${i}][base_pay]`, String(ph.base_pay));
+      fd.append(`pay_history[${i}][effective_date]`, ph.effective_date);
+      fd.append(`pay_history[${i}][performance_pay]`, String(ph.performance_pay));
+    });
+
+    payload.positions?.forEach((p, i) => {
+      fd.append(`positions[${i}][effective_date]`, p.effective_date);
+      fd.append(`positions[${i}][position_id]`, String(p.position_id));
+    });
+
+    payload.status_history?.forEach((sh, i) => {
+      fd.append(`status_history[${i}][effective_date]`, sh.effective_date);
+      fd.append(`status_history[${i}][status]`, sh.status);
+      if (sh.notes) fd.append(`status_history[${i}][notes]`, sh.notes);
+      if (sh.store_id) fd.append(`status_history[${i}][store_id]`, String(sh.store_id));
+    });
+
+    payload.store_assignments?.forEach((sa, i) => {
+      fd.append(`store_assignments[${i}][effective_date]`, sa.effective_date);
+      fd.append(`store_assignments[${i}][store_id]`, String(sa.store_id));
+    });
+
+    const { data } = await axios.put(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
+      fd,
+      { headers: buildHeaders(), timeout: 15_000 },
+    );
+    return data;
+  },
+
+  /**
+   * Change employee status.
+   * Proxied through PATCH /api/v1/stores/[storeId]/employees/[employeeId]/status
+   */
+  async updateEmployeeStatus(
+    storeId: string,
+    employeeId: number,
+    payload: {
+      status: "hired" | "resigned" | "terminated" | "rehired" | "OJE";
+      effective_date?: string;
+      notes?: string;
+    },
+  ): Promise<unknown> {
+    const { data } = await axios.patch(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}/status`,
+      payload,
+      {
+        headers: { ...buildHeaders(), "Content-Type": "application/json" },
+        timeout: 15_000,
+      },
     );
     return data;
   },

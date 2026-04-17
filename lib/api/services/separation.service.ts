@@ -123,37 +123,40 @@ export const separationService = {
   },
 
   /**
-   * Create a separation request for a specific employee (multipart/form-data).
-   * Proxied through POST /api/hiring-management/[storeId]/separation-requests/employee/[employeeId]
+   * Create a separation request for a store (multipart/form-data).
+   * Proxied through POST /api/v1/stores/[storeId]/separation-requests
+   * → POST {HIRING_BASE_URL}/v1/stores/{storeId}/separation-requests
    */
   async createSeparationRequest(
     storeId: string,
-    employeeId: number,
     payload: CreateSeparationRequestPayload,
   ): Promise<void> {
     const formData = new FormData();
-    formData.append("final_work_date", payload.final_work_date);
-    formData.append("reason_type", payload.reason_type);
+    formData.append("employee_id", String(payload.employee_id));
+    formData.append("final_working_day", payload.final_working_day);
     formData.append("separation_type", payload.separation_type);
 
-    if (payload.reason_id != null) {
-      formData.append("reason_id", String(payload.reason_id));
-    }
-    if (payload.reason_title) {
-      formData.append("reason_title", payload.reason_title);
-    }
-    if (payload.other_notes) {
-      formData.append("other_notes", payload.other_notes);
+    if (payload.additional_notes) {
+      formData.append("additional_notes", payload.additional_notes);
     }
     if (payload.termination_letter) {
       formData.append("termination_letter", payload.termination_letter);
     }
+    if (payload.termination_reason) {
+      formData.append("termination_reason", payload.termination_reason);
+    }
+    if (payload.termination_reason_details) {
+      formData.append("termination_reason_details", payload.termination_reason_details);
+    }
+    if (payload.resignation_reason) {
+      formData.append("resignation_reason", payload.resignation_reason);
+    }
+    if (payload.resignation_reason_details) {
+      formData.append("resignation_reason_details", payload.resignation_reason_details);
+    }
     if (payload.attachments && payload.attachments.length > 0) {
-      payload.attachments.forEach((att, i) => {
-        formData.append(`attachments[${i}][file]`, att.file);
-        if (att.note) {
-          formData.append(`attachments[${i}][note]`, att.note);
-        }
+      payload.attachments.forEach((file, i) => {
+        formData.append(`attachments[${i}]`, file);
       });
     }
 
@@ -161,7 +164,7 @@ export const separationService = {
     if (!token) throw new Error("Not logged in.");
 
     await axios.post(
-      `/api/hiring-management/${encodeURIComponent(storeId)}/separation-requests/employee/${employeeId}`,
+      `/api/v1/stores/${encodeURIComponent(storeId)}/separation-requests`,
       formData,
       {
         headers: {
@@ -272,5 +275,21 @@ export const separationService = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  /**
+   * Submit a separation request decision (approve/reject).
+   * Proxied through POST /api/v1/stores/[storeId]/separation-requests/[separationId]/decision
+   */
+  async submitSeparationDecision(
+    storeId: string,
+    separationId: number,
+    payload: { decision: "rejected" | "completed"; notes?: string | null },
+  ): Promise<void> {
+    await axios.post(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/separation-requests/${separationId}/decision`,
+      payload,
+      { headers: buildHeaders(), timeout: 15_000 },
+    );
   },
 };

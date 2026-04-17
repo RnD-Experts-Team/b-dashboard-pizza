@@ -23,6 +23,36 @@ export interface CreateHiringRequestPayload {
   new_hires: NewHire[];
 }
 
+/* ── New v1 create-hiring-request types ── */
+
+export type AvailabilityType = "weekday" | "weekend" | "open_availability";
+export type ShiftType = "AM" | "PM" | "OP";
+
+export interface HiringRequestPositionInput {
+  availability_type: AvailabilityType;
+  notes: string;
+  shift_type: ShiftType;
+}
+
+export interface HiringRequestCandidateInput {
+  email: string;
+  name: string;
+  phone: string;
+}
+
+export interface CreateHiringRequestPayloadV1 {
+  /** Full-date string (YYYY-MM-DD) per RFC 3339 §5.6 */
+  desired_start_date: string;
+  /** Total positions to fill (min: 1) */
+  employees_needed: number;
+  /** Position details — count must equal employees_needed - candidates.length */
+  positions: HiringRequestPositionInput[];
+  /** Pre-identified candidates — count must be <= employees_needed */
+  candidates?: HiringRequestCandidateInput[];
+  /** Optional notes (max 2000) */
+  final_notes?: string | null;
+}
+
 /** Shapes returned by the server GET endpoint */
 export interface HiringCandidateRecord {
   id: number;
@@ -258,4 +288,133 @@ export interface CreateEmployeePageData {
   }[];
   employeeMaritalStatuses: MaritalStatusRecord[];
   employeeIdTypes: EmployeeIdTypeRecord[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Unified Store Requests — GET /v1/stores/{storeNumber}/requests     */
+/* ------------------------------------------------------------------ */
+
+export interface StoreRequestLatestDecision {
+  id: number;
+  decision: string;
+  decided_by_user_id: number;
+  decided_at: string;
+  completed_at: string | null;
+  number_hired: number | null;
+  employee_ids: number[];
+}
+
+export interface StoreRequestUser {
+  id: number;
+  name: string;
+  email: string;
+  email_verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreRequestEmployee {
+  id: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  gender: string;
+  employment_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreRequestAttachment {
+  id: number;
+  separation_request_id: number;
+  file_path: string;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreRequestHiringCandidate {
+  id: number;
+  hiring_request_id: number;
+  name: string;
+  phone: string;
+  email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreRequestHiringPosition {
+  id: number;
+  hiring_request_id: number;
+  shift_type: string;
+  availability_type: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoreRequestSeparationDetail {
+  id: number;
+  store_id: number;
+  user_id: number;
+  employee_id: number;
+  separation_type: "resignation" | "termination";
+  final_working_day: string;
+  termination_letter: string | null;
+  termination_reason: string | null;
+  termination_reason_details: string | null;
+  resignation_reason: string | null;
+  resignation_reason_details: string | null;
+  attachments: StoreRequestAttachment[];
+  additional_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  user: StoreRequestUser;
+  employee: StoreRequestEmployee;
+  decisions: unknown[];
+}
+
+export interface StoreRequestHiringDetail {
+  id: number;
+  store_id: number;
+  user_id: number;
+  employees_needed: number;
+  desired_start_date: string;
+  final_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  user: StoreRequestUser;
+  candidates: StoreRequestHiringCandidate[];
+  positions: StoreRequestHiringPosition[];
+  decisions: unknown[];
+}
+
+export interface StoreRequest {
+  id: number;
+  request_type: "hiring" | "separation";
+  store_id: number;
+  requested_by_user_id: number;
+  requested_at: string;
+  workflow_status: string;
+  latest_decision: StoreRequestLatestDecision | null;
+  separation_request: StoreRequestSeparationDetail | null;
+  hiring_request: StoreRequestHiringDetail | null;
+}
+
+export interface StoreRequestsResponse {
+  current_page: number;
+  data: StoreRequest[];
+  first_page_url: string;
+  from: number;
+  last_page: number;
+  last_page_url: string;
+  links: unknown[];
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number;
+  total: number;
 }
