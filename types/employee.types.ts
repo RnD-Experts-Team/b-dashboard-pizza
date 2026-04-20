@@ -607,6 +607,14 @@ export interface EmployeeV1MaritalDetail {
   marital_status: EmployeeV1MaritalStatusRef;
 }
 
+export interface EmployeeV1IdTypeRef {
+  id: number;
+  label: string;
+  description?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface EmployeeV1IdDetail {
   id?: number;
   employee_id?: number;
@@ -614,6 +622,7 @@ export interface EmployeeV1IdDetail {
   id_value?: string;
   created_at?: string;
   updated_at?: string;
+  id_type?: EmployeeV1IdTypeRef | null;
 }
 
 export interface EmployeeV1AttachmentTypeRef {

@@ -1447,7 +1447,9 @@
       "ratingNotDone": "Not Done",
       "ratingCameraFail": "Camera Fail",
       "ratingAutoFail": "Auto Fail",
-      "ratingUrgent": "Urgent"
+      "ratingUrgent": "Urgent",
+      "customReportId": "Custom Report",
+      "allCustomReports": "All Custom Reports"
     },
     "error": {
       "title": "Error Loading Camera Report",

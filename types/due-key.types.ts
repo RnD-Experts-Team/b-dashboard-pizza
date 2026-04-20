@@ -28,10 +28,22 @@ export interface ApiDueKeyItem {
   tags?: ApiDueKeyTag[];
 }
 
+export interface ApiEmployee {
+  id: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  store_id: string;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ApiDueKeysResponse {
   store_id: string;
   date: string;
   items: ApiDueKeyItem[];
+  employees?: ApiEmployee[];
 }
 
 // ── Frontend types (camelCase) ─────────────────────────────────────────
@@ -58,10 +70,20 @@ export interface DueKeyItem {
   tags: DueKeyTag[];
 }
 
+export interface Employee {
+  id: number;
+  firstName: string;
+  middleName: string | null;
+  lastName: string;
+  storeId: string;
+  active: boolean;
+}
+
 export interface DueKeysResponse {
   storeId: string;
   date: string;
   items: DueKeyItem[];
+  employees: Employee[];
 }
 
 // ── Payloads (snake_case — sent to API) ────────────────────────────────

@@ -328,6 +328,12 @@ export interface ApiCameraReportFilters {
   rating_id: number | null;
   category_ids: number[] | null;
   date_range_type: "daily" | "weekly" | null;
+  custom_report_id: number | null;
+}
+
+export interface ApiCameraReportCustomReport {
+  id: number;
+  name: string;
 }
 
 export interface ApiCameraReportData {
@@ -341,6 +347,7 @@ export interface ApiCameraReportData {
   groups: number[];
   ratings: ApiCameraReportRating[];
   filters: ApiCameraReportFilters;
+  custom_reports: ApiCameraReportCustomReport[];
 }
 
 export interface ApiCameraReportResponse {
@@ -405,6 +412,11 @@ export interface CameraReportRating {
   label: string;
 }
 
+export interface CameraReportCustomReport {
+  id: number;
+  name: string;
+}
+
 export interface CameraReportFilters {
   storeId: number | null;
   group: number | null;
@@ -414,6 +426,7 @@ export interface CameraReportFilters {
   ratingId: number | null;
   categoryIds: number[] | null;
   dateRangeType: "daily" | "weekly" | null;
+  customReportId: number | null;
 }
 
 export interface CameraReportData {
@@ -425,6 +438,7 @@ export interface CameraReportData {
   groups: number[];
   ratings: CameraReportRating[];
   filters: CameraReportFilters;
+  customReports: CameraReportCustomReport[];
 }
 
 // ── Camera Form List types (GET /camera-forms) ─────────────────────────

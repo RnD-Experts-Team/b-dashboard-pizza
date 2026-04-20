@@ -50,6 +50,7 @@ import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
   CreateEmployeeV1Payload,
   CreateEmployeeV1Address,
@@ -168,6 +169,19 @@ const SHIFT_TYPES = ["AM", "PM", "OP"] as const;
 
 const STATUS_OPTIONS = ["hired", "resigned", "terminated", "rehired", "OJE"] as const;
 
+function formatSSN(digits: string): string {
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5, 9)}`;
+}
+
+/** Convert HH:mm (HTML time input) to H:i (Laravel format, no leading zero on hour) */
+function toHi(time: string): string {
+  if (!time) return time;
+  const [h, m] = time.split(":");
+  return `${parseInt(h ?? "0", 10)}:${m ?? "00"}`;
+}
+
 const RACE_OPTIONS = [
   "Caucasian",
   "African American",
@@ -197,6 +211,7 @@ export function CreateEmployeeDialog({
   onSuccess,
 }: CreateEmployeeDialogProps) {
   const { selectedStore } = useSelectedStoreStore();
+  const { overviewStores } = useAuthStore();
   const {
     positions: positionOptions,
     maritalStatuses,
@@ -351,8 +366,8 @@ export function CreateEmployeeDialog({
             availability: availability.map((av) => ({
               ...av,
               times: (av.times ?? []).map((t) => ({
-                available_from: t.available_from,
-                available_to: t.available_to,
+                available_from: toHi(t.available_from),
+                available_to: toHi(t.available_to),
               })),
             })),
           }
@@ -512,10 +527,11 @@ export function CreateEmployeeDialog({
               SSN <span className="text-destructive">*</span>
             </Label>
             <Input
-              value={ssn}
-              onChange={(e) => setSsn(e.target.value.replace(/\D/g, "").slice(0, 20))}
-              placeholder="SSN"
-              maxLength={20}
+              value={formatSSN(ssn)}
+              onChange={(e) => setSsn(e.target.value.replace(/\D/g, "").slice(0, 9))}
+              placeholder="123-45-6789"
+              maxLength={11}
+              inputMode="numeric"
             />
           </div>
           <div className="space-y-1.5">
@@ -1311,16 +1327,27 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Store ID</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={sh.store_id || ""}
-                  onChange={(e) =>
-                    updateItem(setStatusHistory, idx, "store_id", parseInt(e.target.value, 10) || 0)
+                <Label>Store</Label>
+                <Select
+                  value={sh.store_id ? String(sh.store_id) : ""}
+                  onValueChange={(v) =>
+                    updateItem(setStatusHistory, idx, "store_id", parseInt(v, 10) || 0)
                   }
-                  placeholder={storeIdNum > 0 ? String(storeIdNum) : "Store ID"}
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select store" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    style={{ maxHeight: "160px", overflowY: "auto" }}
+                  >
+                    {overviewStores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.storeId ?? store.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Notes</Label>
@@ -1361,17 +1388,28 @@ export function CreateEmployeeDialog({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>
-                  Store ID <span className="text-destructive">*</span>
+                  Store <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={sa.store_id || ""}
-                  onChange={(e) =>
-                    updateItem(setStoreAssignments, idx, "store_id", parseInt(e.target.value, 10) || 0)
+                <Select
+                  value={sa.store_id ? String(sa.store_id) : ""}
+                  onValueChange={(v) =>
+                    updateItem(setStoreAssignments, idx, "store_id", parseInt(v, 10) || 0)
                   }
-                  placeholder="Store ID"
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select store" />
+                  </SelectTrigger>
+                  <SelectContent
+                    position="popper"
+                    style={{ maxHeight: "160px", overflowY: "auto" }}
+                  >
+                    {overviewStores.map((store) => (
+                      <SelectItem key={store.id} value={store.id}>
+                        {store.storeId ?? store.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Effective Date</Label>

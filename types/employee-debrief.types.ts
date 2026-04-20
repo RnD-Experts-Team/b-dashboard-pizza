@@ -4,10 +4,22 @@
 
 // ── Raw API types (snake_case) ─────────────────────────────────────────
 
+export interface ApiEmployeeObject {
+  id?: number | null;
+  first_name?: string | null;
+  middle_name?: string | null;
+  last_name?: string | null;
+  store_id?: string | null;
+  active?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface ApiEmployeeDebriefItem {
   id: number;
   employee_id?: number | null;
   employee_name?: string | null;
+  employee?: ApiEmployeeObject | null;
   store_id?: string | null;
   date?: string | null;
   created_at?: string | null;
@@ -21,6 +33,7 @@ export interface ApiEmployeeDebriefDetail {
   id: number;
   employee_id?: number | null;
   employee_name?: string | null;
+  employee?: ApiEmployeeObject | null;
   store_id?: string | null;
   date?: string | null;
   created_at?: string | null;

@@ -36,6 +36,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { referenceCatalogService } from "@/lib/api/services/reference-catalog.service";
+import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import type { ReferenceCatalogItem, ReferenceCatalogRecord } from "@/types/hiring.types";
 
 /* ------------------------------------------------------------------ */
@@ -438,6 +439,7 @@ export function ReferenceCatalogDialog({
   open,
   onOpenChange,
 }: ReferenceCatalogDialogProps) {
+  const { setData: setStoreData } = useReferenceCatalogStore();
   const [activeTab, setActiveTab] = useState<CatalogKey>("attachment_types");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -656,6 +658,11 @@ export function ReferenceCatalogDialog({
 
     try {
       await referenceCatalogService.sync(payload);
+
+      // Refresh catalog and push updated data into the Zustand store
+      const refreshed = await referenceCatalogService.getAll();
+      setStoreData(refreshed.data);
+
       toast.success("Reference catalog synced successfully.");
       onOpenChange(false);
     } catch (err) {

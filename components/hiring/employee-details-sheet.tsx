@@ -31,6 +31,20 @@ import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import type { EmployeeV1DetailRecord } from "@/types/employee.types";
 
+const STORAGE_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+function storageUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  return `${STORAGE_BASE}/storage/${path}`;
+}
+
+function formatFileSize(bytes?: number | null): string | null {
+  if (bytes == null) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface EmployeeDetailsSheetProps {
   employeeId: number | null;
   open: boolean;
@@ -84,6 +98,14 @@ function formatDate(dateStr?: string | null) {
   }
 }
 
+function formatSSN(ssn: string | null | undefined, visible: boolean): string {
+  if (!ssn) return "-";
+  const cleaned = ssn.replace(/\D/g, "");
+  if (cleaned.length !== 9) return ssn;
+  const formatted = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(5, 9)}`;
+  return visible ? formatted : `XXX-XX-${cleaned.slice(5, 9)}`;
+}
+
 export function EmployeeDetailsSheet({
   employeeId,
   open,
@@ -94,6 +116,7 @@ export function EmployeeDetailsSheet({
   const [data, setData] = useState<EmployeeV1DetailRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ssnVisible, setSsnVisible] = useState(false);
 
   useEffect(() => {
     if (!open || employeeId === null || !selectedStore?.storeId) {
@@ -161,6 +184,17 @@ export function EmployeeDetailsSheet({
                 <DetailRow label="Employment Type" value={data.employment_type ?? "-"} />
                 <DetailRow label="Position" value={currentPosition} />
                 <DetailRow label="Marital Status" value={currentMarital} />
+                {data.ssn && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-muted-foreground">SSN</span>
+                    <button
+                      onClick={() => setSsnVisible(!ssnVisible)}
+                      className="text-sm text-left hover:underline cursor-pointer text-primary"
+                    >
+                      {formatSSN(data.ssn, ssnVisible)}
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -170,6 +204,16 @@ export function EmployeeDetailsSheet({
                 <Separator />
                 <section className="space-y-3">
                   <SectionTitle icon={FileText} label="Personal Info" />
+                  {data.obsession.image_path && (
+                    <div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={storageUrl(data.obsession.image_path) ?? undefined}
+                        alt="Employee photo"
+                        className="h-20 w-20 rounded-full object-cover border"
+                      />
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <DetailRow label="Birth Date" value={formatDate(data.obsession.birth_date)} />
                     <DetailRow label="T-Shirt Size" value={data.obsession.t_shirt ?? "-"} />
@@ -367,6 +411,8 @@ export function EmployeeDetailsSheet({
                   {data.financial_infos.map((f, idx) => (
                     <div key={idx} className="rounded-lg border p-3 space-y-2">
                       <div className="grid grid-cols-2 gap-2">
+                        <DetailRow label="Account Number" value={f.account_number ?? "-"} />
+                        <DetailRow label="Routing Number" value={f.routing_number ?? "-"} />
                         <DetailRow label="Account Type" value={f.account_type ?? "-"} />
                         <DetailRow
                           label="Effective Date"
@@ -465,10 +511,11 @@ export function EmployeeDetailsSheet({
                   <div className="space-y-2">
                     {data.ids.map((eid, idx) => {
                       const typeName =
-                        eid.id_type_id != null
+                        eid.id_type?.label ??
+                        (eid.id_type_id != null
                           ? (idTypes.find((t) => t.id === eid.id_type_id)?.label ??
                             `ID Type #${eid.id_type_id}`)
-                          : "-";
+                          : "-");
                       return (
                         <div
                           key={idx}
@@ -498,16 +545,25 @@ export function EmployeeDetailsSheet({
                   <div className="space-y-2">
                     {data.attachments.map((att, idx) => {
                       const typeName =
-                        att.type_id != null
+                        att.attachment_type?.label ??
+                        (att.type_id != null
                           ? (attachmentTypes.find((t) => t.id === att.type_id)?.label ??
                             `Type #${att.type_id}`)
-                          : "-";
+                          : "-");
+                      const fileUrl = storageUrl(att.file_path);
+                      const sizeLabel = formatFileSize(att.file_size);
                       return (
                         <div key={idx} className="rounded-lg border p-3 space-y-1">
-                          <p className="text-sm">{typeName}</p>
-                          {att.file_path && (
+                          <p className="text-sm font-medium">{typeName}</p>
+                          {att.original_name && (
+                            <p className="text-xs text-muted-foreground">{att.original_name}</p>
+                          )}
+                          {sizeLabel && (
+                            <p className="text-xs text-muted-foreground">{sizeLabel}</p>
+                          )}
+                          {fileUrl && (
                             <a
-                              href={att.file_path}
+                              href={fileUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="text-xs text-primary underline-offset-2 hover:underline"

@@ -27,12 +27,9 @@ import {
   RefreshCw,
   AlertCircle,
   Search,
-  Upload,
-  Download,
   X,
   MoreHorizontal,
   Pencil,
-  Trash2,
   UserCog,
   ChevronLeft,
   ChevronRight,
@@ -47,16 +44,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -232,14 +219,9 @@ export default function EmployeesPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteEmployeeId, setDeleteEmployeeId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [changeStatusOpen, setChangeStatusOpen] = useState(false);
   const [changeStatusEmployeeId, setChangeStatusEmployeeId] = useState<number | null>(null);
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [rows, setRows] = useState<EmployeeV1Record[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isStoreHydrated, setIsStoreHydrated] = useState(
@@ -257,7 +239,6 @@ export default function EmployeesPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
-  const importFileInputRef = useRef<HTMLInputElement | null>(null);
 
   function getCurrentFilters(): EmployeeFilterOptions {
     return { ...filters, page };
@@ -462,65 +443,7 @@ export default function EmployeesPage() {
 
   const isFiltered = activeFilterCount > 0;
 
-  async function handleDelete() {
-    if (deleteEmployeeId === null || !selectedStore?.storeId) return;
-    setIsDeleting(true);
-    try {
-      await employeeService.deleteEmployee(selectedStore.storeId, deleteEmployeeId);
-      toast.success("Employee deleted.");
-      setDeleteConfirmOpen(false);
-      setDeleteEmployeeId(null);
-      fetchData(getCurrentFilters());
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete employee.");
-    } finally {
-      setIsDeleting(false);
-    }
-  }
-  
-  function openImportPicker() {
-    importFileInputRef.current?.click();
-  }
 
-  async function handleImportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!selectedStore?.storeId) {
-      toast.error("Select a store before importing employees.");
-      event.target.value = "";
-      return;
-    }
-
-    setIsImporting(true);
-    try {
-      await employeeService.importEmployees(selectedStore.storeId, file);
-      toast.success("Employees imported successfully.");
-      await fetchData({ ...getCurrentFilters(), page: 1 });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to import employees.");
-    } finally {
-      setIsImporting(false);
-      event.target.value = "";
-    }
-  }
-
-  async function handleExportEmployees() {
-    if (!selectedStore?.storeId) {
-      toast.error("Select a store before exporting employees.");
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      await employeeService.exportEmployees(selectedStore.storeId);
-      toast.success("Employees export started.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to export employees.");
-    } finally {
-      setIsExporting(false);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -528,13 +451,6 @@ export default function EmployeesPage() {
         title="Employees"
         description="Manage employees for your stores."
       >
-        <input
-          ref={importFileInputRef}
-          type="file"
-          accept=".csv,.xlsx,.xls"
-          className="hidden"
-          onChange={handleImportFileChange}
-        />
         <Button
           variant="outline"
           size="icon"
@@ -544,37 +460,6 @@ export default function EmployeesPage() {
         >
           <RefreshCw className={shouldShowSkeleton ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              disabled={!hasStore || isImporting || isExporting}
-            >
-              {(isImporting || isExporting) ? (
-                <RefreshCw className="me-2 h-4 w-4 animate-spin" />
-              ) : (
-                <MoreHorizontal className="me-2 h-4 w-4" />
-              )}
-              Import / Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={openImportPicker}
-              disabled={!hasStore || isImporting || isExporting}
-            >
-              <Upload className="me-2 h-4 w-4" />
-              {isImporting ? "Importing..." : "Import Employees"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={handleExportEmployees}
-              disabled={!hasStore || isImporting || isExporting}
-            >
-              <Download className="me-2 h-4 w-4" />
-              {isExporting ? "Exporting..." : "Export Employees"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
         <Button
           variant="outline"
           onClick={() => setCatalogDialogOpen(true)}
@@ -1292,16 +1177,6 @@ export default function EmployeesPage() {
                               <UserCog className="me-2 h-4 w-4" />
                               Change Employee Status
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => {
-                                setDeleteEmployeeId(emp.id);
-                                setDeleteConfirmOpen(true);
-                              }}
-                            >
-                              <Trash2 className="me-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -1434,28 +1309,6 @@ export default function EmployeesPage() {
         }}
         onSuccess={() => fetchData(getCurrentFilters())}
       />
-
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete employee?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. Employee #{deleteEmployeeId} will be
-              permanently removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

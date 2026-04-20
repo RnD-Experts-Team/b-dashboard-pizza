@@ -20,28 +20,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   RefreshCw,
   AlertCircle,
-  Download,
-  Users,
   UserPlus,
   UserMinus,
   MoreHorizontal,
   Pencil,
-  Trash2,
   ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -140,12 +127,6 @@ export default function HiringRequestPage() {
   /* Hiring review dialog */
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewRequestId, setReviewRequestId] = useState<number | null>(null);
-
-  /* Delete confirmation */
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
 
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -266,43 +247,6 @@ export default function HiringRequestPage() {
     !error &&
     rows.length === 0;
 
-  async function handleDelete() {
-    if (deleteRequestId === null || !selectedStore?.storeId) return;
-    setIsDeleting(true);
-    try {
-      await hiringService.deleteHiringRequest(selectedStore.storeId, deleteRequestId);
-      toast.success("Hiring request deleted.");
-      setDeleteConfirmOpen(false);
-      setDeleteRequestId(null);
-      fetchData(page);
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to delete hiring request.",
-      );
-    } finally {
-      setIsDeleting(false);
-    }
-  }
-
-  async function handleExportHiringRequests() {
-    if (!selectedStore?.storeId) {
-      toast.error("Select a store before exporting hiring requests.");
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      await hiringService.exportHiringRequests(selectedStore.storeId);
-      toast.success("Hiring requests export started.");
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to export hiring requests.",
-      );
-    } finally {
-      setIsExporting(false);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -337,18 +281,10 @@ export default function HiringRequestPage() {
                 variant="outline"
                 size="icon"
                 onClick={() => fetchData(page)}
-                disabled={!isStoreHydrated || isLoading || isExporting}
+                disabled={!isStoreHydrated || isLoading}
                 aria-label="Refresh"
               >
                 <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleExportHiringRequests}
-                disabled={!isStoreHydrated || !hasStore || isLoading || isExporting}
-              >
-                <Download className="me-2 h-4 w-4" />
-                {isExporting ? "Exporting..." : "Export"}
               </Button>
               <Button onClick={() => setDialogOpen(true)}>
                 <Plus className="me-2 h-4 w-4" />
@@ -472,17 +408,6 @@ export default function HiringRequestPage() {
                                 <ClipboardCheck className="me-2 h-4 w-4" />
                                 Hiring Review
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteRequestId(req.id);
-                                  setDeleteConfirmOpen(true);
-                                }}
-                              >
-                                <Trash2 className="me-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -524,7 +449,6 @@ export default function HiringRequestPage() {
         <TabsContent value="separation" className="mt-4" tabIndex={-1}>
           <SeparationRequestTab
             active={activeTab === "separation"}
-            showExportButton
           />
         </TabsContent>
       </Tabs>
@@ -557,28 +481,6 @@ export default function HiringRequestPage() {
         onSuccess={() => fetchData(page)}
       />
 
-      {/* Delete confirmation */}
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete hiring request?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The hiring request #{deleteRequestId}{" "}
-              will be permanently removed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

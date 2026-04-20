@@ -28,6 +28,7 @@ export interface CameraReportFilterParams {
   rating_id?: number;
   category_ids?: number[];
   date_range_type?: "daily" | "weekly";
+  custom_report_id?: number;
 }
 
 interface CameraReportErrorState {

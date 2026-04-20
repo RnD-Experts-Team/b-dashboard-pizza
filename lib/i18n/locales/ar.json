@@ -1446,7 +1446,9 @@
       "ratingNotDone": "لم يتم",
       "ratingCameraFail": "فشل الكاميرا",
       "ratingAutoFail": "رسوب تلقائي",
-      "ratingUrgent": "عاجل"
+      "ratingUrgent": "عاجل",
+      "customReportId": "التقرير المخصص",
+      "allCustomReports": "جميع التقارير المخصصة"
     },
     "error": {
       "title": "خطأ في تحميل تقرير الكاميرا",

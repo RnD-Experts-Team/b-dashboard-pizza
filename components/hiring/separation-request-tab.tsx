@@ -20,23 +20,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Plus,
   RefreshCw,
   AlertCircle,
   MoreHorizontal,
-  Trash2,
   ClipboardCheck,
-  Download,
   Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,7 +32,6 @@ import { CreateSeparationRequestDialog } from "@/components/hiring/create-separa
 import { EditSeparationRequestDialog } from "@/components/hiring/edit-separation-request-dialog";
 import { SeparationRequestSheet } from "@/components/hiring/separation-request-sheet";
 import { SeparationReviewDialog } from "@/components/hiring/separation-review-dialog";
-import { separationService } from "@/lib/api/services/separation.service";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { StoreRequest } from "@/types/hiring.types";
@@ -120,21 +107,13 @@ function SepTableSkeleton() {
 
 export function SeparationRequestTab({
   active = true,
-  showExportButton = false,
 }: {
   active?: boolean;
-  showExportButton?: boolean;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
-
-  /* Delete confirmation */
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteRequestId, setDeleteRequestId] = useState<number | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
 
   /* Edit dialog */
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -203,42 +182,6 @@ export function SeparationRequestTab({
 
   const isEmpty = isInitialLoadComplete && !isLoading && !error && rows.length === 0;
 
-  async function handleDelete() {
-    if (deleteRequestId === null || !selectedStore?.storeId) return;
-    setIsDeleting(true);
-    try {
-      await separationService.deleteSeparationRequest(selectedStore.storeId, deleteRequestId);
-      toast.success("Separation request deleted.");
-      setDeleteConfirmOpen(false);
-      setDeleteRequestId(null);
-      fetchData(page);
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to delete separation request.",
-      );
-    } finally {
-      setIsDeleting(false);
-    }
-  }
-
-  async function handleExportSeparations() {
-    if (!selectedStore?.storeId) {
-      toast.error("Select a store before exporting separations.");
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      await separationService.exportSeparations(selectedStore.storeId);
-      toast.success("Separations export started.");
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to export separations.",
-      );
-    } finally {
-      setIsExporting(false);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -248,23 +191,13 @@ export function SeparationRequestTab({
           variant="outline"
           size="icon"
           onClick={() => fetchData(page)}
-          disabled={isLoading || isExporting}
+          disabled={isLoading}
           aria-label="Refresh"
         >
           <RefreshCw
             className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
           />
         </Button>
-        {showExportButton && (
-          <Button
-            variant="outline"
-            onClick={handleExportSeparations}
-            disabled={!selectedStore?.storeId || isLoading || isExporting}
-          >
-            <Download className="me-2 h-4 w-4" />
-            {isExporting ? "Exporting..." : "Export"}
-          </Button>
-        )}
         <Button onClick={() => setDialogOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
           <span className="hidden sm:inline">Create Separation Request</span>
@@ -391,17 +324,6 @@ export function SeparationRequestTab({
                             <ClipboardCheck className="me-2 h-4 w-4" />
                             Separation Review
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteRequestId(req.id);
-                              setDeleteConfirmOpen(true);
-                            }}
-                          >
-                            <Trash2 className="me-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -463,28 +385,6 @@ export function SeparationRequestTab({
         onOpenChange={setReviewDialogOpen}
         onSuccess={() => fetchData(page)}
       />
-
-      {/* Delete confirmation */}
-      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Separation Request</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this separation request? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
