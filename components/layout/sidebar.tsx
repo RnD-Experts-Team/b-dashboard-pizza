@@ -403,6 +403,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("manageRequests"),
         href: `/${locale}/dashboard/hiring-request`,
         icon: ClipboardList,
+        requirements: [
+          { service: "Hiring", method: "GET", path: "/v1/stores/*/requests", storeId: effectiveStoreId },
+        ],
       },
       // {
       //   title: t("separationRequest"),
@@ -413,6 +416,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("employees"),
         href: `/${locale}/dashboard/employees`,
         icon: Users,
+        requirements: [
+          { service: "Hiring", method: "GET", path: "/v1/stores/*/employees", storeId: effectiveStoreId },
+        ],
       },
     ],
   };

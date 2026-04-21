@@ -18,6 +18,7 @@ import { User, UserPlus, CalendarDays, Clock, ClipboardList, CheckCheck, Loader2
 import { toast } from "sonner";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { StoreRequest, StoreRequestEmployee } from "@/types/hiring.types";
 
 const AVAILABILITY_LABELS: Record<string, string> = {
@@ -75,6 +76,9 @@ export function HiringRequestSheet({
 }: HiringRequestSheetProps) {
   const hr = request?.hiring_request ?? null;
   const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const canCompleteHiring = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/hiring-requests/*/decision", storeId: effectiveStoreId });
   const [employees, setEmployees] = useState<StoreRequestEmployee[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
 
@@ -234,12 +238,37 @@ export function HiringRequestSheet({
                       />
                     )}
                   </div>
+                  {(() => {
+                    // employees may live on latest_decision directly OR inside
+                    // hiring_request.decisions (matched by id)
+                    const hiredEmployees =
+                      (request.latest_decision.employees ?? []).length > 0
+                        ? request.latest_decision.employees!
+                        : (hr.decisions.find(
+                            (d) => d.id === request.latest_decision!.id,
+                          )?.employees ?? []);
+                    if (hiredEmployees.length === 0) return null;
+                    return (
+                      <div className="space-y-1.5">
+                        <span className="text-xs text-muted-foreground">Hired Employees</span>
+                        <div className="space-y-1">
+                          {hiredEmployees.map((rec) => (
+                            <div key={rec.id} className="rounded-md border px-3 py-2 text-sm">
+                              {[rec.employee.first_name, rec.employee.middle_name, rec.employee.last_name]
+                                .filter(Boolean)
+                                .join(" ")}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </section>
               </>
             )}
 
             {/* ── Complete Hiring (pending) ── */}
-            {!request.latest_decision && (
+            {!request.latest_decision && canCompleteHiring && (
               <>
                 <Separator />
                 <CompleteHiringSection

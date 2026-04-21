@@ -39,6 +39,7 @@ import { HiringRequestSheet } from "@/components/hiring/hiring-request-sheet";
 import { SeparationRequestTab } from "@/components/hiring/separation-request-tab";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { StoreRequest } from "@/types/hiring.types";
 
 const AVAILABILITY_LABELS: Record<string, string> = {
@@ -119,6 +120,9 @@ export default function HiringRequestPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<import("@/types/hiring.types").StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const canCreateHiringRequest = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/hiring-requests", storeId: effectiveStoreId });
 
   /* Edit dialog */
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -286,11 +290,13 @@ export default function HiringRequestPage() {
               >
                 <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
               </Button>
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="me-2 h-4 w-4" />
-                <span className="hidden sm:inline">Create Hiring Request</span>
-                <span className="sm:hidden">New</span>
-              </Button>
+              {canCreateHiringRequest && (
+                <Button onClick={() => setDialogOpen(true)}>
+                  <Plus className="me-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Create Hiring Request</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              )}
             </div>
 
             {/* Error */}

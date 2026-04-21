@@ -34,6 +34,7 @@ import { SeparationRequestSheet } from "@/components/hiring/separation-request-s
 import { SeparationReviewDialog } from "@/components/hiring/separation-review-dialog";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { StoreRequest } from "@/types/hiring.types";
 import type {
   SeparationType,
@@ -114,6 +115,9 @@ export function SeparationRequestTab({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const canCreateSeparationRequest = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/separation-requests", storeId: effectiveStoreId });
 
   /* Edit dialog */
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -198,11 +202,13 @@ export function SeparationRequestTab({
             className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
           />
         </Button>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="me-2 h-4 w-4" />
-          <span className="hidden sm:inline">Create Separation Request</span>
-          <span className="sm:hidden">New</span>
-        </Button>
+        {canCreateSeparationRequest && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="me-2 h-4 w-4" />
+            <span className="hidden sm:inline">Create Separation Request</span>
+            <span className="sm:hidden">New</span>
+          </Button>
+        )}
       </div>
 
       {/* Error */}

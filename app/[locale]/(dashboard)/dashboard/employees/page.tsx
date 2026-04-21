@@ -62,6 +62,7 @@ import { referenceCatalogService } from "@/lib/api/services/reference-catalog.se
 import { toast } from "sonner";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { EmployeeV1Record } from "@/types/employee.types";
 
 type EmployeeFilterOptions = {
@@ -204,6 +205,16 @@ function TableSkeleton() {
 
 export default function EmployeesPage() {
   const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+
+  // Permission checks — mirror sidebar auth-rule requirements
+  const canViewEmployees = canAccessRoute({ service: "Hiring", method: "GET", path: "/v1/stores/*/employees", storeId: effectiveStoreId });
+  const canViewEmployeeDetails = canAccessRoute({ service: "Hiring", method: "GET", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
+  const canCreateEmployee = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/employees", storeId: effectiveStoreId });
+  const canEditEmployee = canAccessRoute({ service: "Hiring", method: "PUT", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
+  const canChangeEmployeeStatus = canAccessRoute({ service: "Hiring", method: "PATCH", path: "/v1/stores/*/employees/*/status", storeId: effectiveStoreId });
+  const canSyncCatalog = canAccessRoute({ service: "Hiring", method: "PUT", path: "/v1/reference-catalog", storeId: effectiveStoreId });
   const {
     positions: catalogPositions,
     maritalStatuses: catalogMaritalStatuses,
@@ -460,17 +471,21 @@ export default function EmployeesPage() {
         >
           <RefreshCw className={shouldShowSkeleton ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
         </Button>
-        <Button
-          variant="outline"
-          onClick={() => setCatalogDialogOpen(true)}
-        >
-          <RefreshCw className="me-2 h-4 w-4" />
-          Sync Catalog
-        </Button>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="me-2 h-4 w-4" />
-          Add Employee
-        </Button>
+        {canSyncCatalog && (
+          <Button
+            variant="outline"
+            onClick={() => setCatalogDialogOpen(true)}
+          >
+            <RefreshCw className="me-2 h-4 w-4" />
+            Sync Catalog
+          </Button>
+        )}
+        {canCreateEmployee && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="me-2 h-4 w-4" />
+            Add Employee
+          </Button>
+        )}
       </PageHeader>
 
       {/* Filters */}
@@ -1123,11 +1138,11 @@ export default function EmployeesPage() {
                   return (
                     <TableRow
                       key={emp.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => {
+                      className={canViewEmployeeDetails ? "cursor-pointer hover:bg-muted/50" : ""}
+                      onClick={canViewEmployeeDetails ? () => {
                         setSelectedEmployeeId(emp.id);
                         setDetailsOpen(true);
-                      }}
+                      } : undefined}
                     >
                       <TableCell>
                         <div className="font-medium text-sm">{fullName}</div>
@@ -1151,34 +1166,40 @@ export default function EmployeesPage() {
                         {createdDate}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Actions</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setEditEmployeeId(emp.id);
-                                setEditDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="me-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setChangeStatusEmployeeId(emp.id);
-                                setChangeStatusOpen(true);
-                              }}
-                            >
-                              <UserCog className="me-2 h-4 w-4" />
-                              Change Employee Status
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(canEditEmployee || canChangeEmployeeStatus) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {canEditEmployee && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditEmployeeId(emp.id);
+                                    setEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="me-2 h-4 w-4" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {canChangeEmployeeStatus && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setChangeStatusEmployeeId(emp.id);
+                                    setChangeStatusOpen(true);
+                                  }}
+                                >
+                                  <UserCog className="me-2 h-4 w-4" />
+                                  Change Employee Status
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

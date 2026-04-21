@@ -294,6 +294,26 @@ export interface CreateEmployeePageData {
 /*  Unified Store Requests — GET /v1/stores/{storeNumber}/requests     */
 /* ------------------------------------------------------------------ */
 
+export interface DecisionHiredEmployee {
+  id: number;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  gender: string;
+  employment_type: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DecisionEmployeeRecord {
+  id: number;
+  hiring_request_decision_id: number;
+  employee_id: number;
+  created_at: string;
+  updated_at: string;
+  employee: DecisionHiredEmployee;
+}
+
 export interface StoreRequestLatestDecision {
   id: number;
   decision: string;
@@ -302,6 +322,7 @@ export interface StoreRequestLatestDecision {
   completed_at: string | null;
   number_hired: number | null;
   employee_ids: number[];
+  employees?: DecisionEmployeeRecord[];
 }
 
 export interface StoreRequestUser {
@@ -376,6 +397,19 @@ export interface StoreRequestSeparationDetail {
   decisions: unknown[];
 }
 
+export interface HiringRequestDecisionRecord {
+  id: number;
+  hiring_request_id: number;
+  decided_by_user_id: number;
+  decision: string;
+  decided_at: string;
+  completed_at: string | null;
+  number_hired: number | null;
+  created_at: string;
+  updated_at: string;
+  employees?: DecisionEmployeeRecord[];
+}
+
 export interface StoreRequestHiringDetail {
   id: number;
   store_id: number;
@@ -388,7 +422,7 @@ export interface StoreRequestHiringDetail {
   user: StoreRequestUser;
   candidates: StoreRequestHiringCandidate[];
   positions: StoreRequestHiringPosition[];
-  decisions: unknown[];
+  decisions: HiringRequestDecisionRecord[];
 }
 
 export interface StoreRequest {

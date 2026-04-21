@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { StoreRequest } from "@/types/hiring.types";
 
 const IMAGE_EXTS = /\.(jpe?g|png|gif|webp|bmp|svg)$/i;
@@ -95,6 +96,10 @@ export function SeparationRequestSheet({
   const employeeName = emp
     ? [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(" ")
     : null;
+  const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const canSubmitDecision = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/separation-requests/*/decision", storeId: effectiveStoreId });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -285,8 +290,8 @@ export function SeparationRequestSheet({
               </>
             )}
 
-            {/* â”€â”€ Supervisor Decision (pending) â”€â”€ */}
-            {!request.latest_decision && (
+            {/* ── Supervisor Decision (pending) ── */}
+            {!request.latest_decision && canSubmitDecision && (
               <>
                 <Separator />
                 <SupervisorDecisionSection
