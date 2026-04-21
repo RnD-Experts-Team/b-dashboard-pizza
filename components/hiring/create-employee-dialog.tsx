@@ -97,8 +97,14 @@ const emptyAvailabilityTime = (): CreateEmployeeV1AvailabilityTime => ({
   available_to: "",
 });
 
-const emptyAvailability = (): CreateEmployeeV1Availability => ({
-  day_of_week: "",
+interface AvailabilityGroup {
+  days: string[];
+  shift_type: string;
+  times: CreateEmployeeV1AvailabilityTime[];
+}
+
+const emptyAvailability = (): AvailabilityGroup => ({
+  days: [],
   shift_type: "",
   times: [emptyAvailabilityTime()],
 });
@@ -165,6 +171,16 @@ const DAYS_OF_WEEK = [
   "saturday",
 ] as const;
 
+const DAY_LABELS: Record<string, string> = {
+  sunday: "Sun",
+  monday: "Mon",
+  tuesday: "Tue",
+  wednesday: "Wed",
+  thursday: "Thu",
+  friday: "Fri",
+  saturday: "Sat",
+};
+
 const SHIFT_TYPES = ["AM", "PM", "OP"] as const;
 
 const STATUS_OPTIONS = ["hired", "resigned", "terminated", "rehired", "OJE"] as const;
@@ -201,6 +217,24 @@ const RELIGION_OPTIONS = [
 ] as const;
 
 const TSHIRT_OPTIONS = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL", "6XL"] as const;
+
+const SHIFT_TIME_PRESETS: Record<string, { label: string; from: string; to: string }[]> = {
+  AM: [
+    { label: "Early AM", from: "06:00", to: "14:00" },
+    { label: "Standard AM", from: "07:00", to: "15:00" },
+    { label: "Late AM", from: "08:00", to: "16:00" },
+  ],
+  PM: [
+    { label: "Early PM", from: "14:00", to: "22:00" },
+    { label: "Standard PM", from: "15:00", to: "23:00" },
+    { label: "Late PM", from: "16:00", to: "23:59" },
+  ],
+  OP: [
+    { label: "Open Early", from: "05:00", to: "13:00" },
+    { label: "Open Std", from: "06:00", to: "14:00" },
+    { label: "Open Late", from: "10:00", to: "18:00" },
+  ],
+};
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -240,7 +274,7 @@ export function CreateEmployeeDialog({
 
   /* -- Array fields -- */
   const [addresses, setAddresses] = useState<CreateEmployeeV1Address[]>([]);
-  const [availability, setAvailability] = useState<CreateEmployeeV1Availability[]>([]);
+  const [availability, setAvailability] = useState<AvailabilityGroup[]>([]);
   const [contacts, setContacts] = useState<CreateEmployeeV1Contact[]>([]);
   const [employeeIds, setEmployeeIds] = useState<CreateEmployeeV1EmployeeId[]>([]);
   const [financialInfo, setFinancialInfo] = useState<CreateEmployeeV1FinancialInfo[]>([]);
@@ -362,15 +396,23 @@ export function CreateEmployeeDialog({
       } } : {}),
       ...(addresses.length > 0 ? { addresses } : {}),
       ...(availability.length > 0
-        ? {
-            availability: availability.map((av) => ({
-              ...av,
-              times: (av.times ?? []).map((t) => ({
-                available_from: toHi(t.available_from),
-                available_to: toHi(t.available_to),
-              })),
-            })),
-          }
+        ? (() => {
+            const validAvailability = availability
+              .filter((group) => group.days.length > 0)
+              .flatMap((group) =>
+                group.days
+                  .map((day) => ({
+                    day_of_week: day,
+                    shift_type: group.shift_type,
+                    times: (group.times ?? [])
+                      .filter((t) => t.available_from.trim() && t.available_to.trim()),
+                  }))
+                  .filter((entry) => entry.times.length > 0),
+              );
+            return validAvailability.length > 0
+              ? { availability: validAvailability }
+              : {};
+          })()
         : {}),
       ...(contacts.length > 0 ? { contacts } : {}),
       ...(employeeIds.filter((e) => e.id_type_id > 0 && e.id_value.trim()).length > 0
@@ -881,7 +923,7 @@ export function CreateEmployeeDialog({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Availability per day with shift type and time windows.
+            Select one or more days per shift group, then configure time windows.
           </p>
           <AddButton
             label="Add Availability"
@@ -897,48 +939,82 @@ export function CreateEmployeeDialog({
               <Badge variant="secondary">Availability {idx + 1}</Badge>
               <RemoveButton onClick={() => removeItem(setAvailability, idx)} />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
+
+            {/* Day toggle chips */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
                 <Label>
-                  Day of Week <span className="text-destructive">*</span>
+                  Days of Week <span className="text-destructive">*</span>
                 </Label>
-                <Select
-                  value={av.day_of_week}
-                  onValueChange={(v) => updateItem(setAvailability, idx, "day_of_week", v)}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allSelected = DAYS_OF_WEEK.every((d) => av.days.includes(d));
+                    const newDays = allSelected ? [] : [...DAYS_OF_WEEK];
+                    setAvailability((prev) =>
+                      prev.map((item, i) => (i === idx ? { ...item, days: newDays } : item)),
+                    );
+                  }}
+                  className="text-xs text-primary cursor-pointer hover:underline underline-offset-2"
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select day" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAYS_OF_WEEK.map((d) => (
-                      <SelectItem key={d} value={d} className="capitalize">
-                        {d.charAt(0).toUpperCase() + d.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {DAYS_OF_WEEK.every((d) => av.days.includes(d)) ? "Clear All" : "Select All"}
+                </button>
               </div>
-              <div className="space-y-1.5">
-                <Label>
-                  Shift Type <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={av.shift_type}
-                  onValueChange={(v) => updateItem(setAvailability, idx, "shift_type", v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select shift" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SHIFT_TYPES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex flex-wrap gap-1.5">
+                {DAYS_OF_WEEK.map((day) => {
+                  const selected = av.days.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => {
+                        const newDays = selected
+                          ? av.days.filter((d) => d !== day)
+                          : [...av.days, day];
+                        setAvailability((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, days: newDays } : item)),
+                        );
+                      }}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors cursor-pointer select-none ${
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-muted text-muted-foreground hover:border-primary hover:text-foreground"
+                      }`}
+                    >
+                      {DAY_LABELS[day]}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {/* Shift Type */}
+            <div className="space-y-1.5">
+              <Label>
+                Shift Type <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={av.shift_type}
+                onValueChange={(v) =>
+                  setAvailability((prev) =>
+                    prev.map((item, i) => (i === idx ? { ...item, shift_type: v } : item)),
+                  )
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select shift" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SHIFT_TYPES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Time Windows */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs text-muted-foreground uppercase tracking-wide">
@@ -950,10 +1026,11 @@ export function CreateEmployeeDialog({
                   size="sm"
                   className="h-7 text-xs"
                   onClick={() =>
-                    updateItem(setAvailability, idx, "times", [
-                      ...(av.times ?? []),
-                      emptyAvailabilityTime(),
-                    ])
+                    setAvailability((prev) =>
+                      prev.map((item, i) =>
+                        i === idx ? { ...item, times: [...(item.times ?? []), emptyAvailabilityTime()] } : item,
+                      ),
+                    )
                   }
                 >
                   <Plus className="me-1 h-3 w-3" />
@@ -961,47 +1038,82 @@ export function CreateEmployeeDialog({
                 </Button>
               </div>
               {(av.times ?? []).map((t, tIdx) => (
-                <div key={tIdx} className="flex items-end gap-2">
-                  <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs">From</Label>
-                    <Input
-                      type="time"
-                      value={t.available_from}
-                      onChange={(e) => {
-                        const newTimes = (av.times ?? []).map((tm, ti) =>
-                          ti === tIdx ? { ...tm, available_from: e.target.value } : tm,
-                        );
-                        updateItem(setAvailability, idx, "times", newTimes);
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    <Label className="text-xs">To</Label>
-                    <Input
-                      type="time"
-                      value={t.available_to}
-                      onChange={(e) => {
-                        const newTimes = (av.times ?? []).map((tm, ti) =>
-                          ti === tIdx ? { ...tm, available_to: e.target.value } : tm,
-                        );
-                        updateItem(setAvailability, idx, "times", newTimes);
-                      }}
-                    />
-                  </div>
-                  {(av.times ?? []).length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => {
-                        const newTimes = (av.times ?? []).filter((_, ti) => ti !== tIdx);
-                        updateItem(setAvailability, idx, "times", newTimes);
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                <div key={tIdx} className="space-y-1.5 rounded-md border border-dashed p-2.5">
+                  {av.shift_type && SHIFT_TIME_PRESETS[av.shift_type] && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {SHIFT_TIME_PRESETS[av.shift_type].map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            const newTimes = (av.times ?? []).map((tm, ti) =>
+                              ti === tIdx
+                                ? { ...tm, available_from: preset.from, available_to: preset.to }
+                                : tm,
+                            );
+                            setAvailability((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, times: newTimes } : item)),
+                            );
+                          }}
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer ${
+                            t.available_from === preset.from && t.available_to === preset.to
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-muted text-muted-foreground hover:border-primary hover:text-foreground"
+                          }`}
+                        >
+                          {preset.label} ({preset.from}–{preset.to})
+                        </button>
+                      ))}
+                    </div>
                   )}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-1.5">
+                      <Label className="text-xs">From</Label>
+                      <Input
+                        type="time"
+                        value={t.available_from}
+                        onChange={(e) => {
+                          const newTimes = (av.times ?? []).map((tm, ti) =>
+                            ti === tIdx ? { ...tm, available_from: e.target.value } : tm,
+                          );
+                          setAvailability((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, times: newTimes } : item)),
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      <Label className="text-xs">To</Label>
+                      <Input
+                        type="time"
+                        value={t.available_to}
+                        onChange={(e) => {
+                          const newTimes = (av.times ?? []).map((tm, ti) =>
+                            ti === tIdx ? { ...tm, available_to: e.target.value } : tm,
+                          );
+                          setAvailability((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, times: newTimes } : item)),
+                          );
+                        }}
+                      />
+                    </div>
+                    {(av.times ?? []).length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => {
+                          const newTimes = (av.times ?? []).filter((_, ti) => ti !== tIdx);
+                          setAvailability((prev) =>
+                            prev.map((item, i) => (i === idx ? { ...item, times: newTimes } : item)),
+                          );
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

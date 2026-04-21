@@ -204,11 +204,11 @@ export function EmployeeDetailsSheet({
                 <Separator />
                 <section className="space-y-3">
                   <SectionTitle icon={FileText} label="Personal Info" />
-                  {data.obsession.image_path && (
+                  {data.obsession.image_url && (
                     <div>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={storageUrl(data.obsession.image_path) ?? undefined}
+                        src={data.obsession.image_url}
                         alt="Employee photo"
                         className="h-20 w-20 rounded-full object-cover border"
                       />
@@ -361,7 +361,7 @@ export function EmployeeDetailsSheet({
 
             <Separator />
 
-            {/* â”€â”€ Availability â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/*  Availability  */}
             <section className="space-y-3">
               <SectionTitle
                 icon={Clock}
@@ -385,7 +385,7 @@ export function EmployeeDetailsSheet({
                         <div className="space-y-0.5">
                           {av.times.map((t, ti) => (
                             <p key={ti} className="text-xs text-muted-foreground">
-                              {t.available_from} â€“ {t.available_to}
+                              {t.available_from} - {t.available_to}
                             </p>
                           ))}
                         </div>
@@ -398,7 +398,7 @@ export function EmployeeDetailsSheet({
 
             <Separator />
 
-            {/* â”€â”€ Financial Info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+            {/*  Financial Info  */}
             <section className="space-y-3">
               <SectionTitle
                 icon={Wallet}
@@ -550,7 +550,7 @@ export function EmployeeDetailsSheet({
                           ? (attachmentTypes.find((t) => t.id === att.type_id)?.label ??
                             `Type #${att.type_id}`)
                           : "-");
-                      const fileUrl = storageUrl(att.file_path);
+                      const fileUrl = att.attachment_url ?? null;
                       const sizeLabel = formatFileSize(att.file_size);
                       return (
                         <div key={idx} className="rounded-lg border p-3 space-y-1">

@@ -468,7 +468,7 @@ export interface EmployeeV1ObsessionDetail {
   employee_id: number;
   t_shirt: string | null;
   birth_date: string | null;
-  image_path: string | null;
+  image_url: string | null;
   religion: string | null;
   race: string | null;
   notes: string | null;
@@ -638,7 +638,7 @@ export interface EmployeeV1AttachmentDetail {
   emp_id?: number;
   employee_id?: number;
   type_id?: number;
-  file_path?: string | null;
+  attachment_url?: string | null;
   original_name?: string | null;
   mime_type?: string | null;
   file_size?: number | null;

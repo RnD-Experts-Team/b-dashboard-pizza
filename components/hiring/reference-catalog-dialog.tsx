@@ -29,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
@@ -711,7 +710,7 @@ export function ReferenceCatalogDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex flex-col max-w-2xl max-h-[90vh] p-0 gap-0">
+      <DialogContent className="flex flex-col max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle className="flex items-center gap-2">
@@ -727,14 +726,13 @@ export function ReferenceCatalogDialog({
         <Separator />
 
         {/* Body — scrollable */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto min-h-0">
           <Tabs
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as CatalogKey)}
-            className="flex flex-col h-full"
           >
-            {/* Tab list */}
-            <div className="px-6 pt-4 pb-0 shrink-0 overflow-x-auto">
+            {/* Tab list — sticks to the top of the scroll container */}
+            <div className="sticky top-0 z-10 bg-background px-6 pt-4 pb-3 border-b">
               <TabsList className="inline-flex w-auto gap-1 h-auto p-1 flex-wrap">
                 {TABS.map(({ key, label, icon }) => (
                   <TabsTrigger
@@ -750,56 +748,52 @@ export function ReferenceCatalogDialog({
               </TabsList>
             </div>
 
-            {/* Tab content with scroll */}
+            {/* Tab content — natural flow, no height tricks needed */}
             {TABS.map(({ key }) => (
               <TabsContent
                 key={key}
                 value={key}
-                className="flex-1 overflow-hidden mt-0 pt-4"
+                className="mt-0 px-6 pt-4 pb-6"
               >
-                <ScrollArea className="h-full px-6">
-                  <div className="pb-4">
-                    {isLoading ? (
-                      <TabLoadingSkeleton />
-                    ) : fetchError ? (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
-                          <span>{fetchError}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onOpenChange(false)}
-                          >
-                            Close
-                          </Button>
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <CatalogTab
-                        items={catalog[key]}
-                        availableTags={
-                          key === "attachment_types"
-                            ? catalog.tags
-                                .filter((t) => !t.pendingDelete && !!t.id)
-                                .map((t) => ({ id: t.id!, label: t.label }))
-                            : undefined
-                        }
-                        onAdd={() => handleAdd(key)}
-                        onConfirmEdit={(itemKey) => handleConfirmEdit(key, itemKey)}
-                        onCancelEdit={(itemKey) => handleCancelEdit(key, itemKey)}
-                        onStartEdit={(itemKey) => handleStartEdit(key, itemKey)}
-                        onDelete={(itemKey) => handleDelete(key, itemKey)}
-                        onDraftChange={(itemKey, field, value) =>
-                          handleDraftChange(key, itemKey, field, value)
-                        }
-                        onDraftTagsChange={(itemKey, tagIds) =>
-                          handleDraftTagsChange(key, itemKey, tagIds)
-                        }
-                      />
-                    )}
-                  </div>
-                </ScrollArea>
+                {isLoading ? (
+                  <TabLoadingSkeleton />
+                ) : fetchError ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+                      <span>{fetchError}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onOpenChange(false)}
+                      >
+                        Close
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <CatalogTab
+                    items={catalog[key]}
+                    availableTags={
+                      key === "attachment_types"
+                        ? catalog.tags
+                            .filter((t) => !t.pendingDelete && !!t.id)
+                            .map((t) => ({ id: t.id!, label: t.label }))
+                        : undefined
+                    }
+                    onAdd={() => handleAdd(key)}
+                    onConfirmEdit={(itemKey) => handleConfirmEdit(key, itemKey)}
+                    onCancelEdit={(itemKey) => handleCancelEdit(key, itemKey)}
+                    onStartEdit={(itemKey) => handleStartEdit(key, itemKey)}
+                    onDelete={(itemKey) => handleDelete(key, itemKey)}
+                    onDraftChange={(itemKey, field, value) =>
+                      handleDraftChange(key, itemKey, field, value)
+                    }
+                    onDraftTagsChange={(itemKey, tagIds) =>
+                      handleDraftTagsChange(key, itemKey, tagIds)
+                    }
+                  />
+                )}
               </TabsContent>
             ))}
           </Tabs>
