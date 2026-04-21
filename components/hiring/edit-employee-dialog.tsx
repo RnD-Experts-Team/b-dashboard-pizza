@@ -732,7 +732,7 @@ export function EditEmployeeDialog({
               onChange={(e) => setObsession((prev) => ({ ...prev, birth_date: e.target.value }))}
             />
           </div>
-          <div className="space-y-1.5">
+          {/* <div className="space-y-1.5">
             <Label>Race</Label>
             <Select
               value={obsession.race ?? ""}
@@ -749,8 +749,8 @@ export function EditEmployeeDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
+          </div> */}
+          {/* <div className="space-y-1.5">
             <Label>Religion</Label>
             <Select
               value={obsession.religion ?? ""}
@@ -767,7 +767,7 @@ export function EditEmployeeDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </div> */}
           <div className="space-y-1.5">
             <Label>T-Shirt Size</Label>
             <Select

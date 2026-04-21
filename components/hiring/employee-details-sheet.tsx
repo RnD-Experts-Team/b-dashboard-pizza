@@ -217,8 +217,8 @@ export function EmployeeDetailsSheet({
                   <div className="grid grid-cols-2 gap-3">
                     <DetailRow label="Birth Date" value={formatDate(data.obsession.birth_date)} />
                     <DetailRow label="T-Shirt Size" value={data.obsession.t_shirt ?? "-"} />
-                    <DetailRow label="Religion" value={data.obsession.religion ?? "-"} />
-                    <DetailRow label="Race" value={data.obsession.race ?? "-"} />
+                    {/* <DetailRow label="Religion" value={data.obsession.religion ?? "-"} /> */}
+                    {/* <DetailRow label="Race" value={data.obsession.race ?? "-"} /> */}
                     {data.obsession.notes && (
                       <div className="col-span-2">
                         <DetailRow label="Notes" value={data.obsession.notes} />
