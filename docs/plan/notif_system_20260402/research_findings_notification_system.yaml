@@ -1,0 +1,365 @@
+plan_id: notif_system_20260402
+objective: "Add a notification system with bell button beside theme toggle, unread indicator, slide-in toasts, popup panel with read/unread tabs, mark-as-read, announcements placeholder, and test trigger button using mock data"
+focus_area: notification_system
+created_at: "2026-04-02"
+created_by: gem-researcher
+status: completed
+
+tldr: |
+  - Header lives in components/layout/topbar.tsx; theme toggle rendered at line 97-99 inside a <Feature name="darkMode"> wrapper — notification bell should be placed immediately before this block
+  - Project uses shadcn/ui (new-york style) with Tailwind CSS v4, CSS variables, and lucide-react icons; all needed UI primitives (Button, Popover, Badge, Tabs, ScrollArea, Sheet, Skeleton) already exist in components/ui/
+  - No framer-motion; animations use tw-animate-css + Tailwind data-state classes; Sonner is already installed for toast notifications
+  - State management is Zustand with persist middleware; stores live in lib/store/*.store.ts with barrel export
+  - i18n uses next-intl with flat JSON locale files (en.json, ar.json) supporting RTL; translations accessed via useTranslations("namespace")
+
+research_metadata:
+  methodology: "hybrid retrieval: semantic_search + grep_search + read_file for targeted inspection"
+  scope: "components/layout/, components/ui/, components/shared/, components/providers/, lib/store/, lib/i18n/, lib/config/, types/, package.json, components.json, app/globals.css"
+  confidence: high
+  coverage: 95
+
+files_analyzed:
+  - file: topbar.tsx
+    path: components/layout/topbar.tsx
+    purpose: "Main header/topbar component rendered in every layout variant"
+    key_elements:
+      - element: Topbar
+        type: function
+        location: "topbar.tsx:23"
+        description: "Header component with sidebar toggle, breadcrumbs, spacer, and theme toggle"
+      - element: ThemeToggle
+        type: import
+        location: "topbar.tsx:10"
+        description: "Imported as ThemeToggleAnimated from @/components/shared/ThemeToggleAnimated"
+      - element: Feature_darkMode
+        type: pattern
+        location: "topbar.tsx:97-99"
+        description: "<Feature name='darkMode'><ThemeToggle /></Feature> — the exact insertion point for notification bell"
+    language: typescript
+    lines: 100
+
+  - file: app-shell.tsx
+    path: components/layout/app-shell.tsx
+    purpose: "Root layout shell with 4 layout variants (classic, inset, floating, topnav) all rendering <Topbar>"
+    key_elements:
+      - element: AppShell
+        type: function
+        location: "app-shell.tsx:16"
+        description: "Renders Topbar in all layout variants; Topbar is the single place to add notification bell"
+    language: typescript
+    lines: 100
+
+  - file: ThemeToggleAnimated.tsx
+    path: components/shared/ThemeToggleAnimated.tsx
+    purpose: "Theme toggle button using @space-man/react-theme-animation with animated transitions"
+    key_elements:
+      - element: ThemeToggleAnimated
+        type: function
+        location: "ThemeToggleAnimated.tsx:7"
+        description: "Renders Button variant='ghost' size='icon' wrapping a SunMoon lucide icon"
+    language: typescript
+    lines: 25
+
+  - file: ui.store.ts
+    path: lib/store/ui.store.ts
+    purpose: "UI state store (sidebar, theme, layout variant) — model for notification store"
+    key_elements:
+      - element: useUIStore
+        type: function
+        location: "ui.store.ts:28"
+        description: "Zustand store with persist middleware + createJSONStorage; SSR-safe noopStorage fallback"
+    language: typescript
+    lines: 53
+
+  - file: sonner.tsx
+    path: components/ui/sonner.tsx
+    purpose: "Sonner toast provider already configured with theme-aware styling"
+    key_elements:
+      - element: Toaster
+        type: function
+        location: "sonner.tsx:14"
+        description: "Pre-configured Sonner Toaster with success/info/warning/error icons from lucide-react"
+    language: typescript
+    lines: 42
+
+  - file: store.types.ts
+    path: types/store.types.ts
+    purpose: "Example of type file structure — JSDoc sections, Core Entity Types, nested interfaces"
+    key_elements:
+      - element: Store
+        type: interface
+        location: "store.types.ts:23"
+        description: "Core entity with id, name, metadata, timestamps — pattern for notification types"
+    language: typescript
+    lines: 60
+
+  - file: config.ts
+    path: lib/i18n/config.ts
+    purpose: "i18n configuration — locales, directions, validation"
+    key_elements:
+      - element: locales
+        type: variable
+        location: "config.ts:1"
+        description: "['en', 'ar'] as const — supports LTR and RTL"
+    language: typescript
+    lines: 20
+
+  - file: en.json
+    path: lib/i18n/locales/en.json
+    purpose: "English locale messages — flat namespaced keys with ICU interpolation"
+    key_elements:
+      - element: common_namespace
+        type: pattern
+        location: "en.json:2"
+        description: "Top-level namespaces like 'common', 'nav' with flat key-value pairs; interpolation via {count}"
+    language: json
+    lines: 60
+
+  - file: components.json
+    path: components.json
+    purpose: "shadcn/ui configuration file"
+    key_elements:
+      - element: shadcn_config
+        type: pattern
+        location: "components.json:1"
+        description: "style: new-york, rsc: true, tsx: true, iconLibrary: lucide, tailwind cssVariables: true"
+    language: json
+    lines: 20
+
+  - file: package.json
+    path: package.json
+    purpose: "Project dependencies and scripts"
+    key_elements:
+      - element: zustand
+        type: variable
+        location: "package.json:56"
+        description: "^5.0.10 — state management"
+      - element: sonner
+        type: variable
+        location: "package.json:54"
+        description: "^2.0.7 — toast notifications"
+      - element: next-intl
+        type: variable
+        location: "package.json:50"
+        description: "^4.7.0 — internationalization"
+      - element: tw-animate-css
+        type: variable
+        location: "package.json:69"
+        description: "^1.4.0 — Tailwind animation classes"
+    language: json
+    lines: 75
+
+patterns_found:
+  - category: architecture
+    pattern: feature_flag_wrapper
+    description: "UI features wrapped in <Feature name='featureId'> component for conditional rendering"
+    examples:
+      - file: topbar.tsx
+        location: "topbar.tsx:97"
+        snippet: "<Feature name=\"darkMode\"><ThemeToggle /></Feature>"
+    prevalence: common
+
+  - category: architecture
+    pattern: zustand_persist_store
+    description: "Zustand stores with persist middleware, createJSONStorage, SSR-safe noopStorage fallback"
+    examples:
+      - file: ui.store.ts
+        location: "ui.store.ts:28-53"
+        snippet: "create<UIState>()(persist((set) => ({...}), { name: 'ui-storage', storage: createJSONStorage(() => typeof window !== 'undefined' ? localStorage : noopStorage) }))"
+    prevalence: common
+
+  - category: naming
+    pattern: store_file_naming
+    description: "Stores named as {domain}.store.ts, exported via barrel index.ts using use{Domain}Store"
+    examples:
+      - file: index.ts
+        location: "lib/store/index.ts:1"
+        snippet: "export { useUIStore } from './ui.store';"
+    prevalence: common
+
+  - category: naming
+    pattern: type_file_naming
+    description: "Types named as {domain}.types.ts with JSDoc section headers, barrel re-exported from types/index.ts"
+    examples:
+      - file: store.types.ts
+        location: "types/store.types.ts:1-6"
+        snippet: "/** Store Management Types */ // Core Entity Types section"
+    prevalence: common
+
+  - category: structure
+    pattern: i18n_namespace_access
+    description: "Translations accessed via useTranslations('namespace') from next-intl; flat JSON namespaces"
+    examples:
+      - file: topbar.tsx
+        location: "topbar.tsx:25"
+        snippet: "const t = useTranslations('common');"
+    prevalence: common
+
+  - category: structure
+    pattern: client_component_directive
+    description: "Interactive components start with 'use client' directive"
+    examples:
+      - file: topbar.tsx
+        location: "topbar.tsx:1"
+        snippet: "\"use client\";"
+    prevalence: common
+
+  - category: structure
+    pattern: shadcn_ui_primitives
+    description: "UI primitives from shadcn/ui using Radix UI + CVA + cn() utility for class merging"
+    examples:
+      - file: button.tsx
+        location: "components/ui/button.tsx:1-10"
+        snippet: "cva('inline-flex items-center...', { variants: { variant: {...}, size: {...} } })"
+    prevalence: common
+
+  - category: architecture
+    pattern: topbar_right_section
+    description: "Topbar uses flex-1 spacer then renders right-aligned items (theme toggle) at end of header"
+    examples:
+      - file: topbar.tsx
+        location: "topbar.tsx:91-99"
+        snippet: "<div className=\"flex-1\" /> ... <Feature name=\"darkMode\"><ThemeToggle /></Feature>"
+    prevalence: common
+
+related_architecture:
+  components_relevant_to_domain:
+    - component: Topbar
+      responsibility: "Main header bar — renders breadcrumbs, search stub, theme toggle"
+      location: components/layout/topbar.tsx
+      relationship_to_domain: "Notification bell will be inserted here beside theme toggle"
+    - component: AppShell
+      responsibility: "Root layout with 4 variants, all rendering Topbar"
+      location: components/layout/app-shell.tsx
+      relationship_to_domain: "Ensures notification bell appears in every layout variant"
+    - component: ThemeToggleAnimated
+      responsibility: "Theme toggle button with animated transition"
+      location: components/shared/ThemeToggleAnimated.tsx
+      relationship_to_domain: "Adjacent component — notification bell placed beside it"
+    - component: Toaster (Sonner)
+      responsibility: "Toast notification provider"
+      location: components/ui/sonner.tsx
+      relationship_to_domain: "Can be reused for slide-in toast notifications"
+    - component: Feature
+      responsibility: "Feature flag wrapper for conditional UI rendering"
+      location: lib/config/
+      relationship_to_domain: "Notification bell should be wrapped in Feature component"
+  interfaces_used_by_domain:
+    - interface: Popover
+      location: components/ui/popover.tsx
+      usage_pattern: "For notification popup panel with read/unread tabs"
+    - interface: Tabs
+      location: components/ui/tabs.tsx
+      usage_pattern: "For read/unread tab switching in notification panel"
+    - interface: ScrollArea
+      location: components/ui/scroll-area.tsx
+      usage_pattern: "For scrollable notification list"
+    - interface: Badge
+      location: components/ui/badge.tsx
+      usage_pattern: "For unread count indicator on bell icon"
+    - interface: Button
+      location: components/ui/button.tsx
+      usage_pattern: "For bell button (variant ghost, size icon) and mark-as-read actions"
+    - interface: Sheet
+      location: components/ui/sheet.tsx
+      usage_pattern: "Alternative to popover for mobile notification panel"
+    - interface: Skeleton
+      location: components/ui/skeleton.tsx
+      usage_pattern: "For loading states"
+    - interface: Separator
+      location: components/ui/separator.tsx
+      usage_pattern: "For section dividers in notification panel"
+  data_flow_involving_domain: "Zustand notification store → Topbar bell button reads unread count → Popover panel lists notifications → mark-as-read actions update store → Sonner shows slide-in toasts"
+  key_relationships_to_domain:
+    - from: Topbar
+      to: NotificationBell (new)
+      relationship: renders
+    - from: NotificationBell (new)
+      to: useNotificationStore (new)
+      relationship: imports
+    - from: NotificationBell (new)
+      to: Popover
+      relationship: uses
+    - from: NotificationPanel (new)
+      to: Tabs
+      relationship: uses
+    - from: NotificationPanel (new)
+      to: ScrollArea
+      relationship: uses
+
+related_technology_stack:
+  languages_used_in_domain:
+    - TypeScript
+    - CSS (Tailwind v4)
+  frameworks_used_in_domain:
+    - name: Next.js 16
+      usage_in_domain: "App router, RSC-aware components"
+    - name: React 19
+      usage_in_domain: "Component implementation"
+  libraries_used_in_domain:
+    - name: shadcn/ui (new-york style)
+      purpose_in_domain: "UI primitives (Button, Popover, Tabs, Badge, ScrollArea, Sheet, etc.)"
+    - name: Radix UI
+      purpose_in_domain: "Accessible headless UI primitives underlying shadcn/ui"
+    - name: Zustand 5
+      purpose_in_domain: "State management for notification store"
+    - name: Sonner 2
+      purpose_in_domain: "Toast notifications (already configured)"
+    - name: lucide-react
+      purpose_in_domain: "Icons (Bell, BellDot, Check, X, etc.)"
+    - name: next-intl 4
+      purpose_in_domain: "Internationalization for notification text"
+    - name: tw-animate-css
+      purpose_in_domain: "Tailwind animation classes for transitions"
+    - name: class-variance-authority
+      purpose_in_domain: "Component variant styling"
+    - name: tailwind-merge + clsx
+      purpose_in_domain: "Class name merging via cn() utility"
+
+related_conventions:
+  naming_patterns_in_domain: "Files: kebab-case (notification.store.ts, notification.types.ts). Components: PascalCase. Hooks: use{Name}. Stores: use{Domain}Store."
+  structure_of_domain: "Component in components/notifications/ or components/shared/. Store in lib/store/notification.store.ts. Types in types/notification.types.ts."
+  error_handling_in_domain: "N/A for mock data phase"
+  testing_in_domain: "No test framework detected in package.json"
+  documentation_in_domain: "JSDoc section comments in type files; inline comments in complex logic"
+
+related_dependencies:
+  internal:
+    - component: lib/store/ (Zustand stores)
+      relationship_to_domain: "Pattern to follow for notification.store.ts"
+      direction: outbound
+    - component: components/ui/ (shadcn primitives)
+      relationship_to_domain: "UI building blocks for notification components"
+      direction: outbound
+    - component: lib/config/ (Feature flags)
+      relationship_to_domain: "Wrap notification bell in Feature component"
+      direction: outbound
+    - component: lib/i18n/ (i18n config)
+      relationship_to_domain: "Add notification namespace to en.json and ar.json"
+      direction: outbound
+    - component: components/layout/topbar.tsx
+      relationship_to_domain: "Insert notification bell component here"
+      direction: inbound
+  external:
+    - name: sonner
+      purpose_for_domain: "Slide-in toast notifications (already installed and configured)"
+    - name: zustand
+      purpose_for_domain: "Notification state store with persist middleware"
+    - name: lucide-react
+      purpose_for_domain: "Bell, BellDot, Check, X, Megaphone icons"
+
+open_questions:
+  - question: "Should the notification panel use Popover (desktop) + Sheet (mobile) responsive pattern, or Popover only?"
+    context: "The sidebar already uses Sheet for mobile; a responsive approach would be consistent"
+  - question: "Should a new feature flag be registered for the notification system (e.g., 'notifications')?"
+    context: "Other features like darkMode and breadcrumbs use Feature wrapper — notifications should too"
+  - question: "Where should the Sonner Toaster component be mounted? Is it already in a root layout?"
+    context: "sonner.tsx exists but need to verify Toaster is rendered in the app layout"
+
+gaps:
+  - area: "Sonner Toaster mount point"
+    description: "Did not verify if <Toaster /> is rendered in the root layout — needed for slide-in toasts"
+    impact: "If not mounted, toast notifications won't appear"
+  - area: "Feature flag registration"
+    description: "Did not fully examine the feature flag configuration to see how new flags are registered"
+    impact: "Need to register a 'notifications' flag to use <Feature name='notifications'>"

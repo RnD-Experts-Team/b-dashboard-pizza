@@ -25,6 +25,8 @@ import {
   CalendarDays,
   LayoutGrid,
   CalendarRange,
+  Undo2,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -154,6 +156,7 @@ export function SchedulingManager() {
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [isTakingScreenshot, setIsTakingScreenshot] = useState(false);
+  const [isEmployeeScreenshot, setIsEmployeeScreenshot] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
 
@@ -174,6 +177,29 @@ export function SchedulingManager() {
   const [overtimeThreshold] = useState(DEFAULT_OVERTIME_THRESHOLD);
 
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // Undo stack — stores previous allShifts snapshots (max 20)
+  const undoStackRef = useRef<{ allShifts: Record<number, Shift[]>; label: string }[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
+
+  /** Save current allShifts state before a mutation */
+  const pushUndo = useCallback(
+    (label: string) => {
+      undoStackRef.current.push({ allShifts: structuredClone(allShifts), label });
+      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
+      setCanUndo(true);
+    },
+    [allShifts]
+  );
+
+  /** Restore the last saved state */
+  const handleUndo = useCallback(() => {
+    const entry = undoStackRef.current.pop();
+    if (!entry) return;
+    setAllShifts(entry.allShifts);
+    setCanUndo(undoStackRef.current.length > 0);
+    toast.info(`Undone: ${entry.label}`);
+  }, []);
 
   // Shift dialog state
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
@@ -245,17 +271,19 @@ export function SchedulingManager() {
   }, []);
 
   const handleDeleteShift = useCallback((shiftId: string) => {
+    pushUndo("Delete shift");
     setCurrentShifts((prev) => prev.filter((s) => s.id !== shiftId));
     toast.info("Shift removed");
-  }, [setCurrentShifts]);
+  }, [setCurrentShifts, pushUndo]);
 
   const handleConfirmShift = useCallback(
-    (startTime: string, endTime: string, label: string, type: Shift["type"], isRecurring: boolean) => {
+    (startTime: string, endTime: string, label: string, type: Shift["type"], isRecurring: boolean, note: string) => {
+      pushUndo(editingShift ? "Edit shift" : "Add shift");
       if (editingShift) {
         setCurrentShifts((prev) =>
           prev.map((s) =>
             s.id === editingShift.id
-              ? { ...s, startTime, endTime, label, type, isRecurring, recurringGroupId: isRecurring ? (s.recurringGroupId ?? s.id) : undefined }
+              ? { ...s, startTime, endTime, label, type, isRecurring, recurringGroupId: isRecurring ? (s.recurringGroupId ?? s.id) : undefined, note: note || undefined }
               : s
           )
         );
@@ -275,12 +303,13 @@ export function SchedulingManager() {
         type,
         isRecurring,
         recurringGroupId: isRecurring ? shiftId : undefined,
+        note: note || undefined,
       };
       setCurrentShifts((prev) => [...prev, newShift]);
       setPendingAdd(null);
       toast.success("Shift added");
     },
-    [pendingAdd, editingShift, setCurrentShifts]
+    [pendingAdd, editingShift, setCurrentShifts, pushUndo]
   );
 
   const handleGoToToday = useCallback(() => {
@@ -302,6 +331,7 @@ export function SchedulingManager() {
       ...s,
       id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     }));
+    pushUndo("Copy previous week");
     setAllShifts((all) => ({ ...all, [weekOffset]: copied }));
     toast.success(
       `Copied ${copied.length} shift${copied.length !== 1 ? "s" : ""} from the previous week`
@@ -348,6 +378,7 @@ export function SchedulingManager() {
         ...s,
         id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       }));
+      pushUndo("Load template");
       setAllShifts((all) => ({ ...all, [weekOffset]: loaded }));
       setLoadTemplateOpen(false);
       toast.success(
@@ -474,6 +505,35 @@ export function SchedulingManager() {
       toast.error("Screenshot failed");
     } finally {
       setIsTakingScreenshot(false);
+    }
+  }, [week.label]);
+
+  /** Capture an employee-facing screenshot (no hours, totals, or time-off) */
+  const handleEmployeeScreenshot = useCallback(async () => {
+    setIsEmployeeScreenshot(true);
+    // Give React one tick to re-render with employeeView=true
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      const html2canvas = (await import("html2canvas-pro")).default;
+      const target = gridRef.current;
+      if (!target) { toast.error("Could not find grid"); return; }
+
+      const canvas = await html2canvas(target, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+
+      const a = document.createElement("a");
+      a.download = `schedule-employees-${week.label.replace(/[^a-z0-9]/gi, "-")}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      toast.success("Employee schedule screenshot downloaded");
+    } catch {
+      toast.error("Screenshot failed");
+    } finally {
+      setIsEmployeeScreenshot(false);
     }
   }, [week.label]);
 
@@ -628,6 +688,15 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  disabled={!canUndo}
+                  onSelect={handleUndo}
+                  className="gap-2 cursor-pointer"
+                >
+                  <Undo2 className="h-4 w-4 text-sky-600" />
+                  Undo Last Action
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
                   disabled={!hasPreviousWeekShifts}
                   onSelect={() => setCopyConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
@@ -695,6 +764,18 @@ export function SchedulingManager() {
                     <Camera className="h-4 w-4 text-violet-600" />
                   )}
                   Screenshot
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isEmployeeScreenshot}
+                  onSelect={handleEmployeeScreenshot}
+                  className="gap-2 cursor-pointer"
+                >
+                  {isEmployeeScreenshot ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 text-sky-600" />
+                  )}
+                  Employee Screenshot
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -825,6 +906,7 @@ export function SchedulingManager() {
               onAddShift={handleAddShift}
               onEditShift={handleEditShift}
               onDeleteShift={handleDeleteShift}
+              employeeView={isEmployeeScreenshot}
             />
           )}
 
@@ -874,6 +956,7 @@ export function SchedulingManager() {
               size="sm"
               className="text-destructive hover:text-destructive text-xs"
               onClick={() => {
+                pushUndo("Clear all shifts");
                 setCurrentShifts(() => []);
                 toast.info("All shifts cleared");
               }}

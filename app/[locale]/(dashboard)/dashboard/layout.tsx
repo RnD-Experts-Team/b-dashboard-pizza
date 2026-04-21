@@ -4,6 +4,9 @@ import { useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { AppShell } from "@/components/layout/app-shell";
+import { AnnouncementPopup } from "@/components/announcements/announcement-popup";
+import { AnnouncementOnLoadPopup } from "@/components/announcements/announcement-onload-popup";
+import { PizzaLoader } from "@/components/shared/pizza-loader";
 
 export default function DashboardLayout({
   children,
@@ -28,12 +31,14 @@ export default function DashboardLayout({
 
   // Show nothing while checking auth
   if (!isInitialized || isLoading || !isAuthenticated) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <PizzaLoader />;
   }
 
-  return <AppShell>{children}</AppShell>;
+  return (
+    <>
+      <AppShell>{children}</AppShell>
+      <AnnouncementPopup />
+      <AnnouncementOnLoadPopup />
+    </>
+  );
 }

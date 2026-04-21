@@ -484,14 +484,46 @@ export function CameraReportFilters({
               </SelectContent>
             </Select>
           </div>
-        </div>
 
-        {/* Apply button */}
-        <div className="mt-4 flex justify-end">
-          <Button size="sm" onClick={handleApply} disabled={isLoading}>
-            <Filter className="me-1.5 h-3.5 w-3.5" />
-            {t("filters.apply")}
-          </Button>
+          {/* Custom Report ID */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t("filters.customReportId")}</Label>
+            <Select
+              value={
+                localFilters.custom_report_id
+                  ? String(localFilters.custom_report_id)
+                  : "all"
+              }
+              onValueChange={(val) =>
+                setLocalFilters((prev) => ({
+                  ...prev,
+                  custom_report_id: val === "all" ? undefined : Number(val),
+                }))
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t("filters.allCustomReports")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t("filters.allCustomReports")}
+                </SelectItem>
+                {(data?.customReports ?? []).map((cr) => (
+                  <SelectItem key={cr.id} value={String(cr.id)}>
+                    {cr.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Apply button */}
+          <div className="flex items-end">
+            <Button size="sm" onClick={handleApply} disabled={isLoading} className="w-full">
+              <Filter className="me-1.5 h-3.5 w-3.5" />
+              {t("filters.apply")}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

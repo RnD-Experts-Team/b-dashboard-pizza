@@ -4,6 +4,8 @@ import type {
   DueKeysResponse,
   DueKeyItem,
   DueKeyValuePayload,
+  ApiEmployee,
+  Employee,
 } from "@/types/due-key.types";
 
 export type DueKeysErrorCode =
@@ -51,11 +53,23 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
   };
 }
 
+function transformEmployee(raw: ApiEmployee): Employee {
+  return {
+    id: raw.id,
+    firstName: raw.first_name,
+    middleName: raw.middle_name ?? null,
+    lastName: raw.last_name,
+    storeId: raw.store_id,
+    active: raw.active,
+  };
+}
+
 function transformDueKeysResponse(raw: ApiDueKeysResponse): DueKeysResponse {
   return {
     storeId: raw.store_id,
     date: raw.date,
     items: (raw.items ?? []).map(transformDueKeyItem),
+    employees: (raw.employees ?? []).map(transformEmployee),
   };
 }
 

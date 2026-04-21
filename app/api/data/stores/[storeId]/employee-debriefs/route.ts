@@ -214,22 +214,20 @@ export async function POST(
     return errorResponse("INVALID_PARAM", "Request body must be valid JSON.", 400);
   }
 
-  const { date, employee_name, note } = body;
+  const { date, employee_id, employee_name, note } = body;
 
   if (!date || typeof date !== "string" || !date.trim()) {
     return errorResponse("INVALID_PARAM", "date is required.", 400, { param: "date" });
+  }
+  if (employee_id === undefined || employee_id === null || typeof employee_id !== "number" || !Number.isInteger(employee_id) || employee_id <= 0) {
+    return errorResponse("INVALID_PARAM", "employee_id is required and must be a positive integer.", 400, {
+      param: "employee_id",
+    });
   }
   if (!employee_name || typeof employee_name !== "string" || !employee_name.trim()) {
     return errorResponse("INVALID_PARAM", "employee_name is required.", 400, {
       param: "employee_name",
     });
-  }
-  if (employee_name.length > 255) {
-    return errorResponse(
-      "VALIDATION_ERROR",
-      "employee_name must be at most 255 characters.",
-      422
-    );
   }
   if (!note || typeof note !== "string" || !note.trim()) {
     return errorResponse("INVALID_PARAM", "note is required.", 400, { param: "note" });
@@ -256,6 +254,7 @@ export async function POST(
         },
         body: JSON.stringify({
           date: (date as string).trim(),
+          employee_id: employee_id as number,
           employee_name: (employee_name as string).trim(),
           note: (note as string).trim(),
         }),

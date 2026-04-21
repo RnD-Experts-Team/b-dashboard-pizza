@@ -1,5 +1,6 @@
 import axios from "axios";
 import type {
+  ApiEmployeeObject,
   ApiEmployeeDebriefItem,
   ApiEmployeeDebriefDetail,
   ApiEmployeeDebriefListResponse,
@@ -30,11 +31,32 @@ export class EmployeeDebriefError extends Error {
   }
 }
 
+function resolveEmployeeName(
+  employeeObj: ApiEmployeeObject | undefined | null,
+  flatName: string | null | undefined,
+  employeeId: number | null | undefined
+): string | null {
+  if (employeeObj) {
+    const parts = [
+      employeeObj.first_name,
+      employeeObj.middle_name,
+      employeeObj.last_name,
+    ]
+      .map((p) => p?.trim())
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join(" ");
+  }
+  if (flatName) return flatName;
+  if (employeeId != null) return null; // will fall back to ID badge in UI
+  return null;
+}
+
 function transformItem(raw: ApiEmployeeDebriefItem): EmployeeDebriefItem {
+  const resolvedId = raw.employee?.id ?? raw.employee_id ?? null;
   return {
     id: raw.id,
-    employeeId: raw.employee_id ?? null,
-    employeeName: raw.employee_name ?? null,
+    employeeId: resolvedId,
+    employeeName: resolveEmployeeName(raw.employee, raw.employee_name, resolvedId),
     storeId: raw.store_id ?? null,
     date: raw.date ?? null,
     createdAt: raw.created_at ?? null,
@@ -44,10 +66,11 @@ function transformItem(raw: ApiEmployeeDebriefItem): EmployeeDebriefItem {
 }
 
 function transformDetail(raw: ApiEmployeeDebriefDetail): EmployeeDebriefDetail {
+  const resolvedId = raw.employee?.id ?? raw.employee_id ?? null;
   return {
     id: raw.id,
-    employeeId: raw.employee_id ?? null,
-    employeeName: raw.employee_name ?? null,
+    employeeId: resolvedId,
+    employeeName: resolveEmployeeName(raw.employee, raw.employee_name, resolvedId),
     storeId: raw.store_id ?? null,
     date: raw.date ?? null,
     createdAt: raw.created_at ?? null,
@@ -174,7 +197,7 @@ export const employeeDebriefService = {
 
   async create(
     storeId: string,
-    payload: { date: string; employee_name: string; note: string }
+    payload: { date: string; employee_id: number; employee_name: string; note: string }
   ): Promise<EmployeeDebriefItem> {
     const token = getToken();
     if (!token) {

@@ -65,6 +65,10 @@
     "settings": "Settings",
     "storeManagement": "Store Management",
     "userManagement": "User Management",
+    "hiringManagement": "Hiring Management",
+    "hiringRequest": "Hiring Request",
+    "separationRequest": "Separation Request",
+    "manageRequests": "Manage Requests",
     "qaManagement": "QA Management",
     "highLevelMgmt": "High Level MGMT",
     "dataManagement": "Data Management",
@@ -1443,7 +1447,9 @@
       "ratingNotDone": "Not Done",
       "ratingCameraFail": "Camera Fail",
       "ratingAutoFail": "Auto Fail",
-      "ratingUrgent": "Urgent"
+      "ratingUrgent": "Urgent",
+      "customReportId": "Custom Report",
+      "allCustomReports": "All Custom Reports"
     },
     "error": {
       "title": "Error Loading Camera Report",

@@ -11,12 +11,13 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Clock, Eraser, Loader2, Send } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock, Eraser, Loader2, Send, X } from "lucide-react";
 import type { CreateDebriefPayload } from "@/lib/hooks/use-employee-debriefs";
+import type { Employee } from "@/types/due-key.types";
 
 const DRAFT_KEY = "employee-debrief-draft";
-const MAX_NAME = 255;
 const MAX_NOTE = 5000;
 
 function formatTodayDate(): string {
@@ -28,26 +29,24 @@ function formatTodayDate(): string {
 }
 
 interface DraftData {
-  employeeName: string;
   note: string;
   date: string;
 }
 
 function loadDraft(): DraftData {
   if (typeof window === "undefined") {
-    return { employeeName: "", note: "", date: formatTodayDate() };
+    return { note: "", date: formatTodayDate() };
   }
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return { employeeName: "", note: "", date: formatTodayDate() };
+    if (!raw) return { note: "", date: formatTodayDate() };
     const parsed = JSON.parse(raw) as Partial<DraftData>;
     return {
-      employeeName: parsed.employeeName ?? "",
       note: parsed.note ?? "",
       date: parsed.date ?? formatTodayDate(),
     };
   } catch {
-    return { employeeName: "", note: "", date: formatTodayDate() };
+    return { note: "", date: formatTodayDate() };
   }
 }
 
@@ -74,6 +73,7 @@ interface CreateEmployeeDebriefFormProps {
   submitError: string | null;
   onSubmit: (payload: CreateDebriefPayload) => Promise<boolean>;
   onClearError: () => void;
+  employees?: Employee[];
 }
 
 export function CreateEmployeeDebriefForm({
@@ -82,13 +82,21 @@ export function CreateEmployeeDebriefForm({
   submitError,
   onSubmit,
   onClearError,
+  employees = [],
 }: CreateEmployeeDebriefFormProps) {
-  const [employeeName, setEmployeeName] = useState("");
+  // Employee selection (id-based; not persisted to draft)
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedDisplayName, setSelectedDisplayName] = useState("");
+
   const [note, setNote] = useState("");
   const [date, setDate] = useState(formatTodayDate());
   const [draftSavedFlash, setDraftSavedFlash] = useState(false);
   const [successFlash, setSuccessFlash] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+
+  // Employee combobox state
+  const [empOpen, setEmpOpen] = useState(false);
+  const [empSearch, setEmpSearch] = useState("");
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,19 +104,26 @@ export function CreateEmployeeDebriefForm({
   // Load draft on mount (client only)
   useEffect(() => {
     const draft = loadDraft();
-    setEmployeeName(draft.employeeName);
     setNote(draft.note);
     setDate(draft.date);
     setHydrated(true);
   }, []);
+
+  // Reset employee selection whenever the store changes
+  useEffect(() => {
+    setSelectedEmployeeId(null);
+    setSelectedDisplayName("");
+    setEmpSearch("");
+    setEmpOpen(false);
+  }, [storeId]);
 
   // Auto-save draft 600ms after last keystroke
   useEffect(() => {
     if (!hydrated) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
-      saveDraft({ employeeName, note, date });
-      if (employeeName || note) {
+      saveDraft({ note, date });
+      if (note) {
         setDraftSavedFlash(true);
         if (flashTimer.current) clearTimeout(flashTimer.current);
         flashTimer.current = setTimeout(() => setDraftSavedFlash(false), 2000);
@@ -117,18 +132,20 @@ export function CreateEmployeeDebriefForm({
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [employeeName, note, date, hydrated]);
+  }, [note, date, hydrated]);
 
-  const hasDraft = !!(employeeName || note);
+  const hasDraft = !!note;
   const isToday = date === formatTodayDate();
 
-  const isNameValid = employeeName.trim().length > 0 && employeeName.length <= MAX_NAME;
+  const isEmployeeValid = selectedEmployeeId !== null;
   const isNoteValid = note.trim().length > 0 && note.length <= MAX_NOTE;
   const isDateValid = !!date.trim();
-  const isFormValid = isNameValid && isNoteValid && isDateValid;
+  const isFormValid = isEmployeeValid && isNoteValid && isDateValid;
 
   const handleClear = () => {
-    setEmployeeName("");
+    setSelectedEmployeeId(null);
+    setSelectedDisplayName("");
+    setEmpSearch("");
     setNote("");
     setDate(formatTodayDate());
     clearDraft();
@@ -137,16 +154,19 @@ export function CreateEmployeeDebriefForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || !isFormValid) return;
+    if (!storeId || !isFormValid || selectedEmployeeId === null) return;
 
     const success = await onSubmit({
       date: date.trim(),
-      employee_name: employeeName.trim(),
+      employee_id: selectedEmployeeId,
+      employee_name: selectedDisplayName.trim(),
       note: note.trim(),
     });
 
     if (success) {
-      setEmployeeName("");
+      setSelectedEmployeeId(null);
+      setSelectedDisplayName("");
+      setEmpSearch("");
       setNote("");
       setDate(formatTodayDate());
       clearDraft();
@@ -202,18 +222,95 @@ export function CreateEmployeeDebriefForm({
             <Label htmlFor="debrief-employee-name" className="text-[11px] font-medium">
               Employee Name
             </Label>
-            <Input
-              id="debrief-employee-name"
-              placeholder="Enter employee name…"
-              value={employeeName}
-              onChange={(e) => {
-                setEmployeeName(e.target.value.slice(0, MAX_NAME));
-                onClearError();
-              }}
-              required
-              autoComplete="off"
-              className="h-8 text-xs"
-            />
+            <Popover open={empOpen} onOpenChange={setEmpOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "w-full flex items-center justify-between h-8 rounded-md border border-input bg-background px-3 text-xs text-left",
+                    "ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    !selectedDisplayName && "text-muted-foreground"
+                  )}
+                >
+                  <span className="truncate">{selectedDisplayName || "Select employee…"}</span>
+                  {selectedDisplayName ? (
+                    <X
+                      className="h-3.5 w-3.5 shrink-0 ml-1 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEmployeeId(null);
+                        setSelectedDisplayName("");
+                        setEmpSearch("");
+                        onClearError();
+                      }}
+                    />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 ml-1 text-muted-foreground" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="p-0 w-(--radix-popover-trigger-width)"
+                align="start"
+                sideOffset={4}
+              >
+                {/* Search input */}
+                <div className="p-2 border-b border-border">
+                  <Input
+                    autoFocus
+                    placeholder="Search employee…"
+                    value={empSearch}
+                    onChange={(e) => setEmpSearch(e.target.value)}
+                    className="h-7 text-xs"
+                  />
+                </div>
+                {/* Filtered list */}
+                <div className="max-h-40 overflow-y-auto py-1">
+                  {(() => {
+                    const q = empSearch.trim().toLowerCase();
+                    const filtered = employees.filter((emp) => {
+                      const full = `${emp.firstName} ${emp.middleName ?? ""} ${emp.lastName}`.toLowerCase();
+                      return !q || full.includes(q);
+                    });
+                    if (filtered.length === 0) {
+                      return (
+                        <p className="px-3 py-2 text-xs text-muted-foreground">No employees found.</p>
+                      );
+                    }
+                    return filtered.map((emp) => {
+                      const fullName = [emp.firstName, emp.middleName, emp.lastName]
+                        .filter(Boolean)
+                        .join(" ");
+                      return (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          className={cn(
+                            "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-accent hover:text-accent-foreground transition-colors",
+                            selectedEmployeeId === emp.id && "bg-accent text-accent-foreground font-medium"
+                          )}
+                          onClick={() => {
+                            setSelectedEmployeeId(emp.id);
+                            setSelectedDisplayName(fullName);
+                            setEmpSearch("");
+                            setEmpOpen(false);
+                            onClearError();
+                          }}
+                        >
+                          <span className="flex-1 truncate">{fullName}</span>
+                          {!emp.active && (
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1 border-0 bg-gray-200/60 dark:bg-gray-700/60 text-muted-foreground">
+                              inactive
+                            </Badge>
+                          )}
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Note */}

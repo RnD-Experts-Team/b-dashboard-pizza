@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { User, Settings, LogOut, LayoutGrid } from "lucide-react";
+import { User, Settings, LogOut, LayoutGrid, Type } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { LayoutSwitcher } from "./layout-switcher";
+import { FontSwitcher } from "./font-switcher";
 
 interface UserMenuProps {
   collapsed?: boolean;
@@ -30,6 +31,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
   const t = useTranslations("common");
   const { user, logout } = useAuthStore();
   const [layoutOpen, setLayoutOpen] = useState(false);
+  const [fontOpen, setFontOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -105,6 +107,16 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
           <LayoutGrid className="me-2 h-4 w-4" />
           Layout
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            setFontOpen(true);
+          }}
+          className="cursor-pointer"
+        >
+          <Type className="me-2 h-4 w-4" />
+          Change Font
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
@@ -117,6 +129,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
     </DropdownMenu>
 
     <LayoutSwitcher open={layoutOpen} onOpenChange={setLayoutOpen} />
+    <FontSwitcher open={fontOpen} onOpenChange={setFontOpen} />
     </>
   );
 }

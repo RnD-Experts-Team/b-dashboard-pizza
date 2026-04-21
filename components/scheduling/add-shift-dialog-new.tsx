@@ -21,8 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Repeat, Ban } from "lucide-react";
+import { AlertTriangle, Repeat, Ban, StickyNote } from "lucide-react";
 import type {
   ScheduleEmployee,
   Shift,
@@ -55,7 +56,8 @@ interface AddShiftDialogNewProps {
     endTime: string,
     label: string,
     type: Shift["type"],
-    isRecurring: boolean
+    isRecurring: boolean,
+    note: string
   ) => void;
   editingShift?: Shift | null;
 }
@@ -78,6 +80,7 @@ export function AddShiftDialogNew({
   const [type, setType] = useState<Shift["type"]>("morning");
   const [activePreset, setActivePreset] = useState<number | null>(0);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [note, setNote] = useState("");
 
   const isEditing = !!editingShift;
 
@@ -89,6 +92,7 @@ export function AddShiftDialogNew({
       setLabel(editingShift.label);
       setType(editingShift.type);
       setIsRecurring(editingShift.isRecurring ?? false);
+      setNote(editingShift.note ?? "");
       // Find matching preset
       const presetIdx = SHIFT_PRESETS.findIndex(
         (p) =>
@@ -103,6 +107,7 @@ export function AddShiftDialogNew({
       setType("morning");
       setActivePreset(0);
       setIsRecurring(false);
+      setNote("");
     }
   }, [editingShift, open]);
 
@@ -156,7 +161,7 @@ export function AddShiftDialogNew({
   };
 
   const handleSubmit = () => {
-    onConfirm(startTime, endTime, label, type, isRecurring);
+    onConfirm(startTime, endTime, label, type, isRecurring, note.trim());
     onOpenChange(false);
   };
 
@@ -288,6 +293,23 @@ export function AddShiftDialogNew({
             <Switch
               checked={isRecurring}
               onCheckedChange={setIsRecurring}
+            />
+          </div>
+
+          {/* Shift note */}
+          <div>
+            <Label htmlFor="shift-note" className="text-xs flex items-center gap-1.5">
+              <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
+              Note (optional)
+            </Label>
+            <Textarea
+              id="shift-note"
+              placeholder="e.g. Cover for Marco, Station 2 only..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              className="mt-1 resize-none text-sm"
+              maxLength={200}
             />
           </div>
 

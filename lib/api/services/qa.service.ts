@@ -1391,6 +1391,7 @@ export const qaService = {
       rating_id?: number;
       category_ids?: number[];
       date_range_type?: "daily" | "weekly";
+      custom_report_id?: number;
     },
     signal?: AbortSignal
   ): Promise<CameraReportData> {
@@ -1504,6 +1505,7 @@ export const qaService = {
     rating_id?: number;
     category_ids?: number[];
     date_range_type?: "daily" | "weekly";
+    custom_report_id?: number;
   }): Promise<void> {
     const token = getToken();
     if (!token) {
@@ -1612,6 +1614,7 @@ export const qaService = {
     rating_id?: number;
     category_ids?: number[];
     date_range_type?: "daily" | "weekly";
+    custom_report_id?: number;
   }): Promise<void> {
     const token = getToken();
     if (!token) {
@@ -1686,6 +1689,7 @@ export const qaService = {
     rating_id?: number;
     category_ids?: number[];
     date_range_type?: "daily" | "weekly";
+    custom_report_id?: number;
   }): Promise<void> {
     const token = getToken();
     if (!token) {
@@ -2678,6 +2682,11 @@ function transformCameraReportResponse(
       ratingId: raw.data.filters.rating_id,
       categoryIds: raw.data.filters.category_ids ?? null,
       dateRangeType: raw.data.filters.date_range_type ?? null,
+      customReportId: raw.data.filters.custom_report_id ?? null,
     },
+    customReports: (raw.data.custom_reports ?? []).map((cr) => ({
+      id: cr.id,
+      name: cr.name,
+    })),
   };
 }

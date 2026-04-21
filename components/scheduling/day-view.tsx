@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import type {
   TimeOffEntry,
   WeekInfo,
 } from "@/types/scheduling.types";
+import { EmployeeProfileDialog } from "./employee-profile-dialog";
 
 interface DayViewProps {
   employees: ScheduleEmployee[];
@@ -39,6 +40,7 @@ interface DayViewProps {
   onAddShift: (employeeId: string, dayIndex: number) => void;
   onEditShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
+  onEmployeeClick?: (employee: ScheduleEmployee) => void;
 }
 
 const HOUR_HEIGHT = 60; // px per hour
@@ -55,7 +57,9 @@ export function DayView({
   timeOff,
   onAddShift,
   onEditShift,
+  onEmployeeClick,
 }: DayViewProps) {
+  const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
   const dayShiftsByEmp = useMemo(() => {
     const map: Record<string, Shift[]> = {};
     for (const s of shifts) {
@@ -121,7 +125,16 @@ export function DayView({
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{emp.name}</p>
+                    <button
+                      type="button"
+                      className="text-xs font-medium truncate text-left hover:underline hover:text-primary transition-colors cursor-pointer block w-full"
+                      onClick={() => {
+                        setProfileEmp(emp);
+                        onEmployeeClick?.(emp);
+                      }}
+                    >
+                      {emp.name}
+                    </button>
                     {isOvertime && (
                       <span className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">
                         OT
@@ -287,6 +300,17 @@ export function DayView({
           })}
         </div>
       </div>
+
+      <EmployeeProfileDialog
+        open={!!profileEmp}
+        onOpenChange={(open) => { if (!open) setProfileEmp(null); }}
+        employee={profileEmp}
+        shifts={shifts}
+        availability={availability}
+        timeOff={timeOff}
+        isOvertime={profileEmp ? overtimeEmpIds.has(profileEmp.id) : false}
+        overtimeThreshold={40}
+      />
     </div>
   );
 }

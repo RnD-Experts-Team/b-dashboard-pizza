@@ -6,8 +6,11 @@ import type { DsprResponse } from "@/types/dspr.types";
 /*  Constants                                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/** Data is considered fresh for 5 minutes */
-const STALE_AFTER_MS = 5 * 60 * 1000;
+/** Data is considered fresh for 2.5 hours */
+const STALE_AFTER_MS = 2.5 * 60 * 60 * 1000;
+
+/** Auto-refresh interval (2.5 hours) */
+const AUTO_REFRESH_MS = 2.5 * 60 * 60 * 1000;
 
 /** Max retries for retryable errors (client-level) */
 const MAX_AUTO_RETRIES = 2;
@@ -58,6 +61,7 @@ interface DsprState {
 let _abortController: AbortController | null = null;
 let _retryTimer: ReturnType<typeof setTimeout> | null = null;
 let _retryCount = 0;
+let _autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Store                                                                   */
@@ -210,10 +214,19 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
   },
 
   startAutoRefresh: () => {
-    // Auto-refresh polling intentionally disabled.
+    if (_autoRefreshTimer) return;
+    _autoRefreshTimer = setInterval(() => {
+      const { lastStoreId, isStale } = get();
+      if (lastStoreId && isStale()) {
+        get().refreshReport();
+      }
+    }, AUTO_REFRESH_MS);
   },
 
   stopAutoRefresh: () => {
-    // No-op: polling is disabled.
+    if (_autoRefreshTimer) {
+      clearInterval(_autoRefreshTimer);
+      _autoRefreshTimer = null;
+    }
   },
 }));

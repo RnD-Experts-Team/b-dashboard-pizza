@@ -1,5 +1,5 @@
-import { DashboardPageSkeleton } from "@/components/dashboard/skeletons";
+import { PizzaLoader } from "@/components/shared/pizza-loader";
 
 export default function DashboardLoading() {
-  return <DashboardPageSkeleton />;
+  return <PizzaLoader />;
 }

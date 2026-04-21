@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import { PizzaLoader } from "@/components/shared/pizza-loader";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const t = useTranslations("auth.login");
@@ -49,8 +50,10 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="overflow-hidden">
-      <div className="grid md:grid-cols-2">
+    <>
+      {/* {isLoading && <PizzaLoader />} */}
+      <Card className="overflow-hidden">
+        <div className="grid md:grid-cols-2">
         {/* Form Side */}
         <div>
           <CardHeader className="space-y-1">
@@ -132,7 +135,6 @@ export default function LoginPage() {
             </CardContent>
             <CardFooter className="flex flex-col gap-4 pt-2">
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                 {t("signIn")}
               </Button>
               <p className="text-sm text-muted-foreground text-center">
@@ -168,6 +170,7 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
-    </Card>
+      </Card>
+    </>
   );
 }
