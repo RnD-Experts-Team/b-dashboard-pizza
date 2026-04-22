@@ -90,9 +90,10 @@ export interface DueKeysResponse {
 
 export interface DueKeyValuePayload {
   key_id: number;
-  value_text: string | null;
-  value_number: number | null;
+  attachments?: string[] | null;
+  note?: string | null;
   value_boolean: boolean | null;
   value_json: unknown;
-  note?: string | null;
+  value_number: number | null;
+  value_text: string | null;
 }

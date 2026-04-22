@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
-import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
-import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
+import { DueKeysFeed } from "@/components/due-keys/due-keys-feed";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,36 +36,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
 import {
   useEmployeeDebriefs,
   useDeleteEmployeeDebrief,
 } from "@/lib/hooks/use-employee-debriefs";
-import { useTagsList } from "@/lib/hooks/use-tags";
-import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { RefreshCw, Trash2, ChevronsUpDown } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
+import { RefreshCw, Trash2, Store, CalendarDays, Tag } from "lucide-react";
 import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
 interface AuthUserStoreOption {
   id: string;
   name: string;
-}
-
-function formatTodayDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function parseAuthUserStores(): AuthUserStoreOption[] {
@@ -96,33 +77,6 @@ function parseAuthUserStores(): AuthUserStoreOption[] {
   } catch {
     return [];
   }
-}
-
-function renderValuePreview(item: DueKeyItem): string {
-  if (item.value == null) return "—";
-  // Prefer the typed value fields returned by the API (value_text, value_number, value_boolean, value_json)
-  const v: any = item.value as any;
-
-  if (v?.value_text != null) return String(v.value_text);
-  if (v?.value_number != null) return String(v.value_number);
-  if (v?.value_boolean != null) return String(v.value_boolean);
-  if (v?.value_json != null) {
-    try {
-      return JSON.stringify(v.value_json);
-    } catch {
-      return String(v.value_json);
-    }
-  }
-
-  if (typeof item.value === "object") {
-    try {
-      return JSON.stringify(item.value);
-    } catch {
-      return "[Object]";
-    }
-  }
-
-  return String(item.value);
 }
 
 function formatDebriefDate(raw: string | null | undefined): string {
@@ -165,60 +119,14 @@ function DebriefTableSkeleton() {
   );
 }
 
-function DueKeysTableSkeleton() {
-  return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-20">Key ID</TableHead>
-            <TableHead>Label</TableHead>
-            <TableHead className="hidden sm:table-cell">Data Type</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="hidden lg:table-cell">Value</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: 6 }).map((_, index) => (
-            <TableRow key={index}>
-              <TableCell>
-                <Skeleton className="h-4 w-10" />
-              </TableCell>
-              <TableCell>
-                <Skeleton className="h-4 w-40" />
-              </TableCell>
-              <TableCell className="hidden sm:table-cell">
-                <Skeleton className="h-4 w-16" />
-              </TableCell>
-              <TableCell>
-                <Skeleton className="h-5 w-16" />
-              </TableCell>
-              <TableCell className="hidden lg:table-cell">
-                <Skeleton className="h-4 w-44" />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
 export default function DueKeysPage() {
-  const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
   const [stores, setStores] = useState<AuthUserStoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(formatTodayDate());
-
-  // ── Due Keys sheet state ───────────────────────────────────────────
-  // ── Tags filter ───────────────────────────────────────────────────
-  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const { data: tagsData } = useTagsList();
-
-  // ── Due Keys sheet state ───────────────────────────────────────────
-  const [selectedItem, setSelectedItem] = useState<DueKeyItem | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
 
   // ── Employee Debrief state ─────────────────────────────────────────
   const [selectedDebrief, setSelectedDebrief] = useState<EmployeeDebriefItem | null>(null);
@@ -229,31 +137,17 @@ export default function DueKeysPage() {
   useEffect(() => {
     const parsedStores = parseAuthUserStores();
     setStores(parsedStores);
-
     if (parsedStores.length > 0) {
       setSelectedStoreId(parsedStores[0].id);
     }
   }, []);
 
-  const { data, isLoading, isRefreshing, error, refetch, clearError } = useDueKeys(
-    selectedStoreId,
-    selectedDate,
-    selectedTagIds.length > 0 ? selectedTagIds : undefined
-  );
-
-  const {
-    setDueKeyValue,
-    isSubmitting,
-    error: submitError,
-    clearError: clearSubmitError,
-  } = useSetDueKeyValue();
-
-  const {
-    setDueKeysBulk,
-    isSubmitting: isSubmittingBulk,
-    error: submitErrorBulk,
-    clearError: clearBulkError,
-  } = useSetDueKeysBulk();
+  // Sync with global selected store if available
+  useEffect(() => {
+    if (selectedStore?.id) {
+      setSelectedStoreId(String(selectedStore.id));
+    }
+  }, [selectedStore]);
 
   const {
     items: debriefItems,
@@ -270,61 +164,6 @@ export default function DueKeysPage() {
     error: deleteError,
     clearError: clearDeleteError,
   } = useDeleteEmployeeDebrief();
-
-  const [bulkSheetOpen, setBulkSheetOpen] = useState(false);
-
-  const activeItems = data?.items ?? [];
-
-  // Keep store selection behavior aligned with sidebar/keys authorization checks.
-  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
-
-  const dueKeysWriteRequirements = [
-    {
-      service: "Data",
-      method: "POST",
-      path: "/engine/stores/",
-      storeId: effectiveStoreId,
-    },
-  ];
-  const canWriteDueKeys = dueKeysWriteRequirements.some((requirement) =>
-    canAccessRoute(requirement)
-  );
-
-  const hasValidContext = useMemo(
-    () => !!selectedStoreId && !!selectedDate,
-    [selectedStoreId, selectedDate]
-  );
-
-  const handleRowClick = (item: DueKeyItem) => {
-    if (!canWriteDueKeys) return;
-    setSelectedItem(item);
-    clearSubmitError();
-    setSheetOpen(true);
-  };
-
-  const handleSubmitValue = async (
-    payload: DueKeyValuePayload,
-    mode: "created" | "updated" | "deactivated"
-  ) => {
-    if (!selectedStoreId || !canWriteDueKeys) return;
-    const success = await setDueKeyValue(selectedStoreId, selectedDate, payload);
-
-    if (!success) {
-      if (submitError) toast.error(submitError);
-      return;
-    }
-
-    if (mode === "created") {
-      toast.success("Key value created successfully.");
-    } else if (mode === "deactivated") {
-      toast.success("Key value deactivated successfully.");
-    } else {
-      toast.success("Key value updated successfully.");
-    }
-
-    setSheetOpen(false);
-    refetch();
-  };
 
   const handleDebriefRowClick = (item: EmployeeDebriefItem) => {
     setSelectedDebrief(item);
@@ -356,227 +195,100 @@ export default function DueKeysPage() {
     <div className="space-y-6">
       <PageHeader
         title="Due Keys"
-        description="View due keys by store and date, then update key values directly."
-      >
-          <div className="flex gap-2">
-            {canWriteDueKeys && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setBulkSheetOpen(true)}
-                disabled={!hasValidContext || isLoading || isRefreshing || activeItems.length === 0}
-              >
-                Fill All Keys
-              </Button>
-            )}
+        description="Browse filled keys by store — scroll up to view history."
+      />
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refetch}
-              disabled={!hasValidContext || isLoading || isRefreshing}
+      {/* ── Main two-column layout ─────────────────────────────────── */}
+      <div className="flex items-start justify-center gap-5">
+
+        {/* ── Feed (left, grows) ──────────────────────────────────── */}
+        <div className="min-w-0 flex-1 max-w-2xl">
+          <DueKeysFeed storeId={selectedStoreId} selectedDate={selectedDate} />
+        </div>
+
+        {/* ── Sidebar (right, sticky) ─────────────────────────────── */}
+        <div className="w-56 shrink-0 space-y-3 lg:w-64" style={{ position: "sticky", top: "1.5rem" }}>
+
+          {/* Store filter */}
+          <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <Store className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Store</p>
+            </div>
+            <Select
+              value={selectedStoreId ?? ""}
+              onValueChange={(value) => setSelectedStoreId(value || null)}
+              disabled={stores.length === 0}
             >
-              <RefreshCw className={cn("me-2 h-4 w-4", isRefreshing && "animate-spin")} />
-              {isRefreshing ? "Refreshing..." : "Refresh"}
-            </Button>
+              <SelectTrigger className="h-8 border-border/50 bg-background/60 text-sm">
+                <SelectValue
+                  placeholder={stores.length === 0 ? "No stores" : "Select store"}
+                />
+              </SelectTrigger>
+              <SelectContent position="popper" style={{ maxHeight: "160px", overflowY: "auto" }}>
+                {stores.map((store) => (
+                  <SelectItem key={store.id} value={store.id}>
+                    {store.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-      </PageHeader>
 
-      <div className="grid grid-cols-1 gap-3 rounded-lg border p-3 sm:grid-cols-2 lg:grid-cols-3">
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">Store</p>
-          <Select
-            value={selectedStoreId ?? ""}
-            onValueChange={(value) => setSelectedStoreId(value || null)}
-            disabled={stores.length === 0}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={stores.length === 0 ? "No stores found" : "Select store"} />
-            </SelectTrigger>
-            <SelectContent
-                position="popper"
-                style={{ maxHeight: "160px", overflowY: "auto" }}
-                className="scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+          {/* Date filter */}
+          <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</p>
+            </div>
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="h-8 border-border/50 bg-background/60 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                setSelectedDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
+              }}
+              className="mt-2 text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
             >
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              Reset to today
+            </button>
+          </div>
 
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">Date</p>
-          <Input
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-          />
-        </div>
-
-        {tagsData && tagsData.data.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">Filter by Tags</p>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-full justify-between font-normal">
-                  {selectedTagIds.length === 0
-                    ? "All tags"
-                    : `${selectedTagIds.length} tag${selectedTagIds.length > 1 ? "s" : ""} selected`}
-                  <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-2" align="start">
-                <div className="max-h-48 overflow-y-auto space-y-1">
-                  {tagsData.data.map((tag) => {
-                    const selected = selectedTagIds.includes(tag.id);
-                    return (
-                      <label
-                        key={tag.id}
-                        className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
-                      >
-                        <Checkbox
-                          checked={selected}
-                          onCheckedChange={(checked) => {
-                            setSelectedTagIds(
-                              checked
-                                ? [...selectedTagIds, tag.id]
-                                : selectedTagIds.filter((id) => id !== tag.id)
-                            );
-                          }}
-                        />
-                        <span className="flex-1 text-sm">{tag.name}</span>
-                      </label>
-                    );
-                  })}
+          {/* Tag legend */}
+          <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tags</p>
+            </div>
+            <div className="space-y-1.5">
+              {[
+                { tag: "temp-log",        label: "Temp Log",        color: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
+                { tag: "safety-audit",    label: "Safety Audit",    color: "bg-red-500/15 text-red-400 border-red-500/20" },
+                { tag: "morning-check",   label: "Morning Check",   color: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
+                { tag: "closing-check",   label: "Closing Check",   color: "bg-purple-500/15 text-purple-400 border-purple-500/20" },
+                { tag: "evening-close",   label: "Evening Close",   color: "bg-indigo-500/15 text-indigo-400 border-indigo-500/20" },
+                { tag: "inventory-count", label: "Inventory",       color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+                { tag: "dough-check",     label: "Dough Check",     color: "bg-orange-500/15 text-orange-400 border-orange-500/20" },
+              ].map(({ tag, label, color }) => (
+                <div key={tag} className="flex items-center gap-2">
+                  <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide", color)}>
+                    #{tag}
+                  </span>
+                  <span className="hidden text-[11px] text-muted-foreground lg:inline">{label}</span>
                 </div>
-                {selectedTagIds.length > 0 && (
-                  <div className="mt-2 border-t pt-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-full text-xs text-muted-foreground"
-                      onClick={() => setSelectedTagIds([])}
-                    >
-                      Clear filter
-                    </Button>
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
+              ))}
+            </div>
           </div>
-        )}
+
+        </div>
       </div>
 
-      {error && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
-          <p className="text-sm text-destructive">{error}</p>
-          <div className="mt-3 flex gap-2">
-            <Button variant="outline" size="sm" onClick={refetch}>
-              Retry
-            </Button>
-            <Button variant="ghost" size="sm" onClick={clearError}>
-              Dismiss
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {isLoading && !data ? (
-        <DueKeysTableSkeleton />
-      ) : !hasValidContext ? (
-        <div className="rounded-md border p-6 text-sm text-muted-foreground">
-          Select a store and date to load due keys.
-        </div>
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-20">Key ID</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead className="hidden sm:table-cell">Data Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden lg:table-cell">Value</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {activeItems.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    No due keys found for this store and date.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                activeItems.map((item) => (
-                  <TableRow
-                    key={item.keyId}
-                    className={cn(canWriteDueKeys && "cursor-pointer")}
-                    onClick={() => {
-                      if (canWriteDueKeys) handleRowClick(item);
-                    }}
-                  >
-                    <TableCell>{item.keyId}</TableCell>
-                    <TableCell className="font-medium">{item.label}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{item.dataType}</TableCell>
-                    <TableCell>
-                      <Badge variant={item.filled ? "default" : "secondary"}>
-                        {item.filled ? "Filled" : "Not Filled"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden max-w-70 truncate lg:table-cell" title={renderValuePreview(item)}>
-                      {renderValuePreview(item)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {canWriteDueKeys && (
-        <DueKeyValueSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          item={selectedItem}
-          storeId={selectedStoreId ?? ""}
-          date={selectedDate}
-          isSubmitting={isSubmitting}
-          submitError={submitError}
-          onSubmit={handleSubmitValue}
-        />
-      )}
-
-      {canWriteDueKeys && (
-        <FillAllKeysSheet
-          open={bulkSheetOpen}
-          onOpenChange={(open) => {
-            setBulkSheetOpen(open);
-            if (!open) clearBulkError();
-          }}
-          items={activeItems}
-          storeId={selectedStoreId ?? ""}
-          date={selectedDate}
-          isSubmitting={isSubmittingBulk}
-          submitError={submitErrorBulk}
-          onSubmit={async (payload) => {
-            if (!selectedStoreId || !canWriteDueKeys) return false;
-            const success = await setDueKeysBulk(selectedStoreId, selectedDate, payload.items);
-            if (success) {
-              refetch();
-            } else {
-              if (submitErrorBulk) toast.error(submitErrorBulk);
-            }
-            return success;
-          }}
-        />
-      )}
-
-      {/* ── Employee Debrief Notes section ──────────────────────────── */}
+      {/* ── Employee Debrief Notes ─────────────────────────────────── */}
       <Separator />
 
       <div className="space-y-4">
@@ -614,89 +326,85 @@ export default function DueKeysPage() {
           </div>
         )}
 
-        {/* Side-by-side: list (left) + create form (right) */}
         <div>
-          {/* Table */}
-          <div>
-            {isDebriefLoading && !debriefItems.length ? (
-              <DebriefTableSkeleton />
-            ) : !selectedStoreId ? (
-              <div className="rounded-md border p-6 text-sm text-muted-foreground">
-                Select a store to load employee debrief notes.
-              </div>
-            ) : (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
+          {isDebriefLoading && !debriefItems.length ? (
+            <DebriefTableSkeleton />
+          ) : !selectedStoreId ? (
+            <div className="rounded-md border p-6 text-sm text-muted-foreground">
+              Select a store to load employee debrief notes.
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-16">ID</TableHead>
+                    <TableHead>Employee</TableHead>
+                    <TableHead className="hidden sm:table-cell">Date Written</TableHead>
+                    <TableHead className="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {debriefItems.length === 0 ? (
                     <TableRow>
-                      <TableHead className="w-16">ID</TableHead>
-                      <TableHead>Employee</TableHead>
-                      <TableHead className="hidden sm:table-cell">Date Written</TableHead>
-                      <TableHead className="w-10" />
+                      <TableCell
+                        colSpan={4}
+                        className="py-8 text-center text-sm text-muted-foreground"
+                      >
+                        No employee debrief notes found for this store.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {debriefItems.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={4}
-                          className="py-8 text-center text-sm text-muted-foreground"
-                        >
-                          No employee debrief notes found for this store.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      debriefItems.map((item) => {
-                        const writtenDate = item.date ?? item.createdAt;
+                  ) : (
+                    debriefItems.map((item) => {
+                      const writtenDate = item.date ?? item.createdAt;
 
-                        return (
-                          <TableRow
-                            key={item.id}
-                            className="cursor-pointer"
-                            onClick={() => handleDebriefRowClick(item)}
-                          >
-                            <TableCell className="font-mono text-sm">{item.id}</TableCell>
-                            <TableCell className="font-medium">
-                              {item.employeeName ? (
-                                item.employeeName
-                              ) : item.employeeId != null ? (
-                                <Badge variant="secondary">ID {item.employeeId}</Badge>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell">
-                              {writtenDate ? (
-                                <span className="text-sm">{formatDebriefDate(writtenDate)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={(e) => handleDebriefDeleteClick(e, item)}
-                                disabled={isDeleting}
-                                aria-label={`Delete debrief #${item.id}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </div>
+                      return (
+                        <TableRow
+                          key={item.id}
+                          className="cursor-pointer"
+                          onClick={() => handleDebriefRowClick(item)}
+                        >
+                          <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                          <TableCell className="font-medium">
+                            {item.employeeName ? (
+                              item.employeeName
+                            ) : item.employeeId != null ? (
+                              <Badge variant="secondary">ID {item.employeeId}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden sm:table-cell">
+                            {writtenDate ? (
+                              <span className="text-sm">{formatDebriefDate(writtenDate)}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => handleDebriefDeleteClick(e, item)}
+                              disabled={isDeleting}
+                              aria-label={`Delete debrief #${item.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Debrief detail sheet */}
+      {/* ── Debrief detail sheet ───────────────────────────────────── */}
       <EmployeeDebriefDetailSheet
         open={debriefSheetOpen}
         onOpenChange={setDebriefSheetOpen}
@@ -704,7 +412,7 @@ export default function DueKeysPage() {
         debriefId={selectedDebrief?.id ?? null}
       />
 
-      {/* Delete confirmation */}
+      {/* ── Delete confirmation ────────────────────────────────────── */}
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

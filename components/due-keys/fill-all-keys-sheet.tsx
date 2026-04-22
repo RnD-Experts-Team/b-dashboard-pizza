@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Paperclip, X as XIcon } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -46,10 +48,10 @@ export function FillAllKeysSheet({
 }: FillAllKeysSheetProps) {
   const unfilledItems = useMemo(() => items.filter((it) => !it.filled), [items]);
 
-  const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string }>>(() => {
-    const initial: Record<number, any> = {};
+  const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string; attachments?: string[]; attachmentInput?: string }>>(() => {
+    const initial: Record<number, { text: string; number: string; boolean: "null" | "true" | "false"; json: string; note: string; attachments: string[]; attachmentInput: string }> = {};
     for (const it of items) {
-      initial[it.keyId] = { text: "", number: "", boolean: "null", json: "", note: "" };
+      initial[it.keyId] = { text: "", number: "", boolean: "null", json: "", note: "", attachments: [], attachmentInput: "" };
     }
     return initial;
   });
@@ -83,7 +85,7 @@ export function FillAllKeysSheet({
 
         try {
           const parsed = JSON.parse(v.json || "");
-          payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: null, value_json: parsed });
+          payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: null, value_json: parsed, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
         } catch (err) {
           setJsonErrors((prev) => ({ ...prev, [it.keyId]: "Invalid JSON." }));
           return null;
@@ -93,7 +95,7 @@ export function FillAllKeysSheet({
       }
 
       if (it.dataType === "text") {
-        payloadItems.push({ key_id: it.keyId, value_text: (v.text || "").trim() ? (v.text || "").trim() : null, value_number: null, value_boolean: null, value_json: null });
+        payloadItems.push({ key_id: it.keyId, value_text: (v.text || "").trim() ? (v.text || "").trim() : null, value_number: null, value_boolean: null, value_json: null, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
         continue;
       }
 
@@ -104,17 +106,18 @@ export function FillAllKeysSheet({
           toast.error(`Invalid number for key ${it.keyId}`);
           return null;
         }
-        payloadItems.push({ key_id: it.keyId, value_text: null, value_number: parsed, value_boolean: null, value_json: null });
+        payloadItems.push({ key_id: it.keyId, value_text: null, value_number: parsed, value_boolean: null, value_json: null, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
         continue;
       }
 
       // boolean
-      payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: v.boolean === "null" ? null : v.boolean === "true", value_json: null });
+      payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: v.boolean === "null" ? null : v.boolean === "true", value_json: null, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
     }
 
     const enrichedItems = payloadItems.map((p) => ({
       ...p,
       note: ((values[p.key_id]?.note ?? "").trim()) || null,
+      attachments: p.attachments ?? null,
     }));
     return { items: enrichedItems };
   };
@@ -211,6 +214,82 @@ export function FillAllKeysSheet({
                       <Label>JSON</Label>
                       <Textarea value={values[it.keyId]?.json || ""} onChange={(e) => handleChange(it.keyId, "json", e.target.value)} className="min-h-28" />
                       {jsonErrors[it.keyId] && <p className="text-xs text-destructive">{jsonErrors[it.keyId]}</p>}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  <Label>
+                    Attachments{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={values[it.keyId]?.attachmentInput ?? ""}
+                      onChange={(e) => handleChange(it.keyId, "attachmentInput", e.target.value)}
+                      placeholder="Add attachment identifier..."
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const val = (values[it.keyId]?.attachmentInput ?? "").trim();
+                          if (val) {
+                            setValues((prev) => ({
+                              ...prev,
+                              [it.keyId]: {
+                                ...(prev[it.keyId] || {}),
+                                attachments: [...(prev[it.keyId]?.attachments ?? []), val],
+                                attachmentInput: "",
+                              },
+                            }));
+                          }
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!(values[it.keyId]?.attachmentInput ?? "").trim()}
+                      onClick={() => {
+                        const val = (values[it.keyId]?.attachmentInput ?? "").trim();
+                        if (val) {
+                          setValues((prev) => ({
+                            ...prev,
+                            [it.keyId]: {
+                              ...(prev[it.keyId] || {}),
+                              attachments: [...(prev[it.keyId]?.attachments ?? []), val],
+                              attachmentInput: "",
+                            },
+                          }));
+                        }
+                      }}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {(values[it.keyId]?.attachments ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(values[it.keyId]?.attachments ?? []).map((att, idx) => (
+                        <Badge key={idx} variant="secondary" className="gap-1 pr-1 text-xs">
+                          <Paperclip className="h-3 w-3" />
+                          <span className="max-w-32 truncate">{att}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setValues((prev) => ({
+                                ...prev,
+                                [it.keyId]: {
+                                  ...(prev[it.keyId] || {}),
+                                  attachments: (prev[it.keyId]?.attachments ?? []).filter((_, i) => i !== idx),
+                                },
+                              }))
+                            }
+                            className="ml-0.5 hover:text-destructive"
+                          >
+                            <XIcon className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
                     </div>
                   )}
                 </div>

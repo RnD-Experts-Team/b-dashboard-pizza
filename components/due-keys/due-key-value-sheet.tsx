@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Paperclip, X as XIcon } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +92,8 @@ export function DueKeyValueSheet({
   const [jsonValue, setJsonValue] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachmentInput, setAttachmentInput] = useState("");
 
   useEffect(() => {
     if (!item) return;
@@ -111,6 +114,8 @@ export function DueKeyValueSheet({
     setJsonValue(item.dataType === "json" ? normalized : "");
     setJsonError(null);
     setNote("");
+    setAttachments([]);
+    setAttachmentInput("");
   }, [item]);
 
   const payload = useMemo<DueKeyValuePayload | null>(() => {
@@ -175,6 +180,17 @@ export function DueKeyValueSheet({
     };
   }, [item, textValue, numberValue, booleanValue, jsonValue]);
 
+  const addAttachment = () => {
+    const trimmed = attachmentInput.trim();
+    if (!trimmed) return;
+    setAttachments((prev) => [...prev, trimmed]);
+    setAttachmentInput("");
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const submitMode: "created" | "updated" | "deactivated" = useMemo(() => {
     if (!item || !payload) return "updated";
     const hasNewValue =
@@ -202,7 +218,10 @@ export function DueKeyValueSheet({
     }
 
     if (!payload) return;
-    await onSubmit({ ...payload, note: note.trim() || null }, submitMode);
+    await onSubmit(
+      { ...payload, note: note.trim() || null, attachments: attachments.length > 0 ? attachments : null },
+      submitMode
+    );
   };
 
   return (
@@ -257,6 +276,24 @@ export function DueKeyValueSheet({
                         </div>
                       </div>
                     ) : null}
+
+                    {(() => {
+                      const att = (item.value as { attachments?: string[] } | null)?.attachments;
+                      if (!att || att.length === 0) return null;
+                      return (
+                        <div className="space-y-2">
+                          <Label>Attachments</Label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {att.map((a, i) => (
+                              <Badge key={i} variant="secondary" className="gap-1 text-xs">
+                                <Paperclip className="h-3 w-3" />
+                                <span className="max-w-40 truncate">{a}</span>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 );
               })()}
@@ -337,6 +374,49 @@ export function DueKeyValueSheet({
                   {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label>
+                  Attachments{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={attachmentInput}
+                    onChange={(e) => setAttachmentInput(e.target.value)}
+                    placeholder="Add attachment identifier..."
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { e.preventDefault(); addAttachment(); }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addAttachment}
+                    disabled={!attachmentInput.trim()}
+                  >
+                    Add
+                  </Button>
+                </div>
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {attachments.map((att, idx) => (
+                      <Badge key={idx} variant="secondary" className="gap-1 pr-1 text-xs">
+                        <Paperclip className="h-3 w-3" />
+                        <span className="max-w-32 truncate">{att}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(idx)}
+                          className="ml-0.5 hover:text-destructive"
+                        >
+                          <XIcon className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="due-key-note">
