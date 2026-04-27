@@ -1,8 +1,12 @@
 import axios from "axios";
 import type {
   ApiDueKeysResponse,
+  ApiDueRangeResponse,
   DueKeysResponse,
+  DueRangeEntry,
   DueKeyItem,
+  DueKeyValue,
+  DueKeyAttachment,
   DueKeyValuePayload,
   ApiEmployee,
   Employee,
@@ -32,12 +36,40 @@ export class DueKeysError extends Error {
 }
 
 function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyItem {
+  let value: DueKeyValue | null = null;
+  if (raw.value) {
+    const v = raw.value;
+    const attachments: DueKeyAttachment[] = (v.attachments ?? []).map((a) => ({
+      id: a.id,
+      enteredKeyValueId: a.entered_key_value_id,
+      filePath: a.file_path,
+      originalName: a.original_name,
+      mimeType: a.mime_type,
+      size: a.size,
+      attachmentUrl: a.attachment_url,
+    }));
+    value = {
+      id: v.id,
+      keyId: v.key_id,
+      storeId: v.store_id,
+      userId: v.user_id,
+      entryDate: v.entry_date,
+      valueText: v.value_text,
+      valueNumber: v.value_number,
+      valueBoolean: v.value_boolean,
+      valueJson: v.value_json,
+      createdAt: v.created_at,
+      updatedAt: v.updated_at,
+      note: v.note,
+      attachments,
+    };
+  }
   return {
     keyId: raw.key_id,
     label: raw.label,
     dataType: raw.data_type,
     filled: raw.filled,
-    value: raw.value,
+    value,
     tags: (raw.tags ?? []).map((tag) => ({
       id: tag.id,
       name: tag.name,
@@ -167,6 +199,47 @@ export const dueKeysService = {
     }
   },
 
+  async getDueRange(
+    storeId: string,
+    from: string,
+    to: string,
+    signal?: AbortSignal,
+    tags?: number[]
+  ): Promise<DueRangeEntry[]> {
+    const token = getToken();
+    if (!token) {
+      throw new DueKeysError("You must be logged in to view due keys.", "NOT_AUTHENTICATED");
+    }
+
+    try {
+      const params: Record<string, unknown> = { from, to };
+      if (tags && tags.length > 0) params.tags = tags.join(",");
+
+      // The range endpoint returns:
+      // { store_id, from, to, days: { "YYYY-MM-DD": ApiDueKeyItem[] } }
+      const response = await axios.get<ApiDueRangeResponse>(
+        `/api/data/stores/${encodeURIComponent(storeId)}/due-range`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          timeout: 300_000, // 5 minutes
+          signal,
+          params,
+        }
+      );
+
+      const days = response.data?.days ?? {};
+      return Object.entries(days)
+        .map(([date, items]) => ({
+          date,
+          items: (items ?? []).map(transformDueKeyItem),
+          employees: [] as Employee[],
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    } catch (err) {
+      throw handleAxiosError(err);
+    }
+  },
+
   async setDueKeyValue(
     storeId: string,
     date: string,
@@ -180,19 +253,43 @@ export const dueKeysService = {
       );
     }
 
+    const formData = new FormData();
+    formData.append("key_id", String(payload.key_id));
+
+    if (payload.value_text !== null && payload.value_text !== undefined) {
+      formData.append("value_text", payload.value_text);
+    }
+    if (payload.value_number !== null && payload.value_number !== undefined) {
+      formData.append("value_number", String(payload.value_number));
+    }
+    if (payload.value_boolean !== null && payload.value_boolean !== undefined) {
+      formData.append("value_boolean", String(payload.value_boolean));
+    }
+    if (payload.value_json !== null && payload.value_json !== undefined) {
+      formData.append("value_json", JSON.stringify(payload.value_json));
+    }
+    if (payload.note) {
+      formData.append("note", payload.note);
+    }
+    if (payload.attachments && payload.attachments.length > 0) {
+      for (const file of payload.attachments) {
+        formData.append("attachments[]", file);
+      }
+    }
+
     try {
       await axios.post(
         `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
           date
         )}/values`,
-        payload,
+        formData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
             Accept: "application/json",
+            // Do not set Content-Type — axios sets it with the correct multipart boundary
           },
-          timeout: 15_000,
+          timeout: 30_000,
         }
       );
     } catch (err) {
@@ -212,21 +309,69 @@ export const dueKeysService = {
       );
     }
 
+    const hasAttachments = items.some(
+      (item) => item.attachments && item.attachments.length > 0
+    );
+
     try {
-      await axios.post(
-        `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
-          date
-        )}/values/bulk`,
-        { items },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          timeout: 30_000,
-        }
-      );
+      if (hasAttachments) {
+        // Build multipart/form-data with indexed fields for each item
+        const formData = new FormData();
+        items.forEach((item, idx) => {
+          formData.append(`items[${idx}][key_id]`, String(item.key_id));
+          if (item.value_text !== null && item.value_text !== undefined) {
+            formData.append(`items[${idx}][value_text]`, item.value_text);
+          }
+          if (item.value_number !== null && item.value_number !== undefined) {
+            formData.append(`items[${idx}][value_number]`, String(item.value_number));
+          }
+          if (item.value_boolean !== null && item.value_boolean !== undefined) {
+            formData.append(`items[${idx}][value_boolean]`, String(item.value_boolean));
+          }
+          if (item.value_json !== null && item.value_json !== undefined) {
+            formData.append(`items[${idx}][value_json]`, JSON.stringify(item.value_json));
+          }
+          if (item.note) {
+            formData.append(`items[${idx}][note]`, item.note);
+          }
+          if (item.attachments && item.attachments.length > 0) {
+            for (const file of item.attachments) {
+              formData.append(`items[${idx}][attachments][]`, file);
+            }
+          }
+        });
+
+        await axios.post(
+          `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
+            date
+          )}/values/bulk`,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+            timeout: 60_000,
+          }
+        );
+      } else {
+        // No attachments — use JSON for efficiency
+        const jsonItems = items.map(({ attachments: _a, ...rest }) => rest);
+        await axios.post(
+          `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
+            date
+          )}/values/bulk`,
+          { items: jsonItems },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            timeout: 30_000,
+          }
+        );
+      }
     } catch (err) {
       throw handleAxiosError(err);
     }

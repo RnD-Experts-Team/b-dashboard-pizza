@@ -1,300 +1,40 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { useLayoutEffect, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Pizza, Loader2, CheckCircle2, Clock } from "lucide-react";
+import {
+  Pizza, Loader2, CheckCircle2, Clock, AlertCircle, RefreshCw,
+  Download, File, FileText, FileArchive, FileVideo, FileAudio, FileCode, FileImage,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useDueKeysFeed } from "@/lib/hooks/use-due-keys-feed";
+import type { DueKeyItem, Employee, DueKeyAttachment } from "@/types/due-key.types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface FeedEntry {
-  id: string;
-  employeeName: string;
-  employeeInitials: string;
-  employeePhoto: string | null;
-  keyTag: string;
-  keyLabel: string;
-  storeNumber: string;
-  attachment: string | null;
-  filledAt: Date;
-  value: string;
-  note: string;
-}
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-function createDate(daysAgo: number, hours: number, minutes: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  d.setHours(hours, minutes, 0, 0);
-  return d;
-}
-
-const ALL_MOCK_ENTRIES: FeedEntry[] = [
-  // ── 4 days ago ───────────────────────────────────────────────
-  {
-    id: "1",
-    employeeName: "Mike Rodriguez",
-    employeeInitials: "MR",
-    employeePhoto: null,
-    keyTag: "temp-log",
-    keyLabel: "Temperature Log",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(4, 8, 15),
-    value: "38°F",
-    note: "Cooler was running warm earlier — had the technician check it and all is good now.",
-  },
-  {
-    id: "2",
-    employeeName: "Emma Chen",
-    employeeInitials: "EC",
-    employeePhoto: null,
-    keyTag: "safety-audit",
-    keyLabel: "Safety Audit",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(4, 14, 30),
-    value: "Passed",
-    note: "All fire exits were clear and equipment inspections passed without any issues.",
-  },
-  {
-    id: "3",
-    employeeName: "James Wilson",
-    employeeInitials: "JW",
-    employeePhoto: null,
-    keyTag: "closing-check",
-    keyLabel: "Closing Checklist",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(4, 22, 5),
-    value: "Completed",
-    note: "Locked up on time, left everything clean and fully stocked for the morning shift.",
-  },
-  // ── 3 days ago ───────────────────────────────────────────────
-  {
-    id: "4",
-    employeeName: "Lisa Park",
-    employeeInitials: "LP",
-    employeePhoto: null,
-    keyTag: "morning-check",
-    keyLabel: "Morning Opening Check",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(3, 7, 45),
-    value: "Done",
-    note: "Arrived early to preheat ovens — everything was in good order from last night's team.",
-  },
-  {
-    id: "5",
-    employeeName: "Tyler Johnson",
-    employeeInitials: "TJ",
-    employeePhoto: null,
-    keyTag: "inventory-count",
-    keyLabel: "Inventory Count",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(3, 11, 20),
-    value: "142 units",
-    note: "A few sauce cans were near expiry — flagged and moved to front stock for immediate use.",
-  },
-  {
-    id: "6",
-    employeeName: "Sarah Mills",
-    employeeInitials: "SM",
-    employeePhoto: null,
-    keyTag: "evening-close",
-    keyLabel: "Evening Closing",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(3, 21, 50),
-    value: "Completed",
-    note: "Smooth closing — one register was slightly off but balanced correctly after a recount.",
-  },
-  // ── 2 days ago ───────────────────────────────────────────────
-  {
-    id: "7",
-    employeeName: "Mike Rodriguez",
-    employeeInitials: "MR",
-    employeePhoto: null,
-    keyTag: "temp-log",
-    keyLabel: "Temperature Log",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(2, 8, 10),
-    value: "37°F",
-    note: "Noticed the freezer door seal looks worn — submitted a maintenance request just in case.",
-  },
-  {
-    id: "8",
-    employeeName: "Emma Chen",
-    employeeInitials: "EC",
-    employeePhoto: null,
-    keyTag: "dough-check",
-    keyLabel: "Dough Preparation Check",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(2, 10, 0),
-    value: "Ready",
-    note: "All dough batches proofed perfectly today and are well within spec for the afternoon rush.",
-  },
-  {
-    id: "9",
-    employeeName: "James Wilson",
-    employeeInitials: "JW",
-    employeePhoto: null,
-    keyTag: "safety-audit",
-    keyLabel: "Safety Audit",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(2, 15, 35),
-    value: "Passed",
-    note: "Minor spill near the prep area had already been cleaned by the team before I checked.",
-  },
-  {
-    id: "10",
-    employeeName: "Lisa Park",
-    employeeInitials: "LP",
-    employeePhoto: null,
-    keyTag: "closing-check",
-    keyLabel: "Closing Checklist",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(2, 22, 15),
-    value: "Done",
-    note: "All stations closed properly, restrooms sanitized, and the alarm was set successfully.",
-  },
-  // ── Yesterday ────────────────────────────────────────────────
-  {
-    id: "11",
-    employeeName: "Tyler Johnson",
-    employeeInitials: "TJ",
-    employeePhoto: null,
-    keyTag: "morning-check",
-    keyLabel: "Morning Opening Check",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(1, 7, 30),
-    value: "Done",
-    note: "Opening was smooth — all deliveries arrived on time and were stocked without issues.",
-  },
-  {
-    id: "12",
-    employeeName: "Sarah Mills",
-    employeeInitials: "SM",
-    employeePhoto: null,
-    keyTag: "inventory-count",
-    keyLabel: "Inventory Count",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(1, 9, 45),
-    value: "158 units",
-    note: "Cheese stock is running low — placed a reorder before the busy weekend rush.",
-  },
-  {
-    id: "13",
-    employeeName: "Mike Rodriguez",
-    employeeInitials: "MR",
-    employeePhoto: null,
-    keyTag: "temp-log",
-    keyLabel: "Temperature Log",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(1, 12, 0),
-    value: "36°F",
-    note: "All fridge temps are stable — no issues to report from the midday walkthrough.",
-  },
-  {
-    id: "14",
-    employeeName: "Emma Chen",
-    employeeInitials: "EC",
-    employeePhoto: null,
-    keyTag: "dough-check",
-    keyLabel: "Dough Preparation Check",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(1, 14, 20),
-    value: "Ready",
-    note: "Second dough batch needed an extra 10 minutes proof time due to the cooler kitchen temp.",
-  },
-  {
-    id: "15",
-    employeeName: "James Wilson",
-    employeeInitials: "JW",
-    employeePhoto: null,
-    keyTag: "evening-close",
-    keyLabel: "Evening Closing",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(1, 21, 55),
-    value: "Completed",
-    note: "Long shift today but everything closed properly and the kitchen was left spotless.",
-  },
-  // ── Today ─────────────────────────────────────────────────────
-  {
-    id: "16",
-    employeeName: "Lisa Park",
-    employeeInitials: "LP",
-    employeePhoto: null,
-    keyTag: "morning-check",
-    keyLabel: "Morning Opening Check",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(0, 7, 15),
-    value: "Done",
-    note: "New hire helped with the opening today and everything went smoothly per the checklist.",
-  },
-  {
-    id: "17",
-    employeeName: "Tyler Johnson",
-    employeeInitials: "TJ",
-    employeePhoto: null,
-    keyTag: "temp-log",
-    keyLabel: "Temperature Log",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(0, 9, 0),
-    value: "37°F",
-    note: "Walk-in cooler is holding temp well following last week's maintenance visit.",
-  },
-  {
-    id: "18",
-    employeeName: "Sarah Mills",
-    employeeInitials: "SM",
-    employeePhoto: null,
-    keyTag: "safety-audit",
-    keyLabel: "Safety Audit",
-    storeNumber: "42",
-    attachment: null,
-    filledAt: createDate(0, 11, 30),
-    value: "Passed",
-    note: "Fire extinguisher inspection tags are all up to date — everything clear this morning.",
-  },
-];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const TAG_COLORS: Record<string, string> = {
-  "temp-log":        "bg-blue-500/15 text-blue-400 border-blue-500/20",
-  "safety-audit":    "bg-red-500/15 text-red-400 border-red-500/20",
-  "morning-check":   "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  "closing-check":   "bg-purple-500/15 text-purple-400 border-purple-500/20",
-  "evening-close":   "bg-indigo-500/15 text-indigo-400 border-indigo-500/20",
-  "inventory-count": "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  "dough-check":     "bg-orange-500/15 text-orange-400 border-orange-500/20",
-};
+// --- Helpers ------------------------------------------------------------------
 
 const AVATAR_COLORS = [
-  "bg-rose-500",
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-amber-500",
-  "bg-purple-500",
-  "bg-cyan-500",
-  "bg-pink-500",
+  "bg-rose-500", "bg-blue-500", "bg-emerald-500",
+  "bg-amber-500", "bg-purple-500", "bg-cyan-500", "bg-pink-500",
 ];
+
+async function downloadFile(url: string, filename: string): Promise<void> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    // silently ignore — browser may block if resource is unavailable
+  }
+}
 
 function getAvatarColor(name: string): string {
   let hash = 0;
@@ -302,59 +42,63 @@ function getAvatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function formatDayLabel(date: Date): string {
+function getInitials(firstName: string, lastName: string): string {
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+}
+
+function formatDayLabel(dateStr: string): string {
+  const date = new Date(dateStr + "T00:00:00");
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-
   const isSameDay = (a: Date, b: Date) =>
-    a.getDate() === b.getDate() &&
-    a.getMonth() === b.getMonth() &&
-    a.getFullYear() === b.getFullYear();
-
+    a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
   if (isSameDay(date, today)) return "Today";
   if (isSameDay(date, yesterday)) return "Yesterday";
-
-  return date.toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+function formatTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-function groupByDay(entries: FeedEntry[]): { label: string; date: Date; items: FeedEntry[] }[] {
-  const groups: Map<string, { label: string; date: Date; items: FeedEntry[] }> = new Map();
-
-  for (const entry of entries) {
-    const key = entry.filledAt.toDateString();
-    if (!groups.has(key)) {
-      groups.set(key, {
-        label: formatDayLabel(entry.filledAt),
-        date: entry.filledAt,
-        items: [],
-      });
-    }
-    groups.get(key)!.items.push(entry);
-  }
-
-  return Array.from(groups.values());
+function getDisplayValue(item: DueKeyItem): string {
+  const v = item.value;
+  if (!v) return "";
+  if (v.valueText != null) return v.valueText;
+  if (v.valueNumber != null) return String(v.valueNumber);
+  if (v.valueBoolean != null) return v.valueBoolean ? "Yes" : "No";
+  if (v.valueJson != null) return JSON.stringify(v.valueJson);
+  return "";
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+type FileIconInfo = { Icon: React.ElementType; color: string; label: string };
+
+function getFileIconInfo(mimeType: string): FileIconInfo {
+  if (mimeType.startsWith("image/"))                                              return { Icon: FileImage,   color: "text-blue-400",    label: "IMG"   };
+  if (mimeType === "application/pdf")                                             return { Icon: FileText,    color: "text-red-400",     label: "PDF"   };
+  if (mimeType.includes("word") || mimeType.includes("document"))                return { Icon: FileText,    color: "text-sky-400",     label: "DOC"   };
+  if (mimeType.includes("excel") || mimeType.includes("spreadsheet"))            return { Icon: FileText,    color: "text-green-400",   label: "XLS"   };
+  if (mimeType.includes("csv"))                                                   return { Icon: FileText,    color: "text-green-400",   label: "CSV"   };
+  if (mimeType.includes("zip") || mimeType.includes("archive") || mimeType.includes("compressed")) return { Icon: FileArchive, color: "text-amber-400",   label: "ZIP"   };
+  if (mimeType.startsWith("video/"))                                              return { Icon: FileVideo,   color: "text-purple-400",  label: "VIDEO" };
+  if (mimeType.startsWith("audio/"))                                              return { Icon: FileAudio,   color: "text-pink-400",    label: "AUDIO" };
+  if (mimeType.includes("json") || mimeType.includes("xml") || mimeType.includes("javascript") || mimeType.includes("html")) return { Icon: FileCode, color: "text-cyan-400", label: "CODE" };
+  return { Icon: File, color: "text-muted-foreground", label: "FILE" };
+}
+
+// --- Sub-components -----------------------------------------------------------
 
 function DayDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 py-2 select-none">
-      <div className="h-px flex-1 bg-border/60" />
-      <span className="rounded-full border border-border/60 bg-muted/60 px-3 py-0.5 text-[11px] font-medium tracking-wide text-muted-foreground">
+      <div className="h-px flex-1 " />
+      <span className="rounded-full border border-border/60 bg-muted/80 px-3 py-0.5 text-[11px] font-medium tracking-wide text-muted-foreground shadow-sm">
         {label}
       </span>
-      <div className="h-px flex-1 bg-border/60" />
+      <div className="h-px flex-1 " />
     </div>
   );
 }
@@ -370,73 +114,154 @@ function AttachmentPlaceholder() {
   );
 }
 
-function FeedCard({ entry }: { entry: FeedEntry }) {
-  const tagColorClass =
-    TAG_COLORS[entry.keyTag] ?? "bg-muted text-muted-foreground border-border/50";
-  const avatarBg = getAvatarColor(entry.employeeName);
+function AttachmentImage({ att }: { att: DueKeyAttachment }) {
+  return (
+    <div className="group relative overflow-hidden rounded-lg">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={att.attachmentUrl}
+        alt={att.originalName}
+        className="w-full rounded-lg object-cover"
+        style={{ maxHeight: "180px" }}
+      />
+      {/* Hover overlay with open + download */}
+      <div className="absolute inset-0 flex items-end justify-end gap-1.5 bg-black/40 p-2 opacity-0 transition-opacity group-hover:opacity-100">
+        <a
+          href={att.attachmentUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="View full size"
+          className="rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FileImage className="h-3.5 w-3.5" />
+        </a>
+        <button
+          type="button"
+          title="Download"
+          className="rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
+          onClick={(e) => { e.stopPropagation(); downloadFile(att.attachmentUrl, att.originalName); }}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AttachmentFile({ att }: { att: DueKeyAttachment }) {
+  const { Icon, color, label } = getFileIconInfo(att.mimeType);
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 p-2.5">
+      <div className={cn("shrink-0", color)}>
+        <Icon className="h-8 w-8" strokeWidth={1.5} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-medium leading-tight text-foreground/80">{att.originalName}</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground">{label} &bull; {(att.size / 1024).toFixed(0)} KB</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <a
+          href={att.attachmentUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </a>
+        <button
+          type="button"
+          title="Download"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          onClick={() => downloadFile(att.attachmentUrl, att.originalName)}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface FeedCardProps {
+  item: DueKeyItem;
+  employee: Employee | null;
+  storeId: string;
+}
+
+function FeedCard({ item, employee, storeId }: FeedCardProps) {
+  const v = item.value!;
+  const fullName = employee
+    ? [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ")
+    : `User #${v.userId}`;
+  const initials = employee
+    ? getInitials(employee.firstName, employee.lastName)
+    : String(v.userId).slice(0, 2).toUpperCase();
+  const avatarBg = getAvatarColor(fullName);
+  const displayValue = getDisplayValue(item);
+  const attachments = v.attachments ?? [];
 
   return (
-    <div className="flex gap-3">
-      {/* Avatar */}
-      <div className="shrink-0 pt-0.5">
-        <Avatar className="h-9 w-9 ring-2 ring-border/40">
-          <AvatarImage src={entry.employeePhoto ?? undefined} alt={entry.employeeName} />
-          <AvatarFallback
-            className={cn("text-[11px] font-bold text-white", avatarBg)}
-          >
-            {entry.employeeInitials}
-          </AvatarFallback>
-        </Avatar>
-      </div>
+    <div className="w-full max-w-xl mx-auto">
+      <div className="flex gap-3 items-start">
+        <div className="shrink-0 pt-0.5">
+          <Avatar className="h-9 w-9 ring-2 ring-border/40">
+            <AvatarImage src={undefined} alt={fullName} />
+            <AvatarFallback className={cn("text-[11px] font-bold text-white", avatarBg)}>
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        </div>
 
-      {/* Bubble */}
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        {/* Bubble card */}
-        <div className="rounded-2xl rounded-tl-sm border border-border/50 bg-card/80 p-3 shadow-sm backdrop-blur-sm">
-          {/* Header row */}
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold leading-tight">
-                {entry.employeeName}
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide",
-                    tagColorClass
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="rounded-2xl rounded-tl-sm border border-border/50 bg-card/80 p-3 shadow-sm backdrop-blur-sm">
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold leading-tight">{fullName}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  {item.tags.length > 0 ? (
+                    item.tags.map((tag) => (
+                      <span key={tag.id} className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                        #{tag.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                      {item.label}
+                    </span>
                   )}
-                >
-                  #{entry.keyTag}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Store {entry.storeNumber}
-                </span>
+                  <span className="text-[11px] text-muted-foreground">Store {storeId}</span>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <span className="text-[10px] text-muted-foreground/80">{formatTime(v.createdAt)}</span>
+                <div className="flex items-center gap-1">
+                  {displayValue && (
+                    <span className="text-[10px] font-medium text-foreground/70">{displayValue}</span>
+                  )}
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                </div>
               </div>
             </div>
-            {/* Time + filled indicator */}
-            <div className="flex shrink-0 flex-col items-end gap-1">
-              <span className="text-[10px] text-muted-foreground/80">{formatTime(entry.filledAt)}</span>
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-            </div>
+
+            {v.note && (
+              <p className="mb-2 text-xs leading-relaxed text-muted-foreground">{v.note}</p>
+            )}
+
+            {attachments.length > 0 ? (
+              <div className={cn("grid gap-2", attachments.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
+                {attachments.map((att) =>
+                  att.mimeType.startsWith("image/") ? (
+                    <AttachmentImage key={att.id} att={att} />
+                  ) : (
+                    <AttachmentFile key={att.id} att={att} />
+                  )
+                )}
+              </div>
+            ) : (
+              <AttachmentPlaceholder />
+            )}
           </div>
-
-          {/* Submitter note */}
-          <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
-            {entry.note}
-          </p>
-
-          {/* Attachment area */}
-          {entry.attachment ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={entry.attachment}
-              alt="Attachment"
-              className="w-full rounded-lg object-cover"
-              style={{ maxHeight: "160px" }}
-            />
-          ) : (
-            <AttachmentPlaceholder />
-          )}
         </div>
       </div>
     </div>
@@ -456,104 +281,87 @@ function FeedCardSkeleton() {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 5;
+// --- Main Component -----------------------------------------------------------
 
 interface DueKeysFeedProps {
   storeId: string | null;
-  selectedDate?: string | null; // YYYY-MM-DD; null = show all history
+  /** Start of the date range (YYYY-MM-DD). Defaults to 2 days before dateTo. */
+  dateFrom?: string | null;
+  /** End of the date range (YYYY-MM-DD). Defaults to today. */
+  dateTo?: string | null;
+  /** Tag IDs to filter by */
+  selectedTags?: number[] | null;
 }
 
-export function DueKeysFeed({ storeId, selectedDate }: DueKeysFeedProps) {
+export function DueKeysFeed({ storeId, dateFrom, dateTo, selectedTags }: DueKeysFeedProps) {
+  const { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload } =
+    useDueKeysFeed(
+      storeId,
+      storeId ? dateFrom : null,
+      storeId ? dateTo : null,
+      storeId ? selectedTags : null,
+    );
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const prevScrollHeightRef = useRef<number>(0);
+  const didScrollRef = useRef(false);
+  const prevScrollHeightRef = useRef(0);
 
-  // Filter entries by date: show entries on or before selected date
-  const allEntries = selectedDate
-    ? ALL_MOCK_ENTRIES.filter((e) => {
-        const entryDay = e.filledAt.toISOString().slice(0, 10);
-        return entryDay <= selectedDate;
-      })
-    : ALL_MOCK_ENTRIES;
-  const totalEntries = allEntries.length;
-
-  const [loadedFrom, setLoadedFrom] = useState(Math.max(0, totalEntries - PAGE_SIZE));
-  const [displayedItems, setDisplayedItems] = useState<FeedEntry[]>(
-    allEntries.slice(Math.max(0, totalEntries - PAGE_SIZE))
-  );
-  const [hasMore, setHasMore] = useState(
-    Math.max(0, totalEntries - PAGE_SIZE) > 0
-  );
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [didInitialScroll, setDidInitialScroll] = useState(false);
-
-  // Reset feed when filters change
-  useEffect(() => {
-    const newFrom = Math.max(0, totalEntries - PAGE_SIZE);
-    setLoadedFrom(newFrom);
-    setDisplayedItems(allEntries.slice(newFrom));
-    setHasMore(newFrom > 0);
-    setDidInitialScroll(false);
-    prevScrollHeightRef.current = 0;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, selectedDate]);
-
-  // Scroll to bottom after content renders (useLayoutEffect = before browser paint)
+  // Scroll to bottom on first load
   useLayoutEffect(() => {
-    if (scrollRef.current && !didInitialScroll && displayedItems.length > 0) {
+    if (!isLoading && pages.length > 0 && !didScrollRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      setDidInitialScroll(true);
+      didScrollRef.current = true;
     }
-  }, [didInitialScroll, displayedItems]);
+  }, [isLoading, pages]);
 
-  // After prepending, preserve scroll position
+  // Reset scroll flag when store/date changes
+  useEffect(() => {
+    didScrollRef.current = false;
+    prevScrollHeightRef.current = 0;
+  }, [storeId, dateFrom, dateTo]);
+
+  // After prepending older pages, restore relative scroll position
   useEffect(() => {
     if (prevScrollHeightRef.current > 0 && scrollRef.current) {
-      const newScrollHeight = scrollRef.current.scrollHeight;
-      scrollRef.current.scrollTop = newScrollHeight - prevScrollHeightRef.current;
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight - prevScrollHeightRef.current;
       prevScrollHeightRef.current = 0;
     }
-  }, [displayedItems]);
+  }, [pages]);
 
-  const loadMore = useCallback(() => {
-    if (!hasMore || isLoadingMore) return;
-
-    setIsLoadingMore(true);
-    prevScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0;
-
-    // Simulate async fetch
-    setTimeout(() => {
-      const newFrom = Math.max(0, loadedFrom - PAGE_SIZE);
-      const newChunk = allEntries.slice(newFrom, loadedFrom);
-
-      setDisplayedItems((prev) => [...newChunk, ...prev]);
-      setLoadedFrom(newFrom);
-      setHasMore(newFrom > 0);
-      setIsLoadingMore(false);
-    }, 800);
-  }, [hasMore, isLoadingMore, loadedFrom, allEntries]);
-
-  // IntersectionObserver for top sentinel
+  // IntersectionObserver: only trigger load-more when the container is actually
+  // scrollable (scrollHeight > clientHeight). This prevents the infinite-request
+  // loop that happens when there is too little content to create a scrollbar.
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !isLoadingMore) {
-          loadMore();
+        if (entries[0]?.isIntersecting && hasMore && !isLoadingMore && !isLoading) {
+          const el = scrollRef.current;
+          if (el && el.scrollHeight > el.clientHeight + 10) {
+            prevScrollHeightRef.current = el.scrollHeight;
+            loadMore();
+          }
         }
       },
       { root: scrollRef.current, threshold: 0.1 }
     );
-
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, isLoadingMore, loadMore]);
+  }, [hasMore, isLoadingMore, isLoading, loadMore]);
 
-  const groups = groupByDay(displayedItems);
+  const employeeMap = new Map<number, Employee>();
+  for (const page of pages) {
+    for (const emp of page.employees) {
+      employeeMap.set(emp.id, emp);
+    }
+  }
+
+  const totalFilled = pages.reduce(
+    (acc, p) => acc + p.items.filter((i) => i.filled && i.value).length,
+    0
+  );
 
   if (!storeId) {
     return (
@@ -568,15 +376,31 @@ export function DueKeysFeed({ storeId, selectedDate }: DueKeysFeedProps) {
 
   return (
     <div>
+      {/* ── Header bar with refresh button ── */}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground/70">
+          <Clock className="me-1 inline h-3 w-3" />
+          Showing last 3 days · scroll up to load older
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={reload}
+          disabled={isLoading}
+          className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+
       <div
         ref={scrollRef}
         className="flex h-130 flex-col overflow-y-auto rounded-2xl border border-border/60 bg-background/50 px-4 py-3 backdrop-blur-sm"
         style={{ scrollbarGutter: "stable" }}
       >
-        {/* Top sentinel – triggers load more */}
         <div ref={sentinelRef} className="shrink-0" />
 
-        {/* Loading more indicator */}
         {isLoadingMore && (
           <div className="flex items-center justify-center gap-2 py-3">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -584,42 +408,69 @@ export function DueKeysFeed({ storeId, selectedDate }: DueKeysFeedProps) {
           </div>
         )}
 
-        {/* "All caught up" indicator */}
-        {!hasMore && displayedItems.length > 0 && (
+        {!hasMore && totalFilled > 0 && (
           <div className="flex items-center justify-center gap-2 py-2">
             <span className="text-[11px] text-muted-foreground/60">Beginning of history</span>
           </div>
         )}
 
-        {/* Empty state */}
-        {displayedItems.length === 0 && !isLoadingMore && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Pizza className="h-10 w-10 opacity-30" strokeWidth={1.5} />
-            <p className="text-sm">No filled keys yet for this store.</p>
+        {error && (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <AlertCircle className="h-8 w-8 text-destructive/60" />
+            <p className="text-sm text-muted-foreground">{error}</p>
+            <Button variant="outline" size="sm" onClick={reload}>
+              <RefreshCw className="me-2 h-3.5 w-3.5" />
+              Retry
+            </Button>
           </div>
         )}
 
-        {/* Day groups */}
-        <div className="flex flex-1 flex-col gap-2">
-          {groups.map((group) => (
-            <div key={group.label} className="flex flex-col gap-3">
-              <DayDivider label={group.label} />
-              {group.items.map((entry) => (
-                <FeedCard key={entry.id} entry={entry} />
-              ))}
-            </div>
-          ))}
-        </div>
+        {isLoading && (
+          <div className="flex flex-1 flex-col gap-5 pt-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <FeedCardSkeleton key={i} />
+            ))}
+          </div>
+        )}
 
-        {/* Bottom spacer so last item isn't clipped */}
+        {!isLoading && !error && totalFilled === 0 && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Pizza className="h-10 w-10 opacity-30" strokeWidth={1.5} />
+            <p className="text-sm">No filled keys found for this store and date.</p>
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <div className="flex flex-1 flex-col gap-2">
+            {pages.map((page) => {
+              const filledItems = page.items.filter((i) => i.filled && i.value);
+              if (filledItems.length === 0) return null;
+              return (
+                <div key={page.date} className="flex flex-col gap-3">
+                  {/* Sticky date header — pins to top of scroll container as user scrolls */}
+                  <div className="sticky top-0 z-10 -mx-4 px-4 pb-1 bg-transparent">
+                    <DayDivider label={formatDayLabel(page.date)} />
+                  </div>
+                  {filledItems.map((item) => (
+                    <FeedCard
+                      key={`${page.date}-${item.keyId}`}
+                      item={item}
+                      employee={
+                        item.value?.userId != null
+                          ? (employeeMap.get(item.value.userId) ?? null)
+                          : null
+                      }
+                      storeId={storeId}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <div className="h-2 shrink-0" />
       </div>
-
-      {/* Scroll hint */}
-      <p className="mt-1.5 text-center text-[10px] text-muted-foreground/50 select-none">
-        <Clock className="me-1 inline h-3 w-3" />
-        Scroll up to view older filled keys
-      </p>
     </div>
   );
 }

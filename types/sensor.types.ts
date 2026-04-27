@@ -71,7 +71,7 @@ export interface SensorsResponse {
   success: boolean;
   store: SensorStoreInfo;
   temperature_unit?: TemperatureUnit | null;
-  hub: SensorDevice;
+  hub: SensorDevice | null;
   sensors: SensorDevice[];
   count: number;
   fetched_at: string;

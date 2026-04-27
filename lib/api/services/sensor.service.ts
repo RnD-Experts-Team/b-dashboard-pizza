@@ -155,7 +155,7 @@ function normalizeSensorsResponse(data: SensorsResponse, requestedUnit?: "c" | "
   return {
     ...data,
     temperature_unit: responseUnit,
-    hub: normalizeLiveSensor(data.hub, responseUnit),
+    hub: data.hub ? normalizeLiveSensor(data.hub, responseUnit) : null,
     sensors: data.sensors.map((sensor) => normalizeLiveSensor(sensor, responseUnit)),
   };
 }

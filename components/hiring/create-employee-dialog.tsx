@@ -237,6 +237,29 @@ const SHIFT_TIME_PRESETS: Record<string, { label: string; from: string; to: stri
 };
 
 /* ------------------------------------------------------------------ */
+/*  API error extraction helper                                        */
+/* ------------------------------------------------------------------ */
+function extractApiError(err: unknown): string {
+  if (!(err instanceof Error)) return "An unexpected error occurred.";
+  const axiosErr = err as unknown as { response?: { data?: unknown } };
+  if (axiosErr.response?.data) {
+    const raw = axiosErr.response.data;
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (typeof raw === "object" && raw !== null) {
+      const obj = raw as Record<string, unknown>;
+      if (obj.errors && typeof obj.errors === "object") {
+        const messages = Object.values(obj.errors as Record<string, unknown>)
+          .flatMap((v) => (Array.isArray(v) ? v : [v]))
+          .filter((v): v is string => typeof v === "string");
+        if (messages.length > 0) return messages.join("\n");
+      }
+      if (typeof obj.message === "string" && obj.message) return obj.message;
+    }
+  }
+  return err.message || "An unexpected error occurred.";
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 export function CreateEmployeeDialog({
@@ -363,7 +386,43 @@ export function CreateEmployeeDialog({
     lastName.trim() !== "" &&
     employmentType !== "" &&
     gender !== "" &&
-    ssn.trim() !== "";
+    ssn.trim() !== "" &&
+    addresses.every(
+      (a) =>
+        a.address_name.trim() !== "" &&
+        a.address_1.trim() !== "" &&
+        a.city.trim() !== "" &&
+        a.state.trim() !== "" &&
+        a.zip_code.trim() !== "",
+    ) &&
+    maritalHistory.every(
+      (mh) => mh.marital_id > 0 && mh.effective_date.trim() !== "",
+    ) &&
+    contacts.every(
+      (c) =>
+        c.contact_name.trim() !== "" &&
+        c.contact_type.trim() !== "" &&
+        c.contact_value.trim() !== "",
+    ) &&
+    availability.every(
+      (av) =>
+        av.days.length > 0 &&
+        av.shift_type.trim() !== "" &&
+        (av.times ?? []).every(
+          (t) => t.available_from.trim() !== "" && t.available_to.trim() !== "",
+        ),
+    ) &&
+    positions.every((p) => p.position_id > 0 && p.effective_date.trim() !== "") &&
+    payHistory.every((ph) => ph.effective_date.trim() !== "") &&
+    financialInfo.every(
+      (fi) =>
+        fi.account_number.trim() !== "" &&
+        fi.routing_number.trim() !== "" &&
+        fi.account_type.trim() !== "" &&
+        fi.effective_date.trim() !== "",
+    ) &&
+    statusHistory.every((sh) => sh.status.trim() !== "" && sh.effective_date.trim() !== "") &&
+    storeAssignments.every((sa) => sa.store_id > 0 && sa.effective_date.trim() !== "");
 
   /* -- Submit -- */
   async function handleSubmit() {
@@ -448,7 +507,7 @@ export function CreateEmployeeDialog({
       onSuccess?.();
     } catch (err) {
       if (err instanceof Error && err.name === "CanceledError") return;
-      setError(err instanceof Error ? err.message : "Failed to create employee.");
+      setError(extractApiError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -713,7 +772,9 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Marital Status</Label>
+                <Label>
+                  Marital Status <span className="text-destructive">*</span>
+                </Label>
                 <Select
                   value={mh.marital_id && mh.marital_id > 0 ? String(mh.marital_id) : ""}
                   onValueChange={(v) =>
@@ -734,7 +795,9 @@ export function CreateEmployeeDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Effective Date</Label>
+                <Label>
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="date"
                   value={mh.effective_date ?? ""}
@@ -841,7 +904,9 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Address Name</Label>
+                <Label>
+                  Address Name <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.address_name ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "address_name", e.target.value)}
@@ -850,7 +915,9 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
-                <Label>Address 1</Label>
+                <Label>
+                  Address 1 <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.address_1 ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "address_1", e.target.value)}
@@ -868,7 +935,9 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>City</Label>
+                <Label>
+                  City <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.city ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "city", e.target.value)}
@@ -877,7 +946,9 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>State</Label>
+                <Label>
+                  State <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.state ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "state", e.target.value)}
@@ -886,7 +957,9 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Zip Code</Label>
+                <Label>
+                  Zip Code <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={a.zip_code ?? ""}
                   onChange={(e) => updateItem(setAddresses, idx, "zip_code", e.target.value)}
@@ -1068,7 +1141,9 @@ export function CreateEmployeeDialog({
                   )}
                   <div className="flex items-end gap-2">
                     <div className="flex-1 space-y-1.5">
-                      <Label className="text-xs">From</Label>
+                      <Label className="text-xs">
+                        From <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         type="time"
                         value={t.available_from}
@@ -1083,7 +1158,9 @@ export function CreateEmployeeDialog({
                       />
                     </div>
                     <div className="flex-1 space-y-1.5">
-                      <Label className="text-xs">To</Label>
+                      <Label className="text-xs">
+                        To <span className="text-destructive">*</span>
+                      </Label>
                       <Input
                         type="time"
                         value={t.available_to}
@@ -1165,7 +1242,9 @@ export function CreateEmployeeDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Effective Date</Label>
+                <Label>
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="date"
                   value={p.effective_date ?? ""}
@@ -1198,7 +1277,9 @@ export function CreateEmployeeDialog({
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
-                <Label>Base Pay</Label>
+                <Label>
+                  Base Pay <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="number"
                   min={0}
@@ -1211,7 +1292,9 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Performance Pay</Label>
+                <Label>
+                  Performance Pay <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="number"
                   min={0}
@@ -1224,7 +1307,9 @@ export function CreateEmployeeDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Effective Date</Label>
+                <Label>
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="date"
                   value={ph.effective_date ?? ""}
@@ -1305,7 +1390,9 @@ export function CreateEmployeeDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Effective Date</Label>
+                <Label>
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="date"
                   value={fi.effective_date ?? ""}
@@ -1429,7 +1516,9 @@ export function CreateEmployeeDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Effective Date</Label>
+                <Label>
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="date"
                   value={sh.effective_date ?? ""}
@@ -1524,7 +1613,9 @@ export function CreateEmployeeDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Effective Date</Label>
+                <Label>
+                  Effective Date <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="date"
                   value={sa.effective_date ?? ""}
@@ -1604,6 +1695,68 @@ export function CreateEmployeeDialog({
   }
 
   /* ---------------------------------------------------------------- */
+  /*  Per-tab validation error counts                                 */
+  /* ---------------------------------------------------------------- */
+  const personalTabErrors = [
+    firstName.trim() === "" ? 1 : 0,
+    lastName.trim() === "" ? 1 : 0,
+    gender === "" ? 1 : 0,
+    employmentType === "" ? 1 : 0,
+    ssn.trim() === "" ? 1 : 0,
+    ...addresses.flatMap((a) => [
+      a.address_name.trim() === "" ? 1 : 0,
+      a.address_1.trim() === "" ? 1 : 0,
+      a.city.trim() === "" ? 1 : 0,
+      a.state.trim() === "" ? 1 : 0,
+      a.zip_code.trim() === "" ? 1 : 0,
+    ]),
+    ...maritalHistory.flatMap((mh) => [
+      mh.marital_id <= 0 ? 1 : 0,
+      mh.effective_date.trim() === "" ? 1 : 0,
+    ]),
+    ...contacts.flatMap((c) => [
+      c.contact_name.trim() === "" ? 1 : 0,
+      c.contact_value.trim() === "" ? 1 : 0,
+    ]),
+  ].reduce((sum, n) => sum + n, 0);
+
+  const availabilityTabErrors = availability
+    .flatMap((av) => [
+      av.days.length === 0 ? 1 : 0,
+      av.shift_type.trim() === "" ? 1 : 0,
+      ...(av.times ?? []).flatMap((t) => [
+        t.available_from.trim() === "" ? 1 : 0,
+        t.available_to.trim() === "" ? 1 : 0,
+      ]),
+    ])
+    .reduce((sum, n) => sum + n, 0);
+
+  const compensationTabErrors = [
+    ...positions.flatMap((p) => [
+      p.position_id <= 0 ? 1 : 0,
+      p.effective_date.trim() === "" ? 1 : 0,
+    ]),
+    ...payHistory.flatMap((ph) => [ph.effective_date.trim() === "" ? 1 : 0]),
+    ...financialInfo.flatMap((fi) => [
+      fi.account_number.trim() === "" ? 1 : 0,
+      fi.routing_number.trim() === "" ? 1 : 0,
+      fi.account_type.trim() === "" ? 1 : 0,
+      fi.effective_date.trim() === "" ? 1 : 0,
+    ]),
+  ].reduce((sum, n) => sum + n, 0);
+
+  const adminTabErrors = [
+    ...statusHistory.flatMap((sh) => [
+      sh.status.trim() === "" ? 1 : 0,
+      sh.effective_date.trim() === "" ? 1 : 0,
+    ]),
+    ...storeAssignments.flatMap((sa) => [
+      sa.store_id <= 0 ? 1 : 0,
+      sa.effective_date.trim() === "" ? 1 : 0,
+    ]),
+  ].reduce((sum, n) => sum + n, 0);
+
+  /* ---------------------------------------------------------------- */
   /*  RENDER                                                          */
   /* ---------------------------------------------------------------- */
   return (
@@ -1621,9 +1774,9 @@ export function CreateEmployeeDialog({
           </DialogHeader>
 
           {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+            <Alert variant="destructive" className="max-h-32 overflow-y-auto">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <AlertDescription className="whitespace-pre-wrap wrap-break-word">{error}</AlertDescription>
             </Alert>
           )}
 
@@ -1633,10 +1786,46 @@ export function CreateEmployeeDialog({
             className="flex min-h-0 flex-1 flex-col"
           >
             <TabsList className="grid h-9 w-full grid-cols-4 p-1">
-              <TabsTrigger className="text-xs" value="personal">Personal</TabsTrigger>
-              <TabsTrigger className="text-xs" value="availability">Availability</TabsTrigger>
-              <TabsTrigger className="text-xs" value="compensation">Compensation</TabsTrigger>
-              <TabsTrigger className="text-xs" value="admin">Admin</TabsTrigger>
+              <TabsTrigger className="text-xs" value="personal">
+                <span className="flex items-center gap-1">
+                  Personal
+                  {personalTabErrors > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                      {personalTabErrors > 9 ? "9+" : personalTabErrors}
+                    </span>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger className="text-xs" value="availability">
+                <span className="flex items-center gap-1">
+                  Availability
+                  {availabilityTabErrors > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                      {availabilityTabErrors > 9 ? "9+" : availabilityTabErrors}
+                    </span>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger className="text-xs" value="compensation">
+                <span className="flex items-center gap-1">
+                  Compensation
+                  {compensationTabErrors > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                      {compensationTabErrors > 9 ? "9+" : compensationTabErrors}
+                    </span>
+                  )}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger className="text-xs" value="admin">
+                <span className="flex items-center gap-1">
+                  Admin
+                  {adminTabErrors > 0 && (
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                      {adminTabErrors > 9 ? "9+" : adminTabErrors}
+                    </span>
+                  )}
+                </span>
+              </TabsTrigger>
             </TabsList>
 
             <ScrollArea className="flex-1 min-h-0 mt-4">

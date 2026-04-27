@@ -251,6 +251,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/scheduling`,
         icon: CalendarDays,
       },
+       {
+        title: t("sensors"),
+        href: `/${locale}/dashboard/sensors`,
+        icon: Gauge,
+        requirements: [
+          { service: "Sensors", method: "GET", path: "/stores/*/reports", storeId: effectiveStoreId }
+        ],
+      },
     ],
   };
 
@@ -318,12 +326,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "QA", method: "POST", path: "/categories", storeId: effectiveStoreId },
         ],
       },
-      {
-        title: t("customReports"),
-        href: `/${locale}/dashboard/custom-reports`,
-        icon: BarChart3,
+      // {
+      //   title: t("customReports"),
+      //   href: `/${locale}/dashboard/custom-reports`,
+      //   icon: BarChart3,
           
-      },
+      // },
     ],
   };
 
@@ -437,19 +445,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         // No rule or management permission defined yet — always visible
       },
       
-      {
-        title: t("sensors"),
-        href: `/${locale}/dashboard/sensors`,
-        icon: Gauge,
-        requirements: [
-          { service: "Sensors", method: "GET", path: "/stores/*/reports", storeId: effectiveStoreId }
-        ],
-      },
-      {
-        title: "Announcements",
-        href: `/${locale}/dashboard/announcements`,
-        icon: Megaphone,
-      },
+     
+      // {
+      //   title: "Announcements",
+      //   href: `/${locale}/dashboard/announcements`,
+      //   icon: Megaphone,
+      // },
     ],
   };
   // Dev tools navigation (controlled by feature flags)

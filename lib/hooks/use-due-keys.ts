@@ -158,6 +158,8 @@ interface UseSetDueKeysBulkReturn {
       value_number: number | null;
       value_boolean: boolean | null;
       value_json: unknown;
+      note?: string | null;
+      attachments?: File[] | null;
     }>
   ) => Promise<boolean>;
   isSubmitting: boolean;
@@ -181,6 +183,8 @@ export function useSetDueKeysBulk(): UseSetDueKeysBulkReturn {
         value_number: number | null;
         value_boolean: boolean | null;
         value_json: unknown;
+        note?: string | null;
+        attachments?: File[] | null;
       }>
     ): Promise<boolean> => {
       setIsSubmitting(true);

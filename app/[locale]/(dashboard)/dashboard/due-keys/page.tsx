@@ -1,14 +1,20 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
 import { DueKeysFeed } from "@/components/due-keys/due-keys-feed";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,15 +25,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -40,43 +37,21 @@ import {
   useEmployeeDebriefs,
   useDeleteEmployeeDebrief,
 } from "@/lib/hooks/use-employee-debriefs";
+import { useTagsList } from "@/lib/hooks/use-tags";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { RefreshCw, Trash2, Store, CalendarDays, Tag } from "lucide-react";
+import { RefreshCw, Trash2, Store, CalendarDays, Tag, CalendarIcon } from "lucide-react";
 import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
-interface AuthUserStoreOption {
-  id: string;
-  name: string;
+/** Convert a YYYY-MM-DD string to a local Date (avoids UTC offset issues). */
+function strToDate(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function parseAuthUserStores(): AuthUserStoreOption[] {
-  if (typeof window === "undefined") return [];
-  const raw = localStorage.getItem("auth-user");
-  if (!raw) return [];
-
-  try {
-    const parsed = JSON.parse(raw) as {
-      stores?: Array<{
-        store?: {
-          id?: string | number;
-          store_id?: string | number;
-          name?: string;
-        };
-      }>;
-    };
-
-    return (parsed.stores ?? [])
-      .map((entry) => {
-        const store = entry.store;
-        const resolvedId = String(store?.store_id ?? store?.id ?? "").trim();
-        const resolvedName = store?.name?.trim() || resolvedId;
-        return { id: resolvedId, name: resolvedName };
-      })
-      .filter((store) => store.id.length > 0);
-  } catch {
-    return [];
-  }
+/** Convert a local Date to a YYYY-MM-DD string. */
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function formatDebriefDate(raw: string | null | undefined): string {
@@ -99,18 +74,22 @@ function DebriefTableSkeleton() {
             <TableHead className="w-16">ID</TableHead>
             <TableHead>Employee</TableHead>
             <TableHead className="hidden sm:table-cell">Date Written</TableHead>
-            <TableHead className="hidden lg:table-cell">Notes</TableHead>
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 4 }).map((_, i) => (
             <TableRow key={i}>
-              <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-              <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-24" /></TableCell>
-              <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-48" /></TableCell>
-              <TableCell><Skeleton className="h-7 w-7" /></TableCell>
+              <TableCell>
+                <div className="h-4 w-10 animate-pulse rounded bg-muted" />
+              </TableCell>
+              <TableCell>
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+              </TableCell>
+              <TableCell className="hidden sm:table-cell">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+              </TableCell>
+              <TableCell />
             </TableRow>
           ))}
         </TableBody>
@@ -121,33 +100,29 @@ function DebriefTableSkeleton() {
 
 export default function DueKeysPage() {
   const { selectedStore } = useSelectedStoreStore();
-  const [stores, setStores] = useState<AuthUserStoreOption[]>([]);
-  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  // Use the human-readable store number (e.g. "03795-00001") as the API store_id
+  const storeId = selectedStore?.storeId ?? null;
+
+  // ── Date range state ──────────────────────────────────────────────
+  const [dateFrom, setDateFrom] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 2);
+    return dateToStr(d);
   });
+  const [dateTo, setDateTo] = useState<string>(() => dateToStr(new Date()));
+  const [fromOpen, setFromOpen] = useState(false);
+  const [toOpen, setToOpen] = useState(false);
+
+  // ── Tag filter state ──────────────────────────────────────────────
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const { data: tagsData, isLoading: isTagsLoading } = useTagsList();
+  const availableTags = tagsData?.data ?? [];
 
   // ── Employee Debrief state ─────────────────────────────────────────
   const [selectedDebrief, setSelectedDebrief] = useState<EmployeeDebriefItem | null>(null);
   const [debriefSheetOpen, setDebriefSheetOpen] = useState(false);
   const [deletingDebrief, setDeletingDebrief] = useState<EmployeeDebriefItem | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    const parsedStores = parseAuthUserStores();
-    setStores(parsedStores);
-    if (parsedStores.length > 0) {
-      setSelectedStoreId(parsedStores[0].id);
-    }
-  }, []);
-
-  // Sync with global selected store if available
-  useEffect(() => {
-    if (selectedStore?.id) {
-      setSelectedStoreId(String(selectedStore.id));
-    }
-  }, [selectedStore]);
 
   const {
     items: debriefItems,
@@ -156,7 +131,7 @@ export default function DueKeysPage() {
     error: debriefError,
     refetch: refetchDebriefs,
     clearError: clearDebriefError,
-  } = useEmployeeDebriefs(selectedStoreId);
+  } = useEmployeeDebriefs(storeId);
 
   const {
     deleteDebrief,
@@ -178,9 +153,9 @@ export default function DueKeysPage() {
   };
 
   const handleConfirmDeleteDebrief = async () => {
-    if (!deletingDebrief || !selectedStoreId) return;
+    if (!deletingDebrief || !storeId) return;
     setDeleteConfirmOpen(false);
-    const success = await deleteDebrief(selectedStoreId, deletingDebrief.id);
+    const success = await deleteDebrief(storeId, deletingDebrief.id);
     if (success) {
       toast.success(`Debrief #${deletingDebrief.id} deleted successfully.`);
       if (selectedDebrief?.id === deletingDebrief.id) setDebriefSheetOpen(false);
@@ -192,215 +167,300 @@ export default function DueKeysPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 p-6">
       <PageHeader
         title="Due Keys"
-        description="Browse filled keys by store — scroll up to view history."
+        description="Track daily key submissions and employee sign-offs."
       />
 
-      {/* ── Main two-column layout ─────────────────────────────────── */}
-      <div className="flex items-start justify-center gap-5">
-
-        {/* ── Feed (left, grows) ──────────────────────────────────── */}
-        <div className="min-w-0 flex-1 max-w-2xl">
-          <DueKeysFeed storeId={selectedStoreId} selectedDate={selectedDate} />
-        </div>
-
-        {/* ── Sidebar (right, sticky) ─────────────────────────────── */}
-        <div className="w-56 shrink-0 space-y-3 lg:w-64" style={{ position: "sticky", top: "1.5rem" }}>
-
-          {/* Store filter */}
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* ── Sidebar — rendered first so it appears above feed on small screens ── */}
+        <div className="order-first w-full shrink-0 lg:order-last lg:w-64" style={{ position: "sticky", top: "1.5rem" }}>
+          <div className="flex flex-wrap gap-3 lg:flex-col lg:gap-0 lg:space-y-3">
+          {/* Store display — follows global sidebar selection */}
+          <div className="min-w-[180px] flex-1 rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm lg:min-w-0">
             <div className="mb-3 flex items-center gap-2">
               <Store className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Store</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Store
+              </p>
             </div>
-            <Select
-              value={selectedStoreId ?? ""}
-              onValueChange={(value) => setSelectedStoreId(value || null)}
-              disabled={stores.length === 0}
-            >
-              <SelectTrigger className="h-8 border-border/50 bg-background/60 text-sm">
-                <SelectValue
-                  placeholder={stores.length === 0 ? "No stores" : "Select store"}
-                />
-              </SelectTrigger>
-              <SelectContent position="popper" style={{ maxHeight: "160px", overflowY: "auto" }}>
-                {stores.map((store) => (
-                  <SelectItem key={store.id} value={store.id}>
-                    {store.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {storeId ? (
+              <div className="rounded-md border border-border/40 bg-background/60 px-3 py-2">
+                <p className="text-sm font-medium leading-tight">
+                  {selectedStore?.name ?? storeId}
+                </p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">{storeId}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No store selected. Use the top-bar store selector.
+              </p>
+            )}
           </div>
 
-          {/* Date filter */}
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+          {/* Date range filter */}
+          <div className="min-w-[160px] flex-1 rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm lg:min-w-0">
             <div className="mb-3 flex items-center gap-2">
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Date Range
+              </p>
             </div>
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-8 border-border/50 bg-background/60 text-sm"
-            />
+
+            {/* From date */}
+            <p className="mb-1 text-[10px] font-medium text-muted-foreground">From</p>
+            <Popover open={fromOpen} onOpenChange={setFromOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full justify-start gap-2 border-border/50 bg-background/60 px-3 text-left text-xs font-normal"
+                >
+                  <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  {format(strToDate(dateFrom), "MMM d, yyyy")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={strToDate(dateFrom)}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    const s = dateToStr(d);
+                    setDateFrom(s);
+                    if (s > dateTo) setDateTo(s);
+                    setFromOpen(false);
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
+            {/* To date */}
+            <p className="mb-1 mt-3 text-[10px] font-medium text-muted-foreground">To</p>
+            <Popover open={toOpen} onOpenChange={setToOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full justify-start gap-2 border-border/50 bg-background/60 px-3 text-left text-xs font-normal"
+                >
+                  <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  {format(strToDate(dateTo), "MMM d, yyyy")}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={strToDate(dateTo)}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    const s = dateToStr(d);
+                    setDateTo(s);
+                    if (s < dateFrom) setDateFrom(s);
+                    setToOpen(false);
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+
             <button
               type="button"
               onClick={() => {
-                const now = new Date();
-                setSelectedDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
+                const today = dateToStr(new Date());
+                const from = dateToStr(new Date(new Date().setDate(new Date().getDate() - 2)));
+                setDateFrom(from);
+                setDateTo(today);
               }}
               className="mt-2 text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
             >
-              Reset to today
+              Reset to last 3 days
             </button>
           </div>
 
-          {/* Tag legend */}
-          <div className="rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tags</p>
+          {/* Tag filter */}
+          <div className="min-w-[160px] flex-1 rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm lg:min-w-0">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Tags
+                </p>
+              </div>
+              {selectedTagIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTagIds([])}
+                  className="text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+                >
+                  Clear ({selectedTagIds.length})
+                </button>
+              )}
             </div>
-            <div className="space-y-1.5">
-              {[
-                { tag: "temp-log",        label: "Temp Log",        color: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
-                { tag: "safety-audit",    label: "Safety Audit",    color: "bg-red-500/15 text-red-400 border-red-500/20" },
-                { tag: "morning-check",   label: "Morning Check",   color: "bg-amber-500/15 text-amber-400 border-amber-500/20" },
-                { tag: "closing-check",   label: "Closing Check",   color: "bg-purple-500/15 text-purple-400 border-purple-500/20" },
-                { tag: "evening-close",   label: "Evening Close",   color: "bg-indigo-500/15 text-indigo-400 border-indigo-500/20" },
-                { tag: "inventory-count", label: "Inventory",       color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
-                { tag: "dough-check",     label: "Dough Check",     color: "bg-orange-500/15 text-orange-400 border-orange-500/20" },
-              ].map(({ tag, label, color }) => (
-                <div key={tag} className="flex items-center gap-2">
-                  <span className={cn("inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide", color)}>
-                    #{tag}
-                  </span>
-                  <span className="hidden text-[11px] text-muted-foreground lg:inline">{label}</span>
+
+            {isTagsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-4 w-24 animate-pulse rounded bg-muted" />
+                ))}
+              </div>
+            ) : availableTags.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No tags available.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {availableTags.map((tag) => (
+                  <div key={tag.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`tag-${tag.id}`}
+                      checked={selectedTagIds.includes(tag.id)}
+                      onCheckedChange={(checked) => {
+                        setSelectedTagIds((prev) =>
+                          checked
+                            ? [...prev, tag.id]
+                            : prev.filter((id) => id !== tag.id)
+                        );
+                      }}
+                    />
+                    <label
+                      htmlFor={`tag-${tag.id}`}
+                      className="cursor-pointer truncate text-xs text-foreground/80 hover:text-foreground"
+                    >
+                      {tag.name}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          </div>
+        </div>
+
+        {/* ── Main content ─────────────────────────────────────────── */}
+        <div className="order-last flex min-w-0 flex-1 flex-col gap-6 lg:order-first">
+          {/* Due Keys Feed */}
+          <DueKeysFeed
+            storeId={storeId}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
+          />
+
+          {/* Employee Debrief section */}
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Employee Debriefs</h2>
+                <p className="text-xs text-muted-foreground">
+                  Debrief notes for the selected store.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refetchDebriefs}
+                disabled={!storeId || isDebriefLoading || isDebriefRefreshing}
+              >
+                <RefreshCw
+                  className={cn("me-2 h-4 w-4", isDebriefRefreshing && "animate-spin")}
+                />
+                {isDebriefRefreshing ? "Refreshing..." : "Refresh"}
+              </Button>
+            </div>
+
+            {debriefError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
+                <p className="text-sm text-destructive">{debriefError}</p>
+                <div className="mt-3 flex gap-2">
+                  <Button variant="outline" size="sm" onClick={refetchDebriefs}>
+                    Retry
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={clearDebriefError}>
+                    Dismiss
+                  </Button>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            )}
 
-        </div>
-      </div>
-
-      {/* ── Employee Debrief Notes ─────────────────────────────────── */}
-      <Separator />
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Employee Debrief Notes</h2>
-            <p className="text-sm text-muted-foreground">
-              Debrief notes for the selected store.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refetchDebriefs}
-            disabled={!selectedStoreId || isDebriefLoading || isDebriefRefreshing}
-          >
-            <RefreshCw
-              className={cn("me-2 h-4 w-4", isDebriefRefreshing && "animate-spin")}
-            />
-            {isDebriefRefreshing ? "Refreshing..." : "Refresh"}
-          </Button>
-        </div>
-
-        {debriefError && (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
-            <p className="text-sm text-destructive">{debriefError}</p>
-            <div className="mt-3 flex gap-2">
-              <Button variant="outline" size="sm" onClick={refetchDebriefs}>
-                Retry
-              </Button>
-              <Button variant="ghost" size="sm" onClick={clearDebriefError}>
-                Dismiss
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <div>
-          {isDebriefLoading && !debriefItems.length ? (
-            <DebriefTableSkeleton />
-          ) : !selectedStoreId ? (
-            <div className="rounded-md border p-6 text-sm text-muted-foreground">
-              Select a store to load employee debrief notes.
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">ID</TableHead>
-                    <TableHead>Employee</TableHead>
-                    <TableHead className="hidden sm:table-cell">Date Written</TableHead>
-                    <TableHead className="w-10" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {debriefItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="py-8 text-center text-sm text-muted-foreground"
-                      >
-                        No employee debrief notes found for this store.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    debriefItems.map((item) => {
-                      const writtenDate = item.date ?? item.createdAt;
-
-                      return (
-                        <TableRow
-                          key={item.id}
-                          className="cursor-pointer"
-                          onClick={() => handleDebriefRowClick(item)}
-                        >
-                          <TableCell className="font-mono text-sm">{item.id}</TableCell>
-                          <TableCell className="font-medium">
-                            {item.employeeName ? (
-                              item.employeeName
-                            ) : item.employeeId != null ? (
-                              <Badge variant="secondary">ID {item.employeeId}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell">
-                            {writtenDate ? (
-                              <span className="text-sm">{formatDebriefDate(writtenDate)}</span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => handleDebriefDeleteClick(e, item)}
-                              disabled={isDeleting}
-                              aria-label={`Delete debrief #${item.id}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+            <div>
+              {isDebriefLoading && !debriefItems.length ? (
+                <DebriefTableSkeleton />
+              ) : !storeId ? (
+                <div className="rounded-md border p-6 text-sm text-muted-foreground">
+                  Select a store to load employee debrief notes.
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">ID</TableHead>
+                        <TableHead>Employee</TableHead>
+                        <TableHead className="hidden sm:table-cell">Date Written</TableHead>
+                        <TableHead className="w-10" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {debriefItems.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={4}
+                            className="py-8 text-center text-sm text-muted-foreground"
+                          >
+                            No employee debrief notes found for this store.
                           </TableCell>
                         </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
+                      ) : (
+                        debriefItems.map((item) => {
+                          const writtenDate = item.date ?? item.createdAt;
+                          return (
+                            <TableRow
+                              key={item.id}
+                              className="cursor-pointer"
+                              onClick={() => handleDebriefRowClick(item)}
+                            >
+                              <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                              <TableCell className="font-medium">
+                                {item.employeeName ? (
+                                  item.employeeName
+                                ) : item.employeeId != null ? (
+                                  <Badge variant="secondary">ID {item.employeeId}</Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="hidden sm:table-cell">
+                                {writtenDate ? (
+                                  <span className="text-sm">{formatDebriefDate(writtenDate)}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={(e) => handleDebriefDeleteClick(e, item)}
+                                  disabled={isDeleting}
+                                  aria-label={`Delete debrief #${item.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -408,7 +468,7 @@ export default function DueKeysPage() {
       <EmployeeDebriefDetailSheet
         open={debriefSheetOpen}
         onOpenChange={setDebriefSheetOpen}
-        storeId={selectedStoreId ?? ""}
+        storeId={storeId ?? ""}
         debriefId={selectedDebrief?.id ?? null}
       />
 

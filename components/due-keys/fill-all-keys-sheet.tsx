@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Paperclip, X as XIcon } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Paperclip, X } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -48,13 +47,16 @@ export function FillAllKeysSheet({
 }: FillAllKeysSheetProps) {
   const unfilledItems = useMemo(() => items.filter((it) => !it.filled), [items]);
 
-  const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string; attachments?: string[]; attachmentInput?: string }>>(() => {
-    const initial: Record<number, { text: string; number: string; boolean: "null" | "true" | "false"; json: string; note: string; attachments: string[]; attachmentInput: string }> = {};
+  const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string }>>(() => {
+    const initial: Record<number, { text: string; number: string; boolean: "null" | "true" | "false"; json: string; note: string }> = {};
     for (const it of items) {
-      initial[it.keyId] = { text: "", number: "", boolean: "null", json: "", note: "", attachments: [], attachmentInput: "" };
+      initial[it.keyId] = { text: "", number: "", boolean: "null", json: "", note: "" };
     }
     return initial;
   });
+
+  const [attachmentsMap, setAttachmentsMap] = useState<Record<number, File[]>>({});
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const [jsonErrors, setJsonErrors] = useState<Record<number, string | null>>({});
 
@@ -85,7 +87,7 @@ export function FillAllKeysSheet({
 
         try {
           const parsed = JSON.parse(v.json || "");
-          payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: null, value_json: parsed, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
+          payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: null, value_json: parsed });
         } catch (err) {
           setJsonErrors((prev) => ({ ...prev, [it.keyId]: "Invalid JSON." }));
           return null;
@@ -95,7 +97,7 @@ export function FillAllKeysSheet({
       }
 
       if (it.dataType === "text") {
-        payloadItems.push({ key_id: it.keyId, value_text: (v.text || "").trim() ? (v.text || "").trim() : null, value_number: null, value_boolean: null, value_json: null, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
+        payloadItems.push({ key_id: it.keyId, value_text: (v.text || "").trim() ? (v.text || "").trim() : null, value_number: null, value_boolean: null, value_json: null });
         continue;
       }
 
@@ -106,18 +108,18 @@ export function FillAllKeysSheet({
           toast.error(`Invalid number for key ${it.keyId}`);
           return null;
         }
-        payloadItems.push({ key_id: it.keyId, value_text: null, value_number: parsed, value_boolean: null, value_json: null, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
+        payloadItems.push({ key_id: it.keyId, value_text: null, value_number: parsed, value_boolean: null, value_json: null });
         continue;
       }
 
       // boolean
-      payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: v.boolean === "null" ? null : v.boolean === "true", value_json: null, attachments: (v.attachments ?? []).length > 0 ? v.attachments : null });
+      payloadItems.push({ key_id: it.keyId, value_text: null, value_number: null, value_boolean: v.boolean === "null" ? null : v.boolean === "true", value_json: null });
     }
 
     const enrichedItems = payloadItems.map((p) => ({
       ...p,
       note: ((values[p.key_id]?.note ?? "").trim()) || null,
-      attachments: p.attachments ?? null,
+      attachments: (attachmentsMap[p.key_id] ?? []).length > 0 ? attachmentsMap[p.key_id] : null,
     }));
     return { items: enrichedItems };
   };
@@ -220,82 +222,6 @@ export function FillAllKeysSheet({
 
                 <div className="mt-3 space-y-2">
                   <Label>
-                    Attachments{" "}
-                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={values[it.keyId]?.attachmentInput ?? ""}
-                      onChange={(e) => handleChange(it.keyId, "attachmentInput", e.target.value)}
-                      placeholder="Add attachment identifier..."
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const val = (values[it.keyId]?.attachmentInput ?? "").trim();
-                          if (val) {
-                            setValues((prev) => ({
-                              ...prev,
-                              [it.keyId]: {
-                                ...(prev[it.keyId] || {}),
-                                attachments: [...(prev[it.keyId]?.attachments ?? []), val],
-                                attachmentInput: "",
-                              },
-                            }));
-                          }
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!(values[it.keyId]?.attachmentInput ?? "").trim()}
-                      onClick={() => {
-                        const val = (values[it.keyId]?.attachmentInput ?? "").trim();
-                        if (val) {
-                          setValues((prev) => ({
-                            ...prev,
-                            [it.keyId]: {
-                              ...(prev[it.keyId] || {}),
-                              attachments: [...(prev[it.keyId]?.attachments ?? []), val],
-                              attachmentInput: "",
-                            },
-                          }));
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  {(values[it.keyId]?.attachments ?? []).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {(values[it.keyId]?.attachments ?? []).map((att, idx) => (
-                        <Badge key={idx} variant="secondary" className="gap-1 pr-1 text-xs">
-                          <Paperclip className="h-3 w-3" />
-                          <span className="max-w-32 truncate">{att}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setValues((prev) => ({
-                                ...prev,
-                                [it.keyId]: {
-                                  ...(prev[it.keyId] || {}),
-                                  attachments: (prev[it.keyId]?.attachments ?? []).filter((_, i) => i !== idx),
-                                },
-                              }))
-                            }
-                            className="ml-0.5 hover:text-destructive"
-                          >
-                            <XIcon className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  <Label>
                     Note{" "}
                     <span className="text-xs font-normal text-muted-foreground">(optional)</span>
                   </Label>
@@ -306,6 +232,76 @@ export function FillAllKeysSheet({
                     placeholder="Add a note..."
                     className="min-h-16 resize-none"
                   />
+                </div>
+
+                {/* Attachments */}
+                <div className="mt-3 space-y-2">
+                  <Label>
+                    Attachments{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => fileInputRefs.current[it.keyId]?.click()}
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      Add files
+                    </Button>
+                    {(attachmentsMap[it.keyId]?.length ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {attachmentsMap[it.keyId].length} file{attachmentsMap[it.keyId].length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    ref={(el) => { fileInputRefs.current[it.keyId] = el; }}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = Array.from(e.target.files ?? []);
+                      if (picked.length > 0) {
+                        setAttachmentsMap((prev) => ({
+                          ...prev,
+                          [it.keyId]: [...(prev[it.keyId] ?? []), ...picked],
+                        }));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  {(attachmentsMap[it.keyId]?.length ?? 0) > 0 && (
+                    <ul className="space-y-1">
+                      {attachmentsMap[it.keyId].map((file, fidx) => (
+                        <li
+                          key={`${file.name}-${fidx}`}
+                          className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs"
+                        >
+                          <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {(file.size / 1024).toFixed(0)} KB
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAttachmentsMap((prev) => ({
+                                ...prev,
+                                [it.keyId]: prev[it.keyId].filter((_, i) => i !== fidx),
+                              }))
+                            }
+                            className="shrink-0 rounded text-muted-foreground hover:text-destructive transition-colors"
+                            aria-label={`Remove ${file.name}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             ))}
