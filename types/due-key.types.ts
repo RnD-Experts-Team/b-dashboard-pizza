@@ -37,6 +37,7 @@ export interface ApiDueKeyValue {
   key_id: number;
   store_id: string;
   user_id: number;
+  user_name?: string | null;
   entry_date: string;
   value_text: string | null;
   value_number: number | null;
@@ -109,6 +110,7 @@ export interface DueKeyValue {
   keyId: number;
   storeId: string;
   userId: number;
+  userName?: string | null;
   entryDate: string;
   valueText: string | null;
   valueNumber: number | null;
@@ -142,23 +144,6 @@ export interface DueKeysResponse {
   storeId: string;
   date: string;
   items: DueKeyItem[];
-  employees: Employee[];
-}
-
-/** Actual response shape from GET /engine/stores/{id}/due-range */
-export interface ApiDueRangeResponse {
-  store_id: string;
-  from: string;
-  to: string;
-  /** Keys are YYYY-MM-DD date strings, values are arrays of key items for that day */
-  days: Record<string, ApiDueKeyItem[]>;
-}
-
-/** Transformed frontend type for a range entry */
-export interface DueRangeEntry {
-  date: string;
-  items: DueKeyItem[];
-  /** Empty — range endpoint does not return employee records */
   employees: Employee[];
 }
 

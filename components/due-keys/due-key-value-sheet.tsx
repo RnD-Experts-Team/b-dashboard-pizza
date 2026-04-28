@@ -40,40 +40,37 @@ interface DueKeyValueSheetProps {
 
 function normalizeValueForInput(item: DueKeyItem | null): string {
   if (!item || item.value == null) return "";
+  const v = item.value;
+  if (item.dataType === "text") return v.valueText ?? "";
+  if (item.dataType === "number" || item.dataType === "decimal")
+    return v.valueNumber != null ? String(v.valueNumber) : "";
+  if (item.dataType === "boolean") return ""; // handled separately via setBooleanValue
   if (item.dataType === "json") {
     try {
-      return JSON.stringify(item.value, null, 2);
+      return v.valueJson != null ? JSON.stringify(v.valueJson, null, 2) : "";
     } catch {
       return "";
     }
   }
-  return String(item.value);
+  return "";
 }
 
 function getFilledValueDisplay(item: DueKeyItem): { label: string; display: string; raw: unknown } {
-  const v = item.value as any;
+  const v = item.value;
   if (v == null) return { label: "Value", display: "—", raw: null };
 
-  if (v?.value_text != null) return { label: "Text Value", display: String(v.value_text), raw: v.value_text };
-  if (v?.value_number != null) return { label: "Number Value", display: String(v.value_number), raw: v.value_number };
-  if (v?.value_boolean != null) return { label: "Boolean Value", display: String(v.value_boolean), raw: v.value_boolean };
-  if (v?.value_json != null) {
+  if (v.valueText != null) return { label: "Text Value", display: String(v.valueText), raw: v.valueText };
+  if (v.valueNumber != null) return { label: "Number Value", display: String(v.valueNumber), raw: v.valueNumber };
+  if (v.valueBoolean != null) return { label: "Boolean Value", display: v.valueBoolean ? "Yes" : "No", raw: v.valueBoolean };
+  if (v.valueJson != null) {
     try {
-      return { label: "JSON Value", display: JSON.stringify(v.value_json, null, 2), raw: v.value_json };
+      return { label: "JSON Value", display: JSON.stringify(v.valueJson, null, 2), raw: v.valueJson };
     } catch {
-      return { label: "JSON Value", display: String(v.value_json), raw: v.value_json };
+      return { label: "JSON Value", display: String(v.valueJson), raw: v.valueJson };
     }
   }
 
-  if (typeof item.value === "object") {
-    try {
-      return { label: "Value", display: JSON.stringify(item.value, null, 2), raw: item.value };
-    } catch {
-      return { label: "Value", display: "[Object]", raw: item.value };
-    }
-  }
-
-  return { label: "Value", display: String(item.value), raw: item.value };
+  return { label: "Value", display: "—", raw: null };
 }
 
 export function DueKeyValueSheet({
@@ -106,9 +103,11 @@ export function DueKeyValueSheet({
       item.dataType === "boolean"
         ? item.value == null
           ? "null"
-          : item.value
-            ? "true"
-            : "false"
+          : item.value.valueBoolean === null
+            ? "null"
+            : item.value.valueBoolean
+              ? "true"
+              : "false"
         : "null"
     );
     setJsonValue(item.dataType === "json" ? normalized : "");

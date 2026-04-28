@@ -191,12 +191,17 @@ interface FeedCardProps {
 
 function FeedCard({ item, employee, storeId }: FeedCardProps) {
   const v = item.value!;
-  const fullName = employee
-    ? [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ")
-    : `User #${v.userId}`;
+  const fullName =
+    v.userName
+      ? v.userName
+      : employee
+        ? [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" ")
+        : `User #${v.userId}`;
   const initials = employee
     ? getInitials(employee.firstName, employee.lastName)
-    : String(v.userId).slice(0, 2).toUpperCase();
+    : fullName.length >= 2
+      ? fullName.slice(0, 2).toUpperCase()
+      : String(v.userId).slice(0, 2).toUpperCase();
   const avatarBg = getAvatarColor(fullName);
   const displayValue = getDisplayValue(item);
   const attachments = v.attachments ?? [];
@@ -235,9 +240,9 @@ function FeedCard({ item, employee, storeId }: FeedCardProps) {
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <span className="text-[10px] text-muted-foreground/80">{formatTime(v.createdAt)}</span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 min-w-0">
                   {displayValue && (
-                    <span className="text-[10px] font-medium text-foreground/70">{displayValue}</span>
+                    <span className="text-[10px] font-medium text-foreground/70 break-all whitespace-pre-line max-w-xs">{displayValue}</span>
                   )}
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                 </div>

@@ -1,9 +1,8 @@
 import axios from "axios";
 import type {
   ApiDueKeysResponse,
-  ApiDueRangeResponse,
+  ApiDueKeyItem,
   DueKeysResponse,
-  DueRangeEntry,
   DueKeyItem,
   DueKeyValue,
   DueKeyAttachment,
@@ -53,6 +52,7 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
       keyId: v.key_id,
       storeId: v.store_id,
       userId: v.user_id,
+      userName: v.user_name ?? null,
       entryDate: v.entry_date,
       valueText: v.value_text,
       valueNumber: v.value_number,
@@ -205,36 +205,44 @@ export const dueKeysService = {
     to: string,
     signal?: AbortSignal,
     tags?: number[]
-  ): Promise<DueRangeEntry[]> {
+  ): Promise<import("@/lib/hooks/use-due-keys-feed").DayPage[]> {
     const token = getToken();
     if (!token) {
-      throw new DueKeysError("You must be logged in to view due keys.", "NOT_AUTHENTICATED");
+      throw new DueKeysError(
+        "You must be logged in to view due keys.",
+        "NOT_AUTHENTICATED"
+      );
     }
 
     try {
       const params: Record<string, unknown> = { from, to };
-      if (tags && tags.length > 0) params.tags = tags.join(",");
-
-      // The range endpoint returns:
-      // { store_id, from, to, days: { "YYYY-MM-DD": ApiDueKeyItem[] } }
-      const response = await axios.get<ApiDueRangeResponse>(
+      if (tags && tags.length > 0) {
+        params.tags = tags.join(",");
+      }
+      const response = await axios.get<{
+        store_id: string;
+        from: string;
+        to: string;
+        days: Record<string, ApiDueKeyItem[]>;
+      }>(
         `/api/data/stores/${encodeURIComponent(storeId)}/due-range`,
         {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 300_000, // 5 minutes
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          timeout: 15_000,
           signal,
           params,
         }
       );
 
-      const days = response.data?.days ?? {};
-      return Object.entries(days)
-        .map(([date, items]) => ({
-          date,
-          items: (items ?? []).map(transformDueKeyItem),
-          employees: [] as Employee[],
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+      const daysObj = response.data?.days ?? {};
+      return Object.entries(daysObj).map(([date, items]) => ({
+        date,
+        items: (items ?? []).map(transformDueKeyItem),
+        employees: [],
+      }));
     } catch (err) {
       throw handleAxiosError(err);
     }
