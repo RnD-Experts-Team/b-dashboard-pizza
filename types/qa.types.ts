@@ -63,9 +63,10 @@ export interface ApiQAAuditsResponse {
 export interface ApiQARatingsSummaryItem {
   entity_id: number;
   entity_label: string;
-  auto_fail_count: number;
-  urgent_count: number;
-  total_count: number;
+  auto_fail_count: number | string;
+  urgent_count: number | string;
+  fail_count: number | string;
+  total_count: number | string;
 }
 
 export interface ApiQARatingsSummaryResponse {
@@ -125,6 +126,7 @@ export interface QARatingsSummaryItem {
   entityLabel: string;
   autoFailCount: number;
   urgentCount: number;
+  failCount: number;
   totalCount: number;
 }
 

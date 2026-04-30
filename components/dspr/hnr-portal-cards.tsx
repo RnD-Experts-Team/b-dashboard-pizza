@@ -47,15 +47,11 @@ function getPerformanceLabel(value: number): string {
 //HNR zones and helpers 
 
 const LABOR_ZONES: SpeedZone[] = [
-  { from: 0, to: 35, color: "#EF4444" },  // red – critical low
-  { from: 35, to: 42, color: "#EAB308" }, // yellow – low
-  { from: 42, to: 50, color: "#F97316" }, // orange – below target
-  { from: 50, to: 70, color: "#22C55E" }, // green – on target
-  { from: 70, to: 77, color: "#F97316" }, // orange – above target
-  { from: 77, to: 85, color: "#EAB308" }, // yellow – high
-  { from: 85, to: 100, color: "#EF4444" }, // red – critical high
+   { from: 0, to: 60, color: "#EF4444" },
+  { from: 60, to: 70, color: "#EAB308" },
+  { from: 70, to: 90, color: "#F97316" },
+  { from: 90, to: 100, color: "#22C55E" }, // only green zone
 ];
-
 function getLaborColor(value: number): string {
   if (value <= 35) return "#EF4444";
   if (value <= 42) return "#EAB308";

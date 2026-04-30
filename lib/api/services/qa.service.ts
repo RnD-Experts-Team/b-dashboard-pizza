@@ -146,9 +146,10 @@ function transformRatingsSummaryResponse(
   return (raw.data ?? []).map((item) => ({
     entityId: item.entity_id,
     entityLabel: item.entity_label,
-    autoFailCount: item.auto_fail_count,
-    urgentCount: item.urgent_count,
-    totalCount: item.total_count,
+    autoFailCount: toNumberOr(item.auto_fail_count, 0),
+    urgentCount: toNumberOr(item.urgent_count, 0),
+    failCount: toNumberOr(item.fail_count, 0),
+    totalCount: toNumberOr(item.total_count, 0),
   }));
 }
 

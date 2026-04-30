@@ -18,6 +18,7 @@ import {
   LaborGauge,
   DsprDashboardSkeleton,
   RecentMaintenanceTable,
+  CurrentEmployeesTable,
   TopQaRatingsCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
@@ -687,7 +688,7 @@ export function DsprDashboard() {
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
-          height={220}
+          height={200}
           toolbar={false}
         />
          <HnrCard hnr={day.hnr} />
@@ -725,10 +726,18 @@ export function DsprDashboard() {
         /> 
       </div>
 
-      {/* ── Ingredients + Maintenance + QA ────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
-        {/* <RecentMaintenanceTable />
-        <TopQaRatingsCard /> */}
+      {/* ── Current Employees ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
+        <CurrentEmployeesTable
+          requirements={[
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/employees",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
+          ]}
+        />
       </div>
     </div>
   );
