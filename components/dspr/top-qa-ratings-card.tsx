@@ -265,10 +265,13 @@ export function TopQaRatingsCard({
                 <TableRow key={item.entityId} className={cn(isLoading && "opacity-60 ")}>
                   <TableCell className="text-[9px] font-medium p-0">{item.entityLabel}</TableCell>
                   <TableCell className="text-[9px] text-right py-1">
-                    <Badge className="text-[9px]" variant="secondary">{item.autoFailCount} autoFail</Badge>
+                    <Badge className="text-[9px]" variant="destructive">{item.autoFailCount} autoFail</Badge>
                   </TableCell>
                   <TableCell className="text-[9px] text-right p-0">
                     <Badge className="text-[9px]" variant="outline">{item.urgentCount} urgent</Badge>
+                  </TableCell>
+                  <TableCell className="text-[9px] text-right p-0">
+                    <Badge className="text-[9px]" variant="secondary">{item.failCount} fail</Badge>
                   </TableCell>
                   {/* <TableCell className="text-[11px] text-right">
                     <Badge>{item.totalCount} total</Badge>
@@ -289,12 +292,13 @@ export function TopQaRatingsCard({
                 <p className="text-[11px] font-medium line-clamp-2">{item.entityLabel}</p>
                 <Badge variant="outline" className="shrink-0">#{index + 1}</Badge>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px]">
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                 <Badge variant="secondary" className="gap-0.5">
                   <AlertCircle className="h-2.5 w-2.5" />
                   Auto Fail: {item.autoFailCount}
                 </Badge>
                 <Badge variant="outline">Urgent: {item.urgentCount}</Badge>
+                <Badge variant="destructive">Fail: {item.failCount}</Badge>
                 <Badge>Total: {item.totalCount}</Badge>
               </div>
             </div>

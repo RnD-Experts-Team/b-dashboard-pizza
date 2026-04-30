@@ -152,8 +152,8 @@ export function useEmployeeDebriefDetail(
 export interface CreateDebriefPayload {
   date: string;
   employee_id: number;
-  employee_name: string;
   note: string;
+  attachments?: File[] | null;
 }
 
 interface UseCreateEmployeeDebriefReturn {

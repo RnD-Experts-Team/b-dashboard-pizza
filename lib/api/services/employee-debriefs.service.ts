@@ -3,9 +3,11 @@ import type {
   ApiEmployeeObject,
   ApiEmployeeDebriefItem,
   ApiEmployeeDebriefDetail,
+  ApiDebriefAttachment,
   ApiEmployeeDebriefListResponse,
   EmployeeDebriefItem,
   EmployeeDebriefDetail,
+  DebriefAttachment,
 } from "@/types/employee-debrief.types";
 
 export type EmployeeDebriefErrorCode =
@@ -51,17 +53,32 @@ function resolveEmployeeName(
   return null;
 }
 
+function transformDebriefAttachment(raw: ApiDebriefAttachment): DebriefAttachment {
+  return {
+    id: raw.id,
+    filePath: raw.file_path ?? null,
+    originalName: raw.original_name ?? null,
+    mimeType: raw.mime_type ?? null,
+    size: raw.size ?? null,
+    attachmentUrl: raw.attachment_url ?? null,
+  };
+}
+
 function transformItem(raw: ApiEmployeeDebriefItem): EmployeeDebriefItem {
   const resolvedId = raw.employee?.id ?? raw.employee_id ?? null;
   return {
     id: raw.id,
+    userId: raw.user_id ?? null,
     employeeId: resolvedId,
     employeeName: resolveEmployeeName(raw.employee, raw.employee_name, resolvedId),
+    authorId: raw.author?.id ?? null,
+    authorName: raw.author?.name ?? null,
     storeId: raw.store_id ?? null,
     date: raw.date ?? null,
     createdAt: raw.created_at ?? null,
     updatedAt: raw.updated_at ?? null,
     notes: raw.note ?? raw.notes ?? null,
+    attachments: (raw.attachments ?? []).map(transformDebriefAttachment),
   };
 }
 
@@ -69,8 +86,11 @@ function transformDetail(raw: ApiEmployeeDebriefDetail): EmployeeDebriefDetail {
   const resolvedId = raw.employee?.id ?? raw.employee_id ?? null;
   return {
     id: raw.id,
+    userId: raw.user_id ?? null,
     employeeId: resolvedId,
     employeeName: resolveEmployeeName(raw.employee, raw.employee_name, resolvedId),
+    authorId: raw.author?.id ?? null,
+    authorName: raw.author?.name ?? null,
     storeId: raw.store_id ?? null,
     date: raw.date ?? null,
     createdAt: raw.created_at ?? null,
@@ -78,6 +98,7 @@ function transformDetail(raw: ApiEmployeeDebriefDetail): EmployeeDebriefDetail {
     notes: raw.note ?? raw.notes ?? null,
     content: raw.content ?? null,
     summary: raw.summary ?? null,
+    attachments: (raw.attachments ?? []).map(transformDebriefAttachment),
   };
 }
 
@@ -143,7 +164,7 @@ function handleAxiosError(err: unknown): never {
 }
 
 export const employeeDebriefService = {
-  async list(storeId: string, signal?: AbortSignal): Promise<EmployeeDebriefItem[]> {
+  async list(storeId: string, signal?: AbortSignal, date?: string): Promise<EmployeeDebriefItem[]> {
     const token = getToken();
     if (!token) {
       throw new EmployeeDebriefError(
@@ -157,6 +178,7 @@ export const employeeDebriefService = {
         `/api/data/stores/${encodeURIComponent(storeId)}/employee-debriefs`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          params: date ? { date } : undefined,
           timeout: 15_000,
           signal,
         }
@@ -195,9 +217,46 @@ export const employeeDebriefService = {
     }
   },
 
+  async listRange(
+    storeId: string,
+    from: string,
+    to: string,
+    signal?: AbortSignal
+  ): Promise<Record<string, EmployeeDebriefItem[]>> {
+    const token = getToken();
+    if (!token) {
+      throw new EmployeeDebriefError(
+        "You must be logged in to view employee debriefs.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    try {
+      const response = await axios.get(
+        `/api/data/stores/${encodeURIComponent(storeId)}/employee-debriefs/range`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          params: { from, to },
+          timeout: 15_000,
+          signal,
+        }
+      );
+      // Response: { store_id, from, to, days: { "YYYY-MM-DD": [...items] } }
+      const raw = response.data as { days?: Record<string, ApiEmployeeDebriefItem[]> };
+      const days = raw.days ?? {};
+      const result: Record<string, EmployeeDebriefItem[]> = {};
+      for (const [day, items] of Object.entries(days)) {
+        result[day] = (items ?? []).map(transformItem);
+      }
+      return result;
+    } catch (err) {
+      throw handleAxiosError(err);
+    }
+  },
+
   async create(
     storeId: string,
-    payload: { date: string; employee_id: number; employee_name: string; note: string }
+    payload: { date: string; employee_id: number; note: string; attachments?: File[] | null }
   ): Promise<EmployeeDebriefItem> {
     const token = getToken();
     if (!token) {
@@ -208,13 +267,28 @@ export const employeeDebriefService = {
     }
 
     try {
+      let body: FormData | string;
+      let headers: Record<string, string>;
+
+      if (payload.attachments && payload.attachments.length > 0) {
+        const fd = new FormData();
+        fd.append("date", payload.date);
+        fd.append("employee_id", String(payload.employee_id));
+        fd.append("note", payload.note);
+        for (const file of payload.attachments) {
+          fd.append("attachments[]", file);
+        }
+        body = fd;
+        headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+      } else {
+        body = JSON.stringify({ date: payload.date, employee_id: payload.employee_id, note: payload.note });
+        headers = { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" };
+      }
+
       const response = await axios.post<ApiEmployeeDebriefItem>(
         `/api/data/stores/${encodeURIComponent(storeId)}/employee-debriefs`,
-        payload,
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-        }
+        body,
+        { headers, timeout: 15_000 }
       );
       return transformItem(response.data);
     } catch (err) {

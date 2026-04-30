@@ -9,5 +9,6 @@ export { LaborGauge } from "./labor-gauge";
 export { DsprDashboardSkeleton } from "./dspr-skeleton";
 export { DsprDashboard } from "./dspr-dashboard";
 export { RecentMaintenanceTable } from "./recent-maintenance-table";
+export { CurrentEmployeesTable } from "./current-employees-table";
 export { TopQaRatingsCard } from "./top-qa-ratings-card";
 export { StoreScoreCard } from "./store-score-card";

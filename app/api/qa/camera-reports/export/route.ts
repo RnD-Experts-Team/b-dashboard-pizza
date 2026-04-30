@@ -111,6 +111,7 @@ const ALLOWED_PARAMS = [
   "date_from",
   "date_to",
   "rating_id",
+  "custom_report_id",
   "date_range_type",
 ] as const;
 
@@ -135,7 +136,7 @@ export async function GET(request: NextRequest) {
   for (const param of ALLOWED_PARAMS) {
     const value = searchParams.get(param);
     if (value !== null && value !== "") {
-      if (["store_id", "group", "rating_id"].includes(param)) {
+      if (["store_id", "group", "rating_id", "custom_report_id"].includes(param)) {
         const num = Number(value);
         if (!Number.isFinite(num) || num < 1 || !Number.isInteger(num)) {
           return errorResponse(

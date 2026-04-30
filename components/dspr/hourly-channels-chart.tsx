@@ -72,30 +72,47 @@ export function HourlyChannelsChart({
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
-  const { series, categories } = useMemo(() => {
-    // Sort by hour
-    const sorted = [...hourlyData].sort((a, b) => a.hour - b.hour);
+ const { series, categories, channelHasData } = useMemo(() => {
+  // Sort by hour
+  const sorted = [...hourlyData].sort((a, b) => a.hour - b.hour);
 
-    // Categories = formatted hours ("10 AM", "11 AM", ... "11 PM")
-    const cats = sorted.map((h) => {
-      const hour = h.hour;
-      if (hour === 0) return "12 AM";
-      if (hour < 12) return `${hour} AM`;
-      if (hour === 12) return "12 PM";
-      return `${hour - 12} PM`;
-    });
+  // Categories = formatted hours
+  const cats = sorted.map((h) => {
+    const hour = h.hour;
+    if (hour === 0) return "12 AM";
+    if (hour < 12) return `${hour} AM`;
+    if (hour === 12) return "12 PM";
+    return `${hour - 12} PM`;
+  });
 
-    // Build one series per channel
-    const s = CHANNEL_KEYS.map(({ key, label }) => ({
-      name: label,
-      data: sorted.map((h) => parseFloat(String(h[key])) || 0),
-    }));
+  const hasUsableValue = (value: unknown) => {
+    if (value === null || value === undefined || value === "") return false;
 
-    // Royalty obligation totals per hour (for tooltip)
-    const royalty = sorted.map((h) => parseFloat(h.royalty_obligation) || 0);
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue !== 0;
+  };
 
-    return { series: s, categories: cats, royaltyTotals: royalty };
-  }, [hourlyData]);
+  // Tracks whether each channel has at least one non-zero value
+  const hasDataByChannel = CHANNEL_KEYS.reduce<Record<string, boolean>>(
+    (acc, { key, label }) => {
+      acc[label] = sorted.some((h) => hasUsableValue(h[key]));
+      return acc;
+    },
+    {}
+  );
+
+  // Build one series per channel
+  const s = CHANNEL_KEYS.map(({ key, label }) => ({
+    name: label,
+    data: sorted.map((h) => Number(h[key]) || 0),
+  }));
+
+  return {
+    series: s,
+    categories: cats,
+    channelHasData: hasDataByChannel,
+  };
+}, [hourlyData]);
 
   const baseColors = colors || CHANNEL_KEYS.map((c) => c.color);
 
@@ -218,11 +235,21 @@ export function HourlyChannelsChart({
                 )}
                 style={isHidden ? undefined : { borderColor: color, color }}
               >
-                <span
-                  className="inline-block h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: isHidden ? "#71717a" : color }}
-                />
-                {label}
+                {channelHasData[label] ? (
+  <span
+    className="inline-block h-2 w-2 shrink-0 rounded-full"
+    style={{ backgroundColor: isHidden ? "#71717a" : color }}
+  />
+) : (
+  <span
+    title={`No data for ${label}`}
+    className="text-[10px] leading-none text-red-500"
+  >
+    !
+  </span>
+)}
+
+{label}
               </button>
             );
           })}

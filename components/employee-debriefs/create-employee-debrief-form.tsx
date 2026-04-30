@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, ChevronDown, Clock, Eraser, Loader2, Send, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock, Eraser, FileImage, Loader2, Paperclip, Send, Trash2, X } from "lucide-react";
 import type { CreateDebriefPayload } from "@/lib/hooks/use-employee-debriefs";
 import type { Employee } from "@/types/due-key.types";
 
@@ -98,6 +98,10 @@ export function CreateEmployeeDebriefForm({
   const [empOpen, setEmpOpen] = useState(false);
   const [empSearch, setEmpSearch] = useState("");
 
+  // Attachments
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -148,6 +152,7 @@ export function CreateEmployeeDebriefForm({
     setEmpSearch("");
     setNote("");
     setDate(formatTodayDate());
+    setAttachments([]);
     clearDraft();
     onClearError();
   };
@@ -159,8 +164,8 @@ export function CreateEmployeeDebriefForm({
     const success = await onSubmit({
       date: date.trim(),
       employee_id: selectedEmployeeId,
-      employee_name: selectedDisplayName.trim(),
       note: note.trim(),
+      attachments: attachments.length > 0 ? attachments : null,
     });
 
     if (success) {
@@ -169,6 +174,7 @@ export function CreateEmployeeDebriefForm({
       setEmpSearch("");
       setNote("");
       setDate(formatTodayDate());
+      setAttachments([]);
       clearDraft();
       setSuccessFlash(true);
       if (flashTimer.current) clearTimeout(flashTimer.current);
@@ -332,6 +338,65 @@ export function CreateEmployeeDebriefForm({
             <p className={cn("text-right text-[11px] tabular-nums font-medium", note.length > MAX_NOTE * 0.8 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
               {note.length} / {MAX_NOTE}
             </p>
+          </div>
+
+          {/* Attachments */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-medium">Attachments</Label>
+              {attachments.length > 0 && (
+                <span className="text-[11px] text-muted-foreground">{attachments.length} file{attachments.length > 1 ? "s" : ""}</span>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                setAttachments((prev) => {
+                  const existing = new Set(prev.map((f) => f.name + f.size));
+                  return [...prev, ...files.filter((f) => !existing.has(f.name + f.size))];
+                });
+                e.target.value = "";
+              }}
+            />
+            {attachments.length > 0 && (
+              <ul className="space-y-1">
+                {attachments.map((file, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center gap-2 rounded-md border border-gray-200/60 dark:border-gray-700/60 bg-muted/30 px-2 py-1.5 text-xs"
+                  >
+                    {file.type.startsWith("image/") ? (
+                      <FileImage className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                    ) : (
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="flex-1 truncate text-foreground/80">{file.name}</span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                      onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full h-8 gap-1.5 border-dashed border-gray-200/60 dark:border-gray-700/60 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              Attach files
+            </Button>
           </div>
 
           {/* Error banner */}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Paperclip, X } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,40 +40,37 @@ interface DueKeyValueSheetProps {
 
 function normalizeValueForInput(item: DueKeyItem | null): string {
   if (!item || item.value == null) return "";
+  const v = item.value;
+  if (item.dataType === "text") return v.valueText ?? "";
+  if (item.dataType === "number" || item.dataType === "decimal")
+    return v.valueNumber != null ? String(v.valueNumber) : "";
+  if (item.dataType === "boolean") return ""; // handled separately via setBooleanValue
   if (item.dataType === "json") {
     try {
-      return JSON.stringify(item.value, null, 2);
+      return v.valueJson != null ? JSON.stringify(v.valueJson, null, 2) : "";
     } catch {
       return "";
     }
   }
-  return String(item.value);
+  return "";
 }
 
 function getFilledValueDisplay(item: DueKeyItem): { label: string; display: string; raw: unknown } {
-  const v = item.value as any;
+  const v = item.value;
   if (v == null) return { label: "Value", display: "—", raw: null };
 
-  if (v?.value_text != null) return { label: "Text Value", display: String(v.value_text), raw: v.value_text };
-  if (v?.value_number != null) return { label: "Number Value", display: String(v.value_number), raw: v.value_number };
-  if (v?.value_boolean != null) return { label: "Boolean Value", display: String(v.value_boolean), raw: v.value_boolean };
-  if (v?.value_json != null) {
+  if (v.valueText != null) return { label: "Text Value", display: String(v.valueText), raw: v.valueText };
+  if (v.valueNumber != null) return { label: "Number Value", display: String(v.valueNumber), raw: v.valueNumber };
+  if (v.valueBoolean != null) return { label: "Boolean Value", display: v.valueBoolean ? "Yes" : "No", raw: v.valueBoolean };
+  if (v.valueJson != null) {
     try {
-      return { label: "JSON Value", display: JSON.stringify(v.value_json, null, 2), raw: v.value_json };
+      return { label: "JSON Value", display: JSON.stringify(v.valueJson, null, 2), raw: v.valueJson };
     } catch {
-      return { label: "JSON Value", display: String(v.value_json), raw: v.value_json };
+      return { label: "JSON Value", display: String(v.valueJson), raw: v.valueJson };
     }
   }
 
-  if (typeof item.value === "object") {
-    try {
-      return { label: "Value", display: JSON.stringify(item.value, null, 2), raw: item.value };
-    } catch {
-      return { label: "Value", display: "[Object]", raw: item.value };
-    }
-  }
-
-  return { label: "Value", display: String(item.value), raw: item.value };
+  return { label: "Value", display: "—", raw: null };
 }
 
 export function DueKeyValueSheet({
@@ -91,6 +89,8 @@ export function DueKeyValueSheet({
   const [jsonValue, setJsonValue] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!item) return;
@@ -103,14 +103,17 @@ export function DueKeyValueSheet({
       item.dataType === "boolean"
         ? item.value == null
           ? "null"
-          : item.value
-            ? "true"
-            : "false"
+          : item.value.valueBoolean === null
+            ? "null"
+            : item.value.valueBoolean
+              ? "true"
+              : "false"
         : "null"
     );
     setJsonValue(item.dataType === "json" ? normalized : "");
     setJsonError(null);
     setNote("");
+    setAttachments([]);
   }, [item]);
 
   const payload = useMemo<DueKeyValuePayload | null>(() => {
@@ -202,7 +205,10 @@ export function DueKeyValueSheet({
     }
 
     if (!payload) return;
-    await onSubmit({ ...payload, note: note.trim() || null }, submitMode);
+    await onSubmit(
+      { ...payload, note: note.trim() || null, attachments: attachments.length > 0 ? attachments : null },
+      submitMode
+    );
   };
 
   return (
@@ -233,7 +239,8 @@ export function DueKeyValueSheet({
               {(() => {
                 const { label, display } = getFilledValueDisplay(item);
                 const isJson = item.dataType === "json" || display.startsWith("{") || display.startsWith("[");
-                const note = (item.value as any)?.note;
+                const storedNote = (item.value as unknown as Record<string, unknown>)?.note as string | undefined;
+                const storedAttachments = (item.value as unknown as Record<string, unknown>)?.attachments as unknown[] | undefined;
                 return (
                   <>
                     <div className="space-y-2">
@@ -249,12 +256,42 @@ export function DueKeyValueSheet({
                       )}
                     </div>
 
-                    {note ? (
+                    {storedNote ? (
                       <div className="space-y-2">
                         <Label>Note</Label>
                         <div className="rounded-md border bg-muted px-3 py-2 text-sm whitespace-pre-wrap break-all">
-                          {note}
+                          {storedNote}
                         </div>
+                      </div>
+                    ) : null}
+
+                    {storedAttachments && storedAttachments.length > 0 ? (
+                      <div className="space-y-2">
+                        <Label>Attachments</Label>
+                        <ul className="space-y-1">
+                          {storedAttachments.map((att, idx) => {
+                            const a = att as Record<string, unknown>;
+                            const name = String(a?.name ?? a?.file_name ?? `Attachment ${idx + 1}`);
+                            const url = a?.url ?? a?.path;
+                            return (
+                              <li key={idx} className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
+                                <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                {url ? (
+                                  <a
+                                    href={String(url)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-1 truncate text-primary hover:underline"
+                                  >
+                                    {name}
+                                  </a>
+                                ) : (
+                                  <span className="flex-1 truncate">{name}</span>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
                     ) : null}
                   </>
@@ -341,7 +378,7 @@ export function DueKeyValueSheet({
               <div className="space-y-2">
                 <Label htmlFor="due-key-note">
                   Note{" "}
-                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  <span className="text-xs font-normal text-muted-foreground">(optional, max 2000)</span>
                 </Label>
                 <Textarea
                   id="due-key-note"
@@ -353,6 +390,71 @@ export function DueKeyValueSheet({
                 />
                 {note.length > 0 && (
                   <p className="text-right text-xs text-muted-foreground">{note.length}/2000</p>
+                )}
+              </div>
+
+              {/* Attachments */}
+              <div className="space-y-2">
+                <Label>
+                  Attachments{" "}
+                  <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Add files
+                  </Button>
+                  {attachments.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {attachments.length} file{attachments.length !== 1 ? "s" : ""} selected
+                    </span>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    if (picked.length > 0) {
+                      setAttachments((prev) => [...prev, ...picked]);
+                    }
+                    // reset so the same file can be re-added after removal
+                    e.target.value = "";
+                  }}
+                />
+                {attachments.length > 0 && (
+                  <ul className="space-y-1">
+                    {attachments.map((file, idx) => (
+                      <li
+                        key={`${file.name}-${idx}`}
+                        className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs"
+                      >
+                        <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate">{file.name}</span>
+                        <span className="shrink-0 text-muted-foreground">
+                          {(file.size / 1024).toFixed(0)} KB
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAttachments((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          className="shrink-0 rounded text-muted-foreground hover:text-destructive transition-colors"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
 

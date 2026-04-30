@@ -156,11 +156,24 @@ export async function POST(
     });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse("INVALID_PARAM", "Invalid JSON body.", 400);
+  const contentType = request.headers.get("content-type") ?? "";
+  const isMultipart = contentType.includes("multipart/form-data");
+
+  let forwardBody: BodyInit;
+  let forwardContentType: string;
+
+  if (isMultipart) {
+    forwardBody = await request.arrayBuffer();
+    forwardContentType = contentType; // preserve boundary parameter
+  } else {
+    let parsed: unknown;
+    try {
+      parsed = await request.json();
+    } catch {
+      return errorResponse("INVALID_PARAM", "Invalid JSON body.", 400);
+    }
+    forwardBody = JSON.stringify(parsed);
+    forwardContentType = "application/json";
   }
 
   const targetUrl = `${DATA_BASE_URL}/engine/stores/${encodeURIComponent(
@@ -173,11 +186,11 @@ export async function POST(
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": forwardContentType,
           Accept: "application/json",
           Authorization: getUpstreamAuth(request),
         },
-        body: JSON.stringify(body),
+        body: forwardBody,
       },
       UPSTREAM_TIMEOUT_MS,
       MAX_RETRIES

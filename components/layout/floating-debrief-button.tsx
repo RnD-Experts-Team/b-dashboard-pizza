@@ -68,18 +68,15 @@ function parseAuthUserStores(): StoreOption[] {
 }
 
 function renderValuePreview(item: DueKeyItem): string {
-  if (item.value == null) return "—";
-  const v = item.value as Record<string, unknown>;
-  if (v?.value_text != null) return String(v.value_text);
-  if (v?.value_number != null) return String(v.value_number);
-  if (v?.value_boolean != null) return String(v.value_boolean);
-  if (v?.value_json != null) {
-    try { return JSON.stringify(v.value_json); } catch { return "[JSON]"; }
+  const v = item.value;
+  if (v == null) return "—";
+  if (v.valueText != null) return String(v.valueText);
+  if (v.valueNumber != null) return String(v.valueNumber);
+  if (v.valueBoolean != null) return String(v.valueBoolean);
+  if (v.valueJson != null) {
+    try { return JSON.stringify(v.valueJson); } catch { return "[JSON]"; }
   }
-  if (typeof item.value === "object") {
-    try { return JSON.stringify(item.value); } catch { return "[Object]"; }
-  }
-  return String(item.value);
+  return "—";
 }
 
 export function FloatingDebriefButton() {

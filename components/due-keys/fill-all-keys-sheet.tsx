@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Paperclip, X } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,12 +48,15 @@ export function FillAllKeysSheet({
   const unfilledItems = useMemo(() => items.filter((it) => !it.filled), [items]);
 
   const [values, setValues] = useState<Record<number, { text?: string; number?: string; boolean?: "null" | "true" | "false"; json?: string; note?: string }>>(() => {
-    const initial: Record<number, any> = {};
+    const initial: Record<number, { text: string; number: string; boolean: "null" | "true" | "false"; json: string; note: string }> = {};
     for (const it of items) {
       initial[it.keyId] = { text: "", number: "", boolean: "null", json: "", note: "" };
     }
     return initial;
   });
+
+  const [attachmentsMap, setAttachmentsMap] = useState<Record<number, File[]>>({});
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const [jsonErrors, setJsonErrors] = useState<Record<number, string | null>>({});
 
@@ -115,6 +119,7 @@ export function FillAllKeysSheet({
     const enrichedItems = payloadItems.map((p) => ({
       ...p,
       note: ((values[p.key_id]?.note ?? "").trim()) || null,
+      attachments: (attachmentsMap[p.key_id] ?? []).length > 0 ? attachmentsMap[p.key_id] : null,
     }));
     return { items: enrichedItems };
   };
@@ -227,6 +232,76 @@ export function FillAllKeysSheet({
                     placeholder="Add a note..."
                     className="min-h-16 resize-none"
                   />
+                </div>
+
+                {/* Attachments */}
+                <div className="mt-3 space-y-2">
+                  <Label>
+                    Attachments{" "}
+                    <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => fileInputRefs.current[it.keyId]?.click()}
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      Add files
+                    </Button>
+                    {(attachmentsMap[it.keyId]?.length ?? 0) > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {attachmentsMap[it.keyId].length} file{attachmentsMap[it.keyId].length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    ref={(el) => { fileInputRefs.current[it.keyId] = el; }}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const picked = Array.from(e.target.files ?? []);
+                      if (picked.length > 0) {
+                        setAttachmentsMap((prev) => ({
+                          ...prev,
+                          [it.keyId]: [...(prev[it.keyId] ?? []), ...picked],
+                        }));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                  {(attachmentsMap[it.keyId]?.length ?? 0) > 0 && (
+                    <ul className="space-y-1">
+                      {attachmentsMap[it.keyId].map((file, fidx) => (
+                        <li
+                          key={`${file.name}-${fidx}`}
+                          className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs"
+                        >
+                          <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="flex-1 truncate">{file.name}</span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {(file.size / 1024).toFixed(0)} KB
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAttachmentsMap((prev) => ({
+                                ...prev,
+                                [it.keyId]: prev[it.keyId].filter((_, i) => i !== fidx),
+                              }))
+                            }
+                            className="shrink-0 rounded text-muted-foreground hover:text-destructive transition-colors"
+                            aria-label={`Remove ${file.name}`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             ))}

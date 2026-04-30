@@ -104,7 +104,7 @@ async function handleUpstreamError(response: Response) {
     return errorResponse("FORBIDDEN", "You do not have permission to access this resource.", 403);
   }
   if (response.status === 404) {
-    return errorResponse("NOT_FOUND", "Due key record was not found.", 404);
+    return errorResponse("NOT_FOUND", "Due-range data was not found for this store.", 404);
   }
   if (response.status === 422) {
     let body: Record<string, unknown> = {};
@@ -113,7 +113,6 @@ async function handleUpstreamError(response: Response) {
     } catch {
       /* ignore */
     }
-
     return errorResponse(
       "VALIDATION_ERROR",
       (body?.message as string) || "Validation failed.",
@@ -135,71 +134,67 @@ function isValidDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date);
 }
 
-export async function POST(
+export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ storeId: string; date: string }> }
+  { params }: { params: Promise<{ storeId: string }> }
 ) {
   const authError = requireAuthorization(request);
   if (authError) return authError;
 
-  const { storeId, date } = await params;
+  const { storeId } = await params;
 
   if (!storeId?.trim()) {
-    return errorResponse("INVALID_PARAM", "storeId is required.", 400, {
-      param: "storeId",
+    return errorResponse("INVALID_PARAM", "storeId is required.", 400, { param: "storeId" });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
+  const tagsParam = searchParams.get("tags");
+  const paginatedParam = searchParams.get("paginated");
+  const pageParam = searchParams.get("page");
+  const perPageParam = searchParams.get("per_page");
+
+  if (!fromParam || !isValidDate(fromParam)) {
+    return errorResponse("INVALID_PARAM", "from must be a date in YYYY-MM-DD format.", 400, {
+      param: "from",
+    });
+  }
+  if (!toParam || !isValidDate(toParam)) {
+    return errorResponse("INVALID_PARAM", "to must be a date in YYYY-MM-DD format.", 400, {
+      param: "to",
     });
   }
 
-  if (!isValidDate(date)) {
-    return errorResponse("INVALID_PARAM", "date must be in YYYY-MM-DD format.", 400, {
-      param: "date",
-    });
-  }
+  const baseUrl = `${DATA_BASE_URL}/engine/stores/${encodeURIComponent(storeId)}/due-range`;
+  const upstreamParams = new URLSearchParams();
+  upstreamParams.set("from", fromParam);
+  upstreamParams.set("to", toParam);
+  if (tagsParam?.trim()) upstreamParams.set("tags", tagsParam.trim());
+  if (paginatedParam) upstreamParams.set("paginated", paginatedParam);
+  if (pageParam) upstreamParams.set("page", pageParam);
+  if (perPageParam) upstreamParams.set("per_page", perPageParam);
 
-  const contentType = request.headers.get("content-type") ?? "";
-  const isMultipart = contentType.includes("multipart/form-data");
-
-  let forwardBody: BodyInit;
-  let forwardContentType: string;
-
-  if (isMultipart) {
-    forwardBody = await request.arrayBuffer();
-    forwardContentType = contentType; // preserve boundary parameter
-  } else {
-    let parsed: unknown;
-    try {
-      parsed = await request.json();
-    } catch {
-      return errorResponse("INVALID_PARAM", "Invalid JSON body.", 400);
-    }
-    forwardBody = JSON.stringify(parsed);
-    forwardContentType = "application/json";
-  }
-
-  const targetUrl = `${DATA_BASE_URL}/engine/stores/${encodeURIComponent(
-    storeId
-  )}/dates/${encodeURIComponent(date)}/values`;
+  const targetUrl = `${baseUrl}?${upstreamParams.toString()}`;
 
   try {
     const response = await fetchWithRetry(
       targetUrl,
       {
-        method: "POST",
+        method: "GET",
         headers: {
-          "Content-Type": forwardContentType,
           Accept: "application/json",
           Authorization: getUpstreamAuth(request),
         },
-        body: forwardBody,
       },
       UPSTREAM_TIMEOUT_MS,
       MAX_RETRIES
     );
 
     if (response.ok) {
-      const responseBody = await response.text();
-      return new NextResponse(responseBody || JSON.stringify({ success: true }), {
-        status: response.status,
+      const body = await response.text();
+      return new NextResponse(body, {
+        status: 200,
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-store",

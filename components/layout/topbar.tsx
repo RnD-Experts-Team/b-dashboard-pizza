@@ -5,11 +5,11 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Menu, PanelLeft, Search, Megaphone } from "lucide-react";
 import { useUIStore } from "@/lib/store/ui.store";
-import { useAnnouncementStore } from "@/lib/store/announcement.store";
+// import { useAnnouncementStore } from "@/lib/store/announcement.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
-import { NotificationBell } from "@/components/notifications/notification-bell";
+// import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Breadcrumbs } from "./breadcrumbs";
 import { Feature } from "@/lib/config";
 
@@ -92,9 +92,9 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
       </Feature> */}
 
       {/* Notifications */}
-      <div className="flex items-center gap-1">
+      {/* <div className="flex items-center gap-1">
         <NotificationBell />
-      </div>
+      </div> */}
 
       {/* Theme toggle - conditionally rendered */}
       <Feature name="darkMode">

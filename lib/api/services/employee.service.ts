@@ -542,7 +542,7 @@ export const employeeService = {
     const { data } = await axios.post(
       `/api/v1/stores/${encodeURIComponent(storeId)}/employees`,
       fd,
-      { headers: buildHeaders(), timeout: 15_000 },
+      { headers: buildHeaders(), timeout: 300_000 },
     );
     return data;
   },
@@ -667,7 +667,7 @@ export const employeeService = {
     const { data } = await axios.put(
       `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       fd,
-      { headers: buildHeaders(), timeout: 15_000 },
+      { headers: buildHeaders(), timeout: 300_000 },
     );
     return data;
   },

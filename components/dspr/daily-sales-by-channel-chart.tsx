@@ -35,7 +35,7 @@ interface DailySalesByChannelChartProps {
 
 export function DailySalesByChannelChart({
   totalSales,
-  height = 300,
+  height = 310,
   title = "Daily Sales by Channel",
   toolbar = true,
   className,
@@ -47,6 +47,7 @@ export function DailySalesByChannelChart({
   const { labels, series, colors } = useMemo(() => {
     const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
       const value = Number(totalSales?.[key] ?? 0);
+
       return {
         label,
         color,
@@ -59,6 +60,19 @@ export function DailySalesByChannelChart({
       colors: mapped.map((entry) => entry.color),
       series: mapped.map((entry) => entry.value),
     };
+  }, [totalSales]);
+
+  const total = useMemo(() => {
+    return series.reduce((sum, value) => sum + value, 0);
+  }, [series]);
+
+  const percentages = useMemo(() => {
+    return series.map((value) => (total > 0 ? (value / total) * 100 : 0));
+  }, [series, total]);
+
+  const royaltyValue = useMemo(() => {
+    const raw = Number(totalSales?.royalty_obligation ?? 0);
+    return Number.isFinite(raw) ? raw : 0;
   }, [totalSales]);
 
   const options: ApexOptions = useMemo(
@@ -81,12 +95,7 @@ export function DailySalesByChannelChart({
       colors,
       legend: {
         show: false,
-        position: "bottom",
-        horizontalAlign: "left",
-        fontSize: "8px",
-        labels: { colors: isDark ? "#a1a1aa" : "#71717a" },
       },
-      // Disable hover tooltip per UX request
       tooltip: {
         enabled: false,
       },
@@ -96,44 +105,71 @@ export function DailySalesByChannelChart({
       },
       dataLabels: {
         enabled: true,
-        formatter: (value: number) => `${value.toFixed(1)}%`,
+        formatter: (value: number) => {
+          // Hide tiny slice labels to keep the chart clean
+          if (value < 5) return "";
+
+          // Keep only percentage inside slices.
+          // The channel label appears in the center on hover and in the legend below.
+          return `${value.toFixed(1)}%`;
+        },
         style: {
           fontSize: "10px",
-          fontWeight: 400,
+          fontWeight: 600,
+          colors: ["#ffffff"],
+        },
+        dropShadow: {
+          enabled: true,
+          top: 1,
+          left: 1,
+          blur: 1,
+          opacity: 0.45,
         },
       },
       plotOptions: {
         pie: {
-            donut: {
-              size: "58%",
-              labels: {
+          expandOnClick: false,
+          dataLabels: {
+            offset: 0,
+            minAngleToShowLabel: 15,
+          },
+          donut: {
+            size: "60%",
+            labels: {
+              show: true,
+              name: {
                 show: true,
-                name: {
-                  show: true,
-                  fontSize: "7px",
-                  color: isDark ? "#d4d4d8" : "#52525b",
-                  offsetY: -12,
-                },
-                value: {
-                  show: true,
-                  formatter: (val: any) =>
-                    `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                  fontSize: "12px",
-                  color: isDark ? "#f4f4f5" : "#18181b",
-                  offsetY: -8,
-                },
-                total: {
-                  show: true,
-                  label: "Total",
-                  fontSize: "12px",
-                  color: isDark ? "#f4f4f5" : "#18181b",
-                  formatter: () =>
-                    `$${series
-                      .reduce((sum, value) => sum + value, 0)
-                      .toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                },
+                fontSize: "10px",
+                fontWeight: 500,
+                color: isDark ? "#d4d4d8" : "#52525b",
+                offsetY: -8,
+              },
+              value: {
+                show: true,
+                formatter: (val: any) =>
+                  `$${Number(val).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })}`,
+                fontSize: "12px",
+                fontWeight: 700,
+                color: isDark ? "#f4f4f5" : "#18181b",
+                offsetY: -4,
+              },
+              total: {
+                show: true,
+                label: "Total",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: isDark ? "#f4f4f5" : "#18181b",
+                formatter: () =>
+                  `$${series
+                    .reduce((sum, value) => sum + value, 0)
+                    .toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}`,
               },
             },
+          },
         },
       },
       noData: {
@@ -143,28 +179,50 @@ export function DailySalesByChannelChart({
     [height, toolbar, labels, colors, series, isDark]
   );
 
-  const royaltyValue = useMemo(() => {
-    const raw = Number(totalSales?.royalty_obligation ?? 0);
-    return Number.isFinite(raw) ? raw : 0;
-  }, [totalSales]);
-
   return (
-    <Card className={cn("daily-sales-by-channel-chart group hover:shadow-md transition-shadow py-1.5 gap-0  bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
+    <Card
+      className={cn(
+        "daily-sales-by-channel-chart group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20",
+        className
+      )}
+    >
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">
-            <svg className="h-3 w-3 text-violet-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12A9 9 0 1 1 12 3"/><path d="M21 3v9h-9"/></svg>
+            <svg
+              className="h-3 w-3 text-violet-500"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 12A9 9 0 1 1 12 3" />
+              <path d="M21 3v9h-9" />
+            </svg>
           </div>
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-3 pb-0">
+
+      <CardContent className="px-3 pb-2">
         <div className="relative">
-          <ReactApexChart options={options} series={series} type="donut" height={height} />
-          {/* Royalty overlay — sits below the total label in the donut center, hidden while hovering a slice */}
+          <ReactApexChart
+            options={options}
+            series={series}
+            type="donut"
+            height={height}
+          />
+
+          {/* In Store overlay — hidden while hovering a slice so the hovered slice label/value can show in the center */}
           <div
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
-            style={{ visibility: isSliceHovered ? "hidden" : "visible", paddingTop: `${height * 0.26}px` }}
+            style={{
+              visibility: isSliceHovered ? "hidden" : "visible",
+              paddingTop: `${height * 0.26}px`,
+            }}
           >
             <span
               className="block text-center leading-tight text-muted-foreground"
@@ -176,12 +234,40 @@ export function DailySalesByChannelChart({
               className="block text-center font-semibold leading-tight text-foreground"
               style={{ fontSize: "10px" }}
             >
-              {`$${royaltyValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+              {`$${royaltyValue.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}`}
             </span>
           </div>
         </div>
+
+        {/* Clean custom legend */}
+        {labels.length > 0 && (
+          <div className="mt-1 flex flex-wrap justify-center gap-x-3 gap-y-1 px-2">
+            {labels.map((label, index) => (
+              <div
+                key={label}
+                className="flex items-center gap-1 text-[9px] text-muted-foreground"
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: colors[index] }}
+                />
+                <span>{label}</span>
+                <span className="font-semibold text-foreground">
+                  {`${percentages[index].toFixed(1)}%`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
+
       <style jsx global>{`
+        .daily-sales-by-channel-chart .apexcharts-datalabel {
+          fill: #ffffff !important;
+        }
+
         .daily-sales-by-channel-chart .apexcharts-datalabel-label,
         .daily-sales-by-channel-chart .apexcharts-datalabel-value,
         .daily-sales-by-channel-chart .apexcharts-datalabel-total {
