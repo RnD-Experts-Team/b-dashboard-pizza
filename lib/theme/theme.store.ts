@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Theme, ThemeState } from "./types";
-import { defaultTheme, builtInThemes } from "./default-theme";
+import { defaultTheme, obsidianTheme, builtInThemes } from "./default-theme";
 import { applyTheme, resetThemeStyles, getCurrentMode } from "./apply-theme";
 import { validateTheme } from "./schema";
 
@@ -37,8 +37,8 @@ export const useThemeStore = create<ThemeStore>()(
     (set, get) => ({
       // Initial state
       themes: [...builtInThemes],
-      activeThemeId: defaultTheme.id,
-      activeTheme: defaultTheme,
+      activeThemeId: obsidianTheme.id,
+      activeTheme: obsidianTheme,
       syncPending: false,
       lastSynced: null,
 

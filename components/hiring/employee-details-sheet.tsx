@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -14,7 +14,6 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
-  User,
   MapPin,
   Phone,
   Wallet,
@@ -25,7 +24,15 @@ import {
   Building2,
   Briefcase,
   Heart,
+  Shirt,
+  Calendar,
+  Mail,
+  User,
+  Paperclip,
 } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
@@ -51,30 +58,35 @@ interface EmployeeDetailsSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm wrap-break-word">{value ?? "-"}</span>
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium wrap-break-word">{value ?? "-"}</span>
     </div>
   );
 }
 
-function SectionTitle({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
+function DataCard({ icon: Icon, title, children }: { icon: React.ElementType, title: string, children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-      <Icon className="h-4 w-4 text-muted-foreground" />
-      {label}
-    </div>
+    <Card className="overflow-hidden shadow-sm border-border/50">
+      <div className="bg-muted/30 border-b border-border/50 px-4 py-2.5 flex items-center gap-2">
+        <Icon className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-semibold">{title}</h3>
+      </div>
+      <CardContent className="p-4 grid gap-3">
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 
 function SheetSkeleton() {
   return (
-    <div className="space-y-4 p-4 pt-2">
-      {Array.from({ length: 10 }).map((_, i) => (
-        <Skeleton key={i} className="h-5 w-full" />
-      ))}
+    <div className="space-y-6 p-6 pt-2">
+      <Skeleton className="h-32 w-full rounded-xl" />
+      <Skeleton className="h-24 w-full rounded-xl" />
+      <Skeleton className="h-24 w-full rounded-xl" />
     </div>
   );
 }
@@ -88,7 +100,11 @@ function toPrimaryBadge(value: unknown) {
 function formatDate(dateStr?: string | null) {
   if (!dateStr) return "-";
   try {
-    return new Date(dateStr).toLocaleDateString(undefined, {
+    const datePart = dateStr.split("T")[0] ?? dateStr;
+    const [y, m, d] = datePart.split("-").map(Number);
+    if (!y || !m || !d) return dateStr;
+    const local = new Date(y, (m as number) - 1, d);
+    return local.toLocaleDateString(undefined, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -154,435 +170,341 @@ export function EmployeeDetailsSheet({
     : "-";
 
   const currentPosition = data?.positions?.[0]?.position?.label ?? "-";
-  const currentMarital = data?.maritals?.[0]?.marital_status?.label ?? "-";
+  const currentMarital = data?.maritals?.[0]?.marital_status?.label ?? "Single";
+  const initials = [data?.first_name?.charAt(0), data?.last_name?.charAt(0)].filter(Boolean).join("").toUpperCase();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader className="pb-4">
+      <SheetContent side="right" className="flex flex-col w-full sm:max-w-xl p-0 gap-0">
+        <SheetHeader className="p-6 pb-4 border-b">
           <SheetTitle>Employee #{employeeId ?? "-"}</SheetTitle>
           <SheetDescription>Full details for the selected employee.</SheetDescription>
         </SheetHeader>
 
-        {isLoading && <SheetSkeleton />}
+        <ScrollArea className="flex-1 overflow-hidden">
+          <div className="p-6 space-y-6">
+            {isLoading && <SheetSkeleton />}
 
-        {error && (
-          <Alert variant="destructive" className="mx-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {data && (
-          <div className="space-y-6 p-4 text-sm">
-            {/* â”€â”€ Profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle icon={User} label="Profile" />
-              <div className="grid grid-cols-2 gap-3">
-                <DetailRow label="Name" value={fullName} />
-                <DetailRow label="Gender" value={data.gender ?? "-"} />
-                <DetailRow label="Employment Type" value={data.employment_type ?? "-"} />
-                <DetailRow label="Position" value={currentPosition} />
-                <DetailRow label="Marital Status" value={currentMarital} />
-                {data.ssn && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground">SSN</span>
-                    <button
-                      onClick={() => setSsnVisible(!ssnVisible)}
-                      className="text-sm text-left hover:underline cursor-pointer text-primary"
-                    >
-                      {formatSSN(data.ssn, ssnVisible)}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* â”€â”€ Obsession (personal info) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            {data.obsession && (
-              <>
-                <Separator />
-                <section className="space-y-3">
-                  <SectionTitle icon={FileText} label="Personal Info" />
-                  {data.obsession.image_url && (
-                    <div>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={data.obsession.image_url}
-                        alt="Employee photo"
-                        className="h-20 w-20 rounded-full object-cover border"
-                      />
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <DetailRow label="Birth Date" value={formatDate(data.obsession.birth_date)} />
-                    <DetailRow label="T-Shirt Size" value={data.obsession.t_shirt ?? "-"} />
-                    {/* <DetailRow label="Religion" value={data.obsession.religion ?? "-"} /> */}
-                    {/* <DetailRow label="Race" value={data.obsession.race ?? "-"} /> */}
-                    {data.obsession.notes && (
-                      <div className="col-span-2">
-                        <DetailRow label="Notes" value={data.obsession.notes} />
-                      </div>
-                    )}
-                  </div>
-                </section>
-              </>
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
 
-            <Separator />
-
-            {/* â”€â”€ Status History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={CalendarDays}
-                label={`Status History (${data.status_histories.length})`}
-              />
-              {data.status_histories.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No status history.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.status_histories.map((s, idx) => (
-                    <div key={idx} className="rounded-lg border p-3">
-                      <p className="text-sm capitalize">{s.status}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Effective: {formatDate(s.effective_date)}
-                      </p>
-                      {s.store && (
-                        <p className="text-xs text-muted-foreground">
-                          Store: {s.store.store_number}
-                        </p>
-                      )}
-                      {s.notes && (
-                        <p className="text-xs text-muted-foreground italic mt-1">{s.notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* â”€â”€ Pay History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Wallet}
-                label={`Pay History (${data.pay_histories.length})`}
-              />
-              {data.pay_histories.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No pay history.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.pay_histories.map((p, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <DetailRow label="Base Pay" value={`$${p.base_pay}`} />
-                        <DetailRow label="Performance Pay" value={`$${p.performance_pay}`} />
-                        <DetailRow
-                          label="Effective Date"
-                          value={formatDate(p.effective_date)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* â”€â”€ Contacts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Phone}
-                label={`Contacts (${data.contacts.length})`}
-              />
-              {data.contacts.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No contacts.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.contacts.map((c, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-lg border p-3 flex items-center justify-between gap-2"
-                    >
-                      <div>
-                        {c.contact_name && (
-                          <p className="text-sm font-medium">{c.contact_name}</p>
-                        )}
-                        <p className="text-sm capitalize">{c.contact_type ?? "-"}</p>
-                        <p className="text-xs text-muted-foreground">{c.contact_value ?? "-"}</p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {toPrimaryBadge(c.is_primary)}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* â”€â”€ Addresses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={MapPin}
-                label={`Addresses (${data.addresses.length})`}
-              />
-              {data.addresses.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No addresses.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.addresses.map((a, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        {a.address_name && (
-                          <span className="text-xs font-medium text-muted-foreground">
-                            {a.address_name}
-                          </span>
-                        )}
-                        <Badge variant="outline" className="text-xs ml-auto">
-                          {toPrimaryBadge(a.is_primary)}
+            {data && (
+              <>
+                {/* ID Card Style Profile */}
+                <Card className="relative overflow-hidden border-border/50 shadow-sm">
+                  {/* Decorative background header strip */}
+                  <div className="h-16 bg-muted/50 absolute inset-x-0 top-0 border-b border-border/50" />
+                  
+                  <CardContent className="p-6 pt-10 relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-5">
+                    <div className="relative shrink-0">
+                      <Avatar className="h-24 w-24 border-4 border-background shadow-sm ring-1 ring-border/50">
+                        <AvatarImage src={data.obsession?.image_url || undefined} alt={fullName} className="object-cover" />
+                        <AvatarFallback className="text-2xl font-semibold bg-primary/10 text-primary">
+                          {initials || <User className="h-10 w-10 opacity-50" />}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute -bottom-3 inset-x-0 flex justify-center">
+                        <Badge className="shadow-sm capitalize shrink-0 text-[10px] px-1.5 py-0 border-background">
+                          {data.employment_type || "W2"}
                         </Badge>
                       </div>
-                      <p className="text-sm">{a.address_1 ?? "-"}</p>
-                      {a.address_2 && (
-                        <p className="text-xs text-muted-foreground">{a.address_2}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        {[a.city, a.state, a.zip_code, a.country].filter(Boolean).join(", ")}
+                    </div>
+
+                    <div className="flex-1 space-y-1.5 text-center sm:text-left mt-2 sm:mt-0">
+                      <h2 className="text-xl font-bold tracking-tight">{fullName}</h2>
+                      <p className="font-medium text-primary text-sm flex items-center justify-center sm:justify-start gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5" />
+                        {currentPosition}
                       </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
 
-            <Separator />
-
-            {/*  Availability  */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Clock}
-                label={`Availability (${data.availability_days.length})`}
-              />
-              {data.availability_days.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No availability.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.availability_days.map((av, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm capitalize">{av.day_of_week}</p>
-                        {av.shift_type && (
-                          <Badge variant="secondary" className="text-xs">
-                            {av.shift_type}
-                          </Badge>
-                        )}
-                      </div>
-                      {av.times.length > 0 && (
-                        <div className="space-y-0.5">
-                          {av.times.map((t, ti) => (
-                            <p key={ti} className="text-xs text-muted-foreground">
-                              {t.available_from} - {t.available_to}
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/*  Financial Info  */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Wallet}
-                label={`Financial Info (${data.financial_infos.length})`}
-              />
-              {data.financial_infos.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No financial info.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.financial_infos.map((f, idx) => (
-                    <div key={idx} className="rounded-lg border p-3 space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <DetailRow label="Account Number" value={f.account_number ?? "-"} />
-                        <DetailRow label="Routing Number" value={f.routing_number ?? "-"} />
-                        <DetailRow label="Account Type" value={f.account_type ?? "-"} />
-                        <DetailRow
-                          label="Effective Date"
-                          value={formatDate(f.effective_date)}
-                        />
+                      <div className="flex justify-center sm:justify-start flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-xs text-muted-foreground select-text">
+                        <span className="flex items-center gap-1.5"><User className="w-3.5 h-3.5"/> {data.gender ?? "-"}</span>
+                        <span className="flex items-center gap-1.5"><Heart className="w-3.5 h-3.5"/> {currentMarital}</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
 
-            <Separator />
-
-            {/* â”€â”€ Positions History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Briefcase}
-                label={`Positions (${data.positions.length})`}
-              />
-              {data.positions.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No position history.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.positions.map((pos, idx) => (
-                    <div key={idx} className="rounded-lg border p-3">
-                      <p className="text-sm">{pos.position?.label ?? `Position #${pos.position_id}`}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Effective: {formatDate(pos.effective_date)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* â”€â”€ Store Assignments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Building2}
-                label={`Store Assignments (${data.stores.length})`}
-              />
-              {data.stores.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No store assignments.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.stores.map((s, idx) => (
-                    <div key={idx} className="rounded-lg border p-3">
-                      <p className="text-sm">{s.store?.store_number ?? `Store #${s.store_id}`}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Effective: {formatDate(s.effective_date)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <Separator />
-
-            {/* â”€â”€ Marital History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            <section className="space-y-3">
-              <SectionTitle
-                icon={Heart}
-                label={`Marital History (${data.maritals.length})`}
-              />
-              {data.maritals.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No marital history.</p>
-              ) : (
-                <div className="space-y-2">
-                  {data.maritals.map((m, idx) => (
-                    <div key={idx} className="rounded-lg border p-3">
-                      <p className="text-sm">
-                        {m.marital_status?.label ?? `Marital #${m.marital_id}`}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Effective: {formatDate(m.effective_date)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* â”€â”€ Employee IDs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            {data.ids.length > 0 && (
-              <>
-                <Separator />
-                <section className="space-y-3">
-                  <SectionTitle
-                    icon={IdCard}
-                    label={`Employee IDs (${data.ids.length})`}
-                  />
-                  <div className="space-y-2">
-                    {data.ids.map((eid, idx) => {
-                      const typeName =
-                        eid.id_type?.label ??
-                        (eid.id_type_id != null
-                          ? (idTypes.find((t) => t.id === eid.id_type_id)?.label ??
-                            `ID Type #${eid.id_type_id}`)
-                          : "-");
-                      return (
-                        <div
-                          key={idx}
-                          className="rounded-lg border p-3 flex items-center justify-between gap-2"
+                    {data.ssn && (
+                      <div className="sm:absolute top-4 right-4 bg-background/80 backdrop-blur rounded px-2.5 py-1.5 text-xs border border-border/50 flex flex-col items-center sm:items-end">
+                        <span className="text-[10px] font-semibold uppercase text-muted-foreground mb-0.5 tracking-wider">SSN</span>
+                        <button
+                          onClick={() => setSsnVisible(!ssnVisible)}
+                          className="font-mono hover:text-primary transition-colors cursor-pointer select-text text-sm"
                         >
-                          <div>
-                            <p className="text-sm">{typeName}</p>
-                            <p className="text-xs text-muted-foreground">{eid.id_value ?? "-"}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              </>
-            )}
+                          {formatSSN(data.ssn, ssnVisible)}
+                        </button>
+                      </div>
+                    )}
+                  </CardContent>
 
-            {/* â”€â”€ Attachments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-            {data.attachments.length > 0 && (
-              <>
-                <Separator />
-                <section className="space-y-3">
-                  <SectionTitle
-                    icon={FileText}
-                    label={`Attachments (${data.attachments.length})`}
-                  />
-                  <div className="space-y-2">
-                    {data.attachments.map((att, idx) => {
-                      const typeName =
-                        att.attachment_type?.label ??
-                        (att.type_id != null
-                          ? (attachmentTypes.find((t) => t.id === att.type_id)?.label ??
-                            `Type #${att.type_id}`)
-                          : "-");
-                      const fileUrl = att.attachment_url ?? null;
-                      const sizeLabel = formatFileSize(att.file_size);
-                      return (
-                        <div key={idx} className="rounded-lg border p-3 space-y-1">
-                          <p className="text-sm font-medium">{typeName}</p>
-                          {att.original_name && (
-                            <p className="text-xs text-muted-foreground">{att.original_name}</p>
-                          )}
-                          {sizeLabel && (
-                            <p className="text-xs text-muted-foreground">{sizeLabel}</p>
-                          )}
-                          {fileUrl && (
-                            <a
-                              href={fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs text-primary underline-offset-2 hover:underline"
-                            >
-                              Open file
-                            </a>
-                          )}
-                          {att.notes && (
-                            <p className="text-xs text-muted-foreground italic">{att.notes}</p>
-                          )}
+                  {/* Personal Markers Strip */}
+                  {(data.obsession?.t_shirt || data.obsession?.birth_date) && (
+                    <div className="bg-muted/10 border-t border-border/50 p-3 px-6 flex gap-3 flex-wrap items-center justify-center sm:justify-start">
+                      {data.obsession.birth_date && (
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground border-r border-border pr-3">
+                          <Calendar className="h-3.5 w-3.5" />
+                          Born {formatDate(data.obsession.birth_date)}
                         </div>
-                      );
-                    })}
-                  </div>
-                </section>
+                      )}
+                      {data.obsession.t_shirt && (
+                        <div className="flex items-center gap-1.5 text-xs font-medium">
+                          <Shirt className="h-3.5 w-3.5 text-primary" />
+                          Size {data.obsession.t_shirt}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+
+                {/* Sub Personal Details Card */}
+                {data.obsession?.notes && (
+                  <DataCard icon={FileText} title="Personal Notes">
+                    <p className="text-sm wrap-break-word">{data.obsession.notes}</p>
+                  </DataCard>
+                )}
+
+                {/* Contact & Location Card */}
+                <DataCard icon={Phone} title="Contact & Location">
+                  {data.contacts.length > 0 && (
+                    <div className="space-y-2">
+                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contacts</h4>
+                       <div className="grid sm:grid-cols-2 gap-2">
+                         {data.contacts.map((c, idx) => (
+                           <div key={idx} className="flex flex-col gap-1 p-2.5 rounded-md border border-border/50 bg-background">
+                              <div className="flex justify-between items-start">
+                                <span className="text-xs font-medium capitalize text-muted-foreground flex items-center gap-1.5">
+                                  {c.contact_type === "email" ? <Mail className="w-3 h-3"/> : <Phone className="w-3 h-3"/>}
+                                  {c.contact_type ?? "Contact"}
+                                </span>
+                                <Badge variant={c.is_primary ? "default" : "secondary"} className="text-[10px] px-1 py-0 h-4">
+                                  {toPrimaryBadge(c.is_primary)}
+                                </Badge>
+                              </div>
+                              <span className="text-sm font-medium select-text wrap-break-word">
+                                {c.contact_value ?? "-"}
+                              </span>
+                              {c.contact_name && <span className="text-xs text-muted-foreground">{c.contact_name}</span>}
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+                  )}
+
+                  {data.addresses.length > 0 && (
+                    <div className="space-y-2 mt-4 pt-4 border-t border-border/50">
+                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Addresses</h4>
+                       <div className="grid gap-2">
+                         {data.addresses.map((a, idx) => (
+                           <div key={idx} className="flex flex-col gap-1 p-2.5 rounded-md border border-border/50 bg-background">
+                              <div className="flex justify-between items-start mb-1">
+                                <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                  <MapPin className="w-3 h-3"/>
+                                  {a.address_name || "Address"}
+                                </span>
+                                <Badge variant={a.is_primary ? "default" : "secondary"} className="text-[10px] px-1 py-0 h-4">
+                                  {toPrimaryBadge(a.is_primary)}
+                                </Badge>
+                              </div>
+                              <span className="text-sm select-text wrap-break-word">
+                                {[a.address_1, a.address_2].filter(Boolean).join(", ")}
+                              </span>
+                              <span className="text-xs text-muted-foreground select-text wrap-break-word">
+                                {[a.city, a.state, a.zip_code, a.country].filter(Boolean).join(", ")}
+                              </span>
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+                  )}
+
+                  {data.contacts.length === 0 && data.addresses.length === 0 && (
+                     <p className="text-xs text-muted-foreground">No contact or address information available.</p>
+                  )}
+                </DataCard>
+
+                {/* Employment Details Card */}
+                <DataCard icon={Building2} title="Employment History">
+                  {data.stores.length > 0 && (
+                    <div className="space-y-2">
+                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Store Assignments</h4>
+                       {data.stores.map((s, idx) => (
+                         <div key={idx} className="flex justify-between items-center p-2 text-sm border-b border-border/50 last:border-0 pb-3">
+                           <span className="font-medium select-text">{s.store?.store_number ?? `Store #${s.store_id}`}</span>
+                           <span className="text-xs font-mono text-muted-foreground">{formatDate(s.effective_date)}</span>
+                         </div>
+                       ))}
+                    </div>
+                  )}
+
+                  {data.status_histories.length > 0 && (
+                    <div className="space-y-2 mt-2 pt-4 border-t border-border/50">
+                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status Changes</h4>
+                       {data.status_histories.map((s, idx) => (
+                         <div key={idx} className="flex justify-between items-start p-2 text-sm border-b border-border/50 last:border-0 pb-3">
+                           <div className="flex flex-col gap-0.5">
+                             <span className="font-medium capitalize">{s.status}</span>
+                             {s.store && <span className="text-xs text-muted-foreground">Store {s.store.store_number}</span>}
+                             {s.notes && <span className="text-xs text-muted-foreground italic">{s.notes}</span>}
+                           </div>
+                           <span className="text-xs font-mono text-muted-foreground">{formatDate(s.effective_date)}</span>
+                         </div>
+                       ))}
+                    </div>
+                  )}
+
+                  {data.stores.length === 0 && data.status_histories.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No employment records.</p>
+                  )}
+                </DataCard>
+
+                {/* Pay & Financial Card */}
+                <DataCard icon={Wallet} title="Pay & Financials">
+                  {data.pay_histories.length > 0 && (
+                    <div className="space-y-2">
+                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pay History</h4>
+                       <div className="grid gap-2">
+                         {data.pay_histories.map((p, idx) => (
+                           <div key={idx} className="flex justify-between items-center p-2.5 rounded-md border border-border/50 bg-muted/10">
+                              <div className="flex gap-4">
+                                <DetailItem label="Base Pay" value={`$${p.base_pay}`} />
+                                <DetailItem label="Perf. Pay" value={`$${p.performance_pay}`} />
+                              </div>
+                              <div className="text-right">
+                                <span className="block text-[10px] uppercase text-muted-foreground">Effective</span>
+                                <span className="text-xs font-mono">{formatDate(p.effective_date)}</span>
+                              </div>
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+                  )}
+
+                  {data.financial_infos.length > 0 && (
+                    <div className="space-y-2 mt-4 pt-4 border-t border-border/50">
+                       <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Direct Deposit</h4>
+                       <div className="grid gap-2">
+                         {data.financial_infos.map((f, idx) => (
+                           <div key={idx} className="p-3 rounded-md border border-border/50 bg-background space-y-2.5">
+                              <div className="flex justify-between">
+                                 <Badge variant="outline" className="text-[10px] capitalize">{f.account_type ?? "Account"}</Badge>
+                                 <span className="text-xs font-mono text-muted-foreground">Eff. {formatDate(f.effective_date)}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                 <DetailItem label="Routing Number" value={f.routing_number} />
+                                 <DetailItem label="Account Number" value={f.account_number} />
+                              </div>
+                           </div>
+                         ))}
+                       </div>
+                    </div>
+                  )}
+
+                  {data.pay_histories.length === 0 && data.financial_infos.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No financial data.</p>
+                  )}
+                </DataCard>
+
+                {/* System IDs & Availability Card */}
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <DataCard icon={IdCard} title="System IDs">
+                    {data.ids.length === 0 ? (
+                       <p className="text-xs text-muted-foreground">No IDs found.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {data.ids.map((eid, idx) => {
+                          const typeName =
+                            eid.id_type?.label ??
+                            (eid.id_type_id != null
+                              ? (idTypes.find((t) => t.id === eid.id_type_id)?.label ??
+                                `ID Type #${eid.id_type_id}`)
+                              : "ID");
+                          return (
+                            <div key={idx} className="flex justify-between items-center py-1.5 border-b border-border/50 last:border-0">
+                               <span className="text-xs font-medium text-muted-foreground">{typeName}</span>
+                               <span className="text-sm font-mono select-text">{eid.id_value ?? "-"}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </DataCard>
+
+                  <DataCard icon={Clock} title="Availability">
+                    {data.availability_days.length === 0 ? (
+                       <p className="text-xs text-muted-foreground">No availability logged.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {data.availability_days.map((av, idx) => (
+                           <div key={idx} className="flex justify-between items-start py-1.5 border-b border-border/50 last:border-0">
+                              <div className="flex flex-col gap-0.5">
+                                 <span className="text-sm font-medium capitalize">{av.day_of_week}</span>
+                                 {av.shift_type && <span className="text-[10px] text-muted-foreground uppercase">{av.shift_type}</span>}
+                              </div>
+                              <div className="text-right">
+                                {av.times.length > 0 ? (
+                                  av.times.map((t, ti) => (
+                                    <span key={ti} className="block text-xs font-mono">
+                                      {t.available_from} - {t.available_to}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Unavailable</span>
+                                )}
+                              </div>
+                           </div>
+                        ))}
+                      </div>
+                    )}
+                  </DataCard>
+                </div>
+
+                {/* Attachments Card */}
+                {data.attachments.length > 0 && (
+                  <DataCard icon={Paperclip} title="Attachments">
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {data.attachments.map((att, idx) => {
+                        const typeName =
+                          att.attachment_type?.label ??
+                          (att.type_id != null
+                            ? (attachmentTypes.find((t) => t.id === att.type_id)?.label ??
+                              `Type #${att.type_id}`)
+                            : "Document");
+                        const fileUrl = att.attachment_url ?? null;
+                        const sizeLabel = formatFileSize(att.file_size);
+                        return (
+                          <a
+                            key={idx}
+                            href={fileUrl ?? "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex flex-col gap-1 p-3 rounded-md border border-border/50 bg-background hover:bg-muted/50 transition-colors group"
+                            onClick={(e) => { if (!fileUrl) e.preventDefault(); }}
+                          >
+                            <div className="flex justify-between">
+                              <span className="text-xs font-semibold text-primary group-hover:underline flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5" />
+                                {typeName}
+                              </span>
+                              {sizeLabel && <span className="text-[10px] text-muted-foreground">{sizeLabel}</span>}
+                            </div>
+                            {att.original_name && <span className="text-xs text-muted-foreground truncate">{att.original_name}</span>}
+                            {att.notes && <span className="text-[10px] text-muted-foreground italic mt-1">{att.notes}</span>}
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </DataCard>
+                )}
               </>
             )}
+            
+            {/* Bottom spacer to ensure scrolling breathes */}
+            <div className="h-4" />
           </div>
-        )}
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   );

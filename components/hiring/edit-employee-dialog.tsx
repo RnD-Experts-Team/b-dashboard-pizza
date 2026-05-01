@@ -38,6 +38,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TimePicker } from "@/components/ui/time-picker";
+import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -783,10 +785,10 @@ export function EditEmployeeDialog({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Birth Date</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={obsession.birth_date ?? ""}
-              onChange={(e) => setObsession((prev) => ({ ...prev, birth_date: e.target.value }))}
+              onChange={(v) => setObsession((prev) => ({ ...prev, birth_date: v }))}
+              toYear={2023}
             />
           </div>
           {/* <div className="space-y-1.5">
@@ -918,12 +920,9 @@ export function EditEmployeeDialog({
                 <Label>
                   Effective Date <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={mh.effective_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setMaritalHistory, idx, "effective_date", e.target.value)
-                  }
+                  onChange={(v) => updateItem(setMaritalHistory, idx, "effective_date", v)}
                 />
               </div>
             </div>
@@ -1266,12 +1265,11 @@ export function EditEmployeeDialog({
                       <Label className="text-xs">
                         From <span className="text-destructive">*</span>
                       </Label>
-                      <Input
-                        type="time"
+                      <TimePicker
                         value={t.available_from}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const newTimes = (av.times ?? []).map((tm, ti) =>
-                            ti === tIdx ? { ...tm, available_from: e.target.value } : tm,
+                            ti === tIdx ? { ...tm, available_from: v } : tm,
                           );
                           setAvailability((prev) =>
                             prev.map((item, i) => (i === idx ? { ...item, times: newTimes } : item)),
@@ -1283,12 +1281,11 @@ export function EditEmployeeDialog({
                       <Label className="text-xs">
                         To <span className="text-destructive">*</span>
                       </Label>
-                      <Input
-                        type="time"
+                      <TimePicker
                         value={t.available_to}
-                        onChange={(e) => {
+                        onChange={(v) => {
                           const newTimes = (av.times ?? []).map((tm, ti) =>
-                            ti === tIdx ? { ...tm, available_to: e.target.value } : tm,
+                            ti === tIdx ? { ...tm, available_to: v } : tm,
                           );
                           setAvailability((prev) =>
                             prev.map((item, i) => (i === idx ? { ...item, times: newTimes } : item)),
@@ -1367,12 +1364,10 @@ export function EditEmployeeDialog({
                 <Label>
                   Effective Date <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={p.effective_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setPositions, idx, "effective_date", e.target.value)
-                  }
+                  onChange={(v) => updateItem(setPositions, idx, "effective_date", v)}
+                  fromYear={2023}
                 />
               </div>
             </div>
@@ -1442,12 +1437,9 @@ export function EditEmployeeDialog({
                 <Label>
                   Effective Date <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={ph.effective_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setPayHistory, idx, "effective_date", e.target.value)
-                  }
+                  onChange={(v) => updateItem(setPayHistory, idx, "effective_date", v)}
                 />
               </div>
             </div>
@@ -1525,12 +1517,9 @@ export function EditEmployeeDialog({
                 <Label>
                   Effective Date <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={fi.effective_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setFinancialInfo, idx, "effective_date", e.target.value)
-                  }
+                  onChange={(v) => updateItem(setFinancialInfo, idx, "effective_date", v)}
                 />
               </div>
             </div>
@@ -1651,12 +1640,9 @@ export function EditEmployeeDialog({
                 <Label>
                   Effective Date <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={sh.effective_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setStatusHistory, idx, "effective_date", e.target.value)
-                  }
+                  onChange={(v) => updateItem(setStatusHistory, idx, "effective_date", v)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1760,12 +1746,9 @@ export function EditEmployeeDialog({
                 <Label>
                   Effective Date <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  type="date"
+                <DatePicker
                   value={sa.effective_date ?? ""}
-                  onChange={(e) =>
-                    updateItem(setStoreAssignments, idx, "effective_date", e.target.value)
-                  }
+                  onChange={(v) => updateItem(setStoreAssignments, idx, "effective_date", v)}
                 />
               </div>
             </div>
@@ -1973,7 +1956,7 @@ export function EditEmployeeDialog({
                 <span className="flex items-center gap-1">
                   Personal
                   {personalTabErrors > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-white leading-none">
                       {personalTabErrors > 9 ? "9+" : personalTabErrors}
                     </span>
                   )}
@@ -1983,7 +1966,7 @@ export function EditEmployeeDialog({
                 <span className="flex items-center gap-1">
                   Availability
                   {availabilityTabErrors > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-white leading-none">
                       {availabilityTabErrors > 9 ? "9+" : availabilityTabErrors}
                     </span>
                   )}
@@ -1993,7 +1976,7 @@ export function EditEmployeeDialog({
                 <span className="flex items-center gap-1">
                   Compensation
                   {compensationTabErrors > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-white leading-none">
                       {compensationTabErrors > 9 ? "9+" : compensationTabErrors}
                     </span>
                   )}
@@ -2003,7 +1986,7 @@ export function EditEmployeeDialog({
                 <span className="flex items-center gap-1">
                   Admin
                   {adminTabErrors > 0 && (
-                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-destructive-foreground leading-none">
+                    <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-0.5 text-[10px] font-bold text-white leading-none">
                       {adminTabErrors > 9 ? "9+" : adminTabErrors}
                     </span>
                   )}
