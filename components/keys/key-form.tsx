@@ -225,41 +225,100 @@ function StoreRuleForm({
                       onChange={(e) => setStoreSearch(e.target.value)}
                       className="mb-2 h-8 text-sm"
                     />
-                    <div className="max-h-52 overflow-y-auto">
-                      <div className="space-y-1">
-                        {stores
-                          .filter((s) => {
-                            const q = storeSearch.toLowerCase();
-                            return (
-                              s.name.toLowerCase().includes(q) ||
-                              (s.storeId ?? s.id).toLowerCase().includes(q)
-                            );
-                          })
-                          .map((s) => {
-                            const displayId = s.storeId ?? s.id;
-                            const selected = rule.store_ids.includes(displayId);
-                            return (
-                              <label
-                                key={s.id}
-                                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
-                              >
+                    {(() => {
+                      const filteredStores = stores.filter((s) => {
+                        const q = storeSearch.toLowerCase();
+                        return (
+                          s.name.toLowerCase().includes(q) ||
+                          (s.storeId ?? s.id).toLowerCase().includes(q)
+                        );
+                      });
+                      const filteredIds = filteredStores.map((s) => s.storeId ?? s.id);
+                      const selectedInFiltered = filteredIds.filter((id) =>
+                        rule.store_ids.includes(id)
+                      );
+                      const allFilteredSelected =
+                        filteredStores.length > 0 &&
+                        selectedInFiltered.length === filteredStores.length;
+                      const someFilteredSelected =
+                        selectedInFiltered.length > 0 && !allFilteredSelected;
+
+                      const handleSelectAll = (checked: boolean | "indeterminate") => {
+                        if (checked === true) {
+                          const merged = Array.from(
+                            new Set([...rule.store_ids, ...filteredIds])
+                          );
+                          update({ store_ids: merged });
+                        } else {
+                          update({
+                            store_ids: rule.store_ids.filter(
+                              (id) => !filteredIds.includes(id)
+                            ),
+                          });
+                        }
+                      };
+
+                      return (
+                        <>
+                          {filteredStores.length > 0 && (
+                            <>
+                              <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent border-b border-border/50 mb-1 pb-2">
                                 <Checkbox
-                                  checked={selected}
-                                  onCheckedChange={(checked) =>
-                                    update({
-                                      store_ids: checked
-                                        ? [...rule.store_ids, displayId]
-                                        : rule.store_ids.filter((id) => id !== displayId),
-                                    })
+                                  checked={
+                                    allFilteredSelected
+                                      ? true
+                                      : someFilteredSelected
+                                      ? "indeterminate"
+                                      : false
                                   }
+                                  onCheckedChange={handleSelectAll}
                                 />
-                                <span className="flex-1 text-sm">{s.name}</span>
-                                <span className="text-xs text-muted-foreground">({displayId})</span>
+                                <span className="flex-1 text-sm font-medium">
+                                  Select all
+                                  {storeSearch
+                                    ? ` (${filteredStores.length} matching)`
+                                    : ` (${filteredStores.length})`}
+                                </span>
                               </label>
-                            );
-                          })}
-                      </div>
-                    </div>
+                            </>
+                          )}
+                          <div className="max-h-52 overflow-y-auto">
+                            <div className="space-y-1">
+                              {filteredStores.map((s) => {
+                                const displayId = s.storeId ?? s.id;
+                                const selected = rule.store_ids.includes(displayId);
+                                return (
+                                  <label
+                                    key={s.id}
+                                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-accent"
+                                  >
+                                    <Checkbox
+                                      checked={selected}
+                                      onCheckedChange={(checked) =>
+                                        update({
+                                          store_ids: checked
+                                            ? [...rule.store_ids, displayId]
+                                            : rule.store_ids.filter((id) => id !== displayId),
+                                        })
+                                      }
+                                    />
+                                    <span className="flex-1 text-sm">{s.name}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      ({displayId})
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                              {filteredStores.length === 0 && (
+                                <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+                                  No stores match your search.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                     {rule.store_ids.length > 0 && (
                       <div className="mt-2 border-t pt-2">
                         <Button
