@@ -78,6 +78,7 @@
     "exportImport": "تصدير / استيراد",
     "tags": "العلامات",
     "scheduling": "الجدولة",
+    "screenProject": "مشروع الشاشة",
     "collapse": "طي",
     "selectStore": "اختيار الفرع",
     "selectStoreDescription": "اختر فرعاً لإدارته",
@@ -133,7 +134,8 @@
     "create": "إنشاء",
     "edit": "تعديل",
     "store-details": "تفاصيل الفرع",
-    "user-details": "تفاصيل المستخدم"
+    "user-details": "تفاصيل المستخدم",
+    "screen-project": "مشروع الشاشة"
   },
   "employees": {
     "title": "الموظفون",
@@ -1675,5 +1677,15 @@
     "title": "الصفحة غير موجودة",
     "description": "عذراً، الصفحة التي تبحث عنها غير موجودة أو تم نقلها.",
     "backToDashboard": "العودة إلى لوحة التحكم"
+  },
+  "screenProject": {
+    "title": "مشروع الشاشة",
+    "description": "مراقبة الشاشات المباشرة والتواصل الصوتي",
+    "mainScreen": "الشاشة الرئيسية",
+    "sidePanel": "الشاشات الجانبية",
+    "mute": "كتم",
+    "unmute": "إلغاء الكتم",
+    "noStreams": "لا توجد بثوث نشطة",
+    "participant": "مشارك"
   }
 }

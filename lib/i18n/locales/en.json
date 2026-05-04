@@ -78,6 +78,7 @@
     "exportImport": "Export / Import",
     "tags": "Tags",
     "scheduling": "Scheduling",
+    "screenProject": "Screen Project",
     "collapse": "Collapse",
     "selectStore": "Select Store",
     "selectStoreDescription": "Choose a store to manage",
@@ -133,7 +134,8 @@
     "create": "Create",
     "edit": "Edit",
     "store-details": "Store Details",
-    "user-details": "User Details"
+    "user-details": "User Details",
+    "screen-project": "Screen Project"
   },
   "auth": {
     "login": {
@@ -1676,5 +1678,15 @@
     "title": "Page Not Found",
     "description": "Sorry, the page you are looking for doesn't exist or has been moved.",
     "backToDashboard": "Back to Dashboard"
+  },
+  "screenProject": {
+    "title": "Screen Project",
+    "description": "Live screen monitoring and voice communication",
+    "mainScreen": "Main Screen",
+    "sidePanel": "Side Screens",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "noStreams": "No active streams",
+    "participant": "Participant"
   }
 }

@@ -36,6 +36,7 @@ import {
   BarChart3,
   CalendarDays,
   Megaphone,
+  Monitor,
 } from "lucide-react";
 import {
   Dialog,
@@ -204,6 +205,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const securityMonitorEnabled = useFeature("securityMonitor");
 
   /* ---- Flat nav items ---- */
+  const screenProjectItem: NavItem = {
+    title: t("screenProject"),
+    href: `/${locale}/dashboard/screen-project`,
+    icon: Monitor,
+    // Always visible — no backend permission required
+  };
+
   const dashboardItem: NavItem = {
     title: t("dashboard"),
     href: `/${locale}/dashboard`,
@@ -676,6 +684,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* 1. Dashboard */}
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+
+          {/* 1b. Screen Project */}
+          {renderNavLink(screenProjectItem)}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (
