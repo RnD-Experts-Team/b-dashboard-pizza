@@ -1,2 +1,3 @@
 export { ScreenProjectView } from "./screen-project-view";
-export type { MockParticipant } from "./screen-tile";
+export { StationsDialog } from "./stations-dialog";
+export type { ScreenTileProps } from "./screen-tile";

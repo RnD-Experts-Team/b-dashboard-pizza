@@ -2,121 +2,104 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, Volume2, VolumeX, UserCircle2 } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ScreenTile, type MockParticipant } from "./screen-tile";
+import { ScreenTile } from "./screen-tile";
+import { StationsDialog } from "./stations-dialog";
+import { useScreenProject } from "@/lib/hooks/use-screen-project";
+import { useSelectedStoreStore } from "@/lib/store";
 
-/* ------------------------------------------------------------------ */
-/*  Mock participants — replaced with real LiveKit participants later  */
-/* ------------------------------------------------------------------ */
-const MOCK_PARTICIPANTS: MockParticipant[] = [
-  {
-    id: "p1",
-    name: "Store 01 – Front Entrance",
-    gradient: "from-violet-600 to-indigo-700",
-  },
-  {
-    id: "p2",
-    name: "Store 02 – Register",
-    gradient: "from-rose-500 to-pink-700",
-  },
-  {
-    id: "p3",
-    name: "Store 03 – Back Office",
-    gradient: "from-amber-500 to-orange-600",
-  },
-  {
-    id: "p4",
-    name: "Store 04 – Drive Thru",
-    gradient: "from-emerald-500 to-teal-700",
-  },
-  {
-    id: "p5",
-    name: "Store 05 – Kitchen",
-    gradient: "from-sky-500 to-blue-700",
-  },
-  {
-    id: "p6",
-    name: "Store 06 – Lobby",
-    gradient: "from-fuchsia-500 to-purple-700",
-  },
-];
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Per-screen A/V state                                                     */
+/* ─────────────────────────────────────────────────────────────────────────── */
 
-/* ------------------------------------------------------------------ */
-/*  Per-screen A/V state                                               */
-/* ------------------------------------------------------------------ */
 interface ScreenState {
   audioEnabled: boolean;
   videoEnabled: boolean;
-  volume: number; // 0–1 local gain
+  volume: number;
 }
 
-function initScreenStates(): Record<string, ScreenState> {
-  const states: Record<string, ScreenState> = {};
-  MOCK_PARTICIPANTS.forEach((p, i) => {
-    states[p.id] = {
-      audioEnabled: i === 0, // main screen audio on, side screens audio off
-      videoEnabled: true,    // all screens video on
-      volume: 1,
-    };
-  });
-  return states;
-}
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  ScreenProjectView                                                         */
+/* ─────────────────────────────────────────────────────────────────────────── */
 
-/* ------------------------------------------------------------------ */
-/*  ScreenProjectView                                                  */
-/* ------------------------------------------------------------------ */
 export function ScreenProjectView() {
   const mainRef = useRef<HTMLDivElement>(null);
-  const [mainId, setMainId] = useState<string>(MOCK_PARTICIPANTS[0].id);
-  const [screenStates, setScreenStates] = useState<Record<string, ScreenState>>(initScreenStates);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
-  // My own controls — mic muted and camera off by default
+  const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
+  const storeId = selectedStore?.storeId ?? "";
+
+  const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
+    useScreenProject();
+
+  const [mainId, setMainId] = useState<string>("");
+  const [screenStates, setScreenStates] = useState<Record<string, ScreenState>>({});
+
+  // My own controls
   const [myMicMuted, setMyMicMuted] = useState(true);
   const [myVideoOff, setMyVideoOff] = useState(true);
   const [myCamVisible, setMyCamVisible] = useState(false);
 
-  const mainParticipant = MOCK_PARTICIPANTS.find((p) => p.id === mainId)!;
-  const sideParticipants = MOCK_PARTICIPANTS.filter((p) => p.id !== mainId);
-
-  // ── Audio level simulation (replaced by LiveKit AudioLevelObserver later) ──
-  const [audioLevels, setAudioLevels] = useState<Record<string, number>>(() =>
-    Object.fromEntries(MOCK_PARTICIPANTS.map((p) => [p.id, 0]))
-  );
-
+  // Start/stop local camera preview for the PiP self-view
   useEffect(() => {
-    const ids = MOCK_PARTICIPANTS.map((p) => p.id);
-    let speakerId = ids[0];
+    const shouldCapture = myCamVisible && !myVideoOff;
+    if (!shouldCapture) {
+      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+      if (localVideoRef.current) localVideoRef.current.srcObject = null;
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: false })
+      .then((stream) => {
+        localStreamRef.current = stream;
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      })
+      .catch(() => {});
+    return () => {
+      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    };
+  }, [myCamVisible, myVideoOff]);
 
-    const interval = setInterval(() => {
-      // Occasionally switch the active speaker
-      if (Math.random() < 0.3) {
-        speakerId = ids[Math.floor(Math.random() * ids.length)];
-      }
-      setAudioLevels((prev) => {
-        const next = { ...prev };
-        ids.forEach((id) => {
-          next[id] =
-            id === speakerId
-              ? 0.45 + Math.random() * 0.5  // speaker: 0.45 – 0.95
-              : Math.random() * 0.1;         // ambient noise
-        });
-        return next;
+  // Initialise per-screen state when stations load (or store changes)
+  useEffect(() => {
+    if (stations.length === 0) {
+      setMainId("");
+      setScreenStates({});
+      return;
+    }
+
+    setMainId((prev) => {
+      const stillExists = stations.some((s) => s.room_name === prev);
+      return stillExists ? prev : stations[0].room_name;
+    });
+
+    setScreenStates((prev) => {
+      const next: Record<string, ScreenState> = {};
+      stations.forEach((s, i) => {
+        next[s.room_name] = prev[s.room_name] ?? {
+          audioEnabled: i === 0,
+          videoEnabled: true,
+          volume: 1,
+        };
       });
-    }, 700);
+      return next;
+    });
+  }, [stations]);
 
-    return () => clearInterval(interval);
-  }, []);
+  const mainStation = stations.find((s) => s.room_name === mainId);
+  const sideStations = stations.filter((s) => s.room_name !== mainId);
 
-  // True if at least one screen still has audio on (used to toggle mute-all label)
-  const anyAudioEnabled = MOCK_PARTICIPANTS.some(
-    (p) => screenStates[p.id]?.audioEnabled
+  const anyAudioEnabled = stations.some(
+    (s) => screenStates[s.room_name]?.audioEnabled,
   );
 
-  const handleSwap = useCallback((id: string) => {
-    setMainId(id);
-  }, []);
+  const handleSwap = useCallback((id: string) => setMainId(id), []);
 
   const handleToggleVideo = useCallback((id: string) => {
     setScreenStates((prev) => ({
@@ -139,9 +122,8 @@ export function ScreenProjectView() {
     }));
   }, []);
 
-  // Mute all → if any audio is on, mute everything; if all muted, unmute all
   const handleMuteAllToggle = useCallback(() => {
-    const target = anyAudioEnabled ? false : true;
+    const target = !anyAudioEnabled;
     setScreenStates((prev) => {
       const next = { ...prev };
       Object.keys(next).forEach((id) => {
@@ -151,15 +133,55 @@ export function ScreenProjectView() {
     });
   }, [anyAudioEnabled]);
 
+  /* ── Loading ────────────────────────────────────────────────────── */
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70" />
+          <p className="text-sm">Loading stations...</p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Error ──────────────────────────────────────────────────────── */
+  if (error) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+          <p className="text-sm text-destructive">{error}</p>
+          <Button variant="outline" size="sm" onClick={refetch} className="gap-1.5">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── No store selected / no stations ───────────────────────────── */
+  if (stations.length === 0 || !mainStation) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          No stations found. Select a store to view screens.
+        </p>
+      </div>
+    );
+  }
+
+  /* ── Main view ──────────────────────────────────────────────────── */
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* ── Screen area ─────────────────────────────────────────────── */}
+      {/* Screen area */}
       <div className="flex flex-1 min-h-0 flex-col gap-3 lg:flex-row">
-        {/* Main screen — relative so the PiP self-view sits inside it */}
+        {/* Main screen */}
         <div className="relative min-h-0 flex-1" ref={mainRef}>
           <AnimatePresence mode="wait">
             <motion.div
-              key={mainParticipant.id}
+              key={mainStation.room_name}
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
@@ -167,21 +189,26 @@ export function ScreenProjectView() {
               className="h-full w-full"
             >
               <ScreenTile
-                participant={mainParticipant}
+                name={mainStation.name}
+                roomName={mainStation.room_name}
+                token={tokenMap[mainStation.room_name] ?? ""}
+                serverUrl={serverUrl}
                 isMain
-                isVideoEnabled={screenStates[mainParticipant.id]?.videoEnabled ?? true}
-                isAudioEnabled={screenStates[mainParticipant.id]?.audioEnabled ?? true}
-                onToggleVideo={() => handleToggleVideo(mainParticipant.id)}
-                onToggleAudio={() => handleToggleAudio(mainParticipant.id)}
-                audioLevel={audioLevels[mainParticipant.id] ?? 0}
-                volume={screenStates[mainParticipant.id]?.volume ?? 1}
-                onVolumeChange={(v) => handleVolumeChange(mainParticipant.id, v)}
+                myMicEnabled={!myMicMuted}
+                myCamEnabled={!myVideoOff}
+                isVideoEnabled={screenStates[mainStation.room_name]?.videoEnabled ?? true}
+                isAudioEnabled={screenStates[mainStation.room_name]?.audioEnabled ?? true}
+                onToggleVideo={() => handleToggleVideo(mainStation.room_name)}
+                onToggleAudio={() => handleToggleAudio(mainStation.room_name)}
+                volume={screenStates[mainStation.room_name]?.volume ?? 1}
+                onVolumeChange={(v) => handleVolumeChange(mainStation.room_name, v)}
+                videoQuality={VideoQuality.HIGH}
                 className="h-full w-full"
               />
             </motion.div>
           </AnimatePresence>
 
-          {/* ── PiP self-view (draggable) ───────────────────────── */}
+          {/* PiP self-view (draggable) */}
           <motion.div
             drag
             dragConstraints={mainRef}
@@ -191,22 +218,27 @@ export function ScreenProjectView() {
             transition={{ duration: 0.2 }}
             className={cn(
               "absolute bottom-14 left-3 z-10 cursor-grab active:cursor-grabbing",
-              !myCamVisible && "pointer-events-none"
+              !myCamVisible && "pointer-events-none",
             )}
           >
             <div className="relative w-36 h-24 rounded-lg overflow-hidden ring-2 ring-white/30 shadow-xl bg-neutral-800">
-              {myVideoOff ? (
+              {/* Real local camera preview — mirrored like a selfie */}
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={cn(
+                  "absolute inset-0 h-full w-full object-cover scale-x-[-1]",
+                  myVideoOff && "hidden",
+                )}
+              />
+              {myVideoOff && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-neutral-800">
                   <UserCircle2 className="h-8 w-8 text-white/40" />
                   <span className="text-[0.6rem] text-white/40">Camera off</span>
                 </div>
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-linear-to-br from-slate-600 to-slate-800">
-                  <UserCircle2 className="h-8 w-8 text-white/70" />
-                  <span className="text-[0.6rem] text-white/70">You</span>
-                </div>
               )}
-              {/* Muted badge */}
               {myMicMuted && (
                 <div className="absolute top-1 right-1 rounded bg-black/60 p-0.5">
                   <MicOff className="h-2.5 w-2.5 text-white" />
@@ -216,39 +248,49 @@ export function ScreenProjectView() {
           </motion.div>
         </div>
 
-        {/* Side panel — horizontal scroll on mobile, vertical on desktop */}
+        {/* Side panel */}
         <div
           className={cn(
             "flex gap-2 shrink-0",
             "h-36 overflow-x-auto overflow-y-hidden",
-            "lg:h-full lg:w-44 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden"
+            "lg:h-full lg:w-44 lg:flex-col lg:overflow-y-auto lg:overflow-x-hidden",
           )}
         >
-          {sideParticipants.map((p) => (
+          {sideStations.map((s) => (
             <ScreenTile
-              key={p.id}
-              participant={p}
+              key={s.room_name}
+              name={s.name}
+              roomName={s.room_name}
+              token={tokenMap[s.room_name] ?? ""}
+              serverUrl={serverUrl}
               isMain={false}
-              onClick={() => handleSwap(p.id)}
-              isVideoEnabled={screenStates[p.id]?.videoEnabled ?? true}
-              isAudioEnabled={screenStates[p.id]?.audioEnabled ?? false}
-              onToggleVideo={() => handleToggleVideo(p.id)}
-              onToggleAudio={() => handleToggleAudio(p.id)}
-              audioLevel={audioLevels[p.id] ?? 0}
+              myMicEnabled={!myMicMuted}
+              myCamEnabled={!myVideoOff}
+              onClick={() => handleSwap(s.room_name)}
+              isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
+              isAudioEnabled={screenStates[s.room_name]?.audioEnabled ?? false}
+              onToggleVideo={() => handleToggleVideo(s.room_name)}
+              onToggleAudio={() => handleToggleAudio(s.room_name)}
+              videoQuality={VideoQuality.LOW}
               className="h-full w-36 shrink-0 lg:h-28 lg:w-full"
             />
           ))}
         </div>
       </div>
 
-      {/* ── Bottom control bar ──────────────────────────────────────── */}
+      {/* Bottom control bar */}
       <div className="flex items-center justify-between rounded-xl border bg-card px-25 py-2.5 shrink-0">
-        {/* Left label */}
-        <p className="hidden sm:block text-xs text-muted-foreground font-medium select-none">
-          My Controls
-        </p>
+        <div className="flex items-center gap-2">
+          {/* <p className="hidden sm:block text-xs text-muted-foreground font-medium select-none">
+            My Controls
+          </p> */}
+          <StationsDialog
+            storeId={storeId}
+            stations={stations}
+            onRefetch={refetch}
+          />
+        </div>
 
-        {/* Center — my mic + my camera + PiP toggle */}
         <div className="flex items-center gap-2 mx-auto sm:mx-0">
           <Button
             variant={myMicMuted ? "destructive" : "secondary"}
@@ -284,7 +326,6 @@ export function ScreenProjectView() {
             </span>
           </Button>
 
-          {/* Toggle PiP self-view */}
           <Button
             variant={myCamVisible ? "secondary" : "outline"}
             size="sm"
@@ -299,18 +340,18 @@ export function ScreenProjectView() {
           </Button>
         </div>
 
-        {/* Right — mute / unmute all screens */}
+        {/* Mute all */}
         <Button
-          variant="outline"
+          variant={anyAudioEnabled ? "secondary" : "outline"}
           size="sm"
           onClick={handleMuteAllToggle}
           className="gap-1.5"
           aria-label={anyAudioEnabled ? "Mute all screens" : "Unmute all screens"}
         >
           {anyAudioEnabled ? (
-            <VolumeX className="h-4 w-4" />
+            <MicOff className="h-4 w-4" />
           ) : (
-            <Volume2 className="h-4 w-4" />
+            <Mic className="h-4 w-4" />
           )}
           <span className="hidden sm:inline">
             {anyAudioEnabled ? "Mute All" : "Unmute All"}
@@ -320,5 +361,3 @@ export function ScreenProjectView() {
     </div>
   );
 }
-
-
