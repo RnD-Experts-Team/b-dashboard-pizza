@@ -261,45 +261,52 @@ export const dueKeysService = {
       );
     }
 
-    const formData = new FormData();
-    formData.append("key_id", String(payload.key_id));
-
-    if (payload.value_text !== null && payload.value_text !== undefined) {
-      formData.append("value_text", payload.value_text);
-    }
-    if (payload.value_number !== null && payload.value_number !== undefined) {
-      formData.append("value_number", String(payload.value_number));
-    }
-    if (payload.value_boolean !== null && payload.value_boolean !== undefined) {
-      formData.append("value_boolean", String(payload.value_boolean));
-    }
-    if (payload.value_json !== null && payload.value_json !== undefined) {
-      formData.append("value_json", JSON.stringify(payload.value_json));
-    }
-    if (payload.note) {
-      formData.append("note", payload.note);
-    }
-    if (payload.attachments && payload.attachments.length > 0) {
-      for (const file of payload.attachments) {
-        formData.append("attachments[]", file);
-      }
-    }
+    const hasAttachments = payload.attachments && payload.attachments.length > 0;
+    const url = `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(date)}/values`;
 
     try {
-      await axios.post(
-        `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
-          date
-        )}/values`,
-        formData,
-        {
+      if (hasAttachments) {
+        const formData = new FormData();
+        formData.append("key_id", String(payload.key_id));
+
+        if (payload.value_text !== null && payload.value_text !== undefined) {
+          formData.append("value_text", payload.value_text);
+        }
+        if (payload.value_number !== null && payload.value_number !== undefined) {
+          formData.append("value_number", String(payload.value_number));
+        }
+        if (payload.value_boolean !== null && payload.value_boolean !== undefined) {
+          formData.append("value_boolean", payload.value_boolean ? "1" : "0");
+        }
+        if (payload.value_json !== null && payload.value_json !== undefined) {
+          formData.append("value_json", JSON.stringify(payload.value_json));
+        }
+        if (payload.note) {
+          formData.append("note", payload.note);
+        }
+        for (const file of payload.attachments!) {
+          formData.append("attachments[]", file);
+        }
+
+        await axios.post(url, formData, {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
             // Do not set Content-Type — axios sets it with the correct multipart boundary
           },
           timeout: 30_000,
-        }
-      );
+        });
+      } else {
+        const { attachments: _a, ...jsonPayload } = payload;
+        await axios.post(url, jsonPayload, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 30_000,
+        });
+      }
     } catch (err) {
       throw handleAxiosError(err);
     }

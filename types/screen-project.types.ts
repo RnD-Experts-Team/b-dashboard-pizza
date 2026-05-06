@@ -38,3 +38,8 @@ export interface SupervisorTokensResponse {
   tokens: TokenEntry[];
   permissions: ScreenProjectPermissions;
 }
+
+export interface StationTokenResponse {
+  token: string;
+  server_url: string;
+}

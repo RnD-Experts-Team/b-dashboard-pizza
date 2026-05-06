@@ -82,4 +82,16 @@ export const screenProjectService = {
       { headers: buildHeaders(), timeout: 15_000 },
     );
   },
+
+  /**
+   * Set the shared station password for a store.
+   * Proxied through POST /api/screen-project/{storeId}/stations/password
+   */
+  async setStationPassword(storeId: string, password: string): Promise<void> {
+    await axios.post(
+      `/api/screen-project/${storeId}/stations/password`,
+      { password },
+      { headers: buildHeaders(), timeout: 15_000 },
+    );
+  },
 };

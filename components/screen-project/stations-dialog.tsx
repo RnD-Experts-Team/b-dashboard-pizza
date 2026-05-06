@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Loader2, Monitor, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, KeyRound, Loader2, Monitor, Plus, Trash2 } from "lucide-react";
 import axios from "axios";
 
 import {
@@ -67,6 +67,12 @@ export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogP
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  /* ── Set password state ────────────────────────────────────────── */
+  const [password, setPassword] = useState("");
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   /* ── Handlers ──────────────────────────────────────────────────── */
 
   async function handleDelete(station: Station) {
@@ -80,6 +86,23 @@ export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogP
       setDeleteError(extractErrorMessage(err));
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleSetPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSettingPassword(true);
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    try {
+      await screenProjectService.setStationPassword(storeId, password);
+      setPassword("");
+      setPasswordSuccess(true);
+    } catch (err) {
+      if (axios.isCancel(err)) return;
+      setPasswordError(extractErrorMessage(err));
+    } finally {
+      setSettingPassword(false);
     }
   }
 
@@ -216,6 +239,54 @@ export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogP
                 <Plus className="h-4 w-4" />
               )}
               {creating ? "Creating…" : "Create Station"}
+            </Button>
+          </form>
+
+          <Separator />
+
+          {/* ── Set shared password ──────────────────────────────────── */}
+          <form onSubmit={handleSetPassword} className="space-y-3">
+            <p className="text-sm font-semibold">Set Shared Station Password</p>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="sp-station-password">Password</Label>
+              <Input
+                id="sp-station-password"
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setPasswordSuccess(false); }}
+                placeholder="Enter shared password"
+                required
+                disabled={settingPassword}
+              />
+            </div>
+
+            {passwordError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{passwordError}</AlertDescription>
+              </Alert>
+            )}
+
+            {passwordSuccess && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <AlertDescription>Password updated successfully.</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              type="submit"
+              size="sm"
+              disabled={settingPassword}
+              className="w-full gap-1.5"
+            >
+              {settingPassword ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <KeyRound className="h-4 w-4" />
+              )}
+              {settingPassword ? "Saving…" : "Set Password"}
             </Button>
           </form>
         </DialogContent>
