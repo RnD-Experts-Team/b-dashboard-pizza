@@ -39,11 +39,6 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
 
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
 
-  // Per-tile playback state
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  const [volume, setVolume] = useState(1);
-
   /* ── Fetch stations on mount ─────────────────────────────────────── */
   useEffect(() => {
     const controller = new AbortController();
@@ -268,15 +263,15 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             token={streaming.token}
             serverUrl={streaming.serverUrl}
             isMain={true}
-            myMicEnabled={false}
-            myCamEnabled={false}
-            isVideoEnabled={isVideoEnabled}
-            isAudioEnabled={isAudioEnabled}
-            onToggleVideo={() => setIsVideoEnabled((v) => !v)}
-            onToggleAudio={() => setIsAudioEnabled((v) => !v)}
-            volume={volume}
-            onVolumeChange={setVolume}
+            myMicEnabled={true}
+            myCamEnabled={true}
+            isVideoEnabled={true}
+            isAudioEnabled={true}
+            onToggleVideo={() => {}}
+            onToggleAudio={() => {}}
+            volume={1}
             videoQuality={VideoQuality.HIGH}
+            viewerOnly={true}
             className="h-full w-full"
           />
         </div>
@@ -291,7 +286,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             className="gap-1.5 shrink-0"
           >
             <Monitor className="h-4 w-4" />
-            Change Station
+            <span className="hidden sm:inline">Change Station</span>
           </Button>
         </div>
       </div>

@@ -81,6 +81,8 @@ export interface ScreenTileProps {
   onVolumeChange?: (v: number) => void;
   /** LiveKit subscription quality for this tile */
   videoQuality?: VideoQuality;
+  /** When true, hides all A/V control buttons (view-only mode) */
+  viewerOnly?: boolean;
   className?: string;
 }
 
@@ -101,6 +103,7 @@ interface InnerProps {
   volume: number;
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
+  viewerOnly?: boolean;
   className?: string;
 }
 
@@ -117,6 +120,7 @@ function ScreenTileInner({
   volume,
   onVolumeChange,
   videoQuality,
+  viewerOnly = false,
   className,
 }: InnerProps) {
   const allTracks = useTracks([
@@ -303,6 +307,7 @@ function ScreenTileInner({
         ))}
 
       {/* Bottom gradient + controls */}
+      {!viewerOnly && (
       <div
         className={cn(
           "absolute inset-x-0 bottom-0 bg-linear-to-t from-black/65 to-transparent",
@@ -414,6 +419,7 @@ function ScreenTileInner({
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -438,6 +444,7 @@ export function ScreenTile({
   volume = 1,
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
+  viewerOnly = false,
   className,
 }: ScreenTileProps) {
   if (!token || !serverUrl) {
@@ -498,6 +505,7 @@ export function ScreenTile({
         volume={volume}
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}
+        viewerOnly={viewerOnly}
         className={className}
       />
     </LiveKitRoom>

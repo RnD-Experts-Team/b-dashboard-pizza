@@ -9,9 +9,9 @@ export default async function StoreEmployeesPage({ params }: Props) {
 
   return (
     <main className="h-screen bg-background p-4">
-      <div className="h-full">
+      {/* <div className="h-full">
         <PublicScreenView storeId={storeId} />
-      </div>
+      </div> */}
     </main>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,7 @@ function computeTileRect(
   containerW: number,
   containerH: number,
   hasSidePanel: boolean,
+  sideScroll: number,
 ): TileRect {
   const isLg = containerW >= LG_BREAKPOINT;
   if (isMain) {
@@ -69,7 +70,7 @@ function computeTileRect(
   } else {
     if (isLg) {
       return {
-        top: sideIndex * (DESK_SIDE_H + PANEL_GAP),
+        top: sideIndex * (DESK_SIDE_H + PANEL_GAP) - sideScroll,
         left: containerW - DESK_SIDE_W,
         width: DESK_SIDE_W,
         height: DESK_SIDE_H,
@@ -77,7 +78,7 @@ function computeTileRect(
     } else {
       return {
         top: containerH - MOB_SIDE_H,
-        left: sideIndex * (MOB_SIDE_W + PANEL_GAP),
+        left: sideIndex * (MOB_SIDE_W + PANEL_GAP) - sideScroll,
         width: MOB_SIDE_W,
         height: MOB_SIDE_H,
       };
@@ -135,6 +136,7 @@ export function ScreenProjectView() {
   const [myMicMuted, setMyMicMuted] = useState(true);
   const [myVideoOff, setMyVideoOff] = useState(true);
   const [myCamVisible, setMyCamVisible] = useState(false);
+  const [sideScroll, setSideScroll] = useState(0);
 
   // Start/stop local camera preview for the PiP self-view
   useEffect(() => {
@@ -182,8 +184,29 @@ export function ScreenProjectView() {
     });
   }, [stations]);
 
+  // Reset side-panel scroll when the stations list changes
+  useEffect(() => { setSideScroll(0); }, [stations]);
+
   const hasSidePanel = stations.length > 1;
   const anyAudioEnabled = stations.some((s) => screenStates[s.room_name]?.audioEnabled);
+
+  // Side-panel virtual scroll limits
+  const isLg = containerSize.width >= LG_BREAKPOINT;
+  // Reset scroll when layout mode flips (desktop ↔ mobile)
+  useEffect(() => { setSideScroll(0); }, [isLg]);
+  const sideTileCount = Math.max(0, stations.length - 1);
+  const sideContentLen =
+    sideTileCount > 0
+      ? sideTileCount * (isLg ? DESK_SIDE_H : MOB_SIDE_W) +
+        (sideTileCount - 1) * PANEL_GAP
+      : 0;
+  const maxSideScroll = Math.max(
+    0,
+    sideContentLen - (isLg ? containerSize.height : containerSize.width) + PANEL_GAP,
+  );
+  const clampedSideScroll = Math.min(sideScroll, maxSideScroll);
+  const canScrollBack = clampedSideScroll > 0;
+  const canScrollFwd = clampedSideScroll < maxSideScroll;
 
   /**
    * Cross-fade swap:
@@ -239,6 +262,23 @@ export function ScreenProjectView() {
       return next;
     });
   }, [anyAudioEnabled]);
+
+  const handleSidePanelWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      if (!hasSidePanel || maxSideScroll <= 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const inSidePanel =
+        containerSize.width >= LG_BREAKPOINT
+          ? e.clientX - rect.left >= containerSize.width - DESK_SIDE_W
+          : e.clientY - rect.top >= containerSize.height - MOB_SIDE_H;
+      if (!inSidePanel) return;
+      e.preventDefault();
+      setSideScroll((prev) =>
+        Math.max(0, Math.min(maxSideScroll, prev + e.deltaY)),
+      );
+    },
+    [hasSidePanel, maxSideScroll, containerSize],
+  );
 
   /* ── Loading ────────────────────────────────────────────────────── */
   if (isLoading) {
@@ -304,7 +344,7 @@ export function ScreenProjectView() {
        * absolute position/size is animated by framer-motion `layout` (FLIP),
        * so no tile ever unmounts and LiveKit connections stay alive.
        */}
-      <div className="relative flex-1 min-h-0" ref={tileAreaRef}>
+      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef} onWheel={handleSidePanelWheel}>
         {containerSize.width > 0 &&
           stationsMeta.map((s) => {
             const rect = computeTileRect(
@@ -313,6 +353,7 @@ export function ScreenProjectView() {
               containerSize.width,
               containerSize.height,
               hasSidePanel,
+              clampedSideScroll,
             );
             return (
               <motion.div
@@ -342,6 +383,53 @@ export function ScreenProjectView() {
               </motion.div>
             );
           })}
+
+        {/* Side-panel scroll arrows */}
+        {hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
+          isLg ? (
+            <>
+              {canScrollBack && (
+                <button
+                  onClick={() => setSideScroll((p) => Math.max(0, p - (DESK_SIDE_H + PANEL_GAP)))}
+                  className="absolute top-2 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
+                  aria-label="Scroll side panel up"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+              )}
+              {canScrollFwd && (
+                <button
+                  onClick={() => setSideScroll((p) => Math.min(maxSideScroll, p + (DESK_SIDE_H + PANEL_GAP)))}
+                  className="absolute bottom-2 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
+                  aria-label="Scroll side panel down"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {canScrollBack && (
+                <button
+                  onClick={() => setSideScroll((p) => Math.max(0, p - (MOB_SIDE_W + PANEL_GAP)))}
+                  className="absolute bottom-4 left-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
+                  aria-label="Scroll side panel left"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              )}
+              {canScrollFwd && (
+                <button
+                  onClick={() => setSideScroll((p) => Math.min(maxSideScroll, p + (MOB_SIDE_W + PANEL_GAP)))}
+                  className="absolute bottom-4 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
+                  aria-label="Scroll side panel right"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+            </>
+          )
+        )}
 
         {/* PiP self-view — draggable overlay constrained to the tile area */}
         <motion.div
