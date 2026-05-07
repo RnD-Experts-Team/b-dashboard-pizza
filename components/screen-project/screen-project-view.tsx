@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -136,6 +136,7 @@ export function ScreenProjectView() {
   const [myMicMuted, setMyMicMuted] = useState(true);
   const [myVideoOff, setMyVideoOff] = useState(true);
   const [myCamVisible, setMyCamVisible] = useState(false);
+  const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
 
   // Start/stop local camera preview for the PiP self-view
@@ -368,7 +369,7 @@ export function ScreenProjectView() {
                   token={tokenMap[s.room_name] ?? ""}
                   serverUrl={serverUrl}
                   isMain={s.isMain}
-                  myMicEnabled={!myMicMuted}
+                  myMicEnabled={!myMicMuted && (broadcastToAll || s.isMain)}
                   myCamEnabled={!myVideoOff}
                   onClick={!s.isMain ? () => handleSwap(s.room_name) : undefined}
                   isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
@@ -484,7 +485,12 @@ export function ScreenProjectView() {
           <Button
             variant={myMicMuted ? "destructive" : "secondary"}
             size="sm"
-            onClick={() => setMyMicMuted((v) => !v)}
+            onClick={() => {
+              setMyMicMuted((v) => {
+                if (!v) setBroadcastToAll(false); // muting mic clears broadcast
+                return !v;
+              });
+            }}
             className="gap-1.5"
             aria-label={myMicMuted ? "Unmute my microphone" : "Mute my microphone"}
           >
@@ -493,6 +499,32 @@ export function ScreenProjectView() {
               {myMicMuted ? "Mic Off" : "Mic On"}
             </span>
           </Button>
+
+          <button
+            disabled={myMicMuted}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setBroadcastToAll(true);
+            }}
+            onPointerUp={() => setBroadcastToAll(false)}
+            onPointerCancel={() => setBroadcastToAll(false)}
+            onContextMenu={(e) => e.preventDefault()}
+            title={myMicMuted ? "Unmute mic first" : "Hold to talk to all screens"}
+            aria-label="Hold to talk to all screens"
+            aria-pressed={broadcastToAll}
+            className={cn(
+              "inline-flex select-none items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "disabled:pointer-events-none disabled:opacity-50",
+              broadcastToAll
+                ? "bg-red-600 text-white ring-2 ring-red-400/70 ring-offset-1 ring-offset-background"
+                : "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
+            )}
+          >
+            <Radio className={cn("h-4 w-4", broadcastToAll && "animate-pulse")} />
+            <span className="hidden sm:inline">
+              {broadcastToAll ? "Broadcasting..." : "Talk to All"}
+            </span>
+          </button>
 
           <Button
             variant={myVideoOff ? "destructive" : "secondary"}
@@ -526,7 +558,7 @@ export function ScreenProjectView() {
           variant={anyAudioEnabled ? "secondary" : "outline"}
           size="sm"
           onClick={handleMuteAllToggle}
-          className="gap-1.5"
+          className="mr-25 gap-1.5"
           aria-label={anyAudioEnabled ? "Mute all screens" : "Unmute all screens"}
         >
           {anyAudioEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
