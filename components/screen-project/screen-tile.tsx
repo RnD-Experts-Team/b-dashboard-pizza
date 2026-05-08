@@ -11,7 +11,7 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX } from "lucide-react";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,8 @@ export interface ScreenTileProps {
   myCamEnabled: boolean;
   onToggleVideo: () => void;
   onToggleAudio: () => void;
+  /** Toggle the supervisor's camera for this specific room */
+  onToggleMyCam?: () => void;
   /** 0-1 local volume gain */
   volume?: number;
   onVolumeChange?: (v: number) => void;
@@ -100,6 +102,7 @@ interface InnerProps {
   myCamEnabled: boolean;
   onToggleVideo: () => void;
   onToggleAudio: () => void;
+  onToggleMyCam?: () => void;
   volume: number;
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
@@ -117,6 +120,7 @@ function ScreenTileInner({
   myCamEnabled,
   onToggleVideo,
   onToggleAudio,
+  onToggleMyCam,
   volume,
   onVolumeChange,
   videoQuality,
@@ -417,6 +421,33 @@ function ScreenTileInner({
               <span>{isVideoEnabled ? "Video" : "Video Off"}</span>
             )}
           </Button>
+
+          {/* My camera toggle — bottom-right: controls whether supervisor's cam is sent to THIS room (side tiles only) */}
+          {!isMain && onToggleMyCam && (
+            <Button
+              variant="ghost"
+              size={isMain ? "sm" : "icon"}
+              aria-label={myCamEnabled ? "Stop sending my camera here" : "Send my camera here"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMyCam();
+              }}
+              className={cn(
+                "ml-auto text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                isMain ? "h-8 gap-1.5 px-2.5 text-xs" : "h-6 w-6",
+                !myCamEnabled && "text-red-400 hover:text-red-300",
+              )}
+            >
+              {myCamEnabled ? (
+                <Camera className={cn(isMain ? "h-3.5 w-3.5" : "h-3 w-3")} />
+              ) : (
+                <CameraOff className={cn(isMain ? "h-3.5 w-3.5" : "h-3 w-3")} />
+              )}
+              {isMain && (
+                <span>{myCamEnabled ? "My Cam" : "My Cam Off"}</span>
+              )}
+            </Button>
+          )}
         </div>
       </div>
       )}
@@ -441,6 +472,7 @@ export function ScreenTile({
   myCamEnabled,
   onToggleVideo,
   onToggleAudio,
+  onToggleMyCam,
   volume = 1,
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
@@ -502,6 +534,7 @@ export function ScreenTile({
         myCamEnabled={myCamEnabled}
         onToggleVideo={onToggleVideo}
         onToggleAudio={onToggleAudio}
+        onToggleMyCam={onToggleMyCam}
         volume={volume}
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}

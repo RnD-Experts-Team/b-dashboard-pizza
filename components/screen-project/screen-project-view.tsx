@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,8 @@ interface ScreenState {
   audioEnabled: boolean;
   videoEnabled: boolean;
   volume: number;
+  /** Whether the supervisor's own camera is published into this room */
+  myCamEnabled: boolean;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -179,6 +181,7 @@ export function ScreenProjectView() {
           audioEnabled: i === 0,
           videoEnabled: true,
           volume: 1,
+          myCamEnabled: false,
         };
       });
       return next;
@@ -190,6 +193,7 @@ export function ScreenProjectView() {
 
   const hasSidePanel = stations.length > 1;
   const anyAudioEnabled = stations.some((s) => screenStates[s.room_name]?.audioEnabled);
+  const anyMyCamEnabled = stations.some((s) => screenStates[s.room_name]?.myCamEnabled);
 
   // Side-panel virtual scroll limits
   const isLg = containerSize.width >= LG_BREAKPOINT;
@@ -263,6 +267,24 @@ export function ScreenProjectView() {
       return next;
     });
   }, [anyAudioEnabled]);
+
+  const handleToggleMyCam = useCallback((id: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], myCamEnabled: !prev[id].myCamEnabled },
+    }));
+  }, []);
+
+  const handleCamToAllToggle = useCallback(() => {
+    const target = !anyMyCamEnabled;
+    setScreenStates((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((id) => {
+        next[id] = { ...next[id], myCamEnabled: target };
+      });
+      return next;
+    });
+  }, [anyMyCamEnabled]);
 
   const handleSidePanelWheel = useCallback(
     (e: React.WheelEvent<HTMLDivElement>) => {
@@ -370,7 +392,8 @@ export function ScreenProjectView() {
                   serverUrl={serverUrl}
                   isMain={s.isMain}
                   myMicEnabled={!myMicMuted && (broadcastToAll || s.isMain)}
-                  myCamEnabled={!myVideoOff}
+                  myCamEnabled={!myVideoOff && (s.isMain || (screenStates[s.room_name]?.myCamEnabled ?? false))}
+                  onToggleMyCam={!s.isMain ? () => handleToggleMyCam(s.room_name) : undefined}
                   onClick={!s.isMain ? () => handleSwap(s.room_name) : undefined}
                   isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
                   isAudioEnabled={screenStates[s.room_name]?.audioEnabled ?? false}
@@ -554,18 +577,35 @@ export function ScreenProjectView() {
         </div>
 
         {/* Mute all */}
-        <Button
-          variant={anyAudioEnabled ? "secondary" : "outline"}
-          size="sm"
-          onClick={handleMuteAllToggle}
-          className="mr-25 gap-1.5"
-          aria-label={anyAudioEnabled ? "Mute all screens" : "Unmute all screens"}
-        >
-          {anyAudioEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          <span className="hidden sm:inline">
-            {anyAudioEnabled ? "Mute All" : "Unmute All"}
-          </span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={anyAudioEnabled ? "secondary" : "outline"}
+            size="sm"
+            onClick={handleMuteAllToggle}
+            className="gap-1.5"
+            aria-label={anyAudioEnabled ? "Mute all screens" : "Unmute all screens"}
+          >
+            {anyAudioEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            <span className="hidden sm:inline">
+              {anyAudioEnabled ? "Mute All" : "Unmute All"}
+            </span>
+          </Button>
+
+          <Button
+            variant={anyMyCamEnabled ? "secondary" : "outline"}
+            size="sm"
+            onClick={handleCamToAllToggle}
+            disabled={myVideoOff}
+            className="gap-1.5"
+            aria-label={anyMyCamEnabled ? "Disable my camera on all screens" : "Enable my camera on all screens"}
+            title={myVideoOff ? "Turn on your camera first" : undefined}
+          >
+            {anyMyCamEnabled ? <Camera className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
+            <span className="hidden sm:inline">
+              {anyMyCamEnabled ? "Cam to All" : "Cam to None"}
+            </span>
+          </Button>
+        </div>
       </div>
     </div>
   );
