@@ -105,12 +105,13 @@ function DayDivider({ label }: { label: string }) {
 
 function AttachmentPlaceholder() {
   return (
-    <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-border/50 bg-muted/30">
-      <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
-        <Pizza className="h-8 w-8" strokeWidth={1.5} />
-        <span className="text-[11px] font-medium tracking-wide">No attachment</span>
-      </div>
-    </div>
+    <div></div>
+    // <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-border/50 bg-muted/30">
+    //   <div className="flex flex-col items-center gap-2 text-muted-foreground/50">
+    //     <Pizza className="h-8 w-8" strokeWidth={1.5} />
+    //     <span className="text-[11px] font-medium tracking-wide">No attachment</span>
+    //   </div>
+    // </div>
   );
 }
 

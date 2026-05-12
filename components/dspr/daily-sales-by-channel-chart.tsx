@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +15,7 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 });
 
 const CHANNEL_KEYS: { key: keyof DsprChannelSales; label: string; color: string }[] = [
+  { key: "royalty_obligation", label: "In Store", color: "#FF6B35" },
   { key: "phone_sales", label: "Phone", color: "#008FFB" },
   { key: "website_sales", label: "Website", color: "#00E396" },
   { key: "mobile_sales", label: "Mobile", color: "#FEB019" },
@@ -42,9 +43,7 @@ export function DailySalesByChannelChart({
 }: DailySalesByChannelChartProps) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const [isSliceHovered, setIsSliceHovered] = useState(false);
-
-  const { labels, series, colors } = useMemo(() => {
+const { labels, series, colors } = useMemo(() => {
     const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
       const value = Number(totalSales?.[key] ?? 0);
 
@@ -70,11 +69,6 @@ export function DailySalesByChannelChart({
     return series.map((value) => (total > 0 ? (value / total) * 100 : 0));
   }, [series, total]);
 
-  const royaltyValue = useMemo(() => {
-    const raw = Number(totalSales?.royalty_obligation ?? 0);
-    return Number.isFinite(raw) ? raw : 0;
-  }, [totalSales]);
-
   const options: ApexOptions = useMemo(
     () => ({
       chart: {
@@ -85,10 +79,6 @@ export function DailySalesByChannelChart({
         fontFamily: "inherit",
         background: "transparent",
         foreColor: isDark ? "#a1a1aa" : "#71717a",
-        events: {
-          dataPointMouseEnter: () => setIsSliceHovered(true),
-          dataPointMouseLeave: () => setIsSliceHovered(false),
-        },
       },
       theme: { mode: isDark ? "dark" : "light" },
       labels,
@@ -216,29 +206,7 @@ export function DailySalesByChannelChart({
             height={height}
           />
 
-          {/* In Store overlay — hidden while hovering a slice so the hovered slice label/value can show in the center */}
-          <div
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
-            style={{
-              visibility: isSliceHovered ? "hidden" : "visible",
-              paddingTop: `${height * 0.26}px`,
-            }}
-          >
-            <span
-              className="block text-center leading-tight text-muted-foreground"
-              style={{ fontSize: "9px" }}
-            >
-              In Store
-            </span>
-            <span
-              className="block text-center font-semibold leading-tight text-foreground"
-              style={{ fontSize: "10px" }}
-            >
-              {`$${royaltyValue.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}`}
-            </span>
-          </div>
+
         </div>
 
         {/* Clean custom legend */}

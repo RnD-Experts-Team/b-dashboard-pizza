@@ -125,7 +125,7 @@ export function FloatingDebriefButton() {
     refetch: refetchDueKeys,
   } = useDueKeys(
     selectedStoreId,
-    isOpen ? selectedDate : null,
+    selectedDate,
     selectedTagIds.length > 0 ? selectedTagIds : undefined
   );
 
@@ -541,27 +541,38 @@ export function FloatingDebriefButton() {
       )}
 
       {/* FAB button — drag to reposition vertically */}
-      <Button
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onClick={handleClick}
+      <div
         className={cn(
-          "fixed z-50 gap-2 rounded-full right-6",
+          "fixed z-50 right-6",
           position === "bottom" ? "bottom-6" : "top-15",
-          "h-11 px-5 text-sm font-medium shadow-lg hover:shadow-xl",
-          "transition-all duration-300 ease-in-out",
-          "cursor-grab active:cursor-grabbing select-none touch-none",
-          "border",
-          isOpen
-            ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200/60 dark:border-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-700"
-            : "bg-white text-black border-gray-200/60 dark:border-gray-700/60 hover:bg-gray-100 dark:bg-white-700 dark:border-white-600 dark:hover:bg-white-600",
         )}
-        size="sm"
       >
-        <PenLine className="h-4 w-4" />
-        <span>Debrief</span>
-      </Button>
+        <Button
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onClick={handleClick}
+          className={cn(
+            "gap-2 rounded-full",
+            "h-11 px-5 text-sm font-medium shadow-lg",
+            "transition-all duration-300 ease-in-out",
+            "cursor-grab active:cursor-grabbing select-none touch-none",
+            "border",
+            isOpen
+              ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
+              : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
+          )}
+          size="sm"
+        >
+          <PenLine className="h-4 w-4" />
+          <span>Debrief</span>
+        </Button>
+        {!isOpen && unfilledItems.length > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
+            {unfilledItems.length}
+          </span>
+        )}
+      </div>
 
       {/* Due Key single-item sheet */}
       {selectedStoreId && (
