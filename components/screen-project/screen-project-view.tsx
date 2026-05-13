@@ -9,7 +9,10 @@ import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
 import { useScreenProject } from "@/lib/hooks/use-screen-project";
+import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { useSelectedStoreStore } from "@/lib/store";
+import { NetworkBadge } from "./network-badge";
+import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Per-screen A/V state                                                     */
@@ -129,6 +132,11 @@ export function ScreenProjectView() {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeId = selectedStore?.storeId ?? "";
 
+  const networkStatus = useNetworkStatus();
+
+  const activatePiP = useScreenProjectPiPStore((s) => s.activatePiP);
+  const closePiP = useScreenProjectPiPStore((s) => s.closePiP);
+
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
     useScreenProject();
 
@@ -190,6 +198,59 @@ export function ScreenProjectView() {
 
   // Reset side-panel scroll when the stations list changes
   useEffect(() => { setSideScroll(0); }, [stations]);
+
+  /**
+   * PiP activation on route leave.
+   * When this component unmounts (user navigates away), if there is an active
+   * main station with a valid token and server URL, we hand it off to the
+   * global PiP store so it survives across routes.
+   * We use a ref to capture the latest values without re-running the effect.
+   */
+  const pipHandoffRef = useRef<{
+    mainId: string;
+    stations: typeof stations;
+    tokenMap: Record<string, string>;
+    serverUrl: string;
+    storeId: string;
+  } | null>(null);
+
+  /** Tracks which room_names are currently live (connected + video track). */
+  const liveRoomsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    pipHandoffRef.current = { mainId, stations, tokenMap, serverUrl, storeId };
+  });
+
+  useEffect(() => {
+    // On mount, hide any existing PiP — we are on the Screen Project page now
+    closePiP();
+    return () => {
+      // On unmount (route leave), activate PiP only for a live station
+      const snap = pipHandoffRef.current;
+      if (!snap) return;
+      const { mainId: id, stations: stns, tokenMap: tMap, serverUrl: sUrl, storeId: sId } = snap;
+      if (!id || !sUrl) return;
+
+      const liveSet = liveRoomsRef.current;
+      // Priority: main station if live, otherwise first live station
+      const pipRoomName = liveSet.has(id)
+        ? id
+        : stns.find((s) => liveSet.has(s.room_name))?.room_name ?? null;
+      if (!pipRoomName) return; // nothing live — skip PiP
+
+      const station = stns.find((s) => s.room_name === pipRoomName);
+      const token = tMap[pipRoomName];
+      if (!station || !token) return;
+      activatePiP({
+        roomName: station.room_name,
+        name: station.name,
+        token,
+        serverUrl: sUrl,
+        storeId: sId,
+      });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hasSidePanel = stations.length > 1;
   const anyAudioEnabled = stations.some((s) => screenStates[s.room_name]?.audioEnabled);
@@ -287,9 +348,11 @@ export function ScreenProjectView() {
   }, [anyMyCamEnabled]);
 
   const handleSidePanelWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
+    (e: WheelEvent) => {
       if (!hasSidePanel || maxSideScroll <= 0) return;
-      const rect = e.currentTarget.getBoundingClientRect();
+      const target = tileAreaDomRef.current;
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
       const inSidePanel =
         containerSize.width >= LG_BREAKPOINT
           ? e.clientX - rect.left >= containerSize.width - DESK_SIDE_W
@@ -302,6 +365,20 @@ export function ScreenProjectView() {
     },
     [hasSidePanel, maxSideScroll, containerSize],
   );
+
+  // Attach a non-passive wheel listener so preventDefault() actually works.
+  // (React's onWheel prop registers a passive listener in modern browsers.)
+  const wheelHandlerRef = useRef(handleSidePanelWheel);
+  useEffect(() => { wheelHandlerRef.current = handleSidePanelWheel; }, [handleSidePanelWheel]);
+  useEffect(() => {
+    const el = tileAreaDomRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => wheelHandlerRef.current(e);
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  // Re-attach when the DOM element itself changes (callback ref fires again)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tileAreaDomRef.current]);
 
   /* ── Loading ────────────────────────────────────────────────────── */
   if (isLoading) {
@@ -367,7 +444,7 @@ export function ScreenProjectView() {
        * absolute position/size is animated by framer-motion `layout` (FLIP),
        * so no tile ever unmounts and LiveKit connections stay alive.
        */}
-      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef} onWheel={handleSidePanelWheel}>
+      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef}>
         {containerSize.width > 0 &&
           stationsMeta.map((s) => {
             const rect = computeTileRect(
@@ -402,6 +479,10 @@ export function ScreenProjectView() {
                   volume={screenStates[s.room_name]?.volume ?? 1}
                   onVolumeChange={(v) => handleVolumeChange(s.room_name, v)}
                   videoQuality={s.isMain ? VideoQuality.HIGH : VideoQuality.LOW}
+                  onLiveChange={(live) => {
+                    if (live) liveRoomsRef.current.add(s.room_name);
+                    else liveRoomsRef.current.delete(s.room_name);
+                  }}
                   className="h-full w-full"
                 />
               </motion.div>
@@ -497,6 +578,7 @@ export function ScreenProjectView() {
       {/* Bottom control bar */}
       <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
         <div className="flex items-center gap-2">
+          <NetworkBadge status={networkStatus} />
           <StationsDialog
             storeId={storeId}
             stations={stations}

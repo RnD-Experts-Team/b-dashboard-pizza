@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { useNetworkStatus } from "@/lib/hooks/use-network-status";
+import { NetworkBadge } from "./network-badge";
 import { ScreenTile } from "./screen-tile";
 import type { Station, StationTokenResponse } from "@/types/screen-project.types";
 
@@ -32,6 +34,8 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [stations, setStations] = useState<Station[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const networkStatus = useNetworkStatus();
 
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [password, setPassword] = useState("");
@@ -138,6 +142,10 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   if (phase === "select") {
     return (
       <div className="flex h-full items-center justify-center p-4">
+        {/* Network badge */}
+        <div className="absolute top-3 right-3">
+          <NetworkBadge status={networkStatus} />
+        </div>
         <div className="w-full max-w-sm space-y-4">
           <div className="text-center">
             <h1 className="text-2xl font-semibold">Select a Station</h1>
@@ -186,6 +194,10 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   if (phase === "auth" || phase === "submitting") {
     return (
       <div className="flex h-full items-center justify-center p-4">
+        {/* Network badge */}
+        <div className="absolute top-3 right-3">
+          <NetworkBadge status={networkStatus} />
+        </div>
         <div className="w-full max-w-sm space-y-5">
           {/* Back link */}
           <button
@@ -272,6 +284,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             volume={1}
             videoQuality={VideoQuality.HIGH}
             viewerOnly={true}
+            publishNetworkStatus={true}
             className="h-full w-full"
           />
         </div>
@@ -279,15 +292,19 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
         {/* Bottom bar — station name + change station */}
         <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
           <p className="text-sm font-medium truncate">{streaming.station.name}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleChangeStation}
-            className="gap-1.5 shrink-0"
-          >
-            <Monitor className="h-4 w-4" />
-            <span className="hidden sm:inline">Change Station</span>
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Network status badge */}
+            <NetworkBadge status={networkStatus} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleChangeStation}
+              className="gap-1.5"
+            >
+              <Monitor className="h-4 w-4" />
+              <span className="hidden sm:inline">Change Station</span>
+            </Button>
+          </div>
         </div>
       </div>
     );

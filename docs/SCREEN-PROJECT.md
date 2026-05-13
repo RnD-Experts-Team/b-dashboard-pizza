@@ -19,6 +19,7 @@ This document explains the end-to-end architecture of the Screen Project feature
    - [StationsDialog](#stationsdialog)
    - [ScreenTile](#screentile)
    - [ScreenTileInner](#screentileinner)
+   - [ScreenProjectPiPOverlay](#screenprojectpipoverlay)
 10. [LiveKit Integration Deep-Dive](#10-livekit-integration-deep-dive)
 11. [State Management](#11-state-management)
 12. [Known Issues & Fixes Applied](#12-known-issues--fixes-applied)
@@ -37,7 +38,7 @@ Key capabilities:
 - Per-station volume slider (hover the Sound button on the main tile) — shows 0 when muted
 - "Mute All / Unmute All" shortcut
 - Animated swap when switching which station is in the main view
-- Draggable PiP (picture-in-picture) self-view overlay
+- **Cross-page draggable PiP overlay** — when the supervisor navigates away from the Screen Project page, a floating mini-player appears (top-right, draggable) showing the active station's live feed; includes mute, mic, camera, navigate-back, and close controls
 - Manage stations: create and delete stations via the **Stations** dialog in the bottom bar
 - Delete confirmation dialog to prevent accidental removal
 - Automatic video quality: main tile requests `HIGH`, side tiles request `LOW` simulcast layers
@@ -66,12 +67,25 @@ Browser
   │
   ├─ ScreenProjectView
   │     └─ <ScreenTile> × N   (one per station)
+  │           ├─ onLiveChange → liveRoomsRef (Set<room_name>)
   │           └─ <LiveKitRoom serverUrl token>
   │                 └─ <ScreenTileInner>
   │                       ├─ useTracks()  ←── LiveKit WebSocket (wss://screens.lcportal.cloud)
   │                       ├─ setVideoQuality(HIGH|LOW) on RemoteTrackPublication
+  │                       ├─ reports isLive changes via onLiveChange prop
   │                       ├─ <VideoTrack>
   │                       └─ <AudioTrack>
+  │
+  ├─ AppShell (all layout variants)
+  │     └─ <ScreenProjectPiPOverlay />   (always mounted, hidden when not active)
+  │           ├─ reads useScreenProjectPiPStore
+  │           ├─ framer-motion drag (offset persisted to localStorage)
+  │           └─ <ScreenTile viewerOnly> (single station, VideoQuality.LOW)
+  │
+  ├─ useScreenProjectPiPStore (Zustand + persist)
+  │     ├─ activeStation, isVisible
+  │     ├─ isMuted, isMicEnabled, isCamEnabled
+  │     └─ position (persisted), videoQuality
   │
   └─ LiveKit Cloud
         └─ wss://screens.lcportal.cloud  (signal + media)
@@ -341,6 +355,28 @@ When `stations` loads/changes, a `useEffect`:
 
 A `<motion.div drag dragConstraints={mainRef}>` anchored inside the main screen area. Visibility is animated (`opacity`/`scale`). The actual local camera preview uses `getUserMedia` and is rendered in a mirrored `<video>` element — it is **not** published to any LiveKit room.
 
+#### PiP handoff on route leave
+
+`ScreenProjectView` integrates with `useScreenProjectPiPStore` to hand off the active station to the global PiP overlay when the supervisor navigates away.
+
+On **mount**, `closePiP()` is called — the full-page view supersedes any existing PiP.
+
+On **unmount** (route leave), the component:
+1. Reads `liveRoomsRef.current` (the `Set<string>` maintained by `onLiveChange` callbacks).
+2. Chooses a station to hand off — **main station first** if it's live, otherwise the first live station in the list.
+3. If no station is live, PiP is **not** activated.
+4. Calls `activatePiP({ roomName, name, token, serverUrl, storeId })` with the chosen station.
+
+```ts
+const liveSet = liveRoomsRef.current;
+const pipRoomName = liveSet.has(mainId)
+  ? mainId
+  : stations.find((s) => liveSet.has(s.room_name))?.room_name ?? null;
+if (!pipRoomName) return; // nothing live — skip PiP
+```
+
+`pipHandoffRef` (a plain `useRef`) is kept up-to-date on every render so the cleanup closure always sees the latest `mainId`, `stations`, `tokenMap`, `serverUrl`, and `storeId` without adding them as effect dependencies.
+
 #### Bottom bar — Stations button
 
 The bottom control bar contains a **Stations** button (left side) that opens `<StationsDialog>`. It receives:
@@ -420,6 +456,14 @@ Passed from `ScreenProjectView` as `HIGH` for the main tile and `LOW` for side t
 
 > **Note:** Quality hints only take effect when the publishing station encodes multiple simulcast layers. If the station publishes a single track, the server ignores the hint and delivers what is available.
 
+#### `onLiveChange` prop
+
+```ts
+onLiveChange?: (isLive: boolean) => void
+```
+
+Called by `ScreenTileInner` (via a `useEffect`) whenever the tile's live status changes. A tile is considered **live** when `connectionState === ConnectionState.Connected && !!videoTrack`. `ScreenProjectView` uses this to maintain `liveRoomsRef` (a `Set<string>` of currently-live `room_name`s) so the PiP handoff logic can guard against activating PiP for stations that are not actually streaming.
+
 ---
 
 ### ScreenTileInner
@@ -427,8 +471,6 @@ Passed from `ScreenProjectView` as `HIGH` for the main tile and `LOW` for side t
 **File:** `components/screen-project/screen-tile.tsx` — private component
 
 Rendered **inside** the `<LiveKitRoom>` context, so it can call LiveKit hooks.
-
-> **⚠️ This component is currently in debug mode.** See [Section 12](#12-current-debug-state) for details.
 
 #### Track subscription
 
@@ -498,6 +540,50 @@ Called whenever the subscribed track changes or the quality prop changes (e.g. w
 
 ---
 
+### ScreenProjectPiPOverlay
+
+**File:** `components/screen-project/screen-project-pip-overlay.tsx`
+
+A global floating mini-player that persists across all routes. Mounted once in every `AppShell` layout variant and reads from `useScreenProjectPiPStore`. It is invisible (`return null`) when `activeStation` is `null` or `isVisible` is `false`.
+
+#### Positioning & dragging
+
+- Default anchor: CSS `fixed top-4 right-4` (top-right corner, 16 px inset).
+- Dragging is implemented with `framer-motion` `motion.div` using `useMotionValue` for `x`/`y` offsets from the anchor.
+- `dragMomentum={false}` and `dragElastic={0.05}` keep motion precise.
+- On drag end, the offset is written back to the store via `setPosition()` and persisted to `localStorage` so the position survives page reloads.
+
+#### Layout
+
+```
+┌──────────────────────────────┐
+│  <ScreenTile viewerOnly      │  16:9 video area (w-72)
+│    VideoQuality.LOW>         │
+├──────────────────────────────┤
+│ [Station name]  [🔇][🎤][📷][↗][✕] │  controls bar
+└──────────────────────────────┘
+```
+
+Controls (left to right in the button cluster):
+
+| Button | Icon | Behaviour |
+|---|---|---|
+| Mute toggle | `Volume2` / `VolumeX` | Toggles `isMuted`; sets `isAudioEnabled` and `volume` on `ScreenTile` |
+| Mic toggle | `Mic` / `MicOff` | Toggles `isMicEnabled`; red highlight when active; wires to `myMicEnabled` on `ScreenTile` |
+| Camera toggle | `Video` / `VideoOff` | Toggles `isCamEnabled`; red highlight when active; wires to `myCamEnabled` on `ScreenTile` |
+| Go to Screen Project | `ExternalLink` | Navigates to `/{locale}/dashboard/screen-project` |
+| Close | `X` | Calls `closePiP()` — clears station, resets mic/cam |
+
+#### Store switch guard
+
+A `useEffect` watches `selectedStore?.storeId`. If it changes and no longer matches `activeStation.storeId`, `closePiP()` is called automatically — the PiP token is bound to a specific store and would be invalid in another room.
+
+#### ScreenTile inside PiP
+
+`ScreenTile` is rendered with `viewerOnly={true}` (hides the in-tile control bar), `VideoQuality.LOW`, and the mic/cam props wired to `isMicEnabled`/`isCamEnabled` from the store. The supervisor's mic and camera are only captured and published when the user explicitly enables them via the PiP controls.
+
+---
+
 ## 10. LiveKit Integration Deep-Dive
 
 ### Token lifecycle
@@ -541,6 +627,49 @@ Real station devices publish `Track.Source.Camera` (confirmed via runtime debug 
 ### Per-screen A/V state
 
 All `audioEnabled`, `videoEnabled`, `volume` state lives in `ScreenProjectView.screenStates` as a `Record<room_name, ScreenState>`. Callbacks are passed down as props to each `<ScreenTile>`.
+
+### Cross-page PiP state — `useScreenProjectPiPStore`
+
+**File:** `lib/store/screen-project-pip.store.ts`
+
+Zustand store with `persist` middleware. Tracks the active PiP session and user preferences.
+
+```ts
+interface ScreenProjectPiPState {
+  activeStation: PiPStation | null;  // null = no PiP active
+  isVisible: boolean;
+  isMuted: boolean;                  // remote station audio muted
+  isMicEnabled: boolean;             // supervisor mic published into PiP room
+  isCamEnabled: boolean;             // supervisor cam published into PiP room
+  position: PiPPosition;             // drag offset from top-right anchor (persisted)
+  videoQuality: VideoQuality;        // always LOW
+
+  activatePiP(station: PiPStation): void;
+  closePiP(): void;          // clears station, resets isMicEnabled + isCamEnabled
+  toggleMute(): void;
+  toggleMic(): void;
+  toggleCam(): void;
+  setPosition(pos: PiPPosition): void;
+}
+```
+
+`PiPStation` shape:
+
+```ts
+interface PiPStation {
+  roomName: string;    // LiveKit room name
+  name: string;        // human-readable station name
+  token: string;       // JWT (NOT persisted — expires)
+  serverUrl: string;
+  storeId: string;
+}
+```
+
+**Persistence:** Only `position` and `isMuted` are written to `localStorage` via `partialize`. The JWT (`token`) is intentionally excluded because LiveKit tokens expire. `isMicEnabled` and `isCamEnabled` are also excluded — they reset to `false` on every session.
+
+### Live-room tracking
+
+`ScreenProjectView` maintains `liveRoomsRef` (`useRef<Set<string>>`). Each `<ScreenTile>` fires `onLiveChange(true/false)` via a `useEffect` in `ScreenTileInner` whenever its live status (`connected && !!videoTrack`) changes. The ref is used at unmount time to decide whether to activate PiP.
 
 ### No global state for LiveKit
 
@@ -596,6 +725,21 @@ Both proxied through Next.js route handlers following the same pattern as the ex
 
 Main tile requests `VideoQuality.HIGH`, side tiles request `VideoQuality.LOW` via `RemoteTrackPublication.setVideoQuality()`. This reduces bandwidth for the small side thumbnails while keeping the main view sharp.
 
+### Cross-page PiP overlay (added)
+
+When the supervisor navigates away from the Screen Project page, a draggable floating mini-player appears (top-right, `z-9999`, `fixed`) showing the active station's live feed. Features:
+
+- **Live guard** — PiP only activates if at least one station is actually live (connected + video track present). Determined via `onLiveChange` callbacks collected in `liveRoomsRef`.
+- **Main-station priority** — if the main station is live it takes the PiP slot; otherwise the first live station in the list is used.
+- **Mic & camera controls** — the supervisor can optionally publish their microphone and/or camera into the PiP room using the Mic/Camera toggle buttons in the PiP controls bar (red highlight = active).
+- **Draggable with persisted position** — framer-motion drag with `useMotionValue`; offset saved to `localStorage` via Zustand `persist`.
+- **Store switch guard** — PiP auto-closes if the selected store changes (token would be stale).
+- **Token not persisted** — `partialize` excludes the JWT from `localStorage` since LiveKit tokens expire.
+
+### `onLiveChange` callback on ScreenTile (added)
+
+`ScreenTileInner` now fires `onLiveChange(boolean)` whenever `isLive` (`connected && !!videoTrack`) changes. Used by `ScreenProjectView` to maintain `liveRoomsRef` and by the PiP handoff to guard against activating PiP for offline stations.
+
 ---
 
 ## 13. File Map
@@ -617,12 +761,30 @@ lib/api/services/
 lib/hooks/
   use-screen-project.ts                          React hook — fetches stations + tokens, builds tokenMap
 
+lib/store/
+  screen-project-pip.store.ts                    Zustand + persist store for cross-page PiP state
+                                                 (activeStation, isMuted, isMicEnabled, isCamEnabled,
+                                                  position, activatePiP, closePiP, toggleMute/Mic/Cam)
+
+lib/config/
+  features.types.ts                              FEATURE_IDS includes "screenProjectPiP"
+  features.config.ts                             screenProjectPiP feature flag (enabled by default,
+                                                  NEXT_PUBLIC_FEATURE_SCREEN_PROJECT_PIP override)
+
 components/screen-project/
-  screen-project-view.tsx                        Full-page layout, per-screen state, swap animation, PiP, control bar
-  screen-tile.tsx                                LiveKitRoom wrapper + inner tile (video/audio rendering,
-                                                 controls, video quality subscription)
+  screen-project-view.tsx                        Full-page layout, per-screen state, swap animation, control bar
+                                                 PiP handoff: liveRoomsRef + onLiveChange + live guard
+  screen-tile.tsx                                LiveKitRoom wrapper + ScreenTileInner
+                                                 onLiveChange prop: fires when isLive changes
+                                                 videoQuality, viewerOnly, myMicEnabled, myCamEnabled props
+  screen-project-pip-overlay.tsx                 Global cross-page draggable PiP mini-player
+                                                 framer-motion drag, mic/cam/mute controls, store switch guard
   stations-dialog.tsx                            Station list + delete confirmation + create form
-  index.ts                                       Re-exports ScreenProjectView, StationsDialog, ScreenTileProps
+  index.ts                                       Re-exports ScreenProjectView, StationsDialog,
+                                                            ScreenProjectPiPOverlay, ScreenTileProps
+
+components/layout/
+  app-shell.tsx                                  Mounts <ScreenProjectPiPOverlay /> in all 4 layout variants
 
 next.config.ts                                   CSP connect-src includes LiveKit domains; Permissions-Policy
 .env.local                                       NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL

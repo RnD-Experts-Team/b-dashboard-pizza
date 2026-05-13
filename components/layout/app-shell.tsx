@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useUIStore } from "@/lib/store/ui.store";
 import { FloatingDebriefButton } from "./floating-debrief-button";
+import { ScreenProjectPiPOverlay } from "@/components/screen-project/screen-project-pip-overlay";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -43,6 +44,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </div>
         <FloatingDebriefButton />
+        <ScreenProjectPiPOverlay />
       </div>
     );
   }
@@ -68,6 +70,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
         <FloatingDebriefButton />
+        <ScreenProjectPiPOverlay />
       </div>
     );
   }
@@ -93,6 +96,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </div>
         <FloatingDebriefButton />
+        <ScreenProjectPiPOverlay />
       </div>
     );
   }
@@ -118,6 +122,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </main>
       <FloatingDebriefButton />
+      <ScreenProjectPiPOverlay />
     </div>
   );
 }

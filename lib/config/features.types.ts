@@ -29,6 +29,7 @@ export const FEATURE_IDS = [
   "sidebar",
   "breadcrumbs",
   "search",
+  "screenProjectPiP",
 ] as const;
 
 /**

@@ -10,11 +10,14 @@ import {
   useConnectionState,
   useSpeakingParticipants,
 } from "@livekit/components-react";
-import { Track, ConnectionState, VideoQuality, RemoteTrackPublication } from "livekit-client";
+import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent } from "livekit-client";
 import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { useNetworkStatus } from "@/lib/hooks/use-network-status";
+import type { NetworkStatus } from "@/lib/hooks/use-network-status";
+import { NetworkBadge } from "./network-badge";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Sound bars — animated indicator shown when remote audio is active       */
@@ -85,6 +88,17 @@ export interface ScreenTileProps {
   videoQuality?: VideoQuality;
   /** When true, hides all A/V control buttons (view-only mode) */
   viewerOnly?: boolean;
+  /**
+   * When true, this tile publishes the local browser's network status to remote
+   * participants via the LiveKit data channel. Intended for the public viewer so
+   * the supervisor can see the viewer's signal quality on their side.
+   */
+  publishNetworkStatus?: boolean;
+  /**
+   * Called whenever the tile's "live" status changes (connected + video track
+   * present). Used by the parent to know which stations are safe to put in PiP.
+   */
+  onLiveChange?: (isLive: boolean) => void;
   className?: string;
 }
 
@@ -107,7 +121,90 @@ interface InnerProps {
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
   viewerOnly?: boolean;
+  publishNetworkStatus?: boolean;
+  onLiveChange?: (isLive: boolean) => void;
   className?: string;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  NetworkStatusPublisher — runs inside a LiveKitRoom context               */
+/*  Periodically broadcasts the local browser network quality to remote      */
+/*  participants via the LiveKit data channel (reliable, topic "net-status"). */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+function NetworkStatusPublisher() {
+  const room = useRoomContext();
+  const connectionState = useConnectionState();
+  const networkStatus = useNetworkStatus();
+
+  // Log on mount/unmount so we can confirm the component is actually rendered
+  useEffect(() => {
+    console.debug("[NetworkStatusPublisher] 🟡 mounted");
+    return () => console.debug("[NetworkStatusPublisher] 🔴 unmounted");
+  }, []);
+
+  // Log every connection state change so we know when/if Connected is reached
+  useEffect(() => {
+    console.debug("[NetworkStatusPublisher] connectionState:", connectionState);
+  }, [connectionState]);
+
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+
+    // Debug: confirm token permissions before attempting to publish
+    const perms = room.localParticipant.permissions;
+    console.debug(
+      "[NetworkStatusPublisher] localParticipant permissions:",
+      perms,
+    );
+    if (!perms?.canPublishData) {
+      console.warn(
+        "[NetworkStatusPublisher] ⚠️  can_publish_data is NOT granted on this token. " +
+          "The backend POST /api/public/screen-project/:store/tokens/station/:id must " +
+          "return a JWT with can_publish_data: true. " +
+          "Network status will NOT reach the supervisor until this is fixed.",
+      );
+    }
+
+    const send = () => {
+      const q = room.localParticipant.connectionQuality as string;
+      const payload = JSON.stringify({
+        type: "net-status",
+        online: networkStatus.online,
+        effectiveType: networkStatus.effectiveType ?? null,
+        downlink: networkStatus.downlink ?? null,
+        rtt: networkStatus.rtt ?? null,
+        connectionQuality: (q === "excellent" || q === "good" || q === "poor" || q === "lost") ? q : null,
+      });
+      // publishData is async in livekit-client v2 — must use .catch() not try/catch
+      room.localParticipant
+        .publishData(new TextEncoder().encode(payload), {
+          reliable: true,
+          topic: "net-status",
+        })
+        .then(() => {
+          console.debug("[NetworkStatusPublisher] ✅ published:", payload);
+        })
+        .catch((err: unknown) => {
+          console.error(
+            "[NetworkStatusPublisher] ❌ publishData() rejected — " +
+              "check that can_publish_data: true is set in the station token:",
+            err,
+          );
+        });
+    };
+
+    send();
+    const id = setInterval(send, 5000);
+    // Also send immediately whenever LiveKit detects a quality change
+    room.localParticipant.on(ParticipantEvent.ConnectionQualityChanged, send);
+    return () => {
+      clearInterval(id);
+      room.localParticipant.off(ParticipantEvent.ConnectionQualityChanged, send);
+    };
+  }, [networkStatus, connectionState, room]);
+
+  return null;
 }
 
 function ScreenTileInner({
@@ -125,6 +222,8 @@ function ScreenTileInner({
   onVolumeChange,
   videoQuality,
   viewerOnly = false,
+  publishNetworkStatus = false,
+  onLiveChange,
   className,
 }: InnerProps) {
   const allTracks = useTracks([
@@ -150,6 +249,11 @@ function ScreenTileInner({
 
   // Live = connected AND the station is actively streaming video
   const isLive = connectionState === ConnectionState.Connected && !!videoTrack;
+
+  // Notify parent whenever live status changes
+  useEffect(() => {
+    onLiveChange?.(isLive);
+  }, [isLive, onLiveChange]);
 
   // Detect if any remote participant is speaking (audio activity)
   const speakingParticipants = useSpeakingParticipants();
@@ -189,6 +293,42 @@ function ScreenTileInner({
     }
   }, [videoTrack, videoQuality]);
 
+  // Remote viewer's network quality — received via LiveKit data channel
+  const [remoteNetworkStatus, setRemoteNetworkStatus] = useState<NetworkStatus | null>(null);
+
+  useEffect(() => {
+    if (publishNetworkStatus) return; // publisher side — no need to listen
+    console.debug("[ScreenTileInner] 👂 attaching DataReceived listener, room:", room.name);
+    const handler = (payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) => {
+      const raw = new TextDecoder().decode(payload);
+      console.debug("[ScreenTileInner] 📨 DataReceived topic:", topic, "raw:", raw);
+      try {
+        const msg = JSON.parse(raw) as {
+          type: string;
+          online: boolean;
+          effectiveType?: NetworkStatus["effectiveType"];
+          downlink?: number | null;
+          rtt?: number | null;
+          connectionQuality?: NetworkStatus["connectionQuality"] | null;
+        };
+        if (msg.type === "net-status") {
+          console.debug("[ScreenTileInner] ✅ updating remoteNetworkStatus:", msg);
+          setRemoteNetworkStatus({
+            online: msg.online,
+            effectiveType: msg.effectiveType ?? undefined,
+            downlink: msg.downlink ?? undefined,
+            rtt: msg.rtt ?? undefined,
+            connectionQuality: msg.connectionQuality ?? undefined,
+          });
+        }
+      } catch {
+        console.warn("[ScreenTileInner] ⚠️ could not parse DataReceived payload:", raw);
+      }
+    };
+    room.on(RoomEvent.DataReceived, handler);
+    return () => { room.off(RoomEvent.DataReceived, handler); };
+  }, [room, publishNetworkStatus]);
+
   return (
     <div
       onClick={!isMain ? onClick : undefined}
@@ -204,8 +344,8 @@ function ScreenTileInner({
         className,
       )}
     >
-      {/* ── LIVE / offline badge — top-right ─────────────────────────── */}
-      <div className="absolute top-2 right-2 z-10 pointer-events-none select-none">
+      {/* ── Status badges — top-right stack (Live/Offline + remote viewer signal) ── */}
+      <div className="absolute top-2 right-2 z-10 pointer-events-none select-none flex flex-col items-end gap-1">
         {isLive ? (
           <div className={cn(
             "flex items-center gap-1 rounded-full bg-black/60 backdrop-blur-sm",
@@ -235,6 +375,10 @@ function ScreenTileInner({
             )}
           </div>
         ) : null}
+        {/* Remote viewer's network quality — supervisor side only */}
+        {remoteNetworkStatus && !publishNetworkStatus && (
+          <NetworkBadge status={remoteNetworkStatus} iconOnly={!isMain} />
+        )}
       </div>
 
       {videoTrack && isVideoEnabled ? (
@@ -451,6 +595,8 @@ function ScreenTileInner({
         </div>
       </div>
       )}
+      {/* Network status publisher — renders null, sends data-channel heartbeats */}
+      {publishNetworkStatus && <NetworkStatusPublisher />}
     </div>
   );
 }
@@ -477,6 +623,8 @@ export function ScreenTile({
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
   viewerOnly = false,
+  publishNetworkStatus = false,
+  onLiveChange,
   className,
 }: ScreenTileProps) {
   if (!token || !serverUrl) {
@@ -539,6 +687,8 @@ export function ScreenTile({
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}
         viewerOnly={viewerOnly}
+        publishNetworkStatus={publishNetworkStatus}
+        onLiveChange={onLiveChange}
         className={className}
       />
     </LiveKitRoom>
