@@ -682,22 +682,24 @@ export function DsprDashboard() {
         
         <HourlyChannelsChart
           hourlyData={day.hourly_sales_and_channels}
+          weeklyData={day.hourly_sales_and_channels_week_to_date_avg}
           height={190}
           toolbar={false}
           className=""
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
+          weeklyTotalSales={day.total_sales_week_to_date}
           height={200}
           toolbar={false}
         />
-         <HnrCard hnr={day.hnr} />
-        <LaborGauge value={22} />
+         <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
+        <LaborGauge value={22} weeklyValue={day.labor_week_to_date} />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <TopItemsList items={top.top_5_items_sales_for_day} className="sm:col-span-2 lg:col-span-1" />
+        <TopItemsList items={top.top_5_items_sales_for_day} weeklyItems={top.top_5_items_sales_week_to_date} className="sm:col-span-2 lg:col-span-1" />
         <TopIngredientsList
           mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
           paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}

@@ -4,7 +4,11 @@ import dynamic from "next/dynamic";
 import { useMemo, useState, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CalendarDays } from "lucide-react";
 import type { HourlySalesChannel } from "@/types/dspr.types";
 import type { ApexOptions } from "apexcharts";
 import { cn } from "@/lib/utils";
@@ -29,6 +33,8 @@ const CHANNEL_KEYS: { key: keyof HourlySalesChannel; label: string; color: strin
 
 interface HourlyChannelsChartProps {
   hourlyData: HourlySalesChannel[];
+  /** WTD avg data — enables the Day/WTD toggle */
+  weeklyData?: HourlySalesChannel[];
   /** Show royalty_obligation on top as separate annotation (total per hour) */
   showRoyaltyTotal?: boolean;
   height?: number;
@@ -47,6 +53,7 @@ interface HourlyChannelsChartProps {
 
 export function HourlyChannelsChart({
   hourlyData,
+  weeklyData,
   showRoyaltyTotal = true,
   height = 400,
   title = "Hourly Sales by Channel",
@@ -59,6 +66,8 @@ export function HourlyChannelsChart({
   currencyPrefix = "$",
   className,
 }: HourlyChannelsChartProps) {
+  const [isWeekly, setIsWeekly] = useState(false);
+  const activeData = isWeekly && weeklyData ? weeklyData : hourlyData;
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
 
   const toggleSeries = useCallback((label: string) => {
@@ -74,7 +83,7 @@ export function HourlyChannelsChart({
 
  const { series, categories, channelHasData } = useMemo(() => {
   // Sort by hour
-  const sorted = [...hourlyData].sort((a, b) => a.hour - b.hour);
+  const sorted = [...activeData].sort((a, b) => a.hour - b.hour);
 
   // Categories = formatted hours
   const cats = sorted.map((h) => {
@@ -112,7 +121,7 @@ export function HourlyChannelsChart({
     categories: cats,
     channelHasData: hasDataByChannel,
   };
-}, [hourlyData]);
+}, [activeData]);
 
   const baseColors = colors || CHANNEL_KEYS.map((c) => c.color);
 
@@ -209,6 +218,8 @@ export function HourlyChannelsChart({
     ]
   );
 
+  const activeTitle = isWeekly ? "Hourly Avg by Channel (WTD)" : title;
+
   return (
     <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", className)}>
       <CardHeader className="pb-0 px-3">
@@ -216,7 +227,22 @@ export function HourlyChannelsChart({
           <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">
             <svg className="h-3 w-3 text-violet-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 16V8l4 4 4-4v8"/></svg>
           </div>
-          {title}
+          {activeTitle}
+          {weeklyData && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                  onClick={() => setIsWeekly((v) => !v)}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+            </Tooltip>
+          )}
         </CardTitle>
 
         {/* Legend toggle buttons */}

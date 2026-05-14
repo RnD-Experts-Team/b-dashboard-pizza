@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { SpeedometerGauge, type SpeedZone } from "./speedometer-gauge";
 import type { DsprHnr, DsprPortal } from "@/types/dspr.types";
 import {
@@ -15,6 +18,7 @@ import {
   Info,
   CheckCircle2,
   XCircle,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -78,11 +82,14 @@ function getLaborLabel(value: number): string {
 
 interface HnrCardProps {
   hnr: DsprHnr;
+  weeklyHnr?: DsprHnr;
   className?: string;
 }
 
-export function HnrCard({ hnr, className }: HnrCardProps) {
-  const pct = hnr.hnr_promise_met_percent;
+export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
+  const [isWeekly, setIsWeekly] = useState(false);
+  const activeHnr = isWeekly && weeklyHnr ? weeklyHnr : hnr;
+  const pct = activeHnr.hnr_promise_met_percent;
 
   return (
     <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-orange-50 via-orange-100 to-orange-200 dark:from-orange-950/20 dark:via-orange-900/40 dark:to-orange-800/50", className)}>
@@ -92,14 +99,30 @@ export function HnrCard({ hnr, className }: HnrCardProps) {
             <Timer className="h-3 w-3 text-orange-500" />
           </div>
           Hot-N-Ready
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-50">
-              Tracks how well HNR promises are being met
-            </TooltipContent>
-          </Tooltip>
+          {weeklyHnr ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                  onClick={() => setIsWeekly((v) => !v)}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-50">
+                Tracks how well HNR promises are being met
+              </TooltipContent>
+            </Tooltip>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-1 px-3 flex flex-col gap-8">
@@ -114,19 +137,19 @@ export function HnrCard({ hnr, className }: HnrCardProps) {
         <div className="grid grid-cols-3 gap-1 mt-0">
           <Metric
             icon={<Timer className="h-2.5 w-2.5 text-muted-foreground" />}
-            value={hnr.hnr_transactions}
+            value={activeHnr.hnr_transactions}
             label="Trans."
           />
           <Metric
             icon={<CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />}
-            value={hnr.hnr_promise_met}
+            value={activeHnr.hnr_promise_met}
             label="Kept"
           />
           <Metric
             icon={<XCircle className="h-2.5 w-2.5 text-red-500" />}
-            value={hnr.hnr_broken_promises}
+            value={activeHnr.hnr_broken_promises}
             label="Broken"
-            highlight={hnr.hnr_broken_promises > 0}
+            highlight={activeHnr.hnr_broken_promises > 0}
           />
         </div>
       </CardContent>

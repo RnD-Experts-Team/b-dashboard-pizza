@@ -49,6 +49,7 @@ export interface TopIngredient {
 
 export interface DsprTop {
   top_5_items_sales_for_day: TopMenuItem[];
+  top_5_items_sales_week_to_date?: TopMenuItem[];
   ingredients: {
     top_3_ingredients_used: TopIngredient[],
     main_5_ingredients_usage: [],
@@ -109,20 +110,38 @@ export interface DsprPortal {
   portal_on_time_orders: number;
   put_into_portal_percent: number;
   in_portal_on_time_percent: number;
+  week_to_date?: {
+    portal_eligible_orders: number;
+    portal_used_orders: number;
+    portal_on_time_orders: number;
+    put_into_portal_percent: number;
+    in_portal_on_time_percent: number;
+  };
 }
 
 export interface DsprDay {
   hourly_sales_and_channels: HourlySalesChannel[];
+  hourly_sales_and_channels_week_to_date_avg?: HourlySalesChannel[];
   total_sales: DsprChannelSales;
+  total_sales_week_to_date?: DsprChannelSales;
   total_cash_sales: number;
+  total_cash_sales_week_to_date?: number;
   total_deposit: number;
+  total_deposit_week_to_date?: number;
   over_short: number;
+  over_short_week_to_date?: number;
   refunded_orders: DsprRefundedOrders;
+  refunded_orders_week_to_date?: DsprRefundedOrders;
   customer_count: number;
+  customer_count_week_to_date?: number;
   waste: DsprWaste;
+  waste_week_to_date?: DsprWaste;
   total_tips: number;
+  total_tips_week_to_date?: number;
   hnr: DsprHnr;
+  hnr_week_to_date?: DsprHnr;
   labor: number;
+  labor_week_to_date?: number;
   portal: DsprPortal;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import {
   LiveKitRoom,
   useTracks,
@@ -89,6 +89,11 @@ export interface ScreenTileProps {
   /** When true, hides all A/V control buttons (view-only mode) */
   viewerOnly?: boolean;
   /**
+   * When true, renders ALL non-local video tracks in a multi-participant grid.
+   * Used for the observer mode so the observer sees every camera in the room.
+   */
+  observerMode?: boolean;
+  /**
    * When true, this tile publishes the local browser's network status to remote
    * participants via the LiveKit data channel. Intended for the public viewer so
    * the supervisor can see the viewer's signal quality on their side.
@@ -99,6 +104,10 @@ export interface ScreenTileProps {
    * present). Used by the parent to know which stations are safe to put in PiP.
    */
   onLiveChange?: (isLive: boolean) => void;
+  /** MediaDeviceInfo.deviceId for the microphone to use (audioinput) */
+  selectedAudioDeviceId?: string;
+  /** MediaDeviceInfo.deviceId for the camera to use (videoinput) */
+  selectedVideoDeviceId?: string;
   className?: string;
 }
 
@@ -121,8 +130,11 @@ interface InnerProps {
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
   viewerOnly?: boolean;
+  observerMode?: boolean;
   publishNetworkStatus?: boolean;
   onLiveChange?: (isLive: boolean) => void;
+  selectedAudioDeviceId?: string;
+  selectedVideoDeviceId?: string;
   className?: string;
 }
 
@@ -222,8 +234,11 @@ function ScreenTileInner({
   onVolumeChange,
   videoQuality,
   viewerOnly = false,
+  observerMode = false,
   publishNetworkStatus = false,
   onLiveChange,
+  selectedAudioDeviceId,
+  selectedVideoDeviceId,
   className,
 }: InnerProps) {
   const allTracks = useTracks([
@@ -240,6 +255,16 @@ function ScreenTileInner({
       (t.publication.source === Track.Source.Camera ||
         t.publication.source === Track.Source.ScreenShare),
   );
+
+  // Observer mode: all non-local video tracks displayed in a multi-camera grid
+  const allVideoTracks = observerMode
+    ? allTracks.filter(
+        (t) =>
+          !t.participant.isLocal &&
+          (t.publication.source === Track.Source.Camera ||
+            t.publication.source === Track.Source.ScreenShare),
+      )
+    : [];
 
   const room = useRoomContext();
   const connectionState = useConnectionState();
@@ -283,6 +308,20 @@ function ScreenTileInner({
     if (connectionState !== ConnectionState.Connected) return;
     room.localParticipant.setCameraEnabled(myCamEnabled).catch(() => {});
   }, [myCamEnabled, connectionState, room]);
+
+  // Switch active microphone device when the selected audio device changes
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    if (!selectedAudioDeviceId) return;
+    room.switchActiveDevice("audioinput", selectedAudioDeviceId).catch(() => {});
+  }, [selectedAudioDeviceId, connectionState, room]);
+
+  // Switch active camera device when the selected video device changes
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    if (!selectedVideoDeviceId) return;
+    room.switchActiveDevice("videoinput", selectedVideoDeviceId).catch(() => {});
+  }, [selectedVideoDeviceId, connectionState, room]);
 
   // Request the appropriate simulcast layer from the server
   useEffect(() => {
@@ -381,7 +420,45 @@ function ScreenTileInner({
         )}
       </div>
 
-      {videoTrack && isVideoEnabled ? (
+      {observerMode ? (
+        /* Observer mode — show ALL participant cameras in a responsive grid */
+        allVideoTracks.length > 0 ? (
+          <div
+            className={cn(
+              "absolute inset-0 grid gap-1 p-1",
+              allVideoTracks.length === 1 ? "grid-cols-1" : "grid-cols-2",
+            )}
+          >
+            {allVideoTracks.map((t) => (
+              <div
+                key={t.publication.trackSid}
+                className="relative overflow-hidden rounded-lg bg-neutral-900"
+              >
+                <VideoTrack
+                  trackRef={t}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[0.6rem] font-medium text-white/80 backdrop-blur-sm">
+                  {t.participant.identity}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none bg-neutral-900">
+            <div className="rounded-full bg-black/30 flex items-center justify-center h-20 w-20">
+              {isConnecting ? (
+                <div className="animate-spin rounded-full border-2 border-white/20 border-t-white/70 h-9 w-9" />
+              ) : (
+                <VideoOff className="text-white/40 h-9 w-9" />
+              )}
+            </div>
+            <span className="font-medium truncate max-w-[88%] text-center text-white/60 text-base">
+              {isConnecting ? "Connecting..." : name}
+            </span>
+          </div>
+        )
+      ) : videoTrack && isVideoEnabled ? (
         <VideoTrack
           trackRef={videoTrack}
           className="absolute inset-0 h-full w-full object-cover"
@@ -623,8 +700,11 @@ export function ScreenTile({
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
   viewerOnly = false,
+  observerMode = false,
   publishNetworkStatus = false,
   onLiveChange,
+  selectedAudioDeviceId,
+  selectedVideoDeviceId,
   className,
 }: ScreenTileProps) {
   if (!token || !serverUrl) {
@@ -663,6 +743,21 @@ export function ScreenTile({
     );
   }
 
+  // Memoize options so the object reference stays stable between renders.
+  // A new object on every render would cause LiveKitRoom to tear down and
+  // recreate the room (closing the RTCEngine) on each re-render.
+  const roomOptions = useMemo(
+    () => ({
+      audioCaptureDefaults: selectedAudioDeviceId ? { deviceId: selectedAudioDeviceId } : undefined,
+      videoCaptureDefaults: selectedVideoDeviceId ? { deviceId: selectedVideoDeviceId } : undefined,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only re-create when the initial device IDs change (not on every render).
+    // Device switching after connect is handled via room.switchActiveDevice inside ScreenTileInner.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   return (
     <LiveKitRoom
       serverUrl={serverUrl}
@@ -670,6 +765,7 @@ export function ScreenTile({
       connect
       audio={false}
       video={false}
+      options={roomOptions}
       style={{ display: "contents" }}
     >
       <ScreenTileInner
@@ -687,8 +783,11 @@ export function ScreenTile({
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}
         viewerOnly={viewerOnly}
+        observerMode={observerMode}
         publishNetworkStatus={publishNetworkStatus}
         onLiveChange={onLiveChange}
+        selectedAudioDeviceId={selectedAudioDeviceId}
+        selectedVideoDeviceId={selectedVideoDeviceId}
         className={className}
       />
     </LiveKitRoom>

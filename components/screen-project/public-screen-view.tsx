@@ -1,13 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound, Settings2, Mic, Video as VideoIcon } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
@@ -42,6 +52,38 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
+
+  /* ── Media device state ──────────────────────────────────────────── */
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedVideoId, setSelectedVideoId] = useState("");
+  const [selectedAudioId, setSelectedAudioId] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const enumerateDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      // Exclude devices with empty deviceId (returned before permission is granted)
+      const cams = devices.filter((d) => d.kind === "videoinput" && d.deviceId !== "");
+      const mics = devices.filter((d) => d.kind === "audioinput" && d.deviceId !== "");
+      setVideoDevices(cams);
+      setAudioDevices(mics);
+      setSelectedVideoId((prev) =>
+        prev && cams.some((c) => c.deviceId === prev) ? prev : (cams[0]?.deviceId ?? ""),
+      );
+      setSelectedAudioId((prev) =>
+        prev && mics.some((m) => m.deviceId === prev) ? prev : (mics[0]?.deviceId ?? ""),
+      );
+    } catch {
+      // Ignore enumeration errors (e.g. insecure context)
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    enumerateDevices();
+  }, [settingsOpen, enumerateDevices]);
 
   /* ── Fetch stations on mount ─────────────────────────────────────── */
   useEffect(() => {
@@ -285,16 +327,112 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             videoQuality={VideoQuality.HIGH}
             viewerOnly={true}
             publishNetworkStatus={true}
+            selectedAudioDeviceId={selectedAudioId || undefined}
+            selectedVideoDeviceId={selectedVideoId || undefined}
             className="h-full w-full"
           />
         </div>
 
-        {/* Bottom bar — station name + change station */}
+        {/* Bottom bar — station name + device settings + change station */}
         <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
           <p className="text-sm font-medium truncate">{streaming.station.name}</p>
           <div className="flex items-center gap-2 shrink-0">
             {/* Network status badge */}
             <NetworkBadge status={networkStatus} />
+
+            {/* Device settings popover */}
+            <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Device settings"
+                >
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                side="top"
+                sideOffset={8}
+                className="w-72 p-0 overflow-hidden"
+              >
+                {/* Fixed header */}
+                <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                  <p className="text-sm font-semibold">Device Settings</p>
+                </div>
+                <Separator />
+
+                {/* Scrollable body — capped so it never overflows small screens */}
+                <ScrollArea className="max-h-[min(60vh,320px)]">
+                  <div className="space-y-4 px-4 py-3">
+
+                {/* Camera select */}
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <VideoIcon className="h-3.5 w-3.5" />
+                    Camera
+                  </Label>
+                  <Select
+                    value={selectedVideoId}
+                    onValueChange={setSelectedVideoId}
+                    disabled={videoDevices.length === 0}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Select camera…" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-40 overflow-y-auto">
+                      {videoDevices.length === 0 ? (
+                        <SelectItem value="__none" disabled>
+                          No cameras found
+                        </SelectItem>
+                      ) : (
+                        videoDevices.map((d) => (
+                          <SelectItem key={d.deviceId} value={d.deviceId}>
+                            {d.label || `Camera ${d.deviceId.slice(0, 8)}`}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Microphone select */}
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Mic className="h-3.5 w-3.5" />
+                    Microphone
+                  </Label>
+                  <Select
+                    value={selectedAudioId}
+                    onValueChange={setSelectedAudioId}
+                    disabled={audioDevices.length === 0}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Select microphone…" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-40 overflow-y-auto">
+                      {audioDevices.length === 0 ? (
+                        <SelectItem value="__none" disabled>
+                          No microphones found
+                        </SelectItem>
+                      ) : (
+                        audioDevices.map((d) => (
+                          <SelectItem key={d.deviceId} value={d.deviceId}>
+                            {d.label || `Microphone ${d.deviceId.slice(0, 8)}`}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                  </div>
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+
             <Button
               variant="outline"
               size="sm"

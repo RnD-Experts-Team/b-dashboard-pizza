@@ -79,11 +79,17 @@ function renderValuePreview(item: DueKeyItem): string {
   return "—";
 }
 
+// Layout constants — keep in sync with the button / panel sizes
+const FAB_W = 108;   // approximate FAB button width in px
+const FAB_H = 44;    // FAB button height in px
+const PANEL_W = 480; // floating panel width (w-120 = 30 rem)
+const EDGE = 8;      // minimum gap from each screen edge
+
 export function FloatingDebriefButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [position, setPosition] = useState<"top" | "bottom">("bottom");
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [activeNav, setActiveNav] = useState<"debrief" | "due-keys">("debrief");
 
   // ── Due Keys state ─────────────────────────────────────────────────────
@@ -94,7 +100,7 @@ export function FloatingDebriefButton() {
   const [fillAllSheetOpen, setFillAllSheetOpen] = useState(false);
 
   const hasDragged = useRef(false);
-  const dragStartY = useRef(0);
+  const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const debriefSectionRef = useRef<HTMLDivElement>(null);
   const dueKeysSectionRef = useRef<HTMLDivElement>(null);
@@ -168,24 +174,53 @@ export function FloatingDebriefButton() {
     }
   }, []);
 
+  // Initialise FAB position to bottom-right corner on mount
+  useEffect(() => {
+    setPos({
+      x: window.innerWidth - FAB_W - EDGE,
+      y: window.innerHeight - FAB_H - EDGE,
+    });
+  }, []);
+
+  // Clamp FAB position when the viewport is resized
+  useEffect(() => {
+    const onResize = () => {
+      setPos((prev) => {
+        if (!prev) return prev;
+        return {
+          x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, prev.x)),
+          y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, prev.y)),
+        };
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   if (!canCreateDebrief) return null;
 
-  // ── Drag handlers — snap to top or bottom on release ──────────────────
-  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+  // ── Drag handlers — free 2-D drag with viewport clamping ─────────────
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pos) return;
     hasDragged.current = false;
-    dragStartY.current = e.clientY;
+    dragOrigin.current = { px: e.clientX, py: e.clientY, ex: pos.x, ey: pos.y };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLButtonElement>) {
-    if (Math.abs(e.clientY - dragStartY.current) > 8) hasDragged.current = true;
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragOrigin.current) return;
+    const dx = e.clientX - dragOrigin.current.px;
+    const dy = e.clientY - dragOrigin.current.py;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged.current = true;
+    if (!hasDragged.current) return;
+    setPos({
+      x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, dragOrigin.current.ex + dx)),
+      y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, dragOrigin.current.ey + dy)),
+    });
   }
 
-  function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!hasDragged.current) return;
-    const delta = e.clientY - dragStartY.current;
-    if (delta < -40) setPosition("top");
-    else if (delta > 40) setPosition("bottom");
+  function handlePointerUp(_e: React.PointerEvent<HTMLDivElement>) {
+    dragOrigin.current = null;
   }
 
   function handleClick() {
@@ -254,6 +289,24 @@ export function FloatingDebriefButton() {
     return () => container.removeEventListener("scroll", handleScroll);
   }, [isOpen]);
 
+  // Compute floating panel screen position, keeping it fully within the viewport
+  function getPanelStyle() {
+    if (!pos) return {};
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Horizontal: prefer left of FAB; fall back to right when not enough room
+    const leftOfFab = pos.x - EDGE - PANEL_W;
+    const rightOfFab = pos.x + FAB_W + EDGE;
+    const left =
+      leftOfFab >= EDGE
+        ? leftOfFab
+        : Math.max(EDGE, Math.min(vw - PANEL_W - EDGE, rightOfFab));
+    // Vertical: align top with FAB, clamp so panel doesn't overflow bottom
+    const maxH = vh * 0.8;
+    const top = Math.max(EDGE, Math.min(vh - maxH - EDGE, pos.y));
+    return { left, top };
+  }
+
   return (
     <>
       {/* Backdrop — closes the panel on click */}
@@ -266,15 +319,15 @@ export function FloatingDebriefButton() {
       )}
 
       {/* Floating panel */}
-      {isOpen && (
+      {isOpen && pos && (
         <div
           className={cn(
-            "fixed z-50 right-6 w-120 max-h-[80vh]",
-            position === "bottom" ? "bottom-20" : "top-30",
+            "fixed z-50 w-120 max-h-[80vh]",
             "flex flex-col",
             "rounded-2xl bg-background shadow-2xl",
             "border border-gray-200/60 dark:border-gray-700/60",
           )}
+          style={getPanelStyle()}
         >
           {/* Panel header */}
           <div className="shrink-0 bg-background px-4 pt-4 pb-3 border-b border-gray-100/60 dark:border-gray-800/60 rounded-t-2xl">
@@ -540,39 +593,39 @@ export function FloatingDebriefButton() {
         </div>
       )}
 
-      {/* FAB button — drag to reposition vertically */}
-      <div
-        className={cn(
-          "fixed z-50 right-6",
-          position === "bottom" ? "bottom-6" : "top-15",
-        )}
-      >
-        <Button
+      {/* FAB button — freely draggable anywhere on screen */}
+      {pos && (
+        <div
+          className="fixed z-50"
+          style={{ left: pos.x, top: pos.y, touchAction: "none" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onClick={handleClick}
-          className={cn(
-            "gap-2 rounded-full",
-            "h-11 px-5 text-sm font-medium shadow-lg",
-            "transition-all duration-300 ease-in-out",
-            "cursor-grab active:cursor-grabbing select-none touch-none",
-            "border",
-            isOpen
-              ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
-              : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
-          )}
-          size="sm"
         >
-          <PenLine className="h-4 w-4" />
-          <span>Debrief</span>
-        </Button>
-        {!isOpen && unfilledItems.length > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
-            {unfilledItems.length}
-          </span>
-        )}
-      </div>
+          <Button
+            className={cn(
+              "gap-2 rounded-full",
+              "h-11 px-5 text-sm font-medium shadow-lg",
+              "transition-all duration-300 ease-in-out",
+              "cursor-grab active:cursor-grabbing select-none touch-none",
+              "border",
+              isOpen
+                ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
+                : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
+            )}
+            size="sm"
+          >
+            <PenLine className="h-4 w-4" />
+            <span>Debrief</span>
+          </Button>
+          {!isOpen && unfilledItems.length > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
+              {unfilledItems.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Due Key single-item sheet */}
       {selectedStoreId && (

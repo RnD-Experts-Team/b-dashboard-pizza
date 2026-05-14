@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
+import { ObserverDialog } from "./observer-dialog";
 import { useScreenProject } from "@/lib/hooks/use-screen-project";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { useSelectedStoreStore } from "@/lib/store";
@@ -148,6 +149,11 @@ export function ScreenProjectView() {
   const [myCamVisible, setMyCamVisible] = useState(false);
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
+
+  /** "supervisor" = normal tile view, "observer" = station picker grid */
+  const [viewMode, setViewMode] = useState<"supervisor" | "observer">("supervisor");
+  /** room_name of the station currently open in the ObserverDialog */
+  const [observingRoom, setObservingRoom] = useState<string | null>(null);
 
   // Start/stop local camera preview for the PiP self-view
   useEffect(() => {
@@ -408,8 +414,8 @@ export function ScreenProjectView() {
     );
   }
 
-  /* ── No store selected / no stations ───────────────────────────── */
-  if (stations.length === 0 || !mainId) {
+  /* ── No store selected / no stations (supervisor mode only) ────────────── */
+  if ((stations.length === 0 || !mainId) && viewMode === "supervisor") {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -434,6 +440,83 @@ export function ScreenProjectView() {
     const isMain = s.room_name === mainId;
     return { ...s, isMain, sideIdx: isMain ? -1 : sideCounter++ };
   });
+
+  /* ── Observer mode — station picker grid ────────────────────────── */
+  if (viewMode === "observer") {
+    const observingStation = observingRoom
+      ? stations.find((s) => s.room_name === observingRoom) ?? null
+      : null;
+
+    return (
+      <div className="flex h-full flex-col gap-3">
+        {/* Observer header bar */}
+        <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <Eye className="h-4 w-4 text-amber-400" />
+            <span className="text-sm font-semibold">Observer View</span>
+            <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[0.65rem] font-medium text-amber-400 ring-1 ring-inset ring-amber-400/30">
+              Passive · listen only
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("supervisor")}
+            className="gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Supervisor View
+          </Button>
+        </div>
+
+        {/* Station cards grid */}
+        {stations.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-muted-foreground">No stations to observe.</p>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {stations.map((s) => (
+                <button
+                  key={s.room_name}
+                  onClick={() => setObservingRoom(s.room_name)}
+                  className="group relative aspect-video overflow-hidden rounded-xl bg-neutral-900 ring-2 ring-transparent transition-all duration-200 hover:ring-amber-400/50 focus-visible:outline-none focus-visible:ring-amber-400/70"
+                  aria-label={`Observe ${s.name}`}
+                >
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4">
+                    <div className="rounded-full bg-neutral-800 p-3 transition-colors group-hover:bg-amber-400/10">
+                      <Eye className="h-6 w-6 text-neutral-500 transition-colors group-hover:text-amber-400" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold leading-tight text-white">
+                        {s.name}
+                      </p>
+                      <p className="mt-0.5 max-w-full truncate text-[0.6rem] text-white/35">
+                        {s.room_name}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-amber-400/0 transition-colors group-hover:bg-amber-400/5" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Observer dialog — opens when a station card is clicked */}
+        {observingStation && tokenMap[observingStation.room_name] && (
+          <ObserverDialog
+            stationName={observingStation.name}
+            roomName={observingStation.room_name}
+            token={tokenMap[observingStation.room_name] ?? ""}
+            serverUrl={serverUrl}
+            onClose={() => setObservingRoom(null)}
+          />
+        )}
+      </div>
+    );
+  }
 
   /* ── Main view ──────────────────────────────────────────────────── */
   return (
@@ -584,6 +667,16 @@ export function ScreenProjectView() {
             stations={stations}
             onRefetch={refetch}
           />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewMode("observer")}
+            className="gap-1.5"
+            aria-label="Switch to observer view"
+          >
+            <Eye className="h-4 w-4" />
+            <span className="hidden sm:inline">Observer View</span>
+          </Button>
         </div>
 
         <div className="flex items-center gap-2 mx-auto sm:mx-0">

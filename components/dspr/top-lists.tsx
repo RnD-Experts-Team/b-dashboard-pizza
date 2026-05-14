@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TopMenuItem, TopIngredient } from "@/types/dspr.types";
-import { Pizza, Package, TrendingUp } from "lucide-react";
+import { Pizza, Package, TrendingUp, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -13,6 +15,8 @@ import { cn } from "@/lib/utils";
 
 interface TopItemsListProps {
   items: TopMenuItem[];
+  /** WTD top items — enables the Day/WTD toggle */
+  weeklyItems?: TopMenuItem[];
   title?: string;
   className?: string;
 }
@@ -27,11 +31,14 @@ const rankColors = [
 
 export function TopItemsList({
   items,
+  weeklyItems,
   title = "Top 5 Menu Items",
   className,
 }: TopItemsListProps) {
+  const [isWeekly, setIsWeekly] = useState(false);
+  const activeItems = isWeekly && weeklyItems ? weeklyItems : items;
   // Find the max gross_sales to compute relative bar widths
-  const maxSales = Math.max(...items.map((i) => i.gross_sales), 1);
+  const maxSales = Math.max(...activeItems.map((i) => i.gross_sales), 1);
 
   return (
     <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA] via-[#F7E8D9] to-[#FFF7F2] dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", className)}>
@@ -40,14 +47,31 @@ export function TopItemsList({
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
             <Pizza className="h-3 w-3 text-orange-500" />
           </div>
-          {title}
-          <Badge variant="secondary" className="ms-auto text-[8px] font-mono px-1 py-0">
-            {items.length}
-          </Badge>
+          {isWeekly ? "Top 5 Items (WTD)" : title}
+          {weeklyItems && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                  onClick={() => setIsWeekly((v) => !v)}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+            </Tooltip>
+          )}
+          {!weeklyItems && (
+            <Badge variant="secondary" className="ms-auto text-[8px] font-mono px-1 py-0">
+              {activeItems.length}
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-0 px-3 pb-1">
-        {items.map((item, idx) => {
+        {activeItems.map((item, idx) => {
           const barWidth = (item.gross_sales / maxSales) * 100;
           return (
             <div
@@ -90,7 +114,7 @@ export function TopItemsList({
             </div>
           );
         })}
-        {items.length === 0 && (
+        {activeItems.length === 0 && (
           <div className="flex flex-col items-center justify-center py-5 text-center gap-1.5">
             <TrendingUp className="h-5 w-5 text-muted-foreground/50" />
             <p className="text-[11px] text-muted-foreground">No data available</p>

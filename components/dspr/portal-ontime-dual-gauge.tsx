@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, ShieldCheck, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Info, ShieldCheck, Clock, CalendarDays } from "lucide-react";
 import { SpeedometerGauge } from "./speedometer-gauge";
 import type { DsprPortal } from "@/types/dspr.types";
 import { cn } from "@/lib/utils";
@@ -14,8 +17,11 @@ interface Props {
 }
 
 export function PortalOnTimeDualGauge({ portal, className }: Props) {
-  const primary = portal.put_into_portal_percent;
-  const secondary = portal.in_portal_on_time_percent;
+  const [isWeekly, setIsWeekly] = useState(false);
+  const weeklyPortal = portal.week_to_date;
+  const activePortal = isWeekly && weeklyPortal ? weeklyPortal : portal;
+  const primary = activePortal.put_into_portal_percent;
+  const secondary = activePortal.in_portal_on_time_percent;
 
   return (
     <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-emerald-50 via-emerald-100 to-emerald-200 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", className)}>
@@ -24,15 +30,31 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
           <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">
             <ShieldCheck className="h-3 w-3 text-emerald-500" />
           </div>
-          Portal Performance
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-50">
-               Portal Usage (Red) and on-time (Green)
-            </TooltipContent>
-          </Tooltip>
+          {isWeekly ? "Portal (WTD)" : "Portal Performance"}
+          {weeklyPortal ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                  onClick={() => setIsWeekly((v) => !v)}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-50">
+                Portal Usage (Red) and on-time (Green)
+              </TooltipContent>
+            </Tooltip>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-1 px-3">
@@ -48,10 +70,10 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
         />
 
         <div className="grid grid-cols-4 gap-1 mt-0 pt-2">
-          <Metric value={portal.portal_eligible_orders} label="Eligible" />
-          <Metric value={portal.portal_used_orders} label="Used" />
-          <Metric value={portal.portal_on_time_orders} label="On Time" />
-          <Metric value={portal.portal_used_orders} label="Total" />
+          <Metric value={activePortal.portal_eligible_orders} label="Eligible" />
+          <Metric value={activePortal.portal_used_orders} label="Used" />
+          <Metric value={activePortal.portal_on_time_orders} label="On Time" />
+          <Metric value={activePortal.portal_used_orders} label="Total" />
         </div>
       </CardContent>
     </Card>

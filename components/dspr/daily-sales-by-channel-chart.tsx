@@ -1,10 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CalendarDays } from "lucide-react";
 import type { DsprChannelSales } from "@/types/dspr.types";
 import type { ApexOptions } from "apexcharts";
 import { cn } from "@/lib/utils";
@@ -28,6 +32,8 @@ const CHANNEL_KEYS: { key: keyof DsprChannelSales; label: string; color: string 
 
 interface DailySalesByChannelChartProps {
   totalSales: DsprChannelSales;
+  /** WTD totals — enables the Day/WTD toggle */
+  weeklyTotalSales?: DsprChannelSales;
   height?: number;
   title?: string;
   toolbar?: boolean;
@@ -36,16 +42,19 @@ interface DailySalesByChannelChartProps {
 
 export function DailySalesByChannelChart({
   totalSales,
+  weeklyTotalSales,
   height = 310,
   title = "Daily Sales by Channel",
   toolbar = true,
   className,
 }: DailySalesByChannelChartProps) {
+  const [isWeekly, setIsWeekly] = useState(false);
+  const activeSales = isWeekly && weeklyTotalSales ? weeklyTotalSales : totalSales;
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 const { labels, series, colors } = useMemo(() => {
     const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
-      const value = Number(totalSales?.[key] ?? 0);
+      const value = Number(activeSales?.[key] ?? 0);
 
       return {
         label,
@@ -59,7 +68,7 @@ const { labels, series, colors } = useMemo(() => {
       colors: mapped.map((entry) => entry.color),
       series: mapped.map((entry) => entry.value),
     };
-  }, [totalSales]);
+  }, [activeSales]);
 
   const total = useMemo(() => {
     return series.reduce((sum, value) => sum + value, 0);
@@ -193,7 +202,22 @@ const { labels, series, colors } = useMemo(() => {
               <path d="M21 3v9h-9" />
             </svg>
           </div>
-          {title}
+          {isWeekly ? "Sales by Channel (WTD)" : title}
+          {weeklyTotalSales && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                  onClick={() => setIsWeekly((v) => !v)}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+            </Tooltip>
+          )}
         </CardTitle>
       </CardHeader>
 

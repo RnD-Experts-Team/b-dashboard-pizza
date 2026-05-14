@@ -287,13 +287,18 @@ export const employeeService = {
    */
   async getEmployeesV1(
     storeId: string,
-    params?: Record<string, string | number | boolean | undefined | null>,
+    params?: Record<string, string | number | boolean | string[] | undefined | null>,
     signal?: AbortSignal,
   ): Promise<EmployeesV1PaginatedResponse> {
     const query = new URLSearchParams();
     if (params) {
       for (const [key, val] of Object.entries(params)) {
-        if (val !== undefined && val !== null && val !== "") {
+        if (val === undefined || val === null || val === "") continue;
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            query.append(`${key}[]`, String(item));
+          }
+        } else {
           query.set(key, String(val));
         }
       }
