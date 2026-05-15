@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SpeedometerGauge, type SpeedZone } from "./speedometer-gauge";
 import { cn } from "@/lib/utils";
 import { Gauge, CalendarDays } from "lucide-react";
+import { WtdComparisonDialog, ComparisonGrid, ComparisonTable } from "./wtd-comparison-dialog";
 
 // ============================================================================
 // Labor zones — symmetric around 19-24% green target
@@ -66,9 +67,10 @@ export function LaborGauge({
   className,
 }: LaborGaugeProps) {
   const [isWeekly, setIsWeekly] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const activeValue = isWeekly && weeklyValue !== undefined ? weeklyValue : value;
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50", weeklyValue !== undefined && "cursor-pointer", className)} onClick={() => weeklyValue !== undefined && setDialogOpen(true)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-sky-500/15 dark:bg-sky-500/20">
@@ -82,7 +84,7 @@ export function LaborGauge({
                   variant="ghost"
                   size="icon"
                   className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
-                  onClick={() => setIsWeekly((v) => !v)}
+                  onClick={(e) => { e.stopPropagation(); setIsWeekly((v) => !v); }}
                 >
                   <CalendarDays className="h-3 w-3" />
                 </Button>
@@ -112,6 +114,48 @@ export function LaborGauge({
           </p>
         </div>
       </CardContent>
+
+      {/* WTD Comparison Dialog */}
+      {weeklyValue !== undefined && (
+        <WtdComparisonDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          title="Labor Comparison"
+        >
+          <ComparisonGrid
+            daily={
+              <div className="space-y-2">
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+                  {value.toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-muted-foreground">Labor % Today</p>
+                <p className="text-[10px] text-emerald-600 font-medium mt-1">Target: 19–24%</p>
+              </div>
+            }
+            wtd={
+              <div className="space-y-2">
+                <p className="text-2xl font-bold text-primary tabular-nums">
+                  {weeklyValue.toFixed(1)}%
+                </p>
+                <p className="text-[10px] text-muted-foreground">Labor % WTD Avg</p>
+                <p className="text-[10px] text-emerald-600 font-medium mt-1">Target: 19–24%</p>
+              </div>
+            }
+          />
+          <ComparisonTable
+            rows={[
+              {
+                label: "Labor %",
+                daily: `${value.toFixed(1)}%`,
+                wtd: `${weeklyValue.toFixed(1)}%`,
+                dailyNum: value,
+                wtdNum: weeklyValue,
+                higherIsBetter: false,
+              },
+            ]}
+          />
+        </WtdComparisonDialog>
+      )}
     </Card>
   );
 }

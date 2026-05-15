@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 
 interface CurrentEmployeesTableProps {
   requirements?: CanAccessParams[];
+  className?: string;
 }
 
 function CurrentEmployeesSkeleton() {
@@ -84,7 +85,7 @@ function formatEmployeeName(employee: EmployeeV1Record) {
     .join(" ");
 }
 
-export function CurrentEmployeesTable({ requirements }: CurrentEmployeesTableProps) {
+export function CurrentEmployeesTable({ requirements, className }: CurrentEmployeesTableProps) {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
   const { canAccessRoute } = useAuth();
@@ -151,7 +152,7 @@ export function CurrentEmployeesTable({ requirements }: CurrentEmployeesTablePro
 
   if (error && !data) {
     return (
-      <Card className="py-1.5 gap-0">
+      <Card className={cn("py-1.5 gap-0", className)}>
         <CardHeader className="pb-1 px-3">
           <div className="flex items-center gap-1">
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
@@ -177,7 +178,7 @@ export function CurrentEmployeesTable({ requirements }: CurrentEmployeesTablePro
 
   if (!rows.length) {
     return (
-      <Card className="py-1.5 gap-0">
+      <Card className={cn("py-1.5 gap-0", className)}>
         <CardHeader className="pb-1 px-3">
           <CardTitle className="text-[11px]">Current Employees</CardTitle>
         </CardHeader>
@@ -194,7 +195,7 @@ export function CurrentEmployeesTable({ requirements }: CurrentEmployeesTablePro
   }
 
   return (
-    <Card className="  py-1.5 gap-0 bg-linear-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
+    <Card className={cn("  py-1.5 gap-0 bg-linear-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18", className)}>
       <CardHeader className="pb-1 px-3">
         <div className="flex items-center justify-between gap-3">
           <div>

@@ -26,6 +26,9 @@ export interface DsprSales {
   this_week_by_day: DaySalesMap;
   previous_week_by_day: DaySalesMap;
   same_week_last_year_by_day: DaySalesMap;
+  this_week_total?: number;
+  previous_week_total?: number;
+  same_week_last_year_total?: number;
 }
 
 // ============================================================================

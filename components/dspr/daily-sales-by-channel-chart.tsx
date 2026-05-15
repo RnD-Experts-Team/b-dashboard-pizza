@@ -12,6 +12,7 @@ import { CalendarDays } from "lucide-react";
 import type { DsprChannelSales } from "@/types/dspr.types";
 import type { ApexOptions } from "apexcharts";
 import { cn } from "@/lib/utils";
+import { WtdComparisonDialog, ComparisonTable } from "./wtd-comparison-dialog";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
@@ -49,6 +50,7 @@ export function DailySalesByChannelChart({
   className,
 }: DailySalesByChannelChartProps) {
   const [isWeekly, setIsWeekly] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const activeSales = isWeekly && weeklyTotalSales ? weeklyTotalSales : totalSales;
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -69,6 +71,32 @@ const { labels, series, colors } = useMemo(() => {
       series: mapped.map((entry) => entry.value),
     };
   }, [activeSales]);
+
+  // Independent daily/wtd data for dialog (never depends on toggle state)
+  const dailyChartData = useMemo(() => {
+    const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
+      const value = Number(totalSales?.[key] ?? 0);
+      return { label, color, value: Number.isFinite(value) ? value : 0 };
+    }).filter((e) => e.value > 0);
+    return {
+      labels: mapped.map((e) => e.label),
+      colors: mapped.map((e) => e.color),
+      series: mapped.map((e) => e.value),
+    };
+  }, [totalSales]);
+
+  const wtdChartData = useMemo(() => {
+    if (!weeklyTotalSales) return null;
+    const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
+      const value = Number(weeklyTotalSales?.[key] ?? 0);
+      return { label, color, value: Number.isFinite(value) ? value : 0 };
+    }).filter((e) => e.value > 0);
+    return {
+      labels: mapped.map((e) => e.label),
+      colors: mapped.map((e) => e.color),
+      series: mapped.map((e) => e.value),
+    };
+  }, [weeklyTotalSales]);
 
   const total = useMemo(() => {
     return series.reduce((sum, value) => sum + value, 0);
@@ -182,8 +210,10 @@ const { labels, series, colors } = useMemo(() => {
     <Card
       className={cn(
         "daily-sales-by-channel-chart group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20",
+        weeklyTotalSales && "cursor-pointer",
         className
       )}
+      onClick={() => weeklyTotalSales && setDialogOpen(true)}
     >
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
@@ -210,7 +240,7 @@ const { labels, series, colors } = useMemo(() => {
                   variant="ghost"
                   size="icon"
                   className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
-                  onClick={() => setIsWeekly((v) => !v)}
+                  onClick={(e) => { e.stopPropagation(); setIsWeekly((v) => !v); }}
                 >
                   <CalendarDays className="h-3 w-3" />
                 </Button>
@@ -254,6 +284,87 @@ const { labels, series, colors } = useMemo(() => {
           </div>
         )}
       </CardContent>
+
+      {/* WTD Comparison Dialog */}
+      {weeklyTotalSales && wtdChartData && (
+        <WtdComparisonDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          title="Sales by Channel Comparison"
+          wide
+        >
+          {/* Charts row — side by side, no stacking */}
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            {/* Today column */}
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
+                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">Today</span>
+              </div>
+              <div className="rounded-xl border bg-blue-50/40 dark:bg-blue-950/20 p-2 flex items-center justify-center">
+                <ReactApexChart
+                  options={{
+                    chart: { type: "donut", height: 290, toolbar: { show: false }, animations: { enabled: false }, fontFamily: "inherit", background: "transparent", foreColor: isDark ? "#a1a1aa" : "#71717a" },
+                    theme: { mode: isDark ? "dark" : "light" },
+                    labels: dailyChartData.labels,
+                    colors: dailyChartData.colors,
+                    legend: { show: true, position: "bottom", fontSize: "8px" },
+                    tooltip: { enabled: true },
+                    stroke: { width: 1, colors: [isDark ? "#27272a" : "#fff"] },
+                    dataLabels: { enabled: true, formatter: (v: number) => v < 5 ? "" : `${v.toFixed(1)}%`, style: { fontSize: "10px", fontWeight: 600, colors: ["#ffffff"] } },
+                    plotOptions: { pie: { expandOnClick: false, donut: { size: "60%", labels: { show: true, value: { show: true, fontSize: "12px", fontWeight: 700, formatter: (val: any) => `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}` }, total: { show: true, label: "Total", fontSize: "16px", formatter: () => `$${dailyChartData.series.reduce((s, v) => s + v, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` } } } } },
+                  }}
+                  series={dailyChartData.series}
+                  type="donut"
+                  height={290}
+                  width="100%"
+                />
+              </div>
+            </div>
+            {/* WTD column */}
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                <span className="text-[11px] font-bold text-primary uppercase tracking-widest">Week-to-Date Avg</span>
+              </div>
+              <div className="rounded-xl border bg-primary/5 dark:bg-primary/10 p-2 flex items-center justify-center">
+                <ReactApexChart
+                  options={{
+                    chart: { type: "donut", height: 290, toolbar: { show: false }, animations: { enabled: false }, fontFamily: "inherit", background: "transparent", foreColor: isDark ? "#a1a1aa" : "#71717a" },
+                    theme: { mode: isDark ? "dark" : "light" },
+                    labels: wtdChartData.labels,
+                    colors: wtdChartData.colors,
+                    legend: { show: true, position: "bottom", fontSize: "8px" },
+                    tooltip: { enabled: true },
+                    stroke: { width: 1, colors: [isDark ? "#27272a" : "#fff"] },
+                    dataLabels: { enabled: true, formatter: (v: number) => v < 5 ? "" : `${v.toFixed(1)}%`, style: { fontSize: "10px", fontWeight: 600, colors: ["#ffffff"] } },
+                    plotOptions: { pie: { expandOnClick: false, donut: { size: "60%", labels: { show: true, value: { show: true, fontSize: "12px", fontWeight: 700, formatter: (val: any) => `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}` }, total: { show: true, label: "Total", fontSize: "16px", formatter: () => `$${wtdChartData.series.reduce((s, v) => s + v, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` } } } } },
+                  }}
+                  series={wtdChartData.series}
+                  type="donut"
+                  height={290}
+                  width="100%"
+                />
+              </div>
+            </div>
+          </div>
+          <ComparisonTable
+            rows={CHANNEL_KEYS.map(({ key, label }) => {
+              const d = Number(totalSales?.[key] ?? 0);
+              const w = Number(weeklyTotalSales?.[key] ?? 0);
+              if (d === 0 && w === 0) return null;
+              return {
+                label,
+                daily: `$${d.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                wtd: `$${w.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                dailyNum: d,
+                wtdNum: w,
+                higherIsBetter: true,
+              };
+            }).filter((r): r is NonNullable<typeof r> => r !== null)}
+          />
+        </WtdComparisonDialog>
+      )}
 
       <style jsx global>{`
         .daily-sales-by-channel-chart .apexcharts-datalabel {

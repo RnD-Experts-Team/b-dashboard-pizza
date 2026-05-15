@@ -12,3 +12,6 @@ export { RecentMaintenanceTable } from "./recent-maintenance-table";
 export { CurrentEmployeesTable } from "./current-employees-table";
 export { TopQaRatingsCard } from "./top-qa-ratings-card";
 export { StoreScoreCard } from "./store-score-card";
+export { EmployeeBirthday } from "./employee-birthday";
+export { TopEmployeeHours } from "./top-employee-hours";
+export { StoreGoals } from "./store-goals";

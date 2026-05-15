@@ -194,14 +194,14 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
                     {stat.wtdValue && (
                       <p
                         className={cn(
-                          "text-[8px] tabular-nums truncate leading-tight min-w-0",
+                          "text-[8px] font-medium tabular-nums truncate leading-tight min-w-0",
                           stat.isWtdNegative
-                            ? "text-red-500/60 dark:text-red-400/50"
-                            : "text-muted-foreground/50",
+                            ? "text-red-500/80 dark:text-red-400/70"
+                            : "text-muted-foreground/80",
                         )}
                       >
                         {stat.wtdValue}
-                        <span className="ms-0.5 text-[6px] font-semibold opacity-60 uppercase tracking-wide">
+                        <span className="ms-0.5 text-[6px] font-bold uppercase tracking-wide">
                           wtd
                         </span>
                       </p>

@@ -1,9 +1,11 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { DueKeysFeed } from "@/components/due-keys/due-keys-feed";
 import { DebriefsFeed } from "@/components/due-keys/debriefs-feed";
+import { InlineDueKeyInput } from "@/components/due-keys/inline-due-key-input";
+import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,20 +14,30 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTagsList } from "@/lib/hooks/use-tags";
+import { useDueKeys } from "@/lib/hooks/use-due-keys";
+import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList } from "lucide-react";
+import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList, CheckCircle2 } from "lucide-react";
+import type { DueKeyItem } from "@/types/due-key.types";
 
-/** Convert a YYYY-MM-DD string to a local Date (avoids UTC offset issues). */
 function strToDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
-
-/** Convert a local Date to a YYYY-MM-DD string. */
 function dateToStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function todayStr(): string {
+  return dateToStr(new Date());
 }
 
 type FeedMode = "due-keys" | "debrief";
@@ -34,38 +46,55 @@ export default function DueKeysPage() {
   const { selectedStore } = useSelectedStoreStore();
   const storeId = selectedStore?.storeId ?? null;
 
-  // ── Feed mode ─────────────────────────────────────────────────────
   const [feedMode, setFeedMode] = useState<FeedMode>("due-keys");
 
-  // ── Due Keys date range ───────────────────────────────────────────
   const [dateFrom, setDateFrom] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 2);
-    return dateToStr(d);
+    const d = new Date(); d.setDate(d.getDate() - 2); return dateToStr(d);
   });
   const [dateTo, setDateTo] = useState<string>(() => dateToStr(new Date()));
   const [fromOpen, setFromOpen] = useState(false);
   const [toOpen, setToOpen] = useState(false);
 
-  // ── Tag filter ────────────────────────────────────────────────────
-  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);;
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const { data: tagsData, isLoading: isTagsLoading } = useTagsList();
   const availableTags = tagsData?.data ?? [];
 
+  // Today's due keys — for the key selector & employees (debrief form)
+  const today = useMemo(() => todayStr(), []);
+  const { data: dueKeysData, isLoading: isDueKeysLoading } = useDueKeys(
+    storeId,
+    today,
+    selectedTagIds.length > 0 ? selectedTagIds : undefined
+  );
+
+  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
+  const selectedKey = useMemo<DueKeyItem | null>(
+    () => dueKeysData?.items.find((k) => k.keyId === selectedKeyId) ?? null,
+    [dueKeysData, selectedKeyId]
+  );
+
+  // Debrief submission hook
+  const {
+    createDebrief,
+    isSubmitting: isDebriefSubmitting,
+    error: debriefError,
+    clearError: clearDebriefError,
+  } = useCreateEmployeeDebrief();
+
   return (
-    <div className="flex flex-col gap-3 p-3 sm:gap-6 sm:p-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+    <div className="flex flex-col gap-2 p-2 sm:gap-3 sm:p-3">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start">
         {/* ── Sidebar ──────────────────────────────────────────────── */}
-        <div className="order-first w-full shrink-0 lg:order-last lg:w-64 lg:sticky lg:top-6">
-          <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-0 lg:space-y-3">
+        <div className="order-first w-full shrink-0 lg:order-last lg:w-56 lg:sticky lg:top-4">
+          <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-0 lg:space-y-2">
             {/* ── Tab switcher ── */}
-            <div className="min-w-[180px] flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+            <div className="min-w-45 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
               <div className="grid grid-cols-2 gap-1">
                 <button
                   type="button"
                   onClick={() => setFeedMode("due-keys")}
                   className={cn(
-                    "flex flex-col items-center gap-1 rounded-lg px-2 py-3 text-[11px] font-semibold transition-colors",
+                    "flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-[11px] font-semibold transition-colors",
                     feedMode === "due-keys"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -78,7 +107,7 @@ export default function DueKeysPage() {
                   type="button"
                   onClick={() => setFeedMode("debrief")}
                   className={cn(
-                    "flex flex-col items-center gap-1 rounded-lg px-2 py-3 text-[11px] font-semibold transition-colors",
+                    "flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-[11px] font-semibold transition-colors",
                     feedMode === "debrief"
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -91,8 +120,8 @@ export default function DueKeysPage() {
             </div>
 
             {/* ── Date filter ── */}
-            <div className="min-w-[160px] flex-1 rounded-xl border border-border/60 bg-card/60 p-2 sm:p-4 backdrop-blur-sm lg:min-w-0">
-              <div className="mb-3 flex items-center gap-2">
+            <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+              <div className="mb-2 flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Date Range
@@ -100,83 +129,79 @@ export default function DueKeysPage() {
               </div>
 
               <p className="mb-1 text-[10px] font-medium text-muted-foreground">From</p>
-                  <Popover open={fromOpen} onOpenChange={setFromOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-full justify-start gap-2 border-border/50 bg-background/60 px-3 text-left text-xs font-normal"
-                      >
-                        <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        {format(strToDate(dateFrom), "MMM d, yyyy")}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={strToDate(dateFrom)}
-                        onSelect={(d) => {
-                          if (!d) return;
-                          const s = dateToStr(d);
-                          setDateFrom(s);
-                          if (s > dateTo) setDateTo(s);
-                          setFromOpen(false);
-                        }}
-                        disabled={(date) => date > new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <p className="mb-1 mt-3 text-[10px] font-medium text-muted-foreground">To</p>
-                  <Popover open={toOpen} onOpenChange={setToOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-full justify-start gap-2 border-border/50 bg-background/60 px-3 text-left text-xs font-normal"
-                      >
-                        <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        {format(strToDate(dateTo), "MMM d, yyyy")}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={strToDate(dateTo)}
-                        onSelect={(d) => {
-                          if (!d) return;
-                          const s = dateToStr(d);
-                          setDateTo(s);
-                          if (s < dateFrom) setDateFrom(s);
-                          setToOpen(false);
-                        }}
-                        disabled={(date) => date > new Date()}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const today = dateToStr(new Date());
-                      const from = dateToStr(
-                        new Date(new Date().setDate(new Date().getDate() - 2))
-                      );
-                      setDateFrom(from);
-                      setDateTo(today);
-                    }}
-                    className="mt-2 text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+              <Popover open={fromOpen} onOpenChange={setFromOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-full justify-start gap-2 border-border/50 bg-background/60 px-2 text-left text-xs font-normal"
                   >
-                    Reset to last 3 days
-                  </button>
+                    <CalendarIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    {format(strToDate(dateFrom), "MMM d, yyyy")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={strToDate(dateFrom)}
+                    onSelect={(d) => {
+                      if (!d) return;
+                      const s = dateToStr(d);
+                      setDateFrom(s);
+                      if (s > dateTo) setDateTo(s);
+                      setFromOpen(false);
+                    }}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <p className="mb-1 mt-2 text-[10px] font-medium text-muted-foreground">To</p>
+              <Popover open={toOpen} onOpenChange={setToOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-full justify-start gap-2 border-border/50 bg-background/60 px-2 text-left text-xs font-normal"
+                  >
+                    <CalendarIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                    {format(strToDate(dateTo), "MMM d, yyyy")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={strToDate(dateTo)}
+                    onSelect={(d) => {
+                      if (!d) return;
+                      const s = dateToStr(d);
+                      setDateTo(s);
+                      if (s < dateFrom) setDateFrom(s);
+                      setToOpen(false);
+                    }}
+                    disabled={(date) => date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              <button
+                type="button"
+                onClick={() => {
+                  const t = dateToStr(new Date());
+                  const f = dateToStr(new Date(new Date().setDate(new Date().getDate() - 2)));
+                  setDateFrom(f);
+                  setDateTo(t);
+                }}
+                className="mt-1.5 text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+              >
+                Reset to last 3 days
+              </button>
             </div>
 
             {/* ── Tags — Due Keys only ── */}
             {feedMode === "due-keys" && (
-              <div className="min-w-[160px] flex-1 rounded-xl border border-border/60 bg-card/60 p-2 sm:p-4 backdrop-blur-sm lg:min-w-0">
-                <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+                <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Tag className="h-3.5 w-3.5 text-muted-foreground" />
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -229,20 +254,101 @@ export default function DueKeysPage() {
                 )}
               </div>
             )}
+
+            {/* ── Key selector — Due Keys only ── */}
+            {feedMode === "due-keys" && (
+              <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+                <div className="mb-2 flex items-center gap-2">
+                  <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Submit Key
+                  </p>
+                </div>
+                {isDueKeysLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2].map((i) => (
+                      <div key={i} className="h-7 w-full animate-pulse rounded bg-muted" />
+                    ))}
+                  </div>
+                ) : (
+                  <Select
+                    value={selectedKeyId != null ? String(selectedKeyId) : ""}
+                    onValueChange={(v) => setSelectedKeyId(v ? Number(v) : null)}
+                  >
+                    <SelectTrigger className="h-7 w-full text-xs">
+                      <SelectValue placeholder="Choose a key…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(dueKeysData?.items ?? []).length === 0 ? (
+                        <div className="px-2 py-3 text-center text-xs text-muted-foreground">
+                          No keys for today
+                        </div>
+                      ) : (
+                        (dueKeysData?.items ?? []).map((k) => (
+                          <SelectItem
+                            key={k.keyId}
+                            value={String(k.keyId)}
+                            className="text-xs"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              {k.filled && (
+                                <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
+                              )}
+                              <span className="truncate">{k.label}</span>
+                              {k.tags.length > 0 && (
+                                <span className="shrink-0 text-[10px] text-muted-foreground">
+                                  [{k.tags[0].name}]
+                                </span>
+                              )}
+                            </span>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+                {selectedKeyId != null && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKeyId(null)}
+                    className="mt-1 text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* ── Main feed ────────────────────────────────────────────── */}
         <div className="order-last min-w-0 flex-1 lg:order-first">
           {feedMode === "due-keys" ? (
-            <DueKeysFeed
-              storeId={storeId}
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
-            />
+            <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
+              <DueKeysFeed
+                storeId={storeId}
+                dateFrom={dateFrom}
+                dateTo={dateTo}
+                selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
+              />
+              <InlineDueKeyInput
+                storeId={storeId}
+                selectedKey={selectedKey}
+                today={today}
+              />
+            </div>
           ) : (
-            <DebriefsFeed storeId={storeId} dateFrom={dateFrom} dateTo={dateTo} />
+            <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
+              <DebriefsFeed storeId={storeId} dateFrom={dateFrom} dateTo={dateTo} />
+              <CreateEmployeeDebriefForm
+                storeId={storeId}
+                isSubmitting={isDebriefSubmitting}
+                submitError={debriefError}
+                onSubmit={(payload) => createDebrief(storeId!, payload)}
+                onClearError={clearDebriefError}
+                employees={dueKeysData?.employees ?? []}
+              />
+            </div>
           )}
         </div>
       </div>

@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TopMenuItem, TopIngredient } from "@/types/dspr.types";
-import { Pizza, Package, TrendingUp, CalendarDays } from "lucide-react";
+import { Pizza, Package, TrendingUp, TrendingDown, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WtdComparisonDialog } from "./wtd-comparison-dialog";
 
 // ============================================================================
 // Top 5 Menu Items
@@ -36,12 +37,13 @@ export function TopItemsList({
   className,
 }: TopItemsListProps) {
   const [isWeekly, setIsWeekly] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const activeItems = isWeekly && weeklyItems ? weeklyItems : items;
   // Find the max gross_sales to compute relative bar widths
   const maxSales = Math.max(...activeItems.map((i) => i.gross_sales), 1);
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA] via-[#F7E8D9] to-[#FFF7F2] dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", className)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA] via-[#F7E8D9] to-[#FFF7F2] dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", weeklyItems && "cursor-pointer", className)} onClick={() => weeklyItems && setDialogOpen(true)}>
       <CardHeader className="pb-0.5 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
@@ -55,7 +57,7 @@ export function TopItemsList({
                   variant="ghost"
                   size="icon"
                   className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
-                  onClick={() => setIsWeekly((v) => !v)}
+                  onClick={(e) => { e.stopPropagation(); setIsWeekly((v) => !v); }}
                 >
                   <CalendarDays className="h-3 w-3" />
                 </Button>
@@ -121,6 +123,93 @@ export function TopItemsList({
           </div>
         )}
       </CardContent>
+      {/* WTD Comparison Dialog */}
+      {weeklyItems && (
+        <WtdComparisonDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          title="Top 5 Items Comparison"
+          wide
+        >
+          <div className="mt-4 overflow-hidden rounded-xl border">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-muted/60">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider w-8">#</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Item</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Today Qty</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Today Sales</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold text-primary uppercase tracking-wider">WTD Qty</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold text-primary uppercase tracking-wider">WTD Sales</th>
+                  <th className="px-4 py-3 text-center text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Rank Shift</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Merge all unique item IDs, ranked by today first */}
+                {(() => {
+                  const allIds = Array.from(new Set([...items.map(i => i.item_id), ...weeklyItems.map(i => i.item_id)]));
+                  return allIds.map((id, tableIdx) => {
+                    const todayIdx = items.findIndex(i => i.item_id === id);
+                    const wtdIdx   = weeklyItems.findIndex(i => i.item_id === id);
+                    const todayItem = todayIdx !== -1 ? items[todayIdx] : null;
+                    const wtdItem   = wtdIdx   !== -1 ? weeklyItems[wtdIdx] : null;
+                    const name = todayItem?.menu_item_name ?? wtdItem?.menu_item_name ?? "—";
+                    const rankShift = todayIdx !== -1 && wtdIdx !== -1 ? wtdIdx - todayIdx : null;
+                    return (
+                      <tr
+                        key={id}
+                        className={cn(
+                          "border-b last:border-0 transition-colors hover:bg-muted/30",
+                          tableIdx % 2 === 1 && "bg-muted/20",
+                        )}
+                      >
+                        <td className="px-4 py-3">
+                          <span className={cn("text-[9px] font-bold w-5 h-5 rounded-full flex items-center justify-center", rankColors[tableIdx] ?? rankColors[3])}>
+                            {tableIdx + 1}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-foreground text-sm">{name}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-blue-700 dark:text-blue-300 font-medium">
+                          {todayItem ? todayItem.quantity_sold : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-bold text-blue-700 dark:text-blue-300">
+                          {todayItem ? `$${todayItem.gross_sales.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-primary/80 font-medium">
+                          {wtdItem ? wtdItem.quantity_sold : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-bold text-primary">
+                          {wtdItem ? `$${wtdItem.gross_sales.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {rankShift === null ? (
+                            <span className="text-[10px] text-muted-foreground/40">—</span>
+                          ) : rankShift === 0 ? (
+                            <span className="inline-flex items-center justify-center gap-0.5 text-[10px] font-semibold text-muted-foreground">
+                              <TrendingUp className="h-3 w-3 opacity-30" /> same
+                            </span>
+                          ) : rankShift > 0 ? (
+                            <span className="inline-flex items-center justify-center gap-0.5 text-[10px] font-semibold text-emerald-500">
+                              <TrendingUp className="h-3.5 w-3.5" /> +{rankShift}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center gap-0.5 text-[10px] font-semibold text-red-500">
+                              <TrendingDown className="h-3.5 w-3.5" /> {rankShift}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-[10px] text-muted-foreground text-center">
+            Rank Shift = position gain/loss comparing Today rank vs Week-to-Date rank
+          </p>
+        </WtdComparisonDialog>
+      )}
     </Card>
   );
 }

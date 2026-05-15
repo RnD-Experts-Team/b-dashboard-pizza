@@ -20,6 +20,9 @@ import {
   RecentMaintenanceTable,
   CurrentEmployeesTable,
   TopQaRatingsCard,
+  EmployeeBirthday,
+  TopEmployeeHours,
+  StoreGoals,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -662,6 +665,9 @@ export function DsprDashboard() {
         </div>
       </div>
 
+      {/* ── Store goals ribbon ────────────────────────────────────── */}
+      <StoreGoals />
+
       {/* ── Day summary stats ribbon ────────────────────────────── */}
       <DaySummaryStats day={day} />
 
@@ -728,7 +734,7 @@ export function DsprDashboard() {
         /> 
       </div>
 
-      {/* ── Current Employees ─────────────────────────────────────── */}
+      {/* ── Current Employees + Birthday + Top Hours ──────────────── */}
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
         <CurrentEmployeesTable
           requirements={[
@@ -739,7 +745,10 @@ export function DsprDashboard() {
               storeId: storeNumericId ? String(storeNumericId) : undefined,
             },
           ]}
+          className="sm:col-span-2 lg:col-span-2"
         />
+        <EmployeeBirthday className="lg:col-span-1" />
+        <TopEmployeeHours className="lg:col-span-1" />
       </div>
     </div>
   );

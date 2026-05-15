@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarDays, KeyRound, PenLine, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -86,6 +87,7 @@ const PANEL_W = 480; // floating panel width (w-120 = 30 rem)
 const EDGE = 8;      // minimum gap from each screen edge
 
 export function FloatingDebriefButton() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
@@ -197,7 +199,30 @@ export function FloatingDebriefButton() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
+    const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveNav(section);
+  }, []);
+
+  // Track which section is in view to highlight the active nav button
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !isOpen) return;
+
+    const handleScroll = () => {
+      const containerTop = container.scrollTop;
+      const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
+      // offset by a small threshold so nav switches a bit before the section hits the very top
+      setActiveNav(containerTop + 40 >= dueKeysTop ? "due-keys" : "debrief");
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [isOpen]);
+
   if (!canCreateDebrief) return null;
+  if (pathname?.includes("/due-keys")) return null;
 
   // ── Drag handlers — free 2-D drag with viewport clamping ─────────────
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -266,28 +291,6 @@ export function FloatingDebriefButton() {
       prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
     );
   };
-
-  const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
-    const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setActiveNav(section);
-  }, []);
-
-  // Track which section is in view to highlight the active nav button
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !isOpen) return;
-
-    const handleScroll = () => {
-      const containerTop = container.scrollTop;
-      const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
-      // offset by a small threshold so nav switches a bit before the section hits the very top
-      setActiveNav(containerTop + 40 >= dueKeysTop ? "due-keys" : "debrief");
-    };
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [isOpen]);
 
   // Compute floating panel screen position, keeping it fully within the viewport
   function getPanelStyle() {
