@@ -16,16 +16,16 @@ A scalable, enterprise-grade dashboard foundation built with Next.js 16, Tailwin
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Framework | Next.js 16 (App Router) |
-| Styling | Tailwind CSS v4 |
-| UI Components | shadcn/ui |
-| State Management | Zustand |
-| i18n | next-intl |
-| Validation | Zod |
-| HTTP Client | Axios |
-| Icons | Lucide React |
+| Layer            | Technology              |
+| ---------------- | ----------------------- |
+| Framework        | Next.js 16 (App Router) |
+| Styling          | Tailwind CSS v4         |
+| UI Components    | shadcn/ui               |
+| State Management | Zustand                 |
+| i18n             | next-intl               |
+| Validation       | Zod                     |
+| HTTP Client      | Axios                   |
+| Icons            | Lucide React            |
 
 ## Getting Started
 
@@ -85,6 +85,7 @@ b-dashboard/
 ## Localization (i18n)
 
 The app supports multiple languages with RTL support:
+
 - **English (en)** - Default, LTR
 - **Arabic (ar)** - RTL support with Noto Sans Arabic font
 
@@ -148,6 +149,7 @@ export const localeDirections: Record<Locale, "ltr" | "rtl"> = {
 ### RTL Best Practices
 
 Use logical CSS properties for RTL compatibility:
+
 - `me-*` / `ms-*` instead of `mr-*` / `ml-*`
 - `pe-*` / `ps-*` instead of `pr-*` / `pl-*`
 - `start` / `end` instead of `left` / `right`
@@ -215,11 +217,12 @@ Themes follow this JSON schema:
 import { useThemeStore } from "@/lib/theme";
 
 function MyComponent() {
-  const { themes, activeThemeId, setActiveTheme, importTheme } = useThemeStore();
-  
+  const { themes, activeThemeId, setActiveTheme, importTheme } =
+    useThemeStore();
+
   // Switch theme
   setActiveTheme("ocean");
-  
+
   // Import new theme
   const result = importTheme(jsonString);
   if (result.success) {
@@ -233,7 +236,7 @@ function MyComponent() {
 The theme system is designed to be backend-ready. API endpoints:
 
 - `GET /api/themes` - List themes
-- `POST /api/themes` - Create theme  
+- `POST /api/themes` - Create theme
 - `PATCH /api/themes/[id]` - Update theme
 - `DELETE /api/themes/[id]` - Delete theme
 - `GET/PUT /api/themes/active` - Get/set active theme
@@ -250,13 +253,10 @@ import { useTranslations } from "next-intl";
 
 export default function YourPage() {
   const t = useTranslations("yourPage");
-  
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("title")}
-        description={t("description")}
-      />
+      <PageHeader title={t("title")} description={t("description")} />
       {/* Your content */}
     </div>
   );
@@ -279,13 +279,13 @@ const navItems = [
 
 ## Scripts
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start development server |
-| `pnpm build` | Build for production |
-| `pnpm start` | Start production server |
-| `pnpm lint` | Run ESLint |
-| `pnpm tsc --noEmit` | TypeScript check |
+| Command             | Description                |
+| ------------------- | -------------------------- |
+| `pnpm dev`          | Start development server   |
+| `pnpm build`        | Build for production       |
+| `pnpm start`        | Start production server    |
+| `pnpm lint`         | Run ESLint                 |
+| `pnpm tsc --noEmit` | TypeScript check           |
 | `pnpm analyze:i18n` | Scan for hardcoded strings |
 
 ## Developer Tools
@@ -297,6 +297,7 @@ A built-in developer tool for monitoring translation coverage and detecting issu
 **Access:** Dashboard → Dev Tools → i18n Intelligence
 
 **Features:**
+
 - Real-time missing key detection
 - Translation health score dashboard
 - Issue tracking with severity levels
@@ -346,3 +347,5 @@ For more developer tools ideas, see [Dev Tools Roadmap](./docs/DEV-TOOLS-ROADMAP
 ## License
 
 MIT
+
+fhdsklfhdskjfhdasjklfhdaskjfhjadskfhadsklfhadsjklhjklh
