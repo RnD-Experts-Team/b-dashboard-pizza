@@ -285,7 +285,7 @@ export function SalesChart({
   return (
     <Card
       className={cn(
-        "group hover:shadow-md transition-shadow py-1.5 gap-0 justify-between cursor-pointer bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20",
+        "group hover:shadow-md transition-shadow py-1.5 gap-0 justify-between cursor-pointer dspr-card-hover bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20",
         className
       )}
       onClick={() => setDialogOpen(true)}
@@ -298,7 +298,7 @@ export function SalesChart({
             {title}
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-3 pb-0" onClick={(e) => e.stopPropagation()}>
+        <CardContent className="px-3 pb-0 cursor-default border-t-3 border-border/40" onClick={(e) => e.stopPropagation()}>
           <ReactApexChart
             options={options}
             series={series}

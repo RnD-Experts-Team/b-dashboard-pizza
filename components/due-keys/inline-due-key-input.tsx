@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import {
+  CalendarIcon,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -10,31 +13,36 @@ import {
   Send,
   X,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useSetDueKeyValue } from "@/lib/hooks/use-due-keys";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useDueKeys, useSetDueKeyValue } from "@/lib/hooks/use-due-keys";
 import { cn } from "@/lib/utils";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 
+function strToDate(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function dateToStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function todayDateStr(): string {
+  return dateToStr(new Date());
+}
+
 interface InlineDueKeyInputProps {
   storeId: string | null;
-  selectedKey: DueKeyItem | null;
-  today: string;
 }
 
 export function InlineDueKeyInput({
   storeId,
-  selectedKey,
-  today,
 }: InlineDueKeyInputProps) {
   const [textValue, setTextValue] = useState("");
   const [numberValue, setNumberValue] = useState("");
@@ -44,9 +52,33 @@ export function InlineDueKeyInput({
   const [note, setNote] = useState("");
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [submissionDate, setSubmissionDate] = useState<string>(() => todayDateStr());
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const [keySearch, setKeySearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { setDueKeyValue, isSubmitting, error, clearError } = useSetDueKeyValue();
+
+  const {
+    data: dueKeysData,
+    isLoading: isKeysLoading,
+    isRefreshing: isKeysRefreshing,
+  } = useDueKeys(storeId, submissionDate);
+
+  const items = dueKeysData?.items ?? [];
+
+  const selectedKey = useMemo(
+    () => items.find((k) => k.keyId === selectedKeyId) ?? null,
+    [items, selectedKeyId]
+  );
+
+  const filteredItems = useMemo(() => {
+    const q = keySearch.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((k) => k.label.toLowerCase().includes(q));
+  }, [items, keySearch]);
 
   // Reset fields when selected key changes
   useEffect(() => {
@@ -154,7 +186,7 @@ export function InlineDueKeyInput({
       attachments: attachments.length > 0 ? attachments : null,
     };
 
-    const ok = await setDueKeyValue(storeId, today, finalPayload);
+    const ok = await setDueKeyValue(storeId, submissionDate, finalPayload);
     if (ok) {
       const action = !selectedKey!.filled && hasValue
         ? "created"
@@ -177,6 +209,7 @@ export function InlineDueKeyInput({
       setNote("");
       setNoteExpanded(false);
       setAttachments([]);
+      setSubmissionDate(todayDateStr());
     }
   }
 
@@ -184,33 +217,189 @@ export function InlineDueKeyInput({
 
   return (
     <div className="border-t border-border/60 bg-card/60 backdrop-blur-sm">
-      {/* Key info pill */}
+      {/* Key selector + date picker row */}
       <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
-        {selectedKey ? (
-          <>
-            <Badge variant="secondary" className="gap-1 text-[11px] font-medium">
-              {selectedKey.label}
-            </Badge>
-            <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
-              {selectedKey.dataType}
-            </Badge>
-            {selectedKey.tags.length > 0 && (
-              <span className="text-[10px] text-muted-foreground truncate">
-                {selectedKey.tags.map((t) => t.name).join(", ")}
-              </span>
+        {/* Key combobox */}
+        <Popover open={keyOpen} onOpenChange={setKeyOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              disabled={isKeysLoading}
+              className={cn(
+                "flex flex-1 min-w-0 h-8 items-center justify-between overflow-hidden rounded-md border border-input bg-background px-3 text-xs text-left transition-colors hover:bg-muted/50",
+                !selectedKey && "text-muted-foreground"
+              )}
+            >
+              {isKeysLoading ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading keys…
+                </span>
+              ) : (
+                <>
+                  <span className="flex flex-1 min-w-0 items-center gap-1.5 truncate">
+                    {selectedKey ? (
+                      <>
+                        {selectedKey.filled && (
+                          <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
+                        )}
+                        <span className="truncate">{selectedKey.label}</span>
+                      </>
+                    ) : (
+                      "Choose a key to submit…"
+                    )}
+                  </span>
+                  {selectedKey ? (
+                    <X
+                      className="h-3.5 w-3.5 shrink-0 ml-1.5 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedKeyId(null);
+                        setKeySearch("");
+                        clearError();
+                      }}
+                    />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 ml-1.5 text-muted-foreground" />
+                  )}
+                </>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="p-0 w-(--radix-popover-trigger-width)"
+            align="start"
+            sideOffset={4}
+          >
+            <div className="p-2 border-b border-border">
+              <Input
+                autoFocus
+                placeholder="Search key…"
+                value={keySearch}
+                onChange={(e) => setKeySearch(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+            <div className="max-h-44 overflow-y-auto py-1">
+              {filteredItems.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">
+                  {items.length === 0 ? "No keys for this date." : "No keys match your search."}
+                </p>
+              ) : (
+                filteredItems.map((k) => (
+                  <button
+                    key={k.keyId}
+                    type="button"
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-accent hover:text-accent-foreground transition-colors",
+                      selectedKeyId === k.keyId && "bg-accent text-accent-foreground font-medium"
+                    )}
+                    onClick={() => {
+                      setSelectedKeyId(k.keyId);
+                      setKeySearch("");
+                      setKeyOpen(false);
+                      clearError();
+                    }}
+                  >
+                    {k.filled && (
+                      <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
+                    )}
+                    <span className="flex-1 truncate">{k.label}</span>
+                    {k.tags.length > 0 && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        [{k.tags[0].name}]
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Submission date picker */}
+        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors hover:bg-muted shrink-0",
+                submissionDate !== todayDateStr()
+                  ? "border-primary/50 bg-primary/5 text-primary"
+                  : "border-border/60 bg-background/60 text-muted-foreground"
+              )}
+            >
+              {isKeysRefreshing ? (
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+              ) : (
+                <CalendarIcon className="h-3 w-3 shrink-0" />
+              )}
+              {submissionDate === todayDateStr()
+                ? "Today"
+                : format(strToDate(submissionDate), "MMM d, yyyy")}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end" sideOffset={4}>
+            <div className="border-b border-border px-3 py-2.5">
+              <p className="text-xs font-semibold text-foreground">Submission Date</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {submissionDate === todayDateStr()
+                  ? "Submitting for today"
+                  : `Submitting for ${format(strToDate(submissionDate), "EEEE, MMM d, yyyy")}`}
+              </p>
+            </div>
+            <Calendar
+              mode="single"
+              selected={strToDate(submissionDate)}
+              onSelect={(d) => {
+                if (!d) return;
+                setSubmissionDate(dateToStr(d));
+                setDatePickerOpen(false);
+              }}
+              disabled={(date) => date > new Date()}
+              initialFocus
+            />
+            {submissionDate !== todayDateStr() && (
+              <div className="border-t border-border p-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmissionDate(todayDateStr());
+                    setDatePickerOpen(false);
+                  }}
+                  className="w-full rounded-md px-2 py-1.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  Reset to today
+                </button>
+              </div>
             )}
-            {selectedKey.filled && (
-              <Badge variant="default" className="text-[10px] ml-auto shrink-0">
-                Filled
-              </Badge>
-            )}
-          </>
-        ) : (
-          <span className="text-xs text-muted-foreground italic">
-            Select a key from the sidebar to submit a value
-          </span>
-        )}
+          </PopoverContent>
+        </Popover>
       </div>
+
+      {/* Key context strip — shown when a key is selected */}
+      {selectedKey && (
+        <div className="flex items-center gap-1.5 px-3 pb-1.5">
+          <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground">
+            {selectedKey.dataType}
+          </Badge>
+          {selectedKey.tags.length > 0 && (
+            <span className="text-[10px] text-muted-foreground truncate">
+              {selectedKey.tags.map((t) => t.name).join(", ")}
+            </span>
+          )}
+          {selectedKey.filled && (
+            <Badge variant="default" className="text-[10px]">Filled</Badge>
+          )}
+          <button
+            type="button"
+            onClick={() => setSelectedKeyId(null)}
+            className="ml-auto text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {/* Value input row */}
       <div className="flex items-start gap-2 px-3 pb-2">
@@ -245,22 +434,38 @@ export function InlineDueKeyInput({
             />
           )}
 
-          {/* Boolean */}
+          {/* Boolean — two toggle buttons */}
           {selectedKey && selectedKey.dataType === "boolean" && (
-            <Select
-              value={booleanValue}
-              onValueChange={(v) => setBooleanValue(v as "null" | "true" | "false")}
-              disabled={disabled}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Select value" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="null">No Value</SelectItem>
-                <SelectItem value="true">True</SelectItem>
-                <SelectItem value="false">False</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setBooleanValue((prev) => (prev === "true" ? "null" : "true"))}
+                className={cn(
+                  "flex-1 h-9 rounded-md border text-sm font-medium transition-colors",
+                  booleanValue === "true"
+                    ? "border-green-500/60 bg-green-500/15 text-green-700 dark:text-green-400"
+                    : "border-border/60 bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                  disabled && "cursor-not-allowed opacity-40"
+                )}
+              >
+                True
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setBooleanValue((prev) => (prev === "false" ? "null" : "false"))}
+                className={cn(
+                  "flex-1 h-9 rounded-md border text-sm font-medium transition-colors",
+                  booleanValue === "false"
+                    ? "border-red-500/60 bg-red-500/15 text-red-700 dark:text-red-400"
+                    : "border-border/60 bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                  disabled && "cursor-not-allowed opacity-40"
+                )}
+              >
+                False
+              </button>
+            </div>
           )}
 
           {/* JSON */}

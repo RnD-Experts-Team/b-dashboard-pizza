@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { DueKeysFeed } from "@/components/due-keys/due-keys-feed";
 import { DebriefsFeed } from "@/components/due-keys/debriefs-feed";
 import { InlineDueKeyInput } from "@/components/due-keys/inline-due-key-input";
-import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
+import { InlineDebriefInput } from "@/components/due-keys/inline-debrief-input";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,20 +14,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useTagsList } from "@/lib/hooks/use-tags";
 import { useDueKeys } from "@/lib/hooks/use-due-keys";
-import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList, CheckCircle2 } from "lucide-react";
-import type { DueKeyItem } from "@/types/due-key.types";
+import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList } from "lucide-react";
 
 function strToDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
@@ -66,20 +57,6 @@ export default function DueKeysPage() {
     today,
     selectedTagIds.length > 0 ? selectedTagIds : undefined
   );
-
-  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
-  const selectedKey = useMemo<DueKeyItem | null>(
-    () => dueKeysData?.items.find((k) => k.keyId === selectedKeyId) ?? null,
-    [dueKeysData, selectedKeyId]
-  );
-
-  // Debrief submission hook
-  const {
-    createDebrief,
-    isSubmitting: isDebriefSubmitting,
-    error: debriefError,
-    clearError: clearDebriefError,
-  } = useCreateEmployeeDebrief();
 
   return (
     <div className="flex flex-col gap-2 p-2 sm:gap-3 sm:p-3">
@@ -255,69 +232,6 @@ export default function DueKeysPage() {
               </div>
             )}
 
-            {/* ── Key selector — Due Keys only ── */}
-            {feedMode === "due-keys" && (
-              <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
-                <div className="mb-2 flex items-center gap-2">
-                  <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Submit Key
-                  </p>
-                </div>
-                {isDueKeysLoading ? (
-                  <div className="space-y-2">
-                    {[1, 2].map((i) => (
-                      <div key={i} className="h-7 w-full animate-pulse rounded bg-muted" />
-                    ))}
-                  </div>
-                ) : (
-                  <Select
-                    value={selectedKeyId != null ? String(selectedKeyId) : ""}
-                    onValueChange={(v) => setSelectedKeyId(v ? Number(v) : null)}
-                  >
-                    <SelectTrigger className="h-7 w-full text-xs">
-                      <SelectValue placeholder="Choose a key…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(dueKeysData?.items ?? []).length === 0 ? (
-                        <div className="px-2 py-3 text-center text-xs text-muted-foreground">
-                          No keys for today
-                        </div>
-                      ) : (
-                        (dueKeysData?.items ?? []).map((k) => (
-                          <SelectItem
-                            key={k.keyId}
-                            value={String(k.keyId)}
-                            className="text-xs"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              {k.filled && (
-                                <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
-                              )}
-                              <span className="truncate">{k.label}</span>
-                              {k.tags.length > 0 && (
-                                <span className="shrink-0 text-[10px] text-muted-foreground">
-                                  [{k.tags[0].name}]
-                                </span>
-                              )}
-                            </span>
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                )}
-                {selectedKeyId != null && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedKeyId(null)}
-                    className="mt-1 text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -333,19 +247,13 @@ export default function DueKeysPage() {
               />
               <InlineDueKeyInput
                 storeId={storeId}
-                selectedKey={selectedKey}
-                today={today}
               />
             </div>
           ) : (
             <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
               <DebriefsFeed storeId={storeId} dateFrom={dateFrom} dateTo={dateTo} />
-              <CreateEmployeeDebriefForm
+              <InlineDebriefInput
                 storeId={storeId}
-                isSubmitting={isDebriefSubmitting}
-                submitError={debriefError}
-                onSubmit={(payload) => createDebrief(storeId!, payload)}
-                onClearError={clearDebriefError}
                 employees={dueKeysData?.employees ?? []}
               />
             </div>

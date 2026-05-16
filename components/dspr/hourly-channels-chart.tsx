@@ -253,7 +253,7 @@ export function HourlyChannelsChart({
   const activeTitle = isWeekly ? "Hourly Avg by Channel (WTD)" : title;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", weeklyData && "cursor-pointer", className)} onClick={() => weeklyData && setDialogOpen(true)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20", weeklyData && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyData && setDialogOpen(true)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">

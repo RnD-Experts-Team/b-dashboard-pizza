@@ -43,7 +43,7 @@ export function TopItemsList({
   const maxSales = Math.max(...activeItems.map((i) => i.gross_sales), 1);
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA] via-[#F7E8D9] to-[#FFF7F2] dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", weeklyItems && "cursor-pointer", className)} onClick={() => weeklyItems && setDialogOpen(true)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-gradient-to-r from-[#F5D6BA] via-[#F7E8D9] to-[#FFF7F2] dark:from-[#5A3526]/20 dark:via-[#5F382A]/40 dark:to-[#6A4335]/50", weeklyItems && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyItems && setDialogOpen(true)}>
       <CardHeader className="pb-0.5 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">

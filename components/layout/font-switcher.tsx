@@ -41,6 +41,12 @@ const fontOptions: {
     description: "Neutral monospaced typeface by IBM",
     sampleStyle: { fontFamily: "var(--font-ibm-plex-mono)" },
   },
+  {
+    key: "oswald",
+    label: "Oswald",
+    description: "Condensed sans-serif with strong presence",
+    sampleStyle: { fontFamily: "var(--font-oswald)" },
+  },
 ];
 
 interface FontSwitcherProps {

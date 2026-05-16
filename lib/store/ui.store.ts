@@ -16,7 +16,8 @@ export type FontVariant =
   | "default"
   | "spaceGrotesk"
   | "playfairDisplay"
-  | "ibmPlexMono";
+  | "ibmPlexMono"
+  | "oswald";
 
 interface UIState {
   sidebarCollapsed: boolean;

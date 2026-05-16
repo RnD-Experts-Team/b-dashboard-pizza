@@ -7,6 +7,27 @@
   50%       { transform: scaleY(1); }
 }
 
+/* ── DSPR clickable card: subtle background tint on hover ── */
+.dspr-card-hover {
+  position: relative;
+}
+.dspr-card-hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.045);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.dark .dspr-card-hover::before {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dspr-card-hover:hover::before {
+  opacity: 1;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -64,6 +85,10 @@ html[data-font-variant="playfairDisplay"] body {
 html[data-font-variant="ibmPlexMono"] body {
   --app-font-sans: var(--font-ibm-plex-mono);
   font-family: var(--font-ibm-plex-mono);
+}
+html[data-font-variant="oswald"] body {
+  --app-font-sans: var(--font-oswald);
+  font-family: var(--font-oswald);
 }
 
 :root {

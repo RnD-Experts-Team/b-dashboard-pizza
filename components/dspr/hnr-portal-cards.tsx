@@ -101,7 +101,7 @@ export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
   const pct = activeHnr.hnr_promise_met_percent;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-orange-50 via-orange-100 to-orange-200 dark:from-orange-950/20 dark:via-orange-900/40 dark:to-orange-800/50", weeklyHnr && "cursor-pointer", className)} onClick={() => weeklyHnr && setDialogOpen(true)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-orange-50 via-orange-100 to-orange-200 dark:from-orange-950/20 dark:via-orange-900/40 dark:to-orange-800/50", weeklyHnr && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyHnr && setDialogOpen(true)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">

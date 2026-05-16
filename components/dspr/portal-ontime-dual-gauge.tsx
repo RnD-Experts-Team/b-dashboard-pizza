@@ -26,7 +26,7 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
   const secondary = activePortal.in_portal_on_time_percent;
 
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-emerald-50 via-emerald-100 to-emerald-200 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", weeklyPortal && "cursor-pointer", className)} onClick={() => weeklyPortal && setDialogOpen(true)}>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-emerald-50 via-emerald-100 to-emerald-200 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", weeklyPortal && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyPortal && setDialogOpen(true)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">

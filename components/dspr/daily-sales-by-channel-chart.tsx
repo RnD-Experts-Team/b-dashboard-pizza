@@ -210,7 +210,7 @@ const { labels, series, colors } = useMemo(() => {
     <Card
       className={cn(
         "daily-sales-by-channel-chart group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/20 dark:to-violet-800/20",
-        weeklyTotalSales && "cursor-pointer",
+        weeklyTotalSales && "cursor-pointer dspr-card-hover",
         className
       )}
       onClick={() => weeklyTotalSales && setDialogOpen(true)}
