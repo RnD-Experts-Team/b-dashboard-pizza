@@ -27,7 +27,10 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
   const { toggleSidebar } = useUIStore();
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6">
+    <header
+      data-font-scope="primary"
+      className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6"
+    >
       {/* Logo — shown only in topnav layout */}
       {showLogo && (
         <div className="flex items-center gap-2 me-1">

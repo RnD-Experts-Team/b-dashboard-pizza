@@ -35,15 +35,10 @@ const themeColorsSchema = z.object({
   accent: colorSchema,
   accentForeground: colorSchema,
   destructive: colorSchema,
+  destructiveForeground: colorSchema.optional().default("oklch(0.985 0 0)"),
   border: colorSchema,
   input: colorSchema,
   ring: colorSchema,
-  // Chart colors
-  chart1: colorSchema,
-  chart2: colorSchema,
-  chart3: colorSchema,
-  chart4: colorSchema,
-  chart5: colorSchema,
   // Sidebar colors
   sidebar: colorSchema,
   sidebarForeground: colorSchema,
@@ -53,6 +48,12 @@ const themeColorsSchema = z.object({
   sidebarAccentForeground: colorSchema,
   sidebarBorder: colorSchema,
   sidebarRing: colorSchema,
+  // Utility colors
+  skeletonBase: colorSchema.optional().default("oklch(0.92 0 0)"),
+  skeletonHighlight: colorSchema.optional().default("oklch(0.97 0 0)"),
+  scrollbarThumb: colorSchema.optional().default("oklch(0.78 0 0)"),
+  scrollbarTrack: colorSchema.optional().default("oklch(0.95 0 0)"),
+  shellBackground: colorSchema.optional().default("oklch(0.97 0 0)"),
 });
 
 // Radius schema

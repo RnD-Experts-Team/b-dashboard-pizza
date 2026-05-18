@@ -586,6 +586,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   return (
     <div
+      data-font-scope="primary"
       className={cn(
         "flex h-full flex-col border-r bg-sidebar transition-all duration-300",
         collapsed ? "w-16" : "w-64"

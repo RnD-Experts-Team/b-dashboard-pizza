@@ -59,7 +59,7 @@ export function ConditionalThemeProvider({
     <NextThemeProvider
       defaultTheme={themeProps.defaultTheme as any}
       attribute="class"
-      storageKey="theme-storage"
+      storageKey="color-mode"
       defaultColorTheme="default"
       colorThemePrefix="theme-"
       animationType={ThemeAnimationType.BLUR_CIRCLE}

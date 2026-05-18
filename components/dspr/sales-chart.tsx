@@ -2,12 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DsprSales } from "@/types/dspr.types";
 import type { ApexOptions } from "apexcharts";
 import { cn } from "@/lib/utils";
+import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 import { WtdComparisonDialog } from "./wtd-comparison-dialog";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
@@ -77,8 +77,8 @@ export function SalesChart({
   grid = true,
   className,
 }: SalesChartProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const mode = useDocumentColorMode();
+  const isDark = mode === "dark";
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // ── Weekly totals (from API or summed from daily data) ─────────────
@@ -300,6 +300,7 @@ export function SalesChart({
         </CardHeader>
         <CardContent className="px-3 pb-0 cursor-default border-t-3 border-border/40" onClick={(e) => e.stopPropagation()}>
           <ReactApexChart
+            key={isDark ? "dark" : "light"}
             options={options}
             series={series}
             type="line"

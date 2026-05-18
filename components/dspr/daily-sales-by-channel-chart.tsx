@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import { CalendarDays } from "lucide-react";
 import type { DsprChannelSales } from "@/types/dspr.types";
 import type { ApexOptions } from "apexcharts";
 import { cn } from "@/lib/utils";
+import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 import { WtdComparisonDialog, ComparisonTable } from "./wtd-comparison-dialog";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
@@ -52,8 +52,8 @@ export function DailySalesByChannelChart({
   const [isWeekly, setIsWeekly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const activeSales = isWeekly && weeklyTotalSales ? weeklyTotalSales : totalSales;
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const mode = useDocumentColorMode();
+  const isDark = mode === "dark";
 const { labels, series, colors } = useMemo(() => {
     const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
       const value = Number(activeSales?.[key] ?? 0);
@@ -254,6 +254,7 @@ const { labels, series, colors } = useMemo(() => {
       <CardContent className="px-3 pb-2">
         <div className="relative">
           <ReactApexChart
+            key={isDark ? "dark" : "light"}
             options={options}
             series={series}
             type="donut"
@@ -303,6 +304,7 @@ const { labels, series, colors } = useMemo(() => {
               </div>
               <div className="rounded-xl border bg-blue-50/40 dark:bg-blue-950/20 p-2 flex items-center justify-center">
                 <ReactApexChart
+                  key={isDark ? "dark" : "light"}
                   options={{
                     chart: { type: "donut", height: 290, toolbar: { show: false }, animations: { enabled: false }, fontFamily: "inherit", background: "transparent", foreColor: isDark ? "#a1a1aa" : "#71717a" },
                     theme: { mode: isDark ? "dark" : "light" },
@@ -329,6 +331,7 @@ const { labels, series, colors } = useMemo(() => {
               </div>
               <div className="rounded-xl border bg-primary/5 dark:bg-primary/10 p-2 flex items-center justify-center">
                 <ReactApexChart
+                  key={isDark ? "dark" : "light"}
                   options={{
                     chart: { type: "donut", height: 290, toolbar: { show: false }, animations: { enabled: false }, fontFamily: "inherit", background: "transparent", foreColor: isDark ? "#a1a1aa" : "#71717a" },
                     theme: { mode: isDark ? "dark" : "light" },

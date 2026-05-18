@@ -566,6 +566,8 @@ export function ScreenProjectView() {
                     if (live) liveRoomsRef.current.add(s.room_name);
                     else liveRoomsRef.current.delete(s.room_name);
                   }}
+                  stationNumber={s.id}
+                  storeId={storeId}
                   className="h-full w-full"
                 />
               </motion.div>

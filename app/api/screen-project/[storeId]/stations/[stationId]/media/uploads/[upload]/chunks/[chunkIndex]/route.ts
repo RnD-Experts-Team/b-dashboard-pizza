@@ -1,0 +1,99 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  requireAuthorization,
+  getAuthorizationHeader,
+  errorResponse,
+} from "@/app/api/_lib/auth";
+
+const SCREEN_PROJECT_BASE_URL =
+  process.env.SCREEN_PROJECT_BASE_URL ||
+  process.env.NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL ||
+  "https://control.screens.lcportal.cloud/api";
+
+// Chunks can be large; give upstream more time
+const UPSTREAM_TIMEOUT_MS = 60_000;
+
+/**
+ * POST /api/screen-project/[storeId]/stations/[stationId]/media/uploads/[upload]/chunks/[chunkIndex]
+ * Body: multipart/form-data, field "chunk" (binary)
+ * Proxy → POST {SCREEN_PROJECT_BASE_URL}/{storeId}/stations/{stationId}/media/uploads/{upload}/chunks/{chunkIndex}
+ */
+export async function POST(
+  request: NextRequest,
+  {
+    params,
+  }: {
+    params: Promise<{
+      storeId: string;
+      stationId: string;
+      upload: string;
+      chunkIndex: string;
+    }>;
+  },
+) {
+  const authError = requireAuthorization(request);
+  if (authError) return authError;
+
+  const authorization = getAuthorizationHeader(request)!;
+  const { storeId, stationId, upload, chunkIndex } = await params;
+
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return errorResponse("VALIDATION_ERROR", "Expected multipart/form-data body", 400);
+  }
+
+  const chunkField = formData.get("chunk");
+  if (!chunkField || !(chunkField instanceof Blob)) {
+    return errorResponse("VALIDATION_ERROR", 'Missing or invalid "chunk" field', 400);
+  }
+
+  // Re-build a clean FormData to forward upstream
+  const upstreamForm = new FormData();
+  upstreamForm.append("chunk", chunkField);
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
+    const upstream = await fetch(
+      `${SCREEN_PROJECT_BASE_URL}/${storeId}/stations/${stationId}/media/uploads/${upload}/chunks/${chunkIndex}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: authorization,
+          Accept: "application/json",
+        },
+        body: upstreamForm,
+        signal: controller.signal,
+      },
+    );
+
+    clearTimeout(timer);
+
+    if (upstream.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
+
+    const responseBody = await upstream.text();
+
+    return new NextResponse(responseBody, {
+      status: upstream.status,
+      headers: {
+        "Content-Type":
+          upstream.headers.get("Content-Type") || "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      return errorResponse("TIMEOUT", "Chunk upload timed out", 504);
+    }
+    return errorResponse(
+      "UPSTREAM_ERROR",
+      "Failed to reach screen project service",
+      502,
+    );
+  }
+}

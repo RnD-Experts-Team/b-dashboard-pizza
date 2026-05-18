@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import type { NetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
+import { useScreenProjectMedia } from "@/lib/hooks/use-screen-project-media";
+import { MediaLibraryTrigger } from "./media-library/media-library-trigger";
+import { MediaLibrarySheet } from "./media-library/media-library-sheet";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Sound bars — animated indicator shown when remote audio is active       */
@@ -109,6 +112,10 @@ export interface ScreenTileProps {
   /** MediaDeviceInfo.deviceId for the camera to use (videoinput) */
   selectedVideoDeviceId?: string;
   className?: string;
+  /** Numeric station ID used to fetch/manage the media library */
+  stationNumber?: number;
+  /** Store ID used to scope media library requests */
+  storeId?: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -136,6 +143,8 @@ interface InnerProps {
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
   className?: string;
+  stationNumber?: number;
+  storeId?: string;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -240,7 +249,17 @@ function ScreenTileInner({
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
+  stationNumber,
+  storeId,
 }: InnerProps) {
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  // Media library — lazy fetch; primary media shown when camera is off
+  const { primaryMedia, hasFetched, fetchMedia } = useScreenProjectMedia(
+    storeId ?? null,
+    stationNumber ?? null,
+  );
+
   const allTracks = useTracks([
     Track.Source.ScreenShare,
     Track.Source.Camera,
@@ -279,6 +298,14 @@ function ScreenTileInner({
   useEffect(() => {
     onLiveChange?.(isLive);
   }, [isLive, onLiveChange]);
+
+  // When the station is not live, lazily fetch media so the primary fallback
+  // can be shown without requiring the supervisor to open the library first.
+  useEffect(() => {
+    if (!isLive && !hasFetched) {
+      fetchMedia();
+    }
+  }, [isLive, hasFetched, fetchMedia]);
 
   // Detect if any remote participant is speaking (audio activity)
   const speakingParticipants = useSpeakingParticipants();
@@ -463,6 +490,24 @@ function ScreenTileInner({
           trackRef={videoTrack}
           className="absolute inset-0 h-full w-full object-cover"
         />
+      ) : primaryMedia && !isConnecting ? (
+        /* Primary media fallback — shown when camera is off and media exists */
+        primaryMedia.type === "image" ? (
+          <img
+            src={primaryMedia.url}
+            alt={primaryMedia.file_name}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <video
+            src={primaryMedia.url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none bg-neutral-900">
           <div
@@ -674,6 +719,24 @@ function ScreenTileInner({
       )}
       {/* Network status publisher — renders null, sends data-channel heartbeats */}
       {publishNetworkStatus && <NetworkStatusPublisher />}
+
+      {/* Media library trigger — top-left overlay, always visible for supervisors */}
+      {!viewerOnly && storeId && stationNumber !== undefined && (
+        <div className="absolute top-2 left-2 z-20">
+          <MediaLibraryTrigger onClick={() => setIsLibraryOpen(true)} />
+        </div>
+      )}
+
+      {/* Media library sheet */}
+      {storeId && stationNumber !== undefined && (
+        <MediaLibrarySheet
+          open={isLibraryOpen}
+          onOpenChange={setIsLibraryOpen}
+          storeId={storeId}
+          stationNumber={stationNumber}
+          stationName={name}
+        />
+      )}
     </div>
   );
 }
@@ -706,6 +769,8 @@ export function ScreenTile({
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
+  stationNumber,
+  storeId,
 }: ScreenTileProps) {
   if (!token || !serverUrl) {
     return (
@@ -789,6 +854,8 @@ export function ScreenTile({
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}
         className={className}
+        stationNumber={stationNumber}
+        storeId={storeId}
       />
     </LiveKitRoom>
   );

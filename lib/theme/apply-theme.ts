@@ -1,7 +1,7 @@
 import type { Theme, ThemeColors } from "./types";
 
 // CSS variable names that map to theme color properties
-const COLOR_VAR_MAP: Record<keyof ThemeColors, string> = {
+export const COLOR_VAR_MAP: Record<keyof ThemeColors, string> = {
   background: "--background",
   foreground: "--foreground",
   card: "--card",
@@ -17,14 +17,10 @@ const COLOR_VAR_MAP: Record<keyof ThemeColors, string> = {
   accent: "--accent",
   accentForeground: "--accent-foreground",
   destructive: "--destructive",
+  destructiveForeground: "--destructive-foreground",
   border: "--border",
   input: "--input",
   ring: "--ring",
-  chart1: "--chart-1",
-  chart2: "--chart-2",
-  chart3: "--chart-3",
-  chart4: "--chart-4",
-  chart5: "--chart-5",
   sidebar: "--sidebar",
   sidebarForeground: "--sidebar-foreground",
   sidebarPrimary: "--sidebar-primary",
@@ -33,6 +29,11 @@ const COLOR_VAR_MAP: Record<keyof ThemeColors, string> = {
   sidebarAccentForeground: "--sidebar-accent-foreground",
   sidebarBorder: "--sidebar-border",
   sidebarRing: "--sidebar-ring",
+  skeletonBase: "--skeleton-base",
+  skeletonHighlight: "--skeleton-highlight",
+  scrollbarThumb: "--scrollbar-thumb",
+  scrollbarTrack: "--scrollbar-track",
+  shellBackground: "--shell-background",
 };
 
 /**

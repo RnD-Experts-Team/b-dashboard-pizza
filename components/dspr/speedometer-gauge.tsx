@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -93,8 +93,8 @@ export function SpeedometerGauge({
   secondaryColor,
   secondaryLabel,
 }: SpeedometerGaugeProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const mode = useDocumentColorMode();
+  const isDark = mode === "dark";
   // Animated internal value — animates from current position to new value
   const [animValue, setAnimValue] = useState(0);
   const animValueRef = useRef(0);
@@ -157,7 +157,7 @@ export function SpeedometerGauge({
   const tip2 = useMemo(() => (angle2 == null ? null : polar(NEEDLE2, angle2)), [angle2]);
   
   // Value text color: white in dark mode, light gray in light mode for contrast
-  const valueTextColor = resolvedTheme === "dark" ? "#ffffff" : "#747474";
+  const valueTextColor = isDark ? "#ffffff" : "#747474";
 
   // Build zone arc paths
   const zoneArcs = useMemo(

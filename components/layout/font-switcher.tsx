@@ -47,6 +47,12 @@ const fontOptions: {
     description: "Condensed sans-serif with strong presence",
     sampleStyle: { fontFamily: "var(--font-oswald)" },
   },
+  {
+    key: "instrumentSans",
+    label: "Instrument Sans",
+    description: "Humanist sans-serif with a modern feel",
+    sampleStyle: { fontFamily: "var(--font-instrument-sans)" },
+  },
 ];
 
 interface FontSwitcherProps {
@@ -54,69 +60,125 @@ interface FontSwitcherProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function FontSwitcher({ open, onOpenChange }: FontSwitcherProps) {
-  const { fontVariant, setFontVariant } = useUIStore();
+function applyFontAttribute(attr: "data-primary-font" | "data-secondary-font", key: FontVariant) {
+  if (key === "default") {
+    document.documentElement.removeAttribute(attr);
+  } else {
+    document.documentElement.setAttribute(attr, key);
+  }
+}
 
-  const handleSelect = (key: FontVariant) => {
-    setFontVariant(key);
-    // Sync the data attribute so CSS picks it up immediately
-    if (key === "default") {
-      document.documentElement.removeAttribute("data-font-variant");
-    } else {
-      document.documentElement.setAttribute("data-font-variant", key);
-    }
-    onOpenChange(false);
+export function FontSwitcher({ open, onOpenChange }: FontSwitcherProps) {
+  const { primaryFont, secondaryFont, setPrimaryFont, setSecondaryFont } = useUIStore();
+
+  const handlePrimarySelect = (key: FontVariant) => {
+    setPrimaryFont(key);
+    applyFontAttribute("data-primary-font", key);
+  };
+
+  const handleSecondarySelect = (key: FontVariant) => {
+    setSecondaryFont(key);
+    applyFontAttribute("data-secondary-font", key);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Choose Font</DialogTitle>
+          <DialogTitle>Choose Fonts</DialogTitle>
           <DialogDescription>
-            Pick a font for your dashboard. Your choice is saved automatically.
+            Set a heading font and a body font for your dashboard. Changes are saved automatically.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          {fontOptions.map(({ key, label, description, sampleStyle }) => {
-            const isActive = fontVariant === key;
-            return (
-              <button
-                key={key}
-                onClick={() => handleSelect(key)}
-                className={cn(
-                  "group relative flex flex-col gap-2 rounded-xl border-2 p-3 text-start transition-all hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  isActive
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border bg-background"
-                )}
-              >
-                {isActive && (
-                  <div className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                    <Check className="h-3 w-3" />
-                  </div>
-                )}
+        {/* Heading Font */}
+        <div className="space-y-3 pt-2">
+          <div>
+            <p className="text-sm font-semibold mb-1">Heading Font</p>
+            <p className="text-xs text-muted-foreground mb-3">Applied to h1 – h6 elements</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {fontOptions.map(({ key, label, description, sampleStyle }) => {
+                const isActive = primaryFont === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handlePrimarySelect(key)}
+                    className={cn(
+                      "group relative flex flex-col gap-2 rounded-xl border-2 p-3 text-start transition-all hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isActive
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {isActive && (
+                      <div className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-3 w-3" />
+                      </div>
+                    )}
+                    <div
+                      className="flex h-14 w-full items-center justify-center rounded-md bg-muted/30 text-lg font-semibold"
+                      style={sampleStyle}
+                    >
+                      Aa Bb Cc
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium leading-none">{label}</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-tight">
+                        {description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                {/* Live font sample */}
-                <div
-                  className="flex h-16 w-full items-center justify-center rounded-md bg-muted/30 text-lg"
-                  style={sampleStyle}
-                >
-                  Aa Bb Cc
-                </div>
+          {/* Divider */}
+          <div className="border-t" />
 
-                <div>
-                  <p className="text-sm font-medium leading-none">{label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground leading-tight">
-                    {description}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
+          {/* Body Font */}
+          <div>
+            <p className="text-sm font-semibold mb-1">Body Font</p>
+            <p className="text-xs text-muted-foreground mb-3">Applied to general text and UI elements</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {fontOptions.map(({ key, label, description, sampleStyle }) => {
+                const isActive = secondaryFont === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => handleSecondarySelect(key)}
+                    className={cn(
+                      "group relative flex flex-col gap-2 rounded-xl border-2 p-3 text-start transition-all hover:border-primary/60 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isActive
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border bg-background"
+                    )}
+                  >
+                    {isActive && (
+                      <div className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <Check className="h-3 w-3" />
+                      </div>
+                    )}
+                    <div
+                      className="flex h-14 w-full items-center justify-center rounded-md bg-muted/30 text-lg"
+                      style={sampleStyle}
+                    >
+                      Aa Bb Cc
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium leading-none">{label}</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-tight">
+                        {description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+

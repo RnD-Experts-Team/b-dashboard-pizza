@@ -30,10 +30,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Check, Download, Upload, Trash2, Plus, Palette, Copy, AlertCircle } from "lucide-react";
+import { Check, Download, Upload, Trash2, Palette, Copy, AlertCircle, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { useFeature } from "@/lib/config";
+import { ThemeEditor } from "@/components/layout/theme-editor";
 
 export default function ThemesPage() {
   const t = useTranslations("settings");
@@ -47,6 +48,7 @@ export default function ThemesPage() {
     deleteTheme,
   } = useThemeStore();
 
+  const [editorOpen, setEditorOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importJson, setImportJson] = useState("");
   const [importError, setImportError] = useState<string | null>(null);
@@ -165,7 +167,21 @@ export default function ThemesPage() {
         </p>
       </div>
 
-      {/* Actions */}
+      {/* Live editor CTA */}
+      <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium">Live Theme Editor</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Edit colors, radius and more with a live preview — or pick from presets.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setEditorOpen(true)}>
+          <Pencil className="me-2 h-4 w-4" />
+          Open Editor
+        </Button>
+      </div>
+
+      {/* Actions */} 
       <div className="flex flex-wrap gap-2">
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
           <DialogTrigger asChild>
@@ -241,24 +257,11 @@ export default function ThemesPage() {
               )}
               onClick={() => setActiveTheme(theme.id)}
             >
-              {/* Color Preview */}
-              <div className="flex h-16 overflow-hidden rounded-t-lg">
-                <div
-                  className="flex-1"
-                  style={{ backgroundColor: colors.primary }}
-                />
-                <div
-                  className="flex-1"
-                  style={{ backgroundColor: colors.secondary }}
-                />
-                <div
-                  className="flex-1"
-                  style={{ backgroundColor: colors.accent }}
-                />
-                <div
-                  className="flex-1"
-                  style={{ backgroundColor: colors.background }}
-                />
+              <div className="flex h-12 overflow-hidden rounded-t-lg">
+                <div className="flex-1" style={{ backgroundColor: colors.primary }} />
+                <div className="flex-1" style={{ backgroundColor: colors.secondary }} />
+                <div className="flex-1" style={{ backgroundColor: colors.accent }} />
+                <div className="flex-1" style={{ backgroundColor: colors.background }} />
               </div>
 
               <CardHeader className="pb-2">
@@ -291,7 +294,18 @@ export default function ThemesPage() {
                   </p>
                 )}
 
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  {isActive && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => setEditorOpen(true)}
+                    >
+                      <Pencil className="h-3 w-3 me-1" />
+                      Edit
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -330,20 +344,7 @@ export default function ThemesPage() {
               </CardContent>
             </Card>
           );
-        })}
-
-        {/* Add Theme Card */}
-        <Card
-          className="flex cursor-pointer items-center justify-center border-dashed hover:border-primary hover:bg-muted/50 min-h-50"
-          onClick={() => setImportDialogOpen(true)}
-        >
-          <div className="text-center">
-            <Plus className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium">{t("themes.addTheme")}</p>
-            <p className="text-xs text-muted-foreground">{t("themes.importFromJson")}</p>
-          </div>
-        </Card>
-      </div>
+        })}      </div>
 
       {/* Export Dialog */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
@@ -409,6 +410,9 @@ export default function ThemesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Live editor */}
+      <ThemeEditor open={editorOpen} onOpenChange={setEditorOpen} />
     </div>
   );
 }

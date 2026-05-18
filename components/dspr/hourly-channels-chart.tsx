@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState, useCallback } from "react";
-import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import { CalendarDays, TrendingUp, TrendingDown } from "lucide-react";
 import type { HourlySalesChannel } from "@/types/dspr.types";
 import type { ApexOptions } from "apexcharts";
 import { cn } from "@/lib/utils";
+import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 import { WtdComparisonDialog } from "./wtd-comparison-dialog";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
@@ -80,8 +80,8 @@ export function HourlyChannelsChart({
       return next;
     });
   }, []);
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const mode = useDocumentColorMode();
+  const isDark = mode === "dark";
 
  const { series, categories, channelHasData } = useMemo(() => {
   // Sort by hour
@@ -323,6 +323,7 @@ export function HourlyChannelsChart({
           </div>
         ) : (
           <ReactApexChart
+            key={isDark ? "dark" : "light"}
             options={options}
             series={visibleSeriesData}
             type="bar"
