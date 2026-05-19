@@ -695,7 +695,7 @@ export function DsprDashboard() {
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
-          weeklyTotalSales={day.total_sales_week_to_date}
+          weeklyTotalSales={day.total_sales_week_to_date_avg}
           height={200}
           toolbar={false}
         />

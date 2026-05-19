@@ -21,6 +21,7 @@ import { NetworkBadge } from "./network-badge";
 import { useScreenProjectMedia } from "@/lib/hooks/use-screen-project-media";
 import { MediaLibraryTrigger } from "./media-library/media-library-trigger";
 import { MediaLibrarySheet } from "./media-library/media-library-sheet";
+import type { StationMedia } from "@/types/screen-project-media.types";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Sound bars — animated indicator shown when remote audio is active       */
@@ -116,6 +117,9 @@ export interface ScreenTileProps {
   stationNumber?: number;
   /** Store ID used to scope media library requests */
   storeId?: string;
+  /** Pre-loaded media items (e.g. from the station token response). When
+   * provided, skips the initial API fetch and shows the primary item immediately. */
+  initialMedia?: StationMedia[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -145,6 +149,7 @@ interface InnerProps {
   className?: string;
   stationNumber?: number;
   storeId?: string;
+  initialMedia?: StationMedia[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -251,13 +256,16 @@ function ScreenTileInner({
   className,
   stationNumber,
   storeId,
+  initialMedia,
 }: InnerProps) {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
-  // Media library — lazy fetch; primary media shown when camera is off
+  // Media library — seeded from the token response (initialMedia) on the station
+  // screen so no extra fetch is needed; falls back to lazy fetch for supervisors.
   const { primaryMedia, hasFetched, fetchMedia } = useScreenProjectMedia(
     storeId ?? null,
     stationNumber ?? null,
+    { isPublic: viewerOnly, initialMedia },
   );
 
   const allTracks = useTracks([
@@ -267,19 +275,23 @@ function ScreenTileInner({
     Track.Source.ScreenShareAudio,
   ]);
 
-  // Stations publish Camera; ScreenShare included as fallback
+  // Stations publish Camera; ScreenShare included as fallback.
+  // Exclude muted publications — setCameraEnabled(false) mutes rather than
+  // unpublishes the track, so we must check isMuted to detect "camera off".
   const videoTrack = allTracks.find(
     (t) =>
       !t.participant.isLocal &&
+      !t.publication.isMuted &&
       (t.publication.source === Track.Source.Camera ||
         t.publication.source === Track.Source.ScreenShare),
   );
 
-  // Observer mode: all non-local video tracks displayed in a multi-camera grid
+  // Observer mode: all non-local, non-muted video tracks in a multi-camera grid
   const allVideoTracks = observerMode
     ? allTracks.filter(
         (t) =>
           !t.participant.isLocal &&
+          !t.publication.isMuted &&
           (t.publication.source === Track.Source.Camera ||
             t.publication.source === Track.Source.ScreenShare),
       )
@@ -299,8 +311,9 @@ function ScreenTileInner({
     onLiveChange?.(isLive);
   }, [isLive, onLiveChange]);
 
-  // When the station is not live, lazily fetch media so the primary fallback
-  // can be shown without requiring the supervisor to open the library first.
+  // When the station is not live, lazily fetch media so the primary fallback is
+  // ready. On the station screen the hook is pre-seeded from the token response
+  // (hasFetched = true), so this effect is effectively a no-op there.
   useEffect(() => {
     if (!isLive && !hasFetched) {
       fetchMedia();
@@ -490,8 +503,8 @@ function ScreenTileInner({
           trackRef={videoTrack}
           className="absolute inset-0 h-full w-full object-cover"
         />
-      ) : primaryMedia && !isConnecting ? (
-        /* Primary media fallback — shown when camera is off and media exists */
+      ) : viewerOnly && primaryMedia && !isConnecting ? (
+        /* Primary media fallback — shown on the station screen when supervisor's camera is off */
         primaryMedia.type === "image" ? (
           <img
             src={primaryMedia.url}
@@ -771,6 +784,7 @@ export function ScreenTile({
   className,
   stationNumber,
   storeId,
+  initialMedia,
 }: ScreenTileProps) {
   if (!token || !serverUrl) {
     return (
@@ -856,6 +870,7 @@ export function ScreenTile({
         className={className}
         stationNumber={stationNumber}
         storeId={storeId}
+        initialMedia={initialMedia}
       />
     </LiveKitRoom>
   );

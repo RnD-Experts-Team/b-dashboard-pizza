@@ -42,4 +42,5 @@ export interface SupervisorTokensResponse {
 export interface StationTokenResponse {
   token: string;
   server_url: string;
+  media?: import("./screen-project-media.types").StationMedia[];
 }

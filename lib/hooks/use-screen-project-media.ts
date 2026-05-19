@@ -69,12 +69,14 @@ export interface UseScreenProjectMediaResult {
 export function useScreenProjectMedia(
   storeId: string | null,
   stationNumber: number | null,
+  options?: { isPublic?: boolean; initialMedia?: StationMedia[] },
 ): UseScreenProjectMediaResult {
-  const [mediaItems, setMediaItems] = useState<StationMedia[]>([]);
+  const [mediaItems, setMediaItems] = useState<StationMedia[]>(options?.initialMedia ?? []);
   const [uploadJobs, setUploadJobs] = useState<MediaUploadJob[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false);
+  // Pre-seeded from the token response → skip the initial fetch
+  const [hasFetched, setHasFetched] = useState((options?.initialMedia?.length ?? 0) > 0);
 
   const primaryMedia = mediaItems.find((m) => m.is_primary) ?? null;
 
@@ -83,10 +85,9 @@ export function useScreenProjectMedia(
     if (!storeId || stationNumber === null) return;
     setIsLoading(true);
     try {
-      const items = await screenProjectMediaService.listMedia(
-        storeId,
-        stationNumber,
-      );
+      const items = options?.isPublic
+        ? await screenProjectMediaService.listMediaPublic(storeId, stationNumber)
+        : await screenProjectMediaService.listMedia(storeId, stationNumber);
       setMediaItems(Array.isArray(items) ? items : []);
       setHasFetched(true);
     } catch {
@@ -94,8 +95,7 @@ export function useScreenProjectMedia(
     } finally {
       setIsLoading(false);
     }
-  }, [storeId, stationNumber]);
-
+  }, [storeId, stationNumber, options?.isPublic]);
   /* ── Upload ───────────────────────────────────────────────────────── */
   const uploadFiles = useCallback(
     async (files: File[]) => {

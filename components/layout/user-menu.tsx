@@ -119,7 +119,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
           <Type className="me-2 h-4 w-4" />
           Change Font
         </DropdownMenuItem>
-        <DropdownMenuItem
+        {/* <DropdownMenuItem
           onSelect={(e) => {
             e.preventDefault();
             setThemeEditorOpen(true);
@@ -128,7 +128,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
         >
           <Palette className="me-2 h-4 w-4" />
           Theme Editor
-        </DropdownMenuItem>
+        </DropdownMenuItem> */}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
@@ -142,7 +142,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
 
     <LayoutSwitcher open={layoutOpen} onOpenChange={setLayoutOpen} />
     <FontSwitcher open={fontOpen} onOpenChange={setFontOpen} />
-    <ThemeEditor open={themeEditorOpen} onOpenChange={setThemeEditorOpen} />
+    {/* <ThemeEditor open={themeEditorOpen} onOpenChange={setThemeEditorOpen} /> */}
     </>
   );
 }

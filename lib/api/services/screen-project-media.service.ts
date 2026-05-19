@@ -30,6 +30,9 @@ function buildHeaders() {
 const BASE = (storeId: string, station: number) =>
   `/api/screen-project/${storeId}/stations/${station}/media`;
 
+const PUBLIC_BASE = (storeId: string, station: number) =>
+  `/api/public/screen-project/${storeId}/stations/${station}/media`;
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Service                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -45,6 +48,22 @@ export const screenProjectMediaService = {
       timeout: 15_000,
     });
     // Normalize: API may return a plain array or a wrapped object
+    if (Array.isArray(data)) return data as StationMedia[];
+    const d = data as Record<string, unknown>;
+    const inner = d?.data ?? d?.results ?? d?.media ?? d?.items ?? [];
+    return Array.isArray(inner) ? (inner as StationMedia[]) : [];
+  },
+
+  /**
+   * List media for a station — public, no supervisor auth required.
+   * Used by the station screen to load the primary media fallback.
+   * GET /api/public/screen-project/{storeId}/stations/{station}/media
+   */
+  async listMediaPublic(storeId: string, station: number): Promise<StationMedia[]> {
+    const { data } = await axios.get<unknown>(PUBLIC_BASE(storeId, station), {
+      headers: { Accept: "application/json" },
+      timeout: 15_000,
+    });
     if (Array.isArray(data)) return data as StationMedia[];
     const d = data as Record<string, unknown>;
     const inner = d?.data ?? d?.results ?? d?.media ?? d?.items ?? [];

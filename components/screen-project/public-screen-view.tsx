@@ -23,6 +23,7 @@ import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
 import { ScreenTile } from "./screen-tile";
 import type { Station, StationTokenResponse } from "@/types/screen-project.types";
+import type { StationMedia } from "@/types/screen-project-media.types";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 
@@ -32,6 +33,7 @@ interface StreamingState {
   station: Station;
   token: string;
   serverUrl: string;
+  media: StationMedia[];
 }
 
 interface PublicScreenViewProps {
@@ -151,6 +153,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
         station: selectedStation,
         token: data.token,
         serverUrl: data.server_url,
+        media: data.media ?? [],
       });
       setPhase("streaming");
       setPassword("");
@@ -329,6 +332,9 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             publishNetworkStatus={true}
             selectedAudioDeviceId={selectedAudioId || undefined}
             selectedVideoDeviceId={selectedVideoId || undefined}
+            stationNumber={streaming.station.id}
+            storeId={storeId}
+            initialMedia={streaming.media}
             className="h-full w-full"
           />
         </div>

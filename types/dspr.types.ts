@@ -127,6 +127,7 @@ export interface DsprDay {
   hourly_sales_and_channels_week_to_date_avg?: HourlySalesChannel[];
   total_sales: DsprChannelSales;
   total_sales_week_to_date?: DsprChannelSales;
+  total_sales_week_to_date_avg?: DsprChannelSales;
   total_cash_sales: number;
   total_cash_sales_week_to_date?: number;
   total_deposit: number;
