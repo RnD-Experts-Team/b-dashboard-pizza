@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { DueKeysError, dueKeysService } from "@/lib/api/services/due-keys.service";
-import type { DueKeysResponse, DueKeyValuePayload } from "@/types/due-key.types";
+import type { DueKeysResponse, DueKeyValuePayload, DueKeyValue } from "@/types/due-key.types";
 
 function isCanceledError(err: unknown): boolean {
   if (axios.isCancel(err)) return true;
@@ -97,7 +97,7 @@ interface UseSetDueKeyValueReturn {
     storeId: string,
     date: string,
     payload: DueKeyValuePayload
-  ) => Promise<boolean>;
+  ) => Promise<DueKeyValue | null>;
   isSubmitting: boolean;
   error: string | null;
   clearError: () => void;
@@ -114,15 +114,15 @@ export function useSetDueKeyValue(): UseSetDueKeyValueReturn {
       storeId: string,
       date: string,
       payload: DueKeyValuePayload
-    ): Promise<boolean> => {
+    ): Promise<DueKeyValue | null> => {
       setIsSubmitting(true);
       setError(null);
 
       try {
-        await dueKeysService.setDueKeyValue(storeId, date, payload);
-        return true;
+        const value = await dueKeysService.setDueKeyValue(storeId, date, payload);
+        return value;
       } catch (err) {
-        if (isCanceledError(err)) return false;
+        if (isCanceledError(err)) return null;
         if (err instanceof DueKeysError) {
           setError(err.message);
         } else {
@@ -132,7 +132,7 @@ export function useSetDueKeyValue(): UseSetDueKeyValueReturn {
               : "Failed to update due key value."
           );
         }
-        return false;
+        return null;
       } finally {
         setIsSubmitting(false);
       }

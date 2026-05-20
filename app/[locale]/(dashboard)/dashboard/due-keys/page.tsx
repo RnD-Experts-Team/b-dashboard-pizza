@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import { DueKeysFeed } from "@/components/due-keys/due-keys-feed";
 import { DebriefsFeed } from "@/components/due-keys/debriefs-feed";
@@ -18,7 +18,9 @@ import { useTagsList } from "@/lib/hooks/use-tags";
 import { useDueKeys } from "@/lib/hooks/use-due-keys";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
-import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList } from "lucide-react";
+import type { DueKeyValue } from "@/types/due-key.types";
+import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
+import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList, UserRound } from "lucide-react";
 
 function strToDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
@@ -47,6 +49,11 @@ export default function DueKeysPage() {
   const [toOpen, setToOpen] = useState(false);
 
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+
+  // Feed injection refs — let inline inputs push new items into the feeds
+  const debriefInjectRef = useRef<((item: EmployeeDebriefItem) => void) | null>(null);
+  const dueKeyUpdateRef = useRef<((date: string, keyId: number, value: DueKeyValue) => void) | null>(null);
   const { data: tagsData, isLoading: isTagsLoading } = useTagsList();
   const availableTags = tagsData?.data ?? [];
 
@@ -232,6 +239,63 @@ export default function DueKeysPage() {
               </div>
             )}
 
+            {/* ── Employees — Debrief only ── */}
+            {feedMode === "debrief" && (
+              <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Employee
+                    </p>
+                  </div>
+                  {selectedEmployeeId !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEmployeeId(null)}
+                      className="text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {isDueKeysLoading ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-5 w-28 animate-pulse rounded bg-muted" />
+                    ))}
+                  </div>
+                ) : (dueKeysData?.employees ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No employees found.</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {(dueKeysData?.employees ?? []).map((emp) => {
+                      const fullName = [emp.firstName, emp.lastName].filter(Boolean).join(" ");
+                      const isSelected = selectedEmployeeId === emp.id;
+                      return (
+                        <button
+                          key={emp.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedEmployeeId(isSelected ? null : emp.id)
+                          }
+                          className={cn(
+                            "w-full rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                            isSelected
+                              ? "bg-primary/10 font-semibold text-primary"
+                              : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
+                          )}
+                        >
+                          {fullName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -244,17 +308,20 @@ export default function DueKeysPage() {
                 dateFrom={dateFrom}
                 dateTo={dateTo}
                 selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
+                updateKeyRef={dueKeyUpdateRef}
               />
               <InlineDueKeyInput
                 storeId={storeId}
+                onSuccess={(date, keyId, value) => dueKeyUpdateRef.current?.(date, keyId, value)}
               />
             </div>
           ) : (
             <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
-              <DebriefsFeed storeId={storeId} dateFrom={dateFrom} dateTo={dateTo} />
+              <DebriefsFeed storeId={storeId} dateFrom={dateFrom} dateTo={dateTo} employeeId={selectedEmployeeId} injectRef={debriefInjectRef} />
               <InlineDebriefInput
                 storeId={storeId}
                 employees={dueKeysData?.employees ?? []}
+                onSuccess={(item) => debriefInjectRef.current?.(item)}
               />
             </div>
           )}

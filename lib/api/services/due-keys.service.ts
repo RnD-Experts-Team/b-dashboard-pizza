@@ -85,6 +85,38 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
   };
 }
 
+// Transforms the POST /values response body into a DueKeyValue.
+// userName is not returned by this endpoint and must be enriched by the caller.
+function transformDueKeyValueFromPost(raw: Record<string, unknown>): DueKeyValue {
+  return {
+    id: raw.id as number,
+    keyId: raw.key_id as number,
+    storeId: raw.store_id as string,
+    userId: raw.user_id as number,
+    userName: null,
+    entryDate: (raw.entry_date as string).slice(0, 10),
+    valueText: (raw.value_text as string | null) ?? null,
+    valueNumber: (raw.value_number as number | null) ?? null,
+    valueBoolean: (raw.value_boolean as boolean | null) ?? null,
+    valueJson: raw.value_json ?? null,
+    note: (raw.note as string | null) ?? null,
+    createdAt: raw.created_at as string,
+    updatedAt: raw.updated_at as string,
+    attachments: ((raw.attachments as unknown[]) ?? []).map((a) => {
+      const att = a as Record<string, unknown>;
+      return {
+        id: att.id as number,
+        enteredKeyValueId: att.entered_key_value_id as number,
+        filePath: att.file_path as string,
+        originalName: att.original_name as string,
+        mimeType: att.mime_type as string,
+        size: att.size as number,
+        attachmentUrl: att.attachment_url as string,
+      } satisfies DueKeyAttachment;
+    }),
+  };
+}
+
 function transformEmployee(raw: ApiEmployee): Employee {
   return {
     id: raw.id,
@@ -252,7 +284,7 @@ export const dueKeysService = {
     storeId: string,
     date: string,
     payload: DueKeyValuePayload
-  ): Promise<void> {
+  ): Promise<DueKeyValue> {
     const token = getToken();
     if (!token) {
       throw new DueKeysError(
@@ -288,7 +320,7 @@ export const dueKeysService = {
           formData.append("attachments[]", file);
         }
 
-        await axios.post(url, formData, {
+        const formResponse = await axios.post(url, formData, {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
@@ -296,9 +328,10 @@ export const dueKeysService = {
           },
           timeout: 30_000,
         });
+        return transformDueKeyValueFromPost(formResponse.data as Record<string, unknown>);
       } else {
         const { attachments: _a, ...jsonPayload } = payload;
-        await axios.post(url, jsonPayload, {
+        const jsonResponse = await axios.post(url, jsonPayload, {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
@@ -306,6 +339,7 @@ export const dueKeysService = {
           },
           timeout: 30_000,
         });
+        return transformDueKeyValueFromPost(jsonResponse.data as Record<string, unknown>);
       }
     } catch (err) {
       throw handleAxiosError(err);

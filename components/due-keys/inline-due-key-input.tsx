@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/popover";
 import { useDueKeys, useSetDueKeyValue } from "@/lib/hooks/use-due-keys";
 import { cn } from "@/lib/utils";
-import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
+import type { DueKeyItem, DueKeyValue, DueKeyValuePayload } from "@/types/due-key.types";
 
 function strToDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
@@ -39,10 +39,12 @@ function todayDateStr(): string {
 
 interface InlineDueKeyInputProps {
   storeId: string | null;
+  onSuccess?: (date: string, keyId: number, value: DueKeyValue) => void;
 }
 
 export function InlineDueKeyInput({
   storeId,
+  onSuccess,
 }: InlineDueKeyInputProps) {
   const [textValue, setTextValue] = useState("");
   const [numberValue, setNumberValue] = useState("");
@@ -186,8 +188,16 @@ export function InlineDueKeyInput({
       attachments: attachments.length > 0 ? attachments : null,
     };
 
-    const ok = await setDueKeyValue(storeId, submissionDate, finalPayload);
-    if (ok) {
+    const result = await setDueKeyValue(storeId, submissionDate, finalPayload);
+    if (result) {
+      // Enrich the server response with the current user's name
+      // (this endpoint doesn't return user_name, so we read it from local auth storage)
+      let userName: string | null = null;
+      try {
+        const raw = localStorage.getItem("auth-user");
+        if (raw) userName = (JSON.parse(raw) as { name?: string }).name ?? null;
+      } catch { /* ignore */ }
+      onSuccess?.(submissionDate, finalPayload.key_id, { ...result, userName });
       const action = !selectedKey!.filled && hasValue
         ? "created"
         : selectedKey!.filled && !hasValue

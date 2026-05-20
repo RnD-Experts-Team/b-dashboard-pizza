@@ -433,11 +433,11 @@ export function FloatingDebriefButton() {
                 employees={dueKeysData?.employees ?? []}
                 onSubmit={async (payload) => {
                   if (!selectedStoreId) return false;
-                  const success = await createDebrief(selectedStoreId, payload);
-                  if (success) {
+                  const result = await createDebrief(selectedStoreId, payload);
+                  if (result) {
                     toast.success("Debrief submitted successfully.");
                   }
-                  return success;
+                  return !!result;
                 }}
               />
             </div>

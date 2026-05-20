@@ -25,6 +25,7 @@ import {
 } from "@/lib/hooks/use-employee-debriefs";
 import { cn } from "@/lib/utils";
 import type { Employee } from "@/types/due-key.types";
+import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
 // ── date helpers ─────────────────────────────────────────────────────────────
 function strToDate(s: string): Date {
@@ -44,9 +45,10 @@ const MAX_NOTE = 5000;
 interface InlineDebriefInputProps {
   storeId: string | null;
   employees: Employee[];
+  onSuccess?: (item: EmployeeDebriefItem) => void;
 }
 
-export function InlineDebriefInput({ storeId, employees }: InlineDebriefInputProps) {
+export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebriefInputProps) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [selectedDisplayName, setSelectedDisplayName] = useState("");
   const [empOpen, setEmpOpen] = useState(false);
@@ -94,6 +96,7 @@ export function InlineDebriefInput({ storeId, employees }: InlineDebriefInputPro
     };
     const ok = await createDebrief(storeId, payload);
     if (ok) {
+      onSuccess?.(ok);
       toast.success("Debrief submitted.");
       setNote("");
       setAttachments([]);

@@ -221,7 +221,8 @@ export const employeeDebriefService = {
     storeId: string,
     from: string,
     to: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    employeeId?: number | null
   ): Promise<Record<string, EmployeeDebriefItem[]>> {
     const token = getToken();
     if (!token) {
@@ -236,7 +237,7 @@ export const employeeDebriefService = {
         `/api/data/stores/${encodeURIComponent(storeId)}/employee-debriefs/range`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          params: { from, to },
+          params: { from, to, ...(employeeId != null ? { employee_id: employeeId } : {}) },
           timeout: 15_000,
           signal,
         }

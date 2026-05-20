@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useLayoutEffect, useRef, useEffect } from "react";
+import React, { useLayoutEffect, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDueKeysFeed } from "@/lib/hooks/use-due-keys-feed";
-import type { DueKeyItem, Employee, DueKeyAttachment } from "@/types/due-key.types";
+import type { DueKeyItem, DueKeyValue, Employee, DueKeyAttachment } from "@/types/due-key.types";
 
 // --- Helpers ------------------------------------------------------------------
 
@@ -297,16 +297,22 @@ interface DueKeysFeedProps {
   dateTo?: string | null;
   /** Tag IDs to filter by */
   selectedTags?: number[] | null;
+  updateKeyRef?: React.MutableRefObject<((date: string, keyId: number, value: DueKeyValue) => void) | null>;
 }
 
-export function DueKeysFeed({ storeId, dateFrom, dateTo, selectedTags }: DueKeysFeedProps) {
-  const { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload } =
+export function DueKeysFeed({ storeId, dateFrom, dateTo, selectedTags, updateKeyRef }: DueKeysFeedProps) {
+  const { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload, updateKeyValue } =
     useDueKeysFeed(
       storeId,
       storeId ? dateFrom : null,
       storeId ? dateTo : null,
       storeId ? selectedTags : null,
     );
+
+  // Expose updateKeyValue to the parent via a stable mutable ref
+  useEffect(() => {
+    if (updateKeyRef) updateKeyRef.current = updateKeyValue;
+  }, [updateKeyRef, updateKeyValue]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -449,7 +455,9 @@ export function DueKeysFeed({ storeId, dateFrom, dateTo, selectedTags }: DueKeys
         {!isLoading && !error && (
           <div className="flex flex-1 flex-col gap-2">
             {pages.map((page) => {
-              const filledItems = page.items.filter((i) => i.filled && i.value);
+              const filledItems = page.items
+                .filter((i) => i.filled && i.value)
+                .sort((a, b) => (a.value?.createdAt ?? "").localeCompare(b.value?.createdAt ?? ""));
               if (filledItems.length === 0) return null;
               return (
                 <div key={page.date} className="flex flex-col gap-3">
