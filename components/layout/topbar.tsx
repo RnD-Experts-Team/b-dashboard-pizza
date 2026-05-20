@@ -29,7 +29,7 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
   return (
     <header
       data-font-scope="primary"
-      className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6"
+      className="font-heading flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6"
     >
       {/* Logo — shown only in topnav layout */}
       {showLogo && (

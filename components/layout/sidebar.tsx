@@ -588,7 +588,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     <div
       data-font-scope="primary"
       className={cn(
-        "flex h-full flex-col border-r bg-sidebar transition-all duration-300",
+        "font-heading flex h-full flex-col border-r bg-sidebar transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
     >
@@ -683,7 +683,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
       {/* Navigation — scrollable when content overflows */}
       <ScrollArea className="flex-1 overflow-y-auto">
-        <nav className="space-y-1 px-2 sm:px-3 py-2 sm:py-3">
+        <nav className="font-heading space-y-1 px-2 sm:px-3 py-2 sm:py-3">
           {/* 1. Dashboard */}
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}

@@ -102,7 +102,7 @@ export function Breadcrumbs({ pathname, className }: BreadcrumbsProps) {
   return (
     <nav
       aria-label={tNav("breadcrumb")}
-      className={cn("flex items-center text-sm", className)}
+      className={cn("font-heading flex items-center text-sm", className)}
     >
       <ol className="flex items-center gap-1.5">
         <li>
