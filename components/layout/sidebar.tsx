@@ -456,11 +456,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
       
      
-      // {
-      //   title: "Announcements",
-      //   href: `/${locale}/dashboard/announcements`,
-      //   icon: Megaphone,
-      // },
+      {
+        title: "Announcements",
+        href: `/${locale}/dashboard/announcements`,
+        icon: Megaphone,
+      },
     ],
   };
   // Dev tools navigation (controlled by feature flags)

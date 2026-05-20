@@ -40,53 +40,67 @@ export function useRealtimeNotifications({
     // ── Guard: only connect when we have both token and userId ────────
     if (!token || !userId) return;
 
-    // ── Create the Laravel Echo instance ──────────────────────────────
-    const echo = createEchoInstance(token);
-    echoRef.current = echo;
+    // ── Defer connection by one tick so React 19 Strict Mode's
+    //    immediate mount→unmount→remount cycle doesn't open a WebSocket
+    //    only to close it before the handshake completes. ──────────────
+    let echo: Echo<"pusher"> | null = null;
+    let cancelled = false;
 
-    // ── Connection-level logging (dev convenience) ────────────────────
-    const pusher = echo.connector.pusher;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
 
-    pusher.connection.bind("connected", () => {
-      console.log("[Reverb] WebSocket connected");
-    });
+      // ── Create the Laravel Echo instance ────────────────────────────
+      echo = createEchoInstance(token);
+      echoRef.current = echo;
 
-    pusher.connection.bind("error", (err: unknown) => {
-      console.error("[Reverb] WebSocket connection error:", err);
-    });
+      // ── Connection-level logging (dev convenience) ──────────────────
+      const pusher = echo.connector.pusher;
 
-    pusher.connection.bind("disconnected", () => {
-      console.warn("[Reverb] WebSocket disconnected");
-    });
-
-    // ── Subscribe to the user's private channel ──────────────────────
-    // Channel name matches backend: private-users.{userId}
-    const channel = echo.private(`users.${userId}`);
-
-    channel
-      .subscribed(() => {
-        console.log(`[Reverb] Subscribed to private-users.${userId}`);
-      })
-      .error((err: unknown) => {
-        console.error("[Reverb] Subscription error:", err);
-      })
-      // Listen for the notification.created event broadcast by the backend
-      .listen(".notification.created", (event: Notification) => {
-        console.log("[Reverb] Notification received:", event);
-
-        // Push into the store so the bell badge & panel update instantly
-        useNotificationStore.getState().addNotification(event);
-
-        // Show a slide-in toast so the user notices immediately
-        showNotificationToast(event);
+      pusher.connection.bind("connected", () => {
+        console.log("[Reverb] WebSocket connected");
       });
 
-    // ── Cleanup: disconnect when deps change or component unmounts ────
+      pusher.connection.bind("error", (err: unknown) => {
+        console.error("[Reverb] WebSocket connection error:", err);
+      });
+
+      pusher.connection.bind("disconnected", () => {
+        console.warn("[Reverb] WebSocket disconnected");
+      });
+
+      // ── Subscribe to the user's private channel ────────────────────
+      // Channel name matches backend: private-users.{userId}
+      const channel = echo.private(`users.${userId}`);
+
+      channel
+        .subscribed(() => {
+          console.log(`[Reverb] Subscribed to private-users.${userId}`);
+        })
+        .error((err: unknown) => {
+          console.error("[Reverb] Subscription error:", err);
+        })
+        // Listen for the notification.created event broadcast by the backend
+        .listen(".notification.created", (event: Notification) => {
+          console.log("[Reverb] Notification received:", event);
+
+          // Push into the store so the bell badge & panel update instantly
+          useNotificationStore.getState().addNotification(event);
+
+          // Show a slide-in toast so the user notices immediately
+          showNotificationToast(event);
+        });
+    }, 0);
+
+    // ── Cleanup: cancel pending timer or disconnect if already connected
     return () => {
-      echo.leave(`users.${userId}`);
-      echo.disconnect();
-      echoRef.current = null;
-      console.log("[Reverb] Disconnected & cleaned up");
+      cancelled = true;
+      clearTimeout(timer);
+      if (echo) {
+        echo.leave(`users.${userId}`);
+        echo.disconnect();
+        echoRef.current = null;
+        console.log("[Reverb] Disconnected & cleaned up");
+      }
     };
   }, [token, userId]);
 }

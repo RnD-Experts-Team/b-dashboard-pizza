@@ -99,6 +99,7 @@ interface StoreRuleFormData {
   ends_at: string;
   fill_mode: FillMode;
   role_names: string[];
+  time: string | null;
 }
 
 function emptyStoreRule(): StoreRuleFormData {
@@ -115,6 +116,7 @@ function emptyStoreRule(): StoreRuleFormData {
     ends_at: "",
     fill_mode: "store_once",
     role_names: [],
+    time: null,
   };
 }
 
@@ -484,6 +486,23 @@ function StoreRuleForm({
             />
           </div>
 
+          {/* Time */}
+          <div className="space-y-2">
+            <Label htmlFor={`time-${index}`}>Time</Label>
+            <Input
+              id={`time-${index}`}
+              type="time"
+              value={rule.time ?? ""}
+              onChange={(e) =>
+                update({ time: e.target.value === "" ? null : e.target.value })
+              }
+              placeholder="HH:mm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional due time in HH:mm format
+            </p>
+          </div>
+
           {/* Month Day */}
           {(rule.frequency_type === "monthly" ||
             rule.frequency_type === "yearly") && (
@@ -755,6 +774,7 @@ export function KeyForm({
           ends_at: rule.ends_at || null,
           fill_mode: rule.fill_mode,
           role_names: rule.fill_mode === "role_each" && rule.role_names.length > 0 ? rule.role_names : null,
+          time: rule.time || null,
         }))
       ),
       ...(selectedTagIds.length > 0 ? { tags: selectedTagIds } : {}),

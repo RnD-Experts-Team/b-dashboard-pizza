@@ -30,6 +30,11 @@ const screenProjectDomain = getApiDomain(screenProjectApiUrl);
 // LiveKit server — wss:// + https:// for the same host
 const livekitDomain = "https://screens.lcportal.cloud";
 const livekitWss = "wss://screens.lcportal.cloud";
+// Laravel Reverb WebSocket — wss:// uses the WS host directly
+const reverbWsHost = process.env.NEXT_PUBLIC_REVERB_WS_HOST || "";
+const reverbWss = reverbWsHost ? `wss://${reverbWsHost}` : "";
+const reverbAuthUrl = process.env.NEXT_PUBLIC_REVERB_AUTH_ENDPOINT || "";
+const reverbAuthDomain = getApiDomain(reverbAuthUrl);
 
 const nextConfig: NextConfig = {
   // Security headers
@@ -76,7 +81,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""} ${screenProjectDomain} ${livekitDomain} ${livekitWss}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
+              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""} ${screenProjectDomain} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
               "frame-src 'self'",
               "object-src 'none'",
               "base-uri 'self'",
