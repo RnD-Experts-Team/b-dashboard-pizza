@@ -11,6 +11,7 @@ import type {
   EmployeeRecord,
   EmployeesV1PaginatedResponse,
   EmployeeV1DetailResponse,
+  ManagerDashboardResponse,
 } from "@/types/employee.types";
 
 function normalizeLegalStatus(value?: string): "W2" | "1099" | undefined {
@@ -698,6 +699,25 @@ export const employeeService = {
         timeout: 15_000,
       },
     );
+    return data;
+  },
+
+  /**
+   * Fetch the manager dashboard for a store on a given date.
+   * Returns all active employees with birthday flags, position, pay, and
+   * performance metric (column id 3) for the week containing date.
+   * Proxied through GET /api/hiring-management/[storeId]/manager-dashboard/[date]
+   */
+  async getManagerDashboard(
+    storeId: string,
+    date: string,
+    signal?: AbortSignal,
+  ): Promise<ManagerDashboardResponse> {
+    const { data } = await axios.get<ManagerDashboardResponse>(
+      `/api/hiring-management/${encodeURIComponent(storeId)}/manager-dashboard/${encodeURIComponent(date)}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    // API returns the store object directly (not wrapped in { data: [...] })
     return data;
   },
 };

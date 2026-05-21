@@ -1,10 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { format, addDays } from "date-fns";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import { employeeService } from "@/lib/api/services/employee.service";
-import type { EmployeeV1Record } from "@/types/employee.types";
+import type { UseManagerDashboardResult } from "@/lib/hooks/use-manager-dashboard";
+import type { ManagerDashboardEmployee } from "@/types/employee.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,74 +18,28 @@ const AVATAR_COLORS = [
   "bg-orange-500",
 ];
 
-function getInitials(emp: EmployeeV1Record): string {
-  return [emp.first_name, emp.last_name]
+function getInitials(emp: ManagerDashboardEmployee): string {
+  return [emp.name.first, emp.name.last]
     .filter(Boolean)
     .map((n) => n[0].toUpperCase())
     .join("")
     .slice(0, 2);
 }
 
-function getFullName(emp: EmployeeV1Record): string {
-  return [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(" ");
-}
-
-/** Returns today and today+6 as RFC-3339 date strings for the upcoming 7-day window. */
-function getUpcomingWeekRange(): { birth_from: string; birth_to: string } {
-  const today = new Date();
-  return {
-    birth_from: format(today, "yyyy-MM-dd"),
-    birth_to: format(addDays(today, 6), "yyyy-MM-dd"),
-  };
+function getFullName(emp: ManagerDashboardEmployee): string {
+  return [emp.name.first, emp.name.middle, emp.name.last].filter(Boolean).join(" ");
 }
 
 interface EmployeeBirthdayProps {
+  managerDashboard: UseManagerDashboardResult;
   className?: string;
 }
 
-export function EmployeeBirthday({ className }: EmployeeBirthdayProps) {
-  const { selectedStore } = useSelectedStoreStore();
-  const storeId = selectedStore?.storeId ?? null;
+export function EmployeeBirthday({ managerDashboard, className }: EmployeeBirthdayProps) {
+  const { data, isLoading, error, refetch } = managerDashboard;
 
-  const [employees, setEmployees] = useState<EmployeeV1Record[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchData = useCallback(async () => {
-    if (!storeId) return;
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const { birth_from, birth_to } = getUpcomingWeekRange();
-      const result = await employeeService.getEmployeesV1(
-        storeId,
-        { birth_from, birth_to },
-        controller.signal,
-      );
-      if (!controller.signal.aborted) {
-        setEmployees(result.data);
-      }
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      setError(err instanceof Error ? err.message : "Failed to load birthday data.");
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsLoading(false);
-      }
-    }
-  }, [storeId]);
-
-  useEffect(() => {
-    fetchData();
-    return () => { abortRef.current?.abort(); };
-  }, [fetchData]);
+  const upcomingBirthdays: ManagerDashboardEmployee[] =
+    data?.employees.filter((e) => e.birthday.is_upcoming) ?? [];
 
   return (
     <Card
@@ -113,7 +64,7 @@ export function EmployeeBirthday({ className }: EmployeeBirthdayProps) {
             variant="ghost"
             size="icon"
             className="h-5 w-5 shrink-0"
-            onClick={fetchData}
+            onClick={refetch}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -126,7 +77,7 @@ export function EmployeeBirthday({ className }: EmployeeBirthdayProps) {
       </CardHeader>
 
       <CardContent className="px-3 pb-2 pt-1 space-y-1.5">
-        {isLoading && employees.length === 0 ? (
+        {isLoading && !data ? (
           <div className="space-y-1.5">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-1.5 bg-white/50 dark:bg-white/5 border border-pink-100 dark:border-pink-900/30">
@@ -138,19 +89,19 @@ export function EmployeeBirthday({ className }: EmployeeBirthdayProps) {
               </div>
             ))}
           </div>
-        ) : error ? (
+        ) : error && !data ? (
           <div className="flex flex-col items-center justify-center py-4 gap-1.5">
             <AlertCircle className="h-5 w-5 text-muted-foreground/40" />
             <p className="text-[11px] text-muted-foreground text-center">{error}</p>
-            <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={fetchData}>
+            <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={refetch}>
               <RefreshCw className="h-3 w-3 me-1" />
               Retry
             </Button>
           </div>
-        ) : employees.length > 0 ? (
-          employees.map((emp, idx) => (
+        ) : upcomingBirthdays.length > 0 ? (
+          upcomingBirthdays.map((emp, idx) => (
             <div
-              key={emp.id}
+              key={emp.employee_id}
               className="flex items-center gap-2 rounded-lg px-2 py-1.5 bg-white/50 dark:bg-white/5 border border-pink-100 dark:border-pink-900/30"
             >
               {/* Avatar */}
@@ -163,13 +114,23 @@ export function EmployeeBirthday({ className }: EmployeeBirthdayProps) {
                 {getInitials(emp)}
               </div>
 
-              {/* Name + type */}
+              {/* Name + position + days */}
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] font-semibold truncate text-foreground">
                   {getFullName(emp)}
                 </p>
-                <p className="text-[9px] text-muted-foreground truncate capitalize">
-                  {emp.employment_type ?? emp.gender ?? ""}
+                <p className="text-[9px] text-muted-foreground truncate">
+                  {emp.position}
+                  {emp.birthday.days_until !== undefined && (
+                    <span className="ms-1 text-pink-600 dark:text-pink-400 font-medium">
+                      · {emp.birthday.days_until === 0 ? "Today!" : `in ${emp.birthday.days_until}d`}
+                    </span>
+                  )}
+                  {emp.birthday.turns_age !== undefined && (
+                    <span className="ms-1 text-muted-foreground">
+                      (turns {emp.birthday.turns_age})
+                    </span>
+                  )}
                 </p>
               </div>
 

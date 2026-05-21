@@ -34,8 +34,8 @@ interface TopItemsListProps {
   weeklyCountItems?: TopMenuItem[];
   /** Upselling data */
   upselling?: {
-    day: UpsellingRecord;
-    week_to_date: UpsellingRecord;
+    day?: UpsellingRecord;
+    week_to_date?: UpsellingRecord;
   };
   title?: string;
   className?: string;
@@ -146,7 +146,7 @@ export function TopItemsList({
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-0 px-3 pb-1 overflow-y-auto max-h-[140px]">
+      <CardContent className="space-y-0 px-3 pb-1 overflow-y-auto max-h-[150px]">
         {/* ── Sales / Count rows ── */}
         {tab !== "upselling" && activeItems.map((item, idx) => {
           const barWidth = tab === "count"

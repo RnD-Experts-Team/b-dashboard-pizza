@@ -20,7 +20,7 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 });
 
 const CHANNEL_KEYS: { key: keyof DsprChannelSales; label: string; color: string }[] = [
-  { key: "royalty_obligation", label: "In Store", color: "#FF6B35" },
+  { key: "royalty_obligation", label: "Register", color: "#FF6B35" },
   { key: "phone_sales", label: "Phone", color: "#008FFB" },
   { key: "website_sales", label: "Website", color: "#00E396" },
   { key: "mobile_sales", label: "Mobile", color: "#FEB019" },

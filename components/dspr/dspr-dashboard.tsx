@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { format, subDays, formatDistanceToNow } from "date-fns";
 import html2canvas from "html2canvas-pro";
 import { useDspr } from "@/lib/hooks/use-dspr";
+import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import {
   SalesChart,
   TopItemsList,
@@ -306,6 +307,12 @@ export function DsprDashboard() {
       refetch(toApiDate(selectedDateRef.current));
     }
   }, [storeId, refetch]);
+
+  // Manager dashboard — shared fetch for employee cards
+  const managerDashboard = useManagerDashboard(
+    storeId,
+    toApiDate(selectedDate),
+  );
 
   // Format "last updated" time
   const lastUpdatedLabel = useMemo(() => {
@@ -666,7 +673,7 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Store goals ribbon ────────────────────────────────────── */}
-      <StoreGoals />
+      <StoreGoals sales={sales} day={day} />
 
       {/* ── Day summary stats ribbon ────────────────────────────── */}
       <DaySummaryStats day={day} />
@@ -675,7 +682,11 @@ export function DsprDashboard() {
       <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
         <SalesChart sales={sales} height={190} toolbar={false} className="lg:col-span-2" />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
-        <StoreScoreCard daily={88} weekly={70} monthly={80} className="lg:col-span-1" />
+        <StoreScoreCard
+          upsellingDay={day.upselling?.total_upselling_day}
+          upsellingWeek={day.upselling?.total_upselling_week_to_date}
+          className="lg:col-span-1"
+        />
         <PortalOnTimeDualGauge portal={day.portal} className="lg:col-span-1" />
         {/* </div> */}
       </div>
@@ -754,10 +765,11 @@ export function DsprDashboard() {
               storeId: storeNumericId ? String(storeNumericId) : undefined,
             },
           ]}
+          managerDashboard={managerDashboard}
           className="sm:col-span-2 lg:col-span-2"
         />
-        <EmployeeBirthday className="lg:col-span-1" />
-        <TopEmployeeHours className="lg:col-span-1" />
+        <EmployeeBirthday managerDashboard={managerDashboard} className="lg:col-span-1" />
+        <TopEmployeeHours managerDashboard={managerDashboard} className="lg:col-span-1" />
       </div>
     </div>
   );

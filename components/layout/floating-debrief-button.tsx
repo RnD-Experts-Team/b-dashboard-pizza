@@ -394,13 +394,13 @@ export function FloatingDebriefButton() {
                     <SelectItem value="debrief">
                       <span className="flex items-center gap-1.5">
                         <PenLine className="h-3 w-3" />
-                        Debrief
+                        Employee Debrief
                       </span>
                     </SelectItem>
                     <SelectItem value="due-keys">
                       <span className="flex items-center gap-1.5">
                         <KeyRound className="h-3 w-3" />
-                        Due Keys
+                        Debrief
                         {unfilledItems.length > 0 && (
                           <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
                             {unfilledItems.length}
@@ -423,7 +423,7 @@ export function FloatingDebriefButton() {
             <div ref={debriefSectionRef} className="px-4 py-4">
               <div className="flex items-center gap-2 mb-3">
                 <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Employee Debrief</h4>
               </div>
               <CreateEmployeeDebriefForm
                 storeId={selectedStoreId}
@@ -449,7 +449,7 @@ export function FloatingDebriefButton() {
             <div ref={dueKeysSectionRef} className="py-4">
               <div className="flex items-center gap-2 mb-3 px-4">
                 <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Due Keys</h4>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
               </div>
 
               {/* Date picker */}

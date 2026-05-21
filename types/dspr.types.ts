@@ -166,8 +166,12 @@ export interface DsprDay {
   labor_week_to_date?: number;
   portal: DsprPortal;
   upselling?: {
-    day: UpsellingRecord;
-    week_to_date: UpsellingRecord;
+    /** Aggregate totals (new API format) */
+    total_upselling_day?: number;
+    total_upselling_week_to_date?: number;
+    /** Item-level breakdown (used by TopItemsList) */
+    day?: UpsellingRecord;
+    week_to_date?: UpsellingRecord;
   };
 }
 

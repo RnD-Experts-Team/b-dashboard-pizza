@@ -21,7 +21,7 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 
 /** Channel keys from HourlySalesChannel (everything except hour & royalty_obligation) */
 const CHANNEL_KEYS: { key: keyof HourlySalesChannel; label: string; color: string }[] = [
-  { key: "adjusted_royalty_obligation", label: "In Store",    color: "#F97316" },
+  { key: "adjusted_royalty_obligation", label: "Register",    color: "#F97316" },
   { key: "phone_sales",        label: "Phone",        color: "#008FFB" },
   { key: "website_sales",      label: "Website",      color: "#00E396" },
   { key: "mobile_sales",       label: "Mobile",       color: "#FEB019" },
