@@ -360,7 +360,7 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
           <div className="flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
               <KeyRound className="h-2.5 w-2.5" />
-              Due Key
+              Debrief
             </span>
           </div>
 
@@ -451,7 +451,7 @@ function DebriefCard({ item }: { item: EmployeeDebriefItem }) {
           <div className="flex items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
               <ClipboardList className="h-2.5 w-2.5" />
-              Debrief
+              Employee Debrief
             </span>
           </div>
 
