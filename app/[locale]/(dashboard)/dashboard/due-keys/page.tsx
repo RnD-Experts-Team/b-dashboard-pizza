@@ -2,8 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { DueKeysFeed } from "@/components/due-keys/due-keys-feed";
-import { DebriefsFeed } from "@/components/due-keys/debriefs-feed";
+import { CombinedFeed } from "@/components/due-keys/combined-feed";
 import { InlineDueKeyInput } from "@/components/due-keys/inline-due-key-input";
 import { InlineDebriefInput } from "@/components/due-keys/inline-debrief-input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,7 @@ import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
 import type { DueKeyValue } from "@/types/due-key.types";
 import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
-import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList, UserRound } from "lucide-react";
+import { CalendarDays, Tag, CalendarIcon, KeyRound, ClipboardList, UserRound, Check, Search } from "lucide-react";
 
 function strToDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
@@ -33,13 +32,14 @@ function todayStr(): string {
   return dateToStr(new Date());
 }
 
-type FeedMode = "due-keys" | "debrief";
-
 export default function DueKeysPage() {
   const { selectedStore } = useSelectedStoreStore();
   const storeId = selectedStore?.storeId ?? null;
 
-  const [feedMode, setFeedMode] = useState<FeedMode>("due-keys");
+  const [showDueKeys, setShowDueKeys] = useState(true);
+  const [showDebrief, setShowDebrief] = useState(true);
+  const [submitMode, setSubmitMode] = useState<"due-key" | "debrief">("due-key");
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
   const [dateFrom, setDateFrom] = useState<string>(() => {
     const d = new Date(); d.setDate(d.getDate() - 2); return dateToStr(d);
@@ -76,28 +76,42 @@ export default function DueKeysPage() {
               <div className="grid grid-cols-2 gap-1">
                 <button
                   type="button"
-                  onClick={() => setFeedMode("due-keys")}
+                  onClick={() => setShowDueKeys((v) => !v)}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-[11px] font-semibold transition-colors",
-                    feedMode === "due-keys"
+                    showDueKeys
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   )}
                 >
-                  <KeyRound className="h-4 w-4" />
+                  <div className="relative">
+                    <KeyRound className="h-4 w-4" />
+                    {showDueKeys && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-2 w-2 text-primary-foreground" strokeWidth={3} />
+                      </span>
+                    )}
+                  </div>
                   Due Keys
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFeedMode("debrief")}
+                  onClick={() => setShowDebrief((v) => !v)}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-lg px-2 py-2.5 text-[11px] font-semibold transition-colors",
-                    feedMode === "debrief"
+                    showDebrief
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   )}
                 >
-                  <ClipboardList className="h-4 w-4" />
+                  <div className="relative">
+                    <ClipboardList className="h-4 w-4" />
+                    {showDebrief && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-2 w-2 text-primary-foreground" strokeWidth={3} />
+                      </span>
+                    )}
+                  </div>
                   Debrief
                 </button>
               </div>
@@ -182,9 +196,8 @@ export default function DueKeysPage() {
               </button>
             </div>
 
-            {/* ── Tags — Due Keys only ── */}
-            {feedMode === "due-keys" && (
-              <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+            {/* ── Tags — filters Due Keys ── */}
+            <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Tag className="h-3.5 w-3.5 text-muted-foreground" />
@@ -237,11 +250,9 @@ export default function DueKeysPage() {
                   </div>
                 )}
               </div>
-            )}
 
-            {/* ── Employees — Debrief only ── */}
-            {feedMode === "debrief" && (
-              <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
+            {/* ── Employees — filters Debrief ── */}
+            <div className="min-w-40 flex-1 rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm lg:min-w-0">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
@@ -260,6 +271,18 @@ export default function DueKeysPage() {
                   )}
                 </div>
 
+                {/* Search input */}
+                <div className="relative mb-2">
+                  <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/60" />
+                  <input
+                    type="text"
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    placeholder="Search…"
+                    className="h-7 w-full rounded-md border border-border/50 bg-background/60 pl-6 pr-2 text-xs outline-none placeholder:text-muted-foreground/50 focus:border-primary/50 focus:ring-0"
+                  />
+                </div>
+
                 {isDueKeysLoading ? (
                   <div className="space-y-2">
                     {[1, 2, 3].map((i) => (
@@ -269,62 +292,103 @@ export default function DueKeysPage() {
                 ) : (dueKeysData?.employees ?? []).length === 0 ? (
                   <p className="text-xs text-muted-foreground">No employees found.</p>
                 ) : (
-                  <div className="flex flex-col gap-1">
-                    {(dueKeysData?.employees ?? []).map((emp) => {
-                      const fullName = [emp.firstName, emp.lastName].filter(Boolean).join(" ");
-                      const isSelected = selectedEmployeeId === emp.id;
-                      return (
-                        <button
-                          key={emp.id}
-                          type="button"
-                          onClick={() =>
-                            setSelectedEmployeeId(isSelected ? null : emp.id)
-                          }
-                          className={cn(
-                            "w-full rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
-                            isSelected
-                              ? "bg-primary/10 font-semibold text-primary"
-                              : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
-                          )}
-                        >
-                          {fullName}
-                        </button>
-                      );
-                    })}
+                  <div className="flex max-h-36 flex-col gap-1 overflow-y-auto pr-0.5" style={{ scrollbarGutter: "stable" }}>
+                    {(dueKeysData?.employees ?? [])
+                      .filter((emp) => {
+                        if (!employeeSearch.trim()) return true;
+                        const fullName = [emp.firstName, emp.lastName].filter(Boolean).join(" ").toLowerCase();
+                        return fullName.includes(employeeSearch.toLowerCase().trim());
+                      })
+                      .map((emp) => {
+                        const fullName = [emp.firstName, emp.lastName].filter(Boolean).join(" ");
+                        const isSelected = selectedEmployeeId === emp.id;
+                        return (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() =>
+                              setSelectedEmployeeId(isSelected ? null : emp.id)
+                            }
+                            className={cn(
+                              "w-full rounded-lg px-2 py-1.5 text-left text-xs transition-colors",
+                              isSelected
+                                ? "bg-primary/10 font-semibold text-primary"
+                                : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
+                            )}
+                          >
+                            {fullName}
+                          </button>
+                        );
+                      })}
                   </div>
                 )}
               </div>
-            )}
 
           </div>
         </div>
 
         {/* ── Main feed ────────────────────────────────────────────── */}
         <div className="order-last min-w-0 flex-1 lg:order-first">
-          {feedMode === "due-keys" ? (
-            <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
-              <DueKeysFeed
-                storeId={storeId}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
-                updateKeyRef={dueKeyUpdateRef}
-              />
+          <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
+            <CombinedFeed
+              storeId={storeId}
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
+              employeeId={selectedEmployeeId}
+              showDueKeys={showDueKeys}
+              showDebrief={showDebrief}
+              updateKeyRef={dueKeyUpdateRef}
+              injectRef={debriefInjectRef}
+            />
+            {/* ── Submit-mode toggle (only when both are active) ── */}
+            {showDueKeys && showDebrief && (
+              <div className="flex items-center gap-1 border-t border-border/60 bg-muted/30 px-3 py-1.5">
+                <span className="mr-1 text-[10px] font-medium text-muted-foreground">Add:</span>
+                <button
+                  type="button"
+                  onClick={() => setSubmitMode("due-key")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors",
+                    submitMode === "due-key"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  )}
+                >
+                  <KeyRound className="h-3 w-3" />
+                  Due Key
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubmitMode("debrief")}
+                  className={cn(
+                    "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors",
+                    submitMode === "debrief"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                  )}
+                >
+                  <ClipboardList className="h-3 w-3" />
+                  Debrief
+                </button>
+              </div>
+            )}
+
+            {/* ── Inline inputs ── */}
+            {showDueKeys && (!showDebrief || submitMode === "due-key") && (
               <InlineDueKeyInput
                 storeId={storeId}
                 onSuccess={(date, keyId, value) => dueKeyUpdateRef.current?.(date, keyId, value)}
               />
-            </div>
-          ) : (
-            <div className="flex flex-col rounded-xl border border-border/60 overflow-hidden">
-              <DebriefsFeed storeId={storeId} dateFrom={dateFrom} dateTo={dateTo} employeeId={selectedEmployeeId} injectRef={debriefInjectRef} />
+            )}
+            {showDebrief && (!showDueKeys || submitMode === "debrief") && (
               <InlineDebriefInput
                 storeId={storeId}
                 employees={dueKeysData?.employees ?? []}
                 onSuccess={(item) => debriefInjectRef.current?.(item)}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
