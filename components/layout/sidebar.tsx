@@ -37,6 +37,7 @@ import {
   CalendarDays,
   Megaphone,
   Monitor,
+  Target,
 } from "lucide-react";
 import {
   Dialog,
@@ -408,6 +409,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: Tag,
         requirements: [
           { service: "Data", method: "GET", path: "/tags", storeId: effectiveStoreId }
+        ],
+      },
+      {
+        title: t("goals"),
+        href: `/${locale}/dashboard/goals`,
+        icon: Target,
+        requirements: [
+          { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
         ],
       },
     ],

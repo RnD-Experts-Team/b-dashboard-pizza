@@ -705,11 +705,20 @@ export function DsprDashboard() {
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <TopItemsList items={top.top_5_items_sales_for_day} weeklyItems={top.top_5_items_sales_week_to_date} className="sm:col-span-2 lg:col-span-1" />
+        <TopItemsList
+          items={top.top_5_items_sales_for_day}
+          weeklyItems={top.top_5_items_sales_week_to_date}
+          countItems={top.top_5_items_count_for_day}
+          weeklyCountItems={top.top_5_items_count_week_to_date}
+          upselling={day.upselling}
+          className="sm:col-span-2 lg:col-span-1"
+        />
         <TopIngredientsList
           mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
           paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}
           usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
+          highVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_high}
+          lowVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_low}
           className="sm:col-span-2 lg:col-span-1"
         />
         <RecentMaintenanceTable

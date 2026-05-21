@@ -50,13 +50,31 @@ export interface TopIngredient {
   variance_value?: number;
 }
 
+export interface UpsellingRecord {
+  crazy_bread?: number;
+  cookies?: number;
+  sauce?: number;
+  wings?: number;
+  beverages?: number;
+  crazy_puffs?: number;
+  bev_20oz?: number;
+  bev_2l?: number;
+  italian_cheese_bread?: number;
+  pizza_base?: number;
+  [key: string]: number | undefined;
+}
+
 export interface DsprTop {
   top_5_items_sales_for_day: TopMenuItem[];
   top_5_items_sales_week_to_date?: TopMenuItem[];
+  top_5_items_count_for_day?: TopMenuItem[];
+  top_5_items_count_week_to_date?: TopMenuItem[];
   ingredients: {
-    top_3_ingredients_used: TopIngredient[],
-    main_5_ingredients_usage: [],
-    top_paper_5_ingredients_usage: [];
+    top_3_ingredients_used: TopIngredient[];
+    top_5_ingredients_variance_high?: TopIngredient[];
+    top_5_ingredients_variance_low?: TopIngredient[];
+    main_5_ingredients_usage: TopIngredient[];
+    top_paper_5_ingredients_usage: TopIngredient[];
   };
 }
 
@@ -147,6 +165,10 @@ export interface DsprDay {
   labor: number;
   labor_week_to_date?: number;
   portal: DsprPortal;
+  upselling?: {
+    day: UpsellingRecord;
+    week_to_date: UpsellingRecord;
+  };
 }
 
 // ============================================================================
