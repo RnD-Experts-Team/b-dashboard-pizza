@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
 import { Target, DollarSign, Users, Gauge, Leaf, Clock } from "lucide-react";
 import {
   Tooltip,
@@ -8,10 +7,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import { goalsService } from "@/lib/api/services/goals.service";
-import type { Goal } from "@/types/goal.types";
-import type { DsprSales, DsprDay } from "@/types/dspr.types";
+import type { DsprSales, DsprDay, DsprGoalMetric } from "@/types/dspr.types";
 
 // ── Status style maps ─────────────────────────────────────────────────────────
 type GoalStatus = "met" | "close" | "behind";
@@ -66,6 +62,7 @@ function getCurrentValue(
   const n = name.toLowerCase();
   if (n.includes("sales"))    return sales?.this_week_total ?? null;
   if (n.includes("customer")) return day?.customer_count_week_to_date ?? null;
+  if (n.includes("labor"))    return day?.labor_week_to_date ?? null;
   if (n.includes("waste")) {
     const w = day?.waste_week_to_date;
     if (!w) return null;
@@ -73,7 +70,6 @@ function getCurrentValue(
   }
   if (n.includes("portal") || n.includes("on-time") || n.includes("on time"))
     return day?.portal?.week_to_date?.in_portal_on_time_percent ?? null;
-  // labor & unknown → no live wiring
   return null;
 }
 
@@ -113,66 +109,38 @@ function computeStatus(
   return "behind";
 }
 
-// Static values for labor (no live wiring per spec)
-const LABOR_STATIC = {
-  currentDisplay: "22%",
-  targetDisplay:  "< 24%",
-  pct:            100,
-  status:         "met" as GoalStatus,
-};
-
-// ── Skeleton pill ──────────────────────────────────────────────────────────────
-function GoalSkeleton() {
-  return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-l-2 border-l-muted-foreground/20 bg-card px-2 py-1.5 animate-pulse">
-      <div className="rounded p-0.5 shrink-0 bg-muted h-4 w-4" />
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="h-2.5 bg-muted rounded w-3/4" />
-        <div className="h-2 bg-muted rounded w-1/2" />
-        <div className="mt-0.5 h-0.5 w-full rounded-full bg-muted" />
-      </div>
-    </div>
-  );
-}
-
 // ── Goal card ──────────────────────────────────────────────────────────────────
 function GoalCard({
-  goal,
+  metric,
   sales,
   day,
 }: {
-  goal: Goal;
+  metric: DsprGoalMetric;
   sales?: DsprSales;
   day?: DsprDay;
 }) {
-  const name = goal.metric.name;
+  const name = metric.metric_name;
+  const goalValue = parseFloat(metric.goals[0]?.goal ?? "0");
   const hiB = isHigherBetter(name);
   const { icon: Icon, shortLabel } = getMetricVisuals(name);
-  const isLabor = name.toLowerCase().includes("labor");
+
+  const rawCurrent = getCurrentValue(name, sales, day);
 
   let currentDisplay: string;
   let targetDisplay: string;
   let pct: number;
   let status: GoalStatus;
 
-  if (isLabor) {
-    currentDisplay = LABOR_STATIC.currentDisplay;
-    targetDisplay  = LABOR_STATIC.targetDisplay;
-    pct            = LABOR_STATIC.pct;
-    status         = LABOR_STATIC.status;
+  if (rawCurrent === null) {
+    currentDisplay = "—";
+    targetDisplay  = formatGoalValue(name, goalValue);
+    pct            = 0;
+    status         = "behind";
   } else {
-    const rawCurrent = getCurrentValue(name, sales, day);
-    if (rawCurrent === null) {
-      currentDisplay = "—";
-      targetDisplay  = formatGoalValue(name, goal.goal);
-      pct            = 0;
-      status         = "behind";
-    } else {
-      currentDisplay = formatValue(name, rawCurrent);
-      targetDisplay  = formatGoalValue(name, goal.goal);
-      pct            = computePct(hiB, rawCurrent, goal.goal);
-      status         = computeStatus(hiB, pct, rawCurrent, goal.goal);
-    }
+    currentDisplay = formatValue(name, rawCurrent);
+    targetDisplay  = formatGoalValue(name, goalValue);
+    pct            = computePct(hiB, rawCurrent, goalValue);
+    status         = computeStatus(hiB, pct, rawCurrent, goalValue);
   }
 
   const barPct = Math.min(pct, 100);
@@ -230,78 +198,31 @@ function GoalCard({
 interface StoreGoalsProps {
   sales?: DsprSales;
   day?: DsprDay;
+  goalMetrics?: DsprGoalMetric[];
   className?: string;
 }
 
-export function StoreGoals({ sales, day, className }: StoreGoalsProps) {
-  const { selectedStore } = useSelectedStoreStore();
-  const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
+export function StoreGoals({ sales, day, goalMetrics, className }: StoreGoalsProps) {
+  if (!goalMetrics || goalMetrics.length === 0) return null;
 
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchGoals = useCallback(async () => {
-    if (!storeId) return;
-
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    setGoals([]);
-    setIsLoading(true);
-
-    try {
-      const result = await goalsService.getGoals(String(storeId), controller.signal);
-      if (!controller.signal.aborted) {
-        setGoals(result.data);
-      }
-    } catch {
-      if (!abortRef.current?.signal.aborted) {
-        setGoals([]);
-      }
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsLoading(false);
-      }
-    }
-  }, [storeId]);
-
-  useEffect(() => {
-    fetchGoals();
-    return () => { abortRef.current?.abort(); };
-  }, [fetchGoals]);
-
-  // Loading: show skeleton pills
-  if (isLoading && goals.length === 0) {
-    return (
-      <div className={cn("grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-1", className)}>
-        {Array.from({ length: 3 }).map((_, i) => <GoalSkeleton key={i} />)}
-      </div>
-    );
-  }
-
-  // No goals returned from API — hide the ribbon entirely
-  if (goals.length === 0) return null;
-
-  // Upselling is wired separately into the Upselling card — hide it here
-  const visibleGoals = goals.filter(
-    (g) => !g.metric.name.toLowerCase().includes("upselling"),
+  // Upselling is shown separately in the Upselling card — hide it here
+  const visibleMetrics = goalMetrics.filter(
+    (m) => !m.metric_name.toLowerCase().includes("upselling"),
   );
 
-  if (visibleGoals.length === 0) return null;
+  if (visibleMetrics.length === 0) return null;
 
   const colClass =
-    visibleGoals.length === 1 ? "grid-cols-1" :
-    visibleGoals.length === 2 ? "grid-cols-2" :
-    visibleGoals.length === 3 ? "grid-cols-2 sm:grid-cols-3" :
-    visibleGoals.length === 4 ? "grid-cols-2 sm:grid-cols-4" :
+    visibleMetrics.length === 1 ? "grid-cols-1" :
+    visibleMetrics.length === 2 ? "grid-cols-2" :
+    visibleMetrics.length === 3 ? "grid-cols-2 sm:grid-cols-3" :
+    visibleMetrics.length === 4 ? "grid-cols-2 sm:grid-cols-4" :
     "grid-cols-2 sm:grid-cols-3 xl:grid-cols-5";
 
   return (
     <div className={cn("grid gap-1", colClass, className)}>
-      {visibleGoals.map((goal) => (
-        <GoalCard key={goal.id} goal={goal} sales={sales} day={day} />
+      {visibleMetrics.map((metric) => (
+        <GoalCard key={metric.metric_id} metric={metric} sales={sales} day={day} />
       ))}
     </div>
   );

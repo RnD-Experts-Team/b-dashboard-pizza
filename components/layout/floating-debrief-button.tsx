@@ -23,6 +23,7 @@ import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
 import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { cn } from "@/lib/utils";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 
@@ -100,15 +101,19 @@ export function FloatingDebriefButton() {
   const [dueKeySheetOpen, setDueKeySheetOpen] = useState(false);
   const [dueKeySheetItem, setDueKeySheetItem] = useState<DueKeyItem | null>(null);
   const [fillAllSheetOpen, setFillAllSheetOpen] = useState(false);
+  const [pendingKeyId, setPendingKeyId] = useState<number | null>(null);
 
   const hasDragged = useRef(false);
   const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const debriefSectionRef = useRef<HTMLDivElement>(null);
   const dueKeysSectionRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScroll = useRef(false);
 
   const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
+  const pendingDebriefKey = useDebriefActionStore((s) => s.pendingDebriefKey);
+  const clearPendingDebriefKey = useDebriefActionStore((s) => s.clearPendingDebriefKey);
 
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateDebrief = canAccessRoute({
@@ -184,6 +189,28 @@ export function FloatingDebriefButton() {
     });
   }, []);
 
+  // ── Effect A: wire up store+date when a debrief notification is clicked ──
+  // Note: DueKeyValueSheet renders outside the isOpen panel, so we can open
+  // it directly without opening the floating panel at all.
+  useEffect(() => {
+    if (!pendingDebriefKey) return;
+    setSelectedStoreId(pendingDebriefKey.storeId);
+    setSelectedDate(pendingDebriefKey.date);
+    setPendingKeyId(pendingDebriefKey.keyId);
+    clearPendingDebriefKey();
+  }, [pendingDebriefKey, clearPendingDebriefKey]);
+
+  // ── Effect B: once due-keys data loads, auto-open the sheet for the target key
+  useEffect(() => {
+    if (pendingKeyId === null || isDueKeysLoading) return;
+    const item = dueKeysData?.items.find((i) => i.keyId === pendingKeyId);
+    setPendingKeyId(null);
+    if (item) {
+      handleDueKeyRowClick(item);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dueKeysData, pendingKeyId, isDueKeysLoading]);
+
   // Clamp FAB position when the viewport is resized
   useEffect(() => {
     const onResize = () => {
@@ -201,8 +228,10 @@ export function FloatingDebriefButton() {
 
   const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
     const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
+    isProgrammaticScroll.current = true;
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveNav(section);
+    setTimeout(() => { isProgrammaticScroll.current = false; }, 800);
   }, []);
 
   // Track which section is in view to highlight the active nav button
@@ -211,6 +240,7 @@ export function FloatingDebriefButton() {
     if (!container || !isOpen) return;
 
     const handleScroll = () => {
+      if (isProgrammaticScroll.current) return;
       const containerTop = container.scrollTop;
       const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
       // offset by a small threshold so nav switches a bit before the section hits the very top
@@ -337,7 +367,7 @@ export function FloatingDebriefButton() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Store Notes</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Debrief notes &amp; due key values</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Employee Debrief notes &amp; Debrief values</p>
               </div>
               <Button
                 variant="ghost"
@@ -351,7 +381,7 @@ export function FloatingDebriefButton() {
           </div>
 
           {/* Store picker + Section navigation — same row */}
-          <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40">
+          <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40 overflow-hidden">
             <div className="flex items-end gap-2">
               {/* Store */}
               <div className="flex-1 min-w-0">
@@ -381,7 +411,7 @@ export function FloatingDebriefButton() {
               </div>
 
               {/* Jump-to navigation */}
-              <div className="w-32 shrink-0">
+              <div className="w-32 shrink-0 mr-[40px]">
                 <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Jump to</Label>
                 <Select
                   value={activeNav}
@@ -549,11 +579,11 @@ export function FloatingDebriefButton() {
                   </div>
                 ) : !selectedStoreId ? (
                   <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    Select a store to load due keys.
+                    Select a store to load debrief data.
                   </div>
                 ) : activeItems.length === 0 ? (
                   <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    No due keys for this date.
+                    No debrief items for this date.
                   </div>
                 ) : (
                   <div className="divide-y divide-border/50">

@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import { goalsService } from "@/lib/api/services/goals.service";
+import type { DsprGoalMetric } from "@/types/dspr.types";
 
 // ── Radial geometry constants ─────────────────────────────────────────────────
 const CIRCLE_SIZE = 120;
@@ -18,6 +17,7 @@ interface StoreScoreCardProps {
   upsellingDay?: number;
   /** day.upselling.total_upselling_week_to_date */
   upsellingWeek?: number;
+  goalMetrics?: DsprGoalMetric[];
   loading?: boolean;
   className?: string;
 }
@@ -25,38 +25,15 @@ interface StoreScoreCardProps {
 export function StoreScoreCard({
   upsellingDay = 0,
   upsellingWeek = 0,
+  goalMetrics,
   loading = false,
   className,
 }: StoreScoreCardProps) {
-  // ── Fetch upselling weekly goal ───────────────────────────────────────────
-  const { selectedStore } = useSelectedStoreStore();
-  const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
-  const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchGoal = useCallback(async () => {
-    if (!storeId) return;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    try {
-      const result = await goalsService.getGoals(String(storeId), controller.signal);
-      if (!controller.signal.aborted) {
-        const found = result.data.find((g) =>
-          g.metric.name.toLowerCase().includes("upselling"),
-        );
-        setWeeklyGoal(found?.goal ?? null);
-      }
-    } catch {
-      // goal is optional — fail silently
-    }
-  }, [storeId]);
-
-  useEffect(() => {
-    setWeeklyGoal(null);
-    fetchGoal();
-    return () => { abortRef.current?.abort(); };
-  }, [fetchGoal]);
+  // ── Derive upselling weekly goal from DSPR goal_metrics ───────────────────
+  const upsMetric = goalMetrics?.find((m) =>
+    m.metric_name.toLowerCase().includes("upselling"),
+  );
+  const weeklyGoal = upsMetric ? parseFloat(upsMetric.goals[0]?.goal ?? "0") : null;
 
   // ── Derived values ────────────────────────────────────────────────────────
   const goal = weeklyGoal ?? 0;

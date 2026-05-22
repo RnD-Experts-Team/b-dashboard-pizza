@@ -67,7 +67,7 @@ export default function AnnouncementsPage() {
   };
 
   const unseenIds = announcements
-    .filter((a) => !seenIds.includes(a.id))
+    .filter((a) => !a.seen)
     .map((a) => a.id);
 
   const handleMarkAllSeen = useCallback(async () => {
@@ -164,7 +164,7 @@ export default function AnnouncementsPage() {
                   key={ann.id}
                   announcement={ann}
                   isUserView={viewMode === "user"}
-                  isSeen={viewMode === "user" && seenIds.includes(ann.id)}
+                  isSeen={viewMode === "user" && ann.seen}
                   onMarkSeen={(id) => markSeen([id])}
                   isMarkingSeen={isMarkingSeen}
                   onEdit={(id) => setEditId(id)}

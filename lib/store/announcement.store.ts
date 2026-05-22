@@ -81,8 +81,12 @@ export const useAnnouncementStore = create<AnnouncementStore>()((set) => ({
     set({ isMarkingSeen: true, markSeenError: null });
     try {
       await announcementService.markAnnouncementsSeen(ids);
+      const idSet = new Set(ids);
       set((state) => ({
         seenIds: [...new Set([...state.seenIds, ...ids])],
+        announcements: state.announcements.map((a) =>
+          idSet.has(a.id) ? { ...a, seen: true } : a,
+        ),
         isMarkingSeen: false,
       }));
       return true;

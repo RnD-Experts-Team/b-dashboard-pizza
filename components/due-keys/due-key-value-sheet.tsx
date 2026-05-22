@@ -215,9 +215,9 @@ export function DueKeyValueSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full p-0 sm:max-w-xl">
         <SheetHeader className="border-b pb-3">
-          <SheetTitle>Due Key Value</SheetTitle>
+          <SheetTitle>Debrief Value</SheetTitle>
           <SheetDescription>
-            {item ? `${item.label} (#${item.keyId})` : "Select a due key"}
+            {item ? `${item.label} (#${item.keyId})` : "Select a debrief item"}
           </SheetDescription>
         </SheetHeader>
 

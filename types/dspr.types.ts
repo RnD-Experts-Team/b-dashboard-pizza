@@ -176,6 +176,24 @@ export interface DsprDay {
 }
 
 // ============================================================================
+// Goal Metrics (embedded in DSPR response)
+// ============================================================================
+
+export interface DsprGoalEntry {
+  goal_id: number;
+  week_start_date: string;
+  week_end_date: string;
+  /** Numeric value encoded as a decimal string, e.g. "22.0000" */
+  goal: string;
+}
+
+export interface DsprGoalMetric {
+  metric_id: number;
+  metric_name: string;
+  goals: DsprGoalEntry[];
+}
+
+// ============================================================================
 // Full DSPR Response
 // ============================================================================
 
@@ -184,4 +202,5 @@ export interface DsprResponse {
   sales: DsprSales;
   top: DsprTop;
   day: DsprDay;
+  goal_metrics?: DsprGoalMetric[];
 }

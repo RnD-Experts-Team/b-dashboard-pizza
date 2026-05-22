@@ -474,7 +474,7 @@ export function DsprDashboard() {
   }
 
   // ── Success: render dashboard ──────────────────────────────────────────
-  const { filtering, sales, top, day } = data;
+  const { filtering, sales, top, day, goal_metrics } = data;
 
   return (
     <div
@@ -673,7 +673,7 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Store goals ribbon ────────────────────────────────────── */}
-      <StoreGoals sales={sales} day={day} />
+      <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} />
 
       {/* ── Day summary stats ribbon ────────────────────────────── */}
       <DaySummaryStats day={day} />
@@ -685,6 +685,7 @@ export function DsprDashboard() {
         <StoreScoreCard
           upsellingDay={day.upselling?.total_upselling_day}
           upsellingWeek={day.upselling?.total_upselling_week_to_date}
+          goalMetrics={goal_metrics}
           className="lg:col-span-1"
         />
         <PortalOnTimeDualGauge portal={day.portal} className="lg:col-span-1" />

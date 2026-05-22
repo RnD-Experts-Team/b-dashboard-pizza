@@ -41,6 +41,19 @@ export const announcementService = {
   },
 
   /**
+   * Fetch unseen announcements for the current user.
+   * Proxied through /api/announcements/unseen → notifications API
+   * Response: Announcement[]
+   */
+  async getUnseenAnnouncements(signal?: AbortSignal): Promise<Announcement[]> {
+    const { data } = await axios.get<Announcement[]>(
+      "/api/announcements/unseen",
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
+  /**
    * Fetch all announcements (admin view).
    * Proxied through /api/announcements → notifications API
    * Response is paginated: { current_page, data: Announcement[], ... }

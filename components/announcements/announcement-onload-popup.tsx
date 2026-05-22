@@ -61,7 +61,7 @@ export function AnnouncementOnLoadPopup() {
     const controller = new AbortController();
 
     announcementService
-      .getVisibleAnnouncements(controller.signal)
+      .getUnseenAnnouncements(controller.signal)
       .then((list) => {
         if (cancelled || list.length === 0) return;
         const sorted = [...list].sort(

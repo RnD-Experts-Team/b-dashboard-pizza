@@ -12,13 +12,39 @@ import {
   Check,
   Bell,
   ExternalLink,
+  KeyRound,
 } from "lucide-react";
+import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
+
+/**
+ * Parse a debrief action URL and extract keyId, date, and storeId.
+ * e.g. /data-entries/keys/29?date=2026-05-22&store_id=03795-00001
+ */
+function parseDebriefActionUrl(
+  url: string
+): { keyId: number; date: string; storeId: string } | null {
+  try {
+    const parsed = new URL(url, "http://x");
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    // pathname segments: ["data-entries", "keys", "29"]
+    const keyId = Number(parts[parts.length - 1]);
+    const date = parsed.searchParams.get("date") ?? "";
+    const storeId = parsed.searchParams.get("store_id") ?? "";
+    if (!keyId || !date || !storeId) return null;
+    return { keyId, date, storeId };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Derive icon & color from the API notification type string.
  * Common types: "announcement.created", "announcement.updated", etc.
  */
 function getTypeVisuals(type: string) {
+  if (type.startsWith("data_entry_key")) {
+    return { Icon: KeyRound, bg: "bg-orange-500/10 text-orange-600 dark:text-orange-400" };
+  }
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400" };
   }
@@ -88,32 +114,53 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
   const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || "en";
+  const openDebriefKey = useDebriefActionStore((s) => s.openDebriefKey);
 
   const { Icon, bg } = getTypeVisuals(notification.type);
   const isUnread = notification.read_at === null;
-  const pageSegment = getPageSegment(notification.action_url);
+  const isDebriefType = notification.type.startsWith("data_entry_key");
+  const isAnnouncementType = notification.type.startsWith("announcement");
+  const pageSegment = isDebriefType || isAnnouncementType
+    ? null
+    : getPageSegment(notification.action_url);
+
+  const isClickable = isDebriefType || isAnnouncementType || !!pageSegment;
 
   function handleClick() {
-    if (!pageSegment) return;
+    if (!isClickable) return;
     if (isUnread) onMarkAsRead(notification.id);
     onNavigate?.();
+
+    if (isAnnouncementType) {
+      router.push(`/${locale}/dashboard/announcements`);
+      return;
+    }
+
+    if (isDebriefType) {
+      const parsed = parseDebriefActionUrl(notification.action_url ?? "");
+      if (parsed) {
+        openDebriefKey(parsed.keyId, parsed.date, parsed.storeId);
+      }
+      return;
+    }
+
     router.push(`/${locale}/dashboard/${pageSegment}`);
   }
 
   return (
     <div
-      role={pageSegment ? "button" : "listitem"}
-      tabIndex={pageSegment ? 0 : undefined}
+      role={isClickable ? "button" : "listitem"}
+      tabIndex={isClickable ? 0 : undefined}
       className={cn(
         "flex items-start gap-3 p-3 rounded-md transition-colors group",
-        pageSegment
+        isClickable
           ? "cursor-pointer hover:bg-muted/80"
           : "cursor-default",
         isUnread && "bg-muted/50"
       )}
       onClick={handleClick}
       onKeyDown={(e) => {
-        if (pageSegment && (e.key === "Enter" || e.key === " ")) handleClick();
+        if (isClickable && (e.key === "Enter" || e.key === " ")) handleClick();
       }}
     >
       {/* Icon */}
@@ -136,12 +183,16 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
           <p className="text-xs text-muted-foreground/70">
             {getRelativeTime(notification.created_at)}
           </p>
-          {pageSegment && (
+          {isClickable && (
             <>
               <span className="text-muted-foreground/40 text-xs">·</span>
               <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/70">
                 <ExternalLink className="h-2.5 w-2.5" />
-                {formatPageLabel(pageSegment)}
+                {isAnnouncementType
+                  ? "Announcements"
+                  : isDebriefType
+                  ? "Open Debrief"
+                  : formatPageLabel(pageSegment!)}
               </span>
             </>
           )}
