@@ -105,4 +105,6 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
       </Feature>
     </header>
   );
+  
 }
+
