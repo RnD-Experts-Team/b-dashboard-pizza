@@ -1,12 +1,40 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* ── Screen Project: animated sound bars for audio activity indicator ──── */
+@keyframes soundbar {
+  0%, 100% { transform: scaleY(0.25); }
+  50%       { transform: scaleY(1); }
+}
+
+/* ── DSPR clickable card: subtle background tint on hover ── */
+.dspr-card-hover {
+  position: relative;
+}
+.dspr-card-hover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.045);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.dark .dspr-card-hover::before {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dspr-card-hover:hover::before {
+  opacity: 1;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--app-font-sans, var(--font-geist-sans));
+  --font-heading: var(--app-font-heading, var(--font-geist-sans));
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -46,18 +74,53 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* Font variant switching via data attribute */
-html[data-font-variant="spaceGrotesk"] body {
+/* Heading elements use the heading font variable */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+/* Layout surfaces that should follow the primary font token */
+[data-font-scope="primary"] {
+  font-family: var(--font-heading);
+}
+
+/* ── Primary (heading) font switching via data-primary-font ── */
+html[data-primary-font="spaceGrotesk"] body {
+  --app-font-heading: var(--font-space-grotesk);
+}
+html[data-primary-font="playfairDisplay"] body {
+  --app-font-heading: var(--font-playfair-display);
+}
+html[data-primary-font="ibmPlexMono"] body {
+  --app-font-heading: var(--font-ibm-plex-mono);
+}
+html[data-primary-font="oswald"] body {
+  --app-font-heading: var(--font-oswald);
+}
+html[data-primary-font="instrumentSans"] body {
+  --app-font-heading: var(--font-instrument-sans);
+}
+
+/* ── Secondary (body) font switching via data-secondary-font ── */
+html[data-secondary-font="spaceGrotesk"] body {
   --app-font-sans: var(--font-space-grotesk);
   font-family: var(--font-space-grotesk);
 }
-html[data-font-variant="playfairDisplay"] body {
+html[data-secondary-font="playfairDisplay"] body {
   --app-font-sans: var(--font-playfair-display);
   font-family: var(--font-playfair-display);
 }
-html[data-font-variant="ibmPlexMono"] body {
+html[data-secondary-font="ibmPlexMono"] body {
   --app-font-sans: var(--font-ibm-plex-mono);
   font-family: var(--font-ibm-plex-mono);
+}
+html[data-secondary-font="oswald"] body {
+  --app-font-sans: var(--font-oswald);
+  font-family: var(--font-oswald);
+}
+html[data-secondary-font="instrumentSans"] body {
+  --app-font-sans: var(--font-instrument-sans);
+  font-family: var(--font-instrument-sans);
 }
 
 :root {
@@ -214,52 +277,7 @@ html[data-font-variant="ibmPlexMono"] body {
   100% { transform: translateX(400%); }
 }
 
-@keyframes pizza-loader-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    filter: drop-shadow(0 0 5px rgba(249, 115, 22, 0.75));
-  }
-  50% {
-    opacity: 0.72;
-    filter: drop-shadow(0 0 2px rgba(249, 115, 22, 0.55));
-  }
-}
 
-@keyframes pizza-loader-orbit {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pizza-loader-bar {
-  0% {
-    left: -40%;
-    width: 30%;
-  }
-  50% {
-    width: 60%;
-  }
-  100% {
-    left: 110%;
-    width: 30%;
-  }
-}
-
-.pizza-loader-pulse {
-  animation: pizza-loader-pulse 1.8s ease-in-out infinite;
-}
-
-.pizza-loader-orbit {
-  animation: pizza-loader-orbit 8s linear infinite;
-}
-
-.pizza-loader-bar {
-  animation: pizza-loader-bar 1.9s ease-in-out infinite;
-}
 
 /* DSPR: when `.no-section-backgrounds` is present on the dashboard wrapper,
    remove gradient background-images applied by Tailwind utilities from

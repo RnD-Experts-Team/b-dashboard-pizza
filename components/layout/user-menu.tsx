@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { User, Settings, LogOut, LayoutGrid, Type } from "lucide-react";
+import { User, Settings, LogOut, LayoutGrid, Type, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { LayoutSwitcher } from "./layout-switcher";
 import { FontSwitcher } from "./font-switcher";
+import { ThemeEditor } from "./theme-editor";
 
 interface UserMenuProps {
   collapsed?: boolean;
@@ -32,6 +33,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
   const { user, logout } = useAuthStore();
   const [layoutOpen, setLayoutOpen] = useState(false);
   const [fontOpen, setFontOpen] = useState(false);
+  const [themeEditorOpen, setThemeEditorOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -117,6 +119,16 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
           <Type className="me-2 h-4 w-4" />
           Change Font
         </DropdownMenuItem>
+        {/* <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            setThemeEditorOpen(true);
+          }}
+          className="cursor-pointer"
+        >
+          <Palette className="me-2 h-4 w-4" />
+          Theme Editor
+        </DropdownMenuItem> */}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
@@ -130,6 +142,7 @@ export function UserMenu({ collapsed = false }: UserMenuProps) {
 
     <LayoutSwitcher open={layoutOpen} onOpenChange={setLayoutOpen} />
     <FontSwitcher open={fontOpen} onOpenChange={setFontOpen} />
+    {/* <ThemeEditor open={themeEditorOpen} onOpenChange={setThemeEditorOpen} /> */}
     </>
   );
 }

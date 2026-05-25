@@ -30,6 +30,9 @@ interface UseDebriefsFeedReturn {
   error: string | null;
   loadMore: () => void;
   reload: () => void;
+  inject: (item: EmployeeDebriefItem) => void;
+  /** Increments each time inject successfully adds an item; used to trigger scroll-to-bottom. */
+  lastInjectTime: number;
 }
 
 const CHUNK_DAYS = 7;
@@ -49,7 +52,8 @@ function offsetDate(dateStr: string, days: number): string {
 export function useDebriefsFeed(
   storeId: string | null,
   dateFrom: string | null,
-  dateTo: string | null
+  dateTo: string | null,
+  employeeId?: number | null
 ): UseDebriefsFeedReturn {
   const [pages, setPages] = useState<DebriefPage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +61,15 @@ export function useDebriefsFeed(
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [lastInjectTime, setLastInjectTime] = useState(0);
+
+  // Keep filter values in refs so inject() always sees the latest
+  const dateFromRef = useRef(dateFrom);
+  const dateToRef = useRef(dateTo);
+  const employeeIdRef = useRef(employeeId);
+  dateFromRef.current = dateFrom;
+  dateToRef.current = dateTo;
+  employeeIdRef.current = employeeId;
 
   // Track the oldest loaded `from` date
   const oldestFromRef = useRef<string | null>(null);
@@ -82,7 +95,7 @@ export function useDebriefsFeed(
     oldestFromRef.current = dateFrom;
 
     employeeDebriefService
-      .listRange(storeId, dateFrom, dateTo, controller.signal)
+      .listRange(storeId, dateFrom, dateTo, controller.signal, employeeId)
       .then((days) => {
         if (controller.signal.aborted) return;
         // Filter out empty days
@@ -111,7 +124,7 @@ export function useDebriefsFeed(
 
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId, dateFrom, dateTo, reloadKey]);
+  }, [storeId, dateFrom, dateTo, employeeId, reloadKey]);
 
   const loadMore = useCallback(() => {
     if (!storeId || !dateTo || isLoadingMore || isLoading || !hasMore) return;
@@ -131,7 +144,7 @@ export function useDebriefsFeed(
     const controller = new AbortController();
 
     employeeDebriefService
-      .listRange(storeId, newFrom, newTo, controller.signal)
+      .listRange(storeId, newFrom, newTo, controller.signal, employeeId)
       .then((days) => {
         if (controller.signal.aborted) return;
         const nonEmpty: Record<string, EmployeeDebriefItem[]> = {};
@@ -157,5 +170,39 @@ export function useDebriefsFeed(
       });
   }, [storeId, dateTo, isLoadingMore, isLoading, hasMore]);
 
-  return { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload };
+  const inject = useCallback((item: EmployeeDebriefItem) => {
+    // Normalize date to YYYY-MM-DD — the server may return a full ISO datetime string
+    const itemDate = item.date ? item.date.slice(0, 10) : null;
+    if (!itemDate) return;
+    // Only inject if the item's date is within the currently loaded range
+    const from = dateFromRef.current;
+    const to = dateToRef.current;
+    if (from && itemDate < from) return;
+    if (to && itemDate > to) return;
+    // Only inject if it matches the active employee filter
+    const empId = employeeIdRef.current;
+    if (empId != null && item.employeeId !== empId) return;
+
+    setPages((prev) => {
+      const pageIdx = prev.findIndex(
+        (p) => itemDate >= p.dateFrom && itemDate <= p.dateTo
+      );
+      if (pageIdx === -1) return prev;
+      const page = prev[pageIdx];
+      const existingDay = page.days[itemDate] ?? [];
+      // Deduplicate by id
+      if (existingDay.some((e) => e.id === item.id)) return prev;
+      const updatedPage: DebriefPage = {
+        ...page,
+        days: { ...page.days, [itemDate]: [...existingDay, item] },
+      };
+      const newPages = [...prev];
+      newPages[pageIdx] = updatedPage;
+      return newPages;
+    });
+    // Signal the feed to scroll to bottom so the new item is visible
+    setLastInjectTime(Date.now());
+  }, []);
+
+  return { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload, inject, lastInjectTime };
 }

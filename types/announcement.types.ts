@@ -21,6 +21,7 @@ export interface Announcement {
   ends_at: string;
   created_at: string;
   updated_at: string;
+  seen: boolean;
 }
 
 export interface AnnouncementPaginatedResponse {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarDays, KeyRound, PenLine, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
 import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { cn } from "@/lib/utils";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 
@@ -79,11 +81,18 @@ function renderValuePreview(item: DueKeyItem): string {
   return "—";
 }
 
+// Layout constants — keep in sync with the button / panel sizes
+const FAB_W = 108;   // approximate FAB button width in px
+const FAB_H = 44;    // FAB button height in px
+const PANEL_W = 480; // floating panel width (w-120 = 30 rem)
+const EDGE = 8;      // minimum gap from each screen edge
+
 export function FloatingDebriefButton() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [position, setPosition] = useState<"top" | "bottom">("bottom");
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [activeNav, setActiveNav] = useState<"debrief" | "due-keys">("debrief");
 
   // ── Due Keys state ─────────────────────────────────────────────────────
@@ -92,15 +101,19 @@ export function FloatingDebriefButton() {
   const [dueKeySheetOpen, setDueKeySheetOpen] = useState(false);
   const [dueKeySheetItem, setDueKeySheetItem] = useState<DueKeyItem | null>(null);
   const [fillAllSheetOpen, setFillAllSheetOpen] = useState(false);
+  const [pendingKeyId, setPendingKeyId] = useState<number | null>(null);
 
   const hasDragged = useRef(false);
-  const dragStartY = useRef(0);
+  const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const debriefSectionRef = useRef<HTMLDivElement>(null);
   const dueKeysSectionRef = useRef<HTMLDivElement>(null);
+  const isProgrammaticScroll = useRef(false);
 
   const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
+  const pendingDebriefKey = useDebriefActionStore((s) => s.pendingDebriefKey);
+  const clearPendingDebriefKey = useDebriefActionStore((s) => s.clearPendingDebriefKey);
 
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateDebrief = canAccessRoute({
@@ -125,7 +138,7 @@ export function FloatingDebriefButton() {
     refetch: refetchDueKeys,
   } = useDueKeys(
     selectedStoreId,
-    isOpen ? selectedDate : null,
+    selectedDate,
     selectedTagIds.length > 0 ? selectedTagIds : undefined
   );
 
@@ -168,24 +181,101 @@ export function FloatingDebriefButton() {
     }
   }, []);
 
-  if (!canCreateDebrief) return null;
+  // Initialise FAB position to bottom-right corner on mount
+  useEffect(() => {
+    setPos({
+      x: window.innerWidth - FAB_W - EDGE,
+      y: window.innerHeight - FAB_H - EDGE,
+    });
+  }, []);
 
-  // ── Drag handlers — snap to top or bottom on release ──────────────────
-  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+  // ── Effect A: wire up store+date when a debrief notification is clicked ──
+  // Note: DueKeyValueSheet renders outside the isOpen panel, so we can open
+  // it directly without opening the floating panel at all.
+  useEffect(() => {
+    if (!pendingDebriefKey) return;
+    setSelectedStoreId(pendingDebriefKey.storeId);
+    setSelectedDate(pendingDebriefKey.date);
+    setPendingKeyId(pendingDebriefKey.keyId);
+    clearPendingDebriefKey();
+  }, [pendingDebriefKey, clearPendingDebriefKey]);
+
+  // ── Effect B: once due-keys data loads, auto-open the sheet for the target key
+  useEffect(() => {
+    if (pendingKeyId === null || isDueKeysLoading) return;
+    const item = dueKeysData?.items.find((i) => i.keyId === pendingKeyId);
+    setPendingKeyId(null);
+    if (item) {
+      handleDueKeyRowClick(item);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dueKeysData, pendingKeyId, isDueKeysLoading]);
+
+  // Clamp FAB position when the viewport is resized
+  useEffect(() => {
+    const onResize = () => {
+      setPos((prev) => {
+        if (!prev) return prev;
+        return {
+          x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, prev.x)),
+          y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, prev.y)),
+        };
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
+    const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
+    isProgrammaticScroll.current = true;
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveNav(section);
+    setTimeout(() => { isProgrammaticScroll.current = false; }, 800);
+  }, []);
+
+  // Track which section is in view to highlight the active nav button
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !isOpen) return;
+
+    const handleScroll = () => {
+      if (isProgrammaticScroll.current) return;
+      const containerTop = container.scrollTop;
+      const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
+      // offset by a small threshold so nav switches a bit before the section hits the very top
+      setActiveNav(containerTop + 40 >= dueKeysTop ? "due-keys" : "debrief");
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [isOpen]);
+
+  if (!canCreateDebrief) return null;
+  if (pathname?.includes("/due-keys")) return null;
+
+  // ── Drag handlers — free 2-D drag with viewport clamping ─────────────
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!pos) return;
     hasDragged.current = false;
-    dragStartY.current = e.clientY;
+    dragOrigin.current = { px: e.clientX, py: e.clientY, ex: pos.x, ey: pos.y };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLButtonElement>) {
-    if (Math.abs(e.clientY - dragStartY.current) > 8) hasDragged.current = true;
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragOrigin.current) return;
+    const dx = e.clientX - dragOrigin.current.px;
+    const dy = e.clientY - dragOrigin.current.py;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged.current = true;
+    if (!hasDragged.current) return;
+    setPos({
+      x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, dragOrigin.current.ex + dx)),
+      y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, dragOrigin.current.ey + dy)),
+    });
   }
 
-  function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!hasDragged.current) return;
-    const delta = e.clientY - dragStartY.current;
-    if (delta < -40) setPosition("top");
-    else if (delta > 40) setPosition("bottom");
+  function handlePointerUp(_e: React.PointerEvent<HTMLDivElement>) {
+    dragOrigin.current = null;
   }
 
   function handleClick() {
@@ -232,27 +322,23 @@ export function FloatingDebriefButton() {
     );
   };
 
-  const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
-    const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setActiveNav(section);
-  }, []);
-
-  // Track which section is in view to highlight the active nav button
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !isOpen) return;
-
-    const handleScroll = () => {
-      const containerTop = container.scrollTop;
-      const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
-      // offset by a small threshold so nav switches a bit before the section hits the very top
-      setActiveNav(containerTop + 40 >= dueKeysTop ? "due-keys" : "debrief");
-    };
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [isOpen]);
+  // Compute floating panel screen position, keeping it fully within the viewport
+  function getPanelStyle() {
+    if (!pos) return {};
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // Horizontal: prefer left of FAB; fall back to right when not enough room
+    const leftOfFab = pos.x - EDGE - PANEL_W;
+    const rightOfFab = pos.x + FAB_W + EDGE;
+    const left =
+      leftOfFab >= EDGE
+        ? leftOfFab
+        : Math.max(EDGE, Math.min(vw - PANEL_W - EDGE, rightOfFab));
+    // Vertical: align top with FAB, clamp so panel doesn't overflow bottom
+    const maxH = vh * 0.8;
+    const top = Math.max(EDGE, Math.min(vh - maxH - EDGE, pos.y));
+    return { left, top };
+  }
 
   return (
     <>
@@ -266,22 +352,22 @@ export function FloatingDebriefButton() {
       )}
 
       {/* Floating panel */}
-      {isOpen && (
+      {isOpen && pos && (
         <div
           className={cn(
-            "fixed z-50 right-6 w-120 max-h-[80vh]",
-            position === "bottom" ? "bottom-20" : "top-30",
+            "fixed z-50 w-120 max-h-[80vh]",
             "flex flex-col",
             "rounded-2xl bg-background shadow-2xl",
             "border border-gray-200/60 dark:border-gray-700/60",
           )}
+          style={getPanelStyle()}
         >
           {/* Panel header */}
           <div className="shrink-0 bg-background px-4 pt-4 pb-3 border-b border-gray-100/60 dark:border-gray-800/60 rounded-t-2xl">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">Store Notes</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Debrief notes &amp; due key values</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Employee Debrief notes &amp; Debrief values</p>
               </div>
               <Button
                 variant="ghost"
@@ -295,7 +381,7 @@ export function FloatingDebriefButton() {
           </div>
 
           {/* Store picker + Section navigation — same row */}
-          <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40">
+          <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40 overflow-hidden">
             <div className="flex items-end gap-2">
               {/* Store */}
               <div className="flex-1 min-w-0">
@@ -325,7 +411,7 @@ export function FloatingDebriefButton() {
               </div>
 
               {/* Jump-to navigation */}
-              <div className="w-32 shrink-0">
+              <div className="w-32 shrink-0 mr-[40px]">
                 <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Jump to</Label>
                 <Select
                   value={activeNav}
@@ -338,13 +424,13 @@ export function FloatingDebriefButton() {
                     <SelectItem value="debrief">
                       <span className="flex items-center gap-1.5">
                         <PenLine className="h-3 w-3" />
-                        Debrief
+                        Employee Debrief
                       </span>
                     </SelectItem>
                     <SelectItem value="due-keys">
                       <span className="flex items-center gap-1.5">
                         <KeyRound className="h-3 w-3" />
-                        Due Keys
+                        Debrief
                         {unfilledItems.length > 0 && (
                           <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
                             {unfilledItems.length}
@@ -367,7 +453,7 @@ export function FloatingDebriefButton() {
             <div ref={debriefSectionRef} className="px-4 py-4">
               <div className="flex items-center gap-2 mb-3">
                 <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Employee Debrief</h4>
               </div>
               <CreateEmployeeDebriefForm
                 storeId={selectedStoreId}
@@ -377,11 +463,11 @@ export function FloatingDebriefButton() {
                 employees={dueKeysData?.employees ?? []}
                 onSubmit={async (payload) => {
                   if (!selectedStoreId) return false;
-                  const success = await createDebrief(selectedStoreId, payload);
-                  if (success) {
+                  const result = await createDebrief(selectedStoreId, payload);
+                  if (result) {
                     toast.success("Debrief submitted successfully.");
                   }
-                  return success;
+                  return !!result;
                 }}
               />
             </div>
@@ -393,7 +479,7 @@ export function FloatingDebriefButton() {
             <div ref={dueKeysSectionRef} className="py-4">
               <div className="flex items-center gap-2 mb-3 px-4">
                 <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Due Keys</h4>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
               </div>
 
               {/* Date picker */}
@@ -493,11 +579,11 @@ export function FloatingDebriefButton() {
                   </div>
                 ) : !selectedStoreId ? (
                   <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    Select a store to load due keys.
+                    Select a store to load debrief data.
                   </div>
                 ) : activeItems.length === 0 ? (
                   <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                    No due keys for this date.
+                    No debrief items for this date.
                   </div>
                 ) : (
                   <div className="divide-y divide-border/50">
@@ -540,28 +626,39 @@ export function FloatingDebriefButton() {
         </div>
       )}
 
-      {/* FAB button — drag to reposition vertically */}
-      <Button
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onClick={handleClick}
-        className={cn(
-          "fixed z-50 gap-2 rounded-full right-6",
-          position === "bottom" ? "bottom-6" : "top-15",
-          "h-11 px-5 text-sm font-medium shadow-lg hover:shadow-xl",
-          "transition-all duration-300 ease-in-out",
-          "cursor-grab active:cursor-grabbing select-none touch-none",
-          "border",
-          isOpen
-            ? "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200/60 dark:border-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-700"
-            : "bg-white text-black border-gray-200/60 dark:border-gray-700/60 hover:bg-gray-100 dark:bg-white-700 dark:border-white-600 dark:hover:bg-white-600",
-        )}
-        size="sm"
-      >
-        <PenLine className="h-4 w-4" />
-        <span>Debrief</span>
-      </Button>
+      {/* FAB button — freely draggable anywhere on screen */}
+      {pos && (
+        <div
+          className="fixed z-50"
+          style={{ left: pos.x, top: pos.y, touchAction: "none" }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onClick={handleClick}
+        >
+          <Button
+            className={cn(
+              "gap-2 rounded-full",
+              "h-11 px-5 text-sm font-medium shadow-lg",
+              "transition-all duration-300 ease-in-out",
+              "cursor-grab active:cursor-grabbing select-none touch-none",
+              "border",
+              isOpen
+                ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
+                : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
+            )}
+            size="sm"
+          >
+            <PenLine className="h-4 w-4" />
+            <span>Debrief</span>
+          </Button>
+          {!isOpen && unfilledItems.length > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
+              {unfilledItems.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Due Key single-item sheet */}
       {selectedStoreId && (

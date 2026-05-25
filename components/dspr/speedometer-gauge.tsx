@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -93,26 +93,30 @@ export function SpeedometerGauge({
   secondaryColor,
   secondaryLabel,
 }: SpeedometerGaugeProps) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
-  // Animated internal value — always animate from 0 -> value on each change
+  const mode = useDocumentColorMode();
+  const isDark = mode === "dark";
+  // Animated internal value — animates from current position to new value
   const [animValue, setAnimValue] = useState(0);
+  const animValueRef = useRef(0);
 
   const [animSecondary, setAnimSecondary] = useState<number | null>(null);
+  const animSecondaryRef = useRef<number | null>(null);
 
   useEffect(() => {
     let raf = 0;
-    const start = performance.now();
-    const from = 0;
+    const startTime = performance.now();
+    const from = animValueRef.current;
     const to = value;
-    const duration = 900; // ms
+    const duration = 600; // ms
 
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const easeInOut = (t: number) =>
+      t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
     function frame(now: number) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = easeOutCubic(t);
-      setAnimValue(from + (to - from) * eased);
+      const t = Math.min(1, (now - startTime) / duration);
+      const current = from + (to - from) * easeInOut(t);
+      animValueRef.current = current;
+      setAnimValue(current);
       if (t < 1) {
         raf = requestAnimationFrame(frame);
       }
@@ -125,19 +129,22 @@ export function SpeedometerGauge({
   // Animate secondary needle separately when provided
   useEffect(() => {
     if (secondaryValue === undefined || secondaryValue === null) {
+      animSecondaryRef.current = null;
       setAnimSecondary(null);
       return;
     }
     let raf = 0;
-    const start = performance.now();
-    const from = 0;
+    const startTime = performance.now();
+    const from = animSecondaryRef.current ?? secondaryValue;
     const to = secondaryValue;
-    const duration = 900;
-    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+    const duration = 600;
+    const easeInOut = (t: number) =>
+      t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     function frame(now: number) {
-      const t = Math.min(1, (now - start) / duration);
-      const eased = easeOutCubic(t);
-      setAnimSecondary(from + (to - from) * eased);
+      const t = Math.min(1, (now - startTime) / duration);
+      const current = from + (to - from) * easeInOut(t);
+      animSecondaryRef.current = current;
+      setAnimSecondary(current);
       if (t < 1) raf = requestAnimationFrame(frame);
     }
     raf = requestAnimationFrame(frame);
@@ -150,7 +157,7 @@ export function SpeedometerGauge({
   const tip2 = useMemo(() => (angle2 == null ? null : polar(NEEDLE2, angle2)), [angle2]);
   
   // Value text color: white in dark mode, light gray in light mode for contrast
-  const valueTextColor = resolvedTheme === "dark" ? "#ffffff" : "#747474";
+  const valueTextColor = isDark ? "#ffffff" : "#747474";
 
   // Build zone arc paths
   const zoneArcs = useMemo(

@@ -52,6 +52,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CreateEmployeeDialog } from "@/components/hiring/create-employee-dialog";
 import { EditEmployeeDialog } from "@/components/hiring/edit-employee-dialog";
 import { EmployeeDetailsSheet } from "@/components/hiring/employee-details-sheet";
@@ -70,7 +71,7 @@ type EmployeeFilterOptions = {
   employee_id?: string;
   gender?: "male" | "female" | "all";
   employment_type?: "W2" | "1099" | "all";
-  status?: string;
+  status_in?: string[];
   position_id?: string;
   marital_id?: string;
   id_type_id?: string;
@@ -106,7 +107,7 @@ const DEFAULT_FILTERS: EmployeeFilterOptions = {
   employee_id: "",
   gender: "all",
   employment_type: "all",
-  status: "all",
+  status_in: [],
   position_id: "",
   marital_id: "",
   id_type_id: "",
@@ -137,13 +138,18 @@ const DEFAULT_FILTERS: EmployeeFilterOptions = {
   page: 1,
 };
 
-function buildV1Params(opts?: EmployeeFilterOptions): Record<string, string | number | boolean> {
-  const p: Record<string, string | number | boolean> = {};
+function buildV1Params(opts?: EmployeeFilterOptions): Record<string, string | number | boolean | string[]> {
+  const p: Record<string, string | number | boolean | string[]> = {};
   if (opts?.q?.trim()) p.q = opts.q.trim();
   if (opts?.employee_id?.trim()) p.employee_id = opts.employee_id.trim();
   if (opts?.gender && opts.gender !== "all") p.gender = opts.gender;
   if (opts?.employment_type && opts.employment_type !== "all") p.employment_type = opts.employment_type;
-  if (opts?.status && opts.status !== "all") p.status = opts.status;
+  const _statuses = opts?.status_in ?? [];
+  if (_statuses.length === 1) {
+    p.status = _statuses[0];
+  } else if (_statuses.length > 1) {
+    p["status_in"] = _statuses;
+  }
   if (opts?.position_id?.trim()) p.position_id = opts.position_id.trim();
   if (opts?.marital_id?.trim()) p.marital_id = opts.marital_id.trim();
   if (opts?.id_type_id?.trim()) p.id_type_id = opts.id_type_id.trim();
@@ -212,7 +218,7 @@ export default function EmployeesPage() {
   const canViewEmployees = canAccessRoute({ service: "Hiring", method: "GET", path: "/v1/stores/*/employees", storeId: effectiveStoreId });
   const canViewEmployeeDetails = canAccessRoute({ service: "Hiring", method: "GET", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
   const canCreateEmployee = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/employees", storeId: effectiveStoreId });
-  const canEditEmployee = canAccessRoute({ service: "Hiring", method: "PUT", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
+  const canEditEmployee = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
   const canChangeEmployeeStatus = canAccessRoute({ service: "Hiring", method: "PATCH", path: "/v1/stores/*/employees/*/status", storeId: effectiveStoreId });
   const canSyncCatalog = canAccessRoute({ service: "Hiring", method: "PUT", path: "/v1/reference-catalog", storeId: effectiveStoreId });
   const {
@@ -425,7 +431,7 @@ export default function EmployeesPage() {
     filters.employee_id?.trim(),
     filters.gender !== "all" ? filters.gender : null,
     filters.employment_type !== "all" ? filters.employment_type : null,
-    filters.status && filters.status !== "all" ? filters.status : null,
+    (filters.status_in?.length ?? 0) > 0 ? filters.status_in![0] : null,
     filters.position_id?.trim(),
     filters.marital_id?.trim(),
     filters.id_type_id?.trim(),
@@ -678,22 +684,52 @@ export default function EmployeesPage() {
                   {/* Status */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Select
-                      value={filters.status ?? "all"}
-                      onValueChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="hired">Hired</SelectItem>
-                        <SelectItem value="resigned">Resigned</SelectItem>
-                        <SelectItem value="terminated">Terminated</SelectItem>
-                        <SelectItem value="rehired">Rehired</SelectItem>
-                        <SelectItem value="OJE">OJE</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between font-normal h-9 px-3 text-sm"
+                        >
+                          <span className="truncate text-start">
+                            {(filters.status_in?.length ?? 0) === 0
+                              ? "All statuses"
+                              : filters.status_in!.length === 1
+                              ? filters.status_in![0].charAt(0).toUpperCase() + filters.status_in![0].slice(1)
+                              : `${filters.status_in!.length} statuses`}
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-44 p-1">
+                        {(["hired", "resigned", "terminated", "rehired", "OJE"] as const).map((v) => {
+                          const isSelected = filters.status_in?.includes(v) ?? false;
+                          return (
+                            <DropdownMenuItem
+                              key={v}
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                setFilters((f) => {
+                                  const current = f.status_in ?? [];
+                                  const next = current.includes(v)
+                                    ? current.filter((s) => s !== v)
+                                    : [...current, v];
+                                  return { ...f, status_in: next };
+                                });
+                              }}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => undefined}
+                                className="pointer-events-none"
+                              />
+                              <span className="capitalize">{v}</span>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </TabsContent>

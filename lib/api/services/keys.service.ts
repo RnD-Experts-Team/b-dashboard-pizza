@@ -61,6 +61,7 @@ function transformStoreRule(raw: ApiStoreRule): StoreRule {
     endsAt: raw.ends_at,
     fillMode: raw.fill_mode ?? "store_once",
     roleNames: raw.role_names ?? null,
+    time: raw.time ?? null,
   };
 }
 

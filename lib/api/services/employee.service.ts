@@ -11,6 +11,7 @@ import type {
   EmployeeRecord,
   EmployeesV1PaginatedResponse,
   EmployeeV1DetailResponse,
+  ManagerDashboardResponse,
 } from "@/types/employee.types";
 
 function normalizeLegalStatus(value?: string): "W2" | "1099" | undefined {
@@ -287,13 +288,18 @@ export const employeeService = {
    */
   async getEmployeesV1(
     storeId: string,
-    params?: Record<string, string | number | boolean | undefined | null>,
+    params?: Record<string, string | number | boolean | string[] | undefined | null>,
     signal?: AbortSignal,
   ): Promise<EmployeesV1PaginatedResponse> {
     const query = new URLSearchParams();
     if (params) {
       for (const [key, val] of Object.entries(params)) {
-        if (val !== undefined && val !== null && val !== "") {
+        if (val === undefined || val === null || val === "") continue;
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            query.append(`${key}[]`, String(item));
+          }
+        } else {
           query.set(key, String(val));
         }
       }
@@ -565,7 +571,7 @@ export const employeeService = {
   
   /**
    * Update an employee using the V1 multipart/form-data API.
-   * Proxied through PUT /api/v1/stores/[storeId]/employees/[employeeId]
+   * Proxied through POST /api/v1/stores/[storeId]/employees/[employeeId]
    */
   async updateEmployeeV1(
     storeId: string,
@@ -664,7 +670,7 @@ export const employeeService = {
       fd.append(`store_assignments[${i}][store_id]`, String(sa.store_id));
     });
 
-    const { data } = await axios.put(
+    const { data } = await axios.post(
       `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       fd,
       { headers: buildHeaders(), timeout: 300_000 },
@@ -693,6 +699,25 @@ export const employeeService = {
         timeout: 15_000,
       },
     );
+    return data;
+  },
+
+  /**
+   * Fetch the manager dashboard for a store on a given date.
+   * Returns all active employees with birthday flags, position, pay, and
+   * performance metric (column id 3) for the week containing date.
+   * Proxied through GET /api/hiring-management/[storeId]/manager-dashboard/[date]
+   */
+  async getManagerDashboard(
+    storeId: string,
+    date: string,
+    signal?: AbortSignal,
+  ): Promise<ManagerDashboardResponse> {
+    const { data } = await axios.get<ManagerDashboardResponse>(
+      `/api/hiring-management/${encodeURIComponent(storeId)}/manager-dashboard/${encodeURIComponent(date)}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    // API returns the store object directly (not wrapped in { data: [...] })
     return data;
   },
 };

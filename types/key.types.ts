@@ -28,6 +28,7 @@ export interface ApiStoreRule {
   ends_at: string | null;
   fill_mode: FillMode;
   role_names: string[] | null;
+  time: string | null;
 }
 
 export interface ApiKeyTag {
@@ -84,6 +85,7 @@ export interface StoreRule {
   endsAt: string | null;
   fillMode: FillMode;
   roleNames: string[] | null;
+  time: string | null;
 }
 
 export interface EngineKey {
@@ -128,6 +130,7 @@ export interface StoreRulePayload {
   ends_at: string | null;
   fill_mode: FillMode;
   role_names: string[] | null;
+  time: string | null;
 }
 
 export interface CreateKeyPayload {

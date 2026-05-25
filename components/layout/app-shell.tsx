@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useUIStore } from "@/lib/store/ui.store";
 import { FloatingDebriefButton } from "./floating-debrief-button";
+import { ScreenProjectPiPOverlay } from "@/components/screen-project/screen-project-pip-overlay";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -31,7 +32,7 @@ export function AppShell({ children }: AppShellProps) {
   /* ────────────────────────────────────────────────────────────────── */
   if (layoutVariant === "classic") {
     return (
-      <div className="flex h-screen overflow-hidden bg-muted/40">
+      <div className="flex h-screen overflow-hidden bg-shell-background/40">
         <div className="hidden md:block">
           <Sidebar collapsed={sidebarCollapsed} />
         </div>
@@ -43,6 +44,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </div>
         <FloatingDebriefButton />
+        <ScreenProjectPiPOverlay />
       </div>
     );
   }
@@ -52,7 +54,7 @@ export function AppShell({ children }: AppShellProps) {
   /* ────────────────────────────────────────────────────────────────── */
   if (layoutVariant === "inset") {
     return (
-      <div className="flex h-screen overflow-hidden bg-muted/40">
+      <div className="flex h-screen overflow-hidden bg-shell-background/40">
         <div className="hidden md:block">
           <Sidebar collapsed={sidebarCollapsed} />
         </div>
@@ -68,6 +70,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
         <FloatingDebriefButton />
+        <ScreenProjectPiPOverlay />
       </div>
     );
   }
@@ -77,7 +80,7 @@ export function AppShell({ children }: AppShellProps) {
   /* ────────────────────────────────────────────────────────────────── */
   if (layoutVariant === "floating") {
     return (
-      <div className="flex h-screen overflow-hidden bg-muted/50 p-2 md:p-3 gap-2 md:gap-3">
+      <div className="flex h-screen overflow-hidden bg-shell-background/50 p-2 md:p-3 gap-2 md:gap-3">
         {/* Floating sidebar */}
         <div className="hidden md:flex">
           <div className="rounded-2xl bg-sidebar shadow-md ring-1 ring-border/30 overflow-hidden">
@@ -93,6 +96,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </div>
         <FloatingDebriefButton />
+        <ScreenProjectPiPOverlay />
       </div>
     );
   }
@@ -101,7 +105,7 @@ export function AppShell({ children }: AppShellProps) {
   /*  Top Nav — no sidebar on desktop; nav accessed via hamburger sheet */
   /* ────────────────────────────────────────────────────────────────── */
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-muted/40">
+    <div className="flex h-screen flex-col overflow-hidden bg-shell-background/40">
       {/* Always show hamburger-driven sidebar via sheet */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
@@ -118,6 +122,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </main>
       <FloatingDebriefButton />
+      <ScreenProjectPiPOverlay />
     </div>
   );
 }

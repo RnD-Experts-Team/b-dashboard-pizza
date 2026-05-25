@@ -16,18 +16,24 @@ export type FontVariant =
   | "default"
   | "spaceGrotesk"
   | "playfairDisplay"
-  | "ibmPlexMono";
+  | "ibmPlexMono"
+  | "oswald"
+  | "instrumentSans";
 
 interface UIState {
   sidebarCollapsed: boolean;
   theme: Theme;
   layoutVariant: LayoutVariant;
-  fontVariant: FontVariant;
+  /** Font applied to headings (h1–h6) */
+  primaryFont: FontVariant;
+  /** Font applied to body / general text */
+  secondaryFont: FontVariant;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setTheme: (theme: Theme) => void;
   setLayoutVariant: (variant: LayoutVariant) => void;
-  setFontVariant: (variant: FontVariant) => void;
+  setPrimaryFont: (variant: FontVariant) => void;
+  setSecondaryFont: (variant: FontVariant) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -36,7 +42,8 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       theme: "system",
       layoutVariant: "classic",
-      fontVariant: "default",
+      primaryFont: "oswald",
+      secondaryFont: "instrumentSans",
 
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -49,7 +56,9 @@ export const useUIStore = create<UIState>()(
       setLayoutVariant: (variant: LayoutVariant) =>
         set({ layoutVariant: variant }),
 
-      setFontVariant: (variant: FontVariant) => set({ fontVariant: variant }),
+      setPrimaryFont: (variant: FontVariant) => set({ primaryFont: variant }),
+
+      setSecondaryFont: (variant: FontVariant) => set({ secondaryFont: variant }),
     }),
     {
       name: "ui-storage",

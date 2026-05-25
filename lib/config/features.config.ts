@@ -293,6 +293,29 @@ export const featuresConfig: FeaturesConfig = {
     envOverride: "NEXT_PUBLIC_FEATURE_SEARCH",
     runtimeToggle: true,
   },
+
+  /**
+   * Screen Project — Global PiP Mini-Player
+   *
+   * When enabled, navigating away from the Screen Project page while a live
+   * station is active will automatically show a draggable picture-in-picture
+   * mini-player that keeps the video feed alive across routes.
+   *
+   * Affects:
+   * - Floating PiP overlay in AppShell
+   * - LiveKit room lifecycle (one room kept alive across navigation)
+   * - Drag position persistence
+   */
+  screenProjectPiP: {
+    id: "screenProjectPiP",
+    name: "Screen Project PiP",
+    description:
+      "Draggable cross-page mini-player for live station video when leaving Screen Project.",
+    category: "ui",
+    enabled: true,
+    envOverride: "NEXT_PUBLIC_FEATURE_SCREEN_PROJECT_PIP",
+    runtimeToggle: false,
+  },
 };
 
 /**

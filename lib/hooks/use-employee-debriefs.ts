@@ -157,7 +157,7 @@ export interface CreateDebriefPayload {
 }
 
 interface UseCreateEmployeeDebriefReturn {
-  createDebrief: (storeId: string, payload: CreateDebriefPayload) => Promise<boolean>;
+  createDebrief: (storeId: string, payload: CreateDebriefPayload) => Promise<EmployeeDebriefItem | null>;
   isSubmitting: boolean;
   error: string | null;
   clearError: () => void;
@@ -169,14 +169,14 @@ export function useCreateEmployeeDebrief(): UseCreateEmployeeDebriefReturn {
   const clearError = useCallback(() => setError(null), []);
 
   const createDebrief = useCallback(
-    async (storeId: string, payload: CreateDebriefPayload): Promise<boolean> => {
+    async (storeId: string, payload: CreateDebriefPayload): Promise<EmployeeDebriefItem | null> => {
       setIsSubmitting(true);
       setError(null);
       try {
-        await employeeDebriefService.create(storeId, payload);
-        return true;
+        const item = await employeeDebriefService.create(storeId, payload);
+        return item;
       } catch (err) {
-        if (isCanceledError(err)) return false;
+        if (isCanceledError(err)) return null;
         if (err instanceof EmployeeDebriefError) {
           setError(err.message);
         } else {
@@ -184,7 +184,7 @@ export function useCreateEmployeeDebrief(): UseCreateEmployeeDebriefReturn {
             err instanceof Error ? err.message : "Failed to create employee debrief."
           );
         }
-        return false;
+        return null;
       } finally {
         setIsSubmitting(false);
       }

@@ -52,6 +52,7 @@ export default function UpdateKeyPage() {
           ends_at: sr.endsAt ?? "",
           fill_mode: sr.fillMode,
           role_names: sr.roleNames ?? [],
+          time: sr.time ?? null,
         })),
       }
     : undefined;

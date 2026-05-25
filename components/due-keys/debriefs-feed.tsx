@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useLayoutEffect, useRef, useEffect } from "react";
+import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -301,15 +302,23 @@ interface DebriefsFeedProps {
   storeId: string | null;
   dateFrom?: string | null;
   dateTo?: string | null;
+  employeeId?: number | null;
+  injectRef?: React.MutableRefObject<((item: EmployeeDebriefItem) => void) | null>;
 }
 
-export function DebriefsFeed({ storeId, dateFrom, dateTo }: DebriefsFeedProps) {
-  const { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload } =
+export function DebriefsFeed({ storeId, dateFrom, dateTo, employeeId, injectRef }: DebriefsFeedProps) {
+  const { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload, inject, lastInjectTime } =
     useDebriefsFeed(
       storeId,
       storeId ? dateFrom ?? null : null,
-      storeId ? dateTo ?? null : null
+      storeId ? dateTo ?? null : null,
+      employeeId
     );
+
+  // Expose inject to the parent via a stable mutable ref
+  useEffect(() => {
+    if (injectRef) injectRef.current = inject;
+  }, [injectRef, inject]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -324,11 +333,18 @@ export function DebriefsFeed({ storeId, dateFrom, dateTo }: DebriefsFeedProps) {
     }
   }, [isLoading, pages]);
 
-  // Reset scroll flag when store/dates change
+  // Scroll to bottom when a new item is injected so it's immediately visible
+  useLayoutEffect(() => {
+    if (lastInjectTime > 0 && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [lastInjectTime]);
+
+  // Reset scroll flag when store/dates/employee change
   useEffect(() => {
     didScrollRef.current = false;
     prevScrollHeightRef.current = 0;
-  }, [storeId, dateFrom, dateTo]);
+  }, [storeId, dateFrom, dateTo, employeeId]);
 
   // Restore scroll position after prepending older pages
   useEffect(() => {
@@ -450,8 +466,11 @@ export function DebriefsFeed({ storeId, dateFrom, dateTo }: DebriefsFeedProps) {
               return (
                 <div key={`${page.dateFrom}-${page.dateTo}`} className="flex flex-col gap-3">
                   {sortedDays.map((day) => {
-                    const items = page.days[day];
-                    if (!items || items.length === 0) return null;
+                    const rawItems = page.days[day];
+                    if (!rawItems || rawItems.length === 0) return null;
+                    const items = [...rawItems].sort((a, b) =>
+                      (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
+                    );
                     return (
                       <div key={day} className="flex flex-col gap-3">
                         {/* Sticky date divider */}

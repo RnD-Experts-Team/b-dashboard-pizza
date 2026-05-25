@@ -77,7 +77,9 @@
     "employeeDebriefs": "Employee Debrief Notes",
     "exportImport": "Export / Import",
     "tags": "Tags",
+    "goals": "Goals",
     "scheduling": "Scheduling",
+    "screenProject": "Screen Project",
     "collapse": "Collapse",
     "selectStore": "Select Store",
     "selectStoreDescription": "Choose a store to manage",
@@ -112,6 +114,7 @@
     "due-keys": "Due Keys",
     "employee-debriefs": "Employee Debrief Notes",
     "export-import": "Export / Import",
+    "goals": "Goals",
     "scheduling": "Scheduling",
     "create-key": "Create Key",
     "update-key": "Update Key",
@@ -133,7 +136,8 @@
     "create": "Create",
     "edit": "Edit",
     "store-details": "Store Details",
-    "user-details": "User Details"
+    "user-details": "User Details",
+    "screen-project": "Screen Project"
   },
   "auth": {
     "login": {
@@ -1676,5 +1680,15 @@
     "title": "Page Not Found",
     "description": "Sorry, the page you are looking for doesn't exist or has been moved.",
     "backToDashboard": "Back to Dashboard"
+  },
+  "screenProject": {
+    "title": "Screen Project",
+    "description": "Live screen monitoring and voice communication",
+    "mainScreen": "Main Screen",
+    "sidePanel": "Side Screens",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "noStreams": "No active streams",
+    "participant": "Participant"
   }
 }

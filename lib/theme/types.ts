@@ -14,15 +14,10 @@ export interface ThemeColors {
   accent: string;
   accentForeground: string;
   destructive: string;
+  destructiveForeground: string;
   border: string;
   input: string;
   ring: string;
-  // Chart colors
-  chart1: string;
-  chart2: string;
-  chart3: string;
-  chart4: string;
-  chart5: string;
   // Sidebar colors
   sidebar: string;
   sidebarForeground: string;
@@ -32,6 +27,13 @@ export interface ThemeColors {
   sidebarAccentForeground: string;
   sidebarBorder: string;
   sidebarRing: string;
+  // Utility colors
+  skeletonBase: string;
+  skeletonHighlight: string;
+  scrollbarThumb: string;
+  scrollbarTrack: string;
+  // Layout
+  shellBackground: string;
 }
 
 export interface ThemeRadius {

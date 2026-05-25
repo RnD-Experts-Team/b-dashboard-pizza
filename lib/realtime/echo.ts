@@ -22,18 +22,13 @@ if (typeof window !== "undefined") {
 // ─── Configuration constants ─────────────────────────────────────────────
 
 /** Reverb application key (constant across environments) */
-const REVERB_KEY =
-  process.env.NEXT_PUBLIC_REVERB_KEY || "rvb_7YpQ2mL8xN4kV9sD";
+const REVERB_KEY = process.env.NEXT_PUBLIC_REVERB_KEY ?? "";
 
 /** WebSocket host — Reverb WS endpoint (no protocol prefix) */
-const WS_HOST =
-  process.env.NEXT_PUBLIC_REVERB_WS_HOST ||
-  "ws.notificationstesting.lcportal.cloud";
+const WS_HOST = process.env.NEXT_PUBLIC_REVERB_WS_HOST ?? "";
 
 /** Broadcasting auth endpoint — verifies private-channel subscriptions */
-const AUTH_ENDPOINT =
-  process.env.NEXT_PUBLIC_REVERB_AUTH_ENDPOINT ||
-  "https://notificationstesting.lcportal.cloud/api/broadcasting/auth";
+const AUTH_ENDPOINT = process.env.NEXT_PUBLIC_REVERB_AUTH_ENDPOINT ?? "";
 
 // ─── Factory ─────────────────────────────────────────────────────────────
 

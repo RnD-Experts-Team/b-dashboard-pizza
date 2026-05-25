@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { dueKeysService, DueKeysError } from "@/lib/api/services/due-keys.service";
-import type { DueKeyItem, Employee } from "@/types/due-key.types";
+import type { DueKeyItem, DueKeyValue, Employee } from "@/types/due-key.types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,6 +45,7 @@ export interface UseDueKeysFeedState {
   error: string | null;
   loadMore: () => void;
   reload: () => void;
+  updateKeyValue: (date: string, keyId: number, value: DueKeyValue) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -238,5 +239,22 @@ export function useDueKeysFeed(
     }
   }, [storeId, anchor, isLoadingMore, hasMore]);
 
-  return { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload };
+  // Mutate a single key's value in the feed after a successful submit.
+  // Only applies if the page for that date is already loaded (natural date-range guard).
+  const updateKeyValue = useCallback((date: string, keyId: number, value: DueKeyValue) => {
+    setPages((prev) => {
+      const pageIdx = prev.findIndex((p) => p.date === date);
+      if (pageIdx === -1) return prev; // date not in loaded range — nothing to update
+      const page = prev[pageIdx];
+      const itemIdx = page.items.findIndex((i) => i.keyId === keyId);
+      if (itemIdx === -1) return prev;
+      const newItems = [...page.items];
+      newItems[itemIdx] = { ...newItems[itemIdx], filled: true, value };
+      const newPages = [...prev];
+      newPages[pageIdx] = { ...page, items: newItems };
+      return newPages;
+    });
+  }, []);
+
+  return { pages, isLoading, isLoadingMore, hasMore, error, loadMore, reload, updateKeyValue };
 }

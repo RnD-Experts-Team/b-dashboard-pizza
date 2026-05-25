@@ -184,7 +184,7 @@ export const permissionService = {
       {
         params: {
           page: params?.page,
-          per_page: params?.perPage,
+          per_page: params?.perPage ?? 50,
           search: params?.search,
           guard_name: params?.guardName,
         },

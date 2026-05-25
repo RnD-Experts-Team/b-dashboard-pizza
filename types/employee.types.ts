@@ -676,3 +676,46 @@ export interface EmployeeV1DetailResponse {
   data: EmployeeV1DetailRecord;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Manager Dashboard  (/v1/stores/{storeNumber}/manager-dashboard/{date}) */
+/* ------------------------------------------------------------------ */
+
+export interface ManagerDashboardEmployeeName {
+  first: string;
+  middle: string | null;
+  last: string;
+}
+
+export interface ManagerDashboardEmployeeBirthday {
+  is_upcoming: boolean;
+  birth_date?: string;
+  days_until?: number;
+  turns_age?: number;
+}
+
+export interface ManagerDashboardEmployeeMetric {
+  metric_date: string;
+  value: string;
+  value_numeric: number;
+}
+
+export interface ManagerDashboardEmployee {
+  employee_id: number;
+  name: ManagerDashboardEmployeeName;
+  birthday: ManagerDashboardEmployeeBirthday;
+  position: string;
+  base_pay: string;
+  performance_pay: string;
+  metric: ManagerDashboardEmployeeMetric | null;
+}
+
+export interface ManagerDashboardStoreData {
+  store_id: string;
+  date: string;
+  week_start: string;
+  week_end: string;
+  employees: ManagerDashboardEmployee[];
+}
+
+export interface ManagerDashboardResponse extends ManagerDashboardStoreData {}
+

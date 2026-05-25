@@ -36,6 +36,8 @@ import {
   BarChart3,
   CalendarDays,
   Megaphone,
+  Monitor,
+  Target,
 } from "lucide-react";
 import {
   Dialog,
@@ -204,6 +206,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const securityMonitorEnabled = useFeature("securityMonitor");
 
   /* ---- Flat nav items ---- */
+  const screenProjectItem: NavItem = {
+    title: t("screenProject"),
+    href: `/${locale}/dashboard/screen-project`,
+    icon: Monitor,
+    requirements: [
+      { service: "Screens", method: "POST", path: `/*/tokens/supervisor`, storeId: effectiveStoreId },
+    ],
+  };
+
   const dashboardItem: NavItem = {
     title: t("dashboard"),
     href: `/${locale}/dashboard`,
@@ -246,11 +257,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         requiredPermission: "manage user role assignments",
 
       },
-      {
-        title: t("scheduling"),
-        href: `/${locale}/dashboard/scheduling`,
-        icon: CalendarDays,
-      },
+      // {
+      //   title: t("scheduling"),
+      //   href: `/${locale}/dashboard/scheduling`,
+      //   icon: CalendarDays,
+      // },
        {
         title: t("sensors"),
         href: `/${locale}/dashboard/sensors`,
@@ -326,12 +337,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "QA", method: "POST", path: "/categories", storeId: effectiveStoreId },
         ],
       },
-      // {
-      //   title: t("customReports"),
-      //   href: `/${locale}/dashboard/custom-reports`,
-      //   icon: BarChart3,
-          
-      // },
+      {
+        title: t("customReports"),
+        href: `/${locale}/dashboard/custom-reports`,
+        icon: BarChart3,
+        requirements: [
+          { service: "QA", method: "GET", path: "/custom-reports/*", storeId: effectiveStoreId },
+        ],
+      },
     ],
   };
 
@@ -400,6 +413,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/tags", storeId: effectiveStoreId }
         ],
       },
+      {
+        title: t("goals"),
+        href: `/${locale}/dashboard/goals`,
+        icon: Target,
+        requirements: [
+          { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
+        ],
+      },
     ],
   };
 
@@ -446,11 +467,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
       
      
-      // {
-      //   title: "Announcements",
-      //   href: `/${locale}/dashboard/announcements`,
-      //   icon: Megaphone,
-      // },
+      {
+        title: "Announcements",
+        href: `/${locale}/dashboard/announcements`,
+        icon: Megaphone,
+      },
     ],
   };
   // Dev tools navigation (controlled by feature flags)
@@ -576,8 +597,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   return (
     <div
+      data-font-scope="primary"
       className={cn(
-        "flex h-full flex-col border-r bg-sidebar transition-all duration-300",
+        "font-heading flex h-full flex-col border-r bg-sidebar transition-all duration-300",
         collapsed ? "w-16" : "w-64"
       )}
     >
@@ -672,10 +694,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
       {/* Navigation — scrollable when content overflows */}
       <ScrollArea className="flex-1 overflow-y-auto">
-        <nav className="space-y-1 px-2 sm:px-3 py-2 sm:py-3">
+        <nav className="font-heading space-y-1 px-2 sm:px-3 py-2 sm:py-3">
           {/* 1. Dashboard */}
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+
+          {/* 1b. Screen Project */}
+          {/* {renderNavLink(screenProjectItem)} */}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (

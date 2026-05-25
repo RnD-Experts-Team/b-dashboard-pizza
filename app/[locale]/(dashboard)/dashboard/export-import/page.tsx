@@ -57,6 +57,8 @@ import { dataExportService } from "@/lib/api/services/data-export.service";
 import { dsprService } from "@/lib/api/services/dspr.service";
 import { manualImportService } from "@/lib/api/services/manual-import.service";
 import type { ImportFileResult, ImportProgressResponse } from "@/lib/api/services/manual-import.service";
+import { hiringService } from "@/lib/api/services/hiring.service";
+import type { EmployeeMetricRecord, EmployeeMetricValue, EmployeeMetricsResponse } from "@/lib/api/services/hiring.service";
 import type { DsprResponse } from "@/types/dspr.types";
 
 const EXPORT_MODELS = [
@@ -360,6 +362,23 @@ export default function ExportImportPage() {
   const [isLoadingDspr, setIsLoadingDspr] = useState(false);
   const [dsprError, setDsprError] = useState<string | null>(null);
   const [dsprData, setDsprData] = useState<DsprResponse | null>(null);
+
+  // ── Employee Metrics state ──
+  const metricsFileInputRef = useRef<HTMLInputElement>(null);
+  const [metricsFile, setMetricsFile] = useState<File | null>(null);
+  const [metricsIdTypeId, setMetricsIdTypeId] = useState<string>("");
+  const [isImportingMetrics, setIsImportingMetrics] = useState(false);
+  const [metricsImportResult, setMetricsImportResult] = useState<Record<string, unknown> | null>(null);
+  const [metricsImportError, setMetricsImportError] = useState<string | null>(null);
+
+  const [metricsFilterEmployeeId, setMetricsFilterEmployeeId] = useState<string>("");
+  const [metricsFilterStoreNumber, setMetricsFilterStoreNumber] = useState<string>("");
+  const [metricsFilterDateFrom, setMetricsFilterDateFrom] = useState<string>("");
+  const [metricsFilterDateTo, setMetricsFilterDateTo] = useState<string>("");
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
+  const [metricsData, setMetricsData] = useState<EmployeeMetricsResponse | null>(null);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const [metricsPage, setMetricsPage] = useState(1);
 
   const uploadProgress = useMemo(
     () => extractProgressPercent(uploadProgressData),
@@ -927,6 +946,52 @@ export default function ExportImportPage() {
     }
   };
 
+  const handleImportEmployeeMetrics = async () => {
+    if (!metricsFile) {
+      toast.error("Please select a CSV file to import.");
+      return;
+    }
+    try {
+      setIsImportingMetrics(true);
+      setMetricsImportError(null);
+      setMetricsImportResult(null);
+      const idTypeId = metricsIdTypeId.trim() ? Number(metricsIdTypeId.trim()) : undefined;
+      const result = await hiringService.importEmployeeMetrics(metricsFile, idTypeId);
+      setMetricsImportResult(result);
+      toast.success("Employee metrics import completed.");
+    } catch (error) {
+      if (axios.isCancel(error)) return;
+      const message = error instanceof Error ? error.message : "Failed to import employee metrics.";
+      setMetricsImportError(message);
+      toast.error(message);
+    } finally {
+      setIsImportingMetrics(false);
+    }
+  };
+
+  const handleLoadEmployeeMetrics = async (page = 1) => {
+    try {
+      setIsLoadingMetrics(true);
+      setMetricsError(null);
+      const result = await hiringService.getEmployeeMetrics({
+        employee_id: metricsFilterEmployeeId.trim() ? Number(metricsFilterEmployeeId.trim()) : undefined,
+        store_number: metricsFilterStoreNumber.trim() || undefined,
+        date_from: metricsFilterDateFrom || undefined,
+        date_to: metricsFilterDateTo || undefined,
+        page,
+      });
+      setMetricsData(result);
+      setMetricsPage(page);
+    } catch (error) {
+      if (axios.isCancel(error)) return;
+      const message = error instanceof Error ? error.message : "Failed to load employee metrics.";
+      setMetricsError(message);
+      toast.error(message);
+    } finally {
+      setIsLoadingMetrics(false);
+    }
+  };
+
   const handleLoadDsprLite = async () => {
     const normalizedStore = dsprStore.trim();
 
@@ -973,9 +1038,10 @@ export default function ExportImportPage() {
       />
 
       <Tabs defaultValue="import" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
+        <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-grid">
           <TabsTrigger value="export">Export</TabsTrigger>
           <TabsTrigger value="import">Import</TabsTrigger>
+          <TabsTrigger value="employee-metrics">Employee Metrics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="export" className="space-y-4">
@@ -1795,6 +1861,275 @@ export default function ExportImportPage() {
                   )}
                 </CardContent>
               </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Employee Metrics Tab ── */}
+        <TabsContent value="employee-metrics" className="space-y-4">
+          {/* Import Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UploadCloud className="h-5 w-5" />
+                Import Employee Metrics CSV
+              </CardTitle>
+              <CardDescription>
+                Imports CSV metrics, matches employees by ID type, upserts per employee/date, and returns unmatched IDs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="metrics-file">CSV File *</Label>
+                  <Input
+                    ref={metricsFileInputRef}
+                    id="metrics-file"
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setMetricsFile(file);
+                      setMetricsImportResult(null);
+                      setMetricsImportError(null);
+                    }}
+                  />
+                  {metricsFile && (
+                    <p className="text-xs text-muted-foreground">{metricsFile.name}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="metrics-id-type">
+                    ID Type ID
+                    <span className="ml-1 text-xs text-muted-foreground">(defaults to 1)</span>
+                  </Label>
+                  <Input
+                    id="metrics-id-type"
+                    type="number"
+                    min={1}
+                    placeholder="e.g. 1"
+                    value={metricsIdTypeId}
+                    onChange={(e) => setMetricsIdTypeId(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={handleImportEmployeeMetrics}
+                disabled={!metricsFile || isImportingMetrics}
+                className="w-full sm:w-auto"
+              >
+                {isImportingMetrics ? (
+                  <><Loader2 className="me-2 h-4 w-4 animate-spin" /> Importing...</>
+                ) : (
+                  <><UploadCloud className="me-2 h-4 w-4" /> Import CSV</>
+                )}
+              </Button>
+
+              {metricsImportError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  {metricsImportError}
+                </div>
+              )}
+
+              {metricsImportResult && (
+                <div className="space-y-2 rounded-lg border p-4">
+                  <p className="text-sm font-medium">Import Result</p>
+                  <div className="flex flex-wrap gap-2">
+                    {typeof metricsImportResult.imported === "number" && (
+                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        <CheckCircle2 className="me-1 h-3 w-3" />
+                        {metricsImportResult.imported as number} imported
+                      </Badge>
+                    )}
+                    {typeof metricsImportResult.updated === "number" && (
+                      <Badge variant="secondary">
+                        {metricsImportResult.updated as number} updated
+                      </Badge>
+                    )}
+                  </div>
+                  {Array.isArray(metricsImportResult.unmatched_ids) &&
+                    (metricsImportResult.unmatched_ids as unknown[]).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="flex items-center gap-1.5 text-sm font-medium text-destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          Unmatched IDs
+                        </p>
+                        <div className="max-h-40 overflow-auto rounded-lg border bg-muted/30 p-2">
+                          <div className="flex flex-wrap gap-1">
+                            {(metricsImportResult.unmatched_ids as unknown[]).map((id, i) => (
+                              <Badge key={i} variant="outline" className="font-mono text-xs">
+                                {String(id)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  {typeof metricsImportResult.message === "string" && (
+                    <p className="text-sm text-muted-foreground">{metricsImportResult.message}</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* List / Filter Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                List Employee Metrics
+              </CardTitle>
+              <CardDescription>
+                Global listing with filtering by employee, store, date, and column values.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="metrics-filter-employee">Employee ID</Label>
+                  <Input
+                    id="metrics-filter-employee"
+                    type="number"
+                    min={1}
+                    placeholder="Any"
+                    value={metricsFilterEmployeeId}
+                    onChange={(e) => setMetricsFilterEmployeeId(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="metrics-filter-store">Store Number</Label>
+                  <Input
+                    id="metrics-filter-store"
+                    placeholder="Any"
+                    value={metricsFilterStoreNumber}
+                    onChange={(e) => setMetricsFilterStoreNumber(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="metrics-filter-from">Date From</Label>
+                  <Input
+                    id="metrics-filter-from"
+                    type="date"
+                    value={metricsFilterDateFrom}
+                    onChange={(e) => setMetricsFilterDateFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="metrics-filter-to">Date To</Label>
+                  <Input
+                    id="metrics-filter-to"
+                    type="date"
+                    value={metricsFilterDateTo}
+                    onChange={(e) => setMetricsFilterDateTo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={() => handleLoadEmployeeMetrics(1)}
+                disabled={isLoadingMetrics}
+                className="w-full sm:w-auto"
+              >
+                {isLoadingMetrics ? (
+                  <><Loader2 className="me-2 h-4 w-4 animate-spin" /> Loading...</>
+                ) : (
+                  "Load Metrics"
+                )}
+              </Button>
+
+              {metricsError && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                  {metricsError}
+                </div>
+              )}
+
+              {metricsData && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge variant="outline">
+                      Page {metricsData.current_page} / {metricsData.last_page}
+                    </Badge>
+                    <Badge variant="outline">
+                      {numberFormatter.format(metricsData.total)} total
+                    </Badge>
+                  </div>
+
+                  {metricsData.data.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No records found.</p>
+                  ) : (
+                    <div className="overflow-auto rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-16">ID</TableHead>
+                            <TableHead className="w-24">Employee</TableHead>
+                            <TableHead className="w-28">Date</TableHead>
+                            <TableHead className="w-28">Store</TableHead>
+                            <TableHead>Metrics</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {metricsData.data.map((row: EmployeeMetricRecord) => (
+                            <TableRow key={row.id}>
+                              <TableCell className="tabular-nums">{row.id}</TableCell>
+                              <TableCell className="tabular-nums">{row.employee_id}</TableCell>
+                              <TableCell>{row.metric_date}</TableCell>
+                              <TableCell>{row.store_number ?? "—"}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-1">
+                                  {Object.entries(row.values).map(([key, val]: [string, EmployeeMetricValue]) => (
+                                    <span
+                                      key={key}
+                                      className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs"
+                                      title={key}
+                                    >
+                                      <span className="font-medium text-muted-foreground">
+                                        {val.label || key}:
+                                      </span>
+                                      <span>
+                                        {val.value_numeric !== null
+                                          ? numberFormatter.format(val.value_numeric)
+                                          : val.value || "—"}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {metricsData.last_page > 1 && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={metricsPage <= 1 || isLoadingMetrics}
+                        onClick={() => handleLoadEmployeeMetrics(metricsPage - 1)}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {metricsPage} / {metricsData.last_page}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={metricsPage >= metricsData.last_page || isLoadingMetrics}
+                        onClick={() => handleLoadEmployeeMetrics(metricsPage + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

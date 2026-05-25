@@ -19,6 +19,38 @@ import type {
   StoreRequestEmployee,
 } from "@/types/hiring.types";
 
+export interface EmployeeMetricValue {
+  label: string;
+  value: string;
+  value_numeric: number | null;
+}
+
+export interface EmployeeMetricRecord {
+  id: number;
+  employee_id: number;
+  metric_date: string;
+  store_number: string | null;
+  created_at: string;
+  updated_at: string;
+  values: Record<string, EmployeeMetricValue>;
+}
+
+export interface EmployeeMetricsResponse {
+  current_page: number;
+  data: EmployeeMetricRecord[];
+  first_page_url: string;
+  from: number | null;
+  last_page: number;
+  last_page_url: string;
+  links: Record<string, unknown>[];
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number | null;
+  total: number;
+}
+
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("auth-token");
@@ -246,6 +278,64 @@ export const hiringService = {
       payload,
       { headers: buildHeaders(), timeout: 15_000 },
     );
+  },
+
+  /**
+   * Import employee metrics from a CSV file.
+   * Proxied through POST /api/v1/employee-metrics/import
+   */
+  async importEmployeeMetrics(
+    file: File,
+    idTypeId?: number,
+  ): Promise<Record<string, unknown>> {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (idTypeId !== undefined) {
+      formData.append("id_type_id", String(idTypeId));
+    }
+
+    const { data } = await axios.post<Record<string, unknown>>(
+      "/api/v1/employee-metrics/import",
+      formData,
+      {
+        headers: {
+          ...buildHeaders(),
+          // Let the browser set Content-Type with boundary automatically
+          "Content-Type": undefined as unknown as string,
+        },
+        timeout: 60_000,
+      },
+    );
+    return data;
+  },
+
+  /**
+   * List employee metrics with optional filters.
+   * Proxied through GET /api/v1/employee-metrics
+   */
+  async getEmployeeMetrics(params?: {
+    employee_id?: number;
+    store_number?: string;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<EmployeeMetricsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.employee_id !== undefined)
+      searchParams.set("employee_id", String(params.employee_id));
+    if (params?.store_number) searchParams.set("store_number", params.store_number);
+    if (params?.date_from) searchParams.set("date_from", params.date_from);
+    if (params?.date_to) searchParams.set("date_to", params.date_to);
+    if (params?.page !== undefined) searchParams.set("page", String(params.page));
+    if (params?.per_page !== undefined) searchParams.set("per_page", String(params.per_page));
+
+    const qs = searchParams.toString();
+    const { data } = await axios.get<EmployeeMetricsResponse>(
+      `/api/v1/employee-metrics${qs ? `?${qs}` : ""}`,
+      { headers: buildHeaders(), timeout: 15_000 },
+    );
+    return data;
   },
 
   /**

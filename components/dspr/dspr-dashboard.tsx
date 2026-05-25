@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { format, subDays, formatDistanceToNow } from "date-fns";
 import html2canvas from "html2canvas-pro";
 import { useDspr } from "@/lib/hooks/use-dspr";
+import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import {
   SalesChart,
   TopItemsList,
@@ -20,6 +21,9 @@ import {
   RecentMaintenanceTable,
   CurrentEmployeesTable,
   TopQaRatingsCard,
+  EmployeeBirthday,
+  TopEmployeeHours,
+  StoreGoals,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -304,6 +308,12 @@ export function DsprDashboard() {
     }
   }, [storeId, refetch]);
 
+  // Manager dashboard — shared fetch for employee cards
+  const managerDashboard = useManagerDashboard(
+    storeId,
+    toApiDate(selectedDate),
+  );
+
   // Format "last updated" time
   const lastUpdatedLabel = useMemo(() => {
     if (!lastFetchedAt) return null;
@@ -464,7 +474,7 @@ export function DsprDashboard() {
   }
 
   // ── Success: render dashboard ──────────────────────────────────────────
-  const { filtering, sales, top, day } = data;
+  const { filtering, sales, top, day, goal_metrics } = data;
 
   return (
     <div
@@ -662,6 +672,9 @@ export function DsprDashboard() {
         </div>
       </div>
 
+      {/* ── Store goals ribbon ────────────────────────────────────── */}
+      <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} />
+
       {/* ── Day summary stats ribbon ────────────────────────────── */}
       <DaySummaryStats day={day} />
 
@@ -669,7 +682,12 @@ export function DsprDashboard() {
       <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
         <SalesChart sales={sales} height={190} toolbar={false} className="lg:col-span-2" />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
-        <StoreScoreCard daily={88} weekly={70} monthly={80} className="lg:col-span-1" />
+        <StoreScoreCard
+          upsellingDay={day.upselling?.total_upselling_day}
+          upsellingWeek={day.upselling?.total_upselling_week_to_date}
+          goalMetrics={goal_metrics}
+          className="lg:col-span-1"
+        />
         <PortalOnTimeDualGauge portal={day.portal} className="lg:col-span-1" />
         {/* </div> */}
       </div>
@@ -682,26 +700,37 @@ export function DsprDashboard() {
         
         <HourlyChannelsChart
           hourlyData={day.hourly_sales_and_channels}
+          weeklyData={day.hourly_sales_and_channels_week_to_date_avg}
           height={190}
           toolbar={false}
           className=""
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
+          weeklyTotalSales={day.total_sales_week_to_date_avg}
           height={200}
           toolbar={false}
         />
-         <HnrCard hnr={day.hnr} />
-        <LaborGauge value={22} />
+         <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
+        <LaborGauge value={22} weeklyValue={day.labor_week_to_date} />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <TopItemsList items={top.top_5_items_sales_for_day} className="sm:col-span-2 lg:col-span-1" />
+        <TopItemsList
+          items={top.top_5_items_sales_for_day}
+          weeklyItems={top.top_5_items_sales_week_to_date}
+          countItems={top.top_5_items_count_for_day}
+          weeklyCountItems={top.top_5_items_count_week_to_date}
+          upselling={day.upselling}
+          className="sm:col-span-2 lg:col-span-1"
+        />
         <TopIngredientsList
           mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
           paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}
           usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
+          highVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_high}
+          lowVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_low}
           className="sm:col-span-2 lg:col-span-1"
         />
         <RecentMaintenanceTable
@@ -726,7 +755,7 @@ export function DsprDashboard() {
         /> 
       </div>
 
-      {/* ── Current Employees ─────────────────────────────────────── */}
+      {/* ── Current Employees + Birthday + Top Hours ──────────────── */}
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
         <CurrentEmployeesTable
           requirements={[
@@ -736,7 +765,39 @@ export function DsprDashboard() {
               path: "/v1/stores/*/employees",
               storeId: storeNumericId ? String(storeNumericId) : undefined,
             },
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/manager-dashboard/*",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
           ]}
+          managerDashboard={managerDashboard}
+          className="sm:col-span-2 lg:col-span-2"
+        />
+        <EmployeeBirthday
+          requirements={[
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/manager-dashboard/*",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
+          ]}
+          managerDashboard={managerDashboard}
+          className="lg:col-span-1"
+        />
+        <TopEmployeeHours
+          requirements={[
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/manager-dashboard/*",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
+          ]}
+          managerDashboard={managerDashboard}
+          className="lg:col-span-1"
         />
       </div>
     </div>

@@ -25,6 +25,16 @@ const qaApiUrl = process.env.NEXT_PUBLIC_QA_API_URL || "https://qa.lcportal.clou
 const qaDomain = getApiDomain(qaApiUrl);
 const sensorsApiUrl = process.env.NEXT_PUBLIC_SENSORS_API_URL || "https://sensors.pnefoods.com/api";
 const sensorsDomain = getApiDomain(sensorsApiUrl);
+const screenProjectApiUrl = process.env.NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL || "https://controltesting.screens.lcportal.cloud/api";
+const screenProjectDomain = getApiDomain(screenProjectApiUrl);
+// LiveKit server — wss:// + https:// for the same host
+const livekitDomain = "https://screens.lcportal.cloud";
+const livekitWss = "wss://screens.lcportal.cloud";
+// Laravel Reverb WebSocket — wss:// uses the WS host directly
+const reverbWsHost = process.env.NEXT_PUBLIC_REVERB_WS_HOST || "";
+const reverbWss = reverbWsHost ? `wss://${reverbWsHost}` : "";
+const reverbAuthUrl = process.env.NEXT_PUBLIC_REVERB_AUTH_ENDPOINT || "";
+const reverbAuthDomain = getApiDomain(reverbAuthUrl);
 
 const nextConfig: NextConfig = {
   // Security headers
@@ -52,7 +62,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+            value: "camera=(self), microphone=(self), geolocation=(), interest-cohort=()",
           },
           // HSTS only in production
           ...(!isDev
@@ -71,7 +81,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
+              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""} ${screenProjectDomain} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
               "frame-src 'self'",
               "object-src 'none'",
               "base-uri 'self'",

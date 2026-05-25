@@ -9,7 +9,7 @@ import { useUIStore } from "@/lib/store/ui.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
-// import { NotificationBell } from "@/components/notifications/notification-bell";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { Breadcrumbs } from "./breadcrumbs";
 import { Feature } from "@/lib/config";
 
@@ -27,7 +27,10 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
   const { toggleSidebar } = useUIStore();
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6">
+    <header
+      data-font-scope="primary"
+      className="font-heading flex h-14 items-center gap-4 border-b bg-background px-4 md:px-6"
+    >
       {/* Logo — shown only in topnav layout */}
       {showLogo && (
         <div className="flex items-center gap-2 me-1">
@@ -92,9 +95,9 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
       </Feature> */}
 
       {/* Notifications */}
-      {/* <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1">
         <NotificationBell />
-      </div> */}
+      </div>
 
       {/* Theme toggle - conditionally rendered */}
       <Feature name="darkMode">
@@ -102,4 +105,6 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
       </Feature>
     </header>
   );
+  
 }
+

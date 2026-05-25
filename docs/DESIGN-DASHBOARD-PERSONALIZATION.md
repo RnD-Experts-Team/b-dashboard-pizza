@@ -323,7 +323,7 @@ export function Skeleton({
   return (
     <div
       className={cn(
-        "rounded-[var(--skeleton-border-radius)] bg-[var(--skeleton-base)]",
+        "rounded-(--skeleton-border-radius) bg-(--skeleton-base)",
         shimmer && "skeleton-shimmer",
         className
       )}
@@ -428,9 +428,9 @@ export function SkeletonChart({
     return (
       <div className={cn("space-y-2", className)}>
         <Skeleton className="h-4 w-24" /> {/* Title */}
-        <div className="h-[200px] relative">
-          <Skeleton className="absolute bottom-0 left-0 right-0 h-[2px]" /> {/* X axis */}
-          <Skeleton className="absolute top-0 bottom-0 left-0 w-[2px]" /> {/* Y axis */}
+        <div className="h-50 relative">
+          <Skeleton className="absolute bottom-0 left-0 right-0 h-0.5" /> {/* X axis */}
+          <Skeleton className="absolute top-0 bottom-0 left-0 w-0.5" /> {/* Y axis */}
           <svg className="w-full h-full" viewBox="0 0 100 50">
             <path
               d="M0,40 Q25,20 50,30 T100,10"
@@ -448,7 +448,7 @@ export function SkeletonChart({
   return (
     <div className={cn("space-y-2", className)}>
       <Skeleton className="h-4 w-24" />
-      <div className="flex items-end gap-2 h-[200px]">
+      <div className="flex items-end gap-2 h-50">
         {[60, 80, 45, 90, 70].map((h, i) => (
           <Skeleton 
             key={i} 
@@ -501,7 +501,7 @@ import { Skeleton, SkeletonCircle, SkeletonText } from "@/components/ui/skeleton
 
 export function StatsWidgetSkeleton() {
   return (
-    <Card className="h-full min-h-[120px]">
+    <Card className="h-full min-h-30">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <Skeleton className="h-4 w-24" />
         <SkeletonCircle size={20} />
@@ -517,7 +517,7 @@ export function StatsWidgetSkeleton() {
 // components/dashboard/skeletons/chart-widget-skeleton.tsx
 export function ChartWidgetSkeleton({ type = "bar" }: { type?: "bar" | "line" | "pie" }) {
   return (
-    <Card className="h-full min-h-[300px]">
+    <Card className="h-full min-h-75">
       <CardHeader>
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-3 w-48" />
@@ -532,7 +532,7 @@ export function ChartWidgetSkeleton({ type = "bar" }: { type?: "bar" | "line" | 
 // components/dashboard/skeletons/table-widget-skeleton.tsx
 export function TableWidgetSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <Card className="h-full min-h-[350px]">
+    <Card className="h-full min-h-87.5">
       <CardHeader>
         <Skeleton className="h-5 w-32" />
       </CardHeader>
