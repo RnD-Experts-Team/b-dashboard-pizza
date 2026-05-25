@@ -734,11 +734,11 @@ function ScreenTileInner({
       {publishNetworkStatus && <NetworkStatusPublisher />}
 
       {/* Media library trigger — top-left overlay, always visible for supervisors */}
-      {!viewerOnly && storeId && stationNumber !== undefined && (
+      {/* {!viewerOnly && storeId && stationNumber !== undefined && (
         <div className="absolute top-2 left-2 z-20">
           <MediaLibraryTrigger onClick={() => setIsLibraryOpen(true)} />
         </div>
-      )}
+      )} */}
 
       {/* Media library sheet */}
       {storeId && stationNumber !== undefined && (

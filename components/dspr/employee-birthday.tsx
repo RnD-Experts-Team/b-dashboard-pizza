@@ -1,5 +1,7 @@
 "use client";
 
+import type { CanAccessParams } from "@/lib/auth/can-access";
+import { useAuth } from "@/lib/auth/use-auth";
 import type { UseManagerDashboardResult } from "@/lib/hooks/use-manager-dashboard";
 import type { ManagerDashboardEmployee } from "@/types/employee.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,10 +34,18 @@ function getFullName(emp: ManagerDashboardEmployee): string {
 
 interface EmployeeBirthdayProps {
   managerDashboard: UseManagerDashboardResult;
+  requirements?: CanAccessParams[];
   className?: string;
 }
 
-export function EmployeeBirthday({ managerDashboard, className }: EmployeeBirthdayProps) {
+export function EmployeeBirthday({ managerDashboard, requirements, className }: EmployeeBirthdayProps) {
+  const { canAccessRoute } = useAuth();
+
+  if (requirements && requirements.length > 0) {
+    const ok = requirements.some((req) => canAccessRoute(req));
+    if (!ok) return null;
+  }
+
   const { data, isLoading, error, refetch } = managerDashboard;
 
   const upcomingBirthdays: ManagerDashboardEmployee[] =

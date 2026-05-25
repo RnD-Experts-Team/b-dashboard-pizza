@@ -64,12 +64,12 @@ export async function GET(
 }
 
 /**
- * PUT /api/v1/stores/[storeId]/employees/[employeeId]
- * Proxy → PUT {HIRING_BASE_URL}/v1/stores/{storeId}/employees/{employeeId}
+ * POST /api/v1/stores/[storeId]/employees/[employeeId]
+ * Proxy → POST {HIRING_BASE_URL}/v1/stores/{storeId}/employees/{employeeId}
  *
  * Forwards the request body (multipart/form-data) transparently.
  */
-export async function PUT(
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ storeId: string; employeeId: string }> },
 ) {
@@ -89,7 +89,7 @@ export async function PUT(
     const upstream = await fetch(
       `${HIRING_BASE_URL}/v1/stores/${encodeURIComponent(storeId)}/employees/${encodeURIComponent(employeeId)}`,
       {
-        method: "PUT",
+        method: "POST",
         headers: {
           Authorization: authorization,
           Accept: "application/json",

@@ -218,7 +218,7 @@ export default function EmployeesPage() {
   const canViewEmployees = canAccessRoute({ service: "Hiring", method: "GET", path: "/v1/stores/*/employees", storeId: effectiveStoreId });
   const canViewEmployeeDetails = canAccessRoute({ service: "Hiring", method: "GET", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
   const canCreateEmployee = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/employees", storeId: effectiveStoreId });
-  const canEditEmployee = canAccessRoute({ service: "Hiring", method: "PUT", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
+  const canEditEmployee = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/employees/*", storeId: effectiveStoreId });
   const canChangeEmployeeStatus = canAccessRoute({ service: "Hiring", method: "PATCH", path: "/v1/stores/*/employees/*/status", storeId: effectiveStoreId });
   const canSyncCatalog = canAccessRoute({ service: "Hiring", method: "PUT", path: "/v1/reference-catalog", storeId: effectiveStoreId });
   const {

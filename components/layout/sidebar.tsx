@@ -210,7 +210,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: t("screenProject"),
     href: `/${locale}/dashboard/screen-project`,
     icon: Monitor,
-    // Always visible — no backend permission required
+    requirements: [
+      { service: "Screens", method: "POST", path: `/*/tokens/supervisor`, storeId: effectiveStoreId },
+    ],
   };
 
   const dashboardItem: NavItem = {
@@ -255,11 +257,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         requiredPermission: "manage user role assignments",
 
       },
-      {
-        title: t("scheduling"),
-        href: `/${locale}/dashboard/scheduling`,
-        icon: CalendarDays,
-      },
+      // {
+      //   title: t("scheduling"),
+      //   href: `/${locale}/dashboard/scheduling`,
+      //   icon: CalendarDays,
+      // },
        {
         title: t("sensors"),
         href: `/${locale}/dashboard/sensors`,
@@ -698,7 +700,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
           {/* 1b. Screen Project */}
-          {renderNavLink(screenProjectItem)}
+          {/* {renderNavLink(screenProjectItem)} */}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (

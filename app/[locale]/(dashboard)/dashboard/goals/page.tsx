@@ -54,6 +54,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import {
   Loader2,
   Plus,
@@ -420,6 +421,8 @@ function CreateGoalMetricDialog({ open, onOpenChange, onCreate, isCreating }: Cr
 export default function GoalsPage() {
   const { selectedStore } = useSelectedStoreStore();
   const storeId = selectedStore?.storeId ?? selectedStore?.id;
+  const { canAccessRoute } = useAuthStore();
+  const canViewGoalMetrics = canAccessRoute({ service: "Data", method: "GET", path: "/goal-metrics" });
 
   /* Goals */
   const { data, isLoading, isRefreshing, error: listError, refetch, clearError: clearListError } = useGoalsList(storeId);
@@ -604,10 +607,10 @@ export default function GoalsPage() {
         </CardContent>
       </Card>
 
-      <Separator />
+      {canViewGoalMetrics && <Separator />}
 
       {/* ── Goal Metrics Table ───────────────────────────────────────────── */}
-      <Card>
+      {canViewGoalMetrics && <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
@@ -672,7 +675,7 @@ export default function GoalsPage() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* ── Dialogs ─────────────────────────────────────────────────────── */}
 

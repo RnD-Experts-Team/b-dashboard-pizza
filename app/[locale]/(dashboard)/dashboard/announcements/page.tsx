@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAnnouncementStore } from "@/lib/store/announcement.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { AnnouncementCard } from "@/components/announcements/announcement-card";
 import { CreateAnnouncementDialog } from "@/components/announcements/create-announcement-dialog";
 import { EditAnnouncementDialog } from "@/components/announcements/edit-announcement-dialog";
@@ -37,6 +38,9 @@ export default function AnnouncementsPage() {
     deleteAnnouncement,
     setActivePopup,
   } = useAnnouncementStore();
+  const { canAccessRoute } = useAuthStore();
+  const canAdminAnnouncements = canAccessRoute({ service: "Notifications", method: "POST", path: "/announcements" });
+
   const [viewMode, setViewMode] = useState<ViewMode>("user");
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
@@ -91,15 +95,17 @@ export default function AnnouncementsPage() {
             <User className="h-4 w-4" />
             <span className="hidden sm:inline">User View</span>
           </Button>
-          <Button
-            variant={viewMode === "admin" ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            onClick={() => handleToggleView("admin")}
-          >
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Admin View</span>
-          </Button>
+          {canAdminAnnouncements && (
+            <Button
+              variant={viewMode === "admin" ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => handleToggleView("admin")}
+            >
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">Admin View</span>
+            </Button>
+          )}
           {viewMode === "user" && unseenIds.length > 0 && (
             <Button
               variant="secondary"

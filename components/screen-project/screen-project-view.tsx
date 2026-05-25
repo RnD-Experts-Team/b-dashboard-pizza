@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { useSelectedStoreStore } from "@/lib/store";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
+import { useCanAccessRoute } from "@/lib/auth/use-auth";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Per-screen A/V state                                                     */
@@ -133,6 +134,9 @@ export function ScreenProjectView() {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeId = selectedStore?.storeId ?? "";
 
+  const canSupervisor = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/supervisor` });
+  const canObserver = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/observer` });
+
   const networkStatus = useNetworkStatus();
 
   const activatePiP = useScreenProjectPiPStore((s) => s.activatePiP);
@@ -150,8 +154,12 @@ export function ScreenProjectView() {
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
 
-  /** "supervisor" = normal tile view, "observer" = station picker grid */
-  const [viewMode, setViewMode] = useState<"supervisor" | "observer">("supervisor");
+  /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = auth-gated entry screen */
+  const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select">(() => {
+    if (canSupervisor && canObserver) return "select";
+    if (!canSupervisor && canObserver) return "observer";
+    return "supervisor";
+  });
   /** room_name of the station currently open in the ObserverDialog */
   const [observingRoom, setObservingRoom] = useState<string | null>(null);
 
@@ -441,6 +449,51 @@ export function ScreenProjectView() {
     return { ...s, isMain, sideIdx: isMain ? -1 : sideCounter++ };
   });
 
+  /* ── View selection (both auth rules available) ──────────────────── */
+  if (viewMode === "select") {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-6 text-center max-w-sm w-full px-4">
+          <div className="flex flex-col items-center gap-2">
+            <h2 className="text-lg font-semibold">Select View</h2>
+            <p className="text-sm text-muted-foreground">
+              Choose how you want to access the screen project.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 w-full">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setViewMode("observer")}
+              className="gap-2 w-full justify-start px-4"
+            >
+              <Eye className="h-5 w-5 text-amber-400" />
+              <span>Observer View</span>
+              <span className="ml-auto text-xs text-muted-foreground">Listen only</span>
+            </Button>
+            <div className="flex flex-col gap-1.5">
+              <Button
+                variant="default"
+                size="lg"
+                onClick={() => setViewMode("supervisor")}
+                className="gap-2 w-full justify-start px-4"
+              >
+                <Monitor className="h-5 w-5" />
+                <span>Supervisor View</span>
+              </Button>
+              <div className="flex items-center gap-1.5 px-1">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span className="text-xs text-amber-400">
+                  This view allows active interaction with stations. Use with caution.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* ── Observer mode — station picker grid ────────────────────────── */
   if (viewMode === "observer") {
     const observingStation = observingRoom
@@ -458,15 +511,17 @@ export function ScreenProjectView() {
               Passive · listen only
             </span>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setViewMode("supervisor")}
-            className="gap-1.5 text-muted-foreground hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Supervisor View
-          </Button>
+          {canSupervisor && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode(canObserver ? "select" : "supervisor")}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Supervisor View
+            </Button>
+          )}
         </div>
 
         {/* Station cards grid */}
@@ -669,16 +724,6 @@ export function ScreenProjectView() {
             stations={stations}
             onRefetch={refetch}
           />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setViewMode("observer")}
-            className="gap-1.5"
-            aria-label="Switch to observer view"
-          >
-            <Eye className="h-4 w-4" />
-            <span className="hidden sm:inline">Observer View</span>
-          </Button>
         </div>
 
         <div className="flex items-center gap-2 mx-auto sm:mx-0">

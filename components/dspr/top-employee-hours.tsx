@@ -1,5 +1,7 @@
 "use client";
 
+import type { CanAccessParams } from "@/lib/auth/can-access";
+import { useAuth } from "@/lib/auth/use-auth";
 import type { UseManagerDashboardResult } from "@/lib/hooks/use-manager-dashboard";
 import type { ManagerDashboardEmployee } from "@/types/employee.types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +22,7 @@ const BAR_COLOR = "bg-teal-500/30 dark:bg-teal-400/20";
 
 interface TopEmployeeHoursProps {
   managerDashboard: UseManagerDashboardResult;
+  requirements?: CanAccessParams[];
   className?: string;
 }
 
@@ -27,7 +30,14 @@ function formatName(emp: ManagerDashboardEmployee): string {
   return [emp.name.first, emp.name.last].filter(Boolean).join(" ");
 }
 
-export function TopEmployeeHours({ managerDashboard, className }: TopEmployeeHoursProps) {
+export function TopEmployeeHours({ managerDashboard, requirements, className }: TopEmployeeHoursProps) {
+  const { canAccessRoute } = useAuth();
+
+  if (requirements && requirements.length > 0) {
+    const ok = requirements.some((req) => canAccessRoute(req));
+    if (!ok) return null;
+  }
+
   const { data, isLoading, error, refetch } = managerDashboard;
 
   // Sort employees by metric value descending; those without a metric go last

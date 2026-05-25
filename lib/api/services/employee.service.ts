@@ -571,7 +571,7 @@ export const employeeService = {
   
   /**
    * Update an employee using the V1 multipart/form-data API.
-   * Proxied through PUT /api/v1/stores/[storeId]/employees/[employeeId]
+   * Proxied through POST /api/v1/stores/[storeId]/employees/[employeeId]
    */
   async updateEmployeeV1(
     storeId: string,
@@ -670,7 +670,7 @@ export const employeeService = {
       fd.append(`store_assignments[${i}][store_id]`, String(sa.store_id));
     });
 
-    const { data } = await axios.put(
+    const { data } = await axios.post(
       `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       fd,
       { headers: buildHeaders(), timeout: 300_000 },

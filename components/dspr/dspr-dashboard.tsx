@@ -765,12 +765,40 @@ export function DsprDashboard() {
               path: "/v1/stores/*/employees",
               storeId: storeNumericId ? String(storeNumericId) : undefined,
             },
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/manager-dashboard/*",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
           ]}
           managerDashboard={managerDashboard}
           className="sm:col-span-2 lg:col-span-2"
         />
-        <EmployeeBirthday managerDashboard={managerDashboard} className="lg:col-span-1" />
-        <TopEmployeeHours managerDashboard={managerDashboard} className="lg:col-span-1" />
+        <EmployeeBirthday
+          requirements={[
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/manager-dashboard/*",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
+          ]}
+          managerDashboard={managerDashboard}
+          className="lg:col-span-1"
+        />
+        <TopEmployeeHours
+          requirements={[
+            {
+              service: "Hiring",
+              method: "GET",
+              path: "/v1/stores/*/manager-dashboard/*",
+              storeId: storeNumericId ? String(storeNumericId) : undefined,
+            },
+          ]}
+          managerDashboard={managerDashboard}
+          className="lg:col-span-1"
+        />
       </div>
     </div>
   );
