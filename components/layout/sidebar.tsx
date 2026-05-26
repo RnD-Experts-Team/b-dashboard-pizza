@@ -700,7 +700,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
           {/* 1b. Screen Project */}
-          {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
+          {/* {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)} */}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (
