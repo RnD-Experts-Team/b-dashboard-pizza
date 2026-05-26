@@ -44,3 +44,19 @@ export interface StationTokenResponse {
   server_url: string;
   media?: import("./screen-project-media.types").StationMedia[];
 }
+
+export interface ObserverTokenEntry {
+  room: string;
+  token: string;
+  media?: import("./screen-project-media.types").StationMedia[];
+}
+
+export interface ObserverTokensResponse {
+  server_url: string;
+  storeId: string;
+  store_id: number;
+  identity: string;
+  rooms: string[];
+  tokens: ObserverTokenEntry[];
+  permissions: Record<string, boolean>;
+}

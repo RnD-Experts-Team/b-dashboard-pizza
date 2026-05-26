@@ -104,6 +104,8 @@ export interface ApiAuthUser {
   id: number;
   name: string;
   email: string;
+  image_path?: string | null;
+  image_url?: string | null;
   email_verified_at: string | null;
   created_at: string;
   updated_at: string;

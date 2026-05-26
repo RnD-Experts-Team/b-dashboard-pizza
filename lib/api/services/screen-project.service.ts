@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { Station, SupervisorTokensResponse } from "@/types/screen-project.types";
+import type { Station, SupervisorTokensResponse, ObserverTokensResponse } from "@/types/screen-project.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Auth helper — reads the Zustand-persisted token from localStorage       */
@@ -50,6 +50,22 @@ export const screenProjectService = {
   ): Promise<SupervisorTokensResponse> {
     const { data } = await axios.post<SupervisorTokensResponse>(
       `/api/screen-project/${storeId}/tokens`,
+      undefined,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
+  /**
+   * Fetch observer tokens for all rooms in a store.
+   * Proxied through POST /api/screen-project/{storeId}/tokens/observer
+   */
+  async getObserverTokens(
+    storeId: string,
+    signal?: AbortSignal,
+  ): Promise<ObserverTokensResponse> {
+    const { data } = await axios.post<ObserverTokensResponse>(
+      `/api/screen-project/${storeId}/tokens/observer`,
       undefined,
       { headers: buildHeaders(), timeout: 15_000, signal },
     );

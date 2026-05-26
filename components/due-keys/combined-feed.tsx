@@ -737,10 +737,10 @@ export function CombinedFeed({
         <p className="text-xs text-muted-foreground/70">
           <Clock className="me-1 inline h-3 w-3" />
           {showDueKeys && showDebrief
-            ? "Due keys & debriefs · scroll up to load older"
+            ? "Debriefs & Employee Debriefs · scroll up to load older"
             : showDueKeys
-              ? "Due keys · scroll up to load older"
-              : "Employee debriefs · scroll up to load older"}
+              ? "Debriefs · scroll up to load older"
+              : "Employee Debriefs · scroll up to load older"}
         </p>
         <Button
           variant="ghost"

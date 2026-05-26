@@ -28,7 +28,8 @@ export interface ApiStoreRule {
   ends_at: string | null;
   fill_mode: FillMode;
   role_names: string[] | null;
-  time: string | null;
+  /** API field name is `due_time`; mapped to `time` in the frontend model */
+  due_time: string | null;
 }
 
 export interface ApiKeyTag {

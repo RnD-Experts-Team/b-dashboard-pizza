@@ -59,6 +59,8 @@ import { manualImportService } from "@/lib/api/services/manual-import.service";
 import type { ImportFileResult, ImportProgressResponse } from "@/lib/api/services/manual-import.service";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import type { EmployeeMetricRecord, EmployeeMetricValue, EmployeeMetricsResponse } from "@/lib/api/services/hiring.service";
+import { referenceCatalogService } from "@/lib/api/services/reference-catalog.service";
+import type { ReferenceCatalogRecord } from "@/types/hiring.types";
 import type { DsprResponse } from "@/types/dspr.types";
 
 const EXPORT_MODELS = [
@@ -367,6 +369,9 @@ export default function ExportImportPage() {
   const metricsFileInputRef = useRef<HTMLInputElement>(null);
   const [metricsFile, setMetricsFile] = useState<File | null>(null);
   const [metricsIdTypeId, setMetricsIdTypeId] = useState<string>("");
+  const [idTypes, setIdTypes] = useState<ReferenceCatalogRecord[]>([]);
+  const [isLoadingIdTypes, setIsLoadingIdTypes] = useState(false);
+  const [idTypesError, setIdTypesError] = useState<string | null>(null);
   const [isImportingMetrics, setIsImportingMetrics] = useState(false);
   const [metricsImportResult, setMetricsImportResult] = useState<Record<string, unknown> | null>(null);
   const [metricsImportError, setMetricsImportError] = useState<string | null>(null);
@@ -508,6 +513,35 @@ export default function ExportImportPage() {
       null,
     [aggregationProgressData]
   );
+
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+
+    const loadIdTypes = async () => {
+      try {
+        setIsLoadingIdTypes(true);
+        setIdTypesError(null);
+        const response = await referenceCatalogService.getAll(controller.signal);
+        if (!active) return;
+        setIdTypes(response.data.id_types ?? []);
+      } catch (error) {
+        if (!active) return;
+        if ((error as { name?: string }).name === "CanceledError" || (error as { name?: string }).name === "AbortError") return;
+        const message = error instanceof Error ? error.message : "Failed to load ID types.";
+        setIdTypesError(message);
+      } finally {
+        if (active) setIsLoadingIdTypes(false);
+      }
+    };
+
+    loadIdTypes();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
 
   const normalizedAggregationProgress = useMemo(() => {
     if (!aggregationProgressData) return null;
@@ -1900,17 +1934,33 @@ export default function ExportImportPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="metrics-id-type">
-                    ID Type ID
-                    <span className="ml-1 text-xs text-muted-foreground">(defaults to 1)</span>
+                    ID Type
+                    <span className="ml-1 text-xs text-muted-foreground">(optional)</span>
                   </Label>
-                  <Input
-                    id="metrics-id-type"
-                    type="number"
-                    min={1}
-                    placeholder="e.g. 1"
-                    value={metricsIdTypeId}
-                    onChange={(e) => setMetricsIdTypeId(e.target.value)}
-                  />
+                  {isLoadingIdTypes ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading ID types...
+                    </div>
+                  ) : idTypesError ? (
+                    <p className="text-sm text-destructive">{idTypesError}</p>
+                  ) : (
+                    <Select
+                      value={metricsIdTypeId}
+                      onValueChange={(value) => setMetricsIdTypeId(value === "__none__" ? "" : value)}
+                    >
+                      <SelectTrigger id="metrics-id-type">
+                        <SelectValue placeholder="Select ID type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {idTypes.map((idType) => (
+                          <SelectItem key={idType.id} value={String(idType.id)}>
+                            {idType.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
 

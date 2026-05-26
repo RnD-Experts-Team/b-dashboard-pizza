@@ -3,25 +3,37 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSelectedStoreStore } from "@/lib/store";
 import { screenProjectService } from "@/lib/api/services/screen-project.service";
-import type { Station, SupervisorTokensResponse } from "@/types/screen-project.types";
+import type { Station } from "@/types/screen-project.types";
 
 interface UseScreenProjectResult {
   stations: Station[];
   serverUrl: string;
-  /** Map from room_name → JWT token */
+  /** Map from room_name → JWT token (supervisor or observer depending on tokenType) */
   tokenMap: Record<string, string>;
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
 }
 
-export function useScreenProject(): UseScreenProjectResult {
+/**
+ * Fetches stations and — only when the user has committed to a view —
+ * the corresponding tokens.
+ *
+ * - tokenType "supervisor" → POST /api/screen-project/{storeId}/tokens
+ * - tokenType "observer"   → POST /api/screen-project/{storeId}/tokens/observer
+ * - tokenType null         → no token fetch (user is still on the select screen)
+ */
+export function useScreenProject(
+  tokenType: "supervisor" | "observer" | null,
+): UseScreenProjectResult {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeId = selectedStore?.storeId ?? null;
 
   const [stations, setStations] = useState<Station[]>([]);
-  const [supervisorData, setSupervisorData] =
-    useState<SupervisorTokensResponse | null>(null);
+  const [tokenData, setTokenData] = useState<{
+    server_url: string;
+    tokens: { room: string; token: string }[];
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fetchKey, setFetchKey] = useState(0);
@@ -31,7 +43,7 @@ export function useScreenProject(): UseScreenProjectResult {
   useEffect(() => {
     if (!storeId) {
       setStations([]);
-      setSupervisorData(null);
+      setTokenData(null);
       setError(null);
       return;
     }
@@ -42,40 +54,51 @@ export function useScreenProject(): UseScreenProjectResult {
     setIsLoading(true);
     setError(null);
 
-    Promise.all([
-      screenProjectService.getStations(storeId, signal),
-      screenProjectService.getSupervisorTokens(storeId, signal),
-    ])
-      .then(([stationsData, tokensData]) => {
+    const stationsPromise = screenProjectService.getStations(storeId, signal);
+    const tokensPromise =
+      tokenType === "supervisor"
+        ? screenProjectService.getSupervisorTokens(storeId, signal)
+        : tokenType === "observer"
+        ? screenProjectService.getObserverTokens(storeId, signal)
+        : Promise.resolve(null);
+
+    Promise.allSettled([stationsPromise, tokensPromise])
+      .then(([stationsResult, tokensResult]) => {
         if (signal.aborted) return;
-        setStations(stationsData);
-        setSupervisorData(tokensData);
-      })
-      .catch((err) => {
-        if (signal.aborted) return;
-        const message =
-          err?.response?.data?.error?.message ??
-          err?.message ??
-          "Failed to load screen project data";
-        setError(message);
+
+        if (stationsResult.status === "fulfilled") {
+          setStations(stationsResult.value);
+        } else {
+          const message =
+            stationsResult.reason?.response?.data?.error?.message ??
+            stationsResult.reason?.message ??
+            "Failed to load stations";
+          setError(message);
+        }
+
+        if (tokensResult.status === "fulfilled" && tokensResult.value) {
+          setTokenData(tokensResult.value);
+        }
       })
       .finally(() => {
         if (!signal.aborted) setIsLoading(false);
       });
 
     return () => controller.abort();
-  }, [storeId, fetchKey]);
+  // tokenType in deps: re-fetches tokens when user picks supervisor vs observer
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, fetchKey, tokenType]);
 
   const tokenMap: Record<string, string> = {};
-  if (supervisorData) {
-    for (const entry of supervisorData.tokens) {
+  if (tokenData) {
+    for (const entry of tokenData.tokens) {
       tokenMap[entry.room] = entry.token;
     }
   }
 
   return {
     stations,
-    serverUrl: supervisorData?.server_url ?? "",
+    serverUrl: tokenData?.server_url ?? "",
     tokenMap,
     isLoading,
     error,

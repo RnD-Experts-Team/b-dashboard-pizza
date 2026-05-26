@@ -57,11 +57,13 @@ function transformStoreRule(raw: ApiStoreRule): StoreRule {
     weekOfMonth: raw.week_of_month,
     weekDay: raw.week_day,
     yearMonth: raw.year_month,
-    startsAt: raw.starts_at,
-    endsAt: raw.ends_at,
+    // Slice ISO datetime to YYYY-MM-DD so <input type="date"> renders correctly
+    startsAt: raw.starts_at ? raw.starts_at.slice(0, 10) : "",
+    endsAt: raw.ends_at ? raw.ends_at.slice(0, 10) : null,
     fillMode: raw.fill_mode ?? "store_once",
     roleNames: raw.role_names ?? null,
-    time: raw.time ?? null,
+    // API returns `due_time` as HH:mm:ss; slice to HH:mm (API only accepts HH:mm on write)
+    time: raw.due_time ? raw.due_time.slice(0, 5) : null,
   };
 }
 

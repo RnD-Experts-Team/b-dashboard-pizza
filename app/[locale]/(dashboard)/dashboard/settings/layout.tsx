@@ -26,9 +26,9 @@ export default function SettingsLayout({
   // Build settings tabs based on enabled features
   const settingsTabs = [
     { value: "profile", label: t("tabs.profile"), href: `/${locale}/dashboard/settings/profile`, enabled: true },
-    { value: "account", label: t("tabs.account"), href: `/${locale}/dashboard/settings/account`, enabled: true },
-    { value: "appearance", label: t("tabs.appearance"), href: `/${locale}/dashboard/settings/appearance`, enabled: darkModeEnabled },
-    { value: "preferences", label: t("tabs.preferences"), href: `/${locale}/dashboard/settings/preferences`, enabled: localizationEnabled },
+    // { value: "account", label: t("tabs.account"), href: `/${locale}/dashboard/settings/account`, enabled: true },
+    // { value: "appearance", label: t("tabs.appearance"), href: `/${locale}/dashboard/settings/appearance`, enabled: darkModeEnabled },
+    // { value: "preferences", label: t("tabs.preferences"), href: `/${locale}/dashboard/settings/preferences`, enabled: localizationEnabled },
     { value: "themes", label: t("tabs.themes"), href: `/${locale}/dashboard/settings/themes`, enabled: themeSystemEnabled },
   ].filter(tab => tab.enabled);
 

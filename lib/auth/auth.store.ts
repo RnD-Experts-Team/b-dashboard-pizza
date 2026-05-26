@@ -55,6 +55,13 @@ interface AuthState {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => void;
   setUser: (user: AuthUser) => void;
+  /**
+   * Merge a partial set of basic profile fields (name, email, avatar) into
+   * the current user WITHOUT touching permissions, roles, authRules, or
+   * overviewStores. Use this after a profile-update API call whose response
+   * does not contain the full permission payload.
+   */
+  patchUser: (fields: Partial<Pick<AuthUser, 'name' | 'email' | 'avatar'>>) => void;
   setToken: (token: string) => void;
   checkAuth: () => Promise<void>;
   initialize: () => void;
@@ -234,6 +241,14 @@ export const useAuthStore = create<AuthState>()(
           storePermissions,
         });
         persistUserData(user);
+      },
+
+      patchUser: (fields) => {
+        const current = get().user;
+        if (!current) return;
+        const updated = { ...current, ...fields };
+        set({ user: updated });
+        persistUserData(updated);
       },
 
       setToken: (token: string) => {
