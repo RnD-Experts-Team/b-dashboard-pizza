@@ -22,8 +22,7 @@ interface ObserverDialogProps {
   stationName: string;
   /** LiveKit room name */
   roomName: string;
-  /** Supervisor JWT — observer never publishes; used here as fallback until a
-   *  dedicated observer token endpoint is available from the backend.  */
+  /** Observer JWT — subscribe-only, no publish permissions. */
   token: string;
   /** LiveKit server URL (e.g. "https://screens.lcportal.cloud") */
   serverUrl: string;

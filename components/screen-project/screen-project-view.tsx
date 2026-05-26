@@ -142,8 +142,18 @@ export function ScreenProjectView() {
   const activatePiP = useScreenProjectPiPStore((s) => s.activatePiP);
   const closePiP = useScreenProjectPiPStore((s) => s.closePiP);
 
+  /**
+   * Which token type to fetch — set once the user commits to a view.
+   * null = user is on the select screen (no tokens needed yet).
+   */
+  const [activeTokenType, setActiveTokenType] = useState<"supervisor" | "observer" | null>(() => {
+    if (canSupervisor && canObserver) return null; // select screen — wait for user choice
+    if (!canSupervisor && canObserver) return "observer";
+    return "supervisor";
+  });
+
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
-    useScreenProject();
+    useScreenProject(activeTokenType);
 
   const [mainId, setMainId] = useState<string>("");
   const [screenStates, setScreenStates] = useState<Record<string, ScreenState>>({});
@@ -464,7 +474,7 @@ export function ScreenProjectView() {
             <Button
               variant="outline"
               size="lg"
-              onClick={() => setViewMode("observer")}
+              onClick={() => { setViewMode("observer"); setActiveTokenType("observer"); }}
               className="gap-2 w-full justify-start px-4"
             >
               <Eye className="h-5 w-5 text-amber-400" />
@@ -475,7 +485,7 @@ export function ScreenProjectView() {
               <Button
                 variant="default"
                 size="lg"
-                onClick={() => setViewMode("supervisor")}
+                onClick={() => { setViewMode("supervisor"); setActiveTokenType("supervisor"); }}
                 className="gap-2 w-full justify-start px-4"
               >
                 <Monitor className="h-5 w-5" />
@@ -515,7 +525,14 @@ export function ScreenProjectView() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setViewMode(canObserver ? "select" : "supervisor")}
+              onClick={() => {
+                if (canSupervisor && canObserver) {
+                  setViewMode("select");
+                } else {
+                  setViewMode("supervisor");
+                  setActiveTokenType("supervisor");
+                }
+              }}
               className="gap-1.5 text-muted-foreground hover:text-foreground"
             >
               <ChevronLeft className="h-4 w-4" />
