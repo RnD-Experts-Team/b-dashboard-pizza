@@ -732,10 +732,13 @@ export function ScreenProjectView() {
         </motion.div>
       </div>
 
-      {/* Bottom control bar */}
-      <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
+      {/* Bottom control bar — modern floating dark toolbar */}
+      <div className="flex items-center justify-between rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30">
+
+        {/* ── Left: status + station management ── */}
         <div className="flex items-center gap-2">
           <NetworkBadge status={networkStatus} />
+          <div className="w-px h-5 bg-white/10" />
           <StationsDialog
             storeId={storeId}
             stations={stations}
@@ -743,25 +746,68 @@ export function ScreenProjectView() {
           />
         </div>
 
-        <div className="flex items-center gap-2 mx-auto sm:mx-0">
-          <Button
-            variant={myMicMuted ? "destructive" : "secondary"}
-            size="sm"
+        {/* ── Center: personal A/V controls ── */}
+        <div className="flex items-center gap-1">
+
+          {/* Mic toggle */}
+          <button
             onClick={() => {
               setMyMicMuted((v) => {
-                if (!v) setBroadcastToAll(false); // muting mic clears broadcast
+                if (!v) setBroadcastToAll(false);
                 return !v;
               });
             }}
-            className="gap-1.5"
-            aria-label={myMicMuted ? "Unmute my microphone" : "Mute my microphone"}
+            title={myMicMuted ? "Unmute microphone" : "Mute microphone"}
+            aria-label={myMicMuted ? "Unmute microphone" : "Mute microphone"}
+            className={cn(
+              "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              myMicMuted
+                ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+            )}
           >
             {myMicMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            <span className="hidden sm:inline">
-              {myMicMuted ? "Mic Off" : "Mic On"}
-            </span>
-          </Button>
+            {myMicMuted && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-neutral-900" />
+            )}
+          </button>
 
+          {/* Camera toggle */}
+          <button
+            onClick={() => setMyVideoOff((v) => !v)}
+            title={myVideoOff ? "Turn on camera" : "Turn off camera"}
+            aria-label={myVideoOff ? "Turn on camera" : "Turn off camera"}
+            className={cn(
+              "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              myVideoOff
+                ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
+            )}
+          >
+            {myVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+            {myVideoOff && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-neutral-900" />
+            )}
+          </button>
+
+          {/* Self-view toggle */}
+          <button
+            onClick={() => setMyCamVisible((v) => !v)}
+            title={myCamVisible ? "Hide self view" : "Show self view"}
+            aria-label={myCamVisible ? "Hide self view" : "Show self view"}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              myCamVisible
+                ? "bg-white/15 text-white ring-1 ring-white/20"
+                : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white",
+            )}
+          >
+            <UserCircle2 className="h-4 w-4" />
+          </button>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
+          {/* Talk to All — hold to broadcast */}
           <button
             disabled={myMicMuted}
             onPointerDown={(e) => {
@@ -771,80 +817,68 @@ export function ScreenProjectView() {
             onPointerUp={() => setBroadcastToAll(false)}
             onPointerCancel={() => setBroadcastToAll(false)}
             onContextMenu={(e) => e.preventDefault()}
-            title={myMicMuted ? "Unmute mic first" : "Hold to talk to all screens"}
+            title={myMicMuted ? "Unmute mic first" : "Hold to broadcast to all screens"}
             aria-label="Hold to talk to all screens"
             aria-pressed={broadcastToAll}
             className={cn(
-              "inline-flex select-none items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              "disabled:pointer-events-none disabled:opacity-50",
+              "inline-flex select-none items-center gap-1.5 rounded-xl px-3 h-9 text-xs font-medium transition-all duration-150",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "disabled:pointer-events-none disabled:opacity-40",
               broadcastToAll
-                ? "bg-red-600 text-white ring-2 ring-red-400/70 ring-offset-1 ring-offset-background"
-                : "border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
+                ? "bg-red-600 text-white shadow-lg shadow-red-900/40 ring-2 ring-red-500/40"
+                : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
             )}
           >
-            <Radio className={cn("h-4 w-4", broadcastToAll && "animate-pulse")} />
+            <Radio className={cn("h-4 w-4 shrink-0", broadcastToAll && "animate-pulse")} />
             <span className="hidden sm:inline">
-              {broadcastToAll ? "Broadcasting..." : "Talk to All"}
+              {broadcastToAll ? "Broadcasting…" : "Talk to All"}
             </span>
           </button>
-
-          <Button
-            variant={myVideoOff ? "destructive" : "secondary"}
-            size="sm"
-            onClick={() => setMyVideoOff((v) => !v)}
-            className="gap-1.5"
-            aria-label={myVideoOff ? "Turn on my camera" : "Turn off my camera"}
-          >
-            {myVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-            <span className="hidden sm:inline">
-              {myVideoOff ? "Cam Off" : "Cam On"}
-            </span>
-          </Button>
-
-          <Button
-            variant={myCamVisible ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setMyCamVisible((v) => !v)}
-            className="gap-1.5"
-            aria-label={myCamVisible ? "Hide self view" : "Show self view"}
-          >
-            <UserCircle2 className="h-4 w-4" />
-            <span className="hidden sm:inline">
-              {myCamVisible ? "Hide Me" : "Show Me"}
-            </span>
-          </Button>
         </div>
 
-        {/* Mute all */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant={anyAudioEnabled ? "secondary" : "outline"}
-            size="sm"
+        {/* ── Right: broadcast to screens ── */}
+        <div className="flex items-center gap-1">
+          <div className="w-px h-5 bg-white/10 mr-1" />
+
+          {/* Mute / unmute all screens */}
+          <button
             onClick={handleMuteAllToggle}
-            className="gap-1.5"
+            title={anyAudioEnabled ? "Mute all screens" : "Unmute all screens"}
             aria-label={anyAudioEnabled ? "Mute all screens" : "Unmute all screens"}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              anyAudioEnabled
+                ? "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                : "bg-white/5 text-white/30 hover:bg-white/10 hover:text-white/70",
+            )}
           >
             {anyAudioEnabled ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            <span className="hidden sm:inline">
-              {anyAudioEnabled ? "Mute All" : "Unmute All"}
-            </span>
-          </Button>
+          </button>
 
-          <Button
-            variant={anyMyCamEnabled ? "secondary" : "outline"}
-            size="sm"
+          {/* Cam to all screens */}
+          <button
             onClick={handleCamToAllToggle}
             disabled={myVideoOff}
-            className="gap-1.5"
-            aria-label={anyMyCamEnabled ? "Disable my camera on all screens" : "Enable my camera on all screens"}
-            title={myVideoOff ? "Turn on your camera first" : undefined}
+            title={
+              myVideoOff
+                ? "Turn on your camera first"
+                : anyMyCamEnabled
+                ? "Remove your camera from all screens"
+                : "Show your camera on all screens"
+            }
+            aria-label={anyMyCamEnabled ? "Disable camera on all screens" : "Enable camera on all screens"}
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              "disabled:pointer-events-none disabled:opacity-40",
+              anyMyCamEnabled
+                ? "bg-white/15 text-white ring-1 ring-white/20 hover:bg-white/20"
+                : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white",
+            )}
           >
             {anyMyCamEnabled ? <Camera className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
-            <span className="hidden sm:inline">
-              {anyMyCamEnabled ? "Cam to All" : "Cam to None"}
-            </span>
-          </Button>
+          </button>
         </div>
+
       </div>
     </div>
   );
