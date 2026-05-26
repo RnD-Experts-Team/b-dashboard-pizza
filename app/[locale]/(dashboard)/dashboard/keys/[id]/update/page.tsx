@@ -9,7 +9,7 @@ import { KeyForm } from "@/components/keys/key-form";
 import type { KeyFormValues } from "@/components/keys/key-form";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import type { CreateKeyPayload, FrequencyType } from "@/types/key.types";
 
 export default function UpdateKeyPage() {
@@ -32,29 +32,66 @@ export default function UpdateKeyPage() {
     }
   };
 
-  // Build initial form values from loaded key
+  // Build initial form values from loaded key.
+  // Group store rules that share identical settings into a single form entry
+  // with all matching store_ids collected together (multi-select).
   const initialValues: Partial<KeyFormValues> | undefined = engineKey
-    ? {
-        label: engineKey.label,
-        data_type: engineKey.dataType,
-        is_active: engineKey.isActive,
-        tags: engineKey.tags,
-        store_rules: engineKey.storeRules.map((sr) => ({
-          store_ids: [sr.storeId],
-          frequency_type: sr.frequencyType as FrequencyType,
-          interval: sr.interval,
-          week_days: sr.weekDays ?? [],
-          month_day: sr.monthDay,
-          week_of_month: sr.weekOfMonth,
-          week_day: sr.weekDay,
-          year_month: sr.yearMonth,
-          starts_at: sr.startsAt,
-          ends_at: sr.endsAt ?? "",
-          fill_mode: sr.fillMode,
-          role_names: sr.roleNames ?? [],
-          time: sr.time ?? null,
-        })),
-      }
+    ? (() => {
+        const grouped = new Map<
+          string,
+          { store_ids: string[]; idx: number }
+        >();
+        const storeRules: KeyFormValues["store_rules"] = [];
+
+        for (const sr of engineKey.storeRules) {
+          // Fingerprint every field except store_id so identical rules are merged
+          const fingerprint = JSON.stringify([
+            sr.frequencyType,
+            sr.interval,
+            JSON.stringify((sr.weekDays ?? []).slice().sort()),
+            sr.monthDay,
+            sr.weekOfMonth,
+            sr.weekDay,
+            sr.yearMonth,
+            sr.startsAt,
+            sr.endsAt ?? "",
+            sr.fillMode,
+            JSON.stringify((sr.roleNames ?? []).slice().sort()),
+            sr.time ?? null,
+          ]);
+
+          const existing = grouped.get(fingerprint);
+          if (existing) {
+            storeRules[existing.idx].store_ids.push(sr.storeId);
+          } else {
+            const idx = storeRules.length;
+            grouped.set(fingerprint, { store_ids: [sr.storeId], idx });
+            storeRules.push({
+              store_ids: [sr.storeId],
+              frequency_type: sr.frequencyType as FrequencyType,
+              interval: sr.interval,
+              week_days: sr.weekDays ?? [],
+              month_day: sr.monthDay,
+              week_of_month: sr.weekOfMonth,
+              week_day: sr.weekDay,
+              year_month: sr.yearMonth,
+              starts_at: sr.startsAt,
+              ends_at: sr.endsAt ?? "",
+              fill_mode: sr.fillMode,
+              role_names: sr.roleNames ?? [],
+              time: sr.time ?? null,
+            });
+          }
+        }
+
+        return {
+          label: engineKey.label,
+          data_type: engineKey.dataType,
+          is_active: engineKey.isActive,
+          tags: engineKey.tags,
+          store_rules: storeRules,
+        };
+      })()
     : undefined;
 
   return (

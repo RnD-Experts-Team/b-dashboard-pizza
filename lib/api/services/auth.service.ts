@@ -142,6 +142,7 @@ function transformUser(apiUser: ApiAuthUser): AuthUser {
     id: String(apiUser.id),
     name: apiUser.name,
     email: apiUser.email,
+    avatar: apiUser.image_url ?? apiUser.image_path ?? null,
     emailVerifiedAt: apiUser.email_verified_at,
     createdAt: apiUser.created_at,
     updatedAt: apiUser.updated_at,
@@ -273,5 +274,38 @@ export const authService = {
       "/auth/refresh-token"
     );
     return data;
+  },
+
+  updateMe: async (payload: {
+    name: string;
+    email: string;
+    image?: File | null;
+    password?: string;
+    password_confirmation?: string;
+    remove_image?: boolean;
+  }): Promise<ApiResponse<AuthUser>> => {
+    const form = new FormData();
+    form.append("name", payload.name);
+    form.append("email", payload.email);
+    if (payload.image) {
+      form.append("image", payload.image);
+    }
+    if (payload.password) {
+      form.append("password", payload.password);
+      form.append("password_confirmation", payload.password_confirmation ?? "");
+    }
+    if (payload.remove_image) {
+      form.append("remove_image", "1");
+    }
+
+    const { data } = await axiosClient.post<ApiMeResponse>("/auth/me", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    return {
+      success: data.success,
+      message: data.message,
+      data: transformUser(data.data.user),
+    };
   },
 };
