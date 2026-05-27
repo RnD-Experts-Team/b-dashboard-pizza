@@ -90,6 +90,7 @@ export function DueKeyValueSheet({
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [isHoveringAttachments, setIsHoveringAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -115,6 +116,27 @@ export function DueKeyValueSheet({
     setNote("");
     setAttachments([]);
   }, [item]);
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!isHoveringAttachments) return;
+      const clipItems = e.clipboardData?.items;
+      if (!clipItems) return;
+      const images: File[] = [];
+      for (let i = 0; i < clipItems.length; i++) {
+        const ci = clipItems[i];
+        if (ci.type.startsWith("image/")) {
+          const file = ci.getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      setAttachments((prev) => [...prev, ...images]);
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [isHoveringAttachments]);
 
   const payload = useMemo<DueKeyValuePayload | null>(() => {
     if (!item) return null;
@@ -215,9 +237,11 @@ export function DueKeyValueSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full p-0 sm:max-w-xl">
         <SheetHeader className="border-b pb-3">
-          <SheetTitle>Debrief Value</SheetTitle>
+          <SheetTitle className="text-base leading-snug">
+            {item ? item.label : "Select a debrief item"}
+          </SheetTitle>
           <SheetDescription>
-            {item ? `${item.label} (#${item.keyId})` : "Select a debrief item"}
+            {item ? `Debrief Value · Key #${item.keyId}` : "Select a debrief key"}
           </SheetDescription>
         </SheetHeader>
 
@@ -228,7 +252,6 @@ export function DueKeyValueSheet({
               <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
                 <p>Store: {storeId}</p>
                 <p>Date: {date}</p>
-                <p>Data Type: {item.dataType}</p>
                 <p className="flex items-center gap-1.5">
                   Status: <Badge variant="default" className="text-xs">Filled</Badge>
                 </p>
@@ -310,7 +333,6 @@ export function DueKeyValueSheet({
               <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
                 <p>Store: {storeId}</p>
                 <p>Date: {date}</p>
-                <p>Data Type: {item.dataType}</p>
                 <p>Status: {item.filled ? "Filled" : "Not Filled"}</p>
               </div>
 
@@ -351,8 +373,8 @@ export function DueKeyValueSheet({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="null">No Value</SelectItem>
-                      <SelectItem value="true">True</SelectItem>
-                      <SelectItem value="false">False</SelectItem>
+                      <SelectItem value="true">Yes</SelectItem>
+                      <SelectItem value="false">No</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -394,10 +416,17 @@ export function DueKeyValueSheet({
               </div>
 
               {/* Attachments */}
-              <div className="space-y-2">
+              <div
+                className="space-y-2"
+                onMouseEnter={() => setIsHoveringAttachments(true)}
+                onMouseLeave={() => setIsHoveringAttachments(false)}
+              >
                 <Label>
                   Attachments{" "}
                   <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                  {isHoveringAttachments && (
+                    <span className="ml-2 text-xs text-muted-foreground/70">· Ctrl+V to paste</span>
+                  )}
                 </Label>
                 <div className="flex items-center gap-2">
                   <Button
@@ -458,7 +487,11 @@ export function DueKeyValueSheet({
                 )}
               </div>
 
-              {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+              {submitError && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <span className="flex-1">{submitError}</span>
+                </div>
+              )}
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button

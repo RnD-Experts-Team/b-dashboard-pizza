@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Clock, RefreshCw, Loader2, AlertCircle } from "lucide-react";
+import { Clock, RefreshCw, Loader2, AlertCircle, Construction } from "lucide-react";
 
 const RANK_COLORS = [
   "bg-amber-500 text-white",
@@ -53,10 +53,19 @@ export function TopEmployeeHours({ managerDashboard, requirements, className }: 
   return (
     <Card
       className={cn(
-        "py-1.5 gap-0 bg-linear-to-r from-teal-50 via-teal-100 to-cyan-100 dark:from-teal-950/20 dark:via-teal-900/20 dark:to-cyan-900/20",
+        "py-1.5 gap-0 bg-linear-to-r from-teal-50 via-teal-100 to-cyan-100 dark:from-teal-950/20 dark:via-teal-900/20 dark:to-cyan-900/20 relative overflow-hidden",
         className,
       )}
     >
+      {/* Coming Soon overlay */}
+      <div
+        className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl bg-zinc-900/65 backdrop-blur-[2px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Construction className="h-5 w-5 text-zinc-300" />
+        <p className="text-[11px] font-bold text-zinc-100 tracking-wide">Coming Soon</p>
+        <p className="text-[9px] text-zinc-400">Employee performance data</p>
+      </div>
       <CardHeader className="pb-0.5 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-teal-500/15 dark:bg-teal-500/20">

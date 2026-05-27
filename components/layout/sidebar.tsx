@@ -38,6 +38,7 @@ import {
   Megaphone,
   Monitor,
   Target,
+  LifeBuoy,
 } from "lucide-react";
 import {
   Dialog,
@@ -789,6 +790,25 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* {isNavItemVisible(settingsItem) && renderNavLink(settingsItem)} */}
         </nav>
       </ScrollArea>
+
+      <Separator />
+
+      {/* Support Button */}
+      <div className={cn("px-2 sm:px-3 py-2", collapsed && "flex justify-center")}>
+        <a
+          href="https://tasks.rdexperts.tech/support-ticket"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full",
+            "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
+          {!collapsed && <span className="truncate">Support</span>}
+        </a>
+      </div>
 
       <Separator />
 

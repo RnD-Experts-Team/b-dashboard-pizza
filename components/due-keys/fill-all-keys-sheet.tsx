@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Paperclip, X } from "lucide-react";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,34 @@ export function FillAllKeysSheet({
   });
 
   const [attachmentsMap, setAttachmentsMap] = useState<Record<number, File[]>>({});
-  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [hoveredKeyId, setHoveredKeyId] = useState<number | null>(null);
+  const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({})
+
+  // Clipboard paste into attachment area on hover
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (hoveredKeyId === null) return;
+      const clipItems = e.clipboardData?.items;
+      if (!clipItems) return;
+      const images: File[] = [];
+      for (let i = 0; i < clipItems.length; i++) {
+        const ci = clipItems[i];
+        if (ci.type.startsWith("image/")) {
+          const file = ci.getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      const keyId = hoveredKeyId;
+      setAttachmentsMap((prev) => ({
+        ...prev,
+        [keyId]: [...(prev[keyId] ?? []), ...images],
+      }));
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [hoveredKeyId]);
 
   const [jsonErrors, setJsonErrors] = useState<Record<number, string | null>>({});
 
@@ -204,8 +231,8 @@ export function FillAllKeysSheet({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="null">No Value</SelectItem>
-                          <SelectItem value="true">True</SelectItem>
-                          <SelectItem value="false">False</SelectItem>
+                          <SelectItem value="true">Yes</SelectItem>
+                          <SelectItem value="false">No</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -235,10 +262,17 @@ export function FillAllKeysSheet({
                 </div>
 
                 {/* Attachments */}
-                <div className="mt-3 space-y-2">
+                <div
+                  className="mt-3 space-y-2"
+                  onMouseEnter={() => setHoveredKeyId(it.keyId)}
+                  onMouseLeave={() => setHoveredKeyId(null)}
+                >
                   <Label>
                     Attachments{" "}
                     <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                    {hoveredKeyId === it.keyId && (
+                      <span className="ml-2 text-xs text-muted-foreground/70">· Ctrl+V to paste</span>
+                    )}
                   </Label>
                   <div className="flex items-center gap-2">
                     <Button

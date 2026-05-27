@@ -100,6 +100,7 @@ export function CreateEmployeeDebriefForm({
 
   // Attachments
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [isHoveringAttachments, setIsHoveringAttachments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,6 +138,28 @@ export function CreateEmployeeDebriefForm({
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
   }, [note, date, hydrated]);
+
+  // Clipboard paste into attachment area on hover
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!isHoveringAttachments) return;
+      const clipItems = e.clipboardData?.items;
+      if (!clipItems) return;
+      const images: File[] = [];
+      for (let i = 0; i < clipItems.length; i++) {
+        const ci = clipItems[i];
+        if (ci.type.startsWith("image/")) {
+          const file = ci.getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      setAttachments((prev) => [...prev, ...images]);
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [isHoveringAttachments]);
 
   const hasDraft = !!note;
   const isToday = date === formatTodayDate();
@@ -341,9 +364,18 @@ export function CreateEmployeeDebriefForm({
           </div>
 
           {/* Attachments */}
-          <div className="space-y-1.5">
+          <div
+            className="space-y-1.5"
+            onMouseEnter={() => setIsHoveringAttachments(true)}
+            onMouseLeave={() => setIsHoveringAttachments(false)}
+          >
             <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-medium">Attachments</Label>
+              <Label className="text-[11px] font-medium">
+                Attachments
+                {isHoveringAttachments && (
+                  <span className="ml-2 font-normal text-muted-foreground/70">· Ctrl+V to paste</span>
+                )}
+              </Label>
               {attachments.length > 0 && (
                 <span className="text-[11px] text-muted-foreground">{attachments.length} file{attachments.length > 1 ? "s" : ""}</span>
               )}

@@ -139,12 +139,14 @@ export default function LoginPage() {
               </Button>
               <p className="text-sm text-muted-foreground text-center">
                 {t("noAccount")}{" "}
-                <Link
-                  href={`/${locale}/auth/register`}
+                <a
+                  href="https://www.cognitoforms.com/pnepizza/dashboardonboardingform/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-primary hover:underline"
                 >
                   {t("register")}
-                </Link>
+                </a>
               </p>
             </CardFooter>
           </form>

@@ -686,6 +686,7 @@ export function DsprDashboard() {
           upsellingDay={day.upselling?.total_upselling_day}
           upsellingWeek={day.upselling?.total_upselling_week_to_date}
           goalMetrics={goal_metrics}
+          date={selectedDate}
           className="lg:col-span-1"
         />
         <PortalOnTimeDualGauge portal={day.portal} className="lg:col-span-1" />
@@ -756,7 +757,7 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Current Employees + Birthday + Top Hours ──────────────── */}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4" data-screenshot-ignore="true">
         <CurrentEmployeesTable
           requirements={[
             {

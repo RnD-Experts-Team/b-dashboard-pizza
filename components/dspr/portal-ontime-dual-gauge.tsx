@@ -71,6 +71,18 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
           valueDisplay={`${primary.toFixed(1)}%`}
         />
 
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-3 mt-1">
+          <div className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+            <span className="text-[8px] text-muted-foreground font-medium">Put Into Portal</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-[8px] text-muted-foreground font-medium">On Time</span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-4 gap-1 mt-0 pt-2">
           <Metric value={activePortal.portal_eligible_orders} label="Eligible" />
           <Metric value={activePortal.portal_used_orders} label="Used" />

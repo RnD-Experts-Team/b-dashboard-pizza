@@ -74,7 +74,7 @@ function renderValuePreview(item: DueKeyItem): string {
   if (v == null) return "—";
   if (v.valueText != null) return String(v.valueText);
   if (v.valueNumber != null) return String(v.valueNumber);
-  if (v.valueBoolean != null) return String(v.valueBoolean);
+  if (v.valueBoolean != null) return v.valueBoolean ? "Yes" : "No";
   if (v.valueJson != null) {
     try { return JSON.stringify(v.valueJson); } catch { return "[JSON]"; }
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,8 @@ interface StoreScoreCardProps {
   /** day.upselling.total_upselling_week_to_date */
   upsellingWeek?: number;
   goalMetrics?: DsprGoalMetric[];
+  /** The selected date to display in the "Today" row label */
+  date?: Date;
   loading?: boolean;
   className?: string;
 }
@@ -26,9 +29,11 @@ export function StoreScoreCard({
   upsellingDay = 0,
   upsellingWeek = 0,
   goalMetrics,
+  date,
   loading = false,
   className,
 }: StoreScoreCardProps) {
+  const dayLabel = date ? format(date, "MMM d") : "Today";
   // ── Derive upselling weekly goal from DSPR goal_metrics ───────────────────
   const upsMetric = goalMetrics?.find((m) =>
     m.metric_name.toLowerCase().includes("upselling"),
@@ -230,7 +235,7 @@ export function StoreScoreCard({
           {/* Today */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] w-16 text-left text-muted-foreground shrink-0">
-              Today
+              {dayLabel}
             </span>
             <div className="flex-1">
               <div className="h-1.5 rounded-full bg-muted overflow-hidden">
