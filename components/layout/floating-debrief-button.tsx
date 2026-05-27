@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { CalendarDays, KeyRound, PenLine, RefreshCw, X } from "lucide-react";
@@ -105,10 +105,6 @@ export function FloatingDebriefButton() {
 
   const hasDragged = useRef(false);
   const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const debriefSectionRef = useRef<HTMLDivElement>(null);
-  const dueKeysSectionRef = useRef<HTMLDivElement>(null);
-  const isProgrammaticScroll = useRef(false);
 
   const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
@@ -226,31 +222,6 @@ export function FloatingDebriefButton() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const scrollToSection = useCallback((section: "debrief" | "due-keys") => {
-    const ref = section === "debrief" ? debriefSectionRef : dueKeysSectionRef;
-    isProgrammaticScroll.current = true;
-    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setActiveNav(section);
-    setTimeout(() => { isProgrammaticScroll.current = false; }, 800);
-  }, []);
-
-  // Track which section is in view to highlight the active nav button
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container || !isOpen) return;
-
-    const handleScroll = () => {
-      if (isProgrammaticScroll.current) return;
-      const containerTop = container.scrollTop;
-      const dueKeysTop = dueKeysSectionRef.current?.offsetTop ?? Infinity;
-      // offset by a small threshold so nav switches a bit before the section hits the very top
-      setActiveNav(containerTop + 40 >= dueKeysTop ? "due-keys" : "debrief");
-    };
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [isOpen]);
-
   if (!canCreateDebrief) return null;
   if (pathname?.includes("/due-keys")) return null;
 
@@ -365,35 +336,19 @@ export function FloatingDebriefButton() {
           {/* Panel header */}
           <div className="shrink-0 bg-background px-4 pt-4 pb-3 border-b border-gray-100/60 dark:border-gray-800/60 rounded-t-2xl">
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-foreground">Store Notes</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Employee Debrief notes &amp; Debrief values</p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 rounded-lg hover:bg-gray-200/50 dark:hover:bg-gray-700/50 text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Store picker + Section navigation — same row */}
-          <div className="shrink-0 px-4 py-3 border-b border-gray-100/40 dark:border-gray-800/40 overflow-hidden">
-            <div className="flex items-end gap-2">
-              {/* Store */}
-              <div className="flex-1 min-w-0">
-                <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Store</Label>
+              <div className="flex items-center gap-2 shrink-0">
                 <Select
                   value={selectedStoreId ?? ""}
                   onValueChange={(v) => setSelectedStoreId(v || null)}
                   disabled={stores.length === 0}
                 >
-                  <SelectTrigger className="h-8 text-xs mt-1.5 border-gray-200/60 dark:border-gray-700/60">
+                  <SelectTrigger className="h-7 text-xs w-auto max-w-40 rounded-full bg-muted/60 hover:bg-muted border-0 px-3 shadow-none font-medium gap-1.5 focus:ring-0 focus:ring-offset-0">
                     <SelectValue
-                      placeholder={stores.length === 0 ? "No stores found" : "Select store"}
+                      placeholder={stores.length === 0 ? "No stores" : "Select store"}
                     />
                   </SelectTrigger>
                   <SelectContent
@@ -408,53 +363,63 @@ export function FloatingDebriefButton() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              {/* Jump-to navigation */}
-              <div className="w-32 shrink-0 mr-[40px]">
-                <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Jump to</Label>
-                <Select
-                  value={activeNav}
-                  onValueChange={(v) => scrollToSection(v as "debrief" | "due-keys")}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-lg hover:bg-gray-200/50 dark:hover:bg-gray-700/50 text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setIsOpen(false)}
                 >
-                  <SelectTrigger className="h-8 text-xs mt-1.5 border-gray-200/60 dark:border-gray-700/60">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper">
-                    <SelectItem value="debrief">
-                      <span className="flex items-center gap-1.5">
-                        <PenLine className="h-3 w-3" />
-                        Employee Debrief
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="due-keys">
-                      <span className="flex items-center gap-1.5">
-                        <KeyRound className="h-3 w-3" />
-                        Debrief
-                        {unfilledItems.length > 0 && (
-                          <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
-                            {unfilledItems.length}
-                          </span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
 
-          {/* Scrollable sections container */}
-          <div
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
-          >
+          {/* Tab bar */}
+          <div className="shrink-0 flex border-b border-gray-100/40 dark:border-gray-800/40">
+            <button
+              type="button"
+              onClick={() => setActiveNav("debrief")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px",
+                activeNav === "debrief"
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              Employee Debrief
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveNav("due-keys")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px",
+                activeNav === "due-keys"
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+              Debrief
+              {unfilledItems.length > 0 && (
+                <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
+                  {unfilledItems.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
             {/* ── Debrief Section ─────────────────────────────────────── */}
-            <div ref={debriefSectionRef} className="px-4 py-4">
-              <div className="flex items-center gap-2 mb-3">
+            {activeNav === "debrief" && (
+            <div className="py-4">
+              <div className="flex items-center gap-2 mb-3 px-4">
                 <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
                 <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Employee Debrief</h4>
               </div>
+              <div className="px-4">
               <CreateEmployeeDebriefForm
                 storeId={selectedStoreId}
                 isSubmitting={isSubmitting}
@@ -470,13 +435,13 @@ export function FloatingDebriefButton() {
                   return !!result;
                 }}
               />
+              </div>
             </div>
-
-            {/* Divider */}
-            <div className="mx-4 border-t border-gray-200/60 dark:border-gray-700/60" />
+            )}
 
             {/* ── Due Keys Section ─────────────────────────────────────── */}
-            <div ref={dueKeysSectionRef} className="py-4">
+            {activeNav === "due-keys" && (
+            <div className="py-4">
               <div className="flex items-center gap-2 mb-3 px-4">
                 <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
                 <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
@@ -622,6 +587,7 @@ export function FloatingDebriefButton() {
                 )}
               </div>
             </div>
+            )}
           </div>
         </div>
       )}
