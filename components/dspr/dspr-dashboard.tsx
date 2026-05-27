@@ -57,8 +57,11 @@ import {
   Camera,
   Eye,
   EyeOff,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PageGuide } from "@/components/shared/page-guide";
+import { DSPR_GUIDE_STEPS } from "./dspr-guide-config";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
 function toApiDate(date: Date): string {
@@ -278,6 +281,7 @@ export function DsprDashboard() {
   // Default date = yesterday
   const [selectedDate, setSelectedDate] = useState<Date>(subDays(new Date(), 1));
   const [dateOpen, setDateOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Re-fetch when date changes
   const handleDateSelect = useCallback(
@@ -495,7 +499,7 @@ export function DsprDashboard() {
       )}
 
       {/* ── Header bar ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1" data-guide-id="dspr-header">
         {/* Store badge */}
         <Badge
           variant="secondary"
@@ -669,17 +673,37 @@ export function DsprDashboard() {
               {hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
             </TooltipContent>
           </Tooltip>
+
+          {/* Page guide button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setGuideOpen(true)}
+                aria-label="Open page guide"
+              >
+                <HelpCircle className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Page guide</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       {/* ── Store goals ribbon ────────────────────────────────────── */}
-      <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} />
+      <div data-guide-id="dspr-goals">
+        <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} />
+      </div>
 
       {/* ── Day summary stats ribbon ────────────────────────────── */}
-      <DaySummaryStats day={day} />
+      <div data-guide-id="dspr-summary">
+        <DaySummaryStats day={day} />
+      </div>
 
       {/* ── Weekly Sales + Portal gauges ─────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-1 lg:grid-cols-4" data-guide-id="dspr-sales">
         <SalesChart sales={sales} height={190} toolbar={false} className="lg:col-span-2" />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
         <StoreScoreCard
@@ -695,7 +719,7 @@ export function DsprDashboard() {
 
       {/* ── HNR · Labor · Top 5 Menu Items ───────────────────────── */}
       {/* <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3"> */}
-             <div className="grid grid-cols-1 gap-1 lg:grid-cols-4">
+             <div className="grid grid-cols-1 gap-1 lg:grid-cols-4" data-guide-id="dspr-channels">
 
         {/* <LaborGauge value={day.labor} /> */}
         
@@ -717,7 +741,7 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4" data-guide-id="dspr-top-lists">
         <TopItemsList
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
@@ -757,7 +781,7 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Current Employees + Birthday + Top Hours ──────────────── */}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4" data-screenshot-ignore="true">
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4" data-screenshot-ignore="true" data-guide-id="dspr-employees">
         <CurrentEmployeesTable
           requirements={[
             {
@@ -801,6 +825,12 @@ export function DsprDashboard() {
           className="lg:col-span-1"
         />
       </div>
+
+      <PageGuide
+        steps={DSPR_GUIDE_STEPS}
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
     </div>
   );
 }
