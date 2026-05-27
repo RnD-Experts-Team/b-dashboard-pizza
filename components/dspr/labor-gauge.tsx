@@ -70,9 +70,9 @@ export function LaborGauge({
   const [dialogOpen, setDialogOpen] = useState(false);
   const activeValue = isWeekly && weeklyValue !== undefined ? weeklyValue : value;
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50 relative overflow-hidden", weeklyValue !== undefined && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyValue !== undefined && setDialogOpen(true)}>
-      {/* Coming Soon overlay */}
-      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl bg-zinc-900/65 backdrop-blur-[2px]">
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50 relative overflow-hidden", className)}>
+      {/* Coming Soon overlay — blocks all interaction */}
+      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl bg-zinc-900/65 backdrop-blur-[2px]" onClick={(e) => e.stopPropagation()}>
         <Construction className="h-5 w-5 text-zinc-300" />
         <p className="text-[11px] font-bold text-zinc-100 tracking-wide">Coming Soon</p>
         <p className="text-[9px] text-zinc-400">Labor  </p>
