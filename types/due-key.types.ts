@@ -47,6 +47,11 @@ export interface ApiDueKeyValue {
   updated_at: string;
   note: string | null;
   attachments: ApiDueKeyAttachment[];
+  user?: {
+    id?: number;
+    name?: string | null;
+    image_url?: string | null;
+  } | null;
 }
 
 export interface ApiDueKeyItem {
@@ -111,6 +116,7 @@ export interface DueKeyValue {
   storeId: string;
   userId: number;
   userName?: string | null;
+  imageUrl?: string | null;
   entryDate: string;
   valueText: string | null;
   valueNumber: number | null;

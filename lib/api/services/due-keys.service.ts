@@ -53,6 +53,7 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
       storeId: v.store_id,
       userId: v.user_id,
       userName: v.user_name ?? null,
+      imageUrl: v.user?.image_url ?? null,
       entryDate: v.entry_date,
       valueText: v.value_text,
       valueNumber: v.value_number,
