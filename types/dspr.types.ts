@@ -164,6 +164,7 @@ export interface DsprDay {
   hnr_week_to_date?: DsprHnr;
   labor: number;
   labor_week_to_date?: number;
+  labor_week_to_date_avg?: number;
   portal: DsprPortal;
   upselling?: {
     /** Aggregate totals (new API format) */

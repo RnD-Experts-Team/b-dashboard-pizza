@@ -151,6 +151,11 @@ export function FloatingDebriefButton() {
     error: bulkSubmitError,
   } = useSetDueKeysBulk();
 
+  const selectedStoreName = useMemo(
+    () => stores.find((s) => s.id === selectedStoreId)?.name ?? null,
+    [stores, selectedStoreId]
+  );
+
   const activeItems = useMemo(() => dueKeysData?.items ?? [], [dueKeysData]);
   const unfilledItems = useMemo(() => activeItems.filter((i) => !i.filled), [activeItems]);
   const availableTags = useMemo(() => {
@@ -417,7 +422,12 @@ export function FloatingDebriefButton() {
             <div className="py-4">
               <div className="flex items-center gap-2 mb-3 px-4">
                 <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Employee Debrief</h4>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                  Employee Debrief
+                  {selectedStoreName && (
+                    <span className="normal-case tracking-normal font-normal text-muted-foreground ml-1">({selectedStoreName})</span>
+                  )}
+                </h4>
               </div>
               <div className="px-4">
               <CreateEmployeeDebriefForm
@@ -444,7 +454,12 @@ export function FloatingDebriefButton() {
             <div className="py-4">
               <div className="flex items-center gap-2 mb-3 px-4">
                 <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
-                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">Debrief</h4>
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                  Debrief
+                  {selectedStoreName && (
+                    <span className="normal-case tracking-normal font-normal text-muted-foreground ml-1">({selectedStoreName})</span>
+                  )}
+                </h4>
               </div>
 
               {/* Date picker */}

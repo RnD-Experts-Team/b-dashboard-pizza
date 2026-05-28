@@ -737,7 +737,7 @@ export function DsprDashboard() {
           toolbar={false}
         />
          <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
-        <LaborGauge value={22} weeklyValue={day.labor_week_to_date} />
+        <LaborGauge value={day.labor} weeklyValue={day.labor_week_to_date} weeklyAvgValue={day.labor_week_to_date_avg} />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
