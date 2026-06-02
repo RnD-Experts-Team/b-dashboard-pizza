@@ -1133,6 +1133,11 @@
     "title": "تذاكر الصيانة",
     "description": "تتبع وإدارة تذاكر الصيانة لفرعك.",
     "refresh": "تحديث",
+    "common": {
+      "cancel": "إلغاء",
+      "save": "حفظ",
+      "optional": "اختياري"
+    },
     "showing": "عرض {from}-{to} من {total} تذكرة",
     "columns": {
       "id": "الرقم",

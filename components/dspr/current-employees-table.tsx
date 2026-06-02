@@ -79,6 +79,42 @@ function formatEmployeeName(employee: ManagerDashboardEmployee): string {
     .join(" ");
 }
 
+function getMetricColumns(rows: ManagerDashboardEmployee[]): string[] {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+
+  for (const employee of rows) {
+    for (const metric of employee.metrics ?? []) {
+      if (!seen.has(metric.label)) {
+        seen.add(metric.label);
+        labels.push(metric.label);
+      }
+    }
+  }
+
+  return labels;
+}
+
+function formatMetricDisplay(label: string, rawValue: string | number): string {
+  const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!Number.isFinite(numericValue)) return "-";
+
+  if (label.toLowerCase() === "performance score") {
+    return `${Math.round(numericValue * 100)}%`;
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+}
+
+function getEmployeeMetricDisplay(employee: ManagerDashboardEmployee, label: string): string {
+  const metric = (employee.metrics ?? []).find((item) => item.label === label);
+  if (!metric) return "-";
+
+  return formatMetricDisplay(label, metric.value_numeric ?? metric.value);
+}
+
 export function CurrentEmployeesTable({
   requirements,
   managerDashboard,
@@ -128,6 +164,7 @@ export function CurrentEmployeesTable({
   }
 
   const rows: ManagerDashboardEmployee[] = data?.employees ?? [];
+  const metricColumns = getMetricColumns(rows);
 
   if (!rows.length) {
     return (
@@ -156,7 +193,7 @@ export function CurrentEmployeesTable({
           <div>
             <CardTitle className="text-[11px]">Current Employees</CardTitle>
             <CardDescription className="text-[9px] mt-0.5">
-              Showing {rows.length} active employees
+              Showing {rows.length} active employees for the previous week of the selected date
             </CardDescription>
           </div>
           <div className="flex items-center gap-1.5">
@@ -175,7 +212,7 @@ export function CurrentEmployeesTable({
             {canViewEmployees ? (
               <Button variant="outline" size="sm" className="h-6 text-[10px]" asChild>
                 <Link href={`/${locale}/dashboard/employees`}>
-                  <ExternalLink className="h-3.5 w-3.5 me-1.5" />
+                  <ExternalLink className="h-3.5 w-3.5 " />
                 </Link>
               </Button>
             ) : null}
@@ -190,9 +227,12 @@ export function CurrentEmployeesTable({
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-[9px] uppercase tracking-[0.02em]">Name</TableHead>
-                  <TableHead className="text-[9px] uppercase tracking-[0.02em]">Position</TableHead>
-                  <TableHead className="text-[9px] uppercase tracking-[0.02em]">Base Pay</TableHead>
-                  <TableHead className="text-[9px] uppercase tracking-[0.02em]">Perf. Pay</TableHead>
+                  {/* <TableHead className="text-[9px] uppercase tracking-[0.02em]">Position</TableHead> */}
+                  {metricColumns.map((label) => (
+                    <TableHead key={label} className="text-[9px] uppercase tracking-[0.02em]">
+                      {label}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -204,15 +244,14 @@ export function CurrentEmployeesTable({
                     <TableCell className="text-[10px] py-2">
                       {formatEmployeeName(employee)}
                     </TableCell>
-                    <TableCell className="text-[9px] text-muted-foreground py-2">
+                    {/* <TableCell className="text-[9px] text-muted-foreground py-2">
                       {employee.position}
-                    </TableCell>
-                    <TableCell className="text-[9px] text-muted-foreground py-2">
-                      ${employee.base_pay}
-                    </TableCell>
-                    <TableCell className="text-[9px] text-muted-foreground py-2">
-                      ${employee.performance_pay}
-                    </TableCell>
+                    </TableCell> */}
+                    {metricColumns.map((label) => (
+                      <TableCell key={label} className="text-[9px] text-muted-foreground py-2">
+                        {getEmployeeMetricDisplay(employee, label)}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))}
               </TableBody>
@@ -232,9 +271,20 @@ export function CurrentEmployeesTable({
                   <p className="text-[10px] font-medium">{formatEmployeeName(employee)}</p>
                   <span className="text-[9px] text-muted-foreground">{employee.position}</span>
                 </div>
-                <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                  <span>${employee.base_pay} base</span>
-                  <span>{employee.metric ? employee.metric.value : "—"}</span>
+                <div className="space-y-1 text-[9px] text-muted-foreground">
+                  {metricColumns.length > 0 ? (
+                    metricColumns.map((label) => (
+                      <div key={label} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{label}</span>
+                        <span className="shrink-0">{getEmployeeMetricDisplay(employee, label)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate">Metrics</span>
+                      <span className="shrink-0">-</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -85,7 +85,9 @@ const PRIORITY_CONFIG: Record<string, { variant: BadgeVariant; className: string
 function StatusBadge({ value, label }: { value: string; label: string }) {
   const config = STATUS_CONFIG[value] ?? { variant: "outline" as BadgeVariant, className: "" };
   return (
-    <Badge variant={config.variant} className={cn("text-xs font-medium", config.className)}>
+    // <Badge variant={config.variant} className={cn("text-xs font-medium", config.className)}>
+        <Badge>
+
       {label}
     </Badge>
   );
@@ -144,7 +146,7 @@ function ChangeStatusDialog({ open, issue, storeId, ticketId, onClose, onSuccess
 
   return (
     <Dialog open={open} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t("detailSheet.changeStatus")}</DialogTitle>
           <DialogDescription>{t("detailSheet.changeStatusDesc")}</DialogDescription>
@@ -220,7 +222,7 @@ function AssignDialog({ open, issue, storeId, ticketId, technicians, onClose, on
 
   return (
     <Dialog open={open} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t("detailSheet.assignIssue")}</DialogTitle>
           <DialogDescription>{t("detailSheet.assignIssueDesc")}</DialogDescription>
@@ -307,7 +309,7 @@ function DeferDialog({ open, issue, storeId, ticketId, onClose, onSuccess }: Def
 
   return (
     <Dialog open={open} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t("detailSheet.deferIssue")}</DialogTitle>
           <DialogDescription>{t("detailSheet.deferIssueDesc")}</DialogDescription>
@@ -358,7 +360,7 @@ function FinalNoteDialog({ open, storeId, ticketId, currentNote, onClose, onSucc
 
   return (
     <Dialog open={open} onOpenChange={() => !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t("detailSheet.setFinalNote")}</DialogTitle>
           <DialogDescription>{t("detailSheet.setFinalNoteDesc")}</DialogDescription>

@@ -221,10 +221,10 @@ export interface ApiCatalogIssue {
 export interface ApiCatalogTechnician {
   id: number;
   name: string;
-  phone: string | null;
+  phone?: string | null;
   category_id: number | null;
-  category_name: string | null;
-  deleted_at: string | null;
+  category: { id: number; name: string } | null;
+  deleted_at?: string | null;
 }
 
 export interface ApiCatalogPart {
@@ -253,16 +253,18 @@ export interface ApiTicketAssignment {
   id: number;
   assigned_date: string;
   assigned_hour: string | null;
-  technicians: ApiCatalogTechnician[];
+  ticket_issue_ids: number[] | null;
   delays: ApiTicketAssignmentDelay[];
   created_at: string;
 }
 
 export interface ApiTicketIssueStatusChange {
   id: number;
-  status: ApiEnumField;
-  changed_by: string | null;
+  ticket_issue_id: number;
+  from_status: string;
+  to_status: string;
   reason: string | null;
+  created_by: number | null;
   created_at: string;
 }
 
@@ -270,7 +272,8 @@ export interface ApiTicketIssue {
   id: number;
   ticket_id: number;
   issue_id: number | null;
-  issue_title: string | null;
+  issue: { id: number; title: string; description: string | null } | null;
+  display_title: string | null;
   other_title: string | null;
   priority: ApiEnumField;
   status: ApiEnumField;
@@ -287,6 +290,10 @@ export interface ApiTicketIssue {
 export interface ApiTicket {
   id: number;
   store_id: number | string;
+  store?: {
+    id: number | string;
+    store_number: string;
+  } | null;
   status: ApiEnumField;
   final_note: string | null;
   issues_count?: number;

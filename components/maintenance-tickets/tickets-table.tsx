@@ -39,9 +39,10 @@ function StatusBadge({ status }: { status: string }) {
   const key = status as TicketStatus;
   return (
     <Badge
-      variant={STATUS_VARIANTS[key] ?? "outline"}
-      className={cn("capitalize whitespace-nowrap", STATUS_CLASSES[key])}
+    //   variant={STATUS_VARIANTS[key] ?? "outline"}
+    //   className={cn("capitalize whitespace-nowrap", STATUS_CLASSES[key])}
     >
+        
       {t(key as keyof ReturnType<typeof useTranslations<"maintenanceTickets.status">>)}
     </Badge>
   );

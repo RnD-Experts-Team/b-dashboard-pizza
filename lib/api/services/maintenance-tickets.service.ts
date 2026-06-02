@@ -152,10 +152,10 @@ function transformTechnician(raw: ApiCatalogTechnician): CatalogTechnician {
   return {
     id: raw.id,
     name: raw.name,
-    phone: raw.phone,
+    phone: raw.phone ?? null,
     categoryId: raw.category_id,
-    categoryName: raw.category_name,
-    deletedAt: raw.deleted_at,
+    categoryName: raw.category?.name ?? null,
+    deletedAt: raw.deleted_at ?? null,
   };
 }
 
@@ -164,17 +164,19 @@ function transformAssignment(raw: ApiTicketAssignment): TicketAssignment {
     id: raw.id,
     assignedDate: raw.assigned_date,
     assignedHour: raw.assigned_hour,
-    technicians: (raw.technicians ?? []).map(transformTechnician),
+    technicians: [], // technicians live at the issue level in the API response
     delays: (raw.delays ?? []).map(transformDelay),
     createdAt: raw.created_at,
   };
 }
 
 function transformStatusChange(raw: ApiTicketIssueStatusChange): TicketIssueStatusChange {
+  // API returns raw status strings; build a display-friendly EnumField from to_status
+  const label = raw.to_status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return {
     id: raw.id,
-    status: transformEnumField(raw.status),
-    changedBy: raw.changed_by,
+    status: { value: raw.to_status, label },
+    changedBy: raw.created_by != null ? String(raw.created_by) : null,
     reason: raw.reason,
     createdAt: raw.created_at,
   };
@@ -185,7 +187,7 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     id: raw.id,
     ticketId: raw.ticket_id,
     issueId: raw.issue_id,
-    issueTitle: raw.issue_title,
+    issueTitle: raw.display_title ?? raw.issue?.title ?? null,
     otherTitle: raw.other_title,
     priority: transformEnumField(raw.priority),
     status: transformEnumField(raw.status),
@@ -203,7 +205,7 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
 function transformTicket(raw: ApiTicket): Ticket {
   return {
     id: raw.id,
-    storeId: String(raw.store_id),
+    storeId: raw.store?.store_number ?? String(raw.store_id),
     status: transformEnumField(raw.status),
     finalNote: raw.final_note,
     issueCount: raw.issues_count ?? 0,

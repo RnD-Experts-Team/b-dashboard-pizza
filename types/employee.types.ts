@@ -695,6 +695,7 @@ export interface ManagerDashboardEmployeeBirthday {
 
 export interface ManagerDashboardEmployeeMetric {
   metric_date: string;
+  label: string;
   value: string;
   value_numeric: number;
 }
@@ -706,7 +707,8 @@ export interface ManagerDashboardEmployee {
   position: string;
   base_pay: string;
   performance_pay: string;
-  metric: ManagerDashboardEmployeeMetric | null;
+  metrics: ManagerDashboardEmployeeMetric[];
+  metric?: ManagerDashboardEmployeeMetric | null;
 }
 
 export interface ManagerDashboardStoreData {

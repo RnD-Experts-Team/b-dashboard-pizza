@@ -1133,6 +1133,11 @@
     "title": "Maintenance Tickets",
     "description": "Track and manage maintenance tickets for your store.",
     "refresh": "Refresh",
+    "common": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "optional": "Optional"
+    },
     "showing": "Showing {from}-{to} of {total} ticket(s)",
     "columns": {
       "id": "ID",

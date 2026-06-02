@@ -476,32 +476,34 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog }: Cata
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="w-[95vw] max-w-xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="w-[95vw] max-w-xl flex flex-col max-h-[90vh] overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{t("catalog.title")}</DialogTitle>
           <DialogDescription>{t("catalog.description")}</DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="issues">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs defaultValue="issues" className="flex flex-col flex-1 min-h-0">
+          <TabsList className="grid w-full grid-cols-4 shrink-0">
             <TabsTrigger value="issues" className="text-xs">{t("catalog.tabs.issues")}</TabsTrigger>
             <TabsTrigger value="technicians" className="text-xs">{t("catalog.tabs.technicians")}</TabsTrigger>
             <TabsTrigger value="categories" className="text-xs">{t("catalog.tabs.categories")}</TabsTrigger>
             <TabsTrigger value="parts" className="text-xs">{t("catalog.tabs.parts")}</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="issues" className="mt-4">
-            <IssuesTab onReloadCatalog={onReloadCatalog} />
-          </TabsContent>
-          <TabsContent value="technicians" className="mt-4">
-            <TechniciansTab onReloadCatalog={onReloadCatalog} />
-          </TabsContent>
-          <TabsContent value="categories" className="mt-4">
-            <CategoriesTab onReloadCatalog={onReloadCatalog} />
-          </TabsContent>
-          <TabsContent value="parts" className="mt-4">
-            <PartsTab onReloadCatalog={onReloadCatalog} />
-          </TabsContent>
+          <div className="flex-1 overflow-y-auto min-h-0 mt-4">
+            <TabsContent value="issues" className="mt-0">
+              <IssuesTab onReloadCatalog={onReloadCatalog} />
+            </TabsContent>
+            <TabsContent value="technicians" className="mt-0">
+              <TechniciansTab onReloadCatalog={onReloadCatalog} />
+            </TabsContent>
+            <TabsContent value="categories" className="mt-0">
+              <CategoriesTab onReloadCatalog={onReloadCatalog} />
+            </TabsContent>
+            <TabsContent value="parts" className="mt-0">
+              <PartsTab onReloadCatalog={onReloadCatalog} />
+            </TabsContent>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>
