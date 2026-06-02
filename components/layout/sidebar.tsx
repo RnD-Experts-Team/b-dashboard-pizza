@@ -39,6 +39,7 @@ import {
   Monitor,
   Target,
   LifeBuoy,
+  Ticket,
 } from "lucide-react";
 import {
   Dialog,
@@ -465,6 +466,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
         ],
         // No rule or management permission defined yet — always visible
+      },
+      {
+        title: t("maintenanceTickets"),
+        href: `/${locale}/dashboard/maintenance-tickets`,
+        icon: Ticket,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
+        ],
       },
       
      
