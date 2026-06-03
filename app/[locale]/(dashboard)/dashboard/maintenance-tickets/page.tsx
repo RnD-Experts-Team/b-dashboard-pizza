@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import {
   CatalogManagementDialog,
 } from "@/components/maintenance-tickets";
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
+import type { Ticket } from "@/types/maintenance-tickets.types";
 
 export default function MaintenanceTicketsPage() {
   const t = useTranslations("maintenanceTickets");
@@ -29,6 +30,7 @@ export default function MaintenanceTicketsPage() {
     currentPage,
     filters,
     refetch,
+    setMode,
     clearError,
     goToPage,
     applyFilters,
@@ -39,12 +41,18 @@ export default function MaintenanceTicketsPage() {
   } = useMaintenanceTickets();
 
   const [detailTicketId, setDetailTicketId] = useState<number | null>(null);
+  const [detailStoreId, setDetailStoreId] = useState<string>("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
 
-  function handleTicketClick(id: number) {
-    setDetailTicketId(id);
+  useEffect(() => {
+    setMode("store");
+  }, [setMode]);
+
+  function handleTicketClick(ticket: Ticket) {
+    setDetailTicketId(ticket.id);
+    setDetailStoreId(ticket.storeId);
     setSheetOpen(true);
   }
 
@@ -73,14 +81,14 @@ export default function MaintenanceTicketsPage() {
         </Button>
       </PageHeader>
 
-      {/* Filters bar — shown when store is selected */}
+      {/* Filters bar */}
       {selectedStore && (
         <TicketsFiltersBar
           filters={filters}
           onFiltersChange={applyFilters}
           onCreateClick={() => setCreateOpen(true)}
           onCatalogClick={() => setCatalogOpen(true)}
-          disabled={isLoading}
+          disabled={isLoading || !selectedStore}
         />
       )}
 
@@ -112,6 +120,7 @@ export default function MaintenanceTicketsPage() {
           currentPage={currentPage}
           onPageChange={goToPage}
           onTicketClick={handleTicketClick}
+          onRowChanged={handleMutationSuccess}
         />
       )}
 
@@ -128,8 +137,9 @@ export default function MaintenanceTicketsPage() {
       <TicketDetailSheet
         open={sheetOpen}
         ticketId={detailTicketId}
-        storeId={selectedStore?.storeId ?? ""}
+        storeId={detailStoreId || selectedStore?.storeId || ""}
         technicians={catalogTechnicians}
+        tickets={data?.data ?? []}
         onClose={handleSheetClose}
       />
 

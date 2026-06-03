@@ -1138,6 +1138,13 @@
       "save": "Save",
       "optional": "Optional"
     },
+    "navigator": {
+      "title": "Tickets",
+      "searchPlaceholder": "Search tickets…",
+      "noResults": "No tickets match your search.",
+      "issueCount": "{count} issue(s)",
+      "selectPrompt": "Select a ticket from the sidebar."
+    },
     "showing": "Showing {from}-{to} of {total} ticket(s)",
     "columns": {
       "id": "ID",
@@ -1239,7 +1246,9 @@
       "setFinalNote": "Set Final Note",
       "setFinalNoteDesc": "Add or update the final note for this ticket.",
       "finalNotePlaceholder": "Enter final note...",
-      "actionError": "Action failed. Please try again."
+      "actionError": "Action failed. Please try again.",
+      "noDescription": "No description provided.",
+      "draftSaved": "Draft saved"
     },
     "catalog": {
       "title": "Catalog Management",

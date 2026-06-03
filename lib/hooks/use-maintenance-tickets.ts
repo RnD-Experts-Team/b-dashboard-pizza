@@ -21,8 +21,10 @@ export function useMaintenanceTickets() {
     isRefreshing,
     error,
     currentPage,
+    mode,
     filters,
     fetchTickets,
+    setMode,
     goToPage,
     setFilters,
     clearError,
@@ -40,12 +42,14 @@ export function useMaintenanceTickets() {
 
   // Fetch tickets when the selected store changes
   useEffect(() => {
-    if (selectedStore?.storeId) {
+    if (mode === "global") {
+      fetchTickets(undefined, {}, 1);
+    } else if (selectedStore?.storeId) {
       fetchTickets(selectedStore.storeId, {}, 1);
     } else {
       reset();
     }
-  }, [selectedStore?.storeId, fetchTickets, reset]);
+  }, [mode, selectedStore?.storeId, fetchTickets, reset]);
 
   // Load catalog on mount
   useEffect(() => {
@@ -53,10 +57,12 @@ export function useMaintenanceTickets() {
   }, [loadCatalog]);
 
   const refetch = useCallback(() => {
-    if (selectedStore?.storeId) {
+    if (mode === "global") {
+      fetchTickets(undefined, filters, currentPage);
+    } else if (selectedStore?.storeId) {
       fetchTickets(selectedStore.storeId, filters, currentPage);
     }
-  }, [selectedStore?.storeId, fetchTickets, filters, currentPage]);
+  }, [mode, selectedStore?.storeId, fetchTickets, filters, currentPage]);
 
   const reloadCatalog = useCallback(() => {
     loadCatalog();
@@ -76,8 +82,10 @@ export function useMaintenanceTickets() {
     isRefreshing,
     error,
     currentPage,
+    mode,
     filters,
     refetch,
+    setMode,
     goToPage,
     applyFilters,
     clearError,

@@ -43,7 +43,25 @@ export async function GET(
 
   // Forward allowed filter params
   const forwardParams = new URLSearchParams();
-  for (const key of ["status", "priority", "created_from", "created_to", "page", "per_page", "trashed"]) {
+  for (const key of [
+    "status",
+    "priority",
+    "created_from",
+    "created_to",
+    "issue_id",
+    "issue_status",
+    "assigned_from",
+    "assigned_to",
+    "part_cost_single_gt",
+    "part_cost_total_gt",
+    "technician_id",
+    "creator_id",
+    "trashed",
+    "sort",
+    "dir",
+    "page",
+    "per_page",
+  ]) {
     const v = searchParams.get(key);
     if (v) forwardParams.set(key, v);
   }

@@ -11,6 +11,14 @@ import type {
   StatusChangePayload,
   DeferPayload,
   FinalNotePayload,
+  CreateDiagnosisPayload,
+  CreateAttendanceEntryPayload,
+  CreatePartUsagePayload,
+  CreatePayEntryPayload,
+  CreateWarrantyPayload,
+  AttachTechniciansPayload,
+  DelayAssignmentPayload,
+  ChangeAssignmentTechniciansPayload,
   TicketsFilters,
   ApiTicketsListResponse,
   ApiTicketIssuesResponse,
@@ -19,6 +27,12 @@ import type {
   ApiTicketAssignment,
   ApiTicketAssignmentDelay,
   ApiTicketIssueStatusChange,
+  ApiTicketAttachment,
+  ApiTicketIssueDiagnosis,
+  ApiTicketIssueAttendance,
+  ApiTicketIssuePartUsage,
+  ApiTicketIssuePayEntry,
+  ApiTicketIssueWarranty,
   ApiCatalogIssue,
   ApiCatalogTechnician,
   ApiCatalogPart,
@@ -26,6 +40,12 @@ import type {
   EnumField,
   Ticket,
   TicketIssue,
+  TicketAttachment,
+  TicketIssueDiagnosis,
+  TicketIssueAttendance,
+  TicketIssuePartUsage,
+  TicketIssuePayEntry,
+  TicketIssueWarranty,
   TicketAssignment,
   TicketAssignmentDelay,
   TicketIssueStatusChange,
@@ -197,6 +217,11 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     statusChanges: (raw.status_changes ?? []).map(transformStatusChange),
     technicians: (raw.technicians ?? []).map(transformTechnician),
     children: (raw.children ?? []).map(transformIssue),
+    diagnoses: (raw.diagnoses ?? []).map(transformDiagnosis),
+    attendanceEntries: (raw.attendance_entries ?? []).map(transformAttendance),
+    partUsages: (raw.part_usages ?? []).map(transformPartUsage),
+    payEntries: (raw.pay_entries ?? []).map(transformPayEntry),
+    warranties: (raw.warranties ?? []).map(transformWarranty),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -264,6 +289,122 @@ function transformCatalogPart(raw: ApiCatalogPart): CatalogPart {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/*  FormData builder (multipart endpoints that accept file attachments)    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Converts a plain payload + optional files into a FormData instance.
+ * Arrays are serialised as `key[]` entries; undefined values are skipped.
+ * When no files are supplied, callers should use the raw JSON payload instead
+ * so that Content-Type defaults to application/json.
+ */
+function buildFormData(payload: object, files?: File[]): FormData {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      (value as unknown[]).forEach((item) => form.append(`${key}[]`, String(item)));
+    } else {
+      form.append(key, String(value));
+    }
+  }
+  files?.forEach((file) => form.append("files[]", file));
+  return form;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Lifecycle record transform helpers                                      */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+function transformAttachment(raw: ApiTicketAttachment): TicketAttachment {
+  const fileName = raw.file_name ?? raw.original_name ?? raw.path ?? `attachment-${raw.id}`;
+  const fileSize = raw.file_size ?? raw.size ?? null;
+  const contentType = raw.content_type ?? raw.mime_type ?? null;
+
+  return {
+    id: raw.id,
+    fileName,
+    fileSize,
+    contentType,
+    url: raw.url,
+    createdAt: raw.created_at,
+  };
+}
+
+function transformDiagnosis(raw: ApiTicketIssueDiagnosis): TicketIssueDiagnosis {
+  return {
+    id: raw.id,
+    ticketIssueId: raw.ticket_issue_id,
+    body: raw.body,
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    mistaken: raw.mistaken,
+    createdAt: raw.created_at,
+  };
+}
+
+function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendance {
+  return {
+    id: raw.id,
+    ticketIssueId: raw.ticket_issue_id,
+    technicianId: raw.technician_id,
+    startClock: raw.start_clock,
+    endClock: raw.end_clock,
+    startBreak: raw.start_break,
+    endBreak: raw.end_break,
+    startPartsRun: raw.start_parts_run,
+    endPartsRun: raw.end_parts_run,
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    mistaken: raw.mistaken,
+    createdAt: raw.created_at,
+  };
+}
+
+function transformPartUsage(raw: ApiTicketIssuePartUsage): TicketIssuePartUsage {
+  return {
+    id: raw.id,
+    ticketIssueId: raw.ticket_issue_id,
+    partId: raw.part_id,
+    part: raw.part ? { id: raw.part.id, name: raw.part.name } : null,
+    cost: parseFloat(raw.cost),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    mistaken: raw.mistaken,
+    createdAt: raw.created_at,
+  };
+}
+
+function parseDecimal(value: string | null): number | null {
+  return value != null ? parseFloat(value) : null;
+}
+
+function transformPayEntry(raw: ApiTicketIssuePayEntry): TicketIssuePayEntry {
+  return {
+    id: raw.id,
+    ticketIssueId: raw.ticket_issue_id,
+    technicianId: raw.technician_id,
+    basePay: parseDecimal(raw.base_pay),
+    performancePay: parseDecimal(raw.performance_pay),
+    drivingBasePay: parseDecimal(raw.driving_base_pay),
+    drivingPerformancePay: parseDecimal(raw.driving_performance_pay),
+    drivingTime: parseDecimal(raw.driving_time),
+    milesDriven: parseDecimal(raw.miles_driven),
+    perMileRate: parseDecimal(raw.per_mile_rate),
+    mistaken: raw.mistaken,
+    createdAt: raw.created_at,
+  };
+}
+
+function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
+  return {
+    id: raw.id,
+    ticketIssueId: raw.ticket_issue_id,
+    body: raw.body,
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    mistaken: raw.mistaken,
+    createdAt: raw.created_at,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /*  Service                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -280,6 +421,17 @@ export const maintenanceTicketsService = {
     if (filters?.priority) params.priority = filters.priority;
     if (filters?.created_from) params.created_from = filters.created_from;
     if (filters?.created_to) params.created_to = filters.created_to;
+    if (filters?.issue_id) params.issue_id = filters.issue_id;
+    if (filters?.issue_status) params.issue_status = filters.issue_status;
+    if (filters?.assigned_from) params.assigned_from = filters.assigned_from;
+    if (filters?.assigned_to) params.assigned_to = filters.assigned_to;
+    if (filters?.part_cost_single_gt != null) params.part_cost_single_gt = filters.part_cost_single_gt;
+    if (filters?.part_cost_total_gt != null) params.part_cost_total_gt = filters.part_cost_total_gt;
+    if (filters?.technician_id) params.technician_id = filters.technician_id;
+    if (filters?.creator_id) params.creator_id = filters.creator_id;
+    if (filters?.trashed) params.trashed = filters.trashed;
+    if (filters?.sort) params.sort = filters.sort;
+    if (filters?.dir) params.dir = filters.dir;
     if (filters?.page) params.page = filters.page;
     if (filters?.per_page) params.per_page = filters.per_page;
 
@@ -635,6 +787,290 @@ export const maintenanceTicketsService = {
       });
     } catch (err) { return handleAxiosError(err); }
   },
+
+  /* ── Ticket lifecycle ──────────────────────────────────────────────────── */
+
+  /** Soft-delete a ticket (recoverable via restoreTicket) */
+  async deleteTicket(storeId: string, ticketId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Restore a soft-deleted ticket */
+  async restoreTicket(storeId: string, ticketId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/restore`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** List tickets across all stores (no store scope) */
+  async getGlobalTickets(filters?: TicketsFilters, signal?: AbortSignal): Promise<TicketsListResponse> {
+    const token = requireToken();
+    const params: Record<string, string | number> = {};
+    if (filters?.status) params.status = filters.status;
+    if (filters?.priority) params.priority = filters.priority;
+    if (filters?.created_from) params.created_from = filters.created_from;
+    if (filters?.created_to) params.created_to = filters.created_to;
+    if (filters?.issue_id) params.issue_id = filters.issue_id;
+    if (filters?.issue_status) params.issue_status = filters.issue_status;
+    if (filters?.assigned_from) params.assigned_from = filters.assigned_from;
+    if (filters?.assigned_to) params.assigned_to = filters.assigned_to;
+    if (filters?.part_cost_single_gt != null) params.part_cost_single_gt = filters.part_cost_single_gt;
+    if (filters?.part_cost_total_gt != null) params.part_cost_total_gt = filters.part_cost_total_gt;
+    if (filters?.technician_id) params.technician_id = filters.technician_id;
+    if (filters?.creator_id) params.creator_id = filters.creator_id;
+    if (filters?.trashed) params.trashed = filters.trashed;
+    if (filters?.sort) params.sort = filters.sort;
+    if (filters?.dir) params.dir = filters.dir;
+    if (filters?.page) params.page = filters.page;
+    if (filters?.per_page) params.per_page = filters.per_page;
+    try {
+      const res = await axios.get<ApiTicketsListResponse>(
+        "/api/maintenance-tickets/tickets",
+        { params, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+      );
+      return {
+        data: res.data.data.map(transformTicket),
+        links: transformLinks(res.data),
+        meta: transformMeta(res.data),
+      };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Get a single ticket issue with its full history */
+  async getSingleIssue(storeId: string, ticketId: number, issueId: number, signal?: AbortSignal): Promise<TicketIssue> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: ApiTicketIssue }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+      );
+      return transformIssue(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Assignment mutations ──────────────────────────────────────────────── */
+
+  /** Attach technicians to one or more issues (without scheduling a date) */
+  async attachTechnicians(storeId: string, ticketId: number, payload: AttachTechniciansPayload): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/technicians`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Add a delay record to an existing assignment (reschedule with history) */
+  async delayAssignment(
+    storeId: string,
+    ticketId: number,
+    assignmentId: number,
+    payload: DelayAssignmentPayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/delays`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Replace the technician list on an existing assignment */
+  async changeAssignmentTechnicians(
+    storeId: string,
+    ticketId: number,
+    assignmentId: number,
+    payload: ChangeAssignmentTechniciansPayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/change-technicians`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Diagnoses ─────────────────────────────────────────────────────────── */
+
+  /** Add a diagnosis to one or more ticket issues (optionally with attachments) */
+  async createDiagnosis(
+    storeId: string,
+    ticketId: number,
+    payload: CreateDiagnosisPayload,
+    files?: File[]
+  ): Promise<TicketIssueDiagnosis> {
+    const token = requireToken();
+    const body = buildFormData(payload, files);
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueDiagnosis }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/diagnoses`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+      );
+      return transformDiagnosis(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark a diagnosis as mistaken (retains record; excluded from rollups) */
+  async markDiagnosisMistaken(storeId: string, ticketId: number, diagnosisId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/diagnoses/${diagnosisId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Attendance entries ────────────────────────────────────────────────── */
+
+  /** Add an attendance/time entry to one or more ticket issues */
+  async createAttendanceEntry(
+    storeId: string,
+    ticketId: number,
+    payload: CreateAttendanceEntryPayload,
+    files?: File[]
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    const body = files?.length ? buildFormData(payload, files) : payload;
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 30_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark an attendance entry as mistaken */
+  async markAttendanceMistaken(storeId: string, ticketId: number, attendanceId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Part usages ───────────────────────────────────────────────────────── */
+
+  /** Add a part-usage record to one or more ticket issues */
+  async createPartUsage(
+    storeId: string,
+    ticketId: number,
+    payload: CreatePartUsagePayload,
+    files?: File[]
+  ): Promise<TicketIssuePartUsage> {
+    const token = requireToken();
+    const body = files?.length ? buildFormData(payload, files) : payload;
+    try {
+      const res = await axios.post<{ data: ApiTicketIssuePartUsage }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 30_000 }
+      );
+      return transformPartUsage(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark a part-usage record as mistaken (cost excluded from rollups) */
+  async markPartUsageMistaken(storeId: string, ticketId: number, partUsageId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages/${partUsageId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Pay entries ───────────────────────────────────────────────────────── */
+
+  /** Add a pay entry for a technician to one or more ticket issues */
+  async createPayEntry(
+    storeId: string,
+    ticketId: number,
+    payload: CreatePayEntryPayload
+  ): Promise<TicketIssuePayEntry> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssuePayEntry }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/pay-entries`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformPayEntry(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark a pay entry as mistaken */
+  async markPayEntryMistaken(storeId: string, ticketId: number, payEntryId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/pay-entries/${payEntryId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Warranties ────────────────────────────────────────────────────────── */
+
+  /** Add a warranty record to one or more ticket issues */
+  async createWarranty(
+    storeId: string,
+    ticketId: number,
+    payload: CreateWarrantyPayload,
+    files?: File[]
+  ): Promise<TicketIssueWarranty> {
+    const token = requireToken();
+    const body = files?.length ? buildFormData(payload, files) : payload;
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueWarranty }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 30_000 }
+      );
+      return transformWarranty(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark a warranty as mistaken */
+  async markWarrantyMistaken(storeId: string, ticketId: number, warrantyId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties/${warrantyId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Export ────────────────────────────────────────────────────────────── */
 
   /** Returns the proxied export URL — call via plain anchor/window.open */
   getExportUrl(): string {

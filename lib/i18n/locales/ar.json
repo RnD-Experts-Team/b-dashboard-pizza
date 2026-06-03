@@ -1138,6 +1138,13 @@
       "save": "حفظ",
       "optional": "اختياري"
     },
+    "navigator": {
+      "title": "التذاكر",
+      "searchPlaceholder": "ابحث عن تذكرة...",
+      "noResults": "لا توجد تذاكر مطابقة.",
+      "issueCount": "{count} مشكلة",
+      "selectPrompt": "اختر تذكرة من الشريط الجانبي."
+    },
     "showing": "عرض {from}-{to} من {total} تذكرة",
     "columns": {
       "id": "الرقم",
@@ -1239,7 +1246,9 @@
       "setFinalNote": "تعيين الملاحظة الختامية",
       "setFinalNoteDesc": "أضف أو حدّث الملاحظة الختامية لهذه التذكرة.",
       "finalNotePlaceholder": "أدخل الملاحظة الختامية...",
-      "actionError": "فشل الإجراء. حاول مجدداً."
+      "actionError": "فشل الإجراء. حاول مجدداً.",
+      "noDescription": "لا يوجد وصف.",
+      "draftSaved": "تم حفظ المسودة"
     },
     "catalog": {
       "title": "إدارة الكتالوج",

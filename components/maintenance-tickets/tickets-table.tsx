@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
-import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { TicketsListResponse, Ticket, TicketStatus } from "@/types/maintenance-tickets.types";
+import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Status badge                                                            */
@@ -54,15 +55,27 @@ function StatusBadge({ status }: { status: string }) {
 
 interface TicketRowProps {
   ticket: Ticket;
-  onClick: () => void;
+  onClick: (ticket: Ticket) => void;
+  onChanged: () => void;
 }
 
-function TicketRow({ ticket, onClick }: TicketRowProps) {
+function TicketRow({ ticket, onClick, onChanged }: TicketRowProps) {
   const t = useTranslations("maintenanceTickets");
+
+  async function handleDelete() {
+    await maintenanceTicketsService.deleteTicket(ticket.storeId, ticket.id);
+    onChanged();
+  }
+
+  async function handleRestore() {
+    await maintenanceTicketsService.restoreTicket(ticket.storeId, ticket.id);
+    onChanged();
+  }
+
   return (
     <TableRow
       className="cursor-pointer transition-colors hover:bg-muted/50"
-      onClick={onClick}
+      onClick={() => onClick(ticket)}
     >
       <TableCell className="font-mono text-sm font-medium">#{ticket.id}</TableCell>
       <TableCell>
@@ -76,6 +89,21 @@ function TicketRow({ ticket, onClick }: TicketRowProps) {
       <TableCell className="text-sm text-muted-foreground">{ticket.storeId}</TableCell>
       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
         {format(new Date(ticket.createdAt), "MMM d, yyyy")}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          {ticket.deletedAt ? (
+            <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleRestore}>
+              <RotateCcw className="h-3.5 w-3.5 me-1" />
+              Restore
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleDelete}>
+              <Trash2 className="h-3.5 w-3.5 me-1" />
+              Delete
+            </Button>
+          )}
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -156,7 +184,8 @@ export interface TicketsTableProps {
   isRefreshing: boolean;
   currentPage: number;
   onPageChange: (page: number) => void;
-  onTicketClick: (id: number) => void;
+  onTicketClick: (ticket: Ticket) => void;
+  onRowChanged: () => void;
 }
 
 export function TicketsTable({
@@ -165,6 +194,7 @@ export function TicketsTable({
   currentPage,
   onPageChange,
   onTicketClick,
+  onRowChanged,
 }: TicketsTableProps) {
   const t = useTranslations("maintenanceTickets");
 
@@ -187,6 +217,7 @@ export function TicketsTable({
               <TableHead>{t("columns.issues")}</TableHead>
               <TableHead>{t("columns.store")}</TableHead>
               <TableHead>{t("columns.createdAt")}</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -194,7 +225,8 @@ export function TicketsTable({
               <TicketRow
                 key={ticket.id}
                 ticket={ticket}
-                onClick={() => onTicketClick(ticket.id)}
+                onClick={onTicketClick}
+                onChanged={onRowChanged}
               />
             ))}
           </TableBody>
