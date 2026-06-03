@@ -92,12 +92,12 @@ export function TicketsFiltersBar({
 
       <div className="ms-auto flex items-center gap-2">
         {/* Export */}
-        <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting || disabled}>
+        {/* <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting || disabled}>
           {isExporting
             ? <span className="me-1.5 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
             : <Download className="me-1.5 h-4 w-4" />}
           {t("filters.export") || "Export"}
-        </Button>
+        </Button> */}
 
         <Button variant="outline" size="sm" onClick={() => setAdvancedOpen((v) => !v)} disabled={disabled}>
           <SlidersHorizontal className="me-1.5 h-4 w-4" />

@@ -703,10 +703,11 @@ export interface ManagerDashboardEmployeeMetric {
 export interface ManagerDashboardEmployee {
   employee_id: number;
   name: ManagerDashboardEmployeeName;
+  status?: string | null;
   birthday: ManagerDashboardEmployeeBirthday;
-  position: string;
-  base_pay: string;
-  performance_pay: string;
+  position: string | null;
+  base_pay: string | null;
+  performance_pay: string | null;
   metrics: ManagerDashboardEmployeeMetric[];
   metric?: ManagerDashboardEmployeeMetric | null;
 }

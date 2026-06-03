@@ -145,8 +145,8 @@ export function EmployeeBirthday({ managerDashboard, requirements, className }: 
               </div>
 
               {/* Cake icon */}
-              <div className="shrink-0">
-                <span className="text-sm">🎂</span>
+              <div className="shrink-0 rounded p-0.5 bg-pink-500/15 dark:bg-pink-500/20">
+                <Cake className="h-3 w-3 text-pink-500" />
               </div>
             </div>
           ))
