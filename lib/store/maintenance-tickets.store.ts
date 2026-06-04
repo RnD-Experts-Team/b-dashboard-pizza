@@ -56,7 +56,8 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
     fetchTickets: async (storeId?: string, filters?: TicketsFilters, page = 1) => {
       // Cancel any in-flight request
       if (_abortController) _abortController.abort();
-      _abortController = new AbortController();
+      const controller = new AbortController();
+      _abortController = controller;
 
       const mode = get().mode;
       if (mode === "store" && !storeId) {
@@ -86,18 +87,18 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
       try {
         const result =
           mode === "global"
-            ? await maintenanceTicketsService.getGlobalTickets(mergedFilters, _abortController.signal)
+            ? await maintenanceTicketsService.getGlobalTickets(mergedFilters, controller.signal)
             : await maintenanceTicketsService.getTickets(
                 storeId as string,
                 mergedFilters,
-                _abortController.signal
+                controller.signal
               );
 
-        if (_abortController.signal.aborted) return;
+        if (controller.signal.aborted || _abortController !== controller) return;
 
         set({ data: result, isLoading: false, isRefreshing: false });
       } catch (err) {
-        if (_abortController.signal.aborted) return;
+        if (controller.signal.aborted || _abortController !== controller) return;
 
         let errorState: TicketsErrorState;
         if (err instanceof MaintenanceTicketsError) {

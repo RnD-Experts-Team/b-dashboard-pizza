@@ -458,15 +458,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     label: "Reports",
     icon: FileText,
     items: [
-      {
-        title: t("maintenance"),
-        href: `/${locale}/dashboard/maintenance`,
-        icon: HardHat,
-        requirements: [
-          { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
-        ],
-        // No rule or management permission defined yet — always visible
-      },
+      // {
+      //   title: t("maintenance"),
+      //   href: `/${locale}/dashboard/maintenance`,
+      //   icon: HardHat,
+      //   requirements: [
+      //     { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
+      //   ],
+      //   // No rule or management permission defined yet — always visible
+      // },
       {
         title: t("maintenanceTickets"),
         href: `/${locale}/dashboard/maintenance-tickets`,

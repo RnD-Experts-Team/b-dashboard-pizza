@@ -983,12 +983,12 @@ export const maintenanceTicketsService = {
     files?: File[]
   ): Promise<TicketIssuePartUsage> {
     const token = requireToken();
-    const body = files?.length ? buildFormData(payload, files) : payload;
+    const body = buildFormData(payload, files);
     try {
       const res = await axios.post<{ data: ApiTicketIssuePartUsage }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
       );
       return transformPartUsage(res.data.data);
     } catch (err) { return handleAxiosError(err); }
@@ -1047,12 +1047,12 @@ export const maintenanceTicketsService = {
     files?: File[]
   ): Promise<TicketIssueWarranty> {
     const token = requireToken();
-    const body = files?.length ? buildFormData(payload, files) : payload;
+    const body = buildFormData(payload, files);
     try {
       const res = await axios.post<{ data: ApiTicketIssueWarranty }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
       );
       return transformWarranty(res.data.data);
     } catch (err) { return handleAxiosError(err); }

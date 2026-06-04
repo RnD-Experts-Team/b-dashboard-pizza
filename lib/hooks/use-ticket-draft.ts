@@ -59,7 +59,7 @@ export interface TicketDraft {
   issues: Record<string, IssueDraft>;
 }
 
-const EMPTY_ISSUE_DRAFT: IssueDraft = {
+export const EMPTY_ISSUE_DRAFT: IssueDraft = {
   assignDate: "",
   assignHour: "",
   assignTechs: [],

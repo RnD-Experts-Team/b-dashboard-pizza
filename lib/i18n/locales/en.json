@@ -1133,6 +1133,14 @@
     "title": "Maintenance Tickets",
     "description": "Track and manage maintenance tickets for your store.",
     "refresh": "Refresh",
+    "groupBy": {
+      "label": "Group by",
+      "none": "No grouping",
+      "status": "Status",
+      "priority": "Priority",
+      "technician": "Technician",
+      "part": "Part"
+    },
     "common": {
       "cancel": "Cancel",
       "save": "Save",
