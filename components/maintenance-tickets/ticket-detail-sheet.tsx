@@ -68,6 +68,7 @@ import type {
   TicketIssuesResponse,
   IssueStatus,
   CatalogTechnician,
+  CatalogPart,
 } from "@/types/maintenance-tickets.types";
 import {
   useTicketDraft,
@@ -544,22 +545,65 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Attendance</p>
-      <Select value={issueDraft.attendanceTechnicianId} onValueChange={(v) => onPatchDraft({ attendanceTechnicianId: v })}>
-        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
-        <SelectContent>
-          {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
-            <SelectItem key={tech.id} value={String(tech.id)}>{tech.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <div className="grid grid-cols-2 gap-2">
-        <Input type="datetime-local" className="h-8" value={issueDraft.attendanceStartClock} onChange={(e) => onPatchDraft({ attendanceStartClock: e.target.value })} />
-        <Input type="datetime-local" className="h-8" value={issueDraft.attendanceEndClock} onChange={(e) => onPatchDraft({ attendanceEndClock: e.target.value })} />
-        <Input type="datetime-local" className="h-8" value={issueDraft.attendanceStartBreak} onChange={(e) => onPatchDraft({ attendanceStartBreak: e.target.value })} />
-        <Input type="datetime-local" className="h-8" value={issueDraft.attendanceEndBreak} onChange={(e) => onPatchDraft({ attendanceEndBreak: e.target.value })} />
-        <Input type="datetime-local" className="h-8" value={issueDraft.attendanceStartPartsRun} onChange={(e) => onPatchDraft({ attendanceStartPartsRun: e.target.value })} />
-        <Input type="datetime-local" className="h-8" value={issueDraft.attendanceEndPartsRun} onChange={(e) => onPatchDraft({ attendanceEndPartsRun: e.target.value })} />
+
+      {/* Technician (required) */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Technician <span className="text-destructive">*</span></Label>
+        <Select value={issueDraft.attendanceTechnicianId} onValueChange={(v) => onPatchDraft({ attendanceTechnicianId: v })}>
+          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
+          <SelectContent>
+            {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
+              <SelectItem key={tech.id} value={String(tech.id)}>{tech.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Work Clock */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Clock in</Label>
+            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceStartClock} onChange={(e) => onPatchDraft({ attendanceStartClock: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Clock out</Label>
+            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceEndClock} onChange={(e) => onPatchDraft({ attendanceEndClock: e.target.value })} />
+          </div>
+        </div>
+      </div>
+
+      {/* Break */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Break</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Break start</Label>
+            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceStartBreak} onChange={(e) => onPatchDraft({ attendanceStartBreak: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Break end</Label>
+            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceEndBreak} onChange={(e) => onPatchDraft({ attendanceEndBreak: e.target.value })} />
+          </div>
+        </div>
+      </div>
+
+      {/* Parts Run */}
+      <div className="space-y-1.5">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Depart</Label>
+            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceStartPartsRun} onChange={(e) => onPatchDraft({ attendanceStartPartsRun: e.target.value })} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Return</Label>
+            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceEndPartsRun} onChange={(e) => onPatchDraft({ attendanceEndPartsRun: e.target.value })} />
+          </div>
+        </div>
+      </div>
+
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
@@ -575,11 +619,24 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
+  const [partsLoading, setPartsLoading] = useState(true);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setPartsLoading(true);
+    maintenanceTicketsService.getCatalogParts(ctrl.signal)
+      .then((parts) => setCatalogParts(parts.filter((p) => !p.deletedAt)))
+      .catch(() => {})
+      .finally(() => setPartsLoading(false));
+    return () => ctrl.abort();
+  }, []);
+
   async function handleSubmit() {
     const partId = asOptionalNumber(issueDraft.partId);
     const partCost = asOptionalNumber(issueDraft.partCost);
     if (!partId || partCost == null) {
-      setError("Part ID and cost are required.");
+      setError("Part and cost are required.");
       return;
     }
     setIsSubmitting(true);
@@ -600,23 +657,64 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       setIsSubmitting(false);
     }
   }
+
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Part Usage</p>
-      <div className="grid grid-cols-2 gap-2">
-        <Input type="number" className="h-8" placeholder="Part ID" value={issueDraft.partId} onChange={(e) => onPatchDraft({ partId: e.target.value })} />
-        <Input type="number" className="h-8" placeholder="Cost" value={issueDraft.partCost} onChange={(e) => onPatchDraft({ partCost: e.target.value })} />
+
+      {/* Part selector — shows name, stores ID */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Part <span className="text-destructive">*</span></Label>
+        <Select
+          value={issueDraft.partId}
+          onValueChange={(v) => onPatchDraft({ partId: v })}
+          disabled={partsLoading}
+        >
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue placeholder={partsLoading ? "Loading parts…" : "Select a part"} />
+          </SelectTrigger>
+          <SelectContent>
+            {catalogParts.length === 0 && !partsLoading && (
+              <div className="px-3 py-2 text-xs text-muted-foreground">No parts in catalog</div>
+            )}
+            {catalogParts.map((part) => (
+              <SelectItem key={part.id} value={String(part.id)}>
+                {part.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <Input
-        type="file"
-        multiple
-        className="h-8"
-        onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-      />
+
+      {/* Cost */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Cost ($) <span className="text-destructive">*</span></Label>
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          className="h-8"
+          placeholder="0.00"
+          value={issueDraft.partCost}
+          onChange={(e) => onPatchDraft({ partCost: e.target.value })}
+        />
+      </div>
+
+      {/* Attachments */}
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Attachments</Label>
+        <Input
+          type="file"
+          multiple
+          className="h-8"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+        />
+      </div>
+
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || partsLoading}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -1089,10 +1187,12 @@ type ActiveAction =
 function GroupSection({
   label,
   count,
+  subtitle,
   children,
 }: {
   label: string;
   count: number;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(true);
@@ -1116,7 +1216,16 @@ function GroupSection({
         </span>
         <div className="flex-1 h-px bg-border ms-1" />
       </button>
-      {open && <div>{children}</div>}
+      {open && (
+        <div>
+          {subtitle && (
+            <p className="mb-2 text-[11px] text-muted-foreground italic ps-5">
+              {subtitle}
+            </p>
+          )}
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -1766,13 +1875,13 @@ function RightPanel({
             )}
             {/* ── Group-by section headers ─────────────────────────────── */}
             {groupBy !== "none" && (() => {
-              // Derive a group key for each ROOT issue (deferred children inherit parent's group)
+              // Derive group keys for ANY issue (root or child) based on its own data
               const getGroupKeys = (iss: TicketIssue): string[] => {
                 if (groupBy === "status") return [iss.status.label];
                 if (groupBy === "priority") return [iss.priority.label];
                 if (groupBy === "technician") {
                   return iss.technicians.length > 0
-                    ? iss.technicians.map((t) => t.name)
+                    ? iss.technicians.map((tech) => tech.name)
                     : ["Unassigned"];
                 }
                 if (groupBy === "part") {
@@ -1784,86 +1893,114 @@ function RightPanel({
                 return ["Other"];
               };
 
-              // Build ordered group → root issues map
+              // Place every issue (root + children) into groups by its own attributes
               const orderedKeys: string[] = [];
-              const groupedRoots = new Map<string, TicketIssue[]>();
-              // childToRoot map for descendants
-              const childToRoot = new Map<number, number>();
+              const groupedIssues = new Map<string, TicketIssue[]>();
               for (const iss of issuesResponse.data) {
-                if (iss.parentId == null) childToRoot.set(iss.id, iss.id);
-                else childToRoot.set(iss.id, childToRoot.get(iss.parentId) ?? iss.id);
-              }
-              for (const iss of issuesResponse.data) {
-                if (iss.parentId != null) continue; // only roots drive groups
                 for (const key of getGroupKeys(iss)) {
-                  if (!groupedRoots.has(key)) { groupedRoots.set(key, []); orderedKeys.push(key); }
-                  groupedRoots.get(key)!.push(iss);
+                  if (!groupedIssues.has(key)) { groupedIssues.set(key, []); orderedKeys.push(key); }
+                  groupedIssues.get(key)!.push(iss);
                 }
               }
-              // descendants map per root id
-              const descendantsOf = new Map<number, TicketIssue[]>();
-              for (const iss of issuesResponse.data) {
-                if (iss.parentId == null) continue;
-                const rootId = childToRoot.get(iss.id)!;
-                if (!descendantsOf.has(rootId)) descendantsOf.set(rootId, []);
-                descendantsOf.get(rootId)!.push(iss);
-              }
 
-              const renderGroup = (rootIssue: TicketIssue) => {
-                const descs = descendantsOf.get(rootIssue.id) ?? [];
-                return (
-                <div key={rootIssue.id}>
-                  <IssueNode
-                    issue={rootIssue}
-                    storeId={storeId}
-                    ticketId={activeTicketId!}
-                    technicians={technicians}
-                    isExpanded={draft.isIssueExpanded(rootIssue.id)}
-                    onToggleExpand={() => draft.toggleIssueExpanded(rootIssue.id)}
-                    issueDraft={draft.getIssueDraft(rootIssue.id)}
-                    onPatchDraft={(patch) => draft.patchIssueDraft(rootIssue.id, patch)}
-                    onClearDraftFields={(keys) => draft.clearIssueDraftFields(rootIssue.id, keys)}
-                    onReload={onRefresh}
-                    depth={0}
-                    isLast={descs.length === 0}
-                    isSelectMode={isSelectMode}
-                    selectedIssueIds={selectedIssueIds}
-                    onToggleSelectId={toggleIssueSelect}
-                  />
-                  {descs.length > 0 && (
-                    <div className="ms-[9px]">
-                      {descs.map((child, ci) => (
-                        <div key={child.id} className="relative ps-5">
-                          <div className={cn("absolute start-0 w-px bg-border", ci === descs.length - 1 ? "top-0 h-3" : "top-0 bottom-0")} />
-                          <div className="absolute start-0 top-3 h-px w-5 bg-border" />
-                          <IssueNode
-                            issue={child}
-                            storeId={storeId}
-                            ticketId={activeTicketId!}
-                            technicians={technicians}
-                            isExpanded={draft.isIssueExpanded(child.id)}
-                            onToggleExpand={() => draft.toggleIssueExpanded(child.id)}
-                            issueDraft={draft.getIssueDraft(child.id)}
-                            onPatchDraft={(patch) => draft.patchIssueDraft(child.id, patch)}
-                            onClearDraftFields={(keys) => draft.clearIssueDraftFields(child.id, keys)}
-                            onReload={onRefresh}
-                            depth={1}
-                            isLast={true}
-                            isSelectMode={isSelectMode}
-                            selectedIssueIds={selectedIssueIds}
-                            onToggleSelectId={toggleIssueSelect}
-                          />
+              // Subtitle per group key based on groupBy type
+              const getGroupSubtitle = (key: string): string => {
+                if (groupBy === "technician") {
+                  return key === "Unassigned"
+                    ? "These issues have no assigned technician"
+                    : `Note: ${key} has worked the same attendance time for the following issues`;
+                }
+                if (groupBy === "part") {
+                  return key === "No parts"
+                    ? "These issues have no parts added"
+                    : `Note: this part was bought one time and shared across the following issues`;
+                }
+                if (groupBy === "status") return `These issues share the same status: ${key}`;
+                if (groupBy === "priority") return `These issues share the same priority: ${key}`;
+                return "";
+              };
+
+              // Within each group render the same flat-sibling layout as no-grouping:
+              // group-root = issue whose parent is absent from this group
+              // all descendants rendered as flat siblings with T/L connectors
+              const renderGroupContent = (issues: TicketIssue[]) => {
+                const inGroup = new Set(issues.map((i) => i.id));
+                const childToGroupRoot = new Map<number, number>();
+                const groupRootOrder: number[] = [];
+                const gMap = new Map<number, { root: TicketIssue; descendants: TicketIssue[] }>();
+                for (const iss of issues) {
+                  const isGroupRoot = iss.parentId == null || !inGroup.has(iss.parentId);
+                  if (isGroupRoot) {
+                    childToGroupRoot.set(iss.id, iss.id);
+                    gMap.set(iss.id, { root: iss, descendants: [] });
+                    groupRootOrder.push(iss.id);
+                  } else {
+                    const rootId = childToGroupRoot.get(iss.parentId!) ?? iss.id;
+                    childToGroupRoot.set(iss.id, rootId);
+                    gMap.get(rootId)?.descendants.push(iss);
+                  }
+                }
+                return groupRootOrder.map((rootId) => {
+                  const grp = gMap.get(rootId)!;
+                  return (
+                    <div key={rootId} className="mb-1">
+                      <IssueNode
+                        issue={grp.root}
+                        storeId={storeId}
+                        ticketId={activeTicketId!}
+                        technicians={technicians}
+                        isExpanded={draft.isIssueExpanded(grp.root.id)}
+                        onToggleExpand={() => draft.toggleIssueExpanded(grp.root.id)}
+                        issueDraft={draft.getIssueDraft(grp.root.id)}
+                        onPatchDraft={(patch) => draft.patchIssueDraft(grp.root.id, patch)}
+                        onClearDraftFields={(keys) => draft.clearIssueDraftFields(grp.root.id, keys)}
+                        onReload={onRefresh}
+                        depth={0}
+                        isLast={grp.descendants.length === 0}
+                        isSelectMode={isSelectMode}
+                        selectedIssueIds={selectedIssueIds}
+                        onToggleSelectId={toggleIssueSelect}
+                      />
+                      {grp.descendants.length > 0 && (
+                        <div className="ms-[9px]">
+                          {grp.descendants.map((desc, di) => (
+                            <div key={desc.id} className="relative ps-5">
+                              <div className={cn("absolute start-0 w-px bg-border", di === grp.descendants.length - 1 ? "top-0 h-3" : "top-0 bottom-0")} />
+                              <div className="absolute start-0 top-3 h-px w-5 bg-border" />
+                              <IssueNode
+                                issue={desc}
+                                storeId={storeId}
+                                ticketId={activeTicketId!}
+                                technicians={technicians}
+                                isExpanded={draft.isIssueExpanded(desc.id)}
+                                onToggleExpand={() => draft.toggleIssueExpanded(desc.id)}
+                                issueDraft={draft.getIssueDraft(desc.id)}
+                                onPatchDraft={(patch) => draft.patchIssueDraft(desc.id, patch)}
+                                onClearDraftFields={(keys) => draft.clearIssueDraftFields(desc.id, keys)}
+                                onReload={onRefresh}
+                                depth={1}
+                                isLast={true}
+                                isSelectMode={isSelectMode}
+                                selectedIssueIds={selectedIssueIds}
+                                onToggleSelectId={toggleIssueSelect}
+                              />
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
-                </div>
-                );
+                  );
+                });
               };
 
               return orderedKeys.map((key) => (
-                <GroupSection key={key} label={key} count={groupedRoots.get(key)!.length}>
-                  {groupedRoots.get(key)!.map(renderGroup)}
+                <GroupSection
+                  key={key}
+                  label={key}
+                  count={groupedIssues.get(key)!.length}
+                  subtitle={getGroupSubtitle(key)}
+                >
+                  {renderGroupContent(groupedIssues.get(key)!)}
                 </GroupSection>
               ));
             })()}
