@@ -1188,11 +1188,14 @@ function GroupSection({
   label,
   count,
   subtitle,
+  actionKind,
   children,
 }: {
   label: string;
   count: number;
   subtitle?: string;
+  /** null = not an action group (status/priority); shared/solo = action-based group */
+  actionKind?: "shared" | "solo" | null;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(true);
@@ -1214,6 +1217,16 @@ function GroupSection({
         <span className="ms-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
           {count}
         </span>
+        {actionKind === "shared" && (
+          <span className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+            Shared action
+          </span>
+        )}
+        {actionKind === "solo" && (
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            Solo action
+          </span>
+        )}
         <div className="flex-1 h-px bg-border ms-1" />
       </button>
       {open && (
@@ -1247,6 +1260,22 @@ interface IssueNodeProps {
   isSelectMode?: boolean;
   selectedIssueIds?: ReadonlySet<number>;
   onToggleSelectId?: (id: number) => void;
+  /** IDs of part_usage records that appear on more than one issue */
+  sharedPartIds?: ReadonlySet<number>;
+  /** IDs of attendance_entry records that appear on more than one issue */
+  sharedAttendanceIds?: ReadonlySet<number>;
+  /** map: record id -> all issue ids that share this part usage record */
+  sharedPartIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
+  /** map: record id -> all issue ids that share this attendance record */
+  sharedAttendanceIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
+  /** map: issue id -> display title */
+  issueTitleById?: ReadonlyMap<number, string>;
+  /** trigger transient highlight animation for issue cards */
+  onHighlightIssues?: (issueIds: number[]) => void;
+  /** show shared indicator chip in card header row (used for no-grouping mode) */
+  showSharedIndicatorWhenCollapsed?: boolean;
+  /** whether this card should show transient highlight animation */
+  isHighlighted?: boolean;
 }
 
 function IssueNode({
@@ -1265,11 +1294,22 @@ function IssueNode({
   isSelectMode = false,
   selectedIssueIds,
   onToggleSelectId,
+  sharedPartIds,
+  sharedAttendanceIds,
+  sharedPartIssueIdsByRecordId,
+  sharedAttendanceIssueIdsByRecordId,
+  issueTitleById,
+  onHighlightIssues,
+  showSharedIndicatorWhenCollapsed = false,
+  isHighlighted = false,
 }: IssueNodeProps) {
   const t = useTranslations("maintenanceTickets");
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
 
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
+  const hasSharedAction =
+    issue.partUsages.some((item) => Boolean(sharedPartIds?.has(item.id))) ||
+    issue.attendanceEntries.some((item) => Boolean(sharedAttendanceIds?.has(item.id)));
   const canAssign = ["pending", "assigned"].includes(issue.status.value);
   const canDefer = issue.status.value !== "complete";
 
@@ -1311,10 +1351,18 @@ function IssueNode({
 
         {/* Card */}
         <div className="flex-1 min-w-0 pb-4">
-          <div className="rounded-lg border bg-card overflow-hidden">
+          <div
+            className={cn(
+              "relative rounded-lg border bg-card overflow-hidden transition-colors",
+              isHighlighted && "ring-2 ring-muted-foreground/40"
+            )}
+          >
+            {isHighlighted && (
+              <div className="pointer-events-none absolute inset-0 z-0 bg-muted/45 animate-pulse" />
+            )}
             {/* Header (always visible) */}
             <button type="button" onClick={onToggleExpand}
-              className="w-full flex items-start gap-3 px-4 py-3 text-start hover:bg-muted/30 transition-colors group">
+              className="relative z-10 w-full flex items-start gap-3 px-4 py-3 text-start hover:bg-muted/30 transition-colors group">
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {issue.parentId != null && (
@@ -1327,6 +1375,12 @@ function IssueNode({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <StatusChip label={issue.status.label} />
                   <PriorityChip label={issue.priority.label} />
+                  {showSharedIndicatorWhenCollapsed && hasSharedAction && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      Shared
+                    </span>
+                  )}
                   <span className="text-[10px] font-mono text-muted-foreground">#{issue.id}</span>
                 </div>
               </div>
@@ -1337,7 +1391,7 @@ function IssueNode({
 
             {/* Expandable body */}
             {isExpanded && (
-              <div className="border-t px-4 py-3 space-y-3">
+              <div className="relative z-10 border-t px-4 py-3 space-y-3">
                 {/* Description */}
                 {issue.description ? (
                   <p className="text-sm text-muted-foreground leading-relaxed">{issue.description}</p>
@@ -1468,29 +1522,91 @@ function IssueNode({
                 {issue.attendanceEntries.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attendance</p>
-                    {issue.attendanceEntries.map((item) => (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through") }>
-                        <Wrench className="h-3 w-3" />
-                        <span>Tech #{item.technicianId}</span>
-                        {item.startClock && <span>{item.startClock}</span>}
-                        {item.endClock && <span>- {item.endClock}</span>}
-                        {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                      </div>
-                    ))}
+                    {issue.attendanceEntries.map((item) => {
+                      const sharedWithIds = (sharedAttendanceIssueIdsByRecordId?.get(item.id) ?? [])
+                        .filter((id) => id !== issue.id);
+                      const isShared = Boolean(sharedAttendanceIds?.has(item.id));
+                      const idsToHighlight = [issue.id, ...sharedWithIds];
+                      return (
+                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through")}>
+                          <Wrench className="h-3 w-3" />
+                          <span>Tech #{item.technicianId}</span>
+                          {item.startClock && <span>{item.startClock}</span>}
+                          {item.endClock && <span>- {item.endClock}</span>}
+                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                          {isShared && (
+                            <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                              Shared action
+                            </span>
+                          )}
+                          {isShared && sharedWithIds.length > 0 && (
+                            <div className="basis-full ps-5 text-[11px] text-muted-foreground">
+                              Shared with:{" "}
+                              {sharedWithIds.map((otherId, index) => (
+                                <span key={otherId}>
+                                  <button
+                                    type="button"
+                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onHighlightIssues?.(idsToHighlight);
+                                    }}
+                                  >
+                                    {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                  </button>
+                                  {index < sharedWithIds.length - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
                 {issue.partUsages.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Part Usage</p>
-                    {issue.partUsages.map((item) => (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through") }>
-                        <Package className="h-3 w-3" />
-                        <span>{item.part?.name || `Part #${item.partId}`}</span>
-                        <span className="font-medium">${item.cost.toFixed(2)}</span>
-                        {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                      </div>
-                    ))}
+                    {issue.partUsages.map((item) => {
+                      const sharedWithIds = (sharedPartIssueIdsByRecordId?.get(item.id) ?? [])
+                        .filter((id) => id !== issue.id);
+                      const isShared = Boolean(sharedPartIds?.has(item.id));
+                      const idsToHighlight = [issue.id, ...sharedWithIds];
+                      return (
+                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through")}>
+                          <Package className="h-3 w-3" />
+                          <span>{item.part?.name || `Part #${item.partId}`}</span>
+                          <span className="font-medium">${item.cost.toFixed(2)}</span>
+                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                          {isShared && (
+                            <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                              Shared action
+                            </span>
+                          )}
+                          {isShared && sharedWithIds.length > 0 && (
+                            <div className="basis-full ps-5 text-[11px] text-muted-foreground">
+                              Shared with:{" "}
+                              {sharedWithIds.map((otherId, index) => (
+                                <span key={otherId}>
+                                  <button
+                                    type="button"
+                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onHighlightIssues?.(idsToHighlight);
+                                    }}
+                                  >
+                                    {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                  </button>
+                                  {index < sharedWithIds.length - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1707,16 +1823,27 @@ function RightPanel({
   const t = useTranslations("maintenanceTickets");
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
+  const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part">("none");
   const [finalNoteOpen, setFinalNoteOpen] = useState(false);
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
 
   // Clear selection when ticket changes
   useEffect(() => {
     setIsSelectMode(false);
     setSelectedIssueIds(new Set());
+    setHighlightedIssueIds(new Set());
   }, [activeTicketId]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current != null) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
 
   function toggleIssueSelect(id: number) {
     setSelectedIssueIds((prev) => {
@@ -1724,6 +1851,18 @@ function RightPanel({
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  }
+
+  function triggerIssueHighlight(ids: number[]) {
+    const unique = Array.from(new Set(ids));
+    setHighlightedIssueIds(new Set(unique));
+    if (highlightTimeoutRef.current != null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedIssueIds(new Set());
+      highlightTimeoutRef.current = null;
+    }, 1200);
   }
 
   const activeTicket = tickets.find((tk) => tk.id === activeTicketId);
@@ -1856,7 +1995,32 @@ function RightPanel({
         )}
 
         {/* Issues tree */}
-        {issuesResponse && issuesResponse.data.length > 0 && (
+        {issuesResponse && issuesResponse.data.length > 0 && (() => {
+          // ── Compute shared action record IDs (used by both grouped and flat views) ──
+          // A record ID is "shared" when it appears on more than one issue.
+          const partIssueIdsByRecordId = new Map<number, number[]>();
+          const attendanceIssueIdsByRecordId = new Map<number, number[]>();
+          const issueTitleById = new Map<number, string>();
+          for (const iss of issuesResponse.data) {
+            issueTitleById.set(iss.id, iss.issueTitle ?? iss.otherTitle ?? `Issue #${iss.id}`);
+            for (const pu of iss.partUsages) {
+              if (!partIssueIdsByRecordId.has(pu.id)) partIssueIdsByRecordId.set(pu.id, []);
+              const arr = partIssueIdsByRecordId.get(pu.id)!;
+              if (!arr.includes(iss.id)) arr.push(iss.id);
+            }
+            for (const ae of iss.attendanceEntries) {
+              if (!attendanceIssueIdsByRecordId.has(ae.id)) attendanceIssueIdsByRecordId.set(ae.id, []);
+              const arr = attendanceIssueIdsByRecordId.get(ae.id)!;
+              if (!arr.includes(iss.id)) arr.push(iss.id);
+            }
+          }
+          const sharedPartIds: ReadonlySet<number> = new Set(
+            [...partIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
+          );
+          const sharedAttendanceIds: ReadonlySet<number> = new Set(
+            [...attendanceIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
+          );
+          return (
           <div>
             {/* Bulk action bar — visible when in select mode and ≥1 issue selected */}
             {isSelectMode && selectedIssueIds.size > 0 && (
@@ -1875,49 +2039,84 @@ function RightPanel({
             )}
             {/* ── Group-by section headers ─────────────────────────────── */}
             {groupBy !== "none" && (() => {
-              // Derive group keys for ANY issue (root or child) based on its own data
-              const getGroupKeys = (iss: TicketIssue): string[] => {
-                if (groupBy === "status") return [iss.status.label];
-                if (groupBy === "priority") return [iss.priority.label];
-                if (groupBy === "technician") {
-                  return iss.technicians.length > 0
-                    ? iss.technicians.map((tech) => tech.name)
-                    : ["Unassigned"];
-                }
-                if (groupBy === "part") {
-                  const names = iss.partUsages
-                    .map((p) => p.part?.name)
-                    .filter((n): n is string => !!n);
-                  return names.length > 0 ? names : ["No parts"];
-                }
-                return ["Other"];
-              };
-
-              // Place every issue (root + children) into groups by its own attributes
+              // ── Build groups ────────────────────────────────────────────
+              // status/priority: keyed by attribute label (unchanged)
+              // part:            keyed by part_usage.id  (same record = truly shared)
+              // technician:      keyed by attendance_entry.id (same record = truly shared)
               const orderedKeys: string[] = [];
               const groupedIssues = new Map<string, TicketIssue[]>();
+              // Human-readable label per group key
+              const keyLabel = new Map<string, string>();
+
+              const addToGroup = (key: string, label: string, iss: TicketIssue) => {
+                if (!groupedIssues.has(key)) {
+                  groupedIssues.set(key, []);
+                  orderedKeys.push(key);
+                  keyLabel.set(key, label);
+                }
+                // Deduplicate by issue ID in case of repeated calls
+                const arr = groupedIssues.get(key)!;
+                if (!arr.some((i) => i.id === iss.id)) arr.push(iss);
+              };
+
               for (const iss of issuesResponse.data) {
-                for (const key of getGroupKeys(iss)) {
-                  if (!groupedIssues.has(key)) { groupedIssues.set(key, []); orderedKeys.push(key); }
-                  groupedIssues.get(key)!.push(iss);
+                if (groupBy === "status") {
+                  addToGroup(iss.status.label, iss.status.label, iss);
+                } else if (groupBy === "priority") {
+                  addToGroup(iss.priority.label, iss.priority.label, iss);
+                } else if (groupBy === "part") {
+                  if (iss.partUsages.length === 0) {
+                    addToGroup("__no-parts__", "No parts", iss);
+                  } else {
+                    for (const pu of iss.partUsages) {
+                      const lbl = pu.part?.name ?? `Part #${pu.partId}`;
+                      addToGroup(`part-record-${pu.id}`, lbl, iss);
+                    }
+                  }
+                } else if (groupBy === "technician") {
+                  if (iss.attendanceEntries.length === 0) {
+                    addToGroup("__no-attendance__", "No attendance", iss);
+                  } else {
+                    for (const ae of iss.attendanceEntries) {
+                      const tech = technicians.find((tc) => tc.id === ae.technicianId);
+                      const lbl = tech?.name ?? `Technician #${ae.technicianId}`;
+                      addToGroup(`attendance-record-${ae.id}`, lbl, iss);
+                    }
+                  }
                 }
               }
 
-              // Subtitle per group key based on groupBy type
-              const getGroupSubtitle = (key: string): string => {
-                if (groupBy === "technician") {
-                  return key === "Unassigned"
-                    ? "These issues have no assigned technician"
-                    : `Note: ${key} has worked the same attendance time for the following issues`;
-                }
+              // ── Subtitle & action-kind per group ────────────────────────
+              const getGroupMeta = (
+                key: string,
+                issues: TicketIssue[]
+              ): { subtitle: string; actionKind: "shared" | "solo" | null } => {
+                const isShared = issues.length > 1;
                 if (groupBy === "part") {
-                  return key === "No parts"
-                    ? "These issues have no parts added"
-                    : `Note: this part was bought one time and shared across the following issues`;
+                  if (key === "__no-parts__")
+                    return { subtitle: "These issues have no parts added", actionKind: null };
+                  return {
+                    subtitle: isShared
+                      ? "Note: this part action was created one time and shared across the following issues"
+                      : "Note: this part action applies only to this issue",
+                    actionKind: isShared ? "shared" : "solo",
+                  };
                 }
-                if (groupBy === "status") return `These issues share the same status: ${key}`;
-                if (groupBy === "priority") return `These issues share the same priority: ${key}`;
-                return "";
+                if (groupBy === "technician") {
+                  if (key === "__no-attendance__")
+                    return { subtitle: "These issues have no attendance records", actionKind: null };
+                  return {
+                    subtitle: isShared
+                      ? "Note: this attendance action (same time record) was applied to the following issues"
+                      : "Note: this attendance action applies only to this issue",
+                    actionKind: isShared ? "shared" : "solo",
+                  };
+                }
+                if (groupBy === "status")
+                  return { subtitle: `These issues share the same status: ${keyLabel.get(key) ?? key}`, actionKind: null };
+                if (groupBy === "priority")
+                  return { subtitle: `These issues share the same priority: ${keyLabel.get(key) ?? key}`, actionKind: null };
+                return { subtitle: "", actionKind: null };
               };
 
               // Within each group render the same flat-sibling layout as no-grouping:
@@ -1960,6 +2159,14 @@ function RightPanel({
                         isSelectMode={isSelectMode}
                         selectedIssueIds={selectedIssueIds}
                         onToggleSelectId={toggleIssueSelect}
+                        sharedPartIds={sharedPartIds}
+                        sharedAttendanceIds={sharedAttendanceIds}
+                        sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
+                        sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                        issueTitleById={issueTitleById}
+                        onHighlightIssues={triggerIssueHighlight}
+                        showSharedIndicatorWhenCollapsed={false}
+                        isHighlighted={highlightedIssueIds.has(grp.root.id)}
                       />
                       {grp.descendants.length > 0 && (
                         <div className="ms-[9px]">
@@ -1983,6 +2190,14 @@ function RightPanel({
                                 isSelectMode={isSelectMode}
                                 selectedIssueIds={selectedIssueIds}
                                 onToggleSelectId={toggleIssueSelect}
+                                sharedPartIds={sharedPartIds}
+                                sharedAttendanceIds={sharedAttendanceIds}
+                                sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
+                                sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                                issueTitleById={issueTitleById}
+                                onHighlightIssues={triggerIssueHighlight}
+                                showSharedIndicatorWhenCollapsed={false}
+                                isHighlighted={highlightedIssueIds.has(desc.id)}
                               />
                             </div>
                           ))}
@@ -1993,16 +2208,21 @@ function RightPanel({
                 });
               };
 
-              return orderedKeys.map((key) => (
-                <GroupSection
-                  key={key}
-                  label={key}
-                  count={groupedIssues.get(key)!.length}
-                  subtitle={getGroupSubtitle(key)}
-                >
-                  {renderGroupContent(groupedIssues.get(key)!)}
-                </GroupSection>
-              ));
+              return orderedKeys.map((key) => {
+                const issues = groupedIssues.get(key)!;
+                const { subtitle, actionKind } = getGroupMeta(key, issues);
+                return (
+                  <GroupSection
+                    key={key}
+                    label={keyLabel.get(key) ?? key}
+                    count={issues.length}
+                    subtitle={subtitle}
+                    actionKind={actionKind}
+                  >
+                    {renderGroupContent(issues)}
+                  </GroupSection>
+                );
+              });
             })()}
             {/* ── Default (no grouping) ───────────────────────────────── */}
             {groupBy === "none" && (() => {
@@ -2047,6 +2267,14 @@ function RightPanel({
                       isSelectMode={isSelectMode}
                       selectedIssueIds={selectedIssueIds}
                       onToggleSelectId={toggleIssueSelect}
+                      sharedPartIds={sharedPartIds}
+                      sharedAttendanceIds={sharedAttendanceIds}
+                      sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
+                      sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                      issueTitleById={issueTitleById}
+                      onHighlightIssues={triggerIssueHighlight}
+                      showSharedIndicatorWhenCollapsed={true}
+                      isHighlighted={highlightedIssueIds.has(group.root.id)}
                     />
                     {group.descendants.length > 0 && (
                       <div className="ms-[9px]">
@@ -2070,6 +2298,14 @@ function RightPanel({
                               isSelectMode={isSelectMode}
                               selectedIssueIds={selectedIssueIds}
                               onToggleSelectId={toggleIssueSelect}
+                              sharedPartIds={sharedPartIds}
+                              sharedAttendanceIds={sharedAttendanceIds}
+                              sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
+                              sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                              issueTitleById={issueTitleById}
+                              onHighlightIssues={triggerIssueHighlight}
+                              showSharedIndicatorWhenCollapsed={true}
+                              isHighlighted={highlightedIssueIds.has(child.id)}
                             />
                           </div>
                         ))}
@@ -2080,7 +2316,8 @@ function RightPanel({
               });
             })()}
           </div>
-        )}
+          );
+        })()}
 
         {/* No ticket selected */}
         {!activeTicketId && !isLoading && (
