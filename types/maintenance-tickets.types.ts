@@ -116,6 +116,7 @@ export interface TicketIssueAttendance {
   id: number;
   ticketIssueId: number;
   technicianId: number;
+  technician: { id: number; name: string } | null;
   startClock: string | null;
   endClock: string | null;
   startBreak: string | null;
@@ -329,20 +330,12 @@ export interface ChangeAssignmentTechniciansPayload {
 export interface TicketsFilters {
   status?: TicketStatus | "";
   priority?: Priority | "";
-  created_from?: string;
-  created_to?: string;
   issue_id?: number;
   issue_status?: IssueStatus | "";
-  assigned_from?: string;
-  assigned_to?: string;
-  part_cost_single_gt?: number;
   part_cost_total_gt?: number;
   technician_id?: number;
-  creator_id?: number;
   /** Include soft-deleted tickets: "with" = all, "only" = only deleted */
   trashed?: "with" | "only";
-  sort?: string;
-  dir?: "asc" | "desc";
   page?: number;
   per_page?: number;
 }
@@ -449,6 +442,7 @@ export interface ApiTicketIssueAttendance {
   id: number;
   ticket_issue_id: number;
   technician_id: number;
+  technician: { id: number; name: string } | null;
   start_clock: string | null;
   end_clock: string | null;
   start_break: string | null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Dispatch, SetStateAction } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
 import {
@@ -28,11 +28,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Calendar as CalendarComp } from "@/components/ui/calendar";
 import {
-  Calendar,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  CalendarIcon,
   ChevronDown,
   ChevronRight,
-  Clock,
+  ClockIcon,
   Loader2,
   RefreshCw,
   Search,
@@ -56,6 +62,8 @@ import {
   Paperclip,
   ListChecks,
   LayoutList,
+  Plus,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -86,6 +94,131 @@ function fmtDate(iso: string) {
 
 function fmtDateTime(iso: string) {
   try { return format(new Date(iso), "MMM d, yyyy HH:mm"); } catch { return iso; }
+}
+
+/** Shadcn date picker — Calendar in a Popover */
+function DatePicker({ value, onChange, placeholder, className }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = value ? new Date(value + "T00:00") : undefined;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("h-8 w-full justify-start text-left text-sm font-normal gap-2", !value && "text-muted-foreground", className)}
+        >
+          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {value ? format(new Date(value + "T00:00"), "MMM d, yyyy") : <span>{placeholder ?? "Pick a date"}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <CalendarComp
+          mode="single"
+          selected={selected}
+          onSelect={(d) => { if (d) { onChange(format(d, "yyyy-MM-dd")); setOpen(false); } }}
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Shadcn time picker — Popover with time Input */
+function TimePicker({ value, onChange, placeholder, className }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("h-8 w-full justify-start text-left text-sm font-normal gap-2", !value && "text-muted-foreground", className)}
+        >
+          <ClockIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {value || <span>{placeholder ?? "Pick a time"}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-3 space-y-2" align="start">
+        <p className="text-xs font-medium text-muted-foreground">Select time</p>
+        <Input
+          type="time"
+          className="h-8 text-sm [color-scheme:light] dark:[color-scheme:dark]"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoFocus
+        />
+        <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpen(false)}>Done</Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Shadcn datetime picker — Calendar + time Input in a Popover */
+function DateTimePicker({ value, onChange, placeholder, className }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const datePart = value ? value.slice(0, 10) : "";
+  const timePart = value ? value.slice(11, 16) : "";
+  const selected = datePart ? new Date(datePart + "T00:00") : undefined;
+
+  function handleDateSelect(d: Date | undefined) {
+    if (!d) return;
+    onChange(`${format(d, "yyyy-MM-dd")}T${timePart || "00:00"}`);
+  }
+  function handleTimeChange(t: string) {
+    onChange(`${datePart || format(new Date(), "yyyy-MM-dd")}T${t}`);
+  }
+
+  const displayValue = datePart
+    ? `${format(new Date(datePart + "T00:00"), "MMM d, yyyy")}${timePart ? ` ${timePart}` : ""}`
+    : "";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("h-8 w-full justify-start text-left text-sm font-normal gap-2", !value && "text-muted-foreground", className)}
+        >
+          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {displayValue || <span>{placeholder ?? "Pick date & time"}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <CalendarComp
+          mode="single"
+          selected={selected}
+          onSelect={handleDateSelect}
+          autoFocus
+        />
+        <div className="border-t p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <ClockIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Input
+              type="time"
+              className="h-8 flex-1 text-sm [color-scheme:light] dark:[color-scheme:dark]"
+              value={timePart}
+              onChange={(e) => handleTimeChange(e.target.value)}
+            />
+          </div>
+          <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpen(false)}>Done</Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -166,12 +299,12 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect }
             )}
           >
             <p className={cn("text-sm font-medium truncate", ticket.id === activeId ? "text-foreground" : "text-muted-foreground")}>
-              #{ticket.id}
+             ID #{ticket.id}
             </p>
             <p className="text-xs text-muted-foreground truncate">{ticket.storeId}</p>
             <div className="mt-1 flex items-center gap-1.5">
               <span className="inline-flex items-center rounded-sm border px-1.5 py-px text-[10px] text-muted-foreground">
-                {ticket.issueCount} {t("navigator.issueCount", { count: ticket.issueCount })}
+                 {t("navigator.issueCount", { count: ticket.issueCount })}
               </span>
             </div>
           </button>
@@ -200,7 +333,9 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
   const [status, setStatus] = useState<IssueStatus>(issue.status.value as IssueStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const effectiveIds = issueIds ?? [issue.id];
+  const hasChanged = issueIds ? true : status !== (issue.status.value as IssueStatus);
 
   async function handleSubmit() {
     setIsSubmitting(true); setError(null);
@@ -208,28 +343,55 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
       await maintenanceTicketsService.changeIssueStatus(storeId, ticketId, {
         ticket_issue_ids: effectiveIds, status,
       });
-      onSuccess(); onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
     } finally { setIsSubmitting(false); }
   }
 
+  const statusOptions: { value: IssueStatus; label: string }[] = [
+    { value: "pending", label: t("status.pending") },
+    { value: "assigned", label: t("status.assigned") },
+    { value: "in_progress", label: t("status.in_progress") },
+    { value: "complete", label: t("status.complete") },
+  ];
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Status updated successfully</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("detailSheet.changeStatus")}</p>
-      <Select value={status} onValueChange={(v) => setStatus(v as IssueStatus)}>
-        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="pending">{t("status.pending")}</SelectItem>
-          <SelectItem value="assigned">{t("status.assigned")}</SelectItem>
-          <SelectItem value="in_progress">{t("status.in_progress")}</SelectItem>
-          <SelectItem value="complete">{t("status.complete")}</SelectItem>
-        </SelectContent>
-      </Select>
+      <div className="flex flex-wrap gap-1.5">
+        {statusOptions.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            onClick={() => setStatus(s.value)}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              status === s.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-input hover:bg-muted/50"
+            )}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>{t("common.cancel")}</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || (!issueIds && status === issue.status.value)}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !hasChanged}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("common.save")}
         </Button>
@@ -254,6 +416,7 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
   const t = useTranslations("maintenanceTickets");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const activeTechs = technicians.filter((tech) => !tech.deletedAt);
 
@@ -273,10 +436,22 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
         assigned_date: issueDraft.assignDate,
         ...(issueDraft.assignHour && { assigned_hour: issueDraft.assignHour }),
       });
-      onSuccess(); onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
     } finally { setIsSubmitting(false); }
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Assignment saved successfully</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -285,13 +460,11 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-xs">{t("detailSheet.assignDate")}</Label>
-          <Input type="date" className="h-8 text-sm" value={issueDraft.assignDate}
-            onChange={(e) => onPatchDraft({ assignDate: e.target.value })} />
+          <DatePicker value={issueDraft.assignDate} onChange={(v) => onPatchDraft({ assignDate: v })} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">{t("detailSheet.assignHour")} <span className="text-muted-foreground">({t("common.optional")})</span></Label>
-          <Input type="time" className="h-8 text-sm" value={issueDraft.assignHour}
-            onChange={(e) => onPatchDraft({ assignHour: e.target.value })} />
+          <TimePicker value={issueDraft.assignHour} onChange={(v) => onPatchDraft({ assignHour: v })} />
         </div>
       </div>
       <div className="space-y-1">
@@ -322,7 +495,7 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>{t("common.cancel")}</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.assignDate || issueDraft.assignTechs.length === 0}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("detailSheet.assign")}
         </Button>
@@ -345,30 +518,43 @@ function DeferPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClos
   const t = useTranslations("maintenanceTickets");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   async function handleSubmit() {
     if (!issueDraft.deferReason.trim()) { setError(t("detailSheet.deferReasonRequired")); return; }
     setIsSubmitting(true); setError(null);
     try {
       await maintenanceTicketsService.deferIssue(storeId, ticketId, issue.id, { reason: issueDraft.deferReason.trim() });
-      onSuccess(); onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
     } finally { setIsSubmitting(false); }
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Issue deferred successfully</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("detailSheet.deferIssue")}</p>
       <div className="space-y-1">
-        <Label className="text-xs">{t("detailSheet.deferReason")}</Label>
+        <Label className="text-xs">{t("detailSheet.deferReason")} <span className="text-destructive">*</span></Label>
         <Textarea className="text-sm resize-none min-h-20" placeholder={t("detailSheet.deferReasonPlaceholder")}
           value={issueDraft.deferReason} onChange={(e) => onPatchDraft({ deferReason: e.target.value })} />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>{t("common.cancel")}</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.deferReason.trim()}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("detailSheet.defer")}
         </Button>
@@ -407,6 +593,7 @@ function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [success, setSuccess] = useState(false);
   async function handleSubmit() {
     setIsSubmitting(true);
     setError(null);
@@ -417,29 +604,45 @@ function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       }, files);
       onClearDraftFields(["diagnosisBody"]);
       setFiles([]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create diagnosis.");
     } finally {
       setIsSubmitting(false);
     }
   }
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Diagnosis saved successfully</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Diagnosis</p>
-      <Textarea
-        className="text-sm resize-none min-h-20"
-        placeholder="Diagnosis notes"
-        value={issueDraft.diagnosisBody}
-        onChange={(e) => onPatchDraft({ diagnosisBody: e.target.value })}
-      />
-      <Input
-        type="file"
-        multiple
-        className="h-8"
-        onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-      />
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Notes</Label>
+        <Textarea
+          className="text-sm resize-none min-h-20"
+          placeholder="Diagnosis notes"
+          value={issueDraft.diagnosisBody}
+          onChange={(e) => onPatchDraft({ diagnosisBody: e.target.value })}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Attachments</Label>
+        <Input
+          type="file"
+          multiple
+          className="h-8"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+        />
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
@@ -455,6 +658,7 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [success, setSuccess] = useState(false);
   async function handleSubmit() {
     const body = issueDraft.warrantyBody.trim();
     if (!body) {
@@ -470,33 +674,49 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
       }, files);
       onClearDraftFields(["warrantyBody"]);
       setFiles([]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create warranty.");
     } finally {
       setIsSubmitting(false);
     }
   }
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Warranty saved successfully</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Warranty</p>
-      <Textarea
-        className="text-sm resize-none min-h-20"
-        placeholder="Warranty notes"
-        value={issueDraft.warrantyBody}
-        onChange={(e) => onPatchDraft({ warrantyBody: e.target.value })}
-      />
-      <Input
-        type="file"
-        multiple
-        className="h-8"
-        onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-      />
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Notes <span className="text-destructive">*</span></Label>
+        <Textarea
+          className="text-sm resize-none min-h-20"
+          placeholder="Warranty notes"
+          value={issueDraft.warrantyBody}
+          onChange={(e) => onPatchDraft({ warrantyBody: e.target.value })}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Attachments</Label>
+        <Input
+          type="file"
+          multiple
+          className="h-8"
+          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+        />
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.warrantyBody.trim()}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -505,43 +725,92 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
 }
 
 function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
+  type TimePair = { start: string; end: string };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [technicianId, setTechnicianId] = useState(issueDraft.attendanceTechnicianId ?? "");
+  const [clockRows, setClockRows] = useState<TimePair[]>([{ start: issueDraft.attendanceStartClock ?? "", end: issueDraft.attendanceEndClock ?? "" }]);
+  const [breakRows, setBreakRows] = useState<TimePair[]>([{ start: issueDraft.attendanceStartBreak ?? "", end: issueDraft.attendanceEndBreak ?? "" }]);
+  const [partsRunRows, setPartsRunRows] = useState<TimePair[]>([{ start: issueDraft.attendanceStartPartsRun ?? "", end: issueDraft.attendanceEndPartsRun ?? "" }]);
+
+  function updateRow(setter: Dispatch<SetStateAction<TimePair[]>>, index: number, field: "start" | "end", value: string) {
+    setter((rows) => rows.map((r, i) => i === index ? { ...r, [field]: value } : r));
+  }
+  function addRow(setter: Dispatch<SetStateAction<TimePair[]>>) {
+    setter((rows) => [...rows, { start: "", end: "" }]);
+  }
+  function removeRow(setter: Dispatch<SetStateAction<TimePair[]>>, index: number) {
+    setter((rows) => rows.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit() {
-    if (!issueDraft.attendanceTechnicianId) {
+    if (!technicianId) {
       setError("Technician is required.");
       return;
     }
     setIsSubmitting(true);
     setError(null);
     try {
-      await maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
-        ticket_issue_ids: issueIds ?? [issue.id],
-        technician_id: Number(issueDraft.attendanceTechnicianId),
-        start_clock: toRfc3339OrUndefined(issueDraft.attendanceStartClock),
-        end_clock: toRfc3339OrUndefined(issueDraft.attendanceEndClock),
-        start_break: toRfc3339OrUndefined(issueDraft.attendanceStartBreak),
-        end_break: toRfc3339OrUndefined(issueDraft.attendanceEndBreak),
-        start_parts_run: toRfc3339OrUndefined(issueDraft.attendanceStartPartsRun),
-        end_parts_run: toRfc3339OrUndefined(issueDraft.attendanceEndPartsRun),
-      });
+      const base = { ticket_issue_ids: issueIds ?? [issue.id], technician_id: Number(technicianId) };
+      const calls: Promise<unknown>[] = [];
+      for (const row of clockRows) {
+        if (row.start || row.end) {
+          calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
+            ...base,
+            start_clock: toRfc3339OrUndefined(row.start),
+            end_clock: toRfc3339OrUndefined(row.end),
+          }));
+        }
+      }
+      for (const row of breakRows) {
+        if (row.start || row.end) {
+          calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
+            ...base,
+            start_break: toRfc3339OrUndefined(row.start),
+            end_break: toRfc3339OrUndefined(row.end),
+          }));
+        }
+      }
+      for (const row of partsRunRows) {
+        if (row.start || row.end) {
+          calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
+            ...base,
+            start_parts_run: toRfc3339OrUndefined(row.start),
+            end_parts_run: toRfc3339OrUndefined(row.end),
+          }));
+        }
+      }
+      if (calls.length === 0) {
+        calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, base));
+      }
+      await Promise.all(calls);
       onClearDraftFields([
         "attendanceTechnicianId",
-        "attendanceStartClock",
-        "attendanceEndClock",
-        "attendanceStartBreak",
-        "attendanceEndBreak",
-        "attendanceStartPartsRun",
-        "attendanceEndPartsRun",
+        "attendanceStartClock", "attendanceEndClock",
+        "attendanceStartBreak", "attendanceEndBreak",
+        "attendanceStartPartsRun", "attendanceEndPartsRun",
       ]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create attendance entry.");
     } finally {
       setIsSubmitting(false);
     }
   }
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Attendance saved successfully</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Attendance</p>
@@ -549,7 +818,7 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
       {/* Technician (required) */}
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Technician <span className="text-destructive">*</span></Label>
-        <Select value={issueDraft.attendanceTechnicianId} onValueChange={(v) => onPatchDraft({ attendanceTechnicianId: v })}>
+        <Select value={technicianId} onValueChange={setTechnicianId}>
           <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
           <SelectContent>
             {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
@@ -560,54 +829,96 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
       </div>
 
       {/* Work Clock */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Clock in</Label>
-            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceStartClock} onChange={(e) => onPatchDraft({ attendanceStartClock: e.target.value })} />
+        {clockRows.map((row, i) => (
+          <div key={i} className="space-y-1">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Clock in</Label>
+                <DateTimePicker value={row.start} onChange={(v) => updateRow(setClockRows, i, "start", v)} placeholder="Clock in" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Clock out</Label>
+                <DateTimePicker value={row.end} onChange={(v) => updateRow(setClockRows, i, "end", v)} placeholder="Clock out" />
+              </div>
+            </div>
+            {clockRows.length > 1 && (
+              <div className="flex justify-end">
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => removeRow(setClockRows, i)}>
+                  <X className="me-1 h-3 w-3" /> Remove
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Clock out</Label>
-            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceEndClock} onChange={(e) => onPatchDraft({ attendanceEndClock: e.target.value })} />
-          </div>
-        </div>
+        ))}
+        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={() => addRow(setClockRows)}>
+          <Plus className="me-1 h-3 w-3" /> Add Work Clock
+        </Button>
       </div>
 
       {/* Break */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Break</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Break start</Label>
-            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceStartBreak} onChange={(e) => onPatchDraft({ attendanceStartBreak: e.target.value })} />
+        {breakRows.map((row, i) => (
+          <div key={i} className="space-y-1">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Break start</Label>
+                <DateTimePicker value={row.start} onChange={(v) => updateRow(setBreakRows, i, "start", v)} placeholder="Break start" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Break end</Label>
+                <DateTimePicker value={row.end} onChange={(v) => updateRow(setBreakRows, i, "end", v)} placeholder="Break end" />
+              </div>
+            </div>
+            {breakRows.length > 1 && (
+              <div className="flex justify-end">
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => removeRow(setBreakRows, i)}>
+                  <X className="me-1 h-3 w-3" /> Remove
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Break end</Label>
-            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceEndBreak} onChange={(e) => onPatchDraft({ attendanceEndBreak: e.target.value })} />
-          </div>
-        </div>
+        ))}
+        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={() => addRow(setBreakRows)}>
+          <Plus className="me-1 h-3 w-3" /> Add Break
+        </Button>
       </div>
 
       {/* Parts Run */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</p>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Depart</Label>
-            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceStartPartsRun} onChange={(e) => onPatchDraft({ attendanceStartPartsRun: e.target.value })} />
+        {partsRunRows.map((row, i) => (
+          <div key={i} className="space-y-1">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Depart</Label>
+                <DateTimePicker value={row.start} onChange={(v) => updateRow(setPartsRunRows, i, "start", v)} placeholder="Depart" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Return</Label>
+                <DateTimePicker value={row.end} onChange={(v) => updateRow(setPartsRunRows, i, "end", v)} placeholder="Return" />
+              </div>
+            </div>
+            {partsRunRows.length > 1 && (
+              <div className="flex justify-end">
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => removeRow(setPartsRunRows, i)}>
+                  <X className="me-1 h-3 w-3" /> Remove
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Return</Label>
-            <Input type="datetime-local" className="h-8 text-xs" value={issueDraft.attendanceEndPartsRun} onChange={(e) => onPatchDraft({ attendanceEndPartsRun: e.target.value })} />
-          </div>
-        </div>
+        ))}
+        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={() => addRow(setPartsRunRows)}>
+          <Plus className="me-1 h-3 w-3" /> Add Parts Run
+        </Button>
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !technicianId}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -621,6 +932,7 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
   const [files, setFiles] = useState<File[]>([]);
   const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(true);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -649,13 +961,24 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       }, files);
       onClearDraftFields(["partId", "partCost"]);
       setFiles([]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create part usage.");
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Part usage saved successfully</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -725,6 +1048,7 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
 function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   async function handleSubmit() {
     if (!issueDraft.payTechnicianId) {
       setError("Technician is required.");
@@ -754,13 +1078,23 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
         "milesDriven",
         "perMileRate",
       ]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create pay entry.");
     } finally {
       setIsSubmitting(false);
     }
+  }
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Pay entry saved successfully</p>
+        </div>
+      </div>
+    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -780,7 +1114,7 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.payTechnicianId}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -791,6 +1125,7 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
 function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   function toggleTech(id: number) {
     const current = issueDraft.attachTechs;
     onPatchDraft({ attachTechs: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
@@ -808,13 +1143,23 @@ function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, iss
         technician_ids: issueDraft.attachTechs,
       });
       onClearDraftFields(["attachTechs"]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to attach technicians.");
     } finally {
       setIsSubmitting(false);
     }
+  }
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Technicians attached successfully</p>
+        </div>
+      </div>
+    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -835,7 +1180,7 @@ function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, iss
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || issueDraft.attachTechs.length === 0}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -846,11 +1191,9 @@ function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, iss
 function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: Omit<LifecyclePanelProps, "technicians">) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const canSubmit = !!issueDraft.delayAssignmentId && !!issueDraft.delayNewDate && !!issueDraft.delayReason.trim();
   async function handleSubmit() {
-    if (!issueDraft.delayAssignmentId || !issueDraft.delayNewDate || !issueDraft.delayReason.trim()) {
-      setError("Assignment, date, and reason are required.");
-      return;
-    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -865,36 +1208,58 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
         }
       );
       onClearDraftFields(["delayAssignmentId", "delayNewDate", "delayNewHour", "delayReason"]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to delay assignment.");
     } finally {
       setIsSubmitting(false);
     }
   }
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Assignment delayed successfully</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Delay Assignment</p>
-      <Select value={issueDraft.delayAssignmentId} onValueChange={(v) => onPatchDraft({ delayAssignmentId: v })}>
-        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select assignment" /></SelectTrigger>
-        <SelectContent>
-          {issue.assignments.map((assignment) => (
-            <SelectItem key={assignment.id} value={String(assignment.id)}>
-              #{assignment.id} · {fmtDate(assignment.assignedDate)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <div className="grid grid-cols-2 gap-2">
-        <Input type="date" className="h-8" value={issueDraft.delayNewDate} onChange={(e) => onPatchDraft({ delayNewDate: e.target.value })} />
-        <Input type="time" className="h-8" value={issueDraft.delayNewHour} onChange={(e) => onPatchDraft({ delayNewHour: e.target.value })} />
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Assignment <span className="text-destructive">*</span></Label>
+        <Select value={issueDraft.delayAssignmentId} onValueChange={(v) => onPatchDraft({ delayAssignmentId: v })}>
+          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select assignment" /></SelectTrigger>
+          <SelectContent>
+            {issue.assignments.map((assignment) => (
+              <SelectItem key={assignment.id} value={String(assignment.id)}>
+                #{assignment.id} · {fmtDate(assignment.assignedDate)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <Textarea className="text-sm resize-none min-h-20" placeholder="Reason" value={issueDraft.delayReason} onChange={(e) => onPatchDraft({ delayReason: e.target.value })} />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">New date <span className="text-destructive">*</span></Label>
+          <DatePicker value={issueDraft.delayNewDate} onChange={(v) => onPatchDraft({ delayNewDate: v })} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">New time <span className="text-muted-foreground/60">(optional)</span></Label>
+          <TimePicker value={issueDraft.delayNewHour} onChange={(v) => onPatchDraft({ delayNewHour: v })} />
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Reason <span className="text-destructive">*</span></Label>
+        <Textarea className="text-sm resize-none min-h-20" placeholder="Explain why the assignment is being delayed" value={issueDraft.delayReason} onChange={(e) => onPatchDraft({ delayReason: e.target.value })} />
+      </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !canSubmit}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -905,6 +1270,7 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
 function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   function toggleTech(id: number) {
     const current = issueDraft.changeTechs;
     onPatchDraft({ changeTechs: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
@@ -924,13 +1290,23 @@ function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, o
         { technician_ids: issueDraft.changeTechs }
       );
       onClearDraftFields(["changeAssignmentId", "changeTechs"]);
-      onSuccess();
-      onClose();
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to change technicians.");
     } finally {
       setIsSubmitting(false);
     }
+  }
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Technicians updated successfully</p>
+        </div>
+      </div>
+    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -961,7 +1337,7 @@ function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, o
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.changeAssignmentId || issueDraft.changeTechs.length === 0}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -1352,6 +1728,7 @@ function IssueNode({
         {/* Card */}
         <div className="flex-1 min-w-0 pb-4">
           <div
+            data-issue-id={issue.id}
             className={cn(
               "relative rounded-lg border bg-card overflow-hidden transition-colors",
               isHighlighted && "ring-2 ring-muted-foreground/40"
@@ -1416,9 +1793,9 @@ function IssueNode({
                     {issue.assignments.map((a) => (
                       <div key={a.id} className="rounded border bg-muted/10 px-2 py-1.5 space-y-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Calendar className="h-3 w-3 shrink-0" />
+                          <CalendarIcon className="h-3 w-3 shrink-0" />
                           <span>{fmtDate(a.assignedDate)}</span>
-                          {a.assignedHour && <><Clock className="h-3 w-3 shrink-0" /><span>{a.assignedHour}</span></>}
+                          {a.assignedHour && <><ClockIcon className="h-3 w-3 shrink-0" /><span>{a.assignedHour}</span></>}
                           {a.technicians.length > 0 && (
                             <span>· {a.technicians.map((tech) => tech.name).join(", ")}</span>
                           )}
@@ -1528,16 +1905,39 @@ function IssueNode({
                       const isShared = Boolean(sharedAttendanceIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through")}>
-                          <Wrench className="h-3 w-3" />
-                          <span>Tech #{item.technicianId}</span>
-                          {item.startClock && <span>{item.startClock}</span>}
-                          {item.endClock && <span>- {item.endClock}</span>}
-                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                          {isShared && (
-                            <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                              Shared action
-                            </span>
+                        <div key={item.id} className={cn("text-xs rounded border px-2 py-2 space-y-1.5", item.mistaken && "opacity-60")}>
+                          {/* Header row: technician + badges */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Wrench className="h-3 w-3 shrink-0" />
+                            <span className="font-medium">{item.technician?.name ?? `Technician #${item.technicianId}`}</span>
+                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px] line-through">mistaken</span>}
+                            {isShared && (
+                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                                Shared action
+                              </span>
+                            )}
+                          </div>
+                          {/* Time sections */}
+                          {(item.startClock || item.endClock) && (
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 ps-5">
+                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground col-span-2">Work Clock</span>
+                              {item.startClock && <span className="text-muted-foreground">Clock in: <span className="text-foreground">{fmtDateTime(item.startClock)}</span></span>}
+                              {item.endClock && <span className="text-muted-foreground">Clock out: <span className="text-foreground">{fmtDateTime(item.endClock)}</span></span>}
+                            </div>
+                          )}
+                          {(item.startBreak || item.endBreak) && (
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 ps-5">
+                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground col-span-2">Break</span>
+                              {item.startBreak && <span className="text-muted-foreground">Start: <span className="text-foreground">{fmtDateTime(item.startBreak)}</span></span>}
+                              {item.endBreak && <span className="text-muted-foreground">End: <span className="text-foreground">{fmtDateTime(item.endBreak)}</span></span>}
+                            </div>
+                          )}
+                          {(item.startPartsRun || item.endPartsRun) && (
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 ps-5">
+                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground col-span-2">Parts Run</span>
+                              {item.startPartsRun && <span className="text-muted-foreground">Depart: <span className="text-foreground">{fmtDateTime(item.startPartsRun)}</span></span>}
+                              {item.endPartsRun && <span className="text-muted-foreground">Return: <span className="text-foreground">{fmtDateTime(item.endPartsRun)}</span></span>}
+                            </div>
                           )}
                           {isShared && sharedWithIds.length > 0 && (
                             <div className="basis-full ps-5 text-[11px] text-muted-foreground">
@@ -1550,6 +1950,8 @@ function IssueNode({
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onHighlightIssues?.(idsToHighlight);
+                                      const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
+                                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
                                     }}
                                   >
                                     {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
@@ -1574,34 +1976,72 @@ function IssueNode({
                       const isShared = Boolean(sharedPartIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through")}>
-                          <Package className="h-3 w-3" />
-                          <span>{item.part?.name || `Part #${item.partId}`}</span>
-                          <span className="font-medium">${item.cost.toFixed(2)}</span>
-                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                          {isShared && (
-                            <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                              Shared action
-                            </span>
-                          )}
-                          {isShared && sharedWithIds.length > 0 && (
-                            <div className="basis-full ps-5 text-[11px] text-muted-foreground">
-                              Shared with:{" "}
-                              {sharedWithIds.map((otherId, index) => (
-                                <span key={otherId}>
-                                  <button
-                                    type="button"
-                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onHighlightIssues?.(idsToHighlight);
-                                    }}
-                                  >
-                                    {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
-                                  </button>
-                                  {index < sharedWithIds.length - 1 ? ", " : ""}
-                                </span>
-                              ))}
+                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5", item.mistaken && "opacity-60 line-through")}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Package className="h-3 w-3" />
+                            <span>{item.part?.name || `Part #${item.partId}`}</span>
+                            <span className="font-medium">${item.cost.toFixed(2)}</span>
+                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {isShared && (
+                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                                Shared action
+                              </span>
+                            )}
+                            {isShared && sharedWithIds.length > 0 && (
+                              <div className="basis-full ps-5 text-[11px] text-muted-foreground">
+                                Shared with:{" "}
+                                {sharedWithIds.map((otherId, index) => (
+                                  <span key={otherId}>
+                                    <button
+                                      type="button"
+                                      className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onHighlightIssues?.(idsToHighlight);
+                                        const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
+                                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                      }}
+                                    >
+                                      {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                    </button>
+                                    {index < sharedWithIds.length - 1 ? ", " : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {item.attachments.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              {item.attachments.map((attachment, index) => {
+                                const hasUrl = Boolean(attachment.url);
+                                const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
+                                const mimeType = (attachment.contentType || "").toLowerCase();
+                                const lowerUrl = (attachment.url || "").toLowerCase();
+                                const lowerFileName = (attachment.fileName || "").toLowerCase();
+                                const isImage =
+                                  mimeType.startsWith("image/") ||
+                                  /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) ||
+                                  /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
+                                if (!hasUrl) {
+                                  return (
+                                    <span key={attachment.id} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}>
+                                      <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
+                                    </span>
+                                  );
+                                }
+                                if (isImage) {
+                                  return (
+                                    <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
+                                      <img src={attachment.url} alt={attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" />
+                                    </a>
+                                  );
+                                }
+                                return (
+                                  <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
+                                    <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
+                                  </a>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -1629,10 +2069,46 @@ function IssueNode({
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Warranties</p>
                     {issue.warranties.map((item) => (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through") }>
-                        <ShieldCheck className="h-3 w-3" />
-                        <span>{item.body || "No notes"}</span>
-                        {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5", item.mistaken && "opacity-60 line-through")}>
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="h-3 w-3" />
+                          <span>{item.body || "No notes"}</span>
+                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                        </div>
+                        {item.attachments.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {item.attachments.map((attachment, index) => {
+                              const hasUrl = Boolean(attachment.url);
+                              const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
+                              const mimeType = (attachment.contentType || "").toLowerCase();
+                              const lowerUrl = (attachment.url || "").toLowerCase();
+                              const lowerFileName = (attachment.fileName || "").toLowerCase();
+                              const isImage =
+                                mimeType.startsWith("image/") ||
+                                /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) ||
+                                /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
+                              if (!hasUrl) {
+                                return (
+                                  <span key={attachment.id} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}>
+                                    <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
+                                  </span>
+                                );
+                              }
+                              if (isImage) {
+                                return (
+                                  <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
+                                    <img src={attachment.url} alt={attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" />
+                                  </a>
+                                );
+                              }
+                              return (
+                                <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
+                                  <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1902,7 +2378,7 @@ function RightPanel({
                 <>
                   <span>·</span>
                   <ClipboardList className="h-3.5 w-3.5" />
-                  <span>{activeTicket.issueCount} {t("navigator.issueCount", { count: activeTicket.issueCount })}</span>
+                  <span> {t("navigator.issueCount", { count: activeTicket.issueCount })}</span>
                 </>
               )}
             </div>
@@ -1960,8 +2436,8 @@ function RightPanel({
 
       {/* Scrollable issue body */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
-        {/* Skeleton */}
-        {isLoading && !issuesResponse && (
+        {/* Skeleton — show whenever loading, covers first-load AND ticket-switch */}
+        {isLoading && (
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex gap-3">
@@ -1978,10 +2454,13 @@ function RightPanel({
         )}
 
         {/* Error */}
-        {loadError && (
+        {!isLoading && loadError && (
           <div className="flex flex-col items-center gap-3 rounded-lg border border-destructive/30 p-8 text-center">
             <AlertCircle className="h-8 w-8 text-destructive/70" />
-            <p className="text-sm text-muted-foreground">{loadError}</p>
+            <p className="text-sm font-medium text-destructive">
+              {activeTicketId ? `Failed to load ticket #${activeTicketId}` : "Failed to load ticket"}
+            </p>
+            <p className="text-xs text-muted-foreground">{loadError}</p>
             <Button variant="outline" size="sm" onClick={onRefresh}>{t("error.retry")}</Button>
           </div>
         )}
@@ -1995,7 +2474,7 @@ function RightPanel({
         )}
 
         {/* Issues tree */}
-        {issuesResponse && issuesResponse.data.length > 0 && (() => {
+        {!isLoading && !loadError && issuesResponse && issuesResponse.data.length > 0 && (() => {
           // ── Compute shared action record IDs (used by both grouped and flat views) ──
           // A record ID is "shared" when it appears on more than one issue.
           const partIssueIdsByRecordId = new Map<number, number[]>();
@@ -2407,10 +2886,22 @@ export function TicketDetailSheet({
 
   const draft = useTicketDraft(storeId, activeTicketId);
 
-  // Sync active ticket when parent ticketId changes
+  // Keep local active ticket synchronized with external selection.
+  // Clearing to null is intentional to avoid stale ticket caching.
   useEffect(() => {
-    if (ticketId !== null) setActiveTicketId(ticketId);
+    setActiveTicketId(ticketId);
   }, [ticketId]);
+
+  // When opening, ensure we always land on the externally selected ticket
+  // (or fallback to first available ticket if parent passes null).
+  useEffect(() => {
+    if (!open) return;
+    if (ticketId != null) {
+      setActiveTicketId(ticketId);
+      return;
+    }
+    setActiveTicketId((prev) => prev ?? tickets[0]?.id ?? null);
+  }, [open, ticketId, tickets]);
 
   const loadIssues = useCallback(async () => {
     if (!activeTicketId || !storeId) return;
@@ -2446,13 +2937,21 @@ export function TicketDetailSheet({
     }
   }, [open, activeTicketId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear data when sheet closes
+  // Clear all state when sheet closes so stale activeTicketId can't
+  // trigger a spurious fetch the next time the sheet opens.
   useEffect(() => {
-    if (!open) { setIssuesResponse(null); setLoadError(null); }
+    if (!open) {
+      setIssuesResponse(null);
+      setLoadError(null);
+      setActiveTicketId(null);
+    }
   }, [open]);
 
   function handleSelectTicket(id: number) {
     if (id === activeTicketId) return;
+    // Clear stale data immediately so skeleton shows right away
+    setIssuesResponse(null);
+    setLoadError(null);
     setActiveTicketId(id);
   }
 

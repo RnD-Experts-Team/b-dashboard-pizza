@@ -347,6 +347,7 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
     id: raw.id,
     ticketIssueId: raw.ticket_issue_id,
     technicianId: raw.technician_id,
+    technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
     startClock: raw.start_clock,
     endClock: raw.end_clock,
     startBreak: raw.start_break,
@@ -419,19 +420,11 @@ export const maintenanceTicketsService = {
     const params: Record<string, string | number> = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.priority) params.priority = filters.priority;
-    if (filters?.created_from) params.created_from = filters.created_from;
-    if (filters?.created_to) params.created_to = filters.created_to;
     if (filters?.issue_id) params.issue_id = filters.issue_id;
     if (filters?.issue_status) params.issue_status = filters.issue_status;
-    if (filters?.assigned_from) params.assigned_from = filters.assigned_from;
-    if (filters?.assigned_to) params.assigned_to = filters.assigned_to;
-    if (filters?.part_cost_single_gt != null) params.part_cost_single_gt = filters.part_cost_single_gt;
     if (filters?.part_cost_total_gt != null) params.part_cost_total_gt = filters.part_cost_total_gt;
     if (filters?.technician_id) params.technician_id = filters.technician_id;
-    if (filters?.creator_id) params.creator_id = filters.creator_id;
     if (filters?.trashed) params.trashed = filters.trashed;
-    if (filters?.sort) params.sort = filters.sort;
-    if (filters?.dir) params.dir = filters.dir;
     if (filters?.page) params.page = filters.page;
     if (filters?.per_page) params.per_page = filters.per_page;
 
@@ -819,19 +812,11 @@ export const maintenanceTicketsService = {
     const params: Record<string, string | number> = {};
     if (filters?.status) params.status = filters.status;
     if (filters?.priority) params.priority = filters.priority;
-    if (filters?.created_from) params.created_from = filters.created_from;
-    if (filters?.created_to) params.created_to = filters.created_to;
     if (filters?.issue_id) params.issue_id = filters.issue_id;
     if (filters?.issue_status) params.issue_status = filters.issue_status;
-    if (filters?.assigned_from) params.assigned_from = filters.assigned_from;
-    if (filters?.assigned_to) params.assigned_to = filters.assigned_to;
-    if (filters?.part_cost_single_gt != null) params.part_cost_single_gt = filters.part_cost_single_gt;
     if (filters?.part_cost_total_gt != null) params.part_cost_total_gt = filters.part_cost_total_gt;
     if (filters?.technician_id) params.technician_id = filters.technician_id;
-    if (filters?.creator_id) params.creator_id = filters.creator_id;
     if (filters?.trashed) params.trashed = filters.trashed;
-    if (filters?.sort) params.sort = filters.sort;
-    if (filters?.dir) params.dir = filters.dir;
     if (filters?.page) params.page = filters.page;
     if (filters?.per_page) params.per_page = filters.per_page;
     try {

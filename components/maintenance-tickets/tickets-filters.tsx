@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
-import { Download, Plus, BookOpen, SlidersHorizontal } from "lucide-react";
-import type { TicketsFilters } from "@/types/maintenance-tickets.types";
+import { Label } from "@/components/ui/label";
+import { useEffect, useState } from "react";
+import { Plus, BookOpen, SlidersHorizontal, X, ChevronDown } from "lucide-react";
+import type { CatalogIssue, CatalogTechnician, TicketsFilters } from "@/types/maintenance-tickets.types";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import { cn } from "@/lib/utils";
 
 interface TicketsFiltersBarProps {
   filters: TicketsFilters;
@@ -31,199 +33,273 @@ export function TicketsFiltersBar({
   disabled,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
-  const [isExporting, setIsExporting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
+  const [catalogTechnicians, setCatalogTechnicians] = useState<CatalogTechnician[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
-  async function handleExport() {
-    setIsExporting(true);
-    try { await maintenanceTicketsService.downloadExport(); }
-    finally { setIsExporting(false); }
-  }
-
-  function handleStatus(value: string) {
-    onFiltersChange({ ...filters, status: value === "all" ? "" : (value as TicketsFilters["status"]) });
-  }
-
-  function handlePriority(value: string) {
-    onFiltersChange({ ...filters, priority: value === "all" ? "" : (value as TicketsFilters["priority"]) });
-  }
+  // Load catalog data when advanced panel opens for the first time
+  useEffect(() => {
+    if (!advancedOpen || catalogIssues.length > 0 || catalogTechnicians.length > 0) return;
+    const ctrl = new AbortController();
+    setCatalogLoading(true);
+    Promise.all([
+      maintenanceTicketsService.getCatalogIssues(ctrl.signal),
+      maintenanceTicketsService.getCatalogTechnicians(ctrl.signal),
+    ])
+      .then(([issues, techs]) => {
+        setCatalogIssues(issues.filter((i) => !i.deletedAt));
+        setCatalogTechnicians(techs.filter((t) => !t.deletedAt));
+      })
+      .catch(() => {})
+      .finally(() => setCatalogLoading(false));
+    return () => ctrl.abort();
+  }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateField<K extends keyof TicketsFilters>(key: K, value: TicketsFilters[K]) {
     onFiltersChange({ ...filters, [key]: value });
   }
 
+  const activeAdvancedCount = [
+    filters.issue_id,
+    filters.issue_status,
+    filters.part_cost_total_gt,
+    filters.technician_id,
+    filters.trashed,
+    filters.per_page,
+  ].filter((v) => v != null && v !== "").length;
+
+  function clearAllFilters() {
+    onFiltersChange({});
+  }
+
+  const hasAnyFilter =
+    filters.status ||
+    filters.priority ||
+    activeAdvancedCount > 0;
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Status filter */}
-      <Select
-        value={filters.status || "all"}
-        onValueChange={handleStatus}
-        disabled={disabled}
-      >
-        <SelectTrigger className="h-9 w-40 text-sm">
-          <SelectValue placeholder={t("filters.statusPlaceholder")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>
-          <SelectItem value="pending">{t("status.pending")}</SelectItem>
-          <SelectItem value="assigned">{t("status.assigned")}</SelectItem>
-          <SelectItem value="in_progress">{t("status.in_progress")}</SelectItem>
-          <SelectItem value="complete">{t("status.complete")}</SelectItem>
-        </SelectContent>
-      </Select>
+    <div className="space-y-2">
+      {/* Primary toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Status */}
+        <Select
+          value={filters.status || "all"}
+          onValueChange={(v) => updateField("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectValue placeholder={t("filters.statusPlaceholder")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>
+            <SelectItem value="pending">{t("status.pending")}</SelectItem>
+            <SelectItem value="assigned">{t("status.assigned")}</SelectItem>
+            <SelectItem value="in_progress">{t("status.in_progress")}</SelectItem>
+            <SelectItem value="complete">{t("status.complete")}</SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* Priority filter */}
-      <Select
-        value={filters.priority || "all"}
-        onValueChange={handlePriority}
-        disabled={disabled}
-      >
-        <SelectTrigger className="h-9 w-40 text-sm">
-          <SelectValue placeholder={t("filters.priorityPlaceholder")} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{t("filters.allPriorities")}</SelectItem>
-          <SelectItem value="urgent">{t("priority.urgent")}</SelectItem>
-          <SelectItem value="high">{t("priority.high")}</SelectItem>
-          <SelectItem value="medium">{t("priority.medium")}</SelectItem>
-          <SelectItem value="low">{t("priority.low")}</SelectItem>
-        </SelectContent>
-      </Select>
+        {/* Priority */}
+        <Select
+          value={filters.priority || "all"}
+          onValueChange={(v) => updateField("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
+          disabled={disabled}
+        >
+          <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectValue placeholder={t("filters.priorityPlaceholder")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("filters.allPriorities")}</SelectItem>
+            <SelectItem value="urgent">{t("priority.urgent")}</SelectItem>
+            <SelectItem value="high">{t("priority.high")}</SelectItem>
+            <SelectItem value="medium">{t("priority.medium")}</SelectItem>
+            <SelectItem value="low">{t("priority.low")}</SelectItem>
+          </SelectContent>
+        </Select>
 
-      <div className="ms-auto flex items-center gap-2">
-        {/* Export */}
-        {/* <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting || disabled}>
-          {isExporting
-            ? <span className="me-1.5 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            : <Download className="me-1.5 h-4 w-4" />}
-          {t("filters.export") || "Export"}
-        </Button> */}
-
-        <Button variant="outline" size="sm" onClick={() => setAdvancedOpen((v) => !v)} disabled={disabled}>
+        {/* Advanced toggle */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          disabled={disabled}
+          className={cn(activeAdvancedCount > 0 && "border-primary/50 text-primary")}
+        >
           <SlidersHorizontal className="me-1.5 h-4 w-4" />
-          {advancedOpen ? "Hide Advanced" : "Advanced"}
+          Filters
+          {activeAdvancedCount > 0 && (
+            <span className="ms-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+              {activeAdvancedCount}
+            </span>
+          )}
+          <ChevronDown className={cn("ms-1 h-3 w-3 transition-transform", advancedOpen && "rotate-180")} />
         </Button>
 
-        {/* Catalog */}
-        <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled}>
-          <BookOpen className="me-1.5 h-4 w-4" />
-          {t("filters.catalog")}
-        </Button>
+        {/* Clear all */}
+        {hasAnyFilter && (
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} disabled={disabled} className="text-muted-foreground h-9 px-2">
+            <X className="me-1 h-3.5 w-3.5" />
+            Clear
+          </Button>
+        )}
 
-        {/* Create */}
-        <Button size="sm" onClick={onCreateClick} disabled={disabled}>
-          <Plus className="me-1.5 h-4 w-4" />
-          {t("filters.createTicket")}
-        </Button>
+        <div className="ms-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled}>
+            <BookOpen className="me-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">{t("filters.catalog")}</span>
+          </Button>
+          <Button size="sm" onClick={onCreateClick} disabled={disabled}>
+            <Plus className="me-1.5 h-4 w-4" />
+            <span className="hidden sm:inline">{t("filters.createTicket")}</span>
+          </Button>
+        </div>
       </div>
 
+      {/* Advanced panel */}
       {advancedOpen && (
-        <div className="w-full rounded-lg border bg-muted/20 p-3 mt-1">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <Input
-              placeholder="Issue ID"
-              value={filters.issue_id ?? ""}
-              onChange={(e) => updateField("issue_id", e.target.value ? Number(e.target.value) : undefined)}
-              disabled={disabled}
-              type="number"
-              className="h-9"
-            />
-            <Select
-              value={filters.issue_status || "all"}
-              onValueChange={(value) => updateField("issue_status", value === "all" ? "" : (value as TicketsFilters["issue_status"]))}
-              disabled={disabled}
-            >
-              <SelectTrigger className="h-9"><SelectValue placeholder="Issue status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All issue statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="assigned">Assigned</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="complete">Complete</SelectItem>
-                <SelectItem value="deferred">Deferred</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              placeholder="Assigned from"
-              value={filters.assigned_from ?? ""}
-              onChange={(e) => updateField("assigned_from", e.target.value || undefined)}
-              disabled={disabled}
-              type="date"
-              className="h-9"
-            />
-            <Input
-              placeholder="Assigned to"
-              value={filters.assigned_to ?? ""}
-              onChange={(e) => updateField("assigned_to", e.target.value || undefined)}
-              disabled={disabled}
-              type="date"
-              className="h-9"
-            />
-            <Input
-              placeholder="Min single part cost"
-              value={filters.part_cost_single_gt ?? ""}
-              onChange={(e) => updateField("part_cost_single_gt", e.target.value ? Number(e.target.value) : undefined)}
-              disabled={disabled}
-              type="number"
-              className="h-9"
-            />
-            <Input
-              placeholder="Min total part cost"
-              value={filters.part_cost_total_gt ?? ""}
-              onChange={(e) => updateField("part_cost_total_gt", e.target.value ? Number(e.target.value) : undefined)}
-              disabled={disabled}
-              type="number"
-              className="h-9"
-            />
-            <Input
-              placeholder="Technician ID"
-              value={filters.technician_id ?? ""}
-              onChange={(e) => updateField("technician_id", e.target.value ? Number(e.target.value) : undefined)}
-              disabled={disabled}
-              type="number"
-              className="h-9"
-            />
-            <Input
-              placeholder="Creator ID"
-              value={filters.creator_id ?? ""}
-              onChange={(e) => updateField("creator_id", e.target.value ? Number(e.target.value) : undefined)}
-              disabled={disabled}
-              type="number"
-              className="h-9"
-            />
-            <Select
-              value={filters.trashed || "none"}
-              onValueChange={(value) => updateField("trashed", value === "none" ? undefined : (value as TicketsFilters["trashed"]))}
-              disabled={disabled}
-            >
-              <SelectTrigger className="h-9"><SelectValue placeholder="Trash mode" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Default</SelectItem>
-                <SelectItem value="with">With trashed</SelectItem>
-                <SelectItem value="only">Only trashed</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input
-              placeholder="Sort field"
-              value={filters.sort ?? ""}
-              onChange={(e) => updateField("sort", e.target.value || undefined)}
-              disabled={disabled}
-              className="h-9"
-            />
-            <Select
-              value={filters.dir || "desc"}
-              onValueChange={(value) => updateField("dir", value as TicketsFilters["dir"])}
-              disabled={disabled}
-            >
-              <SelectTrigger className="h-9"><SelectValue placeholder="Direction" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="asc">Asc</SelectItem>
-                <SelectItem value="desc">Desc</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Advanced Filters</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+            {/* Issue (catalog-driven) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Issue</Label>
+              <Select
+                value={filters.issue_id != null ? String(filters.issue_id) : "all"}
+                onValueChange={(v) => updateField("issue_id", v === "all" ? undefined : Number(v))}
+                disabled={disabled || catalogLoading}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder={catalogLoading ? "Loading…" : "All issues"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All issues</SelectItem>
+                  {catalogIssues.map((issue) => (
+                    <SelectItem key={issue.id} value={String(issue.id)}>
+                      {issue.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Issue status */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Issue status</Label>
+              <Select
+                value={filters.issue_status || "all"}
+                onValueChange={(v) => updateField("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
+                disabled={disabled}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="complete">Complete</SelectItem>
+                  <SelectItem value="deferred">Deferred</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Technician (catalog-driven) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Technician</Label>
+              <Select
+                value={filters.technician_id != null ? String(filters.technician_id) : "all"}
+                onValueChange={(v) => updateField("technician_id", v === "all" ? undefined : Number(v))}
+                disabled={disabled || catalogLoading}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder={catalogLoading ? "Loading…" : "All technicians"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All technicians</SelectItem>
+                  {catalogTechnicians.map((tech) => (
+                    <SelectItem key={tech.id} value={String(tech.id)}>
+                      {tech.name}
+                      {tech.categoryName && (
+                        <span className="ms-1.5 text-muted-foreground text-xs">· {tech.categoryName}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Min total part cost */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Min total part cost ($)</Label>
+              <Input
+                placeholder="e.g. 100"
+                value={filters.part_cost_total_gt ?? ""}
+                onChange={(e) => updateField("part_cost_total_gt", e.target.value ? Number(e.target.value) : undefined)}
+                disabled={disabled}
+                type="number"
+                min="0"
+                step="0.01"
+                className="h-9 text-sm"
+              />
+            </div>
+
+            {/* Trashed */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Deleted records</Label>
+              <Select
+                value={filters.trashed || "none"}
+                onValueChange={(v) => updateField("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
+                disabled={disabled}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Active only</SelectItem>
+                  <SelectItem value="with">Include deleted</SelectItem>
+                  <SelectItem value="only">Deleted only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Per page */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Results per page</Label>
+              <Select
+                value={filters.per_page != null ? String(filters.per_page) : "default"}
+                onValueChange={(v) => updateField("per_page", v === "default" ? undefined : Number(v))}
+                disabled={disabled}
+              >
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Default" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="5">5</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="15">15</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
           </div>
+
+          {/* Clear advanced */}
+          {activeAdvancedCount > 0 && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-muted-foreground h-7 px-2"
+                onClick={() => onFiltersChange({ status: filters.status, priority: filters.priority })}
+              >
+                <X className="me-1 h-3 w-3" />
+                Clear advanced filters
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
