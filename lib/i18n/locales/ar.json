@@ -1138,8 +1138,12 @@
       "none": "بدون تجميع",
       "status": "الحالة",
       "priority": "الأولوية",
-      "technician": "الفني",
-      "part": "القطعة"
+      "technician": "الفني (الحضور)",
+      "part": "القطعة",
+      "assigned_technician": "الفني المعيّن",
+      "pay": "إدخال الراتب",
+      "warranty": "الضمان",
+      "diagnosis": "التشخيص"
     },
     "common": {
       "cancel": "إلغاء",

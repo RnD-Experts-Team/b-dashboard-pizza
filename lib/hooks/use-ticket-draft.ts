@@ -49,10 +49,10 @@ export interface IssueDraft {
 
 export interface TicketDraft {
   /**
-   * Issue IDs that the user explicitly collapsed.
-   * All other issues default to expanded.
+   * Issue IDs that the user explicitly expanded.
+   * All other issues default to collapsed.
    */
-  collapsedIssues: number[];
+  expandedIssues: number[];
   /** Draft text for the ticket-level final note footer */
   finalNote: string;
   /** Per-issue form drafts, keyed by issue id as string */
@@ -93,7 +93,7 @@ export const EMPTY_ISSUE_DRAFT: IssueDraft = {
 };
 
 export const EMPTY_TICKET_DRAFT: TicketDraft = {
-  collapsedIssues: [],
+  expandedIssues: [],
   finalNote: "",
   issues: {},
 };
@@ -242,21 +242,22 @@ export function useTicketDraft(storeId: string, ticketId: number | null) {
     [setDraft]
   );
 
-  /** Returns true unless the issue id is in the collapsedIssues list */
+  /** Returns true only if the issue id is in the expandedIssues list */
   const isIssueExpanded = useCallback(
-    (issueId: number) => !draft.collapsedIssues.includes(issueId),
-    [draft.collapsedIssues]
+    (issueId: number) => (draft.expandedIssues ?? []).includes(issueId),
+    [draft.expandedIssues]
   );
 
   const toggleIssueExpanded = useCallback(
     (issueId: number) => {
       setDraft((prev) => {
-        const already = prev.collapsedIssues.includes(issueId);
+        const list = prev.expandedIssues ?? [];
+        const already = list.includes(issueId);
         return {
           ...prev,
-          collapsedIssues: already
-            ? prev.collapsedIssues.filter((id) => id !== issueId)
-            : [...prev.collapsedIssues, issueId],
+          expandedIssues: already
+            ? list.filter((id) => id !== issueId)
+            : [...list, issueId],
         };
       });
     },

@@ -1138,8 +1138,12 @@
       "none": "No grouping",
       "status": "Status",
       "priority": "Priority",
-      "technician": "Technician",
-      "part": "Part"
+      "technician": "Technician (Attendance)",
+      "part": "Part",
+      "assigned_technician": "Assigned Technician",
+      "pay": "Pay Entry",
+      "warranty": "Warranty",
+      "diagnosis": "Diagnosis"
     },
     "common": {
       "cancel": "Cancel",

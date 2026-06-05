@@ -1640,10 +1640,22 @@ interface IssueNodeProps {
   sharedPartIds?: ReadonlySet<number>;
   /** IDs of attendance_entry records that appear on more than one issue */
   sharedAttendanceIds?: ReadonlySet<number>;
+  /** IDs of pay_entry records that appear on more than one issue */
+  sharedPayIds?: ReadonlySet<number>;
+  /** IDs of warranty records that appear on more than one issue */
+  sharedWarrantyIds?: ReadonlySet<number>;
+  /** IDs of diagnosis records that appear on more than one issue */
+  sharedDiagnosisIds?: ReadonlySet<number>;
   /** map: record id -> all issue ids that share this part usage record */
   sharedPartIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
   /** map: record id -> all issue ids that share this attendance record */
   sharedAttendanceIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
+  /** map: record id -> all issue ids that share this pay entry record */
+  sharedPayIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
+  /** map: record id -> all issue ids that share this warranty record */
+  sharedWarrantyIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
+  /** map: record id -> all issue ids that share this diagnosis record */
+  sharedDiagnosisIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
   /** map: issue id -> display title */
   issueTitleById?: ReadonlyMap<number, string>;
   /** trigger transient highlight animation for issue cards */
@@ -1672,8 +1684,14 @@ function IssueNode({
   onToggleSelectId,
   sharedPartIds,
   sharedAttendanceIds,
+  sharedPayIds,
+  sharedWarrantyIds,
+  sharedDiagnosisIds,
   sharedPartIssueIdsByRecordId,
   sharedAttendanceIssueIdsByRecordId,
+  sharedPayIssueIdsByRecordId,
+  sharedWarrantyIssueIdsByRecordId,
+  sharedDiagnosisIssueIdsByRecordId,
   issueTitleById,
   onHighlightIssues,
   showSharedIndicatorWhenCollapsed = false,
@@ -1685,7 +1703,10 @@ function IssueNode({
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
   const hasSharedAction =
     issue.partUsages.some((item) => Boolean(sharedPartIds?.has(item.id))) ||
-    issue.attendanceEntries.some((item) => Boolean(sharedAttendanceIds?.has(item.id)));
+    issue.attendanceEntries.some((item) => Boolean(sharedAttendanceIds?.has(item.id))) ||
+    issue.payEntries.some((item) => Boolean(sharedPayIds?.has(item.id))) ||
+    issue.warranties.some((item) => Boolean(sharedWarrantyIds?.has(item.id))) ||
+    issue.diagnoses.some((item) => Boolean(sharedDiagnosisIds?.has(item.id)));
   const canAssign = ["pending", "assigned"].includes(issue.status.value);
   const canDefer = issue.status.value !== "complete";
 
@@ -1820,13 +1841,45 @@ function IssueNode({
                 {issue.diagnoses.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Diagnoses</p>
-                    {issue.diagnoses.map((item) => (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5", item.mistaken && "opacity-60 line-through") }>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <FileText className="h-3 w-3" />
-                          <span>{item.body || "No notes"}</span>
-                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                        </div>
+                    {issue.diagnoses.map((item) => {
+                      const sharedWithIds = (sharedDiagnosisIssueIdsByRecordId?.get(item.id) ?? [])
+                        .filter((id) => id !== issue.id);
+                      const isShared = Boolean(sharedDiagnosisIds?.has(item.id));
+                      const idsToHighlight = [issue.id, ...sharedWithIds];
+                      return (
+                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
+                          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                            <FileText className="h-3 w-3" />
+                            <span className="text-foreground">{item.body || "No notes"}</span>
+                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {isShared && (
+                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                                Shared action
+                              </span>
+                            )}
+                          </div>
+                          {isShared && sharedWithIds.length > 0 && (
+                            <div className="ps-5 text-[11px] text-muted-foreground">
+                              Shared with:{" "}
+                              {sharedWithIds.map((otherId, index) => (
+                                <span key={otherId}>
+                                  <button
+                                    type="button"
+                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onHighlightIssues?.(idsToHighlight);
+                                      const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
+                                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                    }}
+                                  >
+                                    {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                  </button>
+                                  {index < sharedWithIds.length - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         {item.attachments.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             {item.attachments.map((attachment, index) => {
@@ -1892,7 +1945,8 @@ function IssueNode({
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -2053,28 +2107,95 @@ function IssueNode({
                 {issue.payEntries.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pay Entries</p>
-                    {issue.payEntries.map((item) => (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 flex flex-wrap items-center gap-2", item.mistaken && "opacity-60 line-through") }>
-                        <Wallet className="h-3 w-3" />
-                        <span>Tech #{item.technicianId}</span>
-                        {item.basePay != null && <span>Base ${item.basePay.toFixed(2)}</span>}
-                        {item.performancePay != null && <span>Perf ${item.performancePay.toFixed(2)}</span>}
-                        {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                      </div>
-                    ))}
+                    {issue.payEntries.map((item) => {
+                      const sharedWithIds = (sharedPayIssueIdsByRecordId?.get(item.id) ?? [])
+                        .filter((id) => id !== issue.id);
+                      const isShared = Boolean(sharedPayIds?.has(item.id));
+                      const idsToHighlight = [issue.id, ...sharedWithIds];
+                      return (
+                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Wallet className="h-3 w-3" />
+                            <span>Tech #{item.technicianId}</span>
+                            {item.basePay != null && <span>Base ${item.basePay.toFixed(2)}</span>}
+                            {item.performancePay != null && <span>Perf ${item.performancePay.toFixed(2)}</span>}
+                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {isShared && (
+                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                                Shared action
+                              </span>
+                            )}
+                          </div>
+                          {isShared && sharedWithIds.length > 0 && (
+                            <div className="ps-5 text-[11px] text-muted-foreground">
+                              Shared with:{" "}
+                              {sharedWithIds.map((otherId, index) => (
+                                <span key={otherId}>
+                                  <button
+                                    type="button"
+                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onHighlightIssues?.(idsToHighlight);
+                                      const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
+                                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                    }}
+                                  >
+                                    {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                  </button>
+                                  {index < sharedWithIds.length - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
                 {issue.warranties.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Warranties</p>
-                    {issue.warranties.map((item) => (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5", item.mistaken && "opacity-60 line-through")}>
-                        <div className="flex items-center gap-2">
+                    {issue.warranties.map((item) => {
+                      const sharedWithIds = (sharedWarrantyIssueIdsByRecordId?.get(item.id) ?? [])
+                        .filter((id) => id !== issue.id);
+                      const isShared = Boolean(sharedWarrantyIds?.has(item.id));
+                      const idsToHighlight = [issue.id, ...sharedWithIds];
+                      return (
+                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
+                        <div className="flex flex-wrap items-center gap-2">
                           <ShieldCheck className="h-3 w-3" />
                           <span>{item.body || "No notes"}</span>
                           {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                          {isShared && (
+                            <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                              Shared action
+                            </span>
+                          )}
                         </div>
+                        {isShared && sharedWithIds.length > 0 && (
+                          <div className="ps-5 text-[11px] text-muted-foreground">
+                            Shared with:{" "}
+                            {sharedWithIds.map((otherId, index) => (
+                              <span key={otherId}>
+                                <button
+                                  type="button"
+                                  className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onHighlightIssues?.(idsToHighlight);
+                                    const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
+                                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                  }}
+                                >
+                                  {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                </button>
+                                {index < sharedWithIds.length - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {item.attachments.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             {item.attachments.map((attachment, index) => {
@@ -2110,7 +2231,8 @@ function IssueNode({
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
@@ -2300,7 +2422,7 @@ function RightPanel({
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
-  const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part">("none");
+  const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
   const [finalNoteOpen, setFinalNoteOpen] = useState(false);
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -2410,8 +2532,12 @@ function RightPanel({
               <SelectItem value="none">{t("groupBy.none")}</SelectItem>
               <SelectItem value="status">{t("groupBy.status")}</SelectItem>
               <SelectItem value="priority">{t("groupBy.priority")}</SelectItem>
+              <SelectItem value="assigned_technician">{t("groupBy.assigned_technician")}</SelectItem>
               <SelectItem value="technician">{t("groupBy.technician")}</SelectItem>
               <SelectItem value="part">{t("groupBy.part")}</SelectItem>
+              <SelectItem value="pay">{t("groupBy.pay")}</SelectItem>
+              <SelectItem value="warranty">{t("groupBy.warranty")}</SelectItem>
+              <SelectItem value="diagnosis">{t("groupBy.diagnosis")}</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -2479,6 +2605,9 @@ function RightPanel({
           // A record ID is "shared" when it appears on more than one issue.
           const partIssueIdsByRecordId = new Map<number, number[]>();
           const attendanceIssueIdsByRecordId = new Map<number, number[]>();
+          const payIssueIdsByRecordId = new Map<number, number[]>();
+          const warrantyIssueIdsByRecordId = new Map<number, number[]>();
+          const diagnosisIssueIdsByRecordId = new Map<number, number[]>();
           const issueTitleById = new Map<number, string>();
           for (const iss of issuesResponse.data) {
             issueTitleById.set(iss.id, iss.issueTitle ?? iss.otherTitle ?? `Issue #${iss.id}`);
@@ -2492,12 +2621,36 @@ function RightPanel({
               const arr = attendanceIssueIdsByRecordId.get(ae.id)!;
               if (!arr.includes(iss.id)) arr.push(iss.id);
             }
+            for (const pe of iss.payEntries) {
+              if (!payIssueIdsByRecordId.has(pe.id)) payIssueIdsByRecordId.set(pe.id, []);
+              const arr = payIssueIdsByRecordId.get(pe.id)!;
+              if (!arr.includes(iss.id)) arr.push(iss.id);
+            }
+            for (const w of iss.warranties) {
+              if (!warrantyIssueIdsByRecordId.has(w.id)) warrantyIssueIdsByRecordId.set(w.id, []);
+              const arr = warrantyIssueIdsByRecordId.get(w.id)!;
+              if (!arr.includes(iss.id)) arr.push(iss.id);
+            }
+            for (const d of iss.diagnoses) {
+              if (!diagnosisIssueIdsByRecordId.has(d.id)) diagnosisIssueIdsByRecordId.set(d.id, []);
+              const arr = diagnosisIssueIdsByRecordId.get(d.id)!;
+              if (!arr.includes(iss.id)) arr.push(iss.id);
+            }
           }
           const sharedPartIds: ReadonlySet<number> = new Set(
             [...partIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
           );
           const sharedAttendanceIds: ReadonlySet<number> = new Set(
             [...attendanceIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
+          );
+          const sharedPayIds: ReadonlySet<number> = new Set(
+            [...payIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
+          );
+          const sharedWarrantyIds: ReadonlySet<number> = new Set(
+            [...warrantyIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
+          );
+          const sharedDiagnosisIds: ReadonlySet<number> = new Set(
+            [...diagnosisIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
           );
           return (
           <div>
@@ -2558,8 +2711,42 @@ function RightPanel({
                   } else {
                     for (const ae of iss.attendanceEntries) {
                       const tech = technicians.find((tc) => tc.id === ae.technicianId);
-                      const lbl = tech?.name ?? `Technician #${ae.technicianId}`;
+                      const lbl = ae.technician?.name ?? tech?.name ?? `Technician #${ae.technicianId}`;
                       addToGroup(`attendance-record-${ae.id}`, lbl, iss);
+                    }
+                  }
+                } else if (groupBy === "assigned_technician") {
+                  if (iss.technicians.length === 0) {
+                    addToGroup("__no-assigned-tech__", "No assigned technician", iss);
+                  } else {
+                    for (const tech of iss.technicians) {
+                      addToGroup(`assigned-tech-${tech.id}`, tech.name, iss);
+                    }
+                  }
+                } else if (groupBy === "pay") {
+                  if (iss.payEntries.length === 0) {
+                    addToGroup("__no-pay__", "No pay entries", iss);
+                  } else {
+                    for (const pe of iss.payEntries) {
+                      const tech = technicians.find((tc) => tc.id === pe.technicianId);
+                      const lbl = tech?.name ?? `Technician #${pe.technicianId}`;
+                      addToGroup(`pay-record-${pe.id}`, lbl, iss);
+                    }
+                  }
+                } else if (groupBy === "warranty") {
+                  if (iss.warranties.length === 0) {
+                    addToGroup("__no-warranty__", "No warranty", iss);
+                  } else {
+                    for (const w of iss.warranties) {
+                      addToGroup(`warranty-record-${w.id}`, w.body ? w.body.slice(0, 40) : `Warranty #${w.id}`, iss);
+                    }
+                  }
+                } else if (groupBy === "diagnosis") {
+                  if (iss.diagnoses.length === 0) {
+                    addToGroup("__no-diagnosis__", "No diagnosis", iss);
+                  } else {
+                    for (const d of iss.diagnoses) {
+                      addToGroup(`diagnosis-record-${d.id}`, d.body ? d.body.slice(0, 40) : `Diagnosis #${d.id}`, iss);
                     }
                   }
                 }
@@ -2590,6 +2777,41 @@ function RightPanel({
                       : "Note: this attendance action applies only to this issue",
                     actionKind: isShared ? "shared" : "solo",
                   };
+                }
+                if (groupBy === "pay") {
+                  if (key === "__no-pay__")
+                    return { subtitle: "These issues have no pay entries", actionKind: null };
+                  return {
+                    subtitle: isShared
+                      ? "Note: this pay entry was applied to the following issues"
+                      : "Note: this pay entry applies only to this issue",
+                    actionKind: isShared ? "shared" : "solo",
+                  };
+                }
+                if (groupBy === "warranty") {
+                  if (key === "__no-warranty__")
+                    return { subtitle: "These issues have no warranty claims", actionKind: null };
+                  return {
+                    subtitle: isShared
+                      ? "Note: this warranty record was shared across the following issues"
+                      : "Note: this warranty applies only to this issue",
+                    actionKind: isShared ? "shared" : "solo",
+                  };
+                }
+                if (groupBy === "diagnosis") {
+                  if (key === "__no-diagnosis__")
+                    return { subtitle: "These issues have no diagnosis records", actionKind: null };
+                  return {
+                    subtitle: isShared
+                      ? "Note: this diagnosis was shared across the following issues"
+                      : "Note: this diagnosis applies only to this issue",
+                    actionKind: isShared ? "shared" : "solo",
+                  };
+                }
+                if (groupBy === "assigned_technician") {
+                  if (key === "__no-assigned-tech__")
+                    return { subtitle: "These issues have no assigned technician", actionKind: null };
+                  return { subtitle: `Issues assigned to: ${keyLabel.get(key) ?? key}`, actionKind: null };
                 }
                 if (groupBy === "status")
                   return { subtitle: `These issues share the same status: ${keyLabel.get(key) ?? key}`, actionKind: null };
@@ -2640,8 +2862,14 @@ function RightPanel({
                         onToggleSelectId={toggleIssueSelect}
                         sharedPartIds={sharedPartIds}
                         sharedAttendanceIds={sharedAttendanceIds}
+                        sharedPayIds={sharedPayIds}
+                        sharedWarrantyIds={sharedWarrantyIds}
+                        sharedDiagnosisIds={sharedDiagnosisIds}
                         sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
                         sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                        sharedPayIssueIdsByRecordId={payIssueIdsByRecordId}
+                        sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
+                        sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                         issueTitleById={issueTitleById}
                         onHighlightIssues={triggerIssueHighlight}
                         showSharedIndicatorWhenCollapsed={false}
@@ -2671,8 +2899,14 @@ function RightPanel({
                                 onToggleSelectId={toggleIssueSelect}
                                 sharedPartIds={sharedPartIds}
                                 sharedAttendanceIds={sharedAttendanceIds}
+                                sharedPayIds={sharedPayIds}
+                                sharedWarrantyIds={sharedWarrantyIds}
+                                sharedDiagnosisIds={sharedDiagnosisIds}
                                 sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
                                 sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                                sharedPayIssueIdsByRecordId={payIssueIdsByRecordId}
+                                sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
+                                sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                                 issueTitleById={issueTitleById}
                                 onHighlightIssues={triggerIssueHighlight}
                                 showSharedIndicatorWhenCollapsed={false}
@@ -2748,8 +2982,14 @@ function RightPanel({
                       onToggleSelectId={toggleIssueSelect}
                       sharedPartIds={sharedPartIds}
                       sharedAttendanceIds={sharedAttendanceIds}
+                      sharedPayIds={sharedPayIds}
+                      sharedWarrantyIds={sharedWarrantyIds}
+                      sharedDiagnosisIds={sharedDiagnosisIds}
                       sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
                       sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                      sharedPayIssueIdsByRecordId={payIssueIdsByRecordId}
+                      sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
+                      sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                       issueTitleById={issueTitleById}
                       onHighlightIssues={triggerIssueHighlight}
                       showSharedIndicatorWhenCollapsed={true}
@@ -2779,8 +3019,14 @@ function RightPanel({
                               onToggleSelectId={toggleIssueSelect}
                               sharedPartIds={sharedPartIds}
                               sharedAttendanceIds={sharedAttendanceIds}
+                              sharedPayIds={sharedPayIds}
+                              sharedWarrantyIds={sharedWarrantyIds}
+                              sharedDiagnosisIds={sharedDiagnosisIds}
                               sharedPartIssueIdsByRecordId={partIssueIdsByRecordId}
                               sharedAttendanceIssueIdsByRecordId={attendanceIssueIdsByRecordId}
+                              sharedPayIssueIdsByRecordId={payIssueIdsByRecordId}
+                              sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
+                              sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                               issueTitleById={issueTitleById}
                               onHighlightIssues={triggerIssueHighlight}
                               showSharedIndicatorWhenCollapsed={true}
