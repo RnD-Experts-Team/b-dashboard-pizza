@@ -2,14 +2,23 @@
 /*  Enums / Scalars                                                         */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export type TicketStatus = "pending" | "assigned" | "in_progress" | "complete";
+export type TicketStatus =
+  | "pending"
+  | "assigned"
+  | "in_progress"
+  | "complete"
+  | "cancelled";
 export type IssueStatus =
   | "pending"
   | "assigned"
   | "in_progress"
   | "complete"
-  | "deferred";
+  | "deferred"
+  | "cancelled";
 export type Priority = "urgent" | "high" | "medium" | "low";
+
+/** Typed closing-note categories on a ticket. Generic notes use `null`. */
+export type NoteType = "final_notes" | "what_we_learned";
 
 /**
  * The API returns enum fields as { value: "...", label: "..." }.
@@ -18,6 +27,13 @@ export type Priority = "urgent" | "high" | "medium" | "low";
 export interface EnumField {
   value: string;
   label: string;
+}
+
+/** Minimal user reference returned in `creator` fields. */
+export interface UserRef {
+  id: number;
+  name: string;
+  email: string;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -29,6 +45,8 @@ export interface CatalogIssue {
   title: string;
   description: string | null;
   deletedAt: string | null;
+  notes?: TicketNote[];
+  attachments?: TicketAttachment[];
 }
 
 export interface CatalogTechnician {
@@ -38,6 +56,8 @@ export interface CatalogTechnician {
   categoryId: number | null;
   categoryName: string | null;
   deletedAt: string | null;
+  notes?: TicketNote[];
+  attachments?: TicketAttachment[];
 }
 
 export interface CatalogPart {
@@ -45,12 +65,16 @@ export interface CatalogPart {
   name: string;
   description: string | null;
   deletedAt: string | null;
+  notes?: TicketNote[];
+  attachments?: TicketAttachment[];
 }
 
 export interface CatalogCategory {
   id: number;
   name: string;
   description: string | null;
+  notes?: TicketNote[];
+  attachments?: TicketAttachment[];
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -72,6 +96,8 @@ export interface TicketAssignment {
   assignedHour: string | null;
   technicians: CatalogTechnician[];
   delays: TicketAssignmentDelay[];
+  attachments: TicketAttachment[];
+  notes: TicketNote[];
   createdAt: string;
 }
 
@@ -87,7 +113,7 @@ export interface TicketIssueStatusChange {
 /*  Lifecycle record entity types                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/** A file attached to a diagnosis, attendance, part-usage, or warranty record. */
+/** A file attached to any entity (record, note, ticket, catalog item…). */
 export interface TicketAttachment {
   id: number;
   fileName: string;
@@ -95,7 +121,24 @@ export interface TicketAttachment {
   contentType: string | null;
   /** Ready-to-use download URL provided by the API. */
   url: string;
+  createdBy: number | null;
   createdAt: string;
+}
+
+/**
+ * A free-text note attached to any entity. Notes are append-only.
+ * `type` is null for generic notes; ticket closing notes use a NoteType.
+ */
+export interface TicketNote {
+  id: number;
+  type: string | null;
+  typeLabel: string | null;
+  body: string;
+  attachments: TicketAttachment[];
+  createdBy: number | null;
+  creator: UserRef | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -107,7 +150,9 @@ export interface TicketIssueDiagnosis {
   ticketIssueId: number;
   body: string | null;
   attachments: TicketAttachment[];
+  notes: TicketNote[];
   mistaken: boolean;
+  createdBy: number | null;
   createdAt: string;
 }
 
@@ -124,7 +169,9 @@ export interface TicketIssueAttendance {
   startPartsRun: string | null;
   endPartsRun: string | null;
   attachments: TicketAttachment[];
+  notes: TicketNote[];
   mistaken: boolean;
+  createdBy: number | null;
   createdAt: string;
 }
 
@@ -137,7 +184,9 @@ export interface TicketIssuePartUsage {
   /** Numeric cost — API returns as decimal string; the service parses it. */
   cost: number;
   attachments: TicketAttachment[];
+  notes: TicketNote[];
   mistaken: boolean;
+  createdBy: number | null;
   createdAt: string;
 }
 
@@ -146,6 +195,7 @@ export interface TicketIssuePayEntry {
   id: number;
   ticketIssueId: number;
   technicianId: number;
+  technician: { id: number; name: string } | null;
   basePay: number | null;
   performancePay: number | null;
   drivingBasePay: number | null;
@@ -154,7 +204,10 @@ export interface TicketIssuePayEntry {
   drivingTime: number | null;
   milesDriven: number | null;
   perMileRate: number | null;
+  attachments: TicketAttachment[];
+  notes: TicketNote[];
   mistaken: boolean;
+  createdBy: number | null;
   createdAt: string;
 }
 
@@ -163,8 +216,12 @@ export interface TicketIssueWarranty {
   id: number;
   ticketIssueId: number;
   body: string | null;
+  /** Required since v2.0 (YYYY-MM-DD). */
+  expiryDate: string | null;
   attachments: TicketAttachment[];
+  notes: TicketNote[];
   mistaken: boolean;
+  createdBy: number | null;
   createdAt: string;
 }
 
@@ -187,6 +244,10 @@ export interface TicketIssue {
   partUsages: TicketIssuePartUsage[];
   payEntries: TicketIssuePayEntry[];
   warranties: TicketIssueWarranty[];
+  attachments: TicketAttachment[];
+  notes: TicketNote[];
+  createdBy: number | null;
+  creator: UserRef | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -195,7 +256,10 @@ export interface Ticket {
   id: number;
   storeId: string;
   status: EnumField;
-  finalNote: string | null;
+  /** All ticket notes (closing notes have a non-null `type`; generic notes are null). */
+  notes: TicketNote[];
+  attachments: TicketAttachment[];
+  creator: UserRef | null;
   issueCount: number;
   createdAt: string;
   updatedAt: string;
@@ -265,8 +329,20 @@ export interface DeferPayload {
   reason: string;
 }
 
+export interface CancelPayload {
+  reason: string;
+}
+
+/** A typed closing note appended to a ticket (multipart; supports files). */
 export interface FinalNotePayload {
-  final_note: string | null;
+  body: string;
+  type: NoteType;
+}
+
+/** Generic free-text note for any entity (multipart; supports files). */
+export interface CreateNotePayload {
+  body: string;
+  type?: string;
 }
 
 export interface CreateDiagnosisPayload {
@@ -306,6 +382,8 @@ export interface CreatePayEntryPayload {
 export interface CreateWarrantyPayload {
   ticket_issue_ids: number[];
   body?: string;
+  /** Required since v2.0 (YYYY-MM-DD). */
+  expiry_date: string;
 }
 
 export interface AttachTechniciansPayload {
@@ -364,6 +442,8 @@ export interface ApiCatalogIssue {
   title: string;
   description: string | null;
   deleted_at: string | null;
+  notes?: ApiTicketNote[];
+  attachments?: ApiTicketAttachment[];
 }
 
 export interface ApiCatalogTechnician {
@@ -373,6 +453,8 @@ export interface ApiCatalogTechnician {
   category_id: number | null;
   category: { id: number; name: string } | null;
   deleted_at?: string | null;
+  notes?: ApiTicketNote[];
+  attachments?: ApiTicketAttachment[];
 }
 
 export interface ApiCatalogPart {
@@ -380,12 +462,16 @@ export interface ApiCatalogPart {
   name: string;
   description: string | null;
   deleted_at: string | null;
+  notes?: ApiTicketNote[];
+  attachments?: ApiTicketAttachment[];
 }
 
 export interface ApiCatalogCategory {
   id: number;
   name: string;
   description: string | null;
+  notes?: ApiTicketNote[];
+  attachments?: ApiTicketAttachment[];
 }
 
 export interface ApiTicketAssignmentDelay {
@@ -403,6 +489,8 @@ export interface ApiTicketAssignment {
   assigned_hour: string | null;
   ticket_issue_ids: number[] | null;
   delays: ApiTicketAssignmentDelay[];
+  attachments?: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
   created_at: string;
 }
 
@@ -426,7 +514,20 @@ export interface ApiTicketAttachment {
   content_type?: string | null;
   mime_type?: string | null;
   url: string;
+  created_by?: number | null;
   created_at: string;
+}
+
+export interface ApiTicketNote {
+  id: number;
+  type: string | null;
+  type_label: string | null;
+  body: string;
+  attachments?: ApiTicketAttachment[];
+  created_by: number | null;
+  creator: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiTicketIssueDiagnosis {
@@ -434,7 +535,9 @@ export interface ApiTicketIssueDiagnosis {
   ticket_issue_id: number;
   body: string | null;
   attachments: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
   mistaken: boolean;
+  created_by?: number | null;
   created_at: string;
 }
 
@@ -450,7 +553,9 @@ export interface ApiTicketIssueAttendance {
   start_parts_run: string | null;
   end_parts_run: string | null;
   attachments: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
   mistaken: boolean;
+  created_by?: number | null;
   created_at: string;
 }
 
@@ -462,7 +567,9 @@ export interface ApiTicketIssuePartUsage {
   /** Laravel returns decimal fields as strings (e.g. "49.99") */
   cost: string;
   attachments: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
   mistaken: boolean;
+  created_by?: number | null;
   created_at: string;
 }
 
@@ -470,6 +577,7 @@ export interface ApiTicketIssuePayEntry {
   id: number;
   ticket_issue_id: number;
   technician_id: number;
+  technician?: { id: number; name: string } | null;
   base_pay: string | null;
   performance_pay: string | null;
   driving_base_pay: string | null;
@@ -477,7 +585,10 @@ export interface ApiTicketIssuePayEntry {
   driving_time: string | null;
   miles_driven: string | null;
   per_mile_rate: string | null;
+  attachments?: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
   mistaken: boolean;
+  created_by?: number | null;
   created_at: string;
 }
 
@@ -485,8 +596,11 @@ export interface ApiTicketIssueWarranty {
   id: number;
   ticket_issue_id: number;
   body: string | null;
+  expiry_date?: string | null;
   attachments: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
   mistaken: boolean;
+  created_by?: number | null;
   created_at: string;
 }
 
@@ -510,6 +624,10 @@ export interface ApiTicketIssue {
   part_usages: ApiTicketIssuePartUsage[];
   pay_entries: ApiTicketIssuePayEntry[];
   warranties: ApiTicketIssueWarranty[];
+  attachments?: ApiTicketAttachment[];
+  notes?: ApiTicketNote[];
+  created_by?: number | null;
+  creator?: { id: number; name: string; email: string } | null;
   created_at: string;
   updated_at: string;
 }
@@ -522,7 +640,11 @@ export interface ApiTicket {
     store_number: string;
   } | null;
   status: ApiEnumField;
-  final_note: string | null;
+  /** Removed in v2.0; kept optional for backward-compat. */
+  final_note?: string | null;
+  notes?: ApiTicketNote[];
+  attachments?: ApiTicketAttachment[];
+  creator?: { id: number; name: string; email: string } | null;
   issues_count?: number;
   created_at: string;
   updated_at: string;

@@ -97,6 +97,7 @@ export function TicketsFiltersBar({
             <SelectItem value="assigned">{t("status.assigned")}</SelectItem>
             <SelectItem value="in_progress">{t("status.in_progress")}</SelectItem>
             <SelectItem value="complete">{t("status.complete")}</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
 
@@ -200,6 +201,7 @@ export function TicketsFiltersBar({
                   <SelectItem value="in_progress">In Progress</SelectItem>
                   <SelectItem value="complete">Complete</SelectItem>
                   <SelectItem value="deferred">Deferred</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
             </div>

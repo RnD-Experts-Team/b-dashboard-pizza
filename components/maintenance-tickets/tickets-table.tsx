@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
-import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, RotateCcw, Trash2 } from "lucide-react";
+import { Ban, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -12,41 +13,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { TicketsListResponse, Ticket, TicketStatus } from "@/types/maintenance-tickets.types";
-import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Status badge                                                            */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-const STATUS_VARIANTS: Record<TicketStatus, "default" | "secondary" | "outline" | "destructive"> = {
-  pending: "outline",
-  assigned: "secondary",
-  in_progress: "default",
-  complete: "default",
-};
-
-const STATUS_CLASSES: Record<TicketStatus, string> = {
-  pending: "border-yellow-400 text-yellow-600 dark:text-yellow-400",
-  assigned: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  in_progress: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
-  complete: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-};
-
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations("maintenanceTickets.status");
   const key = status as TicketStatus;
-  return (
-    <Badge
-    //   variant={STATUS_VARIANTS[key] ?? "outline"}
-    //   className={cn("capitalize whitespace-nowrap", STATUS_CLASSES[key])}
-    >
-        
-      {t(key as keyof ReturnType<typeof useTranslations<"maintenanceTickets.status">>)}
-    </Badge>
-  );
+  // `cancelled` has no translation key yet — fall back to a humanized label.
+  const label = key === "cancelled"
+    ? "Cancelled"
+    : t(key as keyof ReturnType<typeof useTranslations<"maintenanceTickets.status">>);
+  return <Badge>{label}</Badge>;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -61,51 +54,122 @@ interface TicketRowProps {
 
 function TicketRow({ ticket, onClick, onChanged }: TicketRowProps) {
   const t = useTranslations("maintenanceTickets");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleDelete() {
-    await maintenanceTicketsService.deleteTicket(ticket.storeId, ticket.id);
-    onChanged();
+  function openDialog(e: React.MouseEvent) {
+    e.stopPropagation();
+    setReason("");
+    setError(null);
+    setDialogOpen(true);
   }
 
-  async function handleRestore() {
+  async function handleConfirmCancel() {
+    if (!reason.trim()) { setError("Reason is required."); return; }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await maintenanceTicketsService.cancelTicket(ticket.storeId, ticket.id, { reason: reason.trim() });
+      setDialogOpen(false);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to cancel ticket.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRestore(e: React.MouseEvent) {
+    e.stopPropagation();
     await maintenanceTicketsService.restoreTicket(ticket.storeId, ticket.id);
     onChanged();
   }
 
   return (
-    <TableRow
-      className="cursor-pointer transition-colors hover:bg-muted/50"
-      onClick={() => onClick(ticket)}
-    >
-      <TableCell className="font-mono text-sm font-medium">#{ticket.id}</TableCell>
-      <TableCell>
-        <StatusBadge status={ticket.status.value} />
-      </TableCell>
-      <TableCell>
-        <span className="text-sm">
-          {ticket.issueCount} {t("columns.issuesCount")}
-        </span>
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground">{ticket.storeId}</TableCell>
-      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-        {format(new Date(ticket.createdAt), "MMM d, yyyy")}
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {ticket.deletedAt ? (
-            <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleRestore}>
-              <RotateCcw className="h-3.5 w-3.5 me-1" />
-              Restore
+    <>
+      <TableRow
+        className="cursor-pointer transition-colors hover:bg-muted/50"
+        onClick={() => onClick(ticket)}
+      >
+        <TableCell className="font-mono text-sm font-medium">#{ticket.id}</TableCell>
+        <TableCell>
+          <StatusBadge status={ticket.status.value} />
+        </TableCell>
+        <TableCell>
+          <span className="text-sm">
+            {ticket.issueCount} {t("columns.issuesCount")}
+          </span>
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground">{ticket.storeId}</TableCell>
+        <TableCell className="text-sm text-muted-foreground">
+          {ticket.creator?.name ?? <span className="opacity-40">—</span>}
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {format(new Date(ticket.createdAt), "MMM d, yyyy")}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            {ticket.deletedAt ? (
+              <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleRestore}>
+                <RotateCcw className="h-3.5 w-3.5 me-1" />
+                Restore
+              </Button>
+            ) : ticket.status.value === "cancelled" ? (
+              <Button variant="outline" size="sm" className="h-7 px-2" disabled>
+                <Ban className="h-3.5 w-3.5 me-1" />
+                Cancelled
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="h-7 px-2 text-destructive hover:text-destructive" onClick={openDialog}>
+                <Ban className="h-3.5 w-3.5 me-1" />
+                Cancel
+              </Button>
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {/* Cancel reason dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!isSubmitting) setDialogOpen(open); }}>
+        <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Cancel Ticket #{ticket.id}</DialogTitle>
+            <DialogDescription>
+              Provide a reason for cancelling this ticket. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="cancel-reason" className="text-sm">
+              Reason <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="cancel-reason"
+              placeholder="Enter cancellation reason…"
+              className="resize-none min-h-24"
+              value={reason}
+              onChange={(e) => { setReason(e.target.value); setError(null); }}
+              disabled={isSubmitting}
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
+              Back
             </Button>
-          ) : (
-            <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleDelete}>
-              <Trash2 className="h-3.5 w-3.5 me-1" />
-              Delete
+            <Button
+              variant="destructive"
+              onClick={handleConfirmCancel}
+              disabled={isSubmitting || !reason.trim()}
+            >
+              {isSubmitting && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
+              Confirm Cancel
             </Button>
-          )}
-        </div>
-      </TableCell>
-    </TableRow>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -216,6 +280,7 @@ export function TicketsTable({
               <TableHead>{t("columns.status")}</TableHead>
               <TableHead>{t("columns.issues")}</TableHead>
               <TableHead>{t("columns.store")}</TableHead>
+              <TableHead>Creator</TableHead>
               <TableHead>{t("columns.createdAt")}</TableHead>
               <TableHead className="text-end">Actions</TableHead>
             </TableRow>

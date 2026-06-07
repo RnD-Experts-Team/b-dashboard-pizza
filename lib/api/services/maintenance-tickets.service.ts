@@ -10,7 +10,9 @@ import type {
   AssignIssuesPayload,
   StatusChangePayload,
   DeferPayload,
+  CancelPayload,
   FinalNotePayload,
+  CreateNotePayload,
   CreateDiagnosisPayload,
   CreateAttendanceEntryPayload,
   CreatePartUsagePayload,
@@ -33,6 +35,8 @@ import type {
   ApiTicketIssuePartUsage,
   ApiTicketIssuePayEntry,
   ApiTicketIssueWarranty,
+  ApiTicketNote,
+  TicketNote,
   ApiCatalogIssue,
   ApiCatalogTechnician,
   ApiCatalogPart,
@@ -176,6 +180,8 @@ function transformTechnician(raw: ApiCatalogTechnician): CatalogTechnician {
     categoryId: raw.category_id,
     categoryName: raw.category?.name ?? null,
     deletedAt: raw.deleted_at ?? null,
+    notes: (raw.notes ?? []).map(transformNote),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
   };
 }
 
@@ -186,6 +192,8 @@ function transformAssignment(raw: ApiTicketAssignment): TicketAssignment {
     assignedHour: raw.assigned_hour,
     technicians: [], // technicians live at the issue level in the API response
     delays: (raw.delays ?? []).map(transformDelay),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
     createdAt: raw.created_at,
   };
 }
@@ -222,6 +230,10 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     partUsages: (raw.part_usages ?? []).map(transformPartUsage),
     payEntries: (raw.pay_entries ?? []).map(transformPayEntry),
     warranties: (raw.warranties ?? []).map(transformWarranty),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
+    createdBy: raw.created_by ?? null,
+    creator: raw.creator ?? null,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -232,7 +244,9 @@ function transformTicket(raw: ApiTicket): Ticket {
     id: raw.id,
     storeId: raw.store?.store_number ?? String(raw.store_id),
     status: transformEnumField(raw.status),
-    finalNote: raw.final_note,
+    notes: (raw.notes ?? []).map(transformNote),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    creator: raw.creator ?? null,
     issueCount: raw.issues_count ?? 0,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
@@ -268,6 +282,8 @@ function transformCatalogIssue(raw: ApiCatalogIssue): CatalogIssue {
     title: raw.title,
     description: raw.description,
     deletedAt: raw.deleted_at,
+    notes: (raw.notes ?? []).map(transformNote),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
   };
 }
 
@@ -276,6 +292,8 @@ function transformCatalogCategory(raw: ApiCatalogCategory): CatalogCategory {
     id: raw.id,
     name: raw.name,
     description: raw.description,
+    notes: (raw.notes ?? []).map(transformNote),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
   };
 }
 
@@ -285,6 +303,8 @@ function transformCatalogPart(raw: ApiCatalogPart): CatalogPart {
     name: raw.name,
     description: raw.description,
     deletedAt: raw.deleted_at,
+    notes: (raw.notes ?? []).map(transformNote),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
   };
 }
 
@@ -327,7 +347,22 @@ function transformAttachment(raw: ApiTicketAttachment): TicketAttachment {
     fileSize,
     contentType,
     url: raw.url,
+    createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
+  };
+}
+
+function transformNote(raw: ApiTicketNote): TicketNote {
+  return {
+    id: raw.id,
+    type: raw.type,
+    typeLabel: raw.type_label,
+    body: raw.body,
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    createdBy: raw.created_by ?? null,
+    creator: raw.creator ?? null,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
   };
 }
 
@@ -337,7 +372,9 @@ function transformDiagnosis(raw: ApiTicketIssueDiagnosis): TicketIssueDiagnosis 
     ticketIssueId: raw.ticket_issue_id,
     body: raw.body,
     attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
+    createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
   };
 }
@@ -355,7 +392,9 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
     startPartsRun: raw.start_parts_run,
     endPartsRun: raw.end_parts_run,
     attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
+    createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
   };
 }
@@ -368,7 +407,9 @@ function transformPartUsage(raw: ApiTicketIssuePartUsage): TicketIssuePartUsage 
     part: raw.part ? { id: raw.part.id, name: raw.part.name } : null,
     cost: parseFloat(raw.cost),
     attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
+    createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
   };
 }
@@ -382,6 +423,7 @@ function transformPayEntry(raw: ApiTicketIssuePayEntry): TicketIssuePayEntry {
     id: raw.id,
     ticketIssueId: raw.ticket_issue_id,
     technicianId: raw.technician_id,
+    technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
     basePay: parseDecimal(raw.base_pay),
     performancePay: parseDecimal(raw.performance_pay),
     drivingBasePay: parseDecimal(raw.driving_base_pay),
@@ -389,7 +431,10 @@ function transformPayEntry(raw: ApiTicketIssuePayEntry): TicketIssuePayEntry {
     drivingTime: parseDecimal(raw.driving_time),
     milesDriven: parseDecimal(raw.miles_driven),
     perMileRate: parseDecimal(raw.per_mile_rate),
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
+    createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
   };
 }
@@ -399,11 +444,46 @@ function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
     id: raw.id,
     ticketIssueId: raw.ticket_issue_id,
     body: raw.body,
+    expiryDate: raw.expiry_date ?? null,
     attachments: (raw.attachments ?? []).map(transformAttachment),
+    notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
+    createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
   };
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Entity path builders (for generic addNote / addAttachments)             */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Builds the relative entity path passed to `addNote` / `addAttachments`.
+ * Each value is the path WITHOUT the `/notes` or `/attachments` suffix.
+ */
+export const entityPaths = {
+  ticket: (store: string, ticket: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}`,
+  ticketIssue: (store: string, ticket: number, issue: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/issues/${issue}`,
+  diagnosis: (store: string, ticket: number, id: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/diagnoses/${id}`,
+  attendance: (store: string, ticket: number, id: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/attendance-entries/${id}`,
+  partUsage: (store: string, ticket: number, id: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/part-usages/${id}`,
+  payEntry: (store: string, ticket: number, id: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/pay-entries/${id}`,
+  warranty: (store: string, ticket: number, id: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/warranties/${id}`,
+  assignment: (store: string, ticket: number, id: number) =>
+    `/stores/${encodeURIComponent(store)}/tickets/${ticket}/assignments/${id}`,
+  store: (store: string) => `/stores/${encodeURIComponent(store)}`,
+  catalogIssue: (id: number) => `/catalog/issues/${id}`,
+  technician: (id: number) => `/catalog/technicians/${id}`,
+  category: (id: number) => `/catalog/categories/${id}`,
+  part: (id: number) => `/catalog/parts/${id}`,
+} as const;
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Service                                                                 */
@@ -571,16 +651,17 @@ export const maintenanceTicketsService = {
     }
   },
 
-  /** Set (or clear) the final note on a completed ticket */
-  async setFinalNote(
+  /** Cancel an issue (terminal; reason required; no child spawned) */
+  async cancelIssue(
     storeId: string,
     ticketId: number,
-    payload: FinalNotePayload
+    issueId: number,
+    payload: CancelPayload
   ): Promise<void> {
     const token = requireToken();
     try {
       await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/final-note`,
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/cancel`,
         payload,
         {
           headers: {
@@ -591,6 +672,72 @@ export const maintenanceTicketsService = {
           timeout: 15_000,
         }
       );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * Append a typed closing note to a ticket (multipart; supports files).
+   * Returns the refreshed ticket including all notes.
+   */
+  async addFinalNote(
+    storeId: string,
+    ticketId: number,
+    payload: FinalNotePayload,
+    files?: File[]
+  ): Promise<Ticket> {
+    const token = requireToken();
+    const body = buildFormData(payload, files);
+    try {
+      const res = await axios.post<{ data: ApiTicket }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/final-note`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+      );
+      return transformTicket(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * Add a free-text note to ANY entity. Pass the entity's relative path
+   * (use the `entityPaths` helper). Multipart; supports file attachments.
+   */
+  async addNote(
+    entityPath: string,
+    payload: CreateNotePayload,
+    files?: File[]
+  ): Promise<TicketNote> {
+    const token = requireToken();
+    const body = buildFormData(payload, files);
+    try {
+      const res = await axios.post<{ data: ApiTicketNote }>(
+        `/api/maintenance-tickets${entityPath}/notes`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+      );
+      return transformNote(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Upload one or more file attachments to ANY entity (multipart). */
+  async addAttachments(
+    entityPath: string,
+    files: File[]
+  ): Promise<TicketAttachment[]> {
+    const token = requireToken();
+    const body = buildFormData({}, files);
+    try {
+      const res = await axios.post<{ data: ApiTicketAttachment[] }>(
+        `/api/maintenance-tickets${entityPath}/attachments`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+      );
+      return (res.data.data ?? []).map(transformAttachment);
     } catch (err) {
       return handleAxiosError(err);
     }
@@ -802,6 +949,18 @@ export const maintenanceTicketsService = {
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/restore`,
         {},
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Cancel a ticket (terminal status) */
+  async cancelTicket(storeId: string, ticketId: number, payload?: { reason?: string }): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/cancel`,
+        payload ?? {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
       );
     } catch (err) { return handleAxiosError(err); }
   },

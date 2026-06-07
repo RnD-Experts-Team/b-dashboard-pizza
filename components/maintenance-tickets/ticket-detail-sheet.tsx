@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, Dispatch, SetStateAction } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { format } from "date-fns";
 import {
@@ -70,6 +70,7 @@ import { cn } from "@/lib/utils";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
+  entityPaths,
 } from "@/lib/api/services/maintenance-tickets.service";
 import type {
   Ticket,
@@ -79,7 +80,12 @@ import type {
   CatalogTechnician,
   CatalogPart,
   TicketsFilters,
+  TicketNote,
+  TicketAttachment,
+  NoteType,
 } from "@/types/maintenance-tickets.types";
+import { EntityNotesAttachments } from "./entity-extras";
+import { NotesList } from "./notes-list";
 import {
   useTicketDraft,
   EMPTY_ISSUE_DRAFT,
@@ -91,11 +97,29 @@ import {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function fmtDate(iso: string) {
-  try { return format(new Date(iso), "MMM d, yyyy"); } catch { return iso; }
+  try {
+    // Date-only strings (YYYY-MM-DD) must be parsed in local time — `new Date("YYYY-MM-DD")` parses
+    // as UTC midnight which shifts the displayed date one day back in UTC-offset timezones.
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(iso.trim()) ? new Date(iso + "T00:00") : new Date(iso);
+    return format(d, "MMM d, yyyy");
+  } catch { return iso; }
 }
 
 function fmtDateTime(iso: string) {
   try { return format(new Date(iso), "MMM d, yyyy HH:mm"); } catch { return iso; }
+}
+
+function calcDuration(startIso: string, endIso: string): string | null {
+  try {
+    const diff = new Date(endIso).getTime() - new Date(startIso).getTime();
+    if (!Number.isFinite(diff) || diff <= 0) return null;
+    const totalMins = Math.floor(diff / 60000);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  } catch { return null; }
 }
 
 /** Shadcn date picker — Calendar in a Popover */
@@ -366,6 +390,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="assigned" className="text-[11px] py-1 px-2">{t("status.assigned")}</SelectItem>
                       <SelectItem value="in_progress" className="text-[11px] py-1 px-2">{t("status.in_progress")}</SelectItem>
                       <SelectItem value="complete" className="text-[11px] py-1 px-2">{t("status.complete")}</SelectItem>
+                      <SelectItem value="cancelled" className="text-[11px] py-1 px-2">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -407,6 +432,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="in_progress" className="text-[11px] py-1 px-2">In Progress</SelectItem>
                       <SelectItem value="complete" className="text-[11px] py-1 px-2">Complete</SelectItem>
                       <SelectItem value="deferred" className="text-[11px] py-1 px-2">Deferred</SelectItem>
+                      <SelectItem value="cancelled" className="text-[11px] py-1 px-2">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -633,7 +659,7 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("detailSheet.assignIssue")}</p>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-xs">{t("detailSheet.assignDate")}</Label>
           <DatePicker value={issueDraft.assignDate} onChange={(v) => onPatchDraft({ assignDate: v })} />
@@ -733,6 +759,71 @@ function DeferPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClos
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.deferReason.trim()}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("detailSheet.defer")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface CancelPanelProps {
+  issue: TicketIssue;
+  storeId: string;
+  ticketId: number;
+  issueIds?: number[];
+  issueDraft: IssueDraft;
+  onPatchDraft: (patch: Partial<IssueDraft>) => void;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function CancelPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatchDraft, onClose, onSuccess }: CancelPanelProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const effectiveIds = issueIds ?? [issue.id];
+
+  async function handleSubmit() {
+    if (!issueDraft.cancelReason.trim()) { setError("A cancellation reason is required."); return; }
+    setIsSubmitting(true); setError(null);
+    try {
+      await Promise.all(
+        effectiveIds.map((id) =>
+          maintenanceTicketsService.cancelIssue(storeId, ticketId, id, { reason: issueDraft.cancelReason.trim() })
+        )
+      );
+      setSuccess(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+    } catch (err) {
+      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to cancel issue.");
+    } finally { setIsSubmitting(false); }
+  }
+
+  if (success) {
+    return (
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
+        <div className="flex items-center justify-center gap-2 py-2">
+          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Issue cancelled successfully</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cancel Issue</p>
+      <p className="text-[11px] text-muted-foreground">Cancelling marks the issue as terminal. Unlike deferring, no follow-up issue is created.</p>
+      <div className="space-y-1">
+        <Label className="text-xs">Reason <span className="text-destructive">*</span></Label>
+        <Textarea className="text-sm resize-none min-h-20" placeholder="Explain why this issue is being cancelled"
+          value={issueDraft.cancelReason} onChange={(e) => onPatchDraft({ cancelReason: e.target.value })} />
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button size="sm" variant="destructive" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.cancelReason.trim()}>
+          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+          Cancel Issue
         </Button>
       </div>
     </div>
@@ -841,14 +932,19 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
       setError("Warranty body is required.");
       return;
     }
+    if (!issueDraft.warrantyExpiry) {
+      setError("Expiry date is required.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
       await maintenanceTicketsService.createWarranty(storeId, ticketId, {
         ticket_issue_ids: issueIds ?? [issue.id],
         body,
+        expiry_date: issueDraft.warrantyExpiry,
       }, files);
-      onClearDraftFields(["warrantyBody"]);
+      onClearDraftFields(["warrantyBody", "warrantyExpiry"]);
       setFiles([]);
       setSuccess(true);
       setTimeout(() => { onSuccess(); onClose(); }, 1500);
@@ -881,6 +977,14 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
         />
       </div>
       <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Expiry date <span className="text-destructive">*</span></Label>
+        <DatePicker
+          value={issueDraft.warrantyExpiry}
+          onChange={(v) => onPatchDraft({ warrantyExpiry: v })}
+          placeholder="Pick expiry date"
+        />
+      </div>
+      <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Attachments</Label>
         <Input
           type="file"
@@ -892,7 +996,7 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.warrantyBody.trim()}>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.warrantyBody.trim() || !issueDraft.warrantyExpiry}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
         </Button>
       </div>
@@ -901,61 +1005,47 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
 }
 
 function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
-  type TimePair = { start: string; end: string };
+  type ClockEntry   = { uid: number; kind: "start_clock"    | "end_clock";    value: string };
+  type BreakEntry   = { uid: number; kind: "start_break"    | "end_break";    value: string };
+  type PartsEntry   = { uid: number; kind: "start_parts_run"| "end_parts_run";value: string };
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [technicianId, setTechnicianId] = useState(issueDraft.attendanceTechnicianId ?? "");
-  const [clockRows, setClockRows] = useState<TimePair[]>([{ start: issueDraft.attendanceStartClock ?? "", end: issueDraft.attendanceEndClock ?? "" }]);
-  const [breakRows, setBreakRows] = useState<TimePair[]>([{ start: issueDraft.attendanceStartBreak ?? "", end: issueDraft.attendanceEndBreak ?? "" }]);
-  const [partsRunRows, setPartsRunRows] = useState<TimePair[]>([{ start: issueDraft.attendanceStartPartsRun ?? "", end: issueDraft.attendanceEndPartsRun ?? "" }]);
+  const [clockEntries, setClockEntries] = useState<ClockEntry[]>([]);
+  const [breakEntries, setBreakEntries] = useState<BreakEntry[]>([]);
+  const [partsEntries, setPartsEntries] = useState<PartsEntry[]>([]);
+  const uidRef = useRef(0);
+  function nextUid() { return uidRef.current++; }
 
-  function updateRow(setter: Dispatch<SetStateAction<TimePair[]>>, index: number, field: "start" | "end", value: string) {
-    setter((rows) => rows.map((r, i) => i === index ? { ...r, [field]: value } : r));
-  }
-  function addRow(setter: Dispatch<SetStateAction<TimePair[]>>) {
-    setter((rows) => [...rows, { start: "", end: "" }]);
-  }
-  function removeRow(setter: Dispatch<SetStateAction<TimePair[]>>, index: number) {
-    setter((rows) => rows.filter((_, i) => i !== index));
-  }
+  function addClock()  { setClockEntries((p) => [...p, { uid: nextUid(), kind: "start_clock",     value: "" }]); }
+  function addBreak()  { setBreakEntries((p) => [...p, { uid: nextUid(), kind: "start_break",     value: "" }]); }
+  function addParts()  { setPartsEntries((p) => [...p, { uid: nextUid(), kind: "start_parts_run", value: "" }]); }
+
+  function patchClock(uid: number, patch: Partial<ClockEntry>) { setClockEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
+  function patchBreak(uid: number, patch: Partial<BreakEntry>) { setBreakEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
+  function patchParts(uid: number, patch: Partial<PartsEntry>) { setPartsEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
+
+  function removeClock(uid: number) { setClockEntries((p) => p.filter((e) => e.uid !== uid)); }
+  function removeBreak(uid: number) { setBreakEntries((p) => p.filter((e) => e.uid !== uid)); }
+  function removeParts(uid: number) { setPartsEntries((p) => p.filter((e) => e.uid !== uid)); }
 
   async function handleSubmit() {
-    if (!technicianId) {
-      setError("Technician is required.");
-      return;
-    }
+    if (!technicianId) { setError("Technician is required."); return; }
     setIsSubmitting(true);
     setError(null);
     try {
       const base = { ticket_issue_ids: issueIds ?? [issue.id], technician_id: Number(technicianId) };
       const calls: Promise<unknown>[] = [];
-      for (const row of clockRows) {
-        if (row.start || row.end) {
-          calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
-            ...base,
-            start_clock: toRfc3339OrUndefined(row.start),
-            end_clock: toRfc3339OrUndefined(row.end),
-          }));
-        }
+      for (const e of clockEntries) {
+        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
       }
-      for (const row of breakRows) {
-        if (row.start || row.end) {
-          calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
-            ...base,
-            start_break: toRfc3339OrUndefined(row.start),
-            end_break: toRfc3339OrUndefined(row.end),
-          }));
-        }
+      for (const e of breakEntries) {
+        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
       }
-      for (const row of partsRunRows) {
-        if (row.start || row.end) {
-          calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, {
-            ...base,
-            start_parts_run: toRfc3339OrUndefined(row.start),
-            end_parts_run: toRfc3339OrUndefined(row.end),
-          }));
-        }
+      for (const e of partsEntries) {
+        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
       }
       if (calls.length === 0) {
         calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, base));
@@ -1007,28 +1097,36 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
       {/* Work Clock */}
       <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</p>
-        {clockRows.map((row, i) => (
-          <div key={i} className="space-y-1">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Clock in</Label>
-                <DateTimePicker value={row.start} onChange={(v) => updateRow(setClockRows, i, "start", v)} placeholder="Clock in" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Clock out</Label>
-                <DateTimePicker value={row.end} onChange={(v) => updateRow(setClockRows, i, "end", v)} placeholder="Clock out" />
-              </div>
+        {clockEntries.map((entry) => (
+          <div key={entry.uid} className="flex items-center gap-2">
+            {/* Type toggle */}
+            <div className="flex shrink-0 rounded-md border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => patchClock(entry.uid, { kind: "start_clock" })}
+                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
+                  entry.kind === "start_clock" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
+              >Clock In</button>
+              <button
+                type="button"
+                onClick={() => patchClock(entry.uid, { kind: "end_clock" })}
+                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
+                  entry.kind === "end_clock" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
+              >Clock Out</button>
             </div>
-            {clockRows.length > 1 && (
-              <div className="flex justify-end">
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => removeRow(setClockRows, i)}>
-                  <X className="me-1 h-3 w-3" /> Remove
-                </Button>
-              </div>
-            )}
+            <div className="flex-1 min-w-0">
+              <DateTimePicker
+                value={entry.value}
+                onChange={(v) => patchClock(entry.uid, { value: v })}
+                placeholder={entry.kind === "start_clock" ? "Clock in time" : "Clock out time"}
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeClock(entry.uid)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={() => addRow(setClockRows)}>
+        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addClock}>
           <Plus className="me-1 h-3 w-3" /> Add Work Clock
         </Button>
       </div>
@@ -1036,28 +1134,35 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
       {/* Break */}
       <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Break</p>
-        {breakRows.map((row, i) => (
-          <div key={i} className="space-y-1">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Break start</Label>
-                <DateTimePicker value={row.start} onChange={(v) => updateRow(setBreakRows, i, "start", v)} placeholder="Break start" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Break end</Label>
-                <DateTimePicker value={row.end} onChange={(v) => updateRow(setBreakRows, i, "end", v)} placeholder="Break end" />
-              </div>
+        {breakEntries.map((entry) => (
+          <div key={entry.uid} className="flex items-center gap-2">
+            <div className="flex shrink-0 rounded-md border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => patchBreak(entry.uid, { kind: "start_break" })}
+                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
+                  entry.kind === "start_break" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
+              >Break Start</button>
+              <button
+                type="button"
+                onClick={() => patchBreak(entry.uid, { kind: "end_break" })}
+                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
+                  entry.kind === "end_break" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
+              >Break End</button>
             </div>
-            {breakRows.length > 1 && (
-              <div className="flex justify-end">
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => removeRow(setBreakRows, i)}>
-                  <X className="me-1 h-3 w-3" /> Remove
-                </Button>
-              </div>
-            )}
+            <div className="flex-1 min-w-0">
+              <DateTimePicker
+                value={entry.value}
+                onChange={(v) => patchBreak(entry.uid, { value: v })}
+                placeholder={entry.kind === "start_break" ? "Break start time" : "Break end time"}
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeBreak(entry.uid)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={() => addRow(setBreakRows)}>
+        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addBreak}>
           <Plus className="me-1 h-3 w-3" /> Add Break
         </Button>
       </div>
@@ -1065,28 +1170,35 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
       {/* Parts Run */}
       <div className="space-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</p>
-        {partsRunRows.map((row, i) => (
-          <div key={i} className="space-y-1">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Depart</Label>
-                <DateTimePicker value={row.start} onChange={(v) => updateRow(setPartsRunRows, i, "start", v)} placeholder="Depart" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Return</Label>
-                <DateTimePicker value={row.end} onChange={(v) => updateRow(setPartsRunRows, i, "end", v)} placeholder="Return" />
-              </div>
+        {partsEntries.map((entry) => (
+          <div key={entry.uid} className="flex items-center gap-2">
+            <div className="flex shrink-0 rounded-md border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => patchParts(entry.uid, { kind: "start_parts_run" })}
+                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
+                  entry.kind === "start_parts_run" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
+              >Depart</button>
+              <button
+                type="button"
+                onClick={() => patchParts(entry.uid, { kind: "end_parts_run" })}
+                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
+                  entry.kind === "end_parts_run" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
+              >Return</button>
             </div>
-            {partsRunRows.length > 1 && (
-              <div className="flex justify-end">
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => removeRow(setPartsRunRows, i)}>
-                  <X className="me-1 h-3 w-3" /> Remove
-                </Button>
-              </div>
-            )}
+            <div className="flex-1 min-w-0">
+              <DateTimePicker
+                value={entry.value}
+                onChange={(v) => patchParts(entry.uid, { value: v })}
+                placeholder={entry.kind === "start_parts_run" ? "Depart time" : "Return time"}
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeParts(entry.uid)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={() => addRow(setPartsRunRows)}>
+        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addParts}>
           <Plus className="me-1 h-3 w-3" /> Add Parts Run
         </Button>
       </div>
@@ -1283,7 +1395,7 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
           ))}
         </SelectContent>
       </Select>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <Input type="number" className="h-8" placeholder="Base pay" value={issueDraft.basePay} onChange={(e) => onPatchDraft({ basePay: e.target.value })} />
         <Input type="number" className="h-8" placeholder="Performance pay" value={issueDraft.performancePay} onChange={(e) => onPatchDraft({ performancePay: e.target.value })} />
       </div>
@@ -1418,7 +1530,7 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">New date <span className="text-destructive">*</span></Label>
           <DatePicker value={issueDraft.delayNewDate} onChange={(v) => onPatchDraft({ delayNewDate: v })} />
@@ -1528,6 +1640,7 @@ function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, o
 type BulkAction =
   | "status"
   | "assign"
+  | "cancel"
   | "diagnosis"
   | "attendance"
   | "part"
@@ -1564,11 +1677,12 @@ interface BulkActionBarProps {
   storeId: string;
   ticketId: number;
   technicians: CatalogTechnician[];
+  attendanceTechnicians?: CatalogTechnician[];
   onClear: () => void;
   onSuccess: () => void;
 }
 
-function BulkActionBar({ issueIds, storeId, ticketId, technicians, onClear, onSuccess }: BulkActionBarProps) {
+function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTechnicians, onClear, onSuccess }: BulkActionBarProps) {
   const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
   const [bulkDraft, setBulkDraft] = useState<IssueDraft>(EMPTY_ISSUE_DRAFT);
 
@@ -1611,6 +1725,9 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, onClear, onSu
             <DropdownMenuItem onClick={() => setBulkAction("assign")}>
               <UserRoundPlus className="h-4 w-4" />Assign issues
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setBulkAction("cancel")} className="text-destructive focus:text-destructive">
+              <X className="h-4 w-4" />Cancel issues
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setBulkAction("diagnosis")}>
               <FileText className="h-4 w-4" />Add diagnosis
             </DropdownMenuItem>
@@ -1647,6 +1764,12 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, onClear, onSu
           issueDraft={bulkDraft} onPatchDraft={patchDraft}
           onClose={() => setBulkAction(null)} onSuccess={handleActionSuccess} />
       )}
+      {bulkAction === "cancel" && (
+        <CancelPanel issue={BULK_DUMMY_ISSUE} storeId={storeId} ticketId={ticketId}
+          issueIds={issueIds}
+          issueDraft={bulkDraft} onPatchDraft={patchDraft}
+          onClose={() => setBulkAction(null)} onSuccess={handleActionSuccess} />
+      )}
       {bulkAction === "diagnosis" && (
         <DiagnosisPanel issue={BULK_DUMMY_ISSUE} storeId={storeId} ticketId={ticketId}
           issueIds={issueIds}
@@ -1655,7 +1778,7 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, onClear, onSu
       )}
       {bulkAction === "attendance" && (
         <AttendancePanel issue={BULK_DUMMY_ISSUE} storeId={storeId} ticketId={ticketId}
-          technicians={technicians} issueIds={issueIds}
+          technicians={attendanceTechnicians ?? technicians} issueIds={issueIds}
           issueDraft={bulkDraft} onPatchDraft={patchDraft} onClearDraftFields={clearDraftFields}
           onClose={() => setBulkAction(null)} onSuccess={handleActionSuccess} />
       )}
@@ -1726,6 +1849,7 @@ type ActiveAction =
   | "status"
   | "assign"
   | "defer"
+  | "cancel"
   | "diagnosis"
   | "attendance"
   | "part"
@@ -1885,6 +2009,7 @@ function IssueNode({
     issue.diagnoses.some((item) => Boolean(sharedDiagnosisIds?.has(item.id)));
   const canAssign = ["pending", "assigned"].includes(issue.status.value);
   const canDefer = issue.status.value !== "complete";
+  const canCancel = !["complete", "cancelled"].includes(issue.status.value);
 
   function toggleAction(action: ActiveAction) {
     setActiveAction((prev) => (prev === action ? null : action));
@@ -1936,7 +2061,7 @@ function IssueNode({
             )}
             {/* Header (always visible) */}
             <button type="button" onClick={onToggleExpand}
-              className="relative z-10 w-full flex items-start gap-3 px-4 py-3 text-start hover:bg-muted/30 transition-colors group">
+              className="relative z-10 w-full flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-3 text-start hover:bg-muted/30 transition-colors group">
               <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {issue.parentId != null && (
@@ -1956,6 +2081,11 @@ function IssueNode({
                     </span>
                   )}
                   <span className="text-[10px] font-mono text-muted-foreground">#{issue.id}</span>
+                  {issue.creator && (
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <User className="h-2.5 w-2.5" />{issue.creator.name}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="shrink-0 text-muted-foreground mt-0.5 group-hover:text-foreground transition-colors">
@@ -1965,7 +2095,7 @@ function IssueNode({
 
             {/* Expandable body */}
             {isExpanded && (
-              <div className="relative z-10 border-t px-4 py-3 space-y-3">
+              <div className="relative z-10 border-t px-3 sm:px-4 py-3 space-y-3">
                 {/* Description */}
                 {issue.description ? (
                   <p className="text-sm text-muted-foreground leading-relaxed">{issue.description}</p>
@@ -2010,6 +2140,12 @@ function IssueNode({
                             ))}
                           </div>
                         )}
+                        <EntityNotesAttachments
+                          entityPath={entityPaths.assignment(storeId, ticketId, a.id)}
+                          notes={a.notes}
+                          attachments={a.attachments}
+                          onSuccess={onReload}
+                        />
                       </div>
                     ))}
                   </div>
@@ -2031,6 +2167,11 @@ function IssueNode({
                             <FileText className="h-3 w-3" />
                             <span className="text-foreground">{item.body || "No notes"}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {item.createdBy != null && (
+                              <span className="flex items-center gap-0.5 text-[10px]">
+                                <User className="h-2.5 w-2.5" />#{item.createdBy}
+                              </span>
+                            )}
                             {isShared && (
                               <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
                                 Shared action
@@ -2123,6 +2264,12 @@ function IssueNode({
                             })}
                           </div>
                         )}
+                        <EntityNotesAttachments
+                          entityPath={entityPaths.diagnosis(storeId, ticketId, item.id)}
+                          notes={item.notes}
+                          attachments={[]}
+                          onSuccess={onReload}
+                        />
                       </div>
                       );
                     })}
@@ -2145,6 +2292,11 @@ function IssueNode({
                             <Wrench className="h-3 w-3 shrink-0" />
                             <span className="font-medium">{item.technician?.name ?? `Technician #${item.technicianId}`}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px] line-through">mistaken</span>}
+                            {item.createdBy != null && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                <User className="h-2.5 w-2.5" />#{item.createdBy}
+                              </span>
+                            )}
                             {isShared && (
                               <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
                                 Shared action
@@ -2152,27 +2304,78 @@ function IssueNode({
                             )}
                           </div>
                           {/* Time sections */}
-                          {(item.startClock || item.endClock) && (
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 ps-5">
-                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground col-span-2">Work Clock</span>
-                              {item.startClock && <span className="text-muted-foreground">Clock in: <span className="text-foreground">{fmtDateTime(item.startClock)}</span></span>}
-                              {item.endClock && <span className="text-muted-foreground">Clock out: <span className="text-foreground">{fmtDateTime(item.endClock)}</span></span>}
-                            </div>
-                          )}
-                          {(item.startBreak || item.endBreak) && (
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 ps-5">
-                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground col-span-2">Break</span>
-                              {item.startBreak && <span className="text-muted-foreground">Start: <span className="text-foreground">{fmtDateTime(item.startBreak)}</span></span>}
-                              {item.endBreak && <span className="text-muted-foreground">End: <span className="text-foreground">{fmtDateTime(item.endBreak)}</span></span>}
-                            </div>
-                          )}
-                          {(item.startPartsRun || item.endPartsRun) && (
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 ps-5">
-                              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground col-span-2">Parts Run</span>
-                              {item.startPartsRun && <span className="text-muted-foreground">Depart: <span className="text-foreground">{fmtDateTime(item.startPartsRun)}</span></span>}
-                              {item.endPartsRun && <span className="text-muted-foreground">Return: <span className="text-foreground">{fmtDateTime(item.endPartsRun)}</span></span>}
-                            </div>
-                          )}
+                          {(item.startClock || item.endClock) && (() => {
+                            const dur = (item.startClock && item.endClock) ? calcDuration(item.startClock, item.endClock) : null;
+                            return (
+                              <div className="ps-5 space-y-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</span>
+                                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                                  {item.startClock
+                                    ? <span className="text-muted-foreground">Clock in: <span className="text-foreground">{fmtDateTime(item.startClock)}</span></span>
+                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing clock in</span>
+                                  }
+                                  {item.endClock
+                                    ? <span className="text-muted-foreground">Clock out: <span className="text-foreground">{fmtDateTime(item.endClock)}</span></span>
+                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing clock out</span>
+                                  }
+                                </div>
+                                {dur && (
+                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                    <ClockIcon className="h-3 w-3 shrink-0" />
+                                    <span>Duration: <span className="text-foreground font-medium">{dur}</span></span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {(item.startBreak || item.endBreak) && (() => {
+                            const dur = (item.startBreak && item.endBreak) ? calcDuration(item.startBreak, item.endBreak) : null;
+                            return (
+                              <div className="ps-5 space-y-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Break</span>
+                                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                                  {item.startBreak
+                                    ? <span className="text-muted-foreground">Start: <span className="text-foreground">{fmtDateTime(item.startBreak)}</span></span>
+                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing break start</span>
+                                  }
+                                  {item.endBreak
+                                    ? <span className="text-muted-foreground">End: <span className="text-foreground">{fmtDateTime(item.endBreak)}</span></span>
+                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing break end</span>
+                                  }
+                                </div>
+                                {dur && (
+                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                    <ClockIcon className="h-3 w-3 shrink-0" />
+                                    <span>Duration: <span className="text-foreground font-medium">{dur}</span></span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          {(item.startPartsRun || item.endPartsRun) && (() => {
+                            const dur = (item.startPartsRun && item.endPartsRun) ? calcDuration(item.startPartsRun, item.endPartsRun) : null;
+                            return (
+                              <div className="ps-5 space-y-1">
+                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</span>
+                                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                                  {item.startPartsRun
+                                    ? <span className="text-muted-foreground">Depart: <span className="text-foreground">{fmtDateTime(item.startPartsRun)}</span></span>
+                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing depart time</span>
+                                  }
+                                  {item.endPartsRun
+                                    ? <span className="text-muted-foreground">Return: <span className="text-foreground">{fmtDateTime(item.endPartsRun)}</span></span>
+                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing return time</span>
+                                  }
+                                </div>
+                                {dur && (
+                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                    <ClockIcon className="h-3 w-3 shrink-0" />
+                                    <span>Duration: <span className="text-foreground font-medium">{dur}</span></span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {isShared && sharedWithIds.length > 0 && (
                             <div className="basis-full ps-5 text-[11px] text-muted-foreground">
                               Shared with:{" "}
@@ -2195,6 +2398,12 @@ function IssueNode({
                               ))}
                             </div>
                           )}
+                          <EntityNotesAttachments
+                            entityPath={entityPaths.attendance(storeId, ticketId, item.id)}
+                            notes={item.notes}
+                            attachments={item.attachments}
+                            onSuccess={onReload}
+                          />
                         </div>
                       );
                     })}
@@ -2217,6 +2426,11 @@ function IssueNode({
                             <span>{item.part?.name || `Part #${item.partId}`}</span>
                             <span className="font-medium">${item.cost.toFixed(2)}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {item.createdBy != null && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                <User className="h-2.5 w-2.5" />#{item.createdBy}
+                              </span>
+                            )}
                             {isShared && (
                               <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
                                 Shared action
@@ -2279,6 +2493,12 @@ function IssueNode({
                               })}
                             </div>
                           )}
+                          <EntityNotesAttachments
+                            entityPath={entityPaths.partUsage(storeId, ticketId, item.id)}
+                            notes={item.notes}
+                            attachments={[]}
+                            onSuccess={onReload}
+                          />
                         </div>
                       );
                     })}
@@ -2298,10 +2518,15 @@ function IssueNode({
                         <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
                           <div className="flex flex-wrap items-center gap-2">
                             <Wallet className="h-3 w-3" />
-                            <span>Tech #{item.technicianId}</span>
+                            <span>{item.technician?.name ?? `Tech #${item.technicianId}`}</span>
                             {item.basePay != null && <span>Base ${item.basePay.toFixed(2)}</span>}
                             {item.performancePay != null && <span>Perf ${item.performancePay.toFixed(2)}</span>}
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {item.createdBy != null && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                <User className="h-2.5 w-2.5" />#{item.createdBy}
+                              </span>
+                            )}
                             {isShared && (
                               <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
                                 Shared action
@@ -2330,6 +2555,12 @@ function IssueNode({
                               ))}
                             </div>
                           )}
+                          <EntityNotesAttachments
+                            entityPath={entityPaths.payEntry(storeId, ticketId, item.id)}
+                            notes={item.notes}
+                            attachments={item.attachments}
+                            onSuccess={onReload}
+                          />
                         </div>
                       );
                     })}
@@ -2350,7 +2581,18 @@ function IssueNode({
                         <div className="flex flex-wrap items-center gap-2">
                           <ShieldCheck className="h-3 w-3" />
                           <span>{item.body || "No notes"}</span>
+                          {item.expiryDate && (
+                            <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] text-muted-foreground">
+                              <CalendarIcon className="h-2.5 w-2.5" />
+                              Expires {fmtDate(item.expiryDate)}
+                            </span>
+                          )}
                           {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                          {item.createdBy != null && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                              <User className="h-2.5 w-2.5" />#{item.createdBy}
+                            </span>
+                          )}
                           {isShared && (
                             <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
                               Shared action
@@ -2413,6 +2655,12 @@ function IssueNode({
                             })}
                           </div>
                         )}
+                        <EntityNotesAttachments
+                          entityPath={entityPaths.warranty(storeId, ticketId, item.id)}
+                          notes={item.notes}
+                          attachments={[]}
+                          onSuccess={onReload}
+                        />
                       </div>
                       );
                     })}
@@ -2447,6 +2695,12 @@ function IssueNode({
                           Defer issue
                         </DropdownMenuItem>
                       )}
+                      {canCancel && (
+                        <DropdownMenuItem onClick={() => toggleAction("cancel")} className="text-destructive focus:text-destructive">
+                          <X className="h-4 w-4" />
+                          Cancel issue
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => toggleAction("diagnosis")}><FileText className="h-4 w-4" />Add diagnosis</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleAction("attendance")}><Wrench className="h-4 w-4" />Add attendance</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleAction("part")}><Package className="h-4 w-4" />Add part usage</DropdownMenuItem>
@@ -2474,6 +2728,11 @@ function IssueNode({
                     issueDraft={issueDraft} onPatchDraft={onPatchDraft}
                     onClose={() => setActiveAction(null)} onSuccess={onReload} />
                 )}
+                {activeAction === "cancel" && (
+                  <CancelPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                    issueDraft={issueDraft} onPatchDraft={onPatchDraft}
+                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
+                )}
                 {activeAction === "diagnosis" && (
                   <DiagnosisPanel issue={issue} storeId={storeId} ticketId={ticketId}
                     issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
@@ -2481,7 +2740,7 @@ function IssueNode({
                 )}
                 {activeAction === "attendance" && (
                   <AttendancePanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    technicians={technicians}
+                    technicians={technicians.filter((t) => issue.technicians.some((at) => at.id === t.id))}
                     issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
                     onClose={() => setActiveAction(null)} onSuccess={onReload} />
                 )}
@@ -2518,6 +2777,15 @@ function IssueNode({
                     issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
                     onClose={() => setActiveAction(null)} onSuccess={onReload} />
                 )}
+
+                {/* Issue-level notes & attachments */}
+                <EntityNotesAttachments
+                  entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
+                  notes={issue.notes}
+                  attachments={issue.attachments}
+                  onSuccess={onReload}
+                  allowNoteType
+                />
 
                 {/* Status history */}
                 {issue.statusChanges.length > 0 && <StatusHistory changes={issue.statusChanges} />}
@@ -2606,15 +2874,27 @@ function RightPanel({
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
-  const [finalNoteOpen, setFinalNoteOpen] = useState(false);
+  const [closingNotesOpen, setClosingNotesOpen] = useState(false);
+  const [composingNoteType, setComposingNoteType] = useState<NoteType | null>(null);
+  const [closingBody, setClosingBody] = useState("");
+  const [closingFiles, setClosingFiles] = useState<File[]>([]);
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
+  /** Local override of ticket notes/attachments (the ticket object isn't refetched here). */
+  const [ticketNotes, setTicketNotes] = useState<TicketNote[] | null>(null);
+  const [ticketAttachments, setTicketAttachments] = useState<TicketAttachment[] | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
 
-  // Clear selection when ticket changes
+  // Clear selection + local ticket-notes override when ticket changes
   useEffect(() => {
     setSelectedIssueIds(new Set());
     setHighlightedIssueIds(new Set());
+    setTicketNotes(null);
+    setTicketAttachments(null);
+    setComposingNoteType(null);
+    setClosingBody("");
+    setClosingFiles([]);
+    setClosingNotesOpen(false);
   }, [activeTicketId]);
 
   useEffect(() => {
@@ -2646,15 +2926,28 @@ function RightPanel({
   }
 
   const activeTicket = tickets.find((tk) => tk.id === activeTicketId);
+  const effectiveNotes = ticketNotes ?? activeTicket?.notes ?? [];
+  const effectiveAttachments = ticketAttachments ?? activeTicket?.attachments ?? [];
+  const isClosingType = (t: string | null) => t === "final_notes" || t === "what_we_learned";
+  const closingNotes = effectiveNotes.filter((n) => isClosingType(n.type));
+  const genericTicketNotes = effectiveNotes.filter((n) => !isClosingType(n.type));
 
-  async function handleFinalNoteSubmit() {
-    if (!activeTicketId) return;
+  async function handleAddClosingNote() {
+    if (!activeTicketId || !composingNoteType) return;
+    if (!closingBody.trim()) { setNoteError("Note text is required."); return; }
     setIsSubmittingNote(true); setNoteError(null);
     try {
-      await maintenanceTicketsService.setFinalNote(storeId, activeTicketId, {
-        final_note: draft.finalNoteDraft.trim() || null,
-      });
-      setFinalNoteOpen(false);
+      const updated = await maintenanceTicketsService.addFinalNote(
+        storeId,
+        activeTicketId,
+        { body: closingBody.trim(), type: composingNoteType },
+        closingFiles,
+      );
+      setTicketNotes(updated.notes);
+      setTicketAttachments(updated.attachments);
+      setComposingNoteType(null);
+      setClosingBody("");
+      setClosingFiles([]);
     } catch (err) {
       setNoteError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
     } finally { setIsSubmittingNote(false); }
@@ -2663,7 +2956,7 @@ function RightPanel({
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Sticky header */}
-      <header className="shrink-0 px-6 py-4 border-b flex items-start justify-between gap-4">
+      <header className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b flex flex-wrap items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5">
@@ -2689,7 +2982,7 @@ function RightPanel({
           )}
           <SheetDescription className="sr-only">{t("detailSheet.description")}</SheetDescription>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 flex-wrap justify-end">
           {/* Group-by selector */}
           <Select value={groupBy} onValueChange={(v) => setGroupBy(v as typeof groupBy)}>
             <SelectTrigger className={cn(
@@ -2744,7 +3037,85 @@ function RightPanel({
       </header>
 
       {/* Scrollable issue body */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-5">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-5">
+        {/* Closing notes & ticket-level notes/files */}
+        {activeTicketId && !loadError && (
+          <div className="mb-5 rounded-lg border bg-muted/10 overflow-hidden">
+            {/* Collapsible header */}
+            <button
+              type="button"
+              onClick={() => setClosingNotesOpen((v) => !v)}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors"
+            >
+              {closingNotesOpen
+                ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+              <StickyNote className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex-1">
+                Closing notes
+              </span>
+              {closingNotes.length > 0 && (
+                <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-medium">
+                  {closingNotes.length}
+                </span>
+              )}
+            </button>
+
+            {closingNotesOpen && (
+              <div className="border-t px-3 pb-3 pt-2 space-y-3">
+                {/* Add buttons */}
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-xs"
+                    onClick={() => { setComposingNoteType("final_notes"); setClosingBody(""); setClosingFiles([]); setNoteError(null); }}>
+                    <Plus className="me-1 h-3 w-3" /> Final Note
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs"
+                    onClick={() => { setComposingNoteType("what_we_learned"); setClosingBody(""); setClosingFiles([]); setNoteError(null); }}>
+                    <Plus className="me-1 h-3 w-3" /> What We Learned
+                  </Button>
+                </div>
+
+                {closingNotes.length > 0
+                  ? <NotesList notes={closingNotes} />
+                  : <p className="text-xs text-muted-foreground/60 italic">No closing notes yet.</p>}
+
+                {composingNoteType && (
+                  <div className="rounded-md border bg-background p-2 space-y-2">
+                    <p className="text-[11px] font-medium text-muted-foreground">
+                      {composingNoteType === "final_notes" ? "Add Final Note" : "Add What We Learned"}
+                    </p>
+                    <Textarea className="text-sm resize-none min-h-20" placeholder="Write the note…"
+                      value={closingBody} onChange={(e) => setClosingBody(e.target.value)} />
+                    <Input type="file" multiple className="h-8 text-xs"
+                      onChange={(e) => setClosingFiles(Array.from(e.target.files ?? []))} />
+                    {noteError && <p className="text-xs text-destructive">{noteError}</p>}
+                    <div className="flex justify-end gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => { setComposingNoteType(null); setNoteError(null); }} disabled={isSubmittingNote}>
+                        {t("common.cancel")}
+                      </Button>
+                      <Button size="sm" onClick={handleAddClosingNote} disabled={isSubmittingNote || !closingBody.trim()}>
+                        {isSubmittingNote && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+                        {t("common.save")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Generic ticket-level notes & files */}
+                <EntityNotesAttachments
+                  entityPath={entityPaths.ticket(storeId, activeTicketId)}
+                  notes={genericTicketNotes}
+                  attachments={effectiveAttachments}
+                  onSuccess={() => {}}
+                  onNoteAdded={(note) => setTicketNotes((prev) => [...(prev ?? activeTicket?.notes ?? []), note])}
+                  onAttachmentsAdded={(atts) => setTicketAttachments((prev) => [...(prev ?? activeTicket?.attachments ?? []), ...atts])}
+                  allowNoteType
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Skeleton — show whenever loading, covers first-load AND ticket-switch */}
         {isLoading && (
           <div className="space-y-4">
@@ -2835,6 +3206,12 @@ function RightPanel({
           const sharedDiagnosisIds: ReadonlySet<number> = new Set(
             [...diagnosisIssueIdsByRecordId.entries()].filter(([, issueIds]) => issueIds.length > 1).map(([id]) => id)
           );
+          const bulkAttendanceTechnicians = technicians.filter((t) =>
+            issuesResponse.data
+              .filter((i) => selectedIssueIds.has(i.id))
+              .flatMap((i) => i.technicians)
+              .some((at) => at.id === t.id)
+          );
           return (
           <div>
             {/* Bulk action bar — visible when ≥2 issues selected */}
@@ -2844,6 +3221,7 @@ function RightPanel({
                 storeId={storeId}
                 ticketId={activeTicketId!}
                 technicians={technicians}
+                attendanceTechnicians={bulkAttendanceTechnicians}
                 onClear={() => setSelectedIssueIds(new Set())}
                 onSuccess={() => {
                   setSelectedIssueIds(new Set());
@@ -3234,53 +3612,6 @@ function RightPanel({
           </div>
         )}
       </div>
-
-      {/* Sticky footer: final note */}
-      <div className="shrink-0 border-t">
-        <button type="button" disabled={!activeTicketId || isLoading}
-          onClick={() => setFinalNoteOpen((v) => !v)}
-          className={cn(
-            "w-full flex items-center justify-between gap-2 px-6 py-3 text-sm text-muted-foreground",
-            "hover:text-foreground hover:bg-muted/30 transition-colors",
-            "disabled:opacity-40 disabled:cursor-not-allowed"
-          )}>
-          <span className="flex items-center gap-2">
-            <StickyNote className="h-4 w-4" />
-            {t("detailSheet.setFinalNote")}
-            {draft.finalNoteDraft && (
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
-            )}
-          </span>
-          {finalNoteOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
-
-        {finalNoteOpen && (
-          <div className="px-6 pb-4 space-y-2">
-            <Textarea className="text-sm resize-none min-h-20"
-              placeholder={t("detailSheet.finalNotePlaceholder")}
-              value={draft.finalNoteDraft}
-              onChange={(e) => draft.setFinalNoteDraft(e.target.value)} />
-            {noteError && <p className="text-xs text-destructive">{noteError}</p>}
-            <div className="flex items-center justify-between gap-2">
-              {draft.lastSavedAt && (
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {t("detailSheet.draftSaved")}
-                </span>
-              )}
-              <div className="flex gap-2 ms-auto">
-                <Button variant="ghost" size="sm" onClick={() => setFinalNoteOpen(false)} disabled={isSubmittingNote}>
-                  {t("common.cancel")}
-                </Button>
-                <Button size="sm" onClick={handleFinalNoteSubmit} disabled={isSubmittingNote || !activeTicketId}>
-                  {isSubmittingNote && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
-                  {t("common.save")}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -3392,7 +3723,7 @@ export function TicketDetailSheet({
       <SheetContent
         side="right"
         showCloseButton={true}
-        className="w-[75vw]! max-w-[75vw]! p-0 flex flex-col overflow-hidden"
+        className="w-[95vw]! sm:w-[88vw]! lg:w-[75vw]! max-w-[95vw]! sm:max-w-[88vw]! lg:max-w-[75vw]! p-0 flex flex-col overflow-hidden"
       >
         {/* Mobile pill switcher */}
         {tickets.length > 0 && (

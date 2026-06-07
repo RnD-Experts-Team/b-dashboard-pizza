@@ -13,9 +13,12 @@ export interface IssueDraft {
   assignTechs: number[];
   /** For the "defer" action inline form */
   deferReason: string;
+  /** For the "cancel" action inline form */
+  cancelReason: string;
   /** For diagnosis and warranty actions */
   diagnosisBody: string;
   warrantyBody: string;
+  warrantyExpiry: string;
   /** For attendance action */
   attendanceTechnicianId: string;
   attendanceStartClock: string;
@@ -53,8 +56,6 @@ export interface TicketDraft {
    * All other issues default to collapsed.
    */
   expandedIssues: number[];
-  /** Draft text for the ticket-level final note footer */
-  finalNote: string;
   /** Per-issue form drafts, keyed by issue id as string */
   issues: Record<string, IssueDraft>;
 }
@@ -64,8 +65,10 @@ export const EMPTY_ISSUE_DRAFT: IssueDraft = {
   assignHour: "",
   assignTechs: [],
   deferReason: "",
+  cancelReason: "",
   diagnosisBody: "",
   warrantyBody: "",
+  warrantyExpiry: "",
   attendanceTechnicianId: "",
   attendanceStartClock: "",
   attendanceEndClock: "",
@@ -94,7 +97,6 @@ export const EMPTY_ISSUE_DRAFT: IssueDraft = {
 
 export const EMPTY_TICKET_DRAFT: TicketDraft = {
   expandedIssues: [],
-  finalNote: "",
   issues: {},
 };
 
@@ -264,13 +266,6 @@ export function useTicketDraft(storeId: string, ticketId: number | null) {
     [setDraft]
   );
 
-  const setFinalNoteDraft = useCallback(
-    (value: string) => {
-      setDraft((prev) => ({ ...prev, finalNote: value }));
-    },
-    [setDraft]
-  );
-
   return {
     draft,
     setDraft,
@@ -282,7 +277,5 @@ export function useTicketDraft(storeId: string, ticketId: number | null) {
     clearIssueDraftFields,
     isIssueExpanded,
     toggleIssueExpanded,
-    finalNoteDraft: draft.finalNote,
-    setFinalNoteDraft,
   };
 }

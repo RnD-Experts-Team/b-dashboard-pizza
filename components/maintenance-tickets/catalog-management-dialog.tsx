@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Trash2, RotateCcw, Loader2, AlertCircle } from "lucide-react";
 import {
@@ -27,13 +27,17 @@ import { cn } from "@/lib/utils";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
+  entityPaths,
 } from "@/lib/api/services/maintenance-tickets.service";
 import type {
   CatalogIssue,
   CatalogTechnician,
   CatalogCategory,
   CatalogPart,
+  TicketNote,
+  TicketAttachment,
 } from "@/types/maintenance-tickets.types";
+import { EntityNotesAttachments } from "./entity-extras";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Reusable item row                                                       */
@@ -46,34 +50,39 @@ interface ItemRowProps {
   onDelete: () => void;
   onRestore?: () => void;
   isActing: boolean;
+  /** Optional content rendered below the row (e.g. notes & attachments). */
+  extra?: ReactNode;
 }
 
-function ItemRow({ name, secondary, isDeleted, onDelete, onRestore, isActing }: ItemRowProps) {
+function ItemRow({ name, secondary, isDeleted, onDelete, onRestore, isActing, extra }: ItemRowProps) {
   return (
     <div className={cn(
-      "flex items-center justify-between gap-3 rounded-md px-3 py-2 transition-colors",
+      "rounded-md transition-colors",
       isDeleted ? "bg-muted/40 opacity-60" : "bg-muted/20 hover:bg-muted/40"
     )}>
-      <div className="min-w-0 flex-1">
-        <p className={cn("text-sm font-medium truncate", isDeleted && "line-through text-muted-foreground")}>
-          {name}
-        </p>
-        {secondary && <p className="text-xs text-muted-foreground truncate">{secondary}</p>}
+      <div className="flex items-center justify-between gap-3 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className={cn("text-sm font-medium truncate", isDeleted && "line-through text-muted-foreground")}>
+            {name}
+          </p>
+          {secondary && <p className="text-xs text-muted-foreground truncate">{secondary}</p>}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {isDeleted && (
+            <Badge variant="secondary" className="text-xs h-5">deleted</Badge>
+          )}
+          {isDeleted && onRestore ? (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRestore} disabled={isActing}>
+              {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            </Button>
+          ) : !isDeleted ? (
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete} disabled={isActing}>
+              {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        {isDeleted && (
-          <Badge variant="secondary" className="text-xs h-5">deleted</Badge>
-        )}
-        {isDeleted && onRestore ? (
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRestore} disabled={isActing}>
-            {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          </Button>
-        ) : !isDeleted ? (
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={onDelete} disabled={isActing}>
-            {isActing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-          </Button>
-        ) : null}
-      </div>
+      {extra && <div className="px-3 pb-2">{extra}</div>}
     </div>
   );
 }
@@ -174,6 +183,17 @@ function IssuesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
             onDelete={() => handleDelete(item.id)}
             onRestore={() => handleRestore(item.id)}
             isActing={actingId === item.id}
+            extra={!item.deletedAt && (
+              <EntityNotesAttachments
+                entityPath={entityPaths.catalogIssue(item.id)}
+                notes={item.notes}
+                attachments={item.attachments}
+                onSuccess={() => {}}
+                onNoteAdded={(note: TicketNote) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, notes: [...(i.notes ?? []), note] } : i))}
+                onAttachmentsAdded={(atts: TicketAttachment[]) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, attachments: [...(i.attachments ?? []), ...atts] } : i))}
+                allowNoteType
+              />
+            )}
           />
         ))}
         {!isLoading && visible.length === 0 && (
@@ -287,6 +307,17 @@ function TechniciansTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
             onDelete={() => handleDelete(item.id)}
             onRestore={() => handleRestore(item.id)}
             isActing={actingId === item.id}
+            extra={!item.deletedAt && (
+              <EntityNotesAttachments
+                entityPath={entityPaths.technician(item.id)}
+                notes={item.notes}
+                attachments={item.attachments}
+                onSuccess={() => {}}
+                onNoteAdded={(note: TicketNote) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, notes: [...(i.notes ?? []), note] } : i))}
+                onAttachmentsAdded={(atts: TicketAttachment[]) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, attachments: [...(i.attachments ?? []), ...atts] } : i))}
+                allowNoteType
+              />
+            )}
           />
         ))}
         {!isLoading && visible.length === 0 && (
@@ -362,6 +393,17 @@ function CategoriesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
             isDeleted={false}
             onDelete={() => handleDelete(item.id)}
             isActing={actingId === item.id}
+            extra={
+              <EntityNotesAttachments
+                entityPath={entityPaths.category(item.id)}
+                notes={item.notes}
+                attachments={item.attachments}
+                onSuccess={() => {}}
+                onNoteAdded={(note: TicketNote) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, notes: [...(i.notes ?? []), note] } : i))}
+                onAttachmentsAdded={(atts: TicketAttachment[]) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, attachments: [...(i.attachments ?? []), ...atts] } : i))}
+                allowNoteType
+              />
+            }
           />
         ))}
         {!isLoading && items.length === 0 && (
@@ -451,6 +493,17 @@ function PartsTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
             onDelete={() => handleDelete(item.id)}
             onRestore={() => handleRestore(item.id)}
             isActing={actingId === item.id}
+            extra={!item.deletedAt && (
+              <EntityNotesAttachments
+                entityPath={entityPaths.part(item.id)}
+                notes={item.notes}
+                attachments={item.attachments}
+                onSuccess={() => {}}
+                onNoteAdded={(note: TicketNote) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, notes: [...(i.notes ?? []), note] } : i))}
+                onAttachmentsAdded={(atts: TicketAttachment[]) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, attachments: [...(i.attachments ?? []), ...atts] } : i))}
+                allowNoteType
+              />
+            )}
           />
         ))}
         {!isLoading && visible.length === 0 && (

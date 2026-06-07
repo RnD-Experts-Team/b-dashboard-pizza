@@ -7,8 +7,6 @@ export async function POST(
 ) {
   const { store, ticket } = await params;
   if (!store || !ticket) return errorJson("MISSING_PARAM", "store and ticket are required", 400);
-
-  // v2.0: multipart (body, type, files[]) — forward raw so files pass through.
-  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/${encodeURIComponent(ticket)}/final-note`;
+  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/${encodeURIComponent(ticket)}/notes`;
   return proxyRawPost(request, upstreamUrl);
 }
