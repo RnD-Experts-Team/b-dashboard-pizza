@@ -5,14 +5,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type { CanAccessParams } from "@/lib/auth/can-access";
 import {
-  maintenanceService,
-  MaintenanceError,
-} from "@/lib/api/services/maintenance.service";
-import { useAuth } from "@/lib/auth/use-auth";
-import type { MaintenanceResponse } from "@/types/maintenance.types";
-import { MaintenanceRequestDetailsSheet } from "@/components/maintenance/maintenance-request-details-sheet";
+  maintenanceTicketsService,
+  MaintenanceTicketsError,
+} from "@/lib/api/services/maintenance-tickets.service";
+import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
+import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 import {
   Card,
   CardContent,
@@ -33,92 +32,71 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  CheckCircle2,
-  Clock,
   AlertCircle,
-  XCircle,
-  Wrench,
-  RefreshCw,
+  ClipboardList,
   ExternalLink,
   Loader2,
+  Plus,
+  RefreshCw,
+  Ticket as TicketIcon,
 } from "lucide-react";
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Status helpers                                                          */
+/*  Status badge                                                            */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-const statusConfig: Record<
-  string,
-  {
-    icon: typeof CheckCircle2;
-    className: string;
-  }
-> = {
-  done: {
-    icon: CheckCircle2,
-    className:
-      "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/30",
-  },
-  in_progress: {
-    icon: Clock,
-    className:
-      "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/30",
-  },
-  pending: {
-    icon: AlertCircle,
-    className:
-      "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/30",
-  },
-  cancelled: {
-    icon: XCircle,
-    className:
-      "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30",
-  },
-  canceled: {
-    icon: XCircle,
-    className:
-      "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30",
-  },
+const STATUS_STYLES: Record<string, string> = {
+  open:        "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/30",
+  in_progress: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/30",
+  complete:    "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/30",
+  deferred:    "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/30",
+  cancelled:   "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/30",
 };
 
-function getStatusConfig(status: string) {
+function StatusBadge({ label, value }: { label: string; value: string }) {
   return (
-    statusConfig[status] ?? {
-      icon: AlertCircle,
-      className: "",
-    }
+    <Badge
+      className={cn(
+        "text-[9px] py-0 px-1.5 font-medium whitespace-nowrap",
+        STATUS_STYLES[value] ?? "bg-muted text-muted-foreground hover:bg-muted"
+      )}
+    >
+      {label}
+    </Badge>
   );
-}
-
-function formatStatusLabel(status: string): string {
-  return status
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Skeleton                                                                */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function RecentMaintenanceSkeleton() {
+function TicketsSkeleton() {
   return (
     <Card className="py-1.5 gap-0">
       <CardHeader className="pb-1 px-3">
-        <div className="flex items-center gap-1.5">
-          <Skeleton className="h-4 w-4 rounded" />
-          <Skeleton className="h-4 w-36" />
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <Skeleton className="h-3.5 w-3.5 rounded" />
+              <Skeleton className="h-3.5 w-28" />
+            </div>
+            <Skeleton className="h-3 w-36" />
+          </div>
+          <div className="flex items-center gap-1">
+            <Skeleton className="h-6 w-6 rounded" />
+            <Skeleton className="h-6 w-10 rounded" />
+            <Skeleton className="h-6 w-6 rounded" />
+          </div>
         </div>
-        <Skeleton className="h-3 w-48 mt-0.5" />
       </CardHeader>
-      <CardContent className="px-3">
-        <div className="space-y-2">
+      <CardContent className="px-3 pb-2">
+        <div className="space-y-1.5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Skeleton className="h-3.5 w-10" />
-              <Skeleton className="h-3.5 w-14" />
-              <Skeleton className="h-3.5 flex-1" />
-              <Skeleton className="h-4 w-18 rounded-full" />
-              <Skeleton className="h-3.5 w-24" />
+            <div key={i} className="flex items-center gap-3 py-1">
+              <Skeleton className="h-3 w-6" />
+              <Skeleton className="h-4 w-16 rounded-full" />
+              <Skeleton className="h-3 w-8" />
+              <Skeleton className="h-3 flex-1" />
             </div>
           ))}
         </div>
@@ -131,101 +109,114 @@ function RecentMaintenanceSkeleton() {
 /*  Component                                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-interface RecentMaintenanceTableProps {
-  requirements?: CanAccessParams[];
-}
-
-export function RecentMaintenanceTable({
-  requirements,
-}: RecentMaintenanceTableProps) {
+export function RecentMaintenanceTable() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
-  const { canAccessRoute } = useAuth();
   const { selectedStore } = useSelectedStoreStore();
-  const [data, setData] = useState<MaintenanceResponse | null>(null);
+  const storeId = selectedStore?.storeId ?? null;
+
+  // ── Tickets data ─────────────────────────────────────────────────────
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const storeId = selectedStore?.storeId ?? null;
-  const canOpenDetails =
-    requirements && requirements.length > 0
-      ? requirements.some((requirement) => canAccessRoute(requirement))
-      : true;
 
-  const openDetails = useCallback((requestId: number) => {
-    if (!canOpenDetails) return;
-    setSelectedRequestId(requestId);
-    setIsDetailsOpen(true);
-  }, [canOpenDetails]);
+  // ── Detail sheet ─────────────────────────────────────────────────────
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
+  const techLoadedRef = useRef(false);
 
-  const fetchData = useCallback(async () => {
+  // ── Create dialog ────────────────────────────────────────────────────
+  const [createOpen, setCreateOpen] = useState(false);
+  const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
+  // ── Fetch tickets ────────────────────────────────────────────────────
+  const fetchTickets = useCallback(async () => {
     if (!storeId) return;
-
-    // Cancel any in-flight request
     abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setIsLoading(true);
     setError(null);
-
     try {
-      const result = await maintenanceService.getRequests(
+      const res = await maintenanceTicketsService.getTickets(
         storeId,
-        1,
-        controller.signal,
-        5
+        { per_page: 5 } as Parameters<typeof maintenanceTicketsService.getTickets>[1],
+        ctrl.signal
       );
-      if (!controller.signal.aborted) {
-        setData(result);
+      if (!ctrl.signal.aborted) {
+        setTickets(res.data);
+        setTotal(res.meta.total ?? null);
       }
     } catch (err) {
-      if (controller.signal.aborted) return;
-      if (err instanceof MaintenanceError) {
-        setError(err.message);
-      } else {
-        setError("Failed to load maintenance requests.");
-      }
+      if (ctrl.signal.aborted) return;
+      setError(
+        err instanceof MaintenanceTicketsError ? err.message : "Failed to load tickets."
+      );
     } finally {
-      if (!controller.signal.aborted) {
-        setIsLoading(false);
-      }
+      if (!ctrl.signal.aborted) setIsLoading(false);
     }
   }, [storeId]);
 
-  // Fetch on mount & when store changes
   useEffect(() => {
-    fetchData();
+    fetchTickets();
     return () => abortRef.current?.abort();
-  }, [fetchData]);
+  }, [fetchTickets]);
 
-  // ── Loading state ────────────────────────────────────────────────────
-  if (isLoading && !data) {
-    return <RecentMaintenanceSkeleton />;
+  // ── Open detail sheet ────────────────────────────────────────────────
+  async function handleRowClick(ticket: Ticket) {
+    setSelectedTicketId(ticket.id);
+    setSheetOpen(true);
+    // Lazy-load technicians on first open
+    if (!techLoadedRef.current) {
+      techLoadedRef.current = true;
+      try {
+        const techs = await maintenanceTicketsService.getCatalogTechnicians();
+        setTechnicians(techs);
+      } catch {
+        // Sheet works fine without technicians for read-only viewing
+      }
+    }
   }
 
-  // ── No store selected ────────────────────────────────────────────────
-  if (!storeId) {
-    return null;
+  // ── Open create dialog ───────────────────────────────────────────────
+  async function handleOpenCreate() {
+    setCreateOpen(true);
+    if (catalogIssues.length === 0 && !catalogLoading) {
+      setCatalogLoading(true);
+      try {
+        const issues = await maintenanceTicketsService.getCatalogIssues();
+        setCatalogIssues(issues);
+      } catch {
+        // Dialog still usable — user can create new issues inline
+      } finally {
+        setCatalogLoading(false);
+      }
+    }
   }
 
-  // ── Error state ──────────────────────────────────────────────────────
-  if (error && !data) {
+  // ── Loading ──────────────────────────────────────────────────────────
+  if (isLoading && tickets.length === 0) return <TicketsSkeleton />;
+  if (!storeId) return null;
+
+  // ── Error ────────────────────────────────────────────────────────────
+  if (error && tickets.length === 0) {
     return (
-      <Card className="py-1.5 gap-0 ">
+      <Card className="py-1.5 gap-0">
         <CardHeader className="pb-1 px-3">
           <CardTitle className="flex items-center gap-1 text-[11px]">
-            <Wrench className="h-3 w-3" />
-            Recent Maintenance Requests
+            <TicketIcon className="h-3 w-3" />
+            Recent Tickets
           </CardTitle>
         </CardHeader>
         <CardContent className="px-3">
           <div className="flex flex-col items-center gap-2 py-4 text-center">
             <AlertCircle className="h-6 w-6 text-muted-foreground" />
             <p className="text-xs text-muted-foreground">{error}</p>
-            <Button variant="outline" size="sm" onClick={fetchData}>
+            <Button variant="outline" size="sm" onClick={fetchTickets}>
               <RefreshCw className="h-3.5 w-3.5 me-1.5" />
               Retry
             </Button>
@@ -235,191 +226,170 @@ export function RecentMaintenanceTable({
     );
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────
-  if (!data || data.data.length === 0) {
+  // ── Empty ────────────────────────────────────────────────────────────
+  if (!isLoading && tickets.length === 0) {
     return (
-      <Card className="py-1.5 gap-0">
-        <CardHeader className="pb-1 px-3">
-          <CardTitle className="flex items-center gap-1 text-[11px]">
-            <Wrench className="h-3 w-3" />
-            Recent Maintenance Requests
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3">
-          <div className="flex flex-col items-center gap-1.5 py-4 text-center">
-            <CheckCircle2 className="h-6 w-6 text-green-500" />
-            <p className="text-xs text-muted-foreground">
-              No maintenance requests found.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <>
+        <Card className="py-1.5 gap-0">
+          <CardHeader className="pb-1 px-3">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-1 text-[11px]">
+                <TicketIcon className="h-3 w-3" />
+                Recent Tickets
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] gap-0.5 px-2"
+                onClick={handleOpenCreate}
+                disabled={catalogLoading}
+              >
+                {catalogLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                New
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="px-3">
+            <div className="flex flex-col items-center gap-1.5 py-4 text-center">
+              <ClipboardList className="h-6 w-6 text-muted-foreground/40" />
+              <p className="text-xs text-muted-foreground">No tickets yet.</p>
+            </div>
+          </CardContent>
+        </Card>
+        <CreateTicketDialog
+          open={createOpen}
+          storeId={storeId}
+          catalogIssues={catalogIssues}
+          onClose={() => setCreateOpen(false)}
+          onSuccess={() => { setCreateOpen(false); fetchTickets(); }}
+        />
+      </>
     );
   }
 
   // ── Data table ───────────────────────────────────────────────────────
   return (
-    <Card className="py-1.5 gap-0 bg-linear-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
-      <CardHeader className="pb-1 px-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-1 text-[11px]">
-              <Wrench className="h-3 w-3" />
-              Recent Maintenance
-            </CardTitle>
-            <CardDescription className="text-[9px] mt-0.5">
-              Latest {data.data.length}{data.pagination?.total ? ` of ${data.pagination.total}` : data.count ? ` of ${data.count}` : ""} requests
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {isLoading && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={fetchData}
-              disabled={isLoading}
-            >
-              <RefreshCw className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-6 text-[10px]"
-              asChild
-            >
-              <Link href={`/${locale}/dashboard/maintenance`}>
-              {/* View all */}
-                <ExternalLink className="" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="px-3 pb-0">
-        {/* Desktop table */}
-        <div className="hidden md:block">
-          <Table>
-           
-            <TableBody>
-              {data.data.map((request) => {
-                const config = getStatusConfig(request.status);
-                const StatusIcon = config.icon;
+    <>
+      <Card className="py-1.5 gap-0 bg-linear-to-r from-[#CFDEE7] via-[#E6F6FA] to-[#FBFEFF] dark:from-[#0E2A30]/25 dark:via-[#102F34]/20 dark:to-[#12363B]/18">
+        <CardHeader className="pb-1 px-3 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <CardTitle className="flex items-center gap-1 text-[11px]">
+                <TicketIcon className="h-3 w-3 shrink-0" />
+                Recent Tickets
+              </CardTitle>
+              <CardDescription className="text-[9px] mt-0.5">
+                {tickets.length}{total != null ? ` of ${total}` : ""} tickets
+              </CardDescription>
+            </div>
 
-                return (
+            <div className="flex items-center gap-1 shrink-0">
+              {isLoading && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={fetchTickets}
+                disabled={isLoading}
+                aria-label="Refresh"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px] gap-0.5 px-2"
+                onClick={handleOpenCreate}
+                disabled={catalogLoading}
+                aria-label="Create ticket"
+              >
+                {catalogLoading
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Plus className="h-3 w-3" />}
+                New
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-1.5"
+                asChild
+                aria-label="View all tickets"
+              >
+                <Link href={`/${locale}/dashboard/maintenance-tickets`}>
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="px-0 pb-0">
+          {/* overflow-y scroll, no x overflow */}
+          <div className="overflow-x-hidden overflow-y-auto max-h-[240px]">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-7 px-3 text-[10px] w-10">#</TableHead>
+                  <TableHead className="h-7 px-3 text-[10px]">Status</TableHead>
+                  <TableHead className="h-7 px-3 text-[10px] text-center w-16">Issues</TableHead>
+                  <TableHead className="h-7 px-3 text-[10px] text-right">Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tickets.map((ticket) => (
                   <TableRow
-                    key={request.id}
+                    key={ticket.id}
                     className={cn(
-                      isLoading && "opacity-60"
+                      "cursor-pointer",
+                      isLoading && "opacity-60 pointer-events-none"
                     )}
-                    onClick={() => openDetails(request.id)}
-                    role={canOpenDetails ? "button" : undefined}
-                    tabIndex={canOpenDetails ? 0 : -1}
-                    aria-disabled={!canOpenDetails}
-                    title={
-                      canOpenDetails
-                        ? undefined
-                        : "You do not have permission to view maintenance request details."
-                    }
-                    onKeyDown={(event) => {
-                      if (!canOpenDetails) return;
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openDetails(request.id);
-                      }
-                    }}
+                    onClick={() => handleRowClick(ticket)}
                   >
-                    {/* <TableCell className="font-mono text-xs">
-                      #{request.id}
-                    </TableCell> */}
-                    {/* <TableCell className="font-medium text-sm">
-                      {request.entryNumber}
-                    </TableCell> */}
-                    <TableCell className="text-[9px] text-muted-foreground">
-                      {format(
-                        new Date(request.submittedAt),
-                        "MMM dd,yyyy"
-                      )}
+                    <TableCell className="py-1.5 px-3 font-mono text-[11px] text-muted-foreground">
+                      {ticket.id}
                     </TableCell>
-                    <TableCell className="text-[11px] py-0">
-                      {request.brokenItem}
+                    <TableCell className="py-1.5 px-3">
+                      <StatusBadge label={ticket.status.label} value={ticket.status.value} />
                     </TableCell>
-                    <TableCell className="text-[7px] py-0">
-                      <Badge className={cn("gap-1 text-[7px] py-0", config.className)}>
-                        <StatusIcon className="text-[7px] h-3 w-3" />
-                        {formatStatusLabel(request.status)}
-                      </Badge>
+                    <TableCell className="py-1.5 px-3 text-center">
+                      <span className="inline-flex items-center justify-center gap-0.5 text-[11px] text-muted-foreground">
+                        <ClipboardList className="h-3 w-3" />
+                        {ticket.issueCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-1.5 px-3 text-[11px] text-muted-foreground text-right whitespace-nowrap">
+                      {format(new Date(ticket.createdAt), "MMM d, yyyy")}
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Mobile cards */}
-        <div className="space-y-2 md:hidden">
-          {data.data.map((request) => {
-            const config = getStatusConfig(request.status);
-            const StatusIcon = config.icon;
+      {/* Detail sheet — opens when a row is clicked */}
+      {sheetOpen && storeId && (
+        <TicketDetailSheet
+          open={sheetOpen}
+          ticketId={selectedTicketId}
+          storeId={storeId}
+          tickets={tickets}
+          technicians={technicians}
+          onClose={() => { setSheetOpen(false); setSelectedTicketId(null); }}
+        />
+      )}
 
-            return (
-              <div
-                key={request.id}
-                className={cn(
-                  "rounded-md border p-2 space-y-1.5",
-                  canOpenDetails ? "cursor-pointer" : "cursor-not-allowed opacity-70",
-                  isLoading && "opacity-60"
-                )}
-                onClick={() => openDetails(request.id)}
-                role={canOpenDetails ? "button" : undefined}
-                tabIndex={canOpenDetails ? 0 : -1}
-                aria-disabled={!canOpenDetails}
-                title={
-                  canOpenDetails
-                    ? undefined
-                    : "You do not have permission to view maintenance request details."
-                }
-                onKeyDown={(event) => {
-                  if (!canOpenDetails) return;
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    openDetails(request.id);
-                  }
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    #{request.id}
-                  </span>
-                  <Badge className={cn("gap-1 text-xs", config.className)}>
-                    <StatusIcon className="h-3 w-3" />
-                    {formatStatusLabel(request.status)}
-                  </Badge>
-                </div>
-                <p className="text-xs font-medium">{request.brokenItem}</p>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Entry #{request.entryNumber}</span>
-                  <span>
-                    {format(
-                      new Date(request.submittedAt),
-                      "MMM dd, yyyy HH:mm"
-                    )}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-
-      <MaintenanceRequestDetailsSheet
-        requestId={selectedRequestId}
-        open={isDetailsOpen}
-        onOpenChange={setIsDetailsOpen}
+      {/* Create dialog */}
+      <CreateTicketDialog
+        open={createOpen}
+        storeId={storeId}
+        catalogIssues={catalogIssues}
+        onClose={() => setCreateOpen(false)}
+        onSuccess={() => { setCreateOpen(false); fetchTickets(); }}
       />
-    </Card>
+    </>
   );
 }

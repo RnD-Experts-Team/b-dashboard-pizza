@@ -758,16 +758,7 @@ export function DsprDashboard() {
           lowVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_low}
           className="sm:col-span-2 lg:col-span-1"
         />
-        <RecentMaintenanceTable
-          requirements={[
-            {
-              service: "Maintenance",
-              method: "GET",
-              path: "/maintenance-requests/{id}",
-              storeId: storeNumericId ? String(storeNumericId) : undefined,
-            },
-          ]}
-        />
+        <RecentMaintenanceTable />
         <TopQaRatingsCard
           requirements={[
             {

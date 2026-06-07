@@ -86,6 +86,7 @@ import type {
 } from "@/types/maintenance-tickets.types";
 import { EntityNotesAttachments } from "./entity-extras";
 import { NotesList } from "./notes-list";
+import { SearchCreateCombobox } from "./search-create-combobox";
 import {
   useTicketDraft,
   EMPTY_ISSUE_DRAFT,
@@ -1221,7 +1222,6 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
   const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(true);
   const [success, setSuccess] = useState(false);
-
   useEffect(() => {
     const ctrl = new AbortController();
     setPartsLoading(true);
@@ -1231,6 +1231,13 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       .finally(() => setPartsLoading(false));
     return () => ctrl.abort();
   }, []);
+
+  /** Creates a catalog part and returns the new id. Called by SearchCreateCombobox. */
+  async function createCatalogPart(name: string): Promise<number> {
+    const newPart = await maintenanceTicketsService.createCatalogPart({ name });
+    setCatalogParts((prev) => [...prev, newPart]);
+    return newPart.id;
+  }
 
   async function handleSubmit() {
     const partId = asOptionalNumber(issueDraft.partId);
@@ -1273,28 +1280,17 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Part Usage</p>
 
-      {/* Part selector — shows name, stores ID */}
+      {/* Part search + create */}
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Part <span className="text-destructive">*</span></Label>
-        <Select
-          value={issueDraft.partId}
-          onValueChange={(v) => onPatchDraft({ partId: v })}
-          disabled={partsLoading}
-        >
-          <SelectTrigger className="h-8 text-sm">
-            <SelectValue placeholder={partsLoading ? "Loading parts…" : "Select a part"} />
-          </SelectTrigger>
-          <SelectContent>
-            {catalogParts.length === 0 && !partsLoading && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">No parts in catalog</div>
-            )}
-            {catalogParts.map((part) => (
-              <SelectItem key={part.id} value={String(part.id)}>
-                {part.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchCreateCombobox
+          items={catalogParts.map((p) => ({ id: p.id, label: p.name }))}
+          selectedId={asOptionalNumber(issueDraft.partId) ?? null}
+          onSelect={(id) => onPatchDraft({ partId: id != null ? String(id) : "" })}
+          onCreate={createCatalogPart}
+          placeholder="Search parts or type to create a new one…"
+          loading={partsLoading}
+        />
       </div>
 
       {/* Cost */}
@@ -1999,6 +1995,7 @@ function IssueNode({
 }: IssueNodeProps) {
   const t = useTranslations("maintenanceTickets");
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
+  const [mistakenSaving, setMistakenSaving] = useState<string | null>(null);
 
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
   const hasSharedAction =
@@ -2120,7 +2117,7 @@ function IssueNode({
                 {issue.assignments.length > 0 && (
                   <div className="space-y-1.5">
                     {issue.assignments.map((a) => (
-                      <div key={a.id} className="rounded border bg-muted/10 px-2 py-1.5 space-y-1">
+                      <div key={a.id} className={cn("rounded border bg-muted/10 px-2 py-1.5 space-y-1", a.mistaken && "opacity-60")}>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <CalendarIcon className="h-3 w-3 shrink-0" />
                           <span>{fmtDate(a.assignedDate)}</span>
@@ -2128,14 +2125,46 @@ function IssueNode({
                           {a.technicians.length > 0 && (
                             <span>· {a.technicians.map((tech) => tech.name).join(", ")}</span>
                           )}
+                          {a.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                          {!a.mistaken && (
+                            <button
+                              type="button"
+                              className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                              disabled={mistakenSaving !== null}
+                              onClick={async () => {
+                                setMistakenSaving(`assignment:${a.id}`);
+                                try { await maintenanceTicketsService.markAssignmentMistaken(storeId, ticketId, a.id); onReload(); }
+                                catch { /* noop */ }
+                                finally { setMistakenSaving(null); }
+                              }}
+                            >
+                              {mistakenSaving === `assignment:${a.id}` ? "…" : "Mark mistaken"}
+                            </button>
+                          )}
                         </div>
                         {a.delays.length > 0 && (
                           <div className="ps-4 border-s space-y-1">
                             {a.delays.map((delay) => (
-                              <div key={delay.id} className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-2">
-                                <TimerReset className="h-3 w-3" />
-                                <span>Delayed to {fmtDate(delay.newDate)}{delay.newHour ? ` ${delay.newHour}` : ""}</span>
+                              <div key={delay.id} className={cn("text-[11px] text-muted-foreground flex flex-wrap items-center gap-2", delay.mistaken && "opacity-60")}>
+                                <TimerReset className="h-3 w-3 shrink-0" />
+                                <span className={delay.mistaken ? "line-through" : ""}>Delayed to {fmtDate(delay.newDate)}{delay.newHour ? ` ${delay.newHour}` : ""}</span>
                                 <span className="italic">{delay.reason}</span>
+                                {delay.mistaken && <span className="rounded-full border px-1.5 py-px text-[9px]">mistaken</span>}
+                                {!delay.mistaken && (
+                                  <button
+                                    type="button"
+                                    className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                                    disabled={mistakenSaving !== null}
+                                    onClick={async () => {
+                                      setMistakenSaving(`delay:${delay.id}`);
+                                      try { await maintenanceTicketsService.markAssignmentDelayMistaken(storeId, ticketId, a.id, delay.id); onReload(); }
+                                      catch { /* noop */ }
+                                      finally { setMistakenSaving(null); }
+                                    }}
+                                  >
+                                    {mistakenSaving === `delay:${delay.id}` ? "…" : "Mark mistaken"}
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -2167,6 +2196,21 @@ function IssueNode({
                             <FileText className="h-3 w-3" />
                             <span className="text-foreground">{item.body || "No notes"}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {!item.mistaken && (
+                              <button
+                                type="button"
+                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                                disabled={mistakenSaving !== null}
+                                onClick={async () => {
+                                  setMistakenSaving(`diagnosis:${item.id}`);
+                                  try { await maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, item.id); onReload(); }
+                                  catch { /* noop */ }
+                                  finally { setMistakenSaving(null); }
+                                }}
+                              >
+                                {mistakenSaving === `diagnosis:${item.id}` ? "…" : "Mark mistaken"}
+                              </button>
+                            )}
                             {item.createdBy != null && (
                               <span className="flex items-center gap-0.5 text-[10px]">
                                 <User className="h-2.5 w-2.5" />#{item.createdBy}
@@ -2292,6 +2336,21 @@ function IssueNode({
                             <Wrench className="h-3 w-3 shrink-0" />
                             <span className="font-medium">{item.technician?.name ?? `Technician #${item.technicianId}`}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px] line-through">mistaken</span>}
+                            {!item.mistaken && (
+                              <button
+                                type="button"
+                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                                disabled={mistakenSaving !== null}
+                                onClick={async () => {
+                                  setMistakenSaving(`attendance:${item.id}`);
+                                  try { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); onReload(); }
+                                  catch { /* noop */ }
+                                  finally { setMistakenSaving(null); }
+                                }}
+                              >
+                                {mistakenSaving === `attendance:${item.id}` ? "…" : "Mark mistaken"}
+                              </button>
+                            )}
                             {item.createdBy != null && (
                               <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                                 <User className="h-2.5 w-2.5" />#{item.createdBy}
@@ -2426,6 +2485,21 @@ function IssueNode({
                             <span>{item.part?.name || `Part #${item.partId}`}</span>
                             <span className="font-medium">${item.cost.toFixed(2)}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {!item.mistaken && (
+                              <button
+                                type="button"
+                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                                disabled={mistakenSaving !== null}
+                                onClick={async () => {
+                                  setMistakenSaving(`part:${item.id}`);
+                                  try { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); onReload(); }
+                                  catch { /* noop */ }
+                                  finally { setMistakenSaving(null); }
+                                }}
+                              >
+                                {mistakenSaving === `part:${item.id}` ? "…" : "Mark mistaken"}
+                              </button>
+                            )}
                             {item.createdBy != null && (
                               <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                                 <User className="h-2.5 w-2.5" />#{item.createdBy}
@@ -2522,6 +2596,21 @@ function IssueNode({
                             {item.basePay != null && <span>Base ${item.basePay.toFixed(2)}</span>}
                             {item.performancePay != null && <span>Perf ${item.performancePay.toFixed(2)}</span>}
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                            {!item.mistaken && (
+                              <button
+                                type="button"
+                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                                disabled={mistakenSaving !== null}
+                                onClick={async () => {
+                                  setMistakenSaving(`pay:${item.id}`);
+                                  try { await maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, item.id); onReload(); }
+                                  catch { /* noop */ }
+                                  finally { setMistakenSaving(null); }
+                                }}
+                              >
+                                {mistakenSaving === `pay:${item.id}` ? "…" : "Mark mistaken"}
+                              </button>
+                            )}
                             {item.createdBy != null && (
                               <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                                 <User className="h-2.5 w-2.5" />#{item.createdBy}
@@ -2588,6 +2677,21 @@ function IssueNode({
                             </span>
                           )}
                           {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
+                          {!item.mistaken && (
+                            <button
+                              type="button"
+                              className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
+                              disabled={mistakenSaving !== null}
+                              onClick={async () => {
+                                setMistakenSaving(`warranty:${item.id}`);
+                                try { await maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, item.id); onReload(); }
+                                catch { /* noop */ }
+                                finally { setMistakenSaving(null); }
+                              }}
+                            >
+                              {mistakenSaving === `warranty:${item.id}` ? "…" : "Mark mistaken"}
+                            </button>
+                          )}
                           {item.createdBy != null && (
                             <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
                               <User className="h-2.5 w-2.5" />#{item.createdBy}

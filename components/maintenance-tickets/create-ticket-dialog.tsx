@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import {
@@ -19,11 +19,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
+import { SearchCreateCombobox } from "./search-create-combobox";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { CatalogIssue, Priority } from "@/types/maintenance-tickets.types";
 
@@ -32,22 +30,20 @@ import type { CatalogIssue, Priority } from "@/types/maintenance-tickets.types";
 /* ────────────────────────────────────────────────────────────────────────── */
 
 interface IssueRow {
-  id: string; // local key only
-  useCatalog: boolean;
+  id: string;
   issueId: number | null;
-  otherTitle: string;
   priority: Priority;
   description: string;
+  note: string;
 }
 
 function makeRow(): IssueRow {
   return {
     id: Math.random().toString(36).slice(2),
-    useCatalog: true,
     issueId: null,
-    otherTitle: "",
     priority: "medium",
     description: "",
+    note: "",
   };
 }
 
@@ -75,7 +71,20 @@ export function CreateTicketDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const activeCatalogIssues = catalogIssues.filter((i) => !i.deletedAt);
+  // Local catalog issues — seeded from prop, grows when user creates new ones in-session
+  const [localCatalogIssues, setLocalCatalogIssues] = useState<CatalogIssue[]>(() =>
+    catalogIssues.filter((i) => !i.deletedAt)
+  );
+
+  // Re-seed on dialog open so it always reflects the latest catalog data
+  useEffect(() => {
+    if (open) {
+      setLocalCatalogIssues(catalogIssues.filter((i) => !i.deletedAt));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
   function updateRow(id: string, patch: Partial<IssueRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -96,17 +105,19 @@ export function CreateTicketDialog({
     onClose();
   }
 
+  /** Creates a catalog issue and returns the new id. Called by SearchCreateCombobox. */
+  async function createCatalogIssue(title: string): Promise<number> {
+    const newIssue = await maintenanceTicketsService.createCatalogIssue({ title });
+    setLocalCatalogIssues((prev) => [...prev, newIssue]);
+    return newIssue.id;
+  }
+
   async function handleSubmit() {
     setSubmitError(null);
 
-    // Validate
     for (const row of rows) {
-      if (row.useCatalog && !row.issueId) {
+      if (!row.issueId) {
         setSubmitError(t("createDialog.validationSelectIssue"));
-        return;
-      }
-      if (!row.useCatalog && !row.otherTitle.trim()) {
-        setSubmitError(t("createDialog.validationTitleRequired"));
         return;
       }
       if (!row.description.trim()) {
@@ -119,9 +130,10 @@ export function CreateTicketDialog({
     try {
       await maintenanceTicketsService.createTicket(storeId, {
         issues: rows.map((row) => ({
-          ...(row.useCatalog ? { issue_id: row.issueId! } : { other_title: row.otherTitle.trim() }),
+          issue_id: row.issueId!,
           priority: row.priority,
           description: row.description.trim(),
+          ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
         })),
       });
       setRows([makeRow()]);
@@ -129,11 +141,9 @@ export function CreateTicketDialog({
       onSuccess();
       onClose();
     } catch (err) {
-      const message =
-        err instanceof MaintenanceTicketsError
-          ? err.message
-          : t("createDialog.submitError");
-      setSubmitError(message);
+      setSubmitError(
+        err instanceof MaintenanceTicketsError ? err.message : t("createDialog.submitError")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -141,7 +151,10 @@ export function CreateTicketDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{t("createDialog.title")}</DialogTitle>
           <DialogDescription>{t("createDialog.description")}</DialogDescription>
@@ -167,49 +180,19 @@ export function CreateTicketDialog({
                 )}
               </div>
 
-              {/* Toggle catalog / free-text */}
-              <div className="flex items-center gap-3">
-                <Switch
-                  id={`catalog-${row.id}`}
-                  checked={row.useCatalog}
-                  onCheckedChange={(v) => updateRow(row.id, { useCatalog: v, issueId: null, otherTitle: "" })}
-                />
-                <Label htmlFor={`catalog-${row.id}`} className="text-sm">
-                  {row.useCatalog ? t("createDialog.useCatalog") : t("createDialog.useCustom")}
+              {/* Issue search + create */}
+              <div className="space-y-1">
+                <Label className="text-sm">
+                  {t("createDialog.issueLabel")} <span className="text-destructive">*</span>
                 </Label>
+                <SearchCreateCombobox
+                  items={comboItems}
+                  selectedId={row.issueId}
+                  onSelect={(id) => updateRow(row.id, { issueId: id })}
+                  onCreate={createCatalogIssue}
+                  placeholder="Search issues or type to create a new one…"
+                />
               </div>
-
-              {/* Issue select or free-text */}
-              {row.useCatalog ? (
-                <div className="space-y-1">
-                  <Label className="text-sm">{t("createDialog.issueLabel")}</Label>
-                  <Select
-                    value={row.issueId ? String(row.issueId) : ""}
-                    onValueChange={(v) => updateRow(row.id, { issueId: Number(v) })}
-                  >
-                    <SelectTrigger className="text-sm">
-                      <SelectValue placeholder={t("createDialog.issuePlaceholder")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeCatalogIssues.map((issue) => (
-                        <SelectItem key={issue.id} value={String(issue.id)}>
-                          {issue.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <Label className="text-sm">{t("createDialog.customTitleLabel")}</Label>
-                  <Input
-                    value={row.otherTitle}
-                    onChange={(e) => updateRow(row.id, { otherTitle: e.target.value })}
-                    placeholder={t("createDialog.customTitlePlaceholder")}
-                    className="text-sm"
-                  />
-                </div>
-              )}
 
               {/* Priority */}
               <div className="space-y-1">
@@ -240,10 +223,23 @@ export function CreateTicketDialog({
                   className="text-sm min-h-20"
                 />
               </div>
+
+              {/* Optional note */}
+              <div className="space-y-1">
+                <Label className="text-sm text-muted-foreground">
+                  {t("createDialog.noteLabel")}
+                  <span className="ms-1 text-xs font-normal opacity-60">{t("createDialog.optional")}</span>
+                </Label>
+                <Textarea
+                  value={row.note}
+                  onChange={(e) => updateRow(row.id, { note: e.target.value })}
+                  placeholder={t("createDialog.notePlaceholder")}
+                  className="text-sm min-h-14"
+                />
+              </div>
             </div>
           ))}
 
-          {/* Add row */}
           <Button
             type="button"
             variant="outline"
@@ -255,9 +251,7 @@ export function CreateTicketDialog({
             {t("createDialog.addIssue")}
           </Button>
 
-          {submitError && (
-            <p className="text-sm text-destructive">{submitError}</p>
-          )}
+          {submitError && <p className="text-sm text-destructive">{submitError}</p>}
         </div>
 
         <DialogFooter className="gap-2">

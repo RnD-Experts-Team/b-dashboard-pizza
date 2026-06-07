@@ -126,7 +126,9 @@ function loadFromStorage(key: string): TicketDraft {
       localStorage.removeItem(key);
       return EMPTY_TICKET_DRAFT;
     }
-    return stored.data ?? EMPTY_TICKET_DRAFT;
+    const loaded = stored.data ?? EMPTY_TICKET_DRAFT;
+    // Always start with all issues collapsed — expand state is transient UX, not draft data
+    return { ...loaded, expandedIssues: [] };
   } catch {
     return EMPTY_TICKET_DRAFT;
   }

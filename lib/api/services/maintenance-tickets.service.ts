@@ -168,6 +168,7 @@ function transformDelay(raw: ApiTicketAssignmentDelay): TicketAssignmentDelay {
     newDate: raw.new_date,
     newHour: raw.new_hour,
     reason: raw.reason,
+    mistaken: raw.mistaken ?? false,
     createdAt: raw.created_at,
   };
 }
@@ -194,6 +195,7 @@ function transformAssignment(raw: ApiTicketAssignment): TicketAssignment {
     delays: (raw.delays ?? []).map(transformDelay),
     attachments: (raw.attachments ?? []).map(transformAttachment),
     notes: (raw.notes ?? []).map(transformNote),
+    mistaken: raw.mistaken ?? false,
     createdAt: raw.created_at,
   };
 }
@@ -1208,6 +1210,30 @@ export const maintenanceTicketsService = {
     try {
       await axios.post(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties/${warrantyId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark an assignment as mistaken */
+  async markAssignmentMistaken(storeId: string, ticketId: number, assignmentId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Mark an assignment delay as mistaken */
+  async markAssignmentDelayMistaken(storeId: string, ticketId: number, assignmentId: number, delayId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/delays/${delayId}/mistaken`,
         {},
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
       );

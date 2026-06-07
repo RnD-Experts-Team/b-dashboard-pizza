@@ -87,6 +87,7 @@ export interface TicketAssignmentDelay {
   newDate: string;
   newHour: string | null;
   reason: string;
+  mistaken: boolean;
   createdAt: string;
 }
 
@@ -98,6 +99,7 @@ export interface TicketAssignment {
   delays: TicketAssignmentDelay[];
   attachments: TicketAttachment[];
   notes: TicketNote[];
+  mistaken: boolean;
   createdAt: string;
 }
 
@@ -307,10 +309,14 @@ export interface CreateTicketIssueRow {
   otherTitle?: string;
   priority: Priority;
   description: string;
+  /** Optional notes to attach to this issue at creation time */
+  notes?: Array<{ body: string; type?: string | null }>;
 }
 
 export interface CreateTicketPayload {
   issues: CreateTicketIssueRow[];
+  /** Optional ticket-level notes to attach at creation time */
+  notes?: Array<{ body: string; type?: string | null }>;
 }
 
 export interface AssignIssuesPayload {
@@ -480,6 +486,7 @@ export interface ApiTicketAssignmentDelay {
   new_date: string;
   new_hour: string | null;
   reason: string;
+  mistaken?: boolean;
   created_at: string;
 }
 
@@ -491,6 +498,7 @@ export interface ApiTicketAssignment {
   delays: ApiTicketAssignmentDelay[];
   attachments?: ApiTicketAttachment[];
   notes?: ApiTicketNote[];
+  mistaken?: boolean;
   created_at: string;
 }
 
