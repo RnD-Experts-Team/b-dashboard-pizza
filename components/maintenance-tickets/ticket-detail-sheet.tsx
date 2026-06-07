@@ -63,6 +63,7 @@ import {
   ListChecks,
   LayoutList,
   Plus,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -77,6 +78,7 @@ import type {
   IssueStatus,
   CatalogTechnician,
   CatalogPart,
+  TicketsFilters,
 } from "@/types/maintenance-tickets.types";
 import {
   useTicketDraft,
@@ -251,10 +253,20 @@ interface NavigatorProps {
   search: string;
   onSearchChange: (v: string) => void;
   onSelect: (id: number) => void;
+  filters?: TicketsFilters;
+  onFiltersChange?: (f: TicketsFilters) => void;
+  technicians?: CatalogTechnician[];
 }
 
-function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect }: NavigatorProps) {
+function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, filters, onFiltersChange, technicians }: NavigatorProps) {
   const t = useTranslations("maintenanceTickets");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [isFiltering, setIsFiltering] = useState(false);
+
+  // Clear filtering skeleton once new tickets arrive
+  useEffect(() => {
+    setIsFiltering(false);
+  }, [tickets]);
 
   const filtered = search.trim()
     ? tickets.filter(
@@ -264,48 +276,212 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect }
       )
     : tickets;
 
+  const activeFilterCount = [
+    filters?.status,
+    filters?.priority,
+    filters?.issue_status,
+    filters?.technician_id,
+  ].filter((v) => v != null && v !== "").length;
+
+  const hasAnyFilter = activeFilterCount > 0;
+
+  function updateFilter<K extends keyof TicketsFilters>(key: K, value: TicketsFilters[K]) {
+    setIsFiltering(true);
+    onFiltersChange?.({ ...(filters ?? {}), [key]: value });
+  }
+
+  function clearFilters() {
+    setIsFiltering(true);
+    onFiltersChange?.({});
+  }
+
   return (
     <aside className="hidden md:flex w-72 flex-col border-s bg-background/95 shrink-0 overflow-hidden">
-      <div className="px-4 py-3 border-b shrink-0 space-y-2 bg-muted/20">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">
+      <div className="px-3 py-3 border-b shrink-0 space-y-2.5 bg-muted/20">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
           {t("navigator.title")}
         </p>
+        {/* Search */}
         <div className="relative">
-          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
           <Input
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t("navigator.searchPlaceholder")}
-            className="h-8 ps-8 text-xs"
+            className="h-7 ps-7 text-[11px]"
           />
         </div>
+
+        {/* Filter toggle row */}
+        {onFiltersChange && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className={cn(
+                  "flex min-w-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                  filtersOpen || hasAnyFilter
+                    ? "border-primary/40 bg-primary/5 text-primary"
+                    : "border-border bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                )}
+              >
+                <SlidersHorizontal className="h-3 w-3 shrink-0" />
+                <span className="truncate">Filters</span>
+                {activeFilterCount > 0 && (
+                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                )}
+                <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform", filtersOpen && "rotate-180")} />
+              </button>
+              {hasAnyFilter && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Filter panel — 2-col grid */}
+            {filtersOpen && (
+              <div className="rounded-md border bg-background p-2 grid grid-cols-2 gap-x-2 gap-y-2">
+                {/* Status */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Status</p>
+                  <Select
+                    value={filters?.status || "all"}
+                    onValueChange={(v) => updateFilter("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
+                  >
+                    <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
+                      <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
+                      <SelectItem value="pending" className="text-[11px] py-1 px-2">{t("status.pending")}</SelectItem>
+                      <SelectItem value="assigned" className="text-[11px] py-1 px-2">{t("status.assigned")}</SelectItem>
+                      <SelectItem value="in_progress" className="text-[11px] py-1 px-2">{t("status.in_progress")}</SelectItem>
+                      <SelectItem value="complete" className="text-[11px] py-1 px-2">{t("status.complete")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Priority */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Priority</p>
+                  <Select
+                    value={filters?.priority || "all"}
+                    onValueChange={(v) => updateFilter("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
+                  >
+                    <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
+                      <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
+                      <SelectItem value="urgent" className="text-[11px] py-1 px-2">{t("priority.urgent")}</SelectItem>
+                      <SelectItem value="high" className="text-[11px] py-1 px-2">{t("priority.high")}</SelectItem>
+                      <SelectItem value="medium" className="text-[11px] py-1 px-2">{t("priority.medium")}</SelectItem>
+                      <SelectItem value="low" className="text-[11px] py-1 px-2">{t("priority.low")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Issue status */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Issue status</p>
+                  <Select
+                    value={filters?.issue_status || "all"}
+                    onValueChange={(v) => updateFilter("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
+                  >
+                    <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
+                      <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
+                      <SelectItem value="pending" className="text-[11px] py-1 px-2">Pending</SelectItem>
+                      <SelectItem value="assigned" className="text-[11px] py-1 px-2">Assigned</SelectItem>
+                      <SelectItem value="in_progress" className="text-[11px] py-1 px-2">In Progress</SelectItem>
+                      <SelectItem value="complete" className="text-[11px] py-1 px-2">Complete</SelectItem>
+                      <SelectItem value="deferred" className="text-[11px] py-1 px-2">Deferred</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Technician */}
+                {technicians && technicians.length > 0 && (
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Technician</p>
+                    <Select
+                      value={filters?.technician_id != null ? String(filters.technician_id) : "all"}
+                      onValueChange={(v) => updateFilter("technician_id", v === "all" ? undefined : Number(v))}
+                    >
+                      <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
+                        <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
+                        {technicians.filter((tc) => !tc.deletedAt).map((tc) => (
+                          <SelectItem key={tc.id} value={String(tc.id)} className="text-[11px] py-1 px-2">
+                            <span className="truncate">{tc.name}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {filtered.length === 0 && (
+        {/* Filtering skeleton */}
+        {isFiltering && (
+          <div className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-md border p-3 space-y-1.5">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-2.5 w-24" />
+                <Skeleton className="h-2.5 w-12" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isFiltering && filtered.length === 0 && (
           <p className="px-4 py-6 text-center text-xs text-muted-foreground">
             {t("navigator.noResults")}
           </p>
         )}
-        {filtered.map((ticket) => (
+        {!isFiltering && filtered.map((ticket) => (
           <button
             key={ticket.id}
             type="button"
             onClick={() => onSelect(ticket.id)}
             className={cn(
-              "relative w-full text-start px-3 py-2.5 transition-colors hover:bg-muted/40 border rounded-md mb-2 last:mb-0",
+              "relative w-full text-start px-2.5 py-2 transition-colors hover:bg-muted/40 border rounded-md mb-1.5 last:mb-0 overflow-hidden",
               ticket.id === activeId &&
                 "bg-accent border-primary/40 shadow-sm before:absolute before:start-0 before:inset-y-1 before:w-0.5 before:bg-primary before:rounded-e"
             )}
           >
-            <p className={cn("text-sm font-medium truncate", ticket.id === activeId ? "text-foreground" : "text-muted-foreground")}>
-             ID #{ticket.id}
+            <p className={cn("text-[11px] font-semibold truncate", ticket.id === activeId ? "text-foreground" : "text-muted-foreground")}>
+              ID #{ticket.id}
             </p>
-            <p className="text-xs text-muted-foreground truncate">{ticket.storeId}</p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className="inline-flex items-center rounded-sm border px-1.5 py-px text-[10px] text-muted-foreground">
-                 {t("navigator.issueCount", { count: ticket.issueCount })}
+            <p className="text-[10px] text-muted-foreground truncate">{ticket.storeId}</p>
+            <div className="mt-1 flex items-center gap-1 flex-wrap">
+              <span className="inline-flex items-center rounded-sm border px-1 py-px text-[9px] text-muted-foreground shrink-0">
+                {t("navigator.issueCount", { count: ticket.issueCount })}
               </span>
+              {ticket.status?.label && (
+                <span className="inline-flex items-center rounded-sm border px-1 py-px text-[9px] text-muted-foreground truncate max-w-[80px]">
+                  {ticket.status.label}
+                </span>
+              )}
             </div>
           </button>
         ))}
@@ -1798,6 +1974,7 @@ function IssueNode({
                 )}
 
                 {/* Technicians */}
+                {issue.technicians.length > 0 && <hr className="border-border" />}
                 {issue.technicians.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {issue.technicians.map((tech) => (
@@ -1809,6 +1986,7 @@ function IssueNode({
                 )}
 
                 {/* Assignments */}
+                {issue.assignments.length > 0 && <hr className="border-border" />}
                 {issue.assignments.length > 0 && (
                   <div className="space-y-1.5">
                     {issue.assignments.map((a) => (
@@ -1838,6 +2016,7 @@ function IssueNode({
                 )}
 
                 {/* Lifecycle timeline rows */}
+                {issue.diagnoses.length > 0 && <hr className="border-border" />}
                 {issue.diagnoses.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Diagnoses</p>
@@ -1950,6 +2129,7 @@ function IssueNode({
                   </div>
                 )}
 
+                {issue.attendanceEntries.length > 0 && <hr className="border-border" />}
                 {issue.attendanceEntries.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attendance</p>
@@ -2021,6 +2201,7 @@ function IssueNode({
                   </div>
                 )}
 
+                {issue.partUsages.length > 0 && <hr className="border-border" />}
                 {issue.partUsages.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Part Usage</p>
@@ -2104,6 +2285,7 @@ function IssueNode({
                   </div>
                 )}
 
+                {issue.payEntries.length > 0 && <hr className="border-border" />}
                 {issue.payEntries.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pay Entries</p>
@@ -2154,6 +2336,7 @@ function IssueNode({
                   </div>
                 )}
 
+                {issue.warranties.length > 0 && <hr className="border-border" />}
                 {issue.warranties.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Warranties</p>
@@ -2236,8 +2419,9 @@ function IssueNode({
                   </div>
                 )}
 
+                <hr className="border-border" />
                 {/* Action menu */}
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Issue actions</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2419,7 +2603,6 @@ function RightPanel({
   draft,
 }: RightPanelProps) {
   const t = useTranslations("maintenanceTickets");
-  const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
@@ -2430,7 +2613,6 @@ function RightPanel({
 
   // Clear selection when ticket changes
   useEffect(() => {
-    setIsSelectMode(false);
     setSelectedIssueIds(new Set());
     setHighlightedIssueIds(new Set());
   }, [activeTicketId]);
@@ -2540,19 +2722,20 @@ function RightPanel({
               <SelectItem value="diagnosis">{t("groupBy.diagnosis")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            variant={isSelectMode ? "default" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => {
-              setIsSelectMode((v) => !v);
-              if (isSelectMode) setSelectedIssueIds(new Set());
-            }}
-            title={isSelectMode ? "Exit select mode" : "Select issues for bulk action"}
-            aria-label="Toggle issue selection"
-          >
-            <ListChecks className="h-4 w-4" />
-          </Button>
+          {issuesResponse && issuesResponse.data.length > 0 && (
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground"
+                onClick={() => setSelectedIssueIds(new Set(issuesResponse.data.map((i) => i.id)))}>
+                <ListChecks className="me-1 h-3.5 w-3.5" />Select all
+              </Button>
+              {selectedIssueIds.size > 0 && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground"
+                  onClick={() => setSelectedIssueIds(new Set())}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onRefresh}
             disabled={isLoading} aria-label={t("refresh")}>
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
@@ -2654,8 +2837,8 @@ function RightPanel({
           );
           return (
           <div>
-            {/* Bulk action bar — visible when in select mode and ≥1 issue selected */}
-            {isSelectMode && selectedIssueIds.size > 0 && (
+            {/* Bulk action bar — visible when ≥2 issues selected */}
+            {selectedIssueIds.size > 1 && (
               <BulkActionBar
                 issueIds={Array.from(selectedIssueIds)}
                 storeId={storeId}
@@ -2663,7 +2846,6 @@ function RightPanel({
                 technicians={technicians}
                 onClear={() => setSelectedIssueIds(new Set())}
                 onSuccess={() => {
-                  setIsSelectMode(false);
                   setSelectedIssueIds(new Set());
                   onRefresh();
                 }}
@@ -2857,7 +3039,7 @@ function RightPanel({
                         onReload={onRefresh}
                         depth={0}
                         isLast={grp.descendants.length === 0}
-                        isSelectMode={isSelectMode}
+                        isSelectMode={true}
                         selectedIssueIds={selectedIssueIds}
                         onToggleSelectId={toggleIssueSelect}
                         sharedPartIds={sharedPartIds}
@@ -2894,7 +3076,7 @@ function RightPanel({
                                 onReload={onRefresh}
                                 depth={1}
                                 isLast={true}
-                                isSelectMode={isSelectMode}
+                                isSelectMode={true}
                                 selectedIssueIds={selectedIssueIds}
                                 onToggleSelectId={toggleIssueSelect}
                                 sharedPartIds={sharedPartIds}
@@ -2977,7 +3159,7 @@ function RightPanel({
                       onReload={onRefresh}
                       depth={0}
                       isLast={group.descendants.length === 0}
-                      isSelectMode={isSelectMode}
+                      isSelectMode={true}
                       selectedIssueIds={selectedIssueIds}
                       onToggleSelectId={toggleIssueSelect}
                       sharedPartIds={sharedPartIds}
@@ -3014,7 +3196,7 @@ function RightPanel({
                               onReload={onRefresh}
                               depth={1}
                               isLast={true}
-                              isSelectMode={isSelectMode}
+                              isSelectMode={true}
                               selectedIssueIds={selectedIssueIds}
                               onToggleSelectId={toggleIssueSelect}
                               sharedPartIds={sharedPartIds}
@@ -3113,6 +3295,8 @@ export interface TicketDetailSheetProps {
   storeId: string;
   tickets: Ticket[];
   technicians: CatalogTechnician[];
+  filters?: TicketsFilters;
+  onFiltersChange?: (f: TicketsFilters) => void;
   onClose: () => void;
 }
 
@@ -3122,6 +3306,8 @@ export function TicketDetailSheet({
   storeId,
   tickets,
   technicians,
+  filters,
+  onFiltersChange,
   onClose,
 }: TicketDetailSheetProps) {
   const [activeTicketId, setActiveTicketId] = useState<number | null>(ticketId);
@@ -3232,6 +3418,9 @@ export function TicketDetailSheet({
             search={search}
             onSearchChange={setSearch}
             onSelect={handleSelectTicket}
+            filters={filters}
+            onFiltersChange={onFiltersChange}
+            technicians={technicians}
           />
         </div>
       </SheetContent>

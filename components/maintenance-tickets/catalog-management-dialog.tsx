@@ -60,7 +60,7 @@ function ItemRow({ name, secondary, isDeleted, onDelete, onRestore, isActing }: 
         </p>
         {secondary && <p className="text-xs text-muted-foreground truncate">{secondary}</p>}
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {isDeleted && (
           <Badge variant="secondary" className="text-xs h-5">deleted</Badge>
         )}

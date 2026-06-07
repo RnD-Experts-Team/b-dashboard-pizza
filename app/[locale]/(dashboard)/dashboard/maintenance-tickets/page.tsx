@@ -140,6 +140,8 @@ export default function MaintenanceTicketsPage() {
         storeId={detailStoreId || selectedStore?.storeId || ""}
         technicians={catalogTechnicians}
         tickets={data?.data ?? []}
+        filters={filters}
+        onFiltersChange={applyFilters}
         onClose={handleSheetClose}
       />
 
