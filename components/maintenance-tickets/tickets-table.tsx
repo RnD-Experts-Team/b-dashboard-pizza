@@ -51,9 +51,10 @@ interface TicketRowProps {
   ticket: Ticket;
   onClick: (ticket: Ticket) => void;
   onChanged: () => void;
+  canCancelTicket?: boolean;
 }
 
-function TicketRow({ ticket, onClick, onChanged }: TicketRowProps) {
+function TicketRow({ ticket, onClick, onChanged, canCancelTicket = true }: TicketRowProps) {
   const t = useTranslations("maintenanceTickets");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -118,26 +119,28 @@ function TicketRow({ ticket, onClick, onChanged }: TicketRowProps) {
         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
           {format(new Date(ticket.createdAt), "MMM d, yyyy")}
         </TableCell>
-        <TableCell>
-          <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            {ticket.deletedAt ? (
-              <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleRestore}>
-                <RotateCcw className="h-3.5 w-3.5 me-1" />
-                Restore
-              </Button>
-            ) : ticket.status.value === "cancelled" ? (
-              <Button variant="outline" size="sm" className="h-7 px-2" disabled>
-                <Ban className="h-3.5 w-3.5 me-1" />
-                Cancelled
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" className="h-7 px-2 text-destructive hover:text-destructive" onClick={openDialog}>
-                <Ban className="h-3.5 w-3.5 me-1" />
-                Cancel
-              </Button>
-            )}
-          </div>
-        </TableCell>
+        {canCancelTicket && (
+          <TableCell>
+            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+              {ticket.deletedAt ? (
+                <Button variant="outline" size="sm" className="h-7 px-2" onClick={handleRestore}>
+                  <RotateCcw className="h-3.5 w-3.5 me-1" />
+                  Restore
+                </Button>
+              ) : ticket.status.value === "cancelled" ? (
+                <Button variant="outline" size="sm" className="h-7 px-2" disabled>
+                  <Ban className="h-3.5 w-3.5 me-1" />
+                  Cancelled
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" className="h-7 px-2 text-destructive hover:text-destructive" onClick={openDialog}>
+                  <Ban className="h-3.5 w-3.5 me-1" />
+                  Cancel
+                </Button>
+              )}
+            </div>
+          </TableCell>
+        )}
       </TableRow>
 
       {/* Cancel reason dialog */}
@@ -259,6 +262,7 @@ export interface TicketsTableProps {
   onPageChange: (page: number) => void;
   onTicketClick: (ticket: Ticket) => void;
   onRowChanged: () => void;
+  canCancelTicket?: boolean;
 }
 
 export function TicketsTable({
@@ -268,6 +272,7 @@ export function TicketsTable({
   onPageChange,
   onTicketClick,
   onRowChanged,
+  canCancelTicket = true,
 }: TicketsTableProps) {
   const t = useTranslations("maintenanceTickets");
 
@@ -291,7 +296,7 @@ export function TicketsTable({
               <TableHead>{t("columns.store")}</TableHead>
               <TableHead>Creator</TableHead>
               <TableHead>{t("columns.createdAt")}</TableHead>
-              <TableHead className="text-end">Actions</TableHead>
+              {canCancelTicket && <TableHead className="text-end">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -301,6 +306,7 @@ export function TicketsTable({
                 ticket={ticket}
                 onClick={onTicketClick}
                 onChanged={onRowChanged}
+                canCancelTicket={canCancelTicket}
               />
             ))}
           </TableBody>

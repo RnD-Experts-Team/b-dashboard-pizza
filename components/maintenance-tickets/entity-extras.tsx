@@ -28,6 +28,8 @@ interface EntityNotesAttachmentsProps {
   onAttachmentsAdded?: (attachments: TicketAttachment[]) => void;
   /** Allow typing a free-form note `type` tag (hidden by default). */
   allowNoteType?: boolean;
+  /** When false, hides the "Add Note" and "Add File" buttons. Defaults to true. */
+  canAdd?: boolean;
   className?: string;
 }
 
@@ -44,6 +46,7 @@ export function EntityNotesAttachments({
   onNoteAdded,
   onAttachmentsAdded,
   allowNoteType = false,
+  canAdd = true,
   className,
 }: EntityNotesAttachmentsProps) {
   const [open, setOpen] = useState(false);
@@ -75,7 +78,7 @@ export function EntityNotesAttachments({
             </div>
           )}
 
-          {mode === null && (
+          {mode === null && canAdd && (
             <div className="flex gap-1.5">
               <Button variant="outline" size="sm" className="h-6 px-2 text-[11px]" onClick={() => setMode("note")}>
                 <MessageSquarePlus className="me-1 h-3 w-3" /> Add Note

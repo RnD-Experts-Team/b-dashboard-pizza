@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { useCanAccessRoute } from "@/lib/auth/use-auth";
 import { format } from "date-fns";
 import {
   Sheet,
@@ -1805,6 +1806,12 @@ interface IssueNodeProps {
   onReload: () => void;
   depth?: number;
   isLast?: boolean;
+  /** When false, hides the Actions dropdown and the select checkbox. Defaults to true. */
+  canActOnIssue?: boolean;
+  /** When false, hides all "Mark as mistaken" buttons. Defaults to true. */
+  canMarkMistaken?: boolean;
+  /** When false, hides "Add Note" / "Add File" buttons on every EntityNotesAttachments. Defaults to true. */
+  canAddNotes?: boolean;
   /** Multi-select */
   isSelectMode?: boolean;
   selectedIssueIds?: ReadonlySet<number>;
@@ -1852,6 +1859,9 @@ function IssueNode({
   onReload,
   depth = 0,
   isLast = false,
+  canActOnIssue = true,
+  canMarkMistaken = true,
+  canAddNotes = true,
   isSelectMode = false,
   selectedIssueIds,
   onToggleSelectId,
@@ -2038,7 +2048,7 @@ function IssueNode({
                             <span>· {a.technicians.map((tech) => tech.name).join(", ")}</span>
                           )}
                           {a.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                          {!a.mistaken && (
+                          {!a.mistaken && canMarkMistaken && (
                             <button
                               type="button"
                               className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2060,7 +2070,7 @@ function IssueNode({
                                 <span className={delay.mistaken ? "line-through" : ""}>Delayed to {fmtDate(delay.newDate)}{delay.newHour ? ` ${delay.newHour}` : ""}</span>
                                 <span className="italic">{delay.reason}</span>
                                 {delay.mistaken && <span className="rounded-full border px-1.5 py-px text-[9px]">mistaken</span>}
-                                {!delay.mistaken && (
+                                {!delay.mistaken && canMarkMistaken && (
                                   <button
                                     type="button"
                                     className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2082,6 +2092,7 @@ function IssueNode({
                           notes={a.notes}
                           attachments={a.attachments}
                           onSuccess={onReload}
+                          canAdd={canAddNotes}
                         />
                       </div>
                     ))}
@@ -2104,7 +2115,7 @@ function IssueNode({
                             <FileText className="h-3 w-3" />
                             <span className="text-foreground">{item.body || "No notes"}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                            {!item.mistaken && (
+                            {!item.mistaken && canMarkMistaken && (
                               <button
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2219,6 +2230,7 @@ function IssueNode({
                           notes={item.notes}
                           attachments={[]}
                           onSuccess={onReload}
+                          canAdd={canAddNotes}
                         />
                       </div>
                       );
@@ -2242,7 +2254,7 @@ function IssueNode({
                             <Wrench className="h-3 w-3 shrink-0" />
                             <span className="font-medium">{item.technician?.name ?? `Technician #${item.technicianId}`}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px] line-through">mistaken</span>}
-                            {!item.mistaken && (
+                            {!item.mistaken && canMarkMistaken && (
                               <button
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2366,6 +2378,7 @@ function IssueNode({
                             notes={item.notes}
                             attachments={item.attachments}
                             onSuccess={onReload}
+                            canAdd={canAddNotes}
                           />
                         </div>
                       );
@@ -2389,7 +2402,7 @@ function IssueNode({
                             <span>{item.part?.name || `Part #${item.partId}`}</span>
                             <span className="font-medium">${item.cost.toFixed(2)}</span>
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                            {!item.mistaken && (
+                            {!item.mistaken && canMarkMistaken && (
                               <button
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2474,6 +2487,7 @@ function IssueNode({
                             notes={item.notes}
                             attachments={[]}
                             onSuccess={onReload}
+                            canAdd={canAddNotes}
                           />
                         </div>
                       );
@@ -2498,7 +2512,7 @@ function IssueNode({
                             {item.basePay != null && <span>Base ${item.basePay.toFixed(2)}</span>}
                             {item.performancePay != null && <span>Perf ${item.performancePay.toFixed(2)}</span>}
                             {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                            {!item.mistaken && (
+                            {!item.mistaken && canMarkMistaken && (
                               <button
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2549,6 +2563,7 @@ function IssueNode({
                             notes={item.notes}
                             attachments={item.attachments}
                             onSuccess={onReload}
+                            canAdd={canAddNotes}
                           />
                         </div>
                       );
@@ -2577,7 +2592,7 @@ function IssueNode({
                             </span>
                           )}
                           {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                          {!item.mistaken && (
+                          {!item.mistaken && canMarkMistaken && (
                             <button
                               type="button"
                               className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
@@ -2662,6 +2677,7 @@ function IssueNode({
                           notes={item.notes}
                           attachments={[]}
                           onSuccess={onReload}
+                          canAdd={canAddNotes}
                         />
                       </div>
                       );
@@ -2669,9 +2685,9 @@ function IssueNode({
                   </div>
                 )}
 
-                <hr className="border-border" />
+                {canActOnIssue && <hr className="border-border" />}
                 {/* Action menu */}
-                <div className="flex items-center justify-between">
+                {canActOnIssue && <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Issue actions</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2713,7 +2729,7 @@ function IssueNode({
                       <DropdownMenuItem onClick={() => toggleAction("changeTechs")}><Users2 className="h-4 w-4" />Change technicians</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
+                </div>}
 
                 {/* Inline action panels */}
                 {activeAction === "status" && (
@@ -2787,6 +2803,7 @@ function IssueNode({
                   attachments={issue.attachments}
                   onSuccess={onReload}
                   allowNoteType
+                  canAdd={canAddNotes}
                 />
 
                 {/* Status history */}
@@ -2874,6 +2891,26 @@ function RightPanel({
   draft,
 }: RightPanelProps) {
   const t = useTranslations("maintenanceTickets");
+  const canActOnIssues = useCanAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/stores/placeholder/tickets/placeholder/technicians",
+  });
+  const canAddFinalNote = useCanAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/stores/placeholder/tickets/placeholder/final-note",
+  });
+  const canAddEntityNotes = useCanAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",
+  });
+  const canMarkMistakenPerm = useCanAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken",
+  });
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
@@ -3018,7 +3055,7 @@ function RightPanel({
               <SelectItem value="diagnosis">{t("groupBy.diagnosis")}</SelectItem>
             </SelectContent>
           </Select>
-          {issuesResponse && issuesResponse.data.length > 0 && (
+          {canActOnIssues && issuesResponse && issuesResponse.data.length > 0 && (
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground"
                 onClick={() => setSelectedIssueIds(new Set(issuesResponse.data.map((i) => i.id)))}>
@@ -3067,16 +3104,18 @@ function RightPanel({
             {closingNotesOpen && (
               <div className="border-t px-3 pb-3 pt-2 space-y-3">
                 {/* Add buttons */}
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="h-7 text-xs"
-                    onClick={() => { setComposingNoteType("final_notes"); setClosingBody(""); setClosingFiles([]); setNoteError(null); }}>
-                    <Plus className="me-1 h-3 w-3" /> Final Note
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-7 text-xs"
-                    onClick={() => { setComposingNoteType("what_we_learned"); setClosingBody(""); setClosingFiles([]); setNoteError(null); }}>
-                    <Plus className="me-1 h-3 w-3" /> What We Learned
-                  </Button>
-                </div>
+                {canAddFinalNote && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => { setComposingNoteType("final_notes"); setClosingBody(""); setClosingFiles([]); setNoteError(null); }}>
+                      <Plus className="me-1 h-3 w-3" /> Final Note
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => { setComposingNoteType("what_we_learned"); setClosingBody(""); setClosingFiles([]); setNoteError(null); }}>
+                      <Plus className="me-1 h-3 w-3" /> What We Learned
+                    </Button>
+                  </div>
+                )}
 
                 {closingNotes.length > 0
                   ? <NotesList notes={closingNotes} />
@@ -3217,8 +3256,8 @@ function RightPanel({
           );
           return (
           <div>
-            {/* Bulk action bar — visible when ≥2 issues selected */}
-            {selectedIssueIds.size > 1 && (
+            {/* Bulk action bar — visible when ≥2 issues selected and user has permission */}
+            {canActOnIssues && selectedIssueIds.size > 1 && (
               <BulkActionBar
                 issueIds={Array.from(selectedIssueIds)}
                 storeId={storeId}
@@ -3420,7 +3459,10 @@ function RightPanel({
                         onReload={onRefresh}
                         depth={0}
                         isLast={grp.descendants.length === 0}
-                        isSelectMode={true}
+                        canActOnIssue={canActOnIssues}
+                        canMarkMistaken={canMarkMistakenPerm}
+                        canAddNotes={canAddEntityNotes}
+                        isSelectMode={canActOnIssues}
                         selectedIssueIds={selectedIssueIds}
                         onToggleSelectId={toggleIssueSelect}
                         sharedPartIds={sharedPartIds}
@@ -3457,7 +3499,10 @@ function RightPanel({
                                 onReload={onRefresh}
                                 depth={1}
                                 isLast={true}
-                                isSelectMode={true}
+                                canActOnIssue={canActOnIssues}
+                                canMarkMistaken={canMarkMistakenPerm}
+                                canAddNotes={canAddEntityNotes}
+                                isSelectMode={canActOnIssues}
                                 selectedIssueIds={selectedIssueIds}
                                 onToggleSelectId={toggleIssueSelect}
                                 sharedPartIds={sharedPartIds}
@@ -3540,7 +3585,10 @@ function RightPanel({
                       onReload={onRefresh}
                       depth={0}
                       isLast={group.descendants.length === 0}
-                      isSelectMode={true}
+                      canActOnIssue={canActOnIssues}
+                      canMarkMistaken={canMarkMistakenPerm}
+                      canAddNotes={canAddEntityNotes}
+                      isSelectMode={canActOnIssues}
                       selectedIssueIds={selectedIssueIds}
                       onToggleSelectId={toggleIssueSelect}
                       sharedPartIds={sharedPartIds}
@@ -3577,7 +3625,10 @@ function RightPanel({
                               onReload={onRefresh}
                               depth={1}
                               isLast={true}
-                              isSelectMode={true}
+                              canActOnIssue={canActOnIssues}
+                              canMarkMistaken={canMarkMistakenPerm}
+                              canAddNotes={canAddEntityNotes}
+                              isSelectMode={canActOnIssues}
                               selectedIssueIds={selectedIssueIds}
                               onToggleSelectId={toggleIssueSelect}
                               sharedPartIds={sharedPartIds}

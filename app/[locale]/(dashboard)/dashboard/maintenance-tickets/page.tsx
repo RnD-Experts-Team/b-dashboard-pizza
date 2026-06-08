@@ -17,10 +17,24 @@ import {
   CatalogManagementDialog,
 } from "@/components/maintenance-tickets";
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
+import { useAuth } from "@/lib/auth/use-auth";
 import type { Ticket } from "@/types/maintenance-tickets.types";
 
 export default function MaintenanceTicketsPage() {
   const t = useTranslations("maintenanceTickets");
+  const { canAccessRoute } = useAuth();
+
+  const canAccessCatalog = canAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/technicians",
+  });
+
+  const canCancelTicket = canAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/stores/placeholder/tickets/placeholder/cancel",
+  });
 
   const {
     data,
@@ -88,6 +102,7 @@ export default function MaintenanceTicketsPage() {
           onFiltersChange={applyFilters}
           onCreateClick={() => setCreateOpen(true)}
           onCatalogClick={() => setCatalogOpen(true)}
+          canAccessCatalog={canAccessCatalog}
           disabled={isLoading || !selectedStore}
         />
       )}
@@ -121,6 +136,7 @@ export default function MaintenanceTicketsPage() {
           onPageChange={goToPage}
           onTicketClick={handleTicketClick}
           onRowChanged={handleMutationSuccess}
+          canCancelTicket={canCancelTicket}
         />
       )}
 

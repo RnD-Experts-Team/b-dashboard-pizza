@@ -22,6 +22,8 @@ interface TicketsFiltersBarProps {
   onFiltersChange: (filters: TicketsFilters) => void;
   onCreateClick: () => void;
   onCatalogClick: () => void;
+  /** When false the Catalog button is hidden entirely. Defaults to true. */
+  canAccessCatalog?: boolean;
   disabled?: boolean;
 }
 
@@ -30,6 +32,7 @@ export function TicketsFiltersBar({
   onFiltersChange,
   onCreateClick,
   onCatalogClick,
+  canAccessCatalog = true,
   disabled,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
@@ -146,10 +149,12 @@ export function TicketsFiltersBar({
         )}
 
         <div className="ms-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled}>
-            <BookOpen className="me-1.5 h-4 w-4" />
-            <span className="hidden sm:inline">{t("filters.catalog")}</span>
-          </Button>
+          {canAccessCatalog && (
+            <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled}>
+              <BookOpen className="me-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">{t("filters.catalog")}</span>
+            </Button>
+          )}
           <Button size="sm" onClick={onCreateClick} disabled={disabled}>
             <Plus className="me-1.5 h-4 w-4" />
             <span className="hidden sm:inline">{t("filters.createTicket")}</span>
