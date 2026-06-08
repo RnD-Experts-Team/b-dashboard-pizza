@@ -24,6 +24,8 @@ interface TicketsFiltersBarProps {
   onCatalogClick: () => void;
   /** When false the Catalog button is hidden entirely. Defaults to true. */
   canAccessCatalog?: boolean;
+  /** Active store id forwarded as X-Store-Id on catalog requests. */
+  storeId?: string;
   disabled?: boolean;
 }
 
@@ -33,6 +35,7 @@ export function TicketsFiltersBar({
   onCreateClick,
   onCatalogClick,
   canAccessCatalog = true,
+  storeId,
   disabled,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
@@ -47,7 +50,7 @@ export function TicketsFiltersBar({
     const ctrl = new AbortController();
     setCatalogLoading(true);
     Promise.all([
-      maintenanceTicketsService.getCatalogIssues(ctrl.signal),
+      maintenanceTicketsService.getCatalogIssues(ctrl.signal, storeId),
       maintenanceTicketsService.getCatalogTechnicians(ctrl.signal),
     ])
       .then(([issues, techs]) => {

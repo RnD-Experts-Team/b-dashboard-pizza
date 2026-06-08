@@ -751,13 +751,17 @@ export const maintenanceTicketsService = {
   },
 
   /** Load catalog issues (for dropdowns) */
-  async getCatalogIssues(signal?: AbortSignal): Promise<CatalogIssue[]> {
+  async getCatalogIssues(signal?: AbortSignal, storeId?: string): Promise<CatalogIssue[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogIssue[] }>(
         "/api/maintenance-tickets/catalog/issues",
         {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            ...(storeId ? { "X-Store-Id": storeId } : {}),
+          },
           timeout: 15_000,
           signal,
         }
@@ -824,13 +828,21 @@ export const maintenanceTicketsService = {
 
   /* ── Catalog CRUD ─────────────────────────────────────────────────────── */
 
-  async createCatalogIssue(payload: { title: string; description?: string }): Promise<CatalogIssue> {
+  async createCatalogIssue(payload: { title: string; description?: string }, storeId?: string): Promise<CatalogIssue> {
     const token = requireToken();
     try {
       const res = await axios.post<{ data: ApiCatalogIssue }>(
         "/api/maintenance-tickets/catalog/issues",
         payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            ...(storeId ? { "X-Store-Id": storeId } : {}),
+          },
+          timeout: 15_000,
+        }
       );
       return transformCatalogIssue(res.data.data);
     } catch (err) { return handleAxiosError(err); }

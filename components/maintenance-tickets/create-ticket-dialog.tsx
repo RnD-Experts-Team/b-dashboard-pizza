@@ -107,7 +107,7 @@ export function CreateTicketDialog({
 
   /** Creates a catalog issue and returns the new id. Called by SearchCreateCombobox. */
   async function createCatalogIssue(title: string): Promise<number> {
-    const newIssue = await maintenanceTicketsService.createCatalogIssue({ title });
+    const newIssue = await maintenanceTicketsService.createCatalogIssue({ title }, storeId);
     setLocalCatalogIssues((prev) => [...prev, newIssue]);
     return newIssue.id;
   }

@@ -103,6 +103,7 @@ export default function MaintenanceTicketsPage() {
           onCreateClick={() => setCreateOpen(true)}
           onCatalogClick={() => setCatalogOpen(true)}
           canAccessCatalog={canAccessCatalog}
+          storeId={selectedStore?.storeId}
           disabled={isLoading || !selectedStore}
         />
       )}
@@ -166,6 +167,7 @@ export default function MaintenanceTicketsPage() {
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
         onReloadCatalog={reloadCatalog}
+        storeId={selectedStore?.storeId}
       />
     </div>
   );

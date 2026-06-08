@@ -51,10 +51,10 @@ export function useMaintenanceTickets() {
     }
   }, [mode, selectedStore?.storeId, fetchTickets, reset]);
 
-  // Load catalog on mount
+  // Load catalog on mount (and whenever the selected store changes)
   useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
+    loadCatalog(selectedStore?.storeId ?? undefined);
+  }, [loadCatalog, selectedStore?.storeId]);
 
   const refetch = useCallback(() => {
     if (mode === "global") {
@@ -65,8 +65,8 @@ export function useMaintenanceTickets() {
   }, [mode, selectedStore?.storeId, fetchTickets, filters, currentPage]);
 
   const reloadCatalog = useCallback(() => {
-    loadCatalog();
-  }, [loadCatalog]);
+    loadCatalog(selectedStore?.storeId ?? undefined);
+  }, [loadCatalog, selectedStore?.storeId]);
 
   const applyFilters = useCallback(
     (newFilters: TicketsFilters) => {

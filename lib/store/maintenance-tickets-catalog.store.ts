@@ -18,8 +18,8 @@ interface MaintenanceTicketsCatalogState {
   isLoading: boolean;
   error: string | null;
 
-  /** Call on page entry and after any successful mutation */
-  loadCatalog: () => Promise<void>;
+  /** Call on page entry and after any successful mutation. Pass the active store id to forward it as X-Store-Id. */
+  loadCatalog: (storeId?: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -34,11 +34,11 @@ export const useMaintenanceTicketsCatalogStore =
     isLoading: false,
     error: null,
 
-    loadCatalog: async () => {
+    loadCatalog: async (storeId?: string) => {
       set({ isLoading: true, error: null });
       try {
         const [issues, technicians] = await Promise.all([
-          maintenanceTicketsService.getCatalogIssues(),
+          maintenanceTicketsService.getCatalogIssues(undefined, storeId),
           maintenanceTicketsService.getCatalogTechnicians(),
         ]);
         set({ issues, technicians, isLoading: false });

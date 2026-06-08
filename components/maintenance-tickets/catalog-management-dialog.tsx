@@ -91,7 +91,7 @@ function ItemRow({ name, secondary, isDeleted, onDelete, onRestore, isActing, ex
 /*  Issues tab                                                              */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function IssuesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
+function IssuesTab({ onReloadCatalog, storeId }: { onReloadCatalog: () => void; storeId?: string }) {
   const t = useTranslations("maintenanceTickets");
   const [items, setItems] = useState<CatalogIssue[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,12 +105,12 @@ function IssuesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
   const load = useCallback(async () => {
     setIsLoading(true); setError(null);
     try {
-      const res = await maintenanceTicketsService.getCatalogIssues();
+      const res = await maintenanceTicketsService.getCatalogIssues(undefined, storeId);
       setItems(res);
     } catch (err) {
       setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to load");
     } finally { setIsLoading(false); }
-  }, []);
+  }, [storeId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -118,7 +118,7 @@ function IssuesTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
     if (!title.trim()) return;
     setIsCreating(true);
     try {
-      await maintenanceTicketsService.createCatalogIssue({ title: title.trim(), description: description.trim() || undefined });
+      await maintenanceTicketsService.createCatalogIssue({ title: title.trim(), description: description.trim() || undefined }, storeId);
       setTitle(""); setDescription("");
       await load();
       onReloadCatalog();
@@ -522,9 +522,11 @@ export interface CatalogManagementDialogProps {
   open: boolean;
   onClose: () => void;
   onReloadCatalog: () => void;
+  /** Active store id forwarded as X-Store-Id on catalog/issues requests. */
+  storeId?: string;
 }
 
-export function CatalogManagementDialog({ open, onClose, onReloadCatalog }: CatalogManagementDialogProps) {
+export function CatalogManagementDialog({ open, onClose, onReloadCatalog, storeId }: CatalogManagementDialogProps) {
   const t = useTranslations("maintenanceTickets");
 
   return (
@@ -545,7 +547,7 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog }: Cata
 
           <div className="flex-1 overflow-y-auto min-h-0 mt-4">
             <TabsContent value="issues" className="mt-0">
-              <IssuesTab onReloadCatalog={onReloadCatalog} />
+              <IssuesTab onReloadCatalog={onReloadCatalog} storeId={storeId} />
             </TabsContent>
             <TabsContent value="technicians" className="mt-0">
               <TechniciansTab onReloadCatalog={onReloadCatalog} />

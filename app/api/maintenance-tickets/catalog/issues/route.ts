@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   const authorization = getAuthorizationHeader(request)!;
+  const storeId = request.headers.get("x-store-id");
   const { searchParams } = new URL(request.url);
   const trashed = searchParams.get("trashed");
   const upstreamUrl = `${BASE_URL}/issues${trashed ? `?trashed=${trashed}` : ""}`;
@@ -40,7 +41,11 @@ export async function GET(request: NextRequest) {
   try {
     const res = await fetchWithTimeout(upstreamUrl, {
       method: "GET",
-      headers: { Authorization: authorization, Accept: "application/json" },
+      headers: {
+        Authorization: authorization,
+        Accept: "application/json",
+        ...(storeId ? { "X-Store-Id": storeId } : {}),
+      },
     });
     const body = await res.text();
     return new NextResponse(body, {
@@ -61,13 +66,19 @@ export async function POST(request: NextRequest) {
   if (authError) return authError;
 
   const authorization = getAuthorizationHeader(request)!;
+  const storeId = request.headers.get("x-store-id");
   const upstreamUrl = `${BASE_URL}/issues`;
 
   try {
     const body = await request.text();
     const res = await fetchWithTimeout(upstreamUrl, {
       method: "POST",
-      headers: { Authorization: authorization, Accept: "application/json", "Content-Type": "application/json" },
+      headers: {
+        Authorization: authorization,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...(storeId ? { "X-Store-Id": storeId } : {}),
+      },
       body,
     });
     const resBody = await res.text();

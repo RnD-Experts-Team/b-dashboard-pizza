@@ -144,7 +144,7 @@ export function RecentMaintenanceTable() {
     try {
       const res = await maintenanceTicketsService.getTickets(
         storeId,
-        { per_page: 5 } as Parameters<typeof maintenanceTicketsService.getTickets>[1],
+        {} as Parameters<typeof maintenanceTicketsService.getTickets>[1],
         ctrl.signal
       );
       if (!ctrl.signal.aborted) {
@@ -184,11 +184,12 @@ export function RecentMaintenanceTable() {
 
   // ── Open create dialog ───────────────────────────────────────────────
   async function handleOpenCreate() {
-    setCreateOpen(true);
+    // Load issues BEFORE opening the dialog so the combobox is already populated
+    // when CreateTicketDialog mounts and seeds its local catalog state.
     if (catalogIssues.length === 0 && !catalogLoading) {
       setCatalogLoading(true);
       try {
-        const issues = await maintenanceTicketsService.getCatalogIssues();
+        const issues = await maintenanceTicketsService.getCatalogIssues(undefined, storeId ?? undefined);
         setCatalogIssues(issues);
       } catch {
         // Dialog still usable — user can create new issues inline
@@ -196,6 +197,7 @@ export function RecentMaintenanceTable() {
         setCatalogLoading(false);
       }
     }
+    setCreateOpen(true);
   }
 
   // ── Loading ──────────────────────────────────────────────────────────
