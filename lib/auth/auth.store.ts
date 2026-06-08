@@ -197,6 +197,14 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
             });
             persistUserData(user);
+            // Persist a minimal user snapshot for the login page "remembered user" UX.
+            // Intentionally NOT cleared on logout so the avatar picker shows after sign-out.
+            if (typeof window !== "undefined") {
+              localStorage.setItem(
+                "auth-last-login",
+                JSON.stringify({ name: user.name, email: user.email, avatar: user.avatar ?? null })
+              );
+            }
           } else {
             set({ isLoading: false });
             throw new Error(response.message || "Login failed");

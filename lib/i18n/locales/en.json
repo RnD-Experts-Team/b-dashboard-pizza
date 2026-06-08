@@ -153,7 +153,10 @@
       "noAccount": "Don't have an account?",
       "register": "Create account",
       "error": "Please enter both email and password",
-      "failed": "Login failed. Please try again."
+      "failed": "Login failed. Please try again.",
+      "clickToSignIn": "Click to sign in",
+      "useDifferentAccount": "Use a different account",
+      "notYou": "Not you?"
     },
     "register": {
       "title": "Create an account",

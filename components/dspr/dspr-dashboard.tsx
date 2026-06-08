@@ -324,6 +324,19 @@ export function DsprDashboard() {
     return formatDistanceToNow(lastFetchedAt, { addSuffix: true });
   }, [lastFetchedAt]);
 
+  // Guide steps — drop the Store Goals step when there are no non-upselling goals.
+  // goal_metrics is an array; an empty array or one containing only "Upselling"
+  // entries means the StoreGoals ribbon won't show anything meaningful.
+  const guideSteps = useMemo(() => {
+    const hasGoals =
+      Array.isArray(data?.goal_metrics) &&
+      data.goal_metrics.some(
+        (m: { metric_name: string }) => m.metric_name !== "Upselling"
+      );
+    if (hasGoals) return DSPR_GUIDE_STEPS;
+    return DSPR_GUIDE_STEPS.filter((s) => s.id !== "dspr-goals");
+  }, [data?.goal_metrics]);
+
   // ── Screenshot ref & handler ───────────────────────────────────────────
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -819,7 +832,7 @@ export function DsprDashboard() {
       </div>
 
       <PageGuide
-        steps={DSPR_GUIDE_STEPS}
+        steps={guideSteps}
         isOpen={guideOpen}
         onClose={() => setGuideOpen(false)}
       />
