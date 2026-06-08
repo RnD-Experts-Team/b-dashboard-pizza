@@ -66,6 +66,17 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import {
   maintenanceTicketsService,
@@ -535,21 +546,20 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
   const t = useTranslations("maintenanceTickets");
   const [status, setStatus] = useState<IssueStatus>(issue.status.value as IssueStatus);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const effectiveIds = issueIds ?? [issue.id];
   const hasChanged = issueIds ? true : status !== (issue.status.value as IssueStatus);
 
   async function handleSubmit() {
-    setIsSubmitting(true); setError(null);
+    setIsSubmitting(true);
     try {
       await maintenanceTicketsService.changeIssueStatus(storeId, ticketId, {
         ticket_issue_ids: effectiveIds, status,
       });
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Status updated successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally { setIsSubmitting(false); }
   }
 
@@ -559,17 +569,6 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
     { value: "in_progress", label: t("status.in_progress") },
     { value: "complete", label: t("status.complete") },
   ];
-
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Status updated successfully</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -591,7 +590,6 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
           </button>
         ))}
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>{t("common.cancel")}</Button>
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !hasChanged}>
@@ -619,7 +617,6 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
   const t = useTranslations("maintenanceTickets");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const activeTechs = technicians.filter((tech) => !tech.deletedAt);
 
@@ -639,22 +636,12 @@ function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, issueDra
         assigned_date: issueDraft.assignDate,
         ...(issueDraft.assignHour && { assigned_hour: issueDraft.assignHour }),
       });
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Assignment saved successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally { setIsSubmitting(false); }
-  }
-
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Assignment saved successfully</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -721,29 +708,18 @@ function DeferPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClos
   const t = useTranslations("maintenanceTickets");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   async function handleSubmit() {
     if (!issueDraft.deferReason.trim()) { setError(t("detailSheet.deferReasonRequired")); return; }
     setIsSubmitting(true); setError(null);
     try {
       await maintenanceTicketsService.deferIssue(storeId, ticketId, issue.id, { reason: issueDraft.deferReason.trim() });
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Issue deferred successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : t("detailSheet.actionError"));
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally { setIsSubmitting(false); }
-  }
-
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Issue deferred successfully</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -780,7 +756,6 @@ interface CancelPanelProps {
 function CancelPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatchDraft, onClose, onSuccess }: CancelPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const effectiveIds = issueIds ?? [issue.id];
 
   async function handleSubmit() {
@@ -792,22 +767,12 @@ function CancelPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatchDr
           maintenanceTicketsService.cancelIssue(storeId, ticketId, id, { reason: issueDraft.cancelReason.trim() })
         )
       );
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Issue cancelled successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to cancel issue.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally { setIsSubmitting(false); }
-  }
-
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Issue cancelled successfully</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -859,12 +824,9 @@ interface LifecyclePanelProps {
 
 function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: Omit<LifecyclePanelProps, "technicians">) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
-  const [success, setSuccess] = useState(false);
   async function handleSubmit() {
     setIsSubmitting(true);
-    setError(null);
     try {
       await maintenanceTicketsService.createDiagnosis(storeId, ticketId, {
         ticket_issue_ids: issueIds ?? [issue.id],
@@ -872,23 +834,14 @@ function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       }, files);
       onClearDraftFields(["diagnosisBody"]);
       setFiles([]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Diagnosis saved successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create diagnosis.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Diagnosis saved successfully</p>
-        </div>
-      </div>
-    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -911,7 +864,6 @@ function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
           onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
         />
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting}>
@@ -926,7 +878,6 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
-  const [success, setSuccess] = useState(false);
   async function handleSubmit() {
     const body = issueDraft.warrantyBody.trim();
     if (!body) {
@@ -947,23 +898,14 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
       }, files);
       onClearDraftFields(["warrantyBody", "warrantyExpiry"]);
       setFiles([]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Warranty saved successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create warranty.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Warranty saved successfully</p>
-        </div>
-      </div>
-    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -1012,7 +954,6 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [technicianId, setTechnicianId] = useState(issueDraft.attendanceTechnicianId ?? "");
   const [clockEntries, setClockEntries] = useState<ClockEntry[]>([]);
   const [breakEntries, setBreakEntries] = useState<BreakEntry[]>([]);
@@ -1058,24 +999,14 @@ function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issu
         "attendanceStartBreak", "attendanceEndBreak",
         "attendanceStartPartsRun", "attendanceEndPartsRun",
       ]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Attendance saved successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create attendance entry.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Attendance saved successfully</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -1221,7 +1152,6 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
   const [files, setFiles] = useState<File[]>([]);
   const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(true);
-  const [success, setSuccess] = useState(false);
   useEffect(() => {
     const ctrl = new AbortController();
     setPartsLoading(true);
@@ -1256,24 +1186,14 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       }, files);
       onClearDraftFields(["partId", "partCost"]);
       setFiles([]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Part usage saved successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create part usage.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Part usage saved successfully</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -1332,7 +1252,6 @@ function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
 function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   async function handleSubmit() {
     if (!issueDraft.payTechnicianId) {
       setError("Technician is required.");
@@ -1362,23 +1281,14 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
         "milesDriven",
         "perMileRate",
       ]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Pay entry saved successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to create pay entry.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Pay entry saved successfully</p>
-        </div>
-      </div>
-    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -1409,7 +1319,6 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
 function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   function toggleTech(id: number) {
     const current = issueDraft.attachTechs;
     onPatchDraft({ attachTechs: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
@@ -1427,23 +1336,14 @@ function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, iss
         technician_ids: issueDraft.attachTechs,
       });
       onClearDraftFields(["attachTechs"]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Technicians attached successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to attach technicians.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Technicians attached successfully</p>
-        </div>
-      </div>
-    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -1474,12 +1374,9 @@ function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueIds, iss
 
 function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: Omit<LifecyclePanelProps, "technicians">) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const canSubmit = !!issueDraft.delayAssignmentId && !!issueDraft.delayNewDate && !!issueDraft.delayReason.trim();
   async function handleSubmit() {
     setIsSubmitting(true);
-    setError(null);
     try {
       await maintenanceTicketsService.delayAssignment(
         storeId,
@@ -1492,23 +1389,14 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
         }
       );
       onClearDraftFields(["delayAssignmentId", "delayNewDate", "delayNewHour", "delayReason"]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Assignment delayed successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to delay assignment.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Assignment delayed successfully</p>
-        </div>
-      </div>
-    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -1540,7 +1428,6 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
         <Label className="text-xs text-muted-foreground">Reason <span className="text-destructive">*</span></Label>
         <Textarea className="text-sm resize-none min-h-20" placeholder="Explain why the assignment is being delayed" value={issueDraft.delayReason} onChange={(e) => onPatchDraft({ delayReason: e.target.value })} />
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !canSubmit}>
@@ -1554,7 +1441,6 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
 function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   function toggleTech(id: number) {
     const current = issueDraft.changeTechs;
     onPatchDraft({ changeTechs: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
@@ -1574,23 +1460,14 @@ function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, o
         { technician_ids: issueDraft.changeTechs }
       );
       onClearDraftFields(["changeAssignmentId", "changeTechs"]);
-      setSuccess(true);
-      setTimeout(() => { onSuccess(); onClose(); }, 1500);
+      toast.success("Technicians updated successfully");
+      onSuccess(); onClose();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to change technicians.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
     } finally {
       setIsSubmitting(false);
     }
-  }
-  if (success) {
-    return (
-      <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-3">
-        <div className="flex items-center justify-center gap-2 py-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Technicians updated successfully</p>
-        </div>
-      </div>
-    );
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
@@ -1996,6 +1873,7 @@ function IssueNode({
   const t = useTranslations("maintenanceTickets");
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
   const [mistakenSaving, setMistakenSaving] = useState<string | null>(null);
+  const [mistakenConfirm, setMistakenConfirm] = useState<{ label: string; onConfirm: () => Promise<void> } | null>(null);
 
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
   const hasSharedAction =
@@ -2013,6 +1891,40 @@ function IssueNode({
   }
 
   return (
+    <>
+    <AlertDialog open={mistakenConfirm !== null} onOpenChange={(open) => { if (!open) setMistakenConfirm(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Mark as mistaken?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {mistakenConfirm?.label} will be marked as mistaken. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={async () => {
+              if (!mistakenConfirm) return;
+              const { onConfirm, label } = mistakenConfirm;
+              setMistakenConfirm(null);
+              setMistakenSaving(label);
+              try {
+                await onConfirm();
+                toast.success(`${label} marked as mistaken.`);
+                onReload();
+              } catch (err) {
+                if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+                toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
+              }
+              finally { setMistakenSaving(null); }
+            }}
+          >
+            Mark as mistaken
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <div className="relative">
       {/* Vertical connector line (non-last) */}
       {!isLast && (
@@ -2131,12 +2043,10 @@ function IssueNode({
                               type="button"
                               className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                               disabled={mistakenSaving !== null}
-                              onClick={async () => {
-                                setMistakenSaving(`assignment:${a.id}`);
-                                try { await maintenanceTicketsService.markAssignmentMistaken(storeId, ticketId, a.id); onReload(); }
-                                catch { /* noop */ }
-                                finally { setMistakenSaving(null); }
-                              }}
+                              onClick={() => setMistakenConfirm({
+                                label: `Assignment #${a.id}`,
+                                onConfirm: async () => { await maintenanceTicketsService.markAssignmentMistaken(storeId, ticketId, a.id); },
+                              })}
                             >
                               {mistakenSaving === `assignment:${a.id}` ? "…" : "Mark mistaken"}
                             </button>
@@ -2155,12 +2065,10 @@ function IssueNode({
                                     type="button"
                                     className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                                     disabled={mistakenSaving !== null}
-                                    onClick={async () => {
-                                      setMistakenSaving(`delay:${delay.id}`);
-                                      try { await maintenanceTicketsService.markAssignmentDelayMistaken(storeId, ticketId, a.id, delay.id); onReload(); }
-                                      catch { /* noop */ }
-                                      finally { setMistakenSaving(null); }
-                                    }}
+                                    onClick={() => setMistakenConfirm({
+                                      label: `Delay #${delay.id}`,
+                                      onConfirm: async () => { await maintenanceTicketsService.markAssignmentDelayMistaken(storeId, ticketId, a.id, delay.id); },
+                                    })}
                                   >
                                     {mistakenSaving === `delay:${delay.id}` ? "…" : "Mark mistaken"}
                                   </button>
@@ -2201,12 +2109,10 @@ function IssueNode({
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                                 disabled={mistakenSaving !== null}
-                                onClick={async () => {
-                                  setMistakenSaving(`diagnosis:${item.id}`);
-                                  try { await maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, item.id); onReload(); }
-                                  catch { /* noop */ }
-                                  finally { setMistakenSaving(null); }
-                                }}
+                                onClick={() => setMistakenConfirm({
+                                  label: `Diagnosis #${item.id}`,
+                                  onConfirm: async () => { await maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, item.id); },
+                                })}
                               >
                                 {mistakenSaving === `diagnosis:${item.id}` ? "…" : "Mark mistaken"}
                               </button>
@@ -2341,12 +2247,10 @@ function IssueNode({
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                                 disabled={mistakenSaving !== null}
-                                onClick={async () => {
-                                  setMistakenSaving(`attendance:${item.id}`);
-                                  try { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); onReload(); }
-                                  catch { /* noop */ }
-                                  finally { setMistakenSaving(null); }
-                                }}
+                                onClick={() => setMistakenConfirm({
+                                  label: `Attendance entry #${item.id}`,
+                                  onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
+                                })}
                               >
                                 {mistakenSaving === `attendance:${item.id}` ? "…" : "Mark mistaken"}
                               </button>
@@ -2490,12 +2394,10 @@ function IssueNode({
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                                 disabled={mistakenSaving !== null}
-                                onClick={async () => {
-                                  setMistakenSaving(`part:${item.id}`);
-                                  try { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); onReload(); }
-                                  catch { /* noop */ }
-                                  finally { setMistakenSaving(null); }
-                                }}
+                                onClick={() => setMistakenConfirm({
+                                  label: `Part usage #${item.id}`,
+                                  onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
+                                })}
                               >
                                 {mistakenSaving === `part:${item.id}` ? "…" : "Mark mistaken"}
                               </button>
@@ -2601,12 +2503,10 @@ function IssueNode({
                                 type="button"
                                 className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                                 disabled={mistakenSaving !== null}
-                                onClick={async () => {
-                                  setMistakenSaving(`pay:${item.id}`);
-                                  try { await maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, item.id); onReload(); }
-                                  catch { /* noop */ }
-                                  finally { setMistakenSaving(null); }
-                                }}
+                                onClick={() => setMistakenConfirm({
+                                  label: `Pay entry #${item.id}`,
+                                  onConfirm: async () => { await maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, item.id); },
+                                })}
                               >
                                 {mistakenSaving === `pay:${item.id}` ? "…" : "Mark mistaken"}
                               </button>
@@ -2682,12 +2582,10 @@ function IssueNode({
                               type="button"
                               className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
                               disabled={mistakenSaving !== null}
-                              onClick={async () => {
-                                setMistakenSaving(`warranty:${item.id}`);
-                                try { await maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, item.id); onReload(); }
-                                catch { /* noop */ }
-                                finally { setMistakenSaving(null); }
-                              }}
+                              onClick={() => setMistakenConfirm({
+                                label: `Warranty #${item.id}`,
+                                onConfirm: async () => { await maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, item.id); },
+                              })}
                             >
                               {mistakenSaving === `warranty:${item.id}` ? "…" : "Mark mistaken"}
                             </button>
@@ -2901,6 +2799,7 @@ function IssueNode({
         </div>
       </div>
     </div>
+    </>
   );
 }
 

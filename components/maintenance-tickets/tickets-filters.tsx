@@ -88,8 +88,8 @@ export function TicketsFiltersBar({
           onValueChange={(v) => updateField("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
           disabled={disabled}
         >
-          <SelectTrigger className="h-9 w-36 text-sm">
-            <SelectValue placeholder={t("filters.statusPlaceholder")} />
+          <SelectTrigger className="h-9 w-40 text-sm">
+            <SelectValue placeholder={t("filters.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>

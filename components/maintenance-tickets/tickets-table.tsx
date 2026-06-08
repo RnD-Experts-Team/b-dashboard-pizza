@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { Ban, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -73,9 +74,11 @@ function TicketRow({ ticket, onClick, onChanged }: TicketRowProps) {
     try {
       await maintenanceTicketsService.cancelTicket(ticket.storeId, ticket.id, { reason: reason.trim() });
       setDialogOpen(false);
+      toast.success("Ticket cancelled successfully.");
       onChanged();
     } catch (err) {
-      setError(err instanceof MaintenanceTicketsError ? err.message : "Failed to cancel ticket.");
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Failed to cancel ticket.");
     } finally {
       setIsSubmitting(false);
     }
@@ -83,8 +86,14 @@ function TicketRow({ ticket, onClick, onChanged }: TicketRowProps) {
 
   async function handleRestore(e: React.MouseEvent) {
     e.stopPropagation();
-    await maintenanceTicketsService.restoreTicket(ticket.storeId, ticket.id);
-    onChanged();
+    try {
+      await maintenanceTicketsService.restoreTicket(ticket.storeId, ticket.id);
+      toast.success("Ticket restored successfully.");
+      onChanged();
+    } catch (err) {
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Failed to restore ticket.");
+    }
   }
 
   return (

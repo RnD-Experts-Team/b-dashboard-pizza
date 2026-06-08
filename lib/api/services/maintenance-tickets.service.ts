@@ -72,6 +72,7 @@ export type TicketsErrorCode =
   | "TIMEOUT"
   | "NETWORK_ERROR"
   | "SERVER_ERROR"
+  | "CANCELLED"
   | "UNKNOWN";
 
 export class MaintenanceTicketsError extends Error {
@@ -124,6 +125,10 @@ function requireToken(): string {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function handleAxiosError(err: unknown): never {
+  // Cancelled / aborted requests — not a user-visible error
+  if (axios.isCancel(err) || (axios.isAxiosError(err) && err.code === "ERR_CANCELED")) {
+    throw new MaintenanceTicketsError("Request cancelled.", "CANCELLED");
+  }
   if (axios.isAxiosError(err)) {
     const status = err.response?.status;
     const data = err.response?.data;
