@@ -18,14 +18,17 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, X, ChevronRight, UserPlus } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Types & helpers                                                           */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
-type LastLogin = { name: string; email: string; avatar: string | null };
+type SavedAccount = { name: string; email: string; avatar: string | null };
 type LoginMode = "full" | "picker" | "password";
+
+const ACCOUNTS_KEY = "auth-saved-accounts";
+const MAX_SAVED = 5;
 
 function getInitials(name: string): string {
   return name
@@ -33,6 +36,50 @@ function getInitials(name: string): string {
     .map((n) => n[0])
     .join("")
     .toUpperCase();
+}
+
+/** Read saved accounts from localStorage, with one-time migration from the old single-account key. */
+function readSavedAccounts(): SavedAccount[] {
+  try {
+    const raw = localStorage.getItem(ACCOUNTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (a: unknown): a is SavedAccount =>
+            typeof (a as SavedAccount)?.email === "string" &&
+            typeof (a as SavedAccount)?.name === "string"
+        );
+      }
+    }
+    // One-time migration: read the old single-account key and promote to array
+    const legacy = localStorage.getItem("auth-last-login");
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as SavedAccount;
+      if (parsed?.email && parsed?.name) {
+        const accounts: SavedAccount[] = [
+          { name: parsed.name, email: parsed.email, avatar: parsed.avatar ?? null },
+        ];
+        localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+        return accounts;
+      }
+    }
+  } catch {
+    // Malformed JSON or localStorage unavailable
+  }
+  return [];
+}
+
+function writeSavedAccounts(accounts: SavedAccount[]) {
+  try {
+    if (accounts.length > 0) {
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+    } else {
+      localStorage.removeItem(ACCOUNTS_KEY);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -50,25 +97,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  // Remembered-user state
-  const [lastLogin, setLastLogin] = useState<LastLogin | null>(null);
+  // Multi-account state
+  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<SavedAccount | null>(null);
   const [mode, setMode] = useState<LoginMode>("full");
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // ── Read remembered user from localStorage on mount ──────────────────────
+  // ── Read saved accounts from localStorage on mount ───────────────────────
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("auth-last-login");
-      if (raw) {
-        const parsed = JSON.parse(raw) as LastLogin;
-        if (parsed?.email && parsed?.name) {
-          setLastLogin(parsed);
-          setMode("picker");
-        }
-      }
-    } catch {
-      // Malformed JSON or localStorage unavailable — stay in "full" mode
-    }
+    const accounts = readSavedAccounts();
+    setSavedAccounts(accounts);
+    if (accounts.length > 0) setMode("picker");
   }, []);
 
   // ── Autofocus password input when transitioning to password mode ──────────
@@ -80,14 +119,38 @@ export default function LoginPage() {
   }, [mode]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
-  function handlePickerClick() {
+
+  function handlePickAccount(account: SavedAccount) {
+    setSelectedAccount(account);
     setMode("password");
+    setPassword("");
     setError("");
   }
 
-  function handleDifferentAccount() {
-    localStorage.removeItem("auth-last-login");
-    setLastLogin(null);
+  function handleRemoveAccount(emailToRemove: string) {
+    const updated = savedAccounts.filter((a) => a.email !== emailToRemove);
+    setSavedAccounts(updated);
+    writeSavedAccounts(updated);
+    // If we removed the currently-selected account, navigate appropriately
+    if (selectedAccount?.email === emailToRemove) {
+      setSelectedAccount(null);
+      setPassword("");
+      setError("");
+      setMode(updated.length > 0 ? "picker" : "full");
+    }
+    // If picker is now empty, move to full form
+    if (updated.length === 0 && mode === "picker") {
+      setMode("full");
+    }
+  }
+
+  function handleBackToAccounts() {
+    setMode("picker");
+    setPassword("");
+    setError("");
+  }
+
+  function handleUseDifferentAccount() {
     setMode("full");
     setEmail("");
     setPassword("");
@@ -98,7 +161,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
 
-    const submitEmail = mode === "password" ? lastLogin!.email : email;
+    const submitEmail = mode === "password" ? selectedAccount!.email : email;
 
     if (!submitEmail || !password) {
       setError(t("error"));
@@ -107,6 +170,9 @@ export default function LoginPage() {
 
     try {
       await login({ email: submitEmail, password });
+      // auth store updates savedAccounts in localStorage; re-read after login
+      const updated = readSavedAccounts();
+      setSavedAccounts(updated);
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
@@ -211,6 +277,15 @@ export default function LoginPage() {
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {t("signIn")}
                   </Button>
+                  {savedAccounts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleBackToAccounts}
+                      className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline transition-colors duration-150"
+                    >
+                      ← {t("backToAccounts")}
+                    </button>
+                  )}
                   <p className="text-sm text-muted-foreground text-center">
                     {t("noAccount")}{" "}
                     <a
@@ -227,8 +302,8 @@ export default function LoginPage() {
             </>
           )}
 
-          {/* ── Mode B1: Avatar picker ──────────────────────────────────── */}
-          {mode === "picker" && lastLogin && (
+          {/* ── Mode B1: Multi-account picker ──────────────────────────── */}
+          {mode === "picker" && savedAccounts.length > 0 && (
             <>
               <CardHeader className="space-y-1">
                 {mobileLogo}
@@ -238,50 +313,79 @@ export default function LoginPage() {
                 </CardDescription>
               </CardHeader>
 
-              <CardContent className="flex flex-col items-center gap-3 pb-6">
+              <CardContent className="pb-6">
                 {error && (
-                  <div className="w-full p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+                  <div className="mb-3 p-3 text-sm text-destructive bg-destructive/10 rounded-md">
                     {error}
                   </div>
                 )}
 
-                {/* Clickable avatar card */}
-                <div
-                  className="flex flex-col items-center gap-4 py-6 px-4 w-full rounded-xl cursor-pointer group hover:bg-muted/50 transition-colors duration-200"
-                  onClick={handlePickerClick}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && handlePickerClick()}
-                  aria-label={`Sign in as ${lastLogin.name}`}
-                >
-                  <Avatar className="h-24 w-24 ring-2 ring-primary/20 group-hover:ring-primary/50 transition-all duration-200">
-                    <AvatarImage src={lastLogin.avatar ?? undefined} alt={lastLogin.name} />
-                    <AvatarFallback className="text-2xl bg-primary/10 text-primary font-semibold">
-                      {getInitials(lastLogin.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="text-center space-y-0.5">
-                    <p className="font-semibold text-lg leading-tight">{lastLogin.name}</p>
-                    <p className="text-sm text-muted-foreground">{lastLogin.email}</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground group-hover:text-primary transition-colors duration-150">
-                    {t("clickToSignIn")}
-                  </p>
+                {/* Account list */}
+                <div className="space-y-1">
+                  {savedAccounts.map((account) => (
+                    <div
+                      key={account.email}
+                      className="group flex items-center rounded-lg border border-transparent hover:border-border/60 hover:bg-muted/50 transition-colors duration-150"
+                    >
+                      {/* Clickable main row */}
+                      <button
+                        type="button"
+                        className="flex flex-1 items-center gap-3 py-2.5 ps-3 pe-1 text-start min-w-0"
+                        onClick={() => handlePickAccount(account)}
+                        aria-label={`Sign in as ${account.name}`}
+                      >
+                        <Avatar className="h-10 w-10 shrink-0">
+                          <AvatarImage src={account.avatar ?? undefined} alt={account.name} />
+                          <AvatarFallback className="text-sm bg-primary/10 text-primary font-semibold">
+                            {getInitials(account.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium leading-tight truncate">
+                            {account.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {account.email}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 transition-colors duration-150" />
+                      </button>
+
+                      {/* Remove button — visible on hover */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 me-1.5 shrink-0 text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all duration-150"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveAccount(account.email);
+                        }}
+                        aria-label={t("removeAccount")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleDifferentAccount}
-                  className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline transition-colors duration-150"
-                >
-                  {t("useDifferentAccount")}
-                </button>
+                {/* Use a different account */}
+                <div className="mt-4 pt-3 border-t flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleUseDifferentAccount}
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline transition-colors duration-150"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    {t("useDifferentAccount")}
+                  </button>
+                </div>
               </CardContent>
             </>
           )}
 
-          {/* ── Mode B2: Password entry for remembered user ─────────────── */}
-          {mode === "password" && lastLogin && (
+          {/* ── Mode B2: Password entry for selected account ────────────── */}
+          {mode === "password" && selectedAccount && (
             <>
               <CardHeader className="space-y-1">
                 {mobileLogo}
@@ -299,14 +403,19 @@ export default function LoginPage() {
                   {/* Compact identity strip */}
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 border border-border/60">
                     <Avatar className="h-10 w-10 shrink-0">
-                      <AvatarImage src={lastLogin.avatar ?? undefined} alt={lastLogin.name} />
+                      <AvatarImage
+                        src={selectedAccount.avatar ?? undefined}
+                        alt={selectedAccount.name}
+                      />
                       <AvatarFallback className="text-sm bg-primary/10 text-primary font-semibold">
-                        {getInitials(lastLogin.name)}
+                        {getInitials(selectedAccount.name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{lastLogin.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{lastLogin.email}</p>
+                      <p className="text-sm font-medium truncate">{selectedAccount.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {selectedAccount.email}
+                      </p>
                     </div>
                   </div>
 
@@ -358,12 +467,13 @@ export default function LoginPage() {
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {t("signIn")}
                   </Button>
+                  {/* Back to accounts list (only shown when there are other accounts) */}
                   <button
                     type="button"
-                    onClick={handleDifferentAccount}
+                    onClick={handleBackToAccounts}
                     className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline transition-colors duration-150"
                   >
-                    {t("notYou")} {t("useDifferentAccount")}
+                    ← {t("backToAccounts")}
                   </button>
                 </CardFooter>
               </form>

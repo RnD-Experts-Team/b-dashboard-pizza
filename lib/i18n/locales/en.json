@@ -156,7 +156,9 @@
       "failed": "Login failed. Please try again.",
       "clickToSignIn": "Click to sign in",
       "useDifferentAccount": "Use a different account",
-      "notYou": "Not you?"
+      "notYou": "Not you?",
+      "backToAccounts": "Back to accounts",
+      "removeAccount": "Remove account"
     },
     "register": {
       "title": "Create an account",

@@ -467,6 +467,28 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       //   ],
       //   // No rule or management permission defined yet — always visible
       // },
+      // {
+      //   title: t("maintenanceTickets"),
+      //   href: `/${locale}/dashboard/maintenance-tickets`,
+      //   icon: Ticket,
+      //   requirements: [
+      //     { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
+      //   ],
+      // },
+      
+      {
+        title: "Announcements",
+        href: `/${locale}/dashboard/announcements`,
+        icon: Megaphone,
+      },
+    ],
+  };
+
+  const Maintenance: NavGroup = {
+    label: "Maintenance",
+    icon: FileText,
+    items: [
+     
       {
         title: t("maintenanceTickets"),
         href: `/${locale}/dashboard/maintenance-tickets`,
@@ -477,11 +499,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
       
      
-      {
-        title: "Announcements",
-        href: `/${locale}/dashboard/announcements`,
-        icon: Megaphone,
-      },
+     
     ],
   };
   // Dev tools navigation (controlled by feature flags)
@@ -576,6 +594,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
   const visibleDataManagementGroup = filterGroup(dataManagementGroup);
   const visibleReports = filterGroup(Reports);
+  const visibleMaintenance = filterGroup(Maintenance);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
 
@@ -766,7 +785,16 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               onNavigate={onNavigate}
             />
           )}
-
+{/* 6. Maintenance */}
+          {visibleMaintenance && (
+            <SidebarNavGroup
+              group={visibleMaintenance }
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
           {/* 7. Hiring Management */}
           {visibleHiringManagementGroup && (
             <SidebarNavGroup

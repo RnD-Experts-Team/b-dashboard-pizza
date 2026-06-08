@@ -199,11 +199,25 @@ export const useAuthStore = create<AuthState>()(
             persistUserData(user);
             // Persist a minimal user snapshot for the login page "remembered user" UX.
             // Intentionally NOT cleared on logout so the avatar picker shows after sign-out.
+            // Stored as an array (most-recent-first, capped at 5) keyed by "auth-saved-accounts".
             if (typeof window !== "undefined") {
-              localStorage.setItem(
-                "auth-last-login",
-                JSON.stringify({ name: user.name, email: user.email, avatar: user.avatar ?? null })
-              );
+              try {
+                const ACCOUNTS_KEY = "auth-saved-accounts";
+                const MAX_SAVED = 5;
+                const existing = localStorage.getItem(ACCOUNTS_KEY);
+                const arr: { name: string; email: string; avatar: string | null }[] =
+                  existing ? JSON.parse(existing) : [];
+                const deduped = Array.isArray(arr)
+                  ? arr.filter((a) => a?.email !== user.email)
+                  : [];
+                const updated = [
+                  { name: user.name, email: user.email, avatar: user.avatar ?? null },
+                  ...deduped,
+                ].slice(0, MAX_SAVED);
+                localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
+              } catch {
+                // ignore storage errors — not critical
+              }
             }
           } else {
             set({ isLoading: false });

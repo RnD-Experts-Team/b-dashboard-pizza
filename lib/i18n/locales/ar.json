@@ -177,7 +177,9 @@
       "failed": "فشل تسجيل الدخول. حاول مرة أخرى.",
       "clickToSignIn": "انقر لتسجيل الدخول",
       "useDifferentAccount": "استخدم حسابًا مختلفًا",
-      "notYou": "لست أنت؟"
+      "notYou": "لست أنت؟",
+      "backToAccounts": "العودة إلى الحسابات",
+      "removeAccount": "إزالة الحساب"
     },
     "register": {
       "title": "إنشاء حساب",
