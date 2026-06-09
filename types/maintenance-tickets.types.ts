@@ -33,7 +33,7 @@ export interface EnumField {
 export interface UserRef {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -155,6 +155,7 @@ export interface TicketIssueDiagnosis {
   notes: TicketNote[];
   mistaken: boolean;
   createdBy: number | null;
+  creator: UserRef | null;
   createdAt: string;
 }
 
@@ -174,6 +175,7 @@ export interface TicketIssueAttendance {
   notes: TicketNote[];
   mistaken: boolean;
   createdBy: number | null;
+  creator: UserRef | null;
   createdAt: string;
 }
 
@@ -189,6 +191,7 @@ export interface TicketIssuePartUsage {
   notes: TicketNote[];
   mistaken: boolean;
   createdBy: number | null;
+  creator: UserRef | null;
   createdAt: string;
 }
 
@@ -210,6 +213,7 @@ export interface TicketIssuePayEntry {
   notes: TicketNote[];
   mistaken: boolean;
   createdBy: number | null;
+  creator: UserRef | null;
   createdAt: string;
 }
 
@@ -224,6 +228,7 @@ export interface TicketIssueWarranty {
   notes: TicketNote[];
   mistaken: boolean;
   createdBy: number | null;
+  creator: UserRef | null;
   createdAt: string;
 }
 
@@ -550,6 +555,7 @@ export interface ApiTicketIssueDiagnosis {
   notes?: ApiTicketNote[];
   mistaken: boolean;
   created_by?: number | null;
+  creator?: { id: number; name: string; email?: string | null } | null;
   created_at: string;
 }
 
@@ -568,6 +574,7 @@ export interface ApiTicketIssueAttendance {
   notes?: ApiTicketNote[];
   mistaken: boolean;
   created_by?: number | null;
+  creator?: { id: number; name: string; email?: string | null } | null;
   created_at: string;
 }
 
@@ -582,6 +589,7 @@ export interface ApiTicketIssuePartUsage {
   notes?: ApiTicketNote[];
   mistaken: boolean;
   created_by?: number | null;
+  creator?: { id: number; name: string; email?: string | null } | null;
   created_at: string;
 }
 
@@ -601,6 +609,7 @@ export interface ApiTicketIssuePayEntry {
   notes?: ApiTicketNote[];
   mistaken: boolean;
   created_by?: number | null;
+  creator?: { id: number; name: string; email?: string | null } | null;
   created_at: string;
 }
 
@@ -613,6 +622,7 @@ export interface ApiTicketIssueWarranty {
   notes?: ApiTicketNote[];
   mistaken: boolean;
   created_by?: number | null;
+  creator?: { id: number; name: string; email?: string | null } | null;
   created_at: string;
 }
 

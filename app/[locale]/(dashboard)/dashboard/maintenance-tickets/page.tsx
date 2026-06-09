@@ -144,6 +144,18 @@ export default function MaintenanceTicketsPage() {
   /** storeId forwarded to child components that need a specific store context */
   const activeStoreId = isStoreMode ? pageSelectedStoreId : undefined;
 
+  /**
+   * Store sent as X-Store-Id on catalog/issues GET and POST.
+   * Priority: page-selected store → last-opened ticket's store → first active store.
+   * This ensures the header is ALWAYS populated when any store context is available.
+   */
+  const catalogStoreId =
+    activeStoreId ||
+    detailStoreId ||
+    activeStores[0]?.storeId ||
+    activeStores[0]?.id ||
+    undefined;
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")}>
@@ -168,7 +180,7 @@ export default function MaintenanceTicketsPage() {
           onCreateClick={() => setCreateOpen(true)}
           onCatalogClick={() => setCatalogOpen(true)}
           canAccessCatalog={canAccessCatalog}
-          storeId={activeStoreId}
+          storeId={catalogStoreId}
           disabled={isLoading}
           stores={activeStores}
           selectedStoreId={pageSelectedStoreId ?? undefined}
@@ -238,7 +250,7 @@ export default function MaintenanceTicketsPage() {
         open={catalogOpen}
         onClose={() => setCatalogOpen(false)}
         onReloadCatalog={reloadCatalog}
-        storeId={activeStoreId}
+        storeId={catalogStoreId}
       />
     </div>
   );

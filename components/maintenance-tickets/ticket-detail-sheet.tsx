@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { useCanAccessRoute } from "@/lib/auth/use-auth";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { format } from "date-fns";
 import {
   Sheet,
@@ -47,6 +47,7 @@ import {
   User,
   Users2,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Circle,
   Hash,
@@ -66,6 +67,8 @@ import {
   Plus,
   SlidersHorizontal,
   X,
+  GitBranch,
+  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -262,20 +265,29 @@ function DateTimePicker({ value, onChange, placeholder, className }: {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Minimal chips (no color variants)                                       */
+/*  Color-coded chips                                                        */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function StatusChip({ label }: { label: string }) {
+function StatusChip({ value, label }: { value: string; label: string }) {
+  const colorMap: Record<string, string> = {
+    pending:     "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
+    assigned:    "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
+    in_progress: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30 dark:text-indigo-400",
+    complete:    "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
+    cancelled:   "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
+    deferred:    "bg-orange-500/10 text-orange-700 border-orange-500/30 dark:text-orange-400",
+  };
   return (
-    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium text-foreground bg-background">
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium", colorMap[value] ?? "bg-muted text-foreground border-border")}>
       {label}
     </span>
   );
 }
 
-function PriorityChip({ label }: { label: string }) {
+function PriorityChip({ label }: { value: string; label: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground/70">Priority:</span>
       {label}
     </span>
   );
@@ -1699,9 +1711,11 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
             <DropdownMenuItem onClick={() => setBulkAction("part")}>
               <Package className="h-4 w-4" />Add part usage
             </DropdownMenuItem>
+            {/* PAY ENTRY DISABLED — creation commented out; existing pay entries still display
             <DropdownMenuItem onClick={() => setBulkAction("pay")}>
               <Wallet className="h-4 w-4" />Add pay entry
             </DropdownMenuItem>
+            */}
             <DropdownMenuItem onClick={() => setBulkAction("warranty")}>
               <ShieldCheck className="h-4 w-4" />Add warranty
             </DropdownMenuItem>
@@ -1773,6 +1787,42 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/*  Collapsible section wrapper (closed by default)                         */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+function SectionCollapse({
+  title,
+  count,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  count?: number;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-foreground border-b border-border pb-1 hover:opacity-70 transition-opacity"
+      >
+        {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+        <span>{title}</span>
+        {count !== undefined && (
+          <span className="ms-auto rounded-full bg-muted px-1.5 py-px text-[9px] font-medium text-muted-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+      {open && <div className="mt-2 space-y-2">{children}</div>}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /*  Status history (collapsible sub-section)                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -1790,8 +1840,13 @@ function StatusHistory({ changes }: { changes: TicketIssue["statusChanges"] }) {
         <div className="mt-2 space-y-1.5 ps-4 border-s">
           {changes.map((c) => (
             <div key={c.id} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <StatusChip label={c.status.label} />
-              {c.changedBy && <span className="flex items-center gap-1"><User className="h-2.5 w-2.5" />{c.changedBy}</span>}
+              <StatusChip value={c.status.value} label={c.status.label} />
+              {c.changedBy && (
+                <span className="flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  Changed by: {c.changedBy}
+                </span>
+              )}
               <span>{fmtDateTime(c.createdAt)}</span>
               {c.reason && <span className="italic">"{c.reason}"</span>}
             </div>
@@ -1932,6 +1987,12 @@ interface IssueNodeProps {
   showSharedIndicatorWhenCollapsed?: boolean;
   /** whether this card should show transient highlight animation */
   isHighlighted?: boolean;
+  /**
+   * Set of issue IDs that have been deferred (i.e. appear as `parentId` of another issue in
+   * the same flat descendants list). Used to lock intermediate nodes whose `children[]` array
+   * may not be fully populated by the API.
+   */
+  deferredIssueIds?: ReadonlySet<number>;
 }
 
 function IssueNode({
@@ -1967,6 +2028,7 @@ function IssueNode({
   onHighlightIssues,
   showSharedIndicatorWhenCollapsed = false,
   isHighlighted = false,
+  deferredIssueIds,
 }: IssueNodeProps) {
   const t = useTranslations("maintenanceTickets");
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
@@ -1974,6 +2036,10 @@ function IssueNode({
   const [mistakenConfirm, setMistakenConfirm] = useState<{ label: string; onConfirm: () => Promise<void> } | null>(null);
 
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
+  // An issue is "deferred" (locked) if it has children in its own data OR if it appears
+  // as the parentId of any sibling in the flat descendants list.  The second check catches
+  // intermediate chain nodes whose `children[]` array wasn't populated by the API.
+  const hasActiveChild = issue.children.length > 0 || (deferredIssueIds?.has(issue.id) ?? false);
   const hasSharedAction =
     issue.partUsages.some((item) => Boolean(sharedPartIds?.has(item.id))) ||
     issue.attendanceEntries.some((item) => Boolean(sharedAttendanceIds?.has(item.id))) ||
@@ -2032,7 +2098,7 @@ function IssueNode({
       <div className="relative flex gap-3">
         {/* Node dot / select checkbox */}
         <div className="relative flex flex-col items-center shrink-0 mt-0.5">
-          {isSelectMode ? (
+          {isSelectMode && !hasActiveChild ? (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onToggleSelectId?.(issue.id); }}
@@ -2068,29 +2134,35 @@ function IssueNode({
             )}
             {/* Header (always visible) */}
             <button type="button" onClick={onToggleExpand}
-              className="relative z-10 w-full flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-3 text-start hover:bg-muted/30 transition-colors group">
-              <div className="flex-1 min-w-0 space-y-0.5">
+              className={cn(
+                "relative z-10 w-full flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-3 text-start hover:bg-muted/30 transition-colors group",
+                hasActiveChild && "opacity-80"
+              )}>
+              <div className="flex-1 min-w-0 space-y-1">
+                {/* Row 1: Title + deferred badge (parent-has-child only) */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {issue.parentId != null && (
-                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                      {t("detailSheet.deferred")} ·{" "}
+                  <span className="text-sm font-semibold">{title}</span>
+                  {hasActiveChild && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-muted-foreground/30 bg-muted/50 px-1.5 py-0.5 text-xs text-muted-foreground" title="This issue has been deferred to a child issue">
+                      <GitBranch className="h-3 w-3" />
+                      Deferred ↓
                     </span>
                   )}
-                  <span className="text-sm font-semibold">{title}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <StatusChip label={issue.status.label} />
-                  <PriorityChip label={issue.priority.label} />
+                {/* Row 2: Status chip + Shared chip + Priority text + ID + creator */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusChip value={issue.status.value} label={issue.status.label} />
                   {showSharedIndicatorWhenCollapsed && hasSharedAction && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
                       Shared
                     </span>
                   )}
-                  <span className="text-[10px] font-mono text-muted-foreground">#{issue.id}</span>
+                  <PriorityChip value={issue.priority.value} label={issue.priority.label} />
+                  <span className="text-xs font-mono text-muted-foreground/60">#{issue.id}</span>
                   {issue.creator && (
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                      <User className="h-2.5 w-2.5" />{issue.creator.name}
+                    <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                      <User className="h-3 w-3" />{issue.creator.name}
                     </span>
                   )}
                 </div>
@@ -2103,6 +2175,14 @@ function IssueNode({
             {/* Expandable body */}
             {isExpanded && (
               <div className="relative z-10 border-t px-3 sm:px-4 py-3 space-y-3">
+                {/* Deferred parent info banner */}
+                {hasActiveChild && (
+                  <div className="flex items-center gap-2 rounded-md bg-muted/50 border px-3 py-2 text-xs text-muted-foreground">
+                    <Info className="h-4 w-4 shrink-0" />
+                    <span>This issue has been deferred. Actions are available on the deferred child below.</span>
+                  </div>
+                )}
+
                 {/* Description */}
                 {issue.description ? (
                   <p className="text-sm text-muted-foreground leading-relaxed">{issue.description}</p>
@@ -2113,64 +2193,122 @@ function IssueNode({
                 {/* Technicians */}
                 {issue.technicians.length > 0 && <hr className="border-border" />}
                 {issue.technicians.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {issue.technicians.map((tech) => (
-                      <span key={tech.id} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
-                        <User className="h-3 w-3" />{tech.name}
-                      </span>
-                    ))}
-                  </div>
+                  <SectionCollapse title="Assigned Technicians" count={issue.technicians.length}>
+                    <div className="flex flex-wrap gap-1.5">
+                      {issue.technicians.map((tech) => (
+                        <span key={tech.id} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                          <User className="h-3 w-3" />{tech.name}
+                        </span>
+                      ))}
+                    </div>
+                  </SectionCollapse>
                 )}
 
                 {/* Assignments */}
                 {issue.assignments.length > 0 && <hr className="border-border" />}
                 {issue.assignments.length > 0 && (
-                  <div className="space-y-1.5">
+                  <SectionCollapse title="Assignments" count={issue.assignments.length}>
                     {issue.assignments.map((a) => (
-                      <div key={a.id} className={cn("rounded border bg-muted/10 px-2 py-1.5 space-y-1", a.mistaken && "opacity-60")}>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <CalendarIcon className="h-3 w-3 shrink-0" />
-                          <span>{fmtDate(a.assignedDate)}</span>
-                          {a.assignedHour && <><ClockIcon className="h-3 w-3 shrink-0" /><span>{a.assignedHour}</span></>}
+                      <div key={a.id} className={cn("rounded-md border bg-card p-3 space-y-2", a.mistaken && "opacity-60")}>
+                        {/* Mistaken banner or ··· menu */}
+                        {a.mistaken ? (
+                          <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            This record has been marked as mistaken
+                          </div>
+                        ) : canMarkMistaken ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Assignment #{a.id}</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setMistakenConfirm({
+                                    label: `Assignment #${a.id}`,
+                                    onConfirm: async () => { await maintenanceTicketsService.markAssignmentMistaken(storeId, ticketId, a.id); },
+                                  })}
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Mark as Mistaken
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium text-muted-foreground">Assignment #{a.id}</span>
+                        )}
+                        {/* Labeled data rows — 2-column */}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-muted-foreground">Scheduled</span>
+                            <span className="text-sm font-medium">
+                              {fmtDate(a.assignedDate)}{a.assignedHour ? `, ${a.assignedHour}` : ""}
+                            </span>
+                          </div>
                           {a.technicians.length > 0 && (
-                            <span>· {a.technicians.map((tech) => tech.name).join(", ")}</span>
-                          )}
-                          {a.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                          {!a.mistaken && canMarkMistaken && (
-                            <button
-                              type="button"
-                              className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                              disabled={mistakenSaving !== null}
-                              onClick={() => setMistakenConfirm({
-                                label: `Assignment #${a.id}`,
-                                onConfirm: async () => { await maintenanceTicketsService.markAssignmentMistaken(storeId, ticketId, a.id); },
-                              })}
-                            >
-                              {mistakenSaving === `assignment:${a.id}` ? "…" : "Mark mistaken"}
-                            </button>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">Assigned Technician{a.technicians.length > 1 ? "s" : ""}</span>
+                              <span className="text-sm font-medium">{a.technicians.map((tech) => tech.name).join(" · ")}</span>
+                            </div>
                           )}
                         </div>
+                        {/* Delays */}
                         {a.delays.length > 0 && (
-                          <div className="ps-4 border-s space-y-1">
+                          <div className="ps-3 border-s space-y-2">
                             {a.delays.map((delay) => (
-                              <div key={delay.id} className={cn("text-[11px] text-muted-foreground flex flex-wrap items-center gap-2", delay.mistaken && "opacity-60")}>
-                                <TimerReset className="h-3 w-3 shrink-0" />
-                                <span className={delay.mistaken ? "line-through" : ""}>Delayed to {fmtDate(delay.newDate)}{delay.newHour ? ` ${delay.newHour}` : ""}</span>
-                                <span className="italic">{delay.reason}</span>
-                                {delay.mistaken && <span className="rounded-full border px-1.5 py-px text-[9px]">mistaken</span>}
-                                {!delay.mistaken && canMarkMistaken && (
-                                  <button
-                                    type="button"
-                                    className="ms-auto text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                                    disabled={mistakenSaving !== null}
-                                    onClick={() => setMistakenConfirm({
-                                      label: `Delay #${delay.id}`,
-                                      onConfirm: async () => { await maintenanceTicketsService.markAssignmentDelayMistaken(storeId, ticketId, a.id, delay.id); },
-                                    })}
-                                  >
-                                    {mistakenSaving === `delay:${delay.id}` ? "…" : "Mark mistaken"}
-                                  </button>
+                              <div key={delay.id} className={cn("space-y-1", delay.mistaken && "opacity-60")}>
+                                {delay.mistaken ? (
+                                  <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                    This delay has been marked as mistaken
+                                  </div>
+                                ) : canMarkMistaken ? (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                      <TimerReset className="h-3 w-3" /> Delay #{delay.id}
+                                    </span>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onClick={() => setMistakenConfirm({
+                                            label: `Delay #${delay.id}`,
+                                            onConfirm: async () => { await maintenanceTicketsService.markAssignmentDelayMistaken(storeId, ticketId, a.id, delay.id); },
+                                          })}
+                                        >
+                                          <AlertTriangle className="h-4 w-4" />
+                                          Mark as Mistaken
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                    <TimerReset className="h-3 w-3" /> Delay #{delay.id}
+                                  </span>
                                 )}
+                                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                                  <span className="text-muted-foreground">Rescheduled to:</span>
+                                  <span className={cn("font-medium", delay.mistaken && "line-through")}>
+                                    {fmtDate(delay.newDate)}{delay.newHour ? `, ${delay.newHour}` : ""}
+                                  </span>
+                                  {delay.reason && (
+                                    <>
+                                      <span className="text-muted-foreground">Reason:</span>
+                                      <span className={cn(delay.mistaken && "line-through")}>{delay.reason}</span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -2184,52 +2322,66 @@ function IssueNode({
                         />
                       </div>
                     ))}
-                  </div>
+                  </SectionCollapse>
                 )}
 
-                {/* Lifecycle timeline rows */}
+                {/* Diagnoses */}
                 {issue.diagnoses.length > 0 && <hr className="border-border" />}
                 {issue.diagnoses.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Diagnoses</p>
+                  <SectionCollapse title="Diagnoses" count={issue.diagnoses.length}>
                     {issue.diagnoses.map((item) => {
                       const sharedWithIds = (sharedDiagnosisIssueIdsByRecordId?.get(item.id) ?? [])
                         .filter((id) => id !== issue.id);
                       const isShared = Boolean(sharedDiagnosisIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
-                          <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                            <FileText className="h-3 w-3" />
-                            <span className="text-foreground">{item.body || "No notes"}</span>
-                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                            {!item.mistaken && canMarkMistaken && (
-                              <button
-                                type="button"
-                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                                disabled={mistakenSaving !== null}
-                                onClick={() => setMistakenConfirm({
-                                  label: `Diagnosis #${item.id}`,
-                                  onConfirm: async () => { await maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, item.id); },
-                                })}
-                              >
-                                {mistakenSaving === `diagnosis:${item.id}` ? "…" : "Mark mistaken"}
-                              </button>
-                            )}
-                            {item.createdBy != null && (
-                              <span className="flex items-center gap-0.5 text-[10px]">
-                                <User className="h-2.5 w-2.5" />#{item.createdBy}
-                              </span>
-                            )}
-                            {isShared && (
-                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                                Shared action
-                              </span>
-                            )}
+                        <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
+                          {/* Mistaken banner or ··· menu */}
+                          {item.mistaken ? (
+                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              This record has been marked as mistaken
+                            </div>
+                          ) : canMarkMistaken ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-muted-foreground">Diagnosis #{item.id}</span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setMistakenConfirm({
+                                      label: `Diagnosis #${item.id}`,
+                                      onConfirm: async () => { await maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, item.id); },
+                                    })}
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Mark as Mistaken
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground">Diagnosis #{item.id}</span>
+                          )}
+                          {/* Body */}
+                          <div className="text-sm text-foreground leading-relaxed">
+                            {item.body || <em className="text-muted-foreground/60">No notes</em>}
                           </div>
+                          {(item.creator?.name || item.createdBy != null) && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <User className="h-3 w-3 shrink-0" />
+                              <span>Added by <span className="font-medium text-foreground">{item.creator?.name ?? `#${item.createdBy}`}</span></span>
+                              <span>· {fmtDate(item.createdAt)}</span>
+                            </div>
+                          )}
                           {isShared && sharedWithIds.length > 0 && (
-                            <div className="ps-5 text-[11px] text-muted-foreground">
-                              Shared with:{" "}
+                            <div className="flex flex-wrap items-center gap-1 text-xs">
+                              <span className="text-muted-foreground">Shared with:</span>
                               {sharedWithIds.map((otherId, index) => (
                                 <span key={otherId}>
                                   <button
@@ -2247,218 +2399,189 @@ function IssueNode({
                                   {index < sharedWithIds.length - 1 ? ", " : ""}
                                 </span>
                               ))}
+                              <span className="ms-1 rounded-full bg-blue-500/10 px-1.5 py-px text-xs font-medium text-blue-600 dark:text-blue-400">Shared</span>
                             </div>
                           )}
-                        {item.attachments.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            {item.attachments.map((attachment, index) => {
-                              const hasUrl = Boolean(attachment.url);
-                              const attachmentLabel = `Attachment ${index + 1}`;
-                              const mimeType = (attachment.contentType || "").toLowerCase();
-                              const lowerUrl = (attachment.url || "").toLowerCase();
-                              const lowerFileName = (attachment.fileName || "").toLowerCase();
-                              const isImage =
-                                mimeType.startsWith("image/") ||
-                                /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) ||
-                                /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
-
-                              if (!hasUrl) {
-                                return (
-                                  <span
-                                    key={attachment.id}
-                                    className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40"
-                                    title={`${attachmentLabel} (missing URL)`}
-                                  >
-                                    <Paperclip className="h-4 w-4" />
-                                    <span>{attachmentLabel}</span>
-                                  </span>
-                                );
-                              }
-
-                              if (isImage) {
-                                return (
-                                  <a
-                                    key={attachment.id}
-                                    href={attachment.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center"
-                                    title={attachment.fileName || attachmentLabel}
-                                    aria-label={`Open ${attachment.fileName || attachmentLabel} in new tab`}
-                                  >
-                                    <img
-                                      src={attachment.url}
-                                      alt={attachment.fileName || attachmentLabel}
-                                      className="h-16 w-16 rounded-sm border object-cover"
-                                      loading="lazy"
-                                    />
-                                  </a>
-                                );
-                              }
-
-                              return (
-                                <a
-                                  key={attachment.id}
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
-                                  title={attachment.fileName || attachmentLabel}
-                                  aria-label={`Open ${attachmentLabel} in new tab`}
-                                >
-                                  <Paperclip className="h-4 w-4" />
-                                  <span>{attachmentLabel}</span>
-                                </a>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <EntityNotesAttachments
-                          entityPath={entityPaths.diagnosis(storeId, ticketId, item.id)}
-                          notes={item.notes}
-                          attachments={[]}
-                          onSuccess={onReload}
-                          canAdd={canAddNotes}
-                        />
-                      </div>
+                          {item.attachments.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Attachments</p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {item.attachments.map((attachment, index) => {
+                                  const hasUrl = Boolean(attachment.url);
+                                  const attachmentLabel = `Attachment ${index + 1}`;
+                                  const mimeType = (attachment.contentType || "").toLowerCase();
+                                  const lowerUrl = (attachment.url || "").toLowerCase();
+                                  const lowerFileName = (attachment.fileName || "").toLowerCase();
+                                  const isImage = mimeType.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
+                                  if (!hasUrl) return <span key={attachment.id} className="inline-flex items-center gap-1 text-xs text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}><Paperclip className="h-4 w-4" /><span>{attachmentLabel}</span></span>;
+                                  if (isImage) return <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachment.fileName || attachmentLabel}><img src={attachment.url} alt={attachment.fileName || attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" /></a>;
+                                  return <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground" title={attachment.fileName || attachmentLabel}><Paperclip className="h-4 w-4" /><span>{attachmentLabel}</span></a>;
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          <EntityNotesAttachments
+                            entityPath={entityPaths.diagnosis(storeId, ticketId, item.id)}
+                            notes={item.notes}
+                            attachments={[]}
+                            onSuccess={onReload}
+                            canAdd={canAddNotes}
+                          />
+                        </div>
                       );
                     })}
-                  </div>
+                  </SectionCollapse>
                 )}
 
                 {issue.attendanceEntries.length > 0 && <hr className="border-border" />}
                 {issue.attendanceEntries.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attendance</p>
+                  <SectionCollapse title="Attendance" count={issue.attendanceEntries.length}>
                     {issue.attendanceEntries.map((item) => {
                       const sharedWithIds = (sharedAttendanceIssueIdsByRecordId?.get(item.id) ?? [])
                         .filter((id) => id !== issue.id);
                       const isShared = Boolean(sharedAttendanceIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                        <div key={item.id} className={cn("text-xs rounded border px-2 py-2 space-y-1.5", item.mistaken && "opacity-60")}>
-                          {/* Header row: technician + badges */}
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Wrench className="h-3 w-3 shrink-0" />
-                            <span className="font-medium">{item.technician?.name ?? `Technician #${item.technicianId}`}</span>
-                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px] line-through">mistaken</span>}
-                            {!item.mistaken && canMarkMistaken && (
-                              <button
-                                type="button"
-                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                                disabled={mistakenSaving !== null}
-                                onClick={() => setMistakenConfirm({
-                                  label: `Attendance entry #${item.id}`,
-                                  onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
-                                })}
-                              >
-                                {mistakenSaving === `attendance:${item.id}` ? "…" : "Mark mistaken"}
-                              </button>
-                            )}
-                            {item.createdBy != null && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                <User className="h-2.5 w-2.5" />#{item.createdBy}
-                              </span>
-                            )}
-                            {isShared && (
-                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                                Shared action
-                              </span>
+                        <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
+                          {/* Mistaken banner or ··· menu */}
+                          {item.mistaken ? (
+                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              This record has been marked as mistaken
+                            </div>
+                          ) : canMarkMistaken ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setMistakenConfirm({
+                                      label: `Attendance entry #${item.id}`,
+                                      onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
+                                    })}
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Mark as Mistaken
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
+                          )}
+                          {/* Labeled data — 2-column layout */}
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">Technician</span>
+                              <span className="text-sm font-medium">{item.technician?.name ?? `Technician #${item.technicianId}`}</span>
+                            </div>
+                            {(item.creator?.name || item.createdBy != null) && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Added by</span>
+                                <span className="text-sm flex items-center gap-1">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  {item.creator?.name ?? `#${item.createdBy}`}
+                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                </span>
+                              </div>
                             )}
                           </div>
-                          {/* Time sections */}
+                          {/* Work clock section — 2-column */}
                           {(item.startClock || item.endClock) && (() => {
                             const dur = (item.startClock && item.endClock) ? calcDuration(item.startClock, item.endClock) : null;
                             return (
-                              <div className="ps-5 space-y-1">
-                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</span>
-                                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                                  {item.startClock
-                                    ? <span className="text-muted-foreground">Clock in: <span className="text-foreground">{fmtDateTime(item.startClock)}</span></span>
-                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing clock in</span>
-                                  }
-                                  {item.endClock
-                                    ? <span className="text-muted-foreground">Clock out: <span className="text-foreground">{fmtDateTime(item.endClock)}</span></span>
-                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing clock out</span>
-                                  }
-                                </div>
-                                {dur && (
-                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                    <ClockIcon className="h-3 w-3 shrink-0" />
-                                    <span>Duration: <span className="text-foreground font-medium">{dur}</span></span>
+                              <div className="space-y-1.5 ps-3 border-s">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1 flex items-center gap-1">
+                                  <ClockIcon className="h-3 w-3" />Work Time
+                                </p>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-muted-foreground">Clock In</span>
+                                    <span className="font-medium">{item.startClock ? fmtDateTime(item.startClock) : <em className="text-muted-foreground/50">Missing</em>}</span>
                                   </div>
-                                )}
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-muted-foreground">Clock Out</span>
+                                    <span className="font-medium">{item.endClock ? fmtDateTime(item.endClock) : <em className="text-muted-foreground/50">Missing</em>}</span>
+                                  </div>
+                                  {dur && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="font-semibold text-sm">{dur}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })()}
+                          {/* Break section — 2-column */}
                           {(item.startBreak || item.endBreak) && (() => {
                             const dur = (item.startBreak && item.endBreak) ? calcDuration(item.startBreak, item.endBreak) : null;
                             return (
-                              <div className="ps-5 space-y-1">
-                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Break</span>
-                                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                                  {item.startBreak
-                                    ? <span className="text-muted-foreground">Start: <span className="text-foreground">{fmtDateTime(item.startBreak)}</span></span>
-                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing break start</span>
-                                  }
-                                  {item.endBreak
-                                    ? <span className="text-muted-foreground">End: <span className="text-foreground">{fmtDateTime(item.endBreak)}</span></span>
-                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing break end</span>
-                                  }
-                                </div>
-                                {dur && (
-                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                    <ClockIcon className="h-3 w-3 shrink-0" />
-                                    <span>Duration: <span className="text-foreground font-medium">{dur}</span></span>
+                              <div className="space-y-1.5 ps-3 border-s">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Break</p>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-muted-foreground">Start</span>
+                                    <span className="font-medium">{item.startBreak ? fmtDateTime(item.startBreak) : <em className="text-muted-foreground/50">Missing</em>}</span>
                                   </div>
-                                )}
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-muted-foreground">End</span>
+                                    <span className="font-medium">{item.endBreak ? fmtDateTime(item.endBreak) : <em className="text-muted-foreground/50">Missing</em>}</span>
+                                  </div>
+                                  {dur && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="font-semibold text-sm">{dur}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })()}
+                          {/* Parts run section — 2-column */}
                           {(item.startPartsRun || item.endPartsRun) && (() => {
                             const dur = (item.startPartsRun && item.endPartsRun) ? calcDuration(item.startPartsRun, item.endPartsRun) : null;
                             return (
-                              <div className="ps-5 space-y-1">
-                                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</span>
-                                <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                                  {item.startPartsRun
-                                    ? <span className="text-muted-foreground">Depart: <span className="text-foreground">{fmtDateTime(item.startPartsRun)}</span></span>
-                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing depart time</span>
-                                  }
-                                  {item.endPartsRun
-                                    ? <span className="text-muted-foreground">Return: <span className="text-foreground">{fmtDateTime(item.endPartsRun)}</span></span>
-                                    : <span className="text-[10px] text-muted-foreground/50 italic">Missing return time</span>
-                                  }
-                                </div>
-                                {dur && (
-                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                    <ClockIcon className="h-3 w-3 shrink-0" />
-                                    <span>Duration: <span className="text-foreground font-medium">{dur}</span></span>
+                              <div className="space-y-1.5 ps-3 border-s">
+                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Parts Run</p>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-muted-foreground">Depart</span>
+                                    <span className="font-medium">{item.startPartsRun ? fmtDateTime(item.startPartsRun) : <em className="text-muted-foreground/50">Missing</em>}</span>
                                   </div>
-                                )}
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-muted-foreground">Return</span>
+                                    <span className="font-medium">{item.endPartsRun ? fmtDateTime(item.endPartsRun) : <em className="text-muted-foreground/50">Missing</em>}</span>
+                                  </div>
+                                  {dur && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="font-semibold text-sm">{dur}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             );
                           })()}
                           {isShared && sharedWithIds.length > 0 && (
-                            <div className="basis-full ps-5 text-[11px] text-muted-foreground">
-                              Shared with:{" "}
+                            <div className="flex flex-wrap items-center gap-1 text-xs">
+                              <span className="text-muted-foreground">Shared with:</span>
                               {sharedWithIds.map((otherId, index) => (
                                 <span key={otherId}>
-                                  <button
-                                    type="button"
-                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onHighlightIssues?.(idsToHighlight);
-                                      const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
-                                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                    }}
-                                  >
+                                  <button type="button" className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); onHighlightIssues?.(idsToHighlight); const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
                                     {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
                                   </button>
                                   {index < sharedWithIds.length - 1 ? ", " : ""}
                                 </span>
                               ))}
+                              <span className="ms-1 rounded-full bg-blue-500/10 px-1.5 py-px text-xs font-medium text-blue-600 dark:text-blue-400">Shared</span>
                             </div>
                           )}
                           <EntityNotesAttachments
@@ -2471,103 +2594,103 @@ function IssueNode({
                         </div>
                       );
                     })}
-                  </div>
+                  </SectionCollapse>
                 )}
 
                 {issue.partUsages.length > 0 && <hr className="border-border" />}
                 {issue.partUsages.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Part Usage</p>
+                  <SectionCollapse title="Parts Used" count={issue.partUsages.length}>
                     {issue.partUsages.map((item) => {
                       const sharedWithIds = (sharedPartIssueIdsByRecordId?.get(item.id) ?? [])
                         .filter((id) => id !== issue.id);
                       const isShared = Boolean(sharedPartIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5", item.mistaken && "opacity-60 line-through")}>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Package className="h-3 w-3" />
-                            <span>{item.part?.name || `Part #${item.partId}`}</span>
-                            <span className="font-medium">${item.cost.toFixed(2)}</span>
-                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                            {!item.mistaken && canMarkMistaken && (
-                              <button
-                                type="button"
-                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                                disabled={mistakenSaving !== null}
-                                onClick={() => setMistakenConfirm({
-                                  label: `Part usage #${item.id}`,
-                                  onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
-                                })}
-                              >
-                                {mistakenSaving === `part:${item.id}` ? "…" : "Mark mistaken"}
-                              </button>
-                            )}
-                            {item.createdBy != null && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                <User className="h-2.5 w-2.5" />#{item.createdBy}
-                              </span>
-                            )}
-                            {isShared && (
-                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                                Shared action
-                              </span>
-                            )}
-                            {isShared && sharedWithIds.length > 0 && (
-                              <div className="basis-full ps-5 text-[11px] text-muted-foreground">
-                                Shared with:{" "}
-                                {sharedWithIds.map((otherId, index) => (
-                                  <span key={otherId}>
-                                    <button
-                                      type="button"
-                                      className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onHighlightIssues?.(idsToHighlight);
-                                        const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
-                                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                      }}
-                                    >
-                                      {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
-                                    </button>
-                                    {index < sharedWithIds.length - 1 ? ", " : ""}
-                                  </span>
-                                ))}
+                        <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
+                          {/* Mistaken banner or ··· menu */}
+                          {item.mistaken ? (
+                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              This record has been marked as mistaken
+                            </div>
+                          ) : canMarkMistaken ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setMistakenConfirm({
+                                      label: `Part usage #${item.id}`,
+                                      onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
+                                    })}
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Mark as Mistaken
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
+                          )}
+                          {/* Labeled data — 2-column */}
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">Part</span>
+                              <span className="text-sm font-medium">{item.part?.name || `Part #${item.partId}`}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">Cost</span>
+                              <span className="text-sm font-semibold">${item.cost.toFixed(2)}</span>
+                            </div>
+                            {(item.creator?.name || item.createdBy != null) && (
+                              <div className="flex flex-col gap-0.5 col-span-2">
+                                <span className="text-muted-foreground">Added by</span>
+                                <span className="text-sm flex items-center gap-1">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  {item.creator?.name ?? `#${item.createdBy}`}
+                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                </span>
                               </div>
                             )}
                           </div>
+                          {isShared && sharedWithIds.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1 text-xs">
+                              <span className="text-muted-foreground">Shared with:</span>
+                              {sharedWithIds.map((otherId, index) => (
+                                <span key={otherId}>
+                                  <button type="button" className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); onHighlightIssues?.(idsToHighlight); const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
+                                    {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
+                                  </button>
+                                  {index < sharedWithIds.length - 1 ? ", " : ""}
+                                </span>
+                              ))}
+                              <span className="ms-1 rounded-full bg-blue-500/10 px-1.5 py-px text-xs font-medium text-blue-600 dark:text-blue-400">Shared</span>
+                            </div>
+                          )}
                           {item.attachments.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                              {item.attachments.map((attachment, index) => {
-                                const hasUrl = Boolean(attachment.url);
-                                const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
-                                const mimeType = (attachment.contentType || "").toLowerCase();
-                                const lowerUrl = (attachment.url || "").toLowerCase();
-                                const lowerFileName = (attachment.fileName || "").toLowerCase();
-                                const isImage =
-                                  mimeType.startsWith("image/") ||
-                                  /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) ||
-                                  /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
-                                if (!hasUrl) {
-                                  return (
-                                    <span key={attachment.id} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}>
-                                      <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
-                                    </span>
-                                  );
-                                }
-                                if (isImage) {
-                                  return (
-                                    <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
-                                      <img src={attachment.url} alt={attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" />
-                                    </a>
-                                  );
-                                }
-                                return (
-                                  <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
-                                    <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
-                                  </a>
-                                );
-                              })}
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Attachments</p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {item.attachments.map((attachment, index) => {
+                                  const hasUrl = Boolean(attachment.url);
+                                  const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
+                                  const mimeType = (attachment.contentType || "").toLowerCase();
+                                  const lowerUrl = (attachment.url || "").toLowerCase();
+                                  const lowerFileName = (attachment.fileName || "").toLowerCase();
+                                  const isImage = mimeType.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
+                                  if (!hasUrl) return <span key={attachment.id} className="inline-flex items-center gap-1 text-xs text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}><Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span></span>;
+                                  if (isImage) return <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachmentLabel}><img src={attachment.url} alt={attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" /></a>;
+                                  return <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground" title={attachmentLabel}><Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span></a>;
+                                })}
+                              </div>
                             </div>
                           )}
                           <EntityNotesAttachments
@@ -2580,70 +2703,117 @@ function IssueNode({
                         </div>
                       );
                     })}
-                  </div>
+                  </SectionCollapse>
                 )}
 
                 {issue.payEntries.length > 0 && <hr className="border-border" />}
                 {issue.payEntries.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pay Entries</p>
+                  <SectionCollapse title="Pay Entries" count={issue.payEntries.length}>
                     {issue.payEntries.map((item) => {
                       const sharedWithIds = (sharedPayIssueIdsByRecordId?.get(item.id) ?? [])
                         .filter((id) => id !== issue.id);
                       const isShared = Boolean(sharedPayIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                        <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Wallet className="h-3 w-3" />
-                            <span>{item.technician?.name ?? `Tech #${item.technicianId}`}</span>
-                            {item.basePay != null && <span>Base ${item.basePay.toFixed(2)}</span>}
-                            {item.performancePay != null && <span>Perf ${item.performancePay.toFixed(2)}</span>}
-                            {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                            {!item.mistaken && canMarkMistaken && (
-                              <button
-                                type="button"
-                                className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                                disabled={mistakenSaving !== null}
-                                onClick={() => setMistakenConfirm({
-                                  label: `Pay entry #${item.id}`,
-                                  onConfirm: async () => { await maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, item.id); },
-                                })}
-                              >
-                                {mistakenSaving === `pay:${item.id}` ? "…" : "Mark mistaken"}
-                              </button>
+                        <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
+                          {/* Mistaken banner or ··· menu */}
+                          {item.mistaken ? (
+                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              This record has been marked as mistaken
+                            </div>
+                          ) : canMarkMistaken ? (
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-muted-foreground">Pay Entry #{item.id}</span>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setMistakenConfirm({
+                                      label: `Pay entry #${item.id}`,
+                                      onConfirm: async () => { await maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, item.id); },
+                                    })}
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Mark as Mistaken
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-medium text-muted-foreground">Pay Entry #{item.id}</span>
+                          )}
+                          {/* Labeled data — 2-column grid */}
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                            <div className="flex flex-col gap-0.5 col-span-2">
+                              <span className="text-muted-foreground">Technician</span>
+                              <span className="text-sm font-semibold">{item.technician?.name ?? `Tech #${item.technicianId}`}</span>
+                            </div>
+                            {item.basePay != null && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Base Pay</span>
+                                <span className="text-sm font-medium">${item.basePay.toFixed(2)}</span>
+                              </div>
                             )}
-                            {item.createdBy != null && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                <User className="h-2.5 w-2.5" />#{item.createdBy}
-                              </span>
+                            {item.performancePay != null && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Performance Pay</span>
+                                <span className="text-sm font-medium">${item.performancePay.toFixed(2)}</span>
+                              </div>
                             )}
-                            {isShared && (
-                              <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                                Shared action
-                              </span>
+                            {item.drivingBasePay != null && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Driving Base Pay</span>
+                                <span className="text-sm font-medium">${item.drivingBasePay.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {item.drivingPerformancePay != null && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Driving Perf. Pay</span>
+                                <span className="text-sm font-medium">${item.drivingPerformancePay.toFixed(2)}</span>
+                              </div>
+                            )}
+                            {item.drivingTime != null && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Driving Time</span>
+                                <span className="text-sm font-medium">{item.drivingTime} hr{item.drivingTime !== 1 ? "s" : ""}</span>
+                              </div>
+                            )}
+                            {item.milesDriven != null && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Miles Driven</span>
+                                <span className="text-sm font-medium">{item.milesDriven} mi{item.perMileRate != null ? ` @ $${item.perMileRate.toFixed(2)}/mi` : ""}</span>
+                              </div>
+                            )}
+                            {(item.creator?.name || item.createdBy != null) && (
+                              <div className="flex flex-col gap-0.5 col-span-2">
+                                <span className="text-muted-foreground">Added by</span>
+                                <span className="text-sm flex items-center gap-1">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  {item.creator?.name ?? `#${item.createdBy}`}
+                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                </span>
+                              </div>
                             )}
                           </div>
                           {isShared && sharedWithIds.length > 0 && (
-                            <div className="ps-5 text-[11px] text-muted-foreground">
-                              Shared with:{" "}
+                            <div className="flex flex-wrap items-center gap-1 text-xs">
+                              <span className="text-muted-foreground">Shared with:</span>
                               {sharedWithIds.map((otherId, index) => (
                                 <span key={otherId}>
-                                  <button
-                                    type="button"
-                                    className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onHighlightIssues?.(idsToHighlight);
-                                      const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
-                                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                    }}
-                                  >
+                                  <button type="button" className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); onHighlightIssues?.(idsToHighlight); const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
                                     {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
                                   </button>
                                   {index < sharedWithIds.length - 1 ? ", " : ""}
                                 </span>
                               ))}
+                              <span className="ms-1 rounded-full bg-blue-500/10 px-1.5 py-px text-xs font-medium text-blue-600 dark:text-blue-400">Shared</span>
                             </div>
                           )}
                           <EntityNotesAttachments
@@ -2656,108 +2826,119 @@ function IssueNode({
                         </div>
                       );
                     })}
-                  </div>
+                  </SectionCollapse>
                 )}
 
                 {issue.warranties.length > 0 && <hr className="border-border" />}
                 {issue.warranties.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Warranties</p>
+                  <SectionCollapse title="Warranties" count={issue.warranties.length}>
                     {issue.warranties.map((item) => {
                       const sharedWithIds = (sharedWarrantyIssueIdsByRecordId?.get(item.id) ?? [])
                         .filter((id) => id !== issue.id);
                       const isShared = Boolean(sharedWarrantyIds?.has(item.id));
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
-                      <div key={item.id} className={cn("text-xs rounded border px-2 py-1.5 space-y-1", item.mistaken && "opacity-60 line-through")}>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <ShieldCheck className="h-3 w-3" />
-                          <span>{item.body || "No notes"}</span>
-                          {item.expiryDate && (
-                            <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] text-muted-foreground">
-                              <CalendarIcon className="h-2.5 w-2.5" />
-                              Expires {fmtDate(item.expiryDate)}
-                            </span>
-                          )}
-                          {item.mistaken && <span className="rounded-full border px-1.5 py-px text-[10px]">mistaken</span>}
-                          {!item.mistaken && canMarkMistaken && (
-                            <button
-                              type="button"
-                              className="text-[10px] text-destructive/70 hover:text-destructive transition-colors disabled:pointer-events-none"
-                              disabled={mistakenSaving !== null}
-                              onClick={() => setMistakenConfirm({
-                                label: `Warranty #${item.id}`,
-                                onConfirm: async () => { await maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, item.id); },
-                              })}
-                            >
-                              {mistakenSaving === `warranty:${item.id}` ? "…" : "Mark mistaken"}
-                            </button>
-                          )}
-                          {item.createdBy != null && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                              <User className="h-2.5 w-2.5" />#{item.createdBy}
-                            </span>
-                          )}
-                          {isShared && (
-                            <span className="ms-auto rounded-full bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">
-                              Shared action
-                            </span>
+                      <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
+                        {/* Mistaken banner or ··· menu */}
+                        {item.mistaken ? (
+                          <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            This record has been marked as mistaken
+                          </div>
+                        ) : canMarkMistaken ? (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Warranty #{item.id}</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                  <MoreHorizontal className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setMistakenConfirm({
+                                    label: `Warranty #${item.id}`,
+                                    onConfirm: async () => { await maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, item.id); },
+                                  })}
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Mark as Mistaken
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-medium text-muted-foreground">Warranty #{item.id}</span>
+                        )}
+                        {/* Labeled data — 2-column */}
+                        <div className="text-sm text-foreground leading-relaxed">
+                          {item.body || <em className="text-muted-foreground/60">No notes</em>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                          {item.expiryDate && (() => {
+                            const expiry = new Date(item.expiryDate + "T00:00");
+                            const now = new Date();
+                            const daysLeft = Math.floor((expiry.getTime() - now.getTime()) / 86400000);
+                            const expiryColor = daysLeft < 0
+                              ? "text-destructive font-semibold"
+                              : daysLeft <= 30
+                                ? "text-orange-600 dark:text-orange-400 font-medium"
+                                : "text-foreground";
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Expires</span>
+                                <span className={cn("text-sm flex items-center gap-1", expiryColor)}>
+                                  <CalendarIcon className="h-3 w-3 shrink-0" />
+                                  {fmtDate(item.expiryDate)}
+                                  {daysLeft < 0 && <span className="text-xs">(expired)</span>}
+                                  {daysLeft >= 0 && daysLeft <= 30 && <span className="text-xs">({daysLeft}d left)</span>}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                          {(item.creator?.name || item.createdBy != null) && (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">Added by</span>
+                              <span className="text-sm flex items-center gap-1">
+                                <User className="h-3 w-3 shrink-0" />
+                                {item.creator?.name ?? `#${item.createdBy}`}
+                                <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                              </span>
+                            </div>
                           )}
                         </div>
                         {isShared && sharedWithIds.length > 0 && (
-                          <div className="ps-5 text-[11px] text-muted-foreground">
-                            Shared with:{" "}
+                          <div className="flex flex-wrap items-center gap-1 text-xs">
+                            <span className="text-muted-foreground">Shared with:</span>
                             {sharedWithIds.map((otherId, index) => (
                               <span key={otherId}>
-                                <button
-                                  type="button"
-                                  className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onHighlightIssues?.(idsToHighlight);
-                                    const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`);
-                                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                  }}
-                                >
+                                <button type="button" className="underline decoration-dotted underline-offset-2 text-foreground hover:text-primary transition-colors"
+                                  onClick={(e) => { e.stopPropagation(); onHighlightIssues?.(idsToHighlight); const el = document.querySelector<HTMLElement>(`[data-issue-id="${otherId}"]`); el?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>
                                   {issueTitleById?.get(otherId) ?? `Issue #${otherId}`}
                                 </button>
                                 {index < sharedWithIds.length - 1 ? ", " : ""}
                               </span>
                             ))}
+                            <span className="ms-1 rounded-full bg-blue-500/10 px-1.5 py-px text-xs font-medium text-blue-600 dark:text-blue-400">Shared</span>
                           </div>
                         )}
                         {item.attachments.length > 0 && (
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                            {item.attachments.map((attachment, index) => {
-                              const hasUrl = Boolean(attachment.url);
-                              const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
-                              const mimeType = (attachment.contentType || "").toLowerCase();
-                              const lowerUrl = (attachment.url || "").toLowerCase();
-                              const lowerFileName = (attachment.fileName || "").toLowerCase();
-                              const isImage =
-                                mimeType.startsWith("image/") ||
-                                /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) ||
-                                /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
-                              if (!hasUrl) {
-                                return (
-                                  <span key={attachment.id} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}>
-                                    <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
-                                  </span>
-                                );
-                              }
-                              if (isImage) {
-                                return (
-                                  <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
-                                    <img src={attachment.url} alt={attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" />
-                                  </a>
-                                );
-                              }
-                              return (
-                                <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] text-muted-foreground transition-colors hover:text-foreground" title={attachmentLabel} aria-label={`Open ${attachmentLabel} in new tab`}>
-                                  <Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span>
-                                </a>
-                              );
-                            })}
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Attachments</p>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {item.attachments.map((attachment, index) => {
+                                const hasUrl = Boolean(attachment.url);
+                                const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
+                                const mimeType = (attachment.contentType || "").toLowerCase();
+                                const lowerUrl = (attachment.url || "").toLowerCase();
+                                const lowerFileName = (attachment.fileName || "").toLowerCase();
+                                const isImage = mimeType.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerUrl) || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(lowerFileName);
+                                if (!hasUrl) return <span key={attachment.id} className="inline-flex items-center gap-1 text-xs text-muted-foreground/40" title={`${attachmentLabel} (missing URL)`}><Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span></span>;
+                                if (isImage) return <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center" title={attachmentLabel}><img src={attachment.url} alt={attachmentLabel} className="h-16 w-16 rounded-sm border object-cover" loading="lazy" /></a>;
+                                return <a key={attachment.id} href={attachment.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground" title={attachmentLabel}><Paperclip className="h-3 w-3" /><span>{attachmentLabel}</span></a>;
+                              })}
+                            </div>
                           </div>
                         )}
                         <EntityNotesAttachments
@@ -2770,12 +2951,12 @@ function IssueNode({
                       </div>
                       );
                     })}
-                  </div>
+                  </SectionCollapse>
                 )}
 
-                {canActOnIssue && <hr className="border-border" />}
+                {canActOnIssue && !hasActiveChild && <hr className="border-border" />}
                 {/* Action menu */}
-                {canActOnIssue && <div className="flex items-center justify-between">
+                {canActOnIssue && !hasActiveChild && <div className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Issue actions</span>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2810,7 +2991,9 @@ function IssueNode({
                       <DropdownMenuItem onClick={() => toggleAction("diagnosis")}><FileText className="h-4 w-4" />Add diagnosis</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleAction("attendance")}><Wrench className="h-4 w-4" />Add attendance</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleAction("part")}><Package className="h-4 w-4" />Add part usage</DropdownMenuItem>
+                      {/* PAY ENTRY DISABLED — creation commented out; existing pay entries still display above
                       <DropdownMenuItem onClick={() => toggleAction("pay")}><Wallet className="h-4 w-4" />Add pay entry</DropdownMenuItem>
+                      */}
                       <DropdownMenuItem onClick={() => toggleAction("warranty")}><ShieldCheck className="h-4 w-4" />Add warranty</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleAction("attachTechs")}><Users2 className="h-4 w-4" />Attach technicians</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => toggleAction("delayAssignment")}><TimerReset className="h-4 w-4" />Delay assignment</DropdownMenuItem>
@@ -2979,26 +3162,14 @@ function RightPanel({
   draft,
 }: RightPanelProps) {
   const t = useTranslations("maintenanceTickets");
-  const canActOnIssues = useCanAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/stores/placeholder/tickets/placeholder/technicians",
-  });
-  const canAddFinalNote = useCanAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/stores/placeholder/tickets/placeholder/final-note",
-  });
-  const canAddEntityNotes = useCanAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",
-  });
-  const canMarkMistakenPerm = useCanAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken",
-  });
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  // storePermissions is keyed by numeric internal id (e.g. "48"), not the
+  // human-readable store id (e.g. "03795-00001"). Resolve it via overviewStores.
+  const storeNumericId = overviewStores.find((s) => s.storeId === storeId)?.id ?? storeId;
+  const canActOnIssues      = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/technicians",                                storeId: storeNumericId });
+  const canAddFinalNote     = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/final-note",                                storeId: storeNumericId });
+  const canAddEntityNotes   = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",     storeId: storeNumericId });
+  const canMarkMistakenPerm = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken", storeId: storeNumericId });
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
@@ -3093,7 +3264,7 @@ function RightPanel({
                 {activeTicketId ? `${t("detailSheet.title")} #${activeTicketId}` : t("detailSheet.title")}
               </SheetTitle>
             </div>
-            {activeTicket && <StatusChip label={activeTicket.status.label} />}
+            {activeTicket && <StatusChip value={activeTicket.status.value} label={activeTicket.status.label} />}
           </div>
           {activeTicket && (
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -3531,12 +3702,17 @@ function RightPanel({
                     gMap.get(rootId)?.descendants.push(iss);
                   }
                 }
+                // IDs that appear as someone's parentId → those issues have been deferred
+                const deferredIssueIds = new Set(
+                  issues.filter((i) => i.parentId != null).map((i) => i.parentId!)
+                );
                 return groupRootOrder.map((rootId) => {
                   const grp = gMap.get(rootId)!;
                   return (
                     <div key={rootId} className="mb-1">
                       <IssueNode
                         issue={grp.root}
+                        deferredIssueIds={deferredIssueIds}
                         storeId={storeId}
                         ticketId={activeTicketId!}
                         technicians={technicians}
@@ -3577,6 +3753,7 @@ function RightPanel({
                               <div className="absolute start-0 top-3 h-px w-5 bg-border" />
                               <IssueNode
                                 issue={desc}
+                                deferredIssueIds={deferredIssueIds}
                                 storeId={storeId}
                                 ticketId={activeTicketId!}
                                 technicians={technicians}
@@ -3659,10 +3836,16 @@ function RightPanel({
               }
               return groupOrder.map((rootId) => {
                 const group = groupMap.get(rootId)!;
+                // IDs that appear as someone's parentId within this chain → those issues have been deferred
+                const allInChain = [group.root, ...group.descendants];
+                const deferredIssueIds = new Set(
+                  allInChain.filter((i) => i.parentId != null).map((i) => i.parentId!)
+                );
                 return (
                   <div key={rootId} className="mb-1">
                     <IssueNode
                       issue={group.root}
+                      deferredIssueIds={deferredIssueIds}
                       storeId={storeId}
                       ticketId={activeTicketId!}
                       technicians={technicians}
@@ -3703,6 +3886,7 @@ function RightPanel({
                             <div className="absolute start-0 top-3 h-px w-5 bg-border" />
                             <IssueNode
                               issue={child}
+                              deferredIssueIds={deferredIssueIds}
                               storeId={storeId}
                               ticketId={activeTicketId!}
                               technicians={technicians}
@@ -3809,11 +3993,18 @@ export function TicketDetailSheet({
     setActiveTicketId((prev) => prev ?? tickets[0]?.id ?? null);
   }, [open, ticketId, tickets]);
 
+  // When showing "all stores" the prop storeId belongs to whichever ticket was
+  // clicked to open the sheet. If the user then navigates to a different ticket
+  // (from a different store) inside the navigator, we must use THAT ticket's
+  // own storeId — not the frozen prop value.
+  const effectiveStoreId =
+    tickets.find((t) => t.id === activeTicketId)?.storeId ?? storeId;
+
   const loadIssues = useCallback(async () => {
-    if (!activeTicketId || !storeId) return;
+    if (!activeTicketId || !effectiveStoreId) return;
     setIsLoading(true); setLoadError(null);
     try {
-      const result = await maintenanceTicketsService.getTicketIssues(storeId, activeTicketId);
+      const result = await maintenanceTicketsService.getTicketIssues(effectiveStoreId, activeTicketId);
       // Build a lookup of id → full root-level issue (root items have complete sub-arrays).
       const issueMap = new Map<number, TicketIssue>();
       result.data.forEach((issue) => issueMap.set(issue.id, issue));
@@ -3833,7 +4024,7 @@ export function TicketDetailSheet({
     } catch (err) {
       setLoadError(err instanceof MaintenanceTicketsError ? err.message : "Failed to load issues.");
     } finally { setIsLoading(false); }
-  }, [activeTicketId, storeId]);
+  }, [activeTicketId, effectiveStoreId]);
 
   // Load issues when sheet opens or active ticket changes
   useEffect(() => {
@@ -3878,7 +4069,7 @@ export function TicketDetailSheet({
           <RightPanel
             activeTicketId={activeTicketId}
             tickets={tickets}
-            storeId={storeId}
+            storeId={effectiveStoreId}
             technicians={technicians}
             issuesResponse={issuesResponse}
             isLoading={isLoading}
@@ -3895,7 +4086,7 @@ export function TicketDetailSheet({
             filters={filters}
             onFiltersChange={onFiltersChange}
             technicians={technicians}
-            storeId={storeId}
+            storeId={effectiveStoreId}
           />
         </div>
       </SheetContent>

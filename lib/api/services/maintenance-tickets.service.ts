@@ -240,7 +240,7 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     attachments: (raw.attachments ?? []).map(transformAttachment),
     notes: (raw.notes ?? []).map(transformNote),
     createdBy: raw.created_by ?? null,
-    creator: raw.creator ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -253,7 +253,7 @@ function transformTicket(raw: ApiTicket): Ticket {
     status: transformEnumField(raw.status),
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
-    creator: raw.creator ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     issueCount: raw.issues_count ?? 0,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
@@ -406,7 +406,7 @@ function transformNote(raw: ApiTicketNote): TicketNote {
     body: raw.body,
     attachments: (raw.attachments ?? []).map(transformAttachment),
     createdBy: raw.created_by ?? null,
-    creator: raw.creator ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -421,6 +421,7 @@ function transformDiagnosis(raw: ApiTicketIssueDiagnosis): TicketIssueDiagnosis 
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
     createdBy: raw.created_by ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
   };
 }
@@ -441,6 +442,7 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
     createdBy: raw.created_by ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
   };
 }
@@ -456,6 +458,7 @@ function transformPartUsage(raw: ApiTicketIssuePartUsage): TicketIssuePartUsage 
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
     createdBy: raw.created_by ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
   };
 }
@@ -481,6 +484,7 @@ function transformPayEntry(raw: ApiTicketIssuePayEntry): TicketIssuePayEntry {
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
     createdBy: raw.created_by ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
   };
 }
@@ -495,6 +499,7 @@ function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
     createdBy: raw.created_by ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     createdAt: raw.created_at,
   };
 }
