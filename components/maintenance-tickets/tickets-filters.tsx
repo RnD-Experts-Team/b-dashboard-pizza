@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { useEffect, useState } from "react";
 import { Plus, BookOpen, SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import type { CatalogIssue, CatalogTechnician, TicketsFilters } from "@/types/maintenance-tickets.types";
+import type { OverviewStore } from "@/lib/api/services/auth.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,14 @@ interface TicketsFiltersBarProps {
   /** Active store id forwarded as X-Store-Id on catalog requests. */
   storeId?: string;
   disabled?: boolean;
+  /** Available stores for selection. When provided, enables store selector. */
+  stores?: OverviewStore[];
+  /** Currently selected store (specific storeId) or "all" for all stores. */
+  selectedStoreId?: string | "all";
+  /** Callback when store selection changes. */
+  onStoreChange?: (storeId: string | "all") => void;
+  /** Whether user can access the "All Stores" option. */
+  canAccessAllStores?: boolean;
 }
 
 export function TicketsFiltersBar({
@@ -37,6 +46,10 @@ export function TicketsFiltersBar({
   canAccessCatalog = true,
   storeId,
   disabled,
+  stores,
+  selectedStoreId,
+  onStoreChange,
+  canAccessAllStores,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -88,6 +101,29 @@ export function TicketsFiltersBar({
     <div className="space-y-2">
       {/* Primary toolbar */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Store selector */}
+        {stores && stores.length > 0 && onStoreChange && (
+          <Select
+            value={selectedStoreId ?? "all"}
+            onValueChange={(v) => onStoreChange(v as string | "all")}
+            disabled={disabled}
+          >
+            <SelectTrigger className="h-9 w-48 text-sm">
+              <SelectValue placeholder={t("filters.selectStore")} />
+            </SelectTrigger>
+            <SelectContent>
+              {canAccessAllStores && (
+                <SelectItem value="all">{t("filters.allStores")}</SelectItem>
+              )}
+              {stores.filter((s) => s.isActive).map((store) => (
+                <SelectItem key={store.id} value={store.storeId ?? store.id}>
+                  {store.storeId ?? store.name ?? store.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         {/* Status */}
         <Select
           value={filters.status || "all"}

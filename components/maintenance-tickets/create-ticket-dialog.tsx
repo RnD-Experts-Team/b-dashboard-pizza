@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Paperclip, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +35,7 @@ interface IssueRow {
   priority: Priority;
   description: string;
   note: string;
+  files: File[];
 }
 
 function makeRow(): IssueRow {
@@ -44,6 +45,7 @@ function makeRow(): IssueRow {
     priority: "medium",
     description: "",
     note: "",
+    files: [],
   };
 }
 
@@ -70,6 +72,7 @@ export function CreateTicketDialog({
   const [rows, setRows] = useState<IssueRow[]>([makeRow()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Local catalog issues — seeded from prop, grows when user creates new ones in-session
   const [localCatalogIssues, setLocalCatalogIssues] = useState<CatalogIssue[]>(() =>
@@ -134,6 +137,7 @@ export function CreateTicketDialog({
           priority: row.priority,
           description: row.description.trim(),
           ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
+          ...(row.files.length ? { files: row.files } : {}),
         })),
       });
       setRows([makeRow()]);
@@ -236,6 +240,52 @@ export function CreateTicketDialog({
                   placeholder={t("createDialog.notePlaceholder")}
                   className="text-sm min-h-14"
                 />
+              </div>
+
+              {/* File attachments */}
+              <div className="space-y-1">
+                <Label className="text-sm text-muted-foreground">
+                  {t("createDialog.filesLabel")}
+                  <span className="ms-1 text-xs font-normal opacity-60">{t("createDialog.optional")}</span>
+                </Label>
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  ref={(el) => { fileInputRefs.current[row.id] = el; }}
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    if (picked.length) updateRow(row.id, { files: [...row.files, ...picked] });
+                    e.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRefs.current[row.id]?.click()}
+                >
+                  <Paperclip className="me-1.5 h-3.5 w-3.5" />
+                  {t("createDialog.attachFiles")}
+                </Button>
+                {row.files.length > 0 && (
+                  <ul className="mt-1 space-y-1">
+                    {row.files.map((file, fi) => (
+                      <li key={fi} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Paperclip className="h-3 w-3 shrink-0 opacity-50" />
+                        <span className="truncate max-w-[220px]">{file.name}</span>
+                        <button
+                          type="button"
+                          aria-label={t("createDialog.removeFile")}
+                          onClick={() => updateRow(row.id, { files: row.files.filter((_, idx) => idx !== fi) })}
+                          className="ms-auto text-destructive hover:opacity-80"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           ))}

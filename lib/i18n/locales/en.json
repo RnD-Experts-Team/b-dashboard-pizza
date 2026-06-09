@@ -1197,7 +1197,9 @@
       "allPriorities": "All Priorities",
       "export": "Export",
       "catalog": "Manage Catalog",
-      "createTicket": "New Ticket"
+      "createTicket": "New Ticket",
+      "allStores": "All Stores",
+      "selectStore": "Select store"
     },
     "noStore": {
       "title": "No Store Selected",
@@ -1229,6 +1231,9 @@
       "descriptionPlaceholder": "Provide details about the issue...",
       "noteLabel": "Note",
       "notePlaceholder": "Add an initial note to this issue (optional)...",
+      "filesLabel": "Attachments",
+      "attachFiles": "Attach Files",
+      "removeFile": "Remove file",
       "optional": "(optional)",
       "cancel": "Cancel",
       "submit": "File Ticket",

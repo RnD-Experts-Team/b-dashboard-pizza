@@ -89,6 +89,7 @@ import type {
   TicketIssue,
   TicketIssuesResponse,
   IssueStatus,
+  CatalogIssue,
   CatalogTechnician,
   CatalogPart,
   TicketsFilters,
@@ -293,17 +294,33 @@ interface NavigatorProps {
   filters?: TicketsFilters;
   onFiltersChange?: (f: TicketsFilters) => void;
   technicians?: CatalogTechnician[];
+  storeId?: string;
 }
 
-function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, filters, onFiltersChange, technicians }: NavigatorProps) {
+function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, filters, onFiltersChange, technicians, storeId }: NavigatorProps) {
   const t = useTranslations("maintenanceTickets");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
+  const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   // Clear filtering skeleton once new tickets arrive
   useEffect(() => {
     setIsFiltering(false);
   }, [tickets]);
+
+  // Load catalog issues lazily when the filter panel first opens
+  useEffect(() => {
+    if (!filtersOpen || catalogIssues.length > 0) return;
+    const ctrl = new AbortController();
+    setCatalogLoading(true);
+    maintenanceTicketsService
+      .getCatalogIssues(ctrl.signal, storeId)
+      .then((issues) => setCatalogIssues(issues.filter((i) => !i.deletedAt)))
+      .catch(() => {})
+      .finally(() => setCatalogLoading(false));
+    return () => ctrl.abort();
+  }, [filtersOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = search.trim()
     ? tickets.filter(
@@ -318,6 +335,10 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
     filters?.priority,
     filters?.issue_status,
     filters?.technician_id,
+    filters?.issue_id,
+    filters?.part_cost_total_gt,
+    filters?.trashed,
+    filters?.per_page,
   ].filter((v) => v != null && v !== "").length;
 
   const hasAnyFilter = activeFilterCount > 0;
@@ -331,6 +352,11 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
     setIsFiltering(true);
     onFiltersChange?.({});
   }
+
+  const selectCls = "h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5";
+  const selectContentCls = "text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40";
+  const itemCls = "text-[11px] py-1 px-2";
+  const labelCls = "text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate";
 
   return (
     <aside className="hidden md:flex w-72 flex-col border-s bg-background/95 shrink-0 overflow-hidden">
@@ -389,89 +415,151 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
               <div className="rounded-md border bg-background p-2 grid grid-cols-2 gap-x-2 gap-y-2">
                 {/* Status */}
                 <div className="min-w-0 space-y-0.5">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Status</p>
+                  <p className={labelCls}>Status</p>
                   <Select
                     value={filters?.status || "all"}
                     onValueChange={(v) => updateFilter("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
                   >
-                    <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
-                      <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
-                      <SelectItem value="pending" className="text-[11px] py-1 px-2">{t("status.pending")}</SelectItem>
-                      <SelectItem value="assigned" className="text-[11px] py-1 px-2">{t("status.assigned")}</SelectItem>
-                      <SelectItem value="in_progress" className="text-[11px] py-1 px-2">{t("status.in_progress")}</SelectItem>
-                      <SelectItem value="complete" className="text-[11px] py-1 px-2">{t("status.complete")}</SelectItem>
-                      <SelectItem value="cancelled" className="text-[11px] py-1 px-2">Cancelled</SelectItem>
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="pending" className={itemCls}>{t("status.pending")}</SelectItem>
+                      <SelectItem value="assigned" className={itemCls}>{t("status.assigned")}</SelectItem>
+                      <SelectItem value="in_progress" className={itemCls}>{t("status.in_progress")}</SelectItem>
+                      <SelectItem value="complete" className={itemCls}>{t("status.complete")}</SelectItem>
+                      <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* Priority */}
                 <div className="min-w-0 space-y-0.5">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Priority</p>
+                  <p className={labelCls}>Priority</p>
                   <Select
                     value={filters?.priority || "all"}
                     onValueChange={(v) => updateFilter("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
                   >
-                    <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
-                      <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
-                      <SelectItem value="urgent" className="text-[11px] py-1 px-2">{t("priority.urgent")}</SelectItem>
-                      <SelectItem value="high" className="text-[11px] py-1 px-2">{t("priority.high")}</SelectItem>
-                      <SelectItem value="medium" className="text-[11px] py-1 px-2">{t("priority.medium")}</SelectItem>
-                      <SelectItem value="low" className="text-[11px] py-1 px-2">{t("priority.low")}</SelectItem>
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="urgent" className={itemCls}>{t("priority.urgent")}</SelectItem>
+                      <SelectItem value="high" className={itemCls}>{t("priority.high")}</SelectItem>
+                      <SelectItem value="medium" className={itemCls}>{t("priority.medium")}</SelectItem>
+                      <SelectItem value="low" className={itemCls}>{t("priority.low")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* Issue status */}
                 <div className="min-w-0 space-y-0.5">
-                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Issue status</p>
+                  <p className={labelCls}>Issue status</p>
                   <Select
                     value={filters?.issue_status || "all"}
                     onValueChange={(v) => updateFilter("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
                   >
-                    <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
-                      <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
-                      <SelectItem value="pending" className="text-[11px] py-1 px-2">Pending</SelectItem>
-                      <SelectItem value="assigned" className="text-[11px] py-1 px-2">Assigned</SelectItem>
-                      <SelectItem value="in_progress" className="text-[11px] py-1 px-2">In Progress</SelectItem>
-                      <SelectItem value="complete" className="text-[11px] py-1 px-2">Complete</SelectItem>
-                      <SelectItem value="deferred" className="text-[11px] py-1 px-2">Deferred</SelectItem>
-                      <SelectItem value="cancelled" className="text-[11px] py-1 px-2">Cancelled</SelectItem>
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="pending" className={itemCls}>Pending</SelectItem>
+                      <SelectItem value="assigned" className={itemCls}>Assigned</SelectItem>
+                      <SelectItem value="in_progress" className={itemCls}>In Progress</SelectItem>
+                      <SelectItem value="complete" className={itemCls}>Complete</SelectItem>
+                      <SelectItem value="deferred" className={itemCls}>Deferred</SelectItem>
+                      <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* Technician */}
-                {technicians && technicians.length > 0 && (
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate">Technician</p>
-                    <Select
-                      value={filters?.technician_id != null ? String(filters.technician_id) : "all"}
-                      onValueChange={(v) => updateFilter("technician_id", v === "all" ? undefined : Number(v))}
-                    >
-                      <SelectTrigger className="h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40">
-                        <SelectItem value="all" className="text-[11px] py-1 px-2">All</SelectItem>
-                        {technicians.filter((tc) => !tc.deletedAt).map((tc) => (
-                          <SelectItem key={tc.id} value={String(tc.id)} className="text-[11px] py-1 px-2">
-                            <span className="truncate">{tc.name}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Technician</p>
+                  <Select
+                    value={filters?.technician_id != null ? String(filters.technician_id) : "all"}
+                    onValueChange={(v) => updateFilter("technician_id", v === "all" ? undefined : Number(v))}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      {(technicians ?? []).filter((tc) => !tc.deletedAt).map((tc) => (
+                        <SelectItem key={tc.id} value={String(tc.id)} className={itemCls}>
+                          <span className="truncate">{tc.name}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Issue (catalog) */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Issue</p>
+                  <Select
+                    value={filters?.issue_id != null ? String(filters.issue_id) : "all"}
+                    onValueChange={(v) => updateFilter("issue_id", v === "all" ? undefined : Number(v))}
+                    disabled={catalogLoading}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>{catalogLoading ? "Loading…" : "All"}</SelectItem>
+                      {catalogIssues.map((issue) => (
+                        <SelectItem key={issue.id} value={String(issue.id)} className={itemCls}>
+                          <span className="truncate">{issue.title}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Deleted records */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Deleted</p>
+                  <Select
+                    value={filters?.trashed || "none"}
+                    onValueChange={(v) => updateFilter("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="none" className={itemCls}>Active only</SelectItem>
+                      <SelectItem value="with" className={itemCls}>Include deleted</SelectItem>
+                      <SelectItem value="only" className={itemCls}>Deleted only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Min total part cost — spans both columns */}
+                <div className="col-span-2 min-w-0 space-y-0.5">
+                  <p className={labelCls}>Min total part cost ($)</p>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 100"
+                    value={filters?.part_cost_total_gt ?? ""}
+                    onChange={(e) => {
+                      setIsFiltering(true);
+                      updateFilter("part_cost_total_gt", e.target.value ? Number(e.target.value) : undefined);
+                    }}
+                    className="h-6 text-[10px] px-1.5"
+                  />
+                </div>
+
+                {/* Results per page — spans both columns */}
+                <div className="col-span-2 min-w-0 space-y-0.5">
+                  <p className={labelCls}>Results per page</p>
+                  <Select
+                    value={filters?.per_page != null ? String(filters.per_page) : "default"}
+                    onValueChange={(v) => updateFilter("per_page", v === "default" ? undefined : Number(v))}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue placeholder="Default" /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="default" className={itemCls}>Default</SelectItem>
+                      <SelectItem value="5" className={itemCls}>5</SelectItem>
+                      <SelectItem value="10" className={itemCls}>10</SelectItem>
+                      <SelectItem value="15" className={itemCls}>15</SelectItem>
+                      <SelectItem value="20" className={itemCls}>20</SelectItem>
+                      <SelectItem value="25" className={itemCls}>25</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
           </div>
@@ -3152,6 +3240,7 @@ function RightPanel({
                   onNoteAdded={(note) => setTicketNotes((prev) => [...(prev ?? activeTicket?.notes ?? []), note])}
                   onAttachmentsAdded={(atts) => setTicketAttachments((prev) => [...(prev ?? activeTicket?.attachments ?? []), ...atts])}
                   allowNoteType
+                  canAdd={canAddEntityNotes}
                 />
               </div>
             )}
@@ -3806,6 +3895,7 @@ export function TicketDetailSheet({
             filters={filters}
             onFiltersChange={onFiltersChange}
             technicians={technicians}
+            storeId={storeId}
           />
         </div>
       </SheetContent>

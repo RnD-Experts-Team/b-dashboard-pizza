@@ -98,13 +98,10 @@ export async function POST(
   if (!store) return errorJson("MISSING_PARAM", "store is required", 400);
 
   const authorization = getAuthorizationHeader(request)!;
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return errorJson("INVALID_REQUEST", "Invalid JSON body", 400);
-  }
+  // Forward the raw body and its Content-Type (including the multipart boundary)
+  // so the upstream can parse the multipart/form-data correctly.
+  const contentType = request.headers.get("content-type") ?? "application/octet-stream";
+  const body = await request.arrayBuffer();
 
   const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets`;
 
@@ -114,9 +111,9 @@ export async function POST(
       headers: {
         Authorization: authorization,
         Accept: "application/json",
-        "Content-Type": "application/json",
+        "Content-Type": contentType,
       },
-      body: JSON.stringify(body),
+      body,
     });
     const text = await res.text();
     return new NextResponse(text, {

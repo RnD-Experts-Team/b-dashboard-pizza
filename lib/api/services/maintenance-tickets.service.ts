@@ -339,6 +339,45 @@ function buildFormData(payload: object, files?: File[]): FormData {
   return form;
 }
 
+/**
+ * Builds a multipart FormData for createTicket when the payload includes
+ * file attachments. Handles the nested issues[N][...] field naming required
+ * by the API, and supports both camelCase (type definitions) and snake_case
+ * (dialog usage) for issueId / otherTitle.
+ */
+function buildTicketFormData(payload: CreateTicketPayload): FormData {
+  const form = new FormData();
+
+  payload.issues.forEach((issue, i) => {
+    const raw = issue as unknown as Record<string, unknown>;
+
+    form.append(`issues[${i}][description]`, issue.description);
+    form.append(`issues[${i}][priority]`, issue.priority);
+
+    const issueId = raw.issue_id ?? raw.issueId;
+    if (issueId != null) form.append(`issues[${i}][issue_id]`, String(issueId));
+
+    const otherTitle = raw.other_title ?? raw.otherTitle;
+    if (otherTitle) form.append(`issues[${i}][other_title]`, String(otherTitle));
+
+    (issue.notes ?? []).forEach((note, j) => {
+      form.append(`issues[${i}][notes][${j}][body]`, note.body);
+      if (note.type) form.append(`issues[${i}][notes][${j}][type]`, note.type);
+    });
+
+    (issue.files ?? []).forEach((file) => form.append(`issues[${i}][files][]`, file));
+  });
+
+  (payload.notes ?? []).forEach((note, j) => {
+    form.append(`notes[${j}][body]`, note.body);
+    if (note.type) form.append(`notes[${j}][type]`, note.type);
+  });
+
+  (payload.files ?? []).forEach((file) => form.append(`files[]`, file));
+
+  return form;
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Lifecycle record transform helpers                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -544,12 +583,11 @@ export const maintenanceTicketsService = {
     try {
       const res = await axios.post<{ data: ApiTicket }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets`,
-        payload,
+        buildTicketFormData(payload),
         {
           headers: {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
-            "Content-Type": "application/json",
           },
           timeout: 15_000,
         }

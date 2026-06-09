@@ -309,14 +309,18 @@ export interface CreateTicketIssueRow {
   otherTitle?: string;
   priority: Priority;
   description: string;
-  /** Optional notes to attach to this issue at creation time */
+  /** Optional notes to attach to this issue at creation time (text only) */
   notes?: Array<{ body: string; type?: string | null }>;
+  /** Files to attach directly to this issue (multipart only) */
+  files?: File[];
 }
 
 export interface CreateTicketPayload {
   issues: CreateTicketIssueRow[];
   /** Optional ticket-level notes to attach at creation time */
   notes?: Array<{ body: string; type?: string | null }>;
+  /** Files to attach directly to the ticket (multipart only) */
+  files?: File[];
 }
 
 export interface AssignIssuesPayload {

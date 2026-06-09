@@ -1197,7 +1197,9 @@
       "allPriorities": "كل الأولويات",
       "export": "تصدير",
       "catalog": "إدارة الكتالوج",
-      "createTicket": "تذكرة جديدة"
+      "createTicket": "تذكرة جديدة",
+      "allStores": "جميع الفروع",
+      "selectStore": "اختر فرعاً"
     },
     "noStore": {
       "title": "لم يتم اختيار فرع",
@@ -1229,6 +1231,9 @@
       "descriptionPlaceholder": "أدخل تفاصيل المشكلة...",
       "noteLabel": "ملاحظة",
       "notePlaceholder": "أضف ملاحظة أولية لهذه المشكلة (اختياري)...",
+      "filesLabel": "المرفقات",
+      "attachFiles": "إرفاق ملفات",
+      "removeFile": "إزالة الملف",
       "optional": "(اختياري)",
       "cancel": "إلغاء",
       "submit": "رفع التذكرة",

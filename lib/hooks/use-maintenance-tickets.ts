@@ -6,14 +6,27 @@ import { useMaintenanceTicketsCatalogStore } from "@/lib/store/maintenance-ticke
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { TicketsFilters } from "@/types/maintenance-tickets.types";
 
+interface UseMaintenanceTicketsOptions {
+  /**
+   * Override the store ID used for fetching tickets (e.g. from a page-level
+   * store selector). When provided it takes precedence over the sidebar's
+   * `selectedStore`. Pass `undefined` to fall back to sidebar selection.
+   */
+  storeId?: string;
+}
+
 /**
  * Main hook for the Maintenance Tickets page.
  * - Fetches tickets when the selected store changes (no auto-refresh).
  * - Loads catalog data (issues + technicians) on mount for dropdowns.
  * - Reloads catalog after any successful mutation via `reloadCatalog`.
  */
-export function useMaintenanceTickets() {
+export function useMaintenanceTickets(options?: UseMaintenanceTicketsOptions) {
   const { selectedStore } = useSelectedStoreStore();
+
+  // Page-level override takes precedence; falls back to sidebar selection.
+  const effectiveStoreId =
+    options?.storeId !== undefined ? options.storeId : selectedStore?.storeId;
 
   const {
     data,
@@ -40,33 +53,33 @@ export function useMaintenanceTickets() {
     clearError: clearCatalogError,
   } = useMaintenanceTicketsCatalogStore();
 
-  // Fetch tickets when the selected store changes
+  // Fetch tickets when the effective store or mode changes
   useEffect(() => {
     if (mode === "global") {
       fetchTickets(undefined, {}, 1);
-    } else if (selectedStore?.storeId) {
-      fetchTickets(selectedStore.storeId, {}, 1);
+    } else if (effectiveStoreId) {
+      fetchTickets(effectiveStoreId, {}, 1);
     } else {
       reset();
     }
-  }, [mode, selectedStore?.storeId, fetchTickets, reset]);
+  }, [mode, effectiveStoreId, fetchTickets, reset]);
 
-  // Load catalog on mount (and whenever the selected store changes)
+  // Load catalog on mount (and whenever the effective store changes)
   useEffect(() => {
-    loadCatalog(selectedStore?.storeId ?? undefined);
-  }, [loadCatalog, selectedStore?.storeId]);
+    loadCatalog(effectiveStoreId ?? undefined);
+  }, [loadCatalog, effectiveStoreId]);
 
   const refetch = useCallback(() => {
     if (mode === "global") {
       fetchTickets(undefined, filters, currentPage);
-    } else if (selectedStore?.storeId) {
-      fetchTickets(selectedStore.storeId, filters, currentPage);
+    } else if (effectiveStoreId) {
+      fetchTickets(effectiveStoreId, filters, currentPage);
     }
-  }, [mode, selectedStore?.storeId, fetchTickets, filters, currentPage]);
+  }, [mode, effectiveStoreId, fetchTickets, filters, currentPage]);
 
   const reloadCatalog = useCallback(() => {
-    loadCatalog(selectedStore?.storeId ?? undefined);
-  }, [loadCatalog, selectedStore?.storeId]);
+    loadCatalog(effectiveStoreId ?? undefined);
+  }, [loadCatalog, effectiveStoreId]);
 
   const applyFilters = useCallback(
     (newFilters: TicketsFilters) => {
