@@ -30,6 +30,8 @@ interface EntityNotesAttachmentsProps {
   allowNoteType?: boolean;
   /** When false, hides the "Add Note" and "Add File" buttons. Defaults to true. */
   canAdd?: boolean;
+  /** When true, content is always shown and the collapse toggle header is hidden. */
+  alwaysOpen?: boolean;
   className?: string;
 }
 
@@ -51,6 +53,7 @@ export function EntityNotesAttachments({
   onAttachmentsAdded,
   allowNoteType = false,
   canAdd = true,
+  alwaysOpen = false,
   className,
 }: EntityNotesAttachmentsProps) {
   const [open, setOpen] = useState(false);
@@ -59,6 +62,7 @@ export function EntityNotesAttachments({
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const total = notes.length + attachments.length;
+  const isOpen = alwaysOpen || open;
 
   function handlePaste(e: React.ClipboardEvent) {
     if (!canAdd) return;
@@ -110,27 +114,44 @@ export function EntityNotesAttachments({
         className
       )}
     >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        title={canAdd ? "Ctrl+V to paste an attachment" : undefined}
-      >
-        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        <MessageSquarePlus className="h-3 w-3" />
-        <span>Notes &amp; files</span>
-        {total > 0 && (
-          <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-medium">{total}</span>
-        )}
-        {canAdd && (
-          <span className="ms-auto text-[9px] text-muted-foreground/50 flex items-center gap-0.5">
-            <ClipboardPaste className="h-2.5 w-2.5" />
-            Paste
-          </span>
-        )}
-      </button>
+      {alwaysOpen ? (
+        // Slim, non-clickable header — content always visible below.
+        <div className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
+          <MessageSquarePlus className="h-3 w-3" />
+          <span>Notes &amp; files</span>
+          {total > 0 && (
+            <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-medium">{total}</span>
+          )}
+          {canAdd && (
+            <span className="ms-auto text-[9px] text-muted-foreground/50 flex items-center gap-0.5">
+              <ClipboardPaste className="h-2.5 w-2.5" />
+              Paste
+            </span>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          title={canAdd ? "Ctrl+V to paste an attachment" : undefined}
+        >
+          {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          <MessageSquarePlus className="h-3 w-3" />
+          <span>Notes &amp; files</span>
+          {total > 0 && (
+            <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-medium">{total}</span>
+          )}
+          {canAdd && (
+            <span className="ms-auto text-[9px] text-muted-foreground/50 flex items-center gap-0.5">
+              <ClipboardPaste className="h-2.5 w-2.5" />
+              Paste
+            </span>
+          )}
+        </button>
+      )}
 
-      {open && (
+      {isOpen && (
         <div className="px-2 pb-2 space-y-2">
           <NotesList notes={notes} />
           {attachments.length > 0 && (

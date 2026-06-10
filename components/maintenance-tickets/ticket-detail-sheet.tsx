@@ -27,6 +27,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Calendar as CalendarComp } from "@/components/ui/calendar";
@@ -1693,6 +1695,8 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
+            {/* ── Issue management ── */}
+            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">Issue</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => setBulkAction("status")}>
               <FileText className="h-4 w-4" />Change status
             </DropdownMenuItem>
@@ -1702,23 +1706,29 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
             <DropdownMenuItem onClick={() => setBulkAction("cancel")} className="text-destructive focus:text-destructive">
               <X className="h-4 w-4" />Cancel issues
             </DropdownMenuItem>
+            {/* ── Add records ── */}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">Add records</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => setBulkAction("diagnosis")}>
-              <FileText className="h-4 w-4" />Add diagnosis
+              <FileText className="h-4 w-4" />Diagnosis
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setBulkAction("attendance")}>
-              <Wrench className="h-4 w-4" />Add attendance
+              <Wrench className="h-4 w-4" />Attendance
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setBulkAction("part")}>
-              <Package className="h-4 w-4" />Add part usage
+              <Package className="h-4 w-4" />Part usage
             </DropdownMenuItem>
             {/* PAY ENTRY DISABLED — creation commented out; existing pay entries still display
             <DropdownMenuItem onClick={() => setBulkAction("pay")}>
-              <Wallet className="h-4 w-4" />Add pay entry
+              <Wallet className="h-4 w-4" />Pay entry
             </DropdownMenuItem>
             */}
             <DropdownMenuItem onClick={() => setBulkAction("warranty")}>
-              <ShieldCheck className="h-4 w-4" />Add warranty
+              <ShieldCheck className="h-4 w-4" />Warranty
             </DropdownMenuItem>
+            {/* ── Technicians ── */}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">Technicians</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => setBulkAction("attachTechs")}>
               <Users2 className="h-4 w-4" />Attach technicians
             </DropdownMenuItem>
@@ -2050,9 +2060,30 @@ function IssueNode({
   const canDefer = issue.status.value !== "complete";
   const canCancel = !["complete", "cancelled"].includes(issue.status.value);
 
-  function toggleAction(action: ActiveAction) {
-    setActiveAction((prev) => (prev === action ? null : action));
-  }
+  // ── Make Action tabs ───────────────────────────────────────────────────────
+  // Default to "Assign technician" when assignable, otherwise "Change status".
+  const defaultActionTab: ActiveAction = canAssign ? "assign" : "status";
+  /** Always resolves to a concrete tab so one panel is always shown. */
+  const activeTab: ActiveAction = activeAction ?? defaultActionTab;
+  const actionTabs: Array<{
+    key: Exclude<ActiveAction, null>;
+    label: string;
+    Icon: typeof FileText;
+    group: "Issue" | "Add records" | "Technicians";
+    destructive?: boolean;
+  }> = [
+    { key: "status", label: "Change status", Icon: FileText, group: "Issue" },
+    ...(canAssign ? [{ key: "assign" as const, label: "Assign technician", Icon: UserRoundPlus, group: "Issue" as const }] : []),
+    ...(canDefer ? [{ key: "defer" as const, label: "Defer", Icon: TimerReset, group: "Issue" as const }] : []),
+    ...(canCancel ? [{ key: "cancel" as const, label: "Cancel", Icon: X, group: "Issue" as const, destructive: true }] : []),
+    { key: "diagnosis", label: "Diagnosis", Icon: FileText, group: "Add records" },
+    { key: "attendance", label: "Attendance", Icon: Wrench, group: "Add records" },
+    { key: "part", label: "Part usage", Icon: Package, group: "Add records" },
+    { key: "warranty", label: "Warranty", Icon: ShieldCheck, group: "Add records" },
+    { key: "attachTechs", label: "Attach techs", Icon: Users2, group: "Technicians" },
+    { key: "delayAssignment", label: "Delay assignment", Icon: TimerReset, group: "Technicians" },
+    { key: "changeTechs", label: "Change techs", Icon: Users2, group: "Technicians" },
+  ];
 
   return (
     <>
@@ -2184,11 +2215,14 @@ function IssueNode({
                 )}
 
                 {/* Description */}
-                {issue.description ? (
-                  <p className="text-sm text-muted-foreground leading-relaxed">{issue.description}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground/50 italic">{t("detailSheet.noDescription")}</p>
-                )}
+                <div className="space-y-0.5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Issue Description</p>
+                  {issue.description ? (
+                    <p className="text-sm text-muted-foreground leading-relaxed">{issue.description}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground/50 italic">{t("detailSheet.noDescription")}</p>
+                  )}
+                </div>
 
                 {/* Technicians */}
                 {issue.technicians.length > 0 && <hr className="border-border" />}
@@ -2954,128 +2988,134 @@ function IssueNode({
                   </SectionCollapse>
                 )}
 
-                {canActOnIssue && !hasActiveChild && <hr className="border-border" />}
-                {/* Action menu */}
-                {canActOnIssue && !hasActiveChild && <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Issue actions</span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-8">
-                        <MoreHorizontal className="h-4 w-4 me-1" />
-                        Actions
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem onClick={() => toggleAction("status")}>
-                        <FileText className="h-4 w-4" />
-                        Change status
-                      </DropdownMenuItem>
-                      {canAssign && (
-                        <DropdownMenuItem onClick={() => toggleAction("assign")}>
-                          <UserRoundPlus className="h-4 w-4" />
-                          Assign issue
-                        </DropdownMenuItem>
-                      )}
-                      {canDefer && (
-                        <DropdownMenuItem onClick={() => toggleAction("defer")}>
-                          <TimerReset className="h-4 w-4" />
-                          Defer issue
-                        </DropdownMenuItem>
-                      )}
-                      {canCancel && (
-                        <DropdownMenuItem onClick={() => toggleAction("cancel")} className="text-destructive focus:text-destructive">
-                          <X className="h-4 w-4" />
-                          Cancel issue
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => toggleAction("diagnosis")}><FileText className="h-4 w-4" />Add diagnosis</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleAction("attendance")}><Wrench className="h-4 w-4" />Add attendance</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleAction("part")}><Package className="h-4 w-4" />Add part usage</DropdownMenuItem>
-                      {/* PAY ENTRY DISABLED — creation commented out; existing pay entries still display above
-                      <DropdownMenuItem onClick={() => toggleAction("pay")}><Wallet className="h-4 w-4" />Add pay entry</DropdownMenuItem>
-                      */}
-                      <DropdownMenuItem onClick={() => toggleAction("warranty")}><ShieldCheck className="h-4 w-4" />Add warranty</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleAction("attachTechs")}><Users2 className="h-4 w-4" />Attach technicians</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleAction("delayAssignment")}><TimerReset className="h-4 w-4" />Delay assignment</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleAction("changeTechs")}><Users2 className="h-4 w-4" />Change technicians</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>}
+                {/* Issue notes — shown directly (no inner toggle) */}
+                <hr className="border-border" />
+                <SectionCollapse title="Issue notes">
+                  <EntityNotesAttachments
+                    entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
+                    notes={issue.notes}
+                    attachments={issue.attachments}
+                    onSuccess={onReload}
+                    allowNoteType
+                    canAdd={canAddNotes}
+                    alwaysOpen
+                  />
+                </SectionCollapse>
 
-                {/* Inline action panels */}
-                {activeAction === "status" && (
-                  <ChangeStatusPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "assign" && (
-                  <AssignPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    technicians={technicians} issueDraft={issueDraft} onPatchDraft={onPatchDraft}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "defer" && (
-                  <DeferPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "cancel" && (
-                  <CancelPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "diagnosis" && (
-                  <DiagnosisPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "attendance" && (
-                  <AttendancePanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    technicians={technicians.filter((t) => issue.technicians.some((at) => at.id === t.id))}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "part" && (
-                  <PartUsagePanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "pay" && (
-                  <PayEntryPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    technicians={technicians}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "warranty" && (
-                  <WarrantyPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "attachTechs" && (
-                  <AttachTechsPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    technicians={technicians}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "delayAssignment" && (
-                  <DelayAssignmentPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
-                {activeAction === "changeTechs" && (
-                  <ChangeTechsPanel issue={issue} storeId={storeId} ticketId={ticketId}
-                    technicians={technicians}
-                    issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
-                    onClose={() => setActiveAction(null)} onSuccess={onReload} />
-                )}
+                {/* Make Action */}
+                {canActOnIssue && !hasActiveChild && (
+                  <>
+                    <hr className="border-border" />
+                    <SectionCollapse title="Make Action" defaultOpen>
+                      <div className="rounded-lg border bg-card p-3 space-y-3">
+                        {/* Tab strip — grouped by category */}
+                        <div className="space-y-2.5">
+                          {(["Issue", "Add records", "Technicians"] as const).map((groupName) => {
+                            const tabsInGroup = actionTabs.filter((tk) => tk.group === groupName);
+                            if (tabsInGroup.length === 0) return null;
+                            return (
+                              <div key={groupName} className="space-y-1.5">
+                                <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                                  {groupName}
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {tabsInGroup.map((tk) => {
+                                    const active = activeTab === tk.key;
+                                    return (
+                                      <button
+                                        key={tk.key}
+                                        type="button"
+                                        onClick={() => setActiveAction(tk.key)}
+                                        className={cn(
+                                          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                                          active
+                                            ? tk.destructive
+                                              ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                              : "border-primary/40 bg-primary/10 text-primary"
+                                            : "border-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
+                                        )}
+                                      >
+                                        <tk.Icon className="h-3.5 w-3.5" />
+                                        {tk.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
 
-                {/* Issue-level notes & attachments */}
-                <EntityNotesAttachments
-                  entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
-                  notes={issue.notes}
-                  attachments={issue.attachments}
-                  onSuccess={onReload}
-                  allowNoteType
-                  canAdd={canAddNotes}
-                />
+                        {/* Active panel */}
+                        <div className="border-t pt-3">
+                          {activeTab === "status" && (
+                            <ChangeStatusPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "assign" && (
+                            <AssignPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians} issueDraft={issueDraft} onPatchDraft={onPatchDraft}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "defer" && (
+                            <DeferPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "cancel" && (
+                            <CancelPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "diagnosis" && (
+                            <DiagnosisPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "attendance" && (
+                            <AttendancePanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians.filter((t) => issue.technicians.some((at) => at.id === t.id))}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "part" && (
+                            <PartUsagePanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "pay" && (
+                            <PayEntryPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "warranty" && (
+                            <WarrantyPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "attachTechs" && (
+                            <AttachTechsPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "delayAssignment" && (
+                            <DelayAssignmentPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "changeTechs" && (
+                            <ChangeTechsPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                        </div>
+                      </div>
+                    </SectionCollapse>
+                  </>
+                )}
 
                 {/* Status history */}
                 {issue.statusChanges.length > 0 && <StatusHistory changes={issue.statusChanges} />}
