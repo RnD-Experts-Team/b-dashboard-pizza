@@ -3006,7 +3006,7 @@ function IssueNode({
                 {canActOnIssue && !hasActiveChild && (
                   <>
                     <hr className="border-border" />
-                    <SectionCollapse title="Make Action" defaultOpen>
+                    <SectionCollapse title="Make Action">
                       <div className="rounded-lg border bg-card p-3 space-y-3">
                         {/* Tab strip — grouped by category */}
                         <div className="space-y-2.5">
@@ -3202,6 +3202,13 @@ function RightPanel({
   draft,
 }: RightPanelProps) {
   const t = useTranslations("maintenanceTickets");
+
+  const [expandedIssues, setExpandedIssues] = useState<number[]>([]);
+  const isIssueExpanded = (issueId: number) => expandedIssues.includes(issueId);
+  const toggleIssueExpanded = (issueId: number) =>
+    setExpandedIssues((prev) =>
+      prev.includes(issueId) ? prev.filter((id) => id !== issueId) : [...prev, issueId]
+    );
   const { canAccessRoute, overviewStores } = useAuthStore();
   // storePermissions is keyed by numeric internal id (e.g. "48"), not the
   // human-readable store id (e.g. "03795-00001"). Resolve it via overviewStores.
@@ -3756,8 +3763,8 @@ function RightPanel({
                         storeId={storeId}
                         ticketId={activeTicketId!}
                         technicians={technicians}
-                        isExpanded={draft.isIssueExpanded(grp.root.id)}
-                        onToggleExpand={() => draft.toggleIssueExpanded(grp.root.id)}
+                        isExpanded={isIssueExpanded(grp.root.id)}
+                        onToggleExpand={() => toggleIssueExpanded(grp.root.id)}
                         issueDraft={draft.getIssueDraft(grp.root.id)}
                         onPatchDraft={(patch) => draft.patchIssueDraft(grp.root.id, patch)}
                         onClearDraftFields={(keys) => draft.clearIssueDraftFields(grp.root.id, keys)}
@@ -3797,8 +3804,8 @@ function RightPanel({
                                 storeId={storeId}
                                 ticketId={activeTicketId!}
                                 technicians={technicians}
-                                isExpanded={draft.isIssueExpanded(desc.id)}
-                                onToggleExpand={() => draft.toggleIssueExpanded(desc.id)}
+                                isExpanded={isIssueExpanded(desc.id)}
+                                onToggleExpand={() => toggleIssueExpanded(desc.id)}
                                 issueDraft={draft.getIssueDraft(desc.id)}
                                 onPatchDraft={(patch) => draft.patchIssueDraft(desc.id, patch)}
                                 onClearDraftFields={(keys) => draft.clearIssueDraftFields(desc.id, keys)}
@@ -3889,8 +3896,8 @@ function RightPanel({
                       storeId={storeId}
                       ticketId={activeTicketId!}
                       technicians={technicians}
-                      isExpanded={draft.isIssueExpanded(group.root.id)}
-                      onToggleExpand={() => draft.toggleIssueExpanded(group.root.id)}
+                      isExpanded={isIssueExpanded(group.root.id)}
+                      onToggleExpand={() => toggleIssueExpanded(group.root.id)}
                       issueDraft={draft.getIssueDraft(group.root.id)}
                       onPatchDraft={(patch) => draft.patchIssueDraft(group.root.id, patch)}
                       onClearDraftFields={(keys) => draft.clearIssueDraftFields(group.root.id, keys)}
@@ -3930,8 +3937,8 @@ function RightPanel({
                               storeId={storeId}
                               ticketId={activeTicketId!}
                               technicians={technicians}
-                              isExpanded={draft.isIssueExpanded(child.id)}
-                              onToggleExpand={() => draft.toggleIssueExpanded(child.id)}
+                              isExpanded={isIssueExpanded(child.id)}
+                              onToggleExpand={() => toggleIssueExpanded(child.id)}
                               issueDraft={draft.getIssueDraft(child.id)}
                               onPatchDraft={(patch) => draft.patchIssueDraft(child.id, patch)}
                               onClearDraftFields={(keys) => draft.clearIssueDraftFields(child.id, keys)}

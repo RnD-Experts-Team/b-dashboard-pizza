@@ -222,16 +222,15 @@ export default function MaintenanceTicketsPage() {
         />
       )}
 
-      {/* Create ticket dialog — only meaningful for a specific store */}
-      {isStoreMode && (
-        <CreateTicketDialog
-          open={createOpen}
-          storeId={activeStoreId ?? ""}
-          catalogIssues={catalogIssues}
-          onClose={() => setCreateOpen(false)}
-          onSuccess={handleMutationSuccess}
-        />
-      )}
+      {/* Create ticket dialog */}
+      <CreateTicketDialog
+        open={createOpen}
+        storeId={activeStoreId ?? ""}
+        catalogIssues={catalogIssues}
+        stores={!isStoreMode ? activeStores : undefined}
+        onClose={() => setCreateOpen(false)}
+        onSuccess={handleMutationSuccess}
+      />
 
       {/* Ticket detail sheet */}
       <TicketDetailSheet

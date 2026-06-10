@@ -40,6 +40,7 @@ import {
   Target,
   LifeBuoy,
   Ticket,
+  Wallet,
 } from "lucide-react";
 import {
   Dialog,
@@ -497,9 +498,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
         ],
       },
-      
-     
-     
+      {
+        title: "Daily Pay",
+        href: `/${locale}/dashboard/daily-pay`,
+        icon: Wallet,
+        // No auth requirements yet — always visible.
+      },
+
+
     ],
   };
   // Dev tools navigation (controlled by feature flags)

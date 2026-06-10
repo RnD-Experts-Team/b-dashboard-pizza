@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Loader2, Paperclip, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Paperclip, X, Store } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SearchCreateCombobox } from "./search-create-combobox";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
+import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { CatalogIssue, Priority } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -51,8 +52,11 @@ function makeRow(): IssueRow {
 
 interface CreateTicketDialogProps {
   open: boolean;
+  /** Pre-selected store. When empty (all-stores mode), a store selector is shown inside the dialog. */
   storeId: string;
   catalogIssues: CatalogIssue[];
+  /** When provided, a store selector is shown inside the dialog (used in all-stores mode). */
+  stores?: OverviewStore[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -65,6 +69,7 @@ export function CreateTicketDialog({
   open,
   storeId,
   catalogIssues,
+  stores,
   onClose,
   onSuccess,
 }: CreateTicketDialogProps) {
@@ -74,18 +79,37 @@ export function CreateTicketDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // When storeId prop is empty (all-stores mode), the user picks a store inside the dialog.
+  const needsStorePick = !storeId && !!stores?.length;
+  const [pickedStoreId, setPickedStoreId] = useState<string>("");
+  const activeStoreId = storeId || pickedStoreId;
+
   // Local catalog issues — seeded from prop, grows when user creates new ones in-session
   const [localCatalogIssues, setLocalCatalogIssues] = useState<CatalogIssue[]>(() =>
     catalogIssues.filter((i) => !i.deletedAt)
   );
+  const [catalogLoading, setCatalogLoading] = useState(false);
 
   // Re-seed on dialog open so it always reflects the latest catalog data
   useEffect(() => {
     if (open) {
+      setPickedStoreId("");
       setLocalCatalogIssues(catalogIssues.filter((i) => !i.deletedAt));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // When a store is picked inside the dialog, fetch that store's catalog issues.
+  useEffect(() => {
+    if (!pickedStoreId) return;
+    let cancelled = false;
+    setCatalogLoading(true);
+    maintenanceTicketsService.getCatalogIssues(undefined, pickedStoreId)
+      .then((issues) => { if (!cancelled) setLocalCatalogIssues(issues.filter((i) => !i.deletedAt)); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCatalogLoading(false); });
+    return () => { cancelled = true; };
+  }, [pickedStoreId]);
 
   const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
@@ -110,13 +134,18 @@ export function CreateTicketDialog({
 
   /** Creates a catalog issue and returns the new id. Called by SearchCreateCombobox. */
   async function createCatalogIssue(title: string): Promise<number> {
-    const newIssue = await maintenanceTicketsService.createCatalogIssue({ title }, storeId);
+    const newIssue = await maintenanceTicketsService.createCatalogIssue({ title }, activeStoreId);
     setLocalCatalogIssues((prev) => [...prev, newIssue]);
     return newIssue.id;
   }
 
   async function handleSubmit() {
     setSubmitError(null);
+
+    if (needsStorePick && !pickedStoreId) {
+      setSubmitError("Please select a store first.");
+      return;
+    }
 
     for (const row of rows) {
       if (!row.issueId) {
@@ -131,7 +160,7 @@ export function CreateTicketDialog({
 
     setIsSubmitting(true);
     try {
-      await maintenanceTicketsService.createTicket(storeId, {
+      await maintenanceTicketsService.createTicket(activeStoreId, {
         issues: rows.map((row) => ({
           issue_id: row.issueId!,
           priority: row.priority,
@@ -165,6 +194,32 @@ export function CreateTicketDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Store selector — shown only when opened in all-stores mode */}
+          {needsStorePick && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
+              <Label className="flex items-center gap-1.5 text-sm font-medium">
+                <Store className="h-4 w-4 text-muted-foreground" />
+                Store <span className="text-destructive">*</span>
+              </Label>
+              <Select value={pickedStoreId} onValueChange={setPickedStoreId}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Select a store…" />
+                </SelectTrigger>
+                <SelectContent position="popper" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                  {stores!.map((s) => {
+                    const id = s.storeId ?? s.id;
+                    return (
+                      <SelectItem key={id} value={id}>
+                        {s.name ? `${s.name} (${id})` : id}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className={needsStorePick && !pickedStoreId ? "pointer-events-none opacity-40" : undefined}>
           {rows.map((row, idx) => (
             <div key={row.id} className="rounded-lg border p-4 space-y-3">
               {/* Row header */}
@@ -194,7 +249,7 @@ export function CreateTicketDialog({
                   selectedId={row.issueId}
                   onSelect={(id) => updateRow(row.id, { issueId: id })}
                   onCreate={createCatalogIssue}
-                  placeholder="Search issues or type to create a new one…"
+                  placeholder={catalogLoading ? "Loading issues…" : "Search issues or type to create a new one…"}
                 />
               </div>
 
@@ -300,6 +355,7 @@ export function CreateTicketDialog({
             <Plus className="me-1.5 h-4 w-4" />
             {t("createDialog.addIssue")}
           </Button>
+          </div>{/* end dimmed wrapper */}
 
           {submitError && <p className="text-sm text-destructive">{submitError}</p>}
         </div>
