@@ -316,7 +316,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("cameraForms"),
         href: `/${locale}/dashboard/quality-assurance`,
         icon: ClipboardCheck,
-        
+        requirements: [
+          { service: "QA", method: "GET", path: "/camera-forms", storeId: effectiveStoreId },
+        ],
       },
       {
         title: t("cameraReport"),
@@ -502,7 +504,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: "Daily Pay",
         href: `/${locale}/dashboard/daily-pay`,
         icon: Wallet,
-        // No auth requirements yet — always visible.
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId: effectiveStoreId }
+        ],
       },
 
 
