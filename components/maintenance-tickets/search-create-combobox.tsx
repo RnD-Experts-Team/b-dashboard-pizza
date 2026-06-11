@@ -91,6 +91,8 @@ export function SearchCreateCombobox({
       onSelect(newId);
       setQuery("");
       setOpen(false);
+      // Blur explicitly so Radix's Sheet focus trap doesn't grab the sheet container
+      inputRef.current?.blur();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Failed to create.");
     } finally {
@@ -125,7 +127,7 @@ export function SearchCreateCombobox({
             if (e.key === "ArrowDown" && !open) setOpen(true);
           }}
           placeholder={loading ? "Loading…" : placeholder}
-          disabled={disabled || loading || isCreating}
+          disabled={disabled || loading}
           className="h-8 text-sm pe-7"
           autoComplete="off"
         />
