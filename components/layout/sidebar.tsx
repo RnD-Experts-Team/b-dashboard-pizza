@@ -487,7 +487,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   const Maintenance: NavGroup = {
     label: "Maintenance",
-    icon: FileText,
+    icon: Wrench,
     items: [
      
       {

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, X, Paperclip, StickyNote } from "lucide-react";
+import { Loader2, Plus, Trash2, X, Paperclip, StickyNote, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,7 @@ import type {
 } from "@/types/daily-pay.types";
 import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
 import type { DailyPayStoreOption } from "@/lib/hooks/use-daily-pay";
+import { TicketIssuePickerDialog } from "./ticket-issue-picker-dialog";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Local form state (strings so number inputs can be empty)                */
@@ -57,7 +59,7 @@ interface LineForm {
   moneyOwed: string;
   travelTime: string;
   totalBreakTime: string;
-  ticketIssueIds: string; // comma-separated integer IDs
+  ticketIssueIds: number[];
   notes: NoteForm[];
   files: File[];
 }
@@ -73,7 +75,7 @@ function emptyLine(): LineForm {
     moneyOwed: "",
     travelTime: "",
     totalBreakTime: "",
-    ticketIssueIds: "",
+    ticketIssueIds: [],
     notes: [],
     files: [],
   };
@@ -167,6 +169,33 @@ export function DailyPayEntryDialog({
   const [isPrefilling, setIsPrefilling] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [pickerLineIndex, setPickerLineIndex] = useState<number | null>(null);
+  const [pickerStoreId, setPickerStoreId] = useState<string>("");
+
+  // Tracks which line receives pasted files (updated onFocus of each line card).
+  const pasteTargetRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!open || isSubmitting || pickerLineIndex !== null) return;
+
+    function handlePaste(e: ClipboardEvent) {
+      const pastedFiles = Array.from(e.clipboardData?.items ?? [])
+        .filter((item) => item.kind === "file")
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => f !== null);
+      if (pastedFiles.length === 0) return;
+      e.preventDefault();
+      const idx = pasteTargetRef.current;
+      setLines((prev) =>
+        prev.map((l, i) =>
+          i === idx ? { ...l, files: [...l.files, ...pastedFiles] } : l
+        )
+      );
+    }
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [open, isSubmitting, pickerLineIndex]);
 
   // Reset / prefill whenever the dialog opens.
   useEffect(() => {
@@ -202,7 +231,7 @@ export function DailyPayEntryDialog({
                 moneyOwed: line.moneyOwed?.toString() ?? "",
                 travelTime: line.travelTime?.toString() ?? "",
                 totalBreakTime: line.totalBreakTime?.toString() ?? "",
-                ticketIssueIds: line.ticketIssues.map((ti) => ti.id).join(", "),
+                ticketIssueIds: line.ticketIssues.map((ti) => ti.id),
                 notes: line.notes.map((n) => ({
                   body: n.body,
                   type: n.type ?? "",
@@ -294,12 +323,7 @@ export function DailyPayEntryDialog({
         return null;
       }
 
-      const ticketIssueIds = line.ticketIssueIds
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map(Number)
-        .filter((n) => Number.isInteger(n) && n > 0);
+      const ticketIssueIds = line.ticketIssueIds;
 
       const notes = line.notes
         .filter((n) => n.body.trim())
@@ -395,7 +419,11 @@ export function DailyPayEntryDialog({
             {/* Lines */}
             <div className="space-y-3">
               {lines.map((line, i) => (
-                <div key={i} className="rounded-lg border bg-card p-4 space-y-3">
+                <div
+                  key={i}
+                  className="rounded-lg border bg-card p-4 space-y-3"
+                  onFocus={() => { pasteTargetRef.current = i; }}
+                >
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold">Line {i + 1}</h4>
                     {lines.length > 1 && (
@@ -484,33 +512,78 @@ export function DailyPayEntryDialog({
                   </div>
 
                   {/* Linked ticket issues */}
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">
-                      Linked ticket issue IDs (optional)
+                      Linked ticket issues (optional)
                     </Label>
-                    <Input
-                      value={line.ticketIssueIds}
-                      onChange={(e) => updateLine(i, { ticketIssueIds: e.target.value })}
-                      placeholder="e.g. 12, 34"
-                      disabled={isSubmitting}
-                      className="h-9 text-sm"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      The technician must already be assigned to each linked issue.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        className="h-8 gap-1.5 text-xs"
+                        disabled={isSubmitting || !line.storeId}
+                        title={!line.storeId ? "Select a store first" : undefined}
+                        onClick={() => {
+                          const storeNum =
+                            stores.find((s) => String(s.id) === line.storeId)
+                              ?.storeNumber ?? "";
+                          setPickerStoreId(storeNum);
+                          setPickerLineIndex(i);
+                        }}
+                      >
+                        <ListChecks className="h-3.5 w-3.5" />
+                        Browse tickets
+                      </Button>
+                      {line.ticketIssueIds.map((id) => (
+                        <Badge
+                          key={id}
+                          variant="secondary"
+                          className="gap-1 pe-1 text-xs"
+                        >
+                          #{id}
+                          <button
+                            type="button"
+                            className="ms-0.5 rounded-sm opacity-60 hover:opacity-100"
+                            onClick={() =>
+                              updateLine(i, {
+                                ticketIssueIds: line.ticketIssueIds.filter(
+                                  (x) => x !== id
+                                ),
+                              })
+                            }
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                      {line.ticketIssueIds.length === 0 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          None selected
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Files */}
-                  <div className="space-y-1.5">
-                    <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      Attachments (optional)
+                  <div className="space-y-1.5 rounded-md p-2 transition-colors hover:bg-muted/30">
+                    <Label className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Attachments (optional)
+                      </span>
+                      <span className="text-[10px] opacity-60">Ctrl+V to paste</span>
                     </Label>
                     <Input
                       type="file"
                       multiple
                       onChange={(e) =>
-                        updateLine(i, { files: Array.from(e.target.files ?? []) })
+                        updateLine(i, {
+                          files: [
+                            ...line.files,
+                            ...Array.from(e.target.files ?? []),
+                          ],
+                        })
                       }
                       disabled={isSubmitting}
                       className="h-9 text-sm"
@@ -523,6 +596,17 @@ export function DailyPayEntryDialog({
                             className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs"
                           >
                             {f.name}
+                            <button
+                              type="button"
+                              className="ms-0.5 rounded-sm opacity-60 hover:opacity-100"
+                              onClick={() =>
+                                updateLine(i, {
+                                  files: line.files.filter((_, idx) => idx !== fi),
+                                })
+                              }
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
                           </span>
                         ))}
                       </div>
@@ -596,6 +680,19 @@ export function DailyPayEntryDialog({
               <p className="text-sm text-destructive">{formError}</p>
             )}
           </div>
+        )}
+
+        {pickerLineIndex !== null && (
+          <TicketIssuePickerDialog
+            open={pickerLineIndex !== null}
+            storeId={pickerStoreId}
+            selectedIssueIds={lines[pickerLineIndex]?.ticketIssueIds ?? []}
+            onClose={() => setPickerLineIndex(null)}
+            onConfirm={(ids) => {
+              updateLine(pickerLineIndex, { ticketIssueIds: ids });
+              setPickerLineIndex(null);
+            }}
+          />
         )}
 
         <DialogFooter>

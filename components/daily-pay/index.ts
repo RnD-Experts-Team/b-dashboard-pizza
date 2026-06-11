@@ -5,4 +5,5 @@ export { DailyPayTable } from "./daily-pay-table";
 export { DailyPayFiltersBar } from "./daily-pay-filters";
 export { DailyPayDetailSheet } from "./daily-pay-detail-sheet";
 export { DailyPayEntryDialog } from "./daily-pay-entry-dialog";
+export { TicketIssuePickerDialog } from "./ticket-issue-picker-dialog";
 export { MultiSelect } from "./multi-select";
