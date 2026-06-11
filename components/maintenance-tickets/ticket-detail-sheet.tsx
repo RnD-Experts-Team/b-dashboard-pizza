@@ -2228,11 +2228,19 @@ function IssueNode({
                 {issue.technicians.length > 0 && <hr className="border-border" />}
                 {issue.technicians.length > 0 && (
                   <SectionCollapse title="Assigned Technicians" count={issue.technicians.length}>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-col gap-1.5">
                       {issue.technicians.map((tech) => (
-                        <span key={tech.id} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
-                          <User className="h-3 w-3" />{tech.name}
-                        </span>
+                        <div key={tech.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-sm font-medium">{tech.name}</span>
+                          </div>
+                          {tech.creator && (
+                            <span className="text-xs text-muted-foreground">
+                              Added by: {tech.creator.name}
+                            </span>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </SectionCollapse>
@@ -2288,6 +2296,12 @@ function IssueNode({
                             <div className="flex flex-col gap-0.5">
                               <span className="text-muted-foreground">Assigned Technician{a.technicians.length > 1 ? "s" : ""}</span>
                               <span className="text-sm font-medium">{a.technicians.map((tech) => tech.name).join(" · ")}</span>
+                            </div>
+                          )}
+                          {a.creator && (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-muted-foreground">Added by</span>
+                              <span className="text-sm font-medium">{a.creator.name}</span>
                             </div>
                           )}
                         </div>

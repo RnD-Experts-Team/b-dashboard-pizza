@@ -186,6 +186,7 @@ function transformTechnician(raw: ApiCatalogTechnician): CatalogTechnician {
     categoryId: raw.category_id,
     categoryName: raw.category?.name ?? null,
     deletedAt: raw.deleted_at ?? null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email } : null,
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
   };
@@ -201,6 +202,7 @@ function transformAssignment(raw: ApiTicketAssignment): TicketAssignment {
     attachments: (raw.attachments ?? []).map(transformAttachment),
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken ?? false,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email } : null,
     createdAt: raw.created_at,
   };
 }

@@ -56,6 +56,7 @@ export interface CatalogTechnician {
   categoryId: number | null;
   categoryName: string | null;
   deletedAt: string | null;
+  creator: UserRef | null;
   notes?: TicketNote[];
   attachments?: TicketAttachment[];
 }
@@ -100,6 +101,7 @@ export interface TicketAssignment {
   attachments: TicketAttachment[];
   notes: TicketNote[];
   mistaken: boolean;
+  creator: UserRef | null;
   createdAt: string;
 }
 
@@ -468,6 +470,8 @@ export interface ApiCatalogTechnician {
   category_id: number | null;
   category: { id: number; name: string } | null;
   deleted_at?: string | null;
+  created_by?: number | null;
+  creator?: { id: number; name: string; email: string } | null;
   notes?: ApiTicketNote[];
   attachments?: ApiTicketAttachment[];
 }
@@ -508,6 +512,8 @@ export interface ApiTicketAssignment {
   attachments?: ApiTicketAttachment[];
   notes?: ApiTicketNote[];
   mistaken?: boolean;
+  created_by?: number | null;
+  creator?: { id: number; name: string; email: string } | null;
   created_at: string;
 }
 
