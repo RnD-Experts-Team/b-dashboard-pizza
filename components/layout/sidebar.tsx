@@ -461,6 +461,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     label: "Reports",
     icon: FileText,
     items: [
+      {
+        title: "WBR Reports",
+        href: `/${locale}/dashboard/wbr-reports`,
+        icon: BarChart3,
+      },
       // {
       //   title: t("maintenance"),
       //   href: `/${locale}/dashboard/maintenance`,
