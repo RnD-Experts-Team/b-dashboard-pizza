@@ -241,6 +241,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     // Settings is always accessible — no requirements
   };
 
+  const announcementsItem: NavItem = {
+    title: "Announcements",
+    href: `/${locale}/dashboard/announcements`,
+    icon: Megaphone,
+  };
+
   /* ---- Collapsible groups ---- */
   const storeManagementGroup: NavGroup = {
     label: t("storeManagement"),
@@ -484,11 +490,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       //   ],
       // },
       
-      {
-        title: "Announcements",
-        href: `/${locale}/dashboard/announcements`,
-        icon: Megaphone,
-      },
     ],
   };
 
@@ -742,6 +743,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* 1. Dashboard */}
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+
+          {/* 1a. Announcements */}
+          {renderNavLink(announcementsItem)}
 
           {/* 1b. Screen Project */}
           {/* {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)} */}
