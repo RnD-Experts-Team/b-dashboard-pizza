@@ -329,7 +329,7 @@ export function RecentMaintenanceTable() {
 
         <CardContent className="px-0 pb-0">
           {/* overflow-y scroll, no x overflow */}
-          <div className="overflow-x-hidden overflow-y-auto max-h-[240px]">
+          <div className="overflow-x-hidden overflow-y-auto max-h-[140px]">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">

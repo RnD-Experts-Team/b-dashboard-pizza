@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { dsprService, DsprError, type DsprErrorCode } from "@/lib/api/services/dspr.service";
 import type { DsprResponse } from "@/types/dspr.types";
+import type { DashboardReportExtras } from "@/types/dashboard-report.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Constants                                                               */
@@ -32,6 +33,7 @@ interface DsprErrorState {
 interface DsprState {
   // Data
   data: DsprResponse | null;
+  wbrData: DashboardReportExtras | null;
   isLoading: boolean;
   isRefreshing: boolean; // background refresh (data already loaded)
   error: DsprErrorState | null;
@@ -69,6 +71,7 @@ let _autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 export const useDsprStore = create<DsprState>()((set, get) => ({
   data: null,
+  wbrData: null,
   isLoading: false,
   isRefreshing: false,
   error: null,
@@ -99,22 +102,23 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
 
     const performFetch = async (): Promise<void> => {
       try {
-        const data = await dsprService.getReport(
+        const result = await dsprService.getReport(
           storeId,
           date,
           _abortController?.signal
         );
 
-        // console.log("[DsprStore] Data received:", { store: data.filtering?.store, date: data.filtering?.date, cashSales: data.day?.total_cash_sales, customers: data.day?.customer_count });
+        // console.log("[DsprStore] Data received:", { store: result.dspr.filtering?.store, date: result.dspr.filtering?.date, cashSales: result.dspr.day?.total_cash_sales, customers: result.dspr.day?.customer_count });
 
         set({
-          data,
+          data: result.dspr,
+          wbrData: result.extras,
           isLoading: false,
           isRefreshing: false,
           error: null,
           lastFetchedAt: Date.now(),
-          lastStoreId: storeId ?? data.filtering?.store ?? null,
-          lastDate: date ?? data.filtering?.date ?? null,
+          lastStoreId: storeId ?? result.dspr.filtering?.store ?? null,
+          lastDate: date ?? result.dspr.filtering?.date ?? null,
           fetchCount: get().fetchCount + 1,
         });
       } catch (err: unknown) {
@@ -197,6 +201,7 @@ export const useDsprStore = create<DsprState>()((set, get) => ({
 
     set({
       data: null,
+      wbrData: null,
       isLoading: false,
       isRefreshing: false,
       error: null,

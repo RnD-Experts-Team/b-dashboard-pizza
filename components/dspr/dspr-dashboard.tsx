@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import { format, subDays, formatDistanceToNow } from "date-fns";
 import html2canvas from "html2canvas-pro";
-import { useDspr } from "@/lib/hooks/use-dspr";
+import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import {
   SalesChart,
@@ -24,6 +24,12 @@ import {
   EmployeeBirthday,
   TopEmployeeHours,
   StoreGoals,
+  WbrCustomerSalesCard,
+  WbrChannelSalesCard,
+  WbrPromoCard,
+  WbrPortalWeeklyCard,
+  WbrCashControlCard,
+  WbrPhoneSalesCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -264,6 +270,7 @@ function ForbiddenWelcomeScreen({ locale }: { locale: string }) {
 export function DsprDashboard() {
   const {
     data,
+    wbrData,
     isLoading,
     isRefreshing,
     error,
@@ -273,7 +280,7 @@ export function DsprDashboard() {
     clearError,
     isStale,
     selectedStore,
-  } = useDspr();
+  } = useWbrCard();
 
   const params = useParams();
   const locale = (params?.locale as string) || "en";
@@ -784,6 +791,8 @@ export function DsprDashboard() {
         /> 
       </div>
 
+      
+
       {/* ── Current Employees + Birthday + Top Hours ──────────────── */}
       <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4" data-screenshot-ignore="true" data-guide-id="dspr-employees">
         <CurrentEmployeesTable
@@ -831,6 +840,25 @@ export function DsprDashboard() {
         /> */}
       </div>
 
+{/* ── WBR Row 1: Customer Sales · Channel Sales · Promos ───────── */}
+      {wbrData && (
+        <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-2">
+          <WbrCustomerSalesCard data={wbrData["customer-count-and-sales"]} />
+          <WbrChannelSalesCard  data={wbrData["channel-sales"]} />
+          <WbrPromoCard         data={wbrData["promo"]} />
+          <WbrPortalWeeklyCard data={wbrData["portal-weekly"]} />
+
+        </div>
+      )}
+
+      {/* ── WBR Row 2: Portal Weekly · Cash Control · Phone Sales ─────── */}
+      {wbrData && (
+        <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-2">
+          <WbrCashControlCard  data={wbrData["cash-control"]} />
+          <WbrPhoneSalesCard   data={wbrData["phone-and-adjusted-sales"]} />
+        </div>
+      )}
+      
       <PageGuide
         steps={guideSteps}
         isOpen={guideOpen}

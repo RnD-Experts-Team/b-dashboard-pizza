@@ -14,6 +14,7 @@ export function useDspr() {
   const { selectedStore } = useSelectedStoreStore();
   const {
     data,
+    wbrData,
     isLoading,
     isRefreshing,
     error,
@@ -72,6 +73,7 @@ export function useDspr() {
 
   return {
     data,
+    wbrData,
     isLoading,
     isRefreshing,
     error,

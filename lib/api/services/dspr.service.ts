@@ -1,5 +1,6 @@
 import axios, { AxiosError } from "axios";
 import type { DsprResponse } from "@/types/dspr.types";
+import type { DashboardReportExtras } from "@/types/dashboard-report.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Error types                                                             */
@@ -199,7 +200,7 @@ export const dsprService = {
     storeId?: string,
     date?: string,
     signal?: AbortSignal
-  ): Promise<DsprResponse> => {
+  ): Promise<{ dspr: DsprResponse; extras: DashboardReportExtras }> => {
     const resolvedStore = storeId || getSelectedStoreId();
     const resolvedDate = date || getYesterday();
 
@@ -225,11 +226,11 @@ export const dsprService = {
     }
 
     const cacheBuster = Date.now();
-    const url = `/api/dspr/${encodeURIComponent(resolvedStore)}/${encodeURIComponent(resolvedDate)}?__noCache=${cacheBuster}`;
+    const url = `/api/data/reports/dashboard/${encodeURIComponent(resolvedStore)}/${encodeURIComponent(resolvedDate)}?__noCache=${cacheBuster}`;
     // console.log("[DsprService] Fetching URL:", url);
 
     try {
-      const { data } = await axios.get<DsprResponse>(url, {
+      const { data: body } = await axios.get<{ dspr: DsprResponse } & DashboardReportExtras>(url, {
         headers: {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
@@ -239,6 +240,8 @@ export const dsprService = {
         timeout: CLIENT_TIMEOUT_MS,
         signal,
       });
+
+      const data = body?.dspr;
 
       // console.log("[DsprService] Response received:", { filtering: data?.filtering, hasDay: !!data?.day, hasSales: !!data?.sales });
 
@@ -252,7 +255,7 @@ export const dsprService = {
         );
       }
 
-      return data;
+      return { dspr: data, extras: body };
     } catch (err) {
       // Already a DsprError (from validation above)
       if (err instanceof DsprError) throw err;
