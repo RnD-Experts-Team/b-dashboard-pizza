@@ -21,3 +21,4 @@ export { WbrPromoCard } from "./wbr-promo-card";
 export { WbrPortalWeeklyCard } from "./wbr-portal-weekly-card";
 export { WbrCashControlCard } from "./wbr-cash-control-card";
 export { WbrPhoneSalesCard } from "./wbr-phone-sales-card";
+export { WbrNonNegotiableCard } from "./wbr-non-negotiable-card";

@@ -41,31 +41,44 @@ export function StoreScoreCard({
   const weeklyGoal = upsMetric ? parseFloat(upsMetric.goals[0]?.goal ?? "0") : null;
 
   // ── Derived values ────────────────────────────────────────────────────────
-  const goal = weeklyGoal ?? 0;
-  const weekPct = goal > 0 ? (upsellingWeek / goal) * 100 : 0;
-  const dayPct  = goal > 0 ? (upsellingDay  / goal) * 100 : 0;
+  const goal   = weeklyGoal ?? 0;
+  const noGoal = goal === 0;
+
+  const weekPct = noGoal ? 0 : (upsellingWeek / goal) * 100;
+  const dayPct  = noGoal ? 0 : (upsellingDay  / goal) * 100;
+
+  // When no goal: scale bars relative to week total so day shows its share
+  const dayBarPct  = noGoal
+    ? (upsellingWeek > 0 ? (upsellingDay / upsellingWeek) * 100 : 0)
+    : Math.min(dayPct, 100);
+  const weekBarPct = noGoal
+    ? (upsellingWeek > 0 ? 100 : 0)
+    : Math.min(weekPct, 100);
 
   const circleColorClass =
-    weekPct >= 90 ? "text-emerald-400" :
-    weekPct >= 60 ? "text-amber-400"   :
+    noGoal         ? "text-muted-foreground/30" :
+    weekPct >= 90  ? "text-emerald-400" :
+    weekPct >= 60  ? "text-amber-400"   :
     "text-violet-400";
 
   const centerColorClass =
-    weekPct >= 90 ? "text-emerald-500" :
-    weekPct >= 60 ? "text-amber-500"   :
+    noGoal         ? "text-muted-foreground" :
+    weekPct >= 90  ? "text-emerald-500" :
+    weekPct >= 60  ? "text-amber-500"   :
     "text-violet-500";
 
   const weekBarColorClass =
-    weekPct >= 90 ? "bg-emerald-400" :
-    weekPct >= 60 ? "bg-amber-400"   :
+    noGoal         ? "bg-violet-400/50" :
+    weekPct >= 90  ? "bg-emerald-400" :
+    weekPct >= 60  ? "bg-amber-400"   :
     "bg-violet-400";
 
   const statusLabel =
+    noGoal         ? (upsellingWeek > 0 ? "No Goal Set" : "No Goal Set") :
     weekPct >= 100 ? "Goal Met!" :
     weekPct >= 80  ? "Almost There" :
     weekPct >= 50  ? "On Track"   :
-    goal > 0       ? "Keep Going"  :
-    "—";
+    "Keep Going";
 
   // ── DOM refs (bypass React re-renders during animation) ───────────────────
   const centerCountRef = useRef<HTMLDivElement | null>(null);
@@ -101,8 +114,7 @@ export function StoreScoreCard({
   }
 
   useEffect(() => {
-    // Reset DOM to zero before animating
-    if (centerCountRef.current) centerCountRef.current.textContent = loading ? "—" : "0%";
+    if (!noGoal && centerCountRef.current) centerCountRef.current.textContent = loading ? "—" : "0%";
     if (circleRef.current)      circleRef.current.style.strokeDashoffset = `${CIRCUMFERENCE}`;
     if (dayBarRef.current)      dayBarRef.current.style.width   = "0%";
     if (dayTextRef.current)     dayTextRef.current.textContent  = "0";
@@ -113,21 +125,23 @@ export function StoreScoreCard({
 
     const dur = 750;
 
-    // Ring — animates week-to-date % of goal
-    animateTo("circle", 0, Math.min(weekPct, 100), dur, (val) => {
+    // Ring — show % of goal when goal exists, else stay empty
+    animateTo("circle", 0, noGoal ? 0 : Math.min(weekPct, 100), dur, (val) => {
       if (circleRef.current)
         circleRef.current.style.strokeDashoffset = `${CIRCUMFERENCE - (val / 100) * CIRCUMFERENCE}`;
     });
 
-    // Center counter — week-to-date % of goal
-    setTimeout(() => animateTo("count", 0, weekPct, dur, (val) => {
-      if (centerCountRef.current)
-        centerCountRef.current.textContent = Math.round(val) + "%";
-    }), 50);
+    // Center — only animate when a goal exists
+    if (!noGoal) {
+      setTimeout(() => animateTo("count", 0, weekPct, dur, (val) => {
+        if (centerCountRef.current)
+          centerCountRef.current.textContent = Math.round(val) + "%";
+      }), 50);
+    }
 
     // Today bar + count
     setTimeout(() => {
-      animateTo("dayBar", 0, dayPct, dur, (val) => {
+      animateTo("dayBar", 0, dayBarPct, dur, (val) => {
         if (dayBarRef.current) dayBarRef.current.style.width = `${Math.min(100, val)}%`;
       });
       animateTo("dayText", 0, upsellingDay, dur, (val) => {
@@ -137,7 +151,7 @@ export function StoreScoreCard({
 
     // Week bar + count
     setTimeout(() => {
-      animateTo("weekBar", 0, weekPct, dur, (val) => {
+      animateTo("weekBar", 0, weekBarPct, dur, (val) => {
         if (weekBarRef.current) weekBarRef.current.style.width = `${Math.min(100, val)}%`;
       });
       animateTo("weekText", 0, upsellingWeek, dur, (val) => {
@@ -150,7 +164,7 @@ export function StoreScoreCard({
       rafRefs.current = {};
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekPct, dayPct, upsellingDay, upsellingWeek, loading]);
+  }, [weekPct, dayPct, dayBarPct, weekBarPct, upsellingDay, upsellingWeek, noGoal, loading]);
 
   return (
     <Card
@@ -165,11 +179,9 @@ export function StoreScoreCard({
       <div className="absolute top-2 left-3 flex items-center gap-1.5 pointer-events-none">
         <TrendingUp className="h-4 w-4 text-violet-500" />
         <span className="text-[11px] font-semibold">Upselling</span>
-        {goal > 0 && (
-          <span className="text-[9px] text-muted-foreground font-normal">
-            goal: {goal.toLocaleString()}
-          </span>
-        )}
+        <span className="text-[9px] text-muted-foreground font-normal">
+          {noGoal ? "no goal set" : `goal: ${goal.toLocaleString()}`}
+        </span>
       </div>
 
       <CardContent className="flex flex-col gap-2 items-center justify-center text-center h-full">
@@ -208,25 +220,32 @@ export function StoreScoreCard({
           </svg>
 
           {/* Center text */}
-          <div className="absolute flex flex-col items-center gap-0.5">
-            <div
-              ref={centerCountRef}
-              className={cn(
-                "text-2xl font-extrabold leading-none tabular-nums",
-                centerColorClass,
-              )}
-              aria-label="Upselling week-to-date percentage"
-            >
-              {loading ? "—" : "0%"}
-            </div>
-            {goal > 0 && (
-              <div className="text-[10px] text-muted-foreground leading-none tabular-nums">
-                / {goal.toLocaleString()}
-              </div>
+          <div className="absolute flex flex-col items-center gap-1">
+            {noGoal ? (
+              <>
+                <div className="text-[13px] font-semibold text-muted-foreground leading-tight">
+                  No Goal
+                </div>
+                <div className="text-[10px] text-muted-foreground/60 leading-none">
+                  not configured
+                </div>
+              </>
+            ) : (
+              <>
+                <div
+                  ref={centerCountRef}
+                  className={cn("text-2xl font-extrabold leading-none tabular-nums", centerColorClass)}
+                >
+                  {loading ? "—" : "0%"}
+                </div>
+                <div className="text-[10px] text-muted-foreground leading-none tabular-nums">
+                  / {goal.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground leading-none mt-0.5">
+                  {statusLabel}
+                </div>
+              </>
             )}
-            <div className="text-[10px] text-muted-foreground leading-none mt-0.5">
-              {statusLabel}
-            </div>
           </div>
         </div>
 

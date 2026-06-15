@@ -28,10 +28,12 @@ export function WbrPortalWeeklyCard({
   const currentWeekStart = filtering.week_start;
 
   return (
-    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0", className)}>
+    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0 bg-linear-to-r from-emerald-50 via-emerald-100 to-emerald-200 dark:from-emerald-950/20 dark:via-emerald-900/40 dark:to-emerald-800/50", className)}>
       <CardHeader className="pb-1 px-3 shrink-0">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <Clock className="h-3 w-3 text-muted-foreground" />
+          <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">
+            <Clock className="h-3 w-3 text-emerald-500" />
+          </div>
           Portal &amp; HNR Weekly
           <span className="font-normal text-muted-foreground ml-auto">
             {shortDate(filtering.week_start)} → {shortDate(filtering.week_end)}
@@ -39,7 +41,7 @@ export function WbrPortalWeeklyCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-1 flex-1 overflow-y-auto min-h-0">
-        <table className={TBL}>
+        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
           <thead>
             <tr>
               <th className={TH}>Week</th>

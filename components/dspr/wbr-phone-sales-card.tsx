@@ -27,10 +27,12 @@ export function WbrPhoneSalesCard({
   ];
 
   return (
-    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0", className)}>
+    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50", className)}>
       <CardHeader className="pb-1 px-3 shrink-0">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <Phone className="h-3 w-3 text-muted-foreground" />
+          <div className="rounded p-0.5 bg-sky-500/15 dark:bg-sky-500/20">
+            <Phone className="h-3 w-3 text-sky-500" />
+          </div>
           Phone &amp; Adj. Sales
           <span className="font-normal text-muted-foreground ml-auto">
             {filtering.date} · Wk {filtering.week_number}
@@ -38,7 +40,7 @@ export function WbrPhoneSalesCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-1 flex-1 overflow-y-auto min-h-0">
-        <table className={TBL}>
+        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
           <thead>
             <tr>
               <th className={TH}>Period</th>

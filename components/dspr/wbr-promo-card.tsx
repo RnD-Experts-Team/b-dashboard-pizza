@@ -26,10 +26,12 @@ export function WbrPromoCard({
   const { filtering, current_week } = data;
 
   return (
-    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0", className)}>
+    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0 bg-linear-to-r from-rose-50 via-rose-100 to-rose-200 dark:from-rose-950/20 dark:via-rose-900/40 dark:to-rose-800/50", className)}>
       <CardHeader className="pb-1 px-3 shrink-0">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <Tag className="h-3 w-3 text-muted-foreground" />
+          <div className="rounded p-0.5 bg-rose-500/15 dark:bg-rose-500/20">
+            <Tag className="h-3 w-3 text-rose-500" />
+          </div>
           Promos
           <span className="font-normal text-muted-foreground">
             · {fmtPct(current_week.promo_totals.pct_of_store_sales)} of sales
@@ -40,7 +42,7 @@ export function WbrPromoCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-1 flex-1 overflow-y-auto min-h-0">
-        <table className={TBL}>
+        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
           <thead>
             <tr>
               <th className={TH}>Code</th>

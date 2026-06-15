@@ -262,6 +262,23 @@ export interface Promo {
 }
 
 // ============================================================================
+// non-negotiable-reports
+// ============================================================================
+
+export interface NonNegotiableReport {
+  id: number;
+  store_number: string;
+  action: string;
+  date: string;
+  time: string;
+  date_two: string;
+  time_two: string;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+// ============================================================================
 // go-to
 // ============================================================================
 
@@ -294,5 +311,5 @@ export interface DashboardReportExtras {
   lto?: Lto;
   promo?: Promo;
   "go-to"?: GoTo;
-  "non-negotiable-reports"?: unknown[];
+  "non-negotiable-reports"?: NonNegotiableReport[];
 }

@@ -33,10 +33,12 @@ export function WbrCashControlCard({
   ];
 
   return (
-    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0", className)}>
+    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0 bg-linear-to-r from-amber-50 via-amber-100 to-amber-200 dark:from-amber-950/20 dark:via-amber-900/40 dark:to-amber-800/50", className)}>
       <CardHeader className="pb-1 px-3 shrink-0">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <Banknote className="h-3 w-3 text-muted-foreground" />
+          <div className="rounded p-0.5 bg-amber-500/15 dark:bg-amber-500/20">
+            <Banknote className="h-3 w-3 text-amber-500" />
+          </div>
           Cash Control
           <span className="font-normal text-muted-foreground ml-auto">
             {filtering.week_start} · P{filtering.period_number}
@@ -44,7 +46,7 @@ export function WbrCashControlCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-1 flex-1 overflow-y-auto min-h-0">
-        <table className={TBL}>
+        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
           <thead>
             <tr>
               <th className={TH}>Period</th>

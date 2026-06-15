@@ -30,10 +30,12 @@ export function WbrChannelSalesCard({
   ];
 
   return (
-    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0", className)}>
+    <Card className={cn("flex flex-col h-[280px] py-1.5 gap-0 bg-linear-to-r from-violet-50 via-violet-100 to-violet-200 dark:from-violet-950/20 dark:via-violet-900/40 dark:to-violet-800/50", className)}>
       <CardHeader className="pb-1 px-3 shrink-0">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
-          <BarChart2 className="h-3 w-3 text-muted-foreground" />
+          <div className="rounded p-0.5 bg-violet-500/15 dark:bg-violet-500/20">
+            <BarChart2 className="h-3 w-3 text-violet-500" />
+          </div>
           Channel Sales
           <span className="font-normal text-muted-foreground ml-auto">
             {filtering.week_start} → {filtering.week_end}
@@ -41,7 +43,7 @@ export function WbrChannelSalesCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-1 flex-1 overflow-y-auto min-h-0">
-        <table className={TBL}>
+        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
           <thead>
             <tr>
               <th className={TH}>Channel</th>

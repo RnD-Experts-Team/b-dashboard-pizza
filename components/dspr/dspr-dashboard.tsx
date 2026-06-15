@@ -30,6 +30,7 @@ import {
   WbrPortalWeeklyCard,
   WbrCashControlCard,
   WbrPhoneSalesCard,
+  WbrNonNegotiableCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -853,12 +854,18 @@ export function DsprDashboard() {
 
       {/* ── WBR Row 2: Portal Weekly · Cash Control · Phone Sales ─────── */}
       {wbrData && (
-        <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-3">
           <WbrCashControlCard  data={wbrData["cash-control"]} />
           <WbrPhoneSalesCard   data={wbrData["phone-and-adjusted-sales"]} />
+                  <WbrNonNegotiableCard data={wbrData["non-negotiable-reports"]} />
+
         </div>
       )}
-      
+
+      {/* ── WBR Row 3: Non-Negotiable Reports ────────────────────────────── */}
+      {/* {wbrData?.["non-negotiable-reports"] !== undefined && (
+      )} */}
+
       <PageGuide
         steps={guideSteps}
         isOpen={guideOpen}
