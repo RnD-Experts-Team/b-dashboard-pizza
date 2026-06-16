@@ -931,14 +931,6 @@ export function DsprDashboard() {
         <WbrGoToCard data={wbrData?.["go-to"]} />
       </div>
 
-      {/* ── WBR · Non-negotiable incidents ──────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <WbrNonNegotiableCard
-          data={wbrData?.["non-negotiable-reports"]}
-          className="md:col-span-2 lg:col-span-2"
-        />
-      </div>
-
       {/* ── WBR · People & feedback (excluded from screenshot) ──────── */}
       <div
         className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
@@ -950,15 +942,15 @@ export function DsprDashboard() {
         <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} />
       </div>
 
-      {/* ── WBR · Money owed (excluded from screenshot) ─────────────── */}
-      <div
-        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
-        data-screenshot-ignore="true"
-      >
-        <WbrMoneyOwedCard
-          data={hooksWbr.data?.money_owed}
-          className="md:col-span-2 lg:col-span-2"
+      {/* ── WBR · Incidents + Money owed ────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+        <WbrNonNegotiableCard
+          data={wbrData?.["non-negotiable-reports"]}
+          className="md:col-span-2"
         />
+        <div data-screenshot-ignore="true" className="md:col-span-2">
+          <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} />
+        </div>
       </div>
 
       <PageGuide

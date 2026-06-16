@@ -40,7 +40,7 @@ export function WbrHighHoursCard({
       </CardHeader>
 
       <CardContent className="min-h-0 flex-1 overflow-y-auto px-0 pb-1">
-        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
+        <table className={cn(TBL, "[&_th]:!bg-muted")}>
           <thead>
             <tr>
               <th className={TH}>Name</th>

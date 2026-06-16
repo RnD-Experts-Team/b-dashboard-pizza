@@ -134,7 +134,7 @@ export function WbrPromoCard({
           </div>
 
           {/* Grouped breakdown */}
-          <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
+          <table className={cn(TBL, "[&_th]:!bg-muted")}>
             <thead>
               <tr>
                 <th className={TH}>Promo</th>

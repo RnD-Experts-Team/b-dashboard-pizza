@@ -58,7 +58,7 @@ export function WbrCashControlCard({
         </div>
 
         {/* Deposit − Cash across periods */}
-        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
+        <table className={cn(TBL, "[&_th]:!bg-muted")}>
           <thead>
             <tr>
               <th className={TH}>Period</th>

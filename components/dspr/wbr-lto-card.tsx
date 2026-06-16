@@ -53,7 +53,7 @@ export function WbrLtoCard({
         </div>
 
         {/* Per-item contribution */}
-        <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
+        <table className={cn(TBL, "[&_th]:!bg-muted")}>
           <thead>
             <tr>
               <th className={TH}>Item</th>

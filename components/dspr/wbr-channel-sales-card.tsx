@@ -43,7 +43,7 @@ function ChannelTable({
 }) {
   const rows = extraTop ? [extraTop, ...ROWS] : ROWS;
   return (
-    <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
+    <table className={cn(TBL, "[&_th]:!bg-muted")}>
       <thead>
         <tr>
           <th className={TH}>Channel</th>
