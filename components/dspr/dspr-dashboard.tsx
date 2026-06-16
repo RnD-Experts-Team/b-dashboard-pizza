@@ -32,6 +32,13 @@ import {
   WbrCashControlCard,
   WbrPhoneSalesCard,
   WbrNonNegotiableCard,
+  WbrLtoCard,
+  WbrGoToCard,
+  WbrHighHoursCard,
+  WbrAveragePayCard,
+  WbrComplaintsCard,
+  WbrFeedbacksCard,
+  WbrMoneyOwedCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -906,6 +913,52 @@ export function DsprDashboard() {
           managerDashboard={managerDashboard}
           className="lg:col-span-1"
         /> */}
+      </div>
+
+      {/* ── WBR · Sales & customers ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+        <WbrCustomerSalesCard data={wbrData?.["customer-count-and-sales"]} />
+        <WbrPhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} />
+        <WbrChannelSalesCard data={wbrData?.["channel-sales"]} />
+        <WbrCashControlCard data={wbrData?.["cash-control"]} />
+      </div>
+
+      {/* ── WBR · Promos · LTO · Portal · Calls ─────────────────────── */}
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+        <WbrPromoCard data={wbrData?.promo} />
+        <WbrLtoCard data={wbrData?.lto} />
+        <WbrPortalWeeklyCard data={wbrData?.["portal-weekly"]} />
+        <WbrGoToCard data={wbrData?.["go-to"]} />
+      </div>
+
+      {/* ── WBR · Non-negotiable incidents ──────────────────────────── */}
+      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+        <WbrNonNegotiableCard
+          data={wbrData?.["non-negotiable-reports"]}
+          className="md:col-span-2 lg:col-span-2"
+        />
+      </div>
+
+      {/* ── WBR · People & feedback (excluded from screenshot) ──────── */}
+      <div
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
+        data-screenshot-ignore="true"
+      >
+        <WbrHighHoursCard data={managerDashboard.highHoursEmployees} />
+        <WbrAveragePayCard data={managerDashboard.averageHourlyPay} />
+        <WbrComplaintsCard data={hooksWbr.data?.complaints} />
+        <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} />
+      </div>
+
+      {/* ── WBR · Money owed (excluded from screenshot) ─────────────── */}
+      <div
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
+        data-screenshot-ignore="true"
+      >
+        <WbrMoneyOwedCard
+          data={hooksWbr.data?.money_owed}
+          className="md:col-span-2 lg:col-span-2"
+        />
       </div>
 
       <PageGuide
