@@ -5,15 +5,18 @@ import { TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { OrdersVsSales } from "@/types/dashboard-report.types";
-import { fmt$, fmtPct, StatTile } from "./wbr-format";
+import { fmt$, fmtPct, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrOrdersVsSalesCard({
   data,
+  isLoading,
   className,
 }: {
   data?: OrdersVsSales;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, current_week, four_weeks, twelve_weeks, six_months } = data;

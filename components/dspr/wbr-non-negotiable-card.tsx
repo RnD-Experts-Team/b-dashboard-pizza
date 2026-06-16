@@ -6,7 +6,7 @@ import { ShieldAlert, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { NonNegotiableReport } from "@/types/dashboard-report.types";
-import { fmtDateTime, fmtDuration } from "./wbr-format";
+import { fmtDateTime, fmtDuration, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog } from "./wbr-detail-dialog";
 
 function groupByAction(
@@ -31,12 +31,15 @@ function timingLine(r: NonNegotiableReport): string {
 
 export function WbrNonNegotiableCard({
   data,
+  isLoading,
   className,
 }: {
   data?: NonNegotiableReport[];
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const groups = groupByAction(data);

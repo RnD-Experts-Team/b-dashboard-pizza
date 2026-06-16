@@ -5,7 +5,7 @@ import { Banknote } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { CashControl } from "@/types/dashboard-report.types";
-import { fmt$2, fmtNum, StatTile } from "./wbr-format";
+import { fmt$2, fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 function diffColor(n: number) {
   if (n > 0.5) return "text-emerald-600 dark:text-emerald-400";
@@ -15,11 +15,14 @@ function diffColor(n: number) {
 
 export function WbrCashControlCard({
   data,
+  isLoading,
   className,
 }: {
   data?: CashControl;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;

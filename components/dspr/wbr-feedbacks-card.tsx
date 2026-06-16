@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Stars } from "@/components/wbr-reports/primitives";
 import type { WbrFeedback } from "@/types/hooks.types";
-import { fmtDate } from "./wbr-format";
+import { fmtDate, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog, DetailField } from "./wbr-detail-dialog";
 
 function Rating({ value }: { value: number | null }) {
@@ -23,12 +23,15 @@ function Rating({ value }: { value: number | null }) {
 
 export function WbrFeedbacksCard({
   data,
+  isLoading,
   className,
 }: {
   data?: WbrFeedback[];
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const empty = data.length === 0;

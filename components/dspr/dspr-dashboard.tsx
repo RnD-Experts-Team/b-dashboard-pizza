@@ -776,14 +776,14 @@ export function DsprDashboard() {
 
       {/* ── Weekly Sales + Portal gauges ─────────────────────────── */}
       <div
-        className="grid grid-cols-1 gap-1 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
         data-guide-id="dspr-sales"
       >
         <SalesChart
           sales={sales}
           height={190}
           toolbar={false}
-          className="lg:col-span-2"
+          className="md:col-span-2 lg:col-span-2"
         />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
         <StoreScoreCard
@@ -800,7 +800,7 @@ export function DsprDashboard() {
       {/* ── HNR · Labor · Top 5 Menu Items ───────────────────────── */}
       {/* <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3"> */}
       <div
-        className="grid grid-cols-1 gap-1 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
         data-guide-id="dspr-channels"
       >
         {/* <LaborGauge value={day.labor} /> */}
@@ -810,13 +810,14 @@ export function DsprDashboard() {
           weeklyData={day.hourly_sales_and_channels_week_to_date_avg}
           height={190}
           toolbar={false}
-          className=""
+          className="md:col-span-2 lg:col-span-1"
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
           weeklyTotalSales={day.total_sales_week_to_date_avg}
           height={200}
           toolbar={false}
+          className="md:col-span-2 lg:col-span-1"
         />
         <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
         <LaborGauge
@@ -920,70 +921,67 @@ export function DsprDashboard() {
       {/* ── WBR Cards ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
         <div>
-          <WbrCustomerSalesCard data={wbrData?.["customer-count-and-sales"]} />
+          <WbrCustomerSalesCard data={wbrData?.["customer-count-and-sales"]} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrPhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} />
+          <WbrPhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrChannelSalesCard data={wbrData?.["channel-sales"]} />
+          <WbrChannelSalesCard data={wbrData?.["channel-sales"]} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrCashControlCard data={wbrData?.["cash-control"]} />
+          <WbrCashControlCard data={wbrData?.["cash-control"]} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrPromoCard data={wbrData?.promo} />
+          <WbrPromoCard data={wbrData?.promo} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrLtoCard data={wbrData?.lto} />
+          <WbrLtoCard data={wbrData?.lto} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrPortalWeeklyCard data={wbrData?.["portal-weekly"]} />
+          <WbrPortalWeeklyCard data={wbrData?.["portal-weekly"]} isLoading={isLoading} />
         </div>
 
         <div>
-          <WbrGoToCard data={wbrData?.["go-to"]} />
+          <WbrGoToCard data={wbrData?.["go-to"]} isLoading={isLoading} />
         </div>
 
         <div className="md:col-span-2 lg:col-span-2" data-screenshot-ignore="true">
-          <WbrHighHoursCard data={managerDashboard.highHoursEmployees} />
+          <WbrHighHoursCard data={managerDashboard.highHoursEmployees} isLoading={managerDashboard.isLoading} />
         </div>
-<div>
-          <WbrOrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} />
+
+        <div>
+          <WbrOrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} isLoading={isLoading} />
         </div>
+
         <div data-screenshot-ignore="true">
-          <WbrAveragePayCard data={managerDashboard.averageHourlyPay} />
+          <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
         </div>
 
         <div className="md:col-span-2 lg:col-span-2">
-          <WbrNonNegotiableCard data={wbrData?.["non-negotiable-reports"]} />
-        </div>
-
-        
-
-        <div data-screenshot-ignore="true">
-          <WbrComplaintsCard data={hooksWbr.data?.complaints} />
+          <WbrNonNegotiableCard data={wbrData?.["non-negotiable-reports"]} isLoading={isLoading} />
         </div>
 
         <div data-screenshot-ignore="true">
-          <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} />
+          <WbrComplaintsCard data={hooksWbr.data?.complaints} isLoading={hooksWbr.isLoading} />
         </div>
 
-        
-<div
-          className="md:col-span-2 lg:col-span-2"
-          data-screenshot-ignore="true"
-        >
-          <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} />
+        <div data-screenshot-ignore="true">
+          <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} />
         </div>
+
+        <div className="md:col-span-2 lg:col-span-2" data-screenshot-ignore="true">
+          <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} isLoading={hooksWbr.isLoading} />
+        </div>
+
         <div>
-          <WbrTransferInOutCard data={wbrData?.["transfer-in-out"]} storeId={storeId} />
+          <WbrTransferInOutCard data={wbrData?.["transfer-in-out"]} storeId={storeId} isLoading={isLoading} />
         </div>
       </div>
       <PageGuide

@@ -2,7 +2,7 @@
 
 import { Phone } from "lucide-react";
 import type { PhoneAndAdjustedSales } from "@/types/dashboard-report.types";
-import { fmt$ } from "./wbr-format";
+import { fmt$, WbrCardSkeleton } from "./wbr-format";
 import {
   PeriodComparisonCard,
   type CmpGroup,
@@ -17,11 +17,14 @@ const METRICS = [
 
 export function WbrPhoneSalesCard({
   data,
+  isLoading,
   className,
 }: {
   data?: PhoneAndAdjustedSales;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;

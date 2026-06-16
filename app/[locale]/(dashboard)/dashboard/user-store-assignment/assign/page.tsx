@@ -113,7 +113,7 @@ export default function AssignStorePage() {
     async (search?: string) => {
       setIsLoadingUsers(true);
       try {
-        const response = await userService.getUsers({ search, pageSize: 100 });
+        const response = await userService.getUsers({ search, pageSize: 1000 });
         setUsers(response.data);
       } catch (error) {
         if (isCanceledError(error)) return;
@@ -132,7 +132,7 @@ export default function AssignStorePage() {
       try {
         const response = await storeService.getStores({
           search,
-          perPage: 100,
+          perPage: 1000,
         });
         setStores(response.data);
       } catch (error) {
@@ -150,7 +150,7 @@ export default function AssignStorePage() {
     async (search?: string) => {
       setIsLoadingRoles(true);
       try {
-        const response = await roleService.getRoles({ search, perPage: 100 });
+        const response = await roleService.getRoles({ search, perPage: 1000 });
         setRoles(response.data);
       } catch (error) {
         if (isCanceledError(error)) return;
@@ -229,7 +229,11 @@ export default function AssignStorePage() {
   const filteredStores = useMemo(() => {
     if (!storeSearch) return stores;
     const q = storeSearch.toLowerCase();
-    return stores.filter((store) => (store.name ?? "").toLowerCase().includes(q));
+    return stores.filter(
+      (store) =>
+        (store.name ?? "").toLowerCase().includes(q) ||
+        (store.storeId ?? "").toLowerCase().includes(q)
+    );
   }, [stores, storeSearch]);
 
   const filteredStoreIds = useMemo(
@@ -645,6 +649,11 @@ export default function AssignStorePage() {
                       <div className="truncate text-sm font-medium">
                         {store.name}
                       </div>
+                      {store.storeId && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {store.storeId}
+                        </div>
+                      )}
                     </div>
                     {assignedStoreIdsForRole.has(store.id) && (
                       <Badge variant="outline" className="text-[10px]">
@@ -733,7 +742,7 @@ export default function AssignStorePage() {
                   variant="secondary"
                   className="flex items-center gap-1 pe-1"
                 >
-                  {store.name}
+                  {store.storeId ? `${store.storeId} - ${store.name}` : store.name}
                   <button
                     type="button"
                     onClick={() => removeStore(store.id)}

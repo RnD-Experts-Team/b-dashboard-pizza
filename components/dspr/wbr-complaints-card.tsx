@@ -6,17 +6,20 @@ import { MessageSquareWarning } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { WbrComplaint } from "@/types/hooks.types";
-import { fmtDate } from "./wbr-format";
+import { fmtDate, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog, DetailField } from "./wbr-detail-dialog";
 
 export function WbrComplaintsCard({
   data,
+  isLoading,
   className,
 }: {
   data?: WbrComplaint[];
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const empty = data.length === 0;

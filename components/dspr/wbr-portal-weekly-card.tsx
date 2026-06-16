@@ -9,7 +9,7 @@ import type {
   PortalWeekly,
   PortalWeeklyRow,
 } from "@/types/dashboard-report.types";
-import { fmtPct } from "./wbr-format";
+import { fmtPct, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog } from "./wbr-detail-dialog";
 
 function shortRange(r: PortalWeeklyRow): string {
@@ -43,12 +43,15 @@ function PpDelta({ curr, prev }: { curr: number; prev?: number }) {
 
 export function WbrPortalWeeklyCard({
   data,
+  isLoading,
   className,
 }: {
   data?: PortalWeekly;
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   // Latest week first.

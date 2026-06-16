@@ -939,7 +939,7 @@ function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
       }, files);
       onClearDraftFields(["diagnosisBody"]);
       setFiles([]);
-      toast.success("Diagnosis saved successfully");
+      toast.success("Troubleshooting saved successfully");
       onSuccess(); onClose();
     } catch (err) {
       if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
@@ -950,12 +950,12 @@ function DiagnosisPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatc
   }
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Diagnosis</p>
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Troubleshooting</p>
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">Notes</Label>
         <Textarea
           className="text-sm resize-none min-h-20"
-          placeholder="Diagnosis notes"
+          placeholder="Troubleshooting notes"
           value={issueDraft.diagnosisBody}
           onChange={(e) => onPatchDraft({ diagnosisBody: e.target.value })}
         />
@@ -1697,7 +1697,7 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 py-1">Add records</DropdownMenuLabel>
             <DropdownMenuItem onClick={() => setBulkAction("diagnosis")}>
-              <FileText className="h-4 w-4" />Diagnosis
+              <FileText className="h-4 w-4" />Troubleshooting
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setBulkAction("attendance")}>
               <Wrench className="h-4 w-4" />Attendance
@@ -2175,7 +2175,7 @@ function IssueNode({
     ...(canAssign ? [{ key: "assign" as const, label: "Assign technician", Icon: UserRoundPlus, group: "Issue" as const }] : []),
     ...(canDefer ? [{ key: "defer" as const, label: "Defer", Icon: TimerReset, group: "Issue" as const }] : []),
     ...(canCancel ? [{ key: "cancel" as const, label: "Cancel", Icon: X, group: "Issue" as const, destructive: true }] : []),
-    { key: "diagnosis", label: "Diagnosis", Icon: FileText, group: "Add records" },
+    { key: "diagnosis", label: "Troubleshooting", Icon: FileText, group: "Add records" },
     { key: "attendance", label: "Attendance", Icon: Wrench, group: "Add records" },
     { key: "part", label: "Part usage", Icon: Package, group: "Add records" },
     { key: "warranty", label: "Warranty", Icon: ShieldCheck, group: "Add records" },
@@ -2472,10 +2472,10 @@ function IssueNode({
                   </SectionCollapse>
                 )}
 
-                {/* Diagnoses */}
+                {/* Troubleshooting */}
                 {issue.diagnoses.length > 0 && <hr className="border-border" />}
                 {issue.diagnoses.length > 0 && (
-                  <SectionCollapse title="Diagnoses" count={issue.diagnoses.length}>
+                  <SectionCollapse title="Troubleshooting" count={issue.diagnoses.length}>
                     {issue.diagnoses.map((item) => {
                       const sharedWithIds = (sharedDiagnosisIssueIdsByRecordId?.get(item.id) ?? [])
                         .filter((id) => id !== issue.id);
@@ -2491,7 +2491,7 @@ function IssueNode({
                             </div>
                           ) : canMarkMistaken ? (
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-muted-foreground">Diagnosis #{item.id}</span>
+                              <span className="text-xs font-medium text-muted-foreground">Troubleshooting #{item.id}</span>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
@@ -2502,7 +2502,7 @@ function IssueNode({
                                   <DropdownMenuItem
                                     className="text-destructive focus:text-destructive"
                                     onClick={() => setMistakenConfirm({
-                                      label: `Diagnosis #${item.id}`,
+                                      label: `Troubleshooting #${item.id}`,
                                       onConfirm: async () => { await maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, item.id); },
                                     })}
                                   >
@@ -2513,7 +2513,7 @@ function IssueNode({
                               </DropdownMenu>
                             </div>
                           ) : (
-                            <span className="text-xs font-medium text-muted-foreground">Diagnosis #{item.id}</span>
+                            <span className="text-xs font-medium text-muted-foreground">Troubleshooting #{item.id}</span>
                           )}
                           {/* Body */}
                           <div className="text-sm text-foreground leading-relaxed">
@@ -3764,10 +3764,10 @@ function RightPanel({
                   }
                 } else if (groupBy === "diagnosis") {
                   if (iss.diagnoses.length === 0) {
-                    addToGroup("__no-diagnosis__", "No diagnosis", iss);
+                    addToGroup("__no-diagnosis__", "No troubleshooting", iss);
                   } else {
                     for (const d of iss.diagnoses) {
-                      addToGroup(`diagnosis-record-${d.id}`, d.body ? d.body.slice(0, 40) : `Diagnosis #${d.id}`, iss);
+                      addToGroup(`diagnosis-record-${d.id}`, d.body ? d.body.slice(0, 40) : `Troubleshooting #${d.id}`, iss);
                     }
                   }
                 }
@@ -3821,11 +3821,11 @@ function RightPanel({
                 }
                 if (groupBy === "diagnosis") {
                   if (key === "__no-diagnosis__")
-                    return { subtitle: "These issues have no diagnosis records", actionKind: null };
+                    return { subtitle: "These issues have no troubleshooting records", actionKind: null };
                   return {
                     subtitle: isShared
-                      ? "Note: this diagnosis was shared across the following issues"
-                      : "Note: this diagnosis applies only to this issue",
+                      ? "Note: this troubleshooting was shared across the following issues"
+                      : "Note: this troubleshooting applies only to this issue",
                     actionKind: isShared ? "shared" : "solo",
                   };
                 }

@@ -5,15 +5,18 @@ import { Timer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { HighHoursEmployees } from "@/types/employee.types";
-import { fmt$2, fmtNumD } from "./wbr-format";
+import { fmt$2, fmtNumD, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrHighHoursCard({
   data,
+  isLoading,
   className,
 }: {
   data?: HighHoursEmployees | null;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const employees = [...data.employees].sort(

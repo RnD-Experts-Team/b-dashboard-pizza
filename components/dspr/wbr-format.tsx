@@ -9,6 +9,8 @@ import type { ReactNode } from "react";
 import { format, parseISO, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { DeltaBadge } from "@/components/wbr-reports/primitives";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /* ── Currency ─────────────────────────────────────────────────────────── */
 
@@ -129,6 +131,32 @@ export function pctChangeOrNull(
 /** Strip a leading "Punchh promo code: " prefix from a promo modification reason. */
 export function stripPunchh(reason: string): string {
   return reason.replace(/^Punchh promo code:\s*/i, "").trim();
+}
+
+/* ── WbrCardSkeleton — generic 280px card skeleton for loading states ──── */
+
+export function WbrCardSkeleton({ className }: { className?: string }) {
+  return (
+    <Card className={cn("flex h-[280px] flex-col gap-0 py-1.5", className)}>
+      <CardHeader className="shrink-0 px-3 pb-1">
+        <div className="flex items-center gap-1.5">
+          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="ml-auto h-3.5 w-8 rounded-full" />
+        </div>
+      </CardHeader>
+      <CardContent className="min-h-0 flex-1 space-y-2 px-3 pb-2">
+        <div className="grid grid-cols-2 gap-1.5">
+          <Skeleton className="h-12 rounded-md" />
+          <Skeleton className="h-12 rounded-md" />
+        </div>
+        <Skeleton className="h-5 w-full rounded-md" />
+        <Skeleton className="h-5 w-full rounded-md" />
+        <Skeleton className="h-5 w-4/5 rounded-md" />
+        <Skeleton className="h-5 w-3/5 rounded-md" />
+      </CardContent>
+    </Card>
+  );
 }
 
 /* ── StatTile — small labeled value tile used across the WBR cards ────── */

@@ -9,7 +9,7 @@ import type {
   ChannelSales,
   ChannelSalesWeek,
 } from "@/types/dashboard-report.types";
-import { fmt$, fmtDate, Delta, pctChangeOrNull } from "./wbr-format";
+import { fmt$, fmtDate, Delta, pctChangeOrNull, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog } from "./wbr-detail-dialog";
 
 type Row = {
@@ -86,12 +86,15 @@ function ChannelTable({
 
 export function WbrChannelSalesCard({
   data,
+  isLoading,
   className,
 }: {
   data?: ChannelSales;
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { current_week, previous_week } = data;
