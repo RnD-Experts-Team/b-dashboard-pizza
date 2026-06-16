@@ -5,15 +5,18 @@ import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { Lto } from "@/types/dashboard-report.types";
-import { fmt$2, fmtNum, fmtPct2, StatTile } from "./wbr-format";
+import { fmt$2, fmtNum, fmtPct2, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrLtoCard({
   data,
+  isLoading,
   className,
 }: {
   data?: Lto;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, lto_totals, items } = data;

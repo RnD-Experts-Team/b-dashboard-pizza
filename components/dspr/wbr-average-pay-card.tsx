@@ -4,15 +4,18 @@ import { cn } from "@/lib/utils";
 import { Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AverageHourlyPay } from "@/types/employee.types";
-import { fmt$2, fmtNumD, StatTile } from "./wbr-format";
+import { fmt$2, fmtNumD, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrAveragePayCard({
   data,
+  isLoading,
   className,
 }: {
   data?: AverageHourlyPay | null;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   return (

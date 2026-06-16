@@ -14,6 +14,7 @@ import {
   Delta,
   pctChangeOrNull,
   StatTile,
+  WbrCardSkeleton,
 } from "./wbr-format";
 import { WbrDetailDialog } from "./wbr-detail-dialog";
 
@@ -28,12 +29,15 @@ const NAMED_PROMOS = [
 
 export function WbrPromoCard({
   data,
+  isLoading,
   className,
 }: {
   data?: Promo;
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, current_week, previous_week, week_over_week } = data;

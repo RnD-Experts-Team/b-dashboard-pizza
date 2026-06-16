@@ -4,15 +4,18 @@ import { cn } from "@/lib/utils";
 import { PhoneCall } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GoTo } from "@/types/dashboard-report.types";
-import { fmtNum, StatTile } from "./wbr-format";
+import { fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrGoToCard({
   data,
+  isLoading,
   className,
 }: {
   data?: GoTo;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, summary } = data;

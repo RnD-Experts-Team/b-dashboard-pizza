@@ -6,7 +6,7 @@ import { HandCoins } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { WbrMoneyOwed } from "@/types/hooks.types";
-import { fmt$2, fmtDate } from "./wbr-format";
+import { fmt$2, fmtDate, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog, DetailField } from "./wbr-detail-dialog";
 
 function money(amount: string): string {
@@ -35,12 +35,15 @@ function ApproveBadge({ value }: { value: string | null }) {
 
 export function WbrMoneyOwedCard({
   data,
+  isLoading,
   className,
 }: {
   data?: WbrMoneyOwed[];
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const empty = data.length === 0;

@@ -2,7 +2,7 @@
 
 import { Users } from "lucide-react";
 import type { CustomerCountAndSales } from "@/types/dashboard-report.types";
-import { fmt$, fmtNum } from "./wbr-format";
+import { fmt$, fmtNum, WbrCardSkeleton } from "./wbr-format";
 import {
   PeriodComparisonCard,
   type CmpGroup,
@@ -16,11 +16,14 @@ const METRICS = [
 
 export function WbrCustomerSalesCard({
   data,
+  isLoading,
   className,
 }: {
   data?: CustomerCountAndSales;
+  isLoading?: boolean;
   className?: string;
 }) {
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;

@@ -6,7 +6,7 @@ import { ArrowLeftRight, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { TransferInOut, TransferEntry } from "@/types/dashboard-report.types";
-import { fmt$, fmt$2, fmtDate, StatTile } from "./wbr-format";
+import { fmt$, fmt$2, fmtDate, StatTile, WbrCardSkeleton } from "./wbr-format";
 import { WbrDetailDialog, DetailField } from "./wbr-detail-dialog";
 
 function entryKey(e: TransferEntry, i: number) {
@@ -23,13 +23,16 @@ function direction(e: TransferEntry, storeId: string | null) {
 export function WbrTransferInOutCard({
   data,
   storeId,
+  isLoading,
   className,
 }: {
   data?: TransferInOut;
   storeId?: string | null;
+  isLoading?: boolean;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
   const { filtering, entries, sales, blue_line } = data;
