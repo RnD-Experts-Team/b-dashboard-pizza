@@ -299,6 +299,63 @@ export interface GoTo {
 }
 
 // ============================================================================
+// orders-vs-sales
+// ============================================================================
+
+export interface OrdersVsSalesPeriod {
+  sales: number;
+  blue_line_total: number;
+  pepsi_total: number;
+  blue_line_pct: number;
+  pepsi_pct: number;
+}
+
+export interface OrdersVsSales {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+  };
+  current_week: OrdersVsSalesPeriod;
+  four_weeks: OrdersVsSalesPeriod;
+  twelve_weeks: OrdersVsSalesPeriod;
+  six_months: OrdersVsSalesPeriod;
+}
+
+// ============================================================================
+// transfer-in-out
+// ============================================================================
+
+export interface TransferEntry {
+  date: string;
+  ing_des: string;
+  quantity: string;
+  unit: string;
+  total_cost: string;
+  from_store_number: string;
+  to_store_number: string;
+}
+
+export interface TransferInOut {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+  };
+  entries: TransferEntry[];
+  sales: {
+    current_week: number;
+    previous_week: number;
+  };
+  blue_line: {
+    current_week: number;
+    previous_week: number;
+  };
+}
+
+// ============================================================================
 // Full extras envelope
 // ============================================================================
 
@@ -312,4 +369,6 @@ export interface DashboardReportExtras {
   promo?: Promo;
   "go-to"?: GoTo;
   "non-negotiable-reports"?: NonNegotiableReport[];
+  "orders-vs-sales"?: OrdersVsSales;
+  "transfer-in-out"?: TransferInOut;
 }

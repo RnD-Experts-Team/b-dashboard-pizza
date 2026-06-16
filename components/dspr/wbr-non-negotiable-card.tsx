@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { NonNegotiableReport } from "@/types/dashboard-report.types";
 import { fmtDateTime, fmtDuration } from "./wbr-format";
 import { WbrDetailDialog } from "./wbr-detail-dialog";
 
-/** Group reports by action, preserving first-seen order. */
 function groupByAction(
   reports: NonNegotiableReport[],
 ): { action: string; items: NonNegotiableReport[] }[] {
@@ -53,10 +52,21 @@ export function WbrNonNegotiableCard({
           className,
         )}
       >
-        <CardHeader className="shrink-0 px-3 pb-1">
-          <CardTitle className="flex items-center gap-1 text-[11px] font-semibold">
-            <div className="rounded bg-red-500/15 p-0.5 dark:bg-red-500/20">
-              <ShieldAlert className="h-3 w-3 text-red-500" />
+        <CardHeader className="shrink-0 px-3 pb-1.5">
+          <CardTitle className="flex items-center gap-1.5 text-[11px] font-semibold">
+            <div
+              className={cn(
+                "rounded p-0.5",
+                empty
+                  ? "bg-emerald-500/15 dark:bg-emerald-500/20"
+                  : "bg-red-500/15 dark:bg-red-500/20",
+              )}
+            >
+              {empty ? (
+                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+              ) : (
+                <ShieldAlert className="h-3 w-3 text-red-500" />
+              )}
             </div>
             Non-Negotiable Reports
             <Badge
@@ -65,7 +75,7 @@ export function WbrNonNegotiableCard({
                 "ml-auto h-4 px-1.5 py-0 text-[10px]",
                 data.length > 0
                   ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                  : "bg-muted text-muted-foreground",
+                  : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
               )}
             >
               {data.length}
@@ -73,34 +83,52 @@ export function WbrNonNegotiableCard({
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-2">
+        <CardContent className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
           {empty ? (
-            <p className="py-2 text-[11px] text-muted-foreground">
-              No incidents this period.
-            </p>
+            <div className="flex h-full flex-col items-center justify-center gap-1.5 py-4">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              <p className="text-[11px] text-muted-foreground">
+                No incidents this period.
+              </p>
+            </div>
           ) : (
-            groups.map((g) => (
-              <div key={g.action} className="space-y-1">
-                <Badge
-                  variant="outline"
-                  className="h-4 border-red-300 px-1.5 py-0 text-[10px] text-red-600 dark:text-red-400"
-                >
-                  {g.action}
-                </Badge>
-                {g.items.map((r) => (
-                  <div key={r.id} className="pl-1">
-                    <p className="text-[11px] font-medium tabular-nums">
-                      {timingLine(r)}
-                    </p>
-                    {r.notes?.trim() && (
-                      <p className="line-clamp-1 text-[10px] text-muted-foreground">
-                        {r.notes.trim()}
-                      </p>
-                    )}
+            <div>
+              {groups.map((g, gi) => (
+                <div key={g.action}>
+                  {gi > 0 && (
+                    <hr className="my-2 border-red-200/70 dark:border-red-800/50" />
+                  )}
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className="h-4 border-red-300 px-1.5 py-0 text-[10px] font-semibold text-red-600 dark:text-red-400"
+                    >
+                      {g.action}
+                    </Badge>
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {g.items.length}×
+                    </span>
                   </div>
-                ))}
-              </div>
-            ))
+                  <div className="space-y-1 pl-1">
+                    {g.items.map((r) => (
+                      <div
+                        key={r.id}
+                        className="rounded bg-background/40 px-2 py-1"
+                      >
+                        <p className="text-[11px] font-medium tabular-nums leading-snug">
+                          {timingLine(r)}
+                        </p>
+                        {r.notes?.trim() && (
+                          <p className="line-clamp-1 text-[10px] text-muted-foreground">
+                            {r.notes.trim()}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -111,18 +139,29 @@ export function WbrNonNegotiableCard({
         title="Non-Negotiable Reports"
         badgeText={`${data.length} incident${data.length === 1 ? "" : "s"}`}
       >
-        <div className="space-y-5">
-          {groups.map((g) => (
-            <div key={g.action} className="space-y-2">
-              <Badge
-                variant="outline"
-                className="border-red-300 text-[11px] text-red-600 dark:text-red-400"
-              >
-                {g.action}
-              </Badge>
+        <div className="space-y-6">
+          {groups.map((g, gi) => (
+            <div key={g.action}>
+              {gi > 0 && <hr className="mb-4 border-border" />}
+              <div className="mb-3 flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="border-red-300 text-[11px] text-red-600 dark:text-red-400"
+                >
+                  {g.action}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {g.items.length} incident{g.items.length === 1 ? "" : "s"}
+                </span>
+              </div>
               <div className="space-y-3">
                 {g.items.map((r) => {
-                  const dur = fmtDuration(r.date, r.time, r.date_two, r.time_two);
+                  const dur = fmtDuration(
+                    r.date,
+                    r.time,
+                    r.date_two,
+                    r.time_two,
+                  );
                   return (
                     <div
                       key={r.id}
@@ -139,7 +178,9 @@ export function WbrNonNegotiableCard({
                         )}
                         {dur && (
                           <>
-                            <span className="text-muted-foreground">Duration</span>
+                            <span className="text-muted-foreground">
+                              Duration
+                            </span>
                             <span>{dur}</span>
                           </>
                         )}

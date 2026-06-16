@@ -39,6 +39,8 @@ import {
   WbrComplaintsCard,
   WbrFeedbacksCard,
   WbrMoneyOwedCard,
+  WbrOrdersVsSalesCard,
+  WbrTransferInOutCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -949,10 +951,12 @@ export function DsprDashboard() {
           <WbrGoToCard data={wbrData?.["go-to"]} />
         </div>
 
-        <div data-screenshot-ignore="true">
+        <div className="md:col-span-2 lg:col-span-2" data-screenshot-ignore="true">
           <WbrHighHoursCard data={managerDashboard.highHoursEmployees} />
         </div>
-
+<div>
+          <WbrOrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} />
+        </div>
         <div data-screenshot-ignore="true">
           <WbrAveragePayCard data={managerDashboard.averageHourlyPay} />
         </div>
@@ -961,12 +965,7 @@ export function DsprDashboard() {
           <WbrNonNegotiableCard data={wbrData?.["non-negotiable-reports"]} />
         </div>
 
-        <div
-          className="md:col-span-2 lg:col-span-2"
-          data-screenshot-ignore="true"
-        >
-          <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} />
-        </div>
+        
 
         <div data-screenshot-ignore="true">
           <WbrComplaintsCard data={hooksWbr.data?.complaints} />
@@ -974,6 +973,17 @@ export function DsprDashboard() {
 
         <div data-screenshot-ignore="true">
           <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} />
+        </div>
+
+        
+<div
+          className="md:col-span-2 lg:col-span-2"
+          data-screenshot-ignore="true"
+        >
+          <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} />
+        </div>
+        <div>
+          <WbrTransferInOutCard data={wbrData?.["transfer-in-out"]} storeId={storeId} />
         </div>
       </div>
       <PageGuide
