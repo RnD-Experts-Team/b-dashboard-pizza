@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, DollarSign, Users, Gauge, Leaf, Clock, Construction } from "lucide-react";
+import { Target, DollarSign, Users, Gauge, Leaf, Clock } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -125,7 +125,6 @@ function GoalCard({
   const { icon: Icon, shortLabel } = getMetricVisuals(name);
 
   const rawCurrent = getCurrentValue(name, sales, day);
-  const isLaborMetric = name.toLowerCase().includes("labor");
 
   let currentDisplay: string;
   let targetDisplay: string;
@@ -145,40 +144,6 @@ function GoalCard({
   }
 
   const barPct = Math.min(pct, 100);
-
-  if (isLaborMetric) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className={cn(
-              "flex items-center gap-1.5 rounded-lg border border-l-2 bg-card px-2 py-1.5",
-              "hover:shadow-sm transition-all cursor-default opacity-70",
-              "border-l-amber-400",
-            )}
-          >
-            <div className="rounded p-0.5 shrink-0 bg-amber-400/15">
-              <Construction className="h-3 w-3 text-amber-500" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold tabular-nums tracking-tight truncate leading-tight text-amber-500">
-                Soon™
-              </p>
-              <p className="text-[8px] font-medium text-muted-foreground truncate leading-tight">
-                {shortLabel} — Coming Soon
-              </p>
-              <div className="mt-0.5 h-0.5 w-full rounded-full bg-muted overflow-hidden">
-                <div className="h-full w-0 rounded-full bg-amber-400" />
-              </div>
-            </div>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          Labor data integration coming soon
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
 
   return (
     <Tooltip>

@@ -38,6 +38,9 @@ import {
   Megaphone,
   Monitor,
   Target,
+  LifeBuoy,
+  Ticket,
+  Wallet,
 } from "lucide-react";
 import {
   Dialog,
@@ -238,6 +241,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     // Settings is always accessible — no requirements
   };
 
+  const announcementsItem: NavItem = {
+    title: "Announcements",
+    href: `/${locale}/dashboard/announcements`,
+    icon: Megaphone,
+  };
+
   /* ---- Collapsible groups ---- */
   const storeManagementGroup: NavGroup = {
     label: t("storeManagement"),
@@ -313,7 +322,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("cameraForms"),
         href: `/${locale}/dashboard/quality-assurance`,
         icon: ClipboardCheck,
-        
+        requirements: [
+          { service: "QA", method: "GET", path: "/camera-forms", storeId: effectiveStoreId },
+        ],
       },
       {
         title: t("cameraReport"),
@@ -456,22 +467,55 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     label: "Reports",
     icon: FileText,
     items: [
-      {
-        title: t("maintenance"),
-        href: `/${locale}/dashboard/maintenance`,
-        icon: HardHat,
-        requirements: [
-          { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
-        ],
-        // No rule or management permission defined yet — always visible
-      },
+      // {
+      //   title: "WBR Reports",
+      //   href: `/${locale}/dashboard/wbr-reports`,
+      //   icon: BarChart3,
+      // },
+      // {
+      //   title: t("maintenance"),
+      //   href: `/${locale}/dashboard/maintenance`,
+      //   icon: HardHat,
+      //   requirements: [
+      //     { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
+      //   ],
+      //   // No rule or management permission defined yet — always visible
+      // },
+      // {
+      //   title: t("maintenanceTickets"),
+      //   href: `/${locale}/dashboard/maintenance-tickets`,
+      //   icon: Ticket,
+      //   requirements: [
+      //     { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
+      //   ],
+      // },
       
+    ],
+  };
+
+  const Maintenance: NavGroup = {
+    label: "Maintenance",
+    icon: Wrench,
+    items: [
      
       {
-        title: "Announcements",
-        href: `/${locale}/dashboard/announcements`,
-        icon: Megaphone,
+        title: t("maintenanceTickets"),
+        href: `/${locale}/dashboard/maintenance-tickets`,
+        icon: Ticket,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
+        ],
       },
+      {
+        title: "Daily Pay",
+        href: `/${locale}/dashboard/daily-pay`,
+        icon: Wallet,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId: effectiveStoreId }
+        ],
+      },
+
+
     ],
   };
   // Dev tools navigation (controlled by feature flags)
@@ -566,6 +610,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
   const visibleDataManagementGroup = filterGroup(dataManagementGroup);
   const visibleReports = filterGroup(Reports);
+  const visibleMaintenance = filterGroup(Maintenance);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
 
@@ -699,6 +744,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
+          {/* 1a. Announcements */}
+          {renderNavLink(announcementsItem)}
+
           {/* 1b. Screen Project */}
           {/* {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)} */}
 
@@ -756,7 +804,16 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               onNavigate={onNavigate}
             />
           )}
-
+{/* 6. Maintenance */}
+          {visibleMaintenance && (
+            <SidebarNavGroup
+              group={visibleMaintenance }
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
           {/* 7. Hiring Management */}
           {visibleHiringManagementGroup && (
             <SidebarNavGroup
@@ -789,6 +846,25 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* {isNavItemVisible(settingsItem) && renderNavLink(settingsItem)} */}
         </nav>
       </ScrollArea>
+
+      <Separator />
+
+      {/* Support Button */}
+      <div className={cn("px-2 sm:px-3 py-2", collapsed && "flex justify-center")}>
+        <a
+          href="https://tasks.rdexperts.tech/support-ticket"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full",
+            "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            collapsed && "justify-center px-2"
+          )}
+        >
+          <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
+          {!collapsed && <span className="truncate">Support</span>}
+        </a>
+      </div>
 
       <Separator />
 

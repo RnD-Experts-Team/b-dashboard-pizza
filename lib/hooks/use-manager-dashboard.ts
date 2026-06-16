@@ -2,10 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { employeeService } from "@/lib/api/services/employee.service";
-import type { ManagerDashboardStoreData } from "@/types/employee.types";
+import type {
+  ManagerDashboardStoreData,
+  HighHoursEmployees,
+  AverageHourlyPay,
+} from "@/types/employee.types";
 
 export interface UseManagerDashboardResult {
   data: ManagerDashboardStoreData | null;
+  highHoursEmployees: HighHoursEmployees | null;
+  averageHourlyPay: AverageHourlyPay | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
@@ -20,6 +26,10 @@ export function useManagerDashboard(
   date: string | null,
 ): UseManagerDashboardResult {
   const [data, setData] = useState<ManagerDashboardStoreData | null>(null);
+  const [highHoursEmployees, setHighHoursEmployees] =
+    useState<HighHoursEmployees | null>(null);
+  const [averageHourlyPay, setAverageHourlyPay] =
+    useState<AverageHourlyPay | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -41,8 +51,9 @@ export function useManagerDashboard(
         controller.signal,
       );
       if (!controller.signal.aborted) {
-        // API returns the store object directly
-        setData(response);
+        setData(response["manager-dashboard"]);
+        setHighHoursEmployees(response["high-hours-employees"] ?? null);
+        setAverageHourlyPay(response["average-hourly-pay"] ?? null);
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -63,5 +74,12 @@ export function useManagerDashboard(
     };
   }, [fetchData]);
 
-  return { data, isLoading, error, refetch: fetchData };
+  return {
+    data,
+    highHoursEmployees,
+    averageHourlyPay,
+    isLoading,
+    error,
+    refetch: fetchData,
+  };
 }

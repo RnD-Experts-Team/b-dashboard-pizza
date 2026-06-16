@@ -1,25 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   requireAuthorization,
-  getAuthorizationHeader,
   errorResponse,
 } from "@/app/api/_lib/auth";
 
-const HIRING_BASE_URL =
-  process.env.HIRING_API_URL ||
-  process.env.NEXT_PUBLIC_HIRING_API_URL ||
-  "https://hiring.lcportal.cloud/api";
+const HOOKS_BASE_URL =
+  process.env.HOOKS_API_URL ||
+  process.env.NEXT_PUBLIC_HOOKS_API_URL ||
+  "";
+
+const HOOKS_SECRET_KEY =
+  process.env.HOOKS_API_URL_HEADER_KEY ||
+  process.env.NEXT_PUBLIC_HOOKS_API_URL_HEADER_KEY ||
+  "";
 
 const UPSTREAM_TIMEOUT_MS =
-  Number(process.env.HIRING_TIMEOUT_MS) || 15_000;
+  Number(process.env.HOOKS_TIMEOUT_MS) || 15_000;
 
 /**
- * GET /api/hiring-management/[storeId]/manager-dashboard/[date]
- * Proxy → GET {HIRING_BASE_URL}/v1/stores/{storeId}/manager-dashboard/{date}
+ * GET /api/hooks/reports/wbr/[storeId]/[date]
+ * Proxy → GET {HOOKS_BASE_URL}/reports/wbr/{storeId}/{date}
  *
- * Returns all active employees for the store with upcoming birthday flags,
- * current position, pay info, and performance metric (column id 3) for the
- * week containing `date`.
+ * Uses X-Secret-Key for upstream auth (added server-side only —
+ * never visible in the browser network tab).
  */
 export async function GET(
   request: NextRequest,
@@ -28,10 +31,9 @@ export async function GET(
   const authError = requireAuthorization(request);
   if (authError) return authError;
 
-  const authorization = getAuthorizationHeader(request)!;
   const { storeId, date } = await params;
 
-  const upstreamUrl = `${HIRING_BASE_URL}/v1/stores/${encodeURIComponent(storeId)}/manager-dashboard/${encodeURIComponent(date)}`;
+  const upstreamUrl = `${HOOKS_BASE_URL}/reports/wbr/${encodeURIComponent(storeId)}/${encodeURIComponent(date)}`;
 
   try {
     const controller = new AbortController();
@@ -40,7 +42,7 @@ export async function GET(
     const upstream = await fetch(upstreamUrl, {
       method: "GET",
       headers: {
-        Authorization: authorization,
+        "X-Secret-Key": HOOKS_SECRET_KEY,
         Accept: "application/json",
       },
       signal: controller.signal,
@@ -62,6 +64,6 @@ export async function GET(
     if (err instanceof DOMException && err.name === "AbortError") {
       return errorResponse("TIMEOUT", "Upstream request timed out", 504);
     }
-    return errorResponse("UPSTREAM_ERROR", "Failed to reach hiring service", 502);
+    return errorResponse("UPSTREAM_ERROR", "Failed to reach hooks service", 502);
   }
 }

@@ -107,7 +107,7 @@ const DEFAULT_FILTERS: EmployeeFilterOptions = {
   employee_id: "",
   gender: "all",
   employment_type: "all",
-  status_in: [],
+  status_in: ["hired", "rehired", "OJE"],
   position_id: "",
   marital_id: "",
   id_type_id: "",

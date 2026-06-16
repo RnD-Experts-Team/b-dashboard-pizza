@@ -54,6 +54,7 @@ export function InlineDueKeyInput({
   const [note, setNote] = useState("");
   const [noteExpanded, setNoteExpanded] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [isHoveringAttach, setIsHoveringAttach] = useState(false);
   const [submissionDate, setSubmissionDate] = useState<string>(() => todayDateStr());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null);
@@ -94,6 +95,28 @@ export function InlineDueKeyInput({
     setAttachments([]);
     clearError();
   }, [selectedKey?.keyId, clearError]);
+
+  // Clipboard paste into attachment area on hover
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!isHoveringAttach) return;
+      const clipItems = e.clipboardData?.items;
+      if (!clipItems) return;
+      const images: File[] = [];
+      for (let i = 0; i < clipItems.length; i++) {
+        const ci = clipItems[i];
+        if (ci.type.startsWith("image/")) {
+          const file = ci.getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      setAttachments((prev) => [...prev, ...images]);
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [isHoveringAttach]);
 
   const payload = useMemo<DueKeyValuePayload | null>(() => {
     if (!selectedKey) return null;
@@ -459,7 +482,7 @@ export function InlineDueKeyInput({
                   disabled && "cursor-not-allowed opacity-40"
                 )}
               >
-                True
+                Yes
               </button>
               <button
                 type="button"
@@ -473,7 +496,7 @@ export function InlineDueKeyInput({
                   disabled && "cursor-not-allowed opacity-40"
                 )}
               >
-                False
+                No
               </button>
             </div>
           )}
@@ -521,12 +544,14 @@ export function InlineDueKeyInput({
             type="button"
             disabled={disabled}
             onClick={() => fileInputRef.current?.click()}
+            onMouseEnter={() => setIsHoveringAttach(true)}
+            onMouseLeave={() => setIsHoveringAttach(false)}
             className={cn(
               "relative flex h-9 w-9 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors",
               !disabled && "hover:bg-muted hover:text-foreground",
               disabled && "opacity-40 cursor-not-allowed"
             )}
-            title="Attach files"
+            title="Attach files · Ctrl+V to paste"
           >
             <Paperclip className="h-4 w-4" />
             {attachments.length > 0 && (

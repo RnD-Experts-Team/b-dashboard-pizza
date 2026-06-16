@@ -348,7 +348,7 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
       <div className="flex gap-3 items-start">
         <div className="shrink-0 pt-0.5">
           <Avatar className="h-9 w-9 ring-2 ring-border/40">
-            <AvatarImage src={undefined} alt={fullName} />
+            <AvatarImage src={v.imageUrl ?? undefined} alt={fullName} />
             <AvatarFallback className={cn("text-[11px] font-bold text-white", avatarBg)}>
               {initials}
             </AvatarFallback>

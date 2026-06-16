@@ -73,6 +73,7 @@
     "highLevelMgmt": "High Level MGMT",
     "dataManagement": "Data Management",
     "keys": "Keys",
+    "maintenanceTickets": "Maintenance Tickets",
     "dueKeys": "Debriefs",
     "employeeDebriefs": "Employee Debrief Notes",
     "exportImport": "Export / Import",
@@ -152,7 +153,12 @@
       "noAccount": "Don't have an account?",
       "register": "Create account",
       "error": "Please enter both email and password",
-      "failed": "Login failed. Please try again."
+      "failed": "Login failed. Please try again.",
+      "clickToSignIn": "Click to sign in",
+      "useDifferentAccount": "Use a different account",
+      "notYou": "Not you?",
+      "backToAccounts": "Back to accounts",
+      "removeAccount": "Remove account"
     },
     "register": {
       "title": "Create an account",
@@ -1126,6 +1132,175 @@
       "title": "Error Loading Maintenance Requests",
       "retry": "Try Again",
       "dismiss": "Dismiss"
+    }
+  },
+  "maintenanceTickets": {
+    "title": "Maintenance Tickets",
+    "description": "Track and manage maintenance tickets for your store.",
+    "refresh": "Refresh",
+    "groupBy": {
+      "label": "Group by",
+      "none": "No grouping",
+      "status": "Status",
+      "priority": "Priority",
+      "technician": "Technician (Attendance)",
+      "part": "Part",
+      "assigned_technician": "Assigned Technician",
+      "pay": "Pay Entry",
+      "warranty": "Warranty",
+      "diagnosis": "Diagnosis"
+    },
+    "common": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "optional": "Optional"
+    },
+    "navigator": {
+      "title": "Tickets",
+      "searchPlaceholder": "Search tickets…",
+      "noResults": "No tickets match your search.",
+      "issueCount": "{count} issue(s)",
+      "selectPrompt": "Select a ticket from the sidebar."
+    },
+    "showing": "Showing {from}-{to} of {total} ticket(s)",
+    "columns": {
+      "id": "ID",
+      "status": "Status",
+      "issues": "Issues",
+      "issuesCount": "issues",
+      "store": "Store",
+      "createdAt": "Created At"
+    },
+    "status": {
+      "pending": "Pending",
+      "assigned": "Assigned",
+      "in_progress": "In Progress",
+      "complete": "Complete"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "pagination": {
+      "page": "Page {current} of {total}",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "filters": {
+      "statusPlaceholder": "Filter by status",
+      "allStatuses": "All Statuses",
+      "priorityPlaceholder": "Filter by priority",
+      "allPriorities": "All Priorities",
+      "export": "Export",
+      "catalog": "Manage Catalog",
+      "createTicket": "New Ticket",
+      "allStores": "All Stores",
+      "selectStore": "Select store"
+    },
+    "noStore": {
+      "title": "No Store Selected",
+      "description": "Please select a store from the sidebar to view maintenance tickets."
+    },
+    "noData": {
+      "title": "No Tickets Found",
+      "description": "There are no maintenance tickets for this store.",
+      "hint": "Create a new ticket to get started."
+    },
+    "error": {
+      "title": "Error Loading Tickets",
+      "retry": "Try Again",
+      "dismiss": "Dismiss"
+    },
+    "createDialog": {
+      "title": "Create Maintenance Ticket",
+      "description": "Add one or more issues to file a maintenance ticket.",
+      "addIssue": "Add Issue",
+      "issueRow": "Issue #{number}",
+      "useCatalog": "Use catalog issue",
+      "useCustom": "Custom issue",
+      "issueLabel": "Issue",
+      "issuePlaceholder": "Select catalog issue",
+      "customTitleLabel": "Issue Title",
+      "customTitlePlaceholder": "Describe the issue",
+      "priorityLabel": "Priority",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "Provide details about the issue...",
+      "noteLabel": "Note",
+      "notePlaceholder": "Add an initial note to this issue (optional)...",
+      "filesLabel": "Attachments",
+      "attachFiles": "Attach Files",
+      "removeFile": "Remove file",
+      "optional": "(optional)",
+      "cancel": "Cancel",
+      "submit": "File Ticket",
+      "submitting": "Filing...",
+      "validationSelectIssue": "Please select a catalog issue for each row.",
+      "validationTitleRequired": "Please enter an issue title for each row.",
+      "validationDescriptionRequired": "Please enter a description for each issue.",
+      "submitError": "Failed to create ticket. Please try again."
+    },
+    "detailSheet": {
+      "title": "Ticket",
+      "description": "View and manage issues for this ticket.",
+      "noIssues": "No issues found for this ticket.",
+      "loadError": "Failed to load ticket issues.",
+      "deferred": "Deferred",
+      "changeStatus": "Change Status",
+      "changeStatusDesc": "Select the new status for this issue.",
+      "newStatus": "New Status",
+      "assignIssue": "Assign",
+      "assignIssueDesc": "Assign this issue to technicians.",
+      "assignDate": "Assigned Date",
+      "assignHour": "Assigned Hour (optional)",
+      "selectTechnicians": "Technicians",
+      "noTechnicians": "No technicians available.",
+      "assign": "Assign",
+      "assignDateRequired": "Please select an assigned date.",
+      "assignTechRequired": "Please select at least one technician.",
+      "deferIssue": "Defer Issue",
+      "deferIssueDesc": "Deferring will create a new pending issue.",
+      "deferReason": "Reason",
+      "deferReasonPlaceholder": "Why is this issue being deferred?",
+      "deferReasonRequired": "Please provide a reason for deferring.",
+      "defer": "Defer",
+      "statusHistory": "Status History",
+      "setFinalNote": "Set Final Note",
+      "setFinalNoteDesc": "Add or update the final note for this ticket.",
+      "finalNotePlaceholder": "Enter final note...",
+      "actionError": "Action failed. Please try again.",
+      "noDescription": "No description provided.",
+      "draftSaved": "Draft saved"
+    },
+    "catalog": {
+      "title": "Catalog Management",
+      "description": "Manage reference data used across maintenance tickets.",
+      "tabs": {
+        "issues": "Issues",
+        "technicians": "Technicians",
+        "categories": "Categories",
+        "parts": "Parts"
+      },
+      "items": "items",
+      "noItems": "No items found.",
+      "add": "Add",
+      "showDeleted": "Show Deleted",
+      "hideDeleted": "Hide Deleted",
+      "addIssue": "New Issue",
+      "issueTitlePlaceholder": "Issue title",
+      "addTechnician": "New Technician",
+      "namePlaceholder": "Full name",
+      "phonePlaceholder": "Phone number (optional)",
+      "categoryPlaceholder": "Select category (optional)",
+      "noCategory": "No category",
+      "addCategory": "New Category",
+      "categoryNamePlaceholder": "Category name",
+      "addPart": "New Part",
+      "partNamePlaceholder": "Part name",
+      "descriptionPlaceholder": "Description (optional)"
     }
   },
   "keys": {

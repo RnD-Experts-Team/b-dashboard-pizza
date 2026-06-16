@@ -1048,7 +1048,7 @@ export default function ExportImportPage() {
       setDsprError(null);
 
       const response = await dsprService.getReport(normalizedStore, dsprDate);
-      setDsprData(response);
+      setDsprData(response.dspr);
       toast.success("DSPR Lite report loaded.");
     } catch (error) {
       if (axios.isCancel(error)) return;

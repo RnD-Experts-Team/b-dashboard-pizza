@@ -73,6 +73,7 @@
     "highLevelMgmt": "الإدارة العليا",
     "dataManagement": "إدارة البيانات",
     "keys": "المفاتيح",
+    "maintenanceTickets": "تذاكر الصيانة",
     "dueKeys": "المفاتيح المستحقة",
     "employeeDebriefs": "ملاحظات إحاطة الموظفين",
     "exportImport": "تصدير / استيراد",
@@ -173,7 +174,12 @@
       "noAccount": "ليس لديك حساب؟",
       "register": "إنشاء حساب",
       "error": "الرجاء إدخال البريد الإلكتروني وكلمة المرور",
-      "failed": "فشل تسجيل الدخول. حاول مرة أخرى."
+      "failed": "فشل تسجيل الدخول. حاول مرة أخرى.",
+      "clickToSignIn": "انقر لتسجيل الدخول",
+      "useDifferentAccount": "استخدم حسابًا مختلفًا",
+      "notYou": "لست أنت؟",
+      "backToAccounts": "العودة إلى الحسابات",
+      "removeAccount": "إزالة الحساب"
     },
     "register": {
       "title": "إنشاء حساب",
@@ -1126,6 +1132,175 @@
       "title": "خطأ في تحميل طلبات الصيانة",
       "retry": "إعادة المحاولة",
       "dismiss": "تجاهل"
+    }
+  },
+  "maintenanceTickets": {
+    "title": "تذاكر الصيانة",
+    "description": "تتبع وإدارة تذاكر الصيانة لفرعك.",
+    "refresh": "تحديث",
+    "groupBy": {
+      "label": "تجميع حسب",
+      "none": "بدون تجميع",
+      "status": "الحالة",
+      "priority": "الأولوية",
+      "technician": "الفني (الحضور)",
+      "part": "القطعة",
+      "assigned_technician": "الفني المعيّن",
+      "pay": "إدخال الراتب",
+      "warranty": "الضمان",
+      "diagnosis": "التشخيص"
+    },
+    "common": {
+      "cancel": "إلغاء",
+      "save": "حفظ",
+      "optional": "اختياري"
+    },
+    "navigator": {
+      "title": "التذاكر",
+      "searchPlaceholder": "ابحث عن تذكرة...",
+      "noResults": "لا توجد تذاكر مطابقة.",
+      "issueCount": "{count} مشكلة",
+      "selectPrompt": "اختر تذكرة من الشريط الجانبي."
+    },
+    "showing": "عرض {from}-{to} من {total} تذكرة",
+    "columns": {
+      "id": "الرقم",
+      "status": "الحالة",
+      "issues": "المشاكل",
+      "issuesCount": "مشاكل",
+      "store": "الفرع",
+      "createdAt": "تاريخ الإنشاء"
+    },
+    "status": {
+      "pending": "قيد الانتظار",
+      "assigned": "مُسندة",
+      "in_progress": "جارية",
+      "complete": "مكتملة"
+    },
+    "priority": {
+      "urgent": "عاجل",
+      "high": "عالية",
+      "medium": "متوسطة",
+      "low": "منخفضة"
+    },
+    "pagination": {
+      "page": "الصفحة {current} من {total}",
+      "first": "الصفحة الأولى",
+      "previous": "الصفحة السابقة",
+      "next": "الصفحة التالية",
+      "last": "الصفحة الأخيرة"
+    },
+    "filters": {
+      "statusPlaceholder": "فلترة حسب الحالة",
+      "allStatuses": "كل الحالات",
+      "priorityPlaceholder": "فلترة حسب الأولوية",
+      "allPriorities": "كل الأولويات",
+      "export": "تصدير",
+      "catalog": "إدارة الكتالوج",
+      "createTicket": "تذكرة جديدة",
+      "allStores": "جميع الفروع",
+      "selectStore": "اختر فرعاً"
+    },
+    "noStore": {
+      "title": "لم يتم اختيار فرع",
+      "description": "يرجى اختيار فرع من الشريط الجانبي لعرض تذاكر الصيانة."
+    },
+    "noData": {
+      "title": "لا توجد تذاكر",
+      "description": "لا توجد تذاكر صيانة لهذا الفرع.",
+      "hint": "أنشئ تذكرة جديدة للبدء."
+    },
+    "error": {
+      "title": "خطأ في تحميل التذاكر",
+      "retry": "حاول مجدداً",
+      "dismiss": "تجاهل"
+    },
+    "createDialog": {
+      "title": "إنشاء تذكرة صيانة",
+      "description": "أضف مشكلة أو أكثر لرفع تذكرة صيانة.",
+      "addIssue": "إضافة مشكلة",
+      "issueRow": "المشكلة #{number}",
+      "useCatalog": "استخدام المشكلة من الكتالوج",
+      "useCustom": "مشكلة مخصصة",
+      "issueLabel": "المشكلة",
+      "issuePlaceholder": "اختر مشكلة من الكتالوج",
+      "customTitleLabel": "عنوان المشكلة",
+      "customTitlePlaceholder": "صف المشكلة",
+      "priorityLabel": "الأولوية",
+      "descriptionLabel": "الوصف",
+      "descriptionPlaceholder": "أدخل تفاصيل المشكلة...",
+      "noteLabel": "ملاحظة",
+      "notePlaceholder": "أضف ملاحظة أولية لهذه المشكلة (اختياري)...",
+      "filesLabel": "المرفقات",
+      "attachFiles": "إرفاق ملفات",
+      "removeFile": "إزالة الملف",
+      "optional": "(اختياري)",
+      "cancel": "إلغاء",
+      "submit": "رفع التذكرة",
+      "submitting": "جارٍ الرفع...",
+      "validationSelectIssue": "يرجى اختيار مشكلة من الكتالوج لكل صف.",
+      "validationTitleRequired": "يرجى إدخال عنوان المشكلة لكل صف.",
+      "validationDescriptionRequired": "يرجى إدخال وصف لكل مشكلة.",
+      "submitError": "فشل إنشاء التذكرة. حاول مجدداً."
+    },
+    "detailSheet": {
+      "title": "تذكرة",
+      "description": "عرض وإدارة مشاكل هذه التذكرة.",
+      "noIssues": "لا توجد مشاكل لهذه التذكرة.",
+      "loadError": "فشل تحميل مشاكل التذكرة.",
+      "deferred": "مؤجلة",
+      "changeStatus": "تغيير الحالة",
+      "changeStatusDesc": "اختر الحالة الجديدة لهذه المشكلة.",
+      "newStatus": "الحالة الجديدة",
+      "assignIssue": "إسناد",
+      "assignIssueDesc": "أسند هذه المشكلة إلى فنيين.",
+      "assignDate": "تاريخ الإسناد",
+      "assignHour": "ساعة الإسناد (اختياري)",
+      "selectTechnicians": "الفنيون",
+      "noTechnicians": "لا يوجد فنيون متاحون.",
+      "assign": "إسناد",
+      "assignDateRequired": "يرجى تحديد تاريخ الإسناد.",
+      "assignTechRequired": "يرجى اختيار فني واحد على الأقل.",
+      "deferIssue": "تأجيل المشكلة",
+      "deferIssueDesc": "سيؤدي التأجيل إلى إنشاء مشكلة جديدة قيد الانتظار.",
+      "deferReason": "السبب",
+      "deferReasonPlaceholder": "لماذا يتم تأجيل هذه المشكلة؟",
+      "deferReasonRequired": "يرجى تقديم سبب للتأجيل.",
+      "defer": "تأجيل",
+      "statusHistory": "سجل الحالة",
+      "setFinalNote": "تعيين الملاحظة الختامية",
+      "setFinalNoteDesc": "أضف أو حدّث الملاحظة الختامية لهذه التذكرة.",
+      "finalNotePlaceholder": "أدخل الملاحظة الختامية...",
+      "actionError": "فشل الإجراء. حاول مجدداً.",
+      "noDescription": "لا يوجد وصف.",
+      "draftSaved": "تم حفظ المسودة"
+    },
+    "catalog": {
+      "title": "إدارة الكتالوج",
+      "description": "إدارة البيانات المرجعية المستخدمة في تذاكر الصيانة.",
+      "tabs": {
+        "issues": "المشكلات",
+        "technicians": "الفنيون",
+        "categories": "الفئات",
+        "parts": "القطع"
+      },
+      "items": "عناصر",
+      "noItems": "لا توجد عناصر.",
+      "add": "إضافة",
+      "showDeleted": "عرض المحذوفات",
+      "hideDeleted": "إخفاء المحذوفات",
+      "addIssue": "مشكلة جديدة",
+      "issueTitlePlaceholder": "عنوان المشكلة",
+      "addTechnician": "فني جديد",
+      "namePlaceholder": "الاسم الكامل",
+      "phonePlaceholder": "رقم الهاتف (اختياري)",
+      "categoryPlaceholder": "اختر الفئة (اختياري)",
+      "noCategory": "بدون فئة",
+      "addCategory": "فئة جديدة",
+      "categoryNamePlaceholder": "اسم الفئة",
+      "addPart": "قطعة جديدة",
+      "partNamePlaceholder": "اسم القطعة",
+      "descriptionPlaceholder": "الوصف (اختياري)"
     }
   },
   "keys": {

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SpeedometerGauge, type SpeedZone } from "./speedometer-gauge";
 import { cn } from "@/lib/utils";
-import { Gauge, CalendarDays, Construction } from "lucide-react";
+import { Gauge, CalendarDays } from "lucide-react";
 import { WtdComparisonDialog, ComparisonGrid, ComparisonTable } from "./wtd-comparison-dialog";
 
 // ============================================================================
@@ -51,8 +51,10 @@ function getLaborLabel(value: number): string {
 interface LaborGaugeProps {
   /** Labor percentage value (0-100) */
   value: number;
-  /** WTD labor value — enables the Day/WTD toggle */
+  /** WTD cumulative labor % */
   weeklyValue?: number;
+  /** WTD daily average labor % */
+  weeklyAvgValue?: number;
   /** Target percentage line */
   target?: number;
   title?: string;
@@ -62,6 +64,7 @@ interface LaborGaugeProps {
 export function LaborGauge({
   value,
   weeklyValue,
+  weeklyAvgValue,
   target,
   title = "Labor",
   className,
@@ -70,13 +73,7 @@ export function LaborGauge({
   const [dialogOpen, setDialogOpen] = useState(false);
   const activeValue = isWeekly && weeklyValue !== undefined ? weeklyValue : value;
   return (
-    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50 relative overflow-hidden", weeklyValue !== undefined && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyValue !== undefined && setDialogOpen(true)}>
-      {/* Coming Soon overlay */}
-      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 rounded-xl bg-zinc-900/65 backdrop-blur-[2px]">
-        <Construction className="h-5 w-5 text-zinc-300" />
-        <p className="text-[11px] font-bold text-zinc-100 tracking-wide">Coming Soon</p>
-        <p className="text-[9px] text-zinc-400">Labor  </p>
-      </div>
+    <Card className={cn("group hover:shadow-md transition-shadow py-1.5 gap-0 bg-linear-to-r from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50", weeklyValue !== undefined && "cursor-pointer dspr-card-hover", className)} onClick={() => weeklyValue !== undefined && setDialogOpen(true)}>
       <CardHeader className="pb-0 px-3">
         <CardTitle className="text-[11px] font-semibold flex items-center gap-1">
           <div className="rounded p-0.5 bg-sky-500/15 dark:bg-sky-500/20">
@@ -143,7 +140,13 @@ export function LaborGauge({
                 <p className="text-2xl font-bold text-primary tabular-nums">
                   {weeklyValue.toFixed(1)}%
                 </p>
-                <p className="text-[10px] text-muted-foreground">Labor % WTD Avg</p>
+                <p className="text-[10px] text-muted-foreground">Labor % WTD</p>
+                {weeklyAvgValue !== undefined && (
+                  <p className="text-[10px] text-muted-foreground">
+                    WTD Daily Avg:{" "}
+                    <span className="font-semibold">{weeklyAvgValue.toFixed(1)}%</span>
+                  </p>
+                )}
                 <p className="text-[10px] text-emerald-600 font-medium mt-1">Target: 19–24%</p>
               </div>
             }
@@ -158,6 +161,14 @@ export function LaborGauge({
                 wtdNum: weeklyValue,
                 higherIsBetter: false,
               },
+              ...(weeklyAvgValue !== undefined ? [{
+                label: "WTD Daily Avg",
+                daily: "—",
+                wtd: `${weeklyAvgValue.toFixed(1)}%`,
+                dailyNum: 0,
+                wtdNum: weeklyAvgValue,
+                higherIsBetter: false,
+              }] : []),
             ]}
           />
         </WtdComparisonDialog>

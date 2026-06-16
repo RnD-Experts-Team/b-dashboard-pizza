@@ -55,6 +55,7 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
   const [empSearch, setEmpSearch] = useState("");
   const [note, setNote] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [isHoveringAttach, setIsHoveringAttach] = useState(false);
   const [submissionDate, setSubmissionDate] = useState<string>(() => todayDateStr());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
@@ -70,6 +71,28 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
     setEmpOpen(false);
     clearError();
   }, [storeId, clearError]);
+
+  // Clipboard paste into attachment area on hover
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (!isHoveringAttach) return;
+      const clipItems = e.clipboardData?.items;
+      if (!clipItems) return;
+      const images: File[] = [];
+      for (let i = 0; i < clipItems.length; i++) {
+        const ci = clipItems[i];
+        if (ci.type.startsWith("image/")) {
+          const file = ci.getAsFile();
+          if (file) images.push(file);
+        }
+      }
+      if (images.length === 0) return;
+      e.preventDefault();
+      setAttachments((prev) => [...prev, ...images]);
+    };
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [isHoveringAttach]);
 
   const filteredEmployees = useMemo(() => {
     const q = empSearch.trim().toLowerCase();
@@ -281,8 +304,10 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
+            onMouseEnter={() => setIsHoveringAttach(true)}
+            onMouseLeave={() => setIsHoveringAttach(false)}
             className="relative flex h-9 w-9 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Attach files"
+            title="Attach files · Ctrl+V to paste"
           >
             <Paperclip className="h-4 w-4" />
             {attachments.length > 0 && (
