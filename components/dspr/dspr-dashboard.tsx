@@ -776,14 +776,14 @@ export function DsprDashboard() {
 
       {/* ── Weekly Sales + Portal gauges ─────────────────────────── */}
       <div
-        className="grid grid-cols-1 gap-1 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
         data-guide-id="dspr-sales"
       >
         <SalesChart
           sales={sales}
           height={190}
           toolbar={false}
-          className="lg:col-span-2"
+          className="md:col-span-2 lg:col-span-2"
         />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
         <StoreScoreCard
@@ -800,7 +800,7 @@ export function DsprDashboard() {
       {/* ── HNR · Labor · Top 5 Menu Items ───────────────────────── */}
       {/* <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3"> */}
       <div
-        className="grid grid-cols-1 gap-1 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
         data-guide-id="dspr-channels"
       >
         {/* <LaborGauge value={day.labor} /> */}
@@ -810,13 +810,14 @@ export function DsprDashboard() {
           weeklyData={day.hourly_sales_and_channels_week_to_date_avg}
           height={190}
           toolbar={false}
-          className=""
+          className="md:col-span-2 lg:col-span-1"
         />
         <DailySalesByChannelChart
           totalSales={day.total_sales}
           weeklyTotalSales={day.total_sales_week_to_date_avg}
           height={200}
           toolbar={false}
+          className="md:col-span-2 lg:col-span-1"
         />
         <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
         <LaborGauge
