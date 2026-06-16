@@ -1,25 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { employeeService } from "@/lib/api/services/employee.service";
-import type { ManagerDashboardStoreData } from "@/types/employee.types";
+import { hooksService } from "@/lib/api/services/hooks.service";
+import type { WbrHooksResponse } from "@/types/hooks.types";
 
-export interface UseManagerDashboardResult {
-  data: ManagerDashboardStoreData | null;
+export interface UseHooksWbrResult {
+  data: WbrHooksResponse | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
 }
 
 /**
- * Fetches GET /v1/stores/{storeId}/manager-dashboard/{date} once and provides
- * the parsed store data to all three employee cards (employees, birthdays, top metric).
+ * Fetches GET /api/hooks/reports/wbr/{storeId}/{date} once and provides
+ * complaints, feedbacks, and money_owed for the week.
  */
-export function useManagerDashboard(
+export function useHooksWbr(
   storeId: string | null,
   date: string | null,
-): UseManagerDashboardResult {
-  const [data, setData] = useState<ManagerDashboardStoreData | null>(null);
+): UseHooksWbrResult {
+  const [data, setData] = useState<WbrHooksResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -35,18 +35,18 @@ export function useManagerDashboard(
     setError(null);
 
     try {
-      const response = await employeeService.getManagerDashboard(
+      const response = await hooksService.getWbrReport(
         storeId,
         date,
         controller.signal,
       );
       if (!controller.signal.aborted) {
-        setData(response["manager-dashboard"]);
+        setData(response);
       }
     } catch (err) {
       if (controller.signal.aborted) return;
       setError(
-        err instanceof Error ? err.message : "Failed to load employee data.",
+        err instanceof Error ? err.message : "Failed to load hooks WBR data.",
       );
     } finally {
       if (!controller.signal.aborted) {

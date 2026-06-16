@@ -11,7 +11,7 @@ import type {
   EmployeeRecord,
   EmployeesV1PaginatedResponse,
   EmployeeV1DetailResponse,
-  ManagerDashboardResponse,
+  HiringReportsResponse,
 } from "@/types/employee.types";
 
 function normalizeLegalStatus(value?: string): "W2" | "1099" | undefined {
@@ -21,7 +21,9 @@ function normalizeLegalStatus(value?: string): "W2" | "1099" | undefined {
   return undefined;
 }
 
-function normalizeAccountType(value?: string): "checking" | "saving" | undefined {
+function normalizeAccountType(
+  value?: string,
+): "checking" | "saving" | undefined {
   if (!value) return undefined;
   if (value === "checking") return "checking";
   if (value === "saving" || value === "savings") return "saving";
@@ -33,7 +35,11 @@ function appendIfDefined(formData: FormData, key: string, value: unknown) {
   formData.append(key, String(value));
 }
 
-function appendBoolean(formData: FormData, key: string, value: boolean | undefined) {
+function appendBoolean(
+  formData: FormData,
+  key: string,
+  value: boolean | undefined,
+) {
   // Backend boolean validation accepts numeric boolean values in multipart.
   formData.append(key, value ? "1" : "0");
 }
@@ -57,29 +63,63 @@ function buildEmployeeFormData(
 
   appendIfDefined(formData, "middle_name", payload.middle_name);
   appendIfDefined(formData, "employement_type", payload.employement_type);
-  appendIfDefined(formData, "marital_status_id", payload.marital_status_id != null ? String(payload.marital_status_id) : undefined);
+  appendIfDefined(
+    formData,
+    "marital_status_id",
+    payload.marital_status_id != null
+      ? String(payload.marital_status_id)
+      : undefined,
+  );
   appendIfDefined(formData, "T_shirt_size", payload.T_shirt_size);
 
   payload.certifications_info?.forEach((cert, i) => {
-    appendIfDefined(formData, `certifications_info[${i}][certification_name]`, cert.certification_name);
+    appendIfDefined(
+      formData,
+      `certifications_info[${i}][certification_name]`,
+      cert.certification_name,
+    );
   });
 
   payload.ids_info?.forEach((idEntry, i) => {
-    appendIfDefined(formData, `ids_info[${i}][employee_id_type_id]`, idEntry.employee_id_type_id);
+    appendIfDefined(
+      formData,
+      `ids_info[${i}][employee_id_type_id]`,
+      idEntry.employee_id_type_id,
+    );
     appendIfDefined(formData, `ids_info[${i}][id_number]`, idEntry.id_number);
-    appendBoolean(formData, `ids_info[${i}][is_primary]`, idEntry.is_primary === true);
+    appendBoolean(
+      formData,
+      `ids_info[${i}][is_primary]`,
+      idEntry.is_primary === true,
+    );
   });
 
   payload.addresses?.forEach((address, i) => {
-    appendIfDefined(formData, `addresses[${i}][address_line_1]`, address.address_line_1);
+    appendIfDefined(
+      formData,
+      `addresses[${i}][address_line_1]`,
+      address.address_line_1,
+    );
     appendIfDefined(formData, `addresses[${i}][city]`, address.city);
     appendIfDefined(formData, `addresses[${i}][country]`, address.country);
     appendIfDefined(formData, `addresses[${i}][state]`, address.state);
-    appendIfDefined(formData, `addresses[${i}][address_line_2]`, (address as { address_line_2?: string }).address_line_2);
-    appendBoolean(formData, `addresses[${i}][is_primary]`, address.is_primary === true);
+    appendIfDefined(
+      formData,
+      `addresses[${i}][address_line_2]`,
+      (address as { address_line_2?: string }).address_line_2,
+    );
+    appendBoolean(
+      formData,
+      `addresses[${i}][is_primary]`,
+      address.is_primary === true,
+    );
     appendIfDefined(formData, `addresses[${i}][latitude]`, address.latitude);
     appendIfDefined(formData, `addresses[${i}][longitude]`, address.longitude);
-    appendIfDefined(formData, `addresses[${i}][zip_code]`, (address as { zip_code?: string }).zip_code);
+    appendIfDefined(
+      formData,
+      `addresses[${i}][zip_code]`,
+      (address as { zip_code?: string }).zip_code,
+    );
   });
 
   payload.availability?.forEach((item, i) => {
@@ -87,13 +127,29 @@ function buildEmployeeFormData(
     item.days?.forEach((day, j) => {
       appendIfDefined(formData, `availability[${i}][days][${j}]`, day);
     });
-    appendIfDefined(formData, `availability[${i}][notes]`, (item as { notes?: string }).notes);
+    appendIfDefined(
+      formData,
+      `availability[${i}][notes]`,
+      (item as { notes?: string }).notes,
+    );
   });
 
   payload.contacts?.forEach((contact, i) => {
-    appendIfDefined(formData, `contacts[${i}][contact_type]`, contact.contact_type);
-    appendIfDefined(formData, `contacts[${i}][contact_value]`, contact.contact_value);
-    appendBoolean(formData, `contacts[${i}][is_primary]`, contact.is_primary === true);
+    appendIfDefined(
+      formData,
+      `contacts[${i}][contact_type]`,
+      contact.contact_type,
+    );
+    appendIfDefined(
+      formData,
+      `contacts[${i}][contact_value]`,
+      contact.contact_value,
+    );
+    appendBoolean(
+      formData,
+      `contacts[${i}][is_primary]`,
+      contact.is_primary === true,
+    );
   });
 
   if (options?.isUpdate) {
@@ -124,7 +180,10 @@ function buildEmployeeFormData(
   } else {
     payload.files?.forEach((file, i) => {
       if (file.file) {
-        formData.append(`files[${i}][file]`, file.file instanceof Blob ? file.file : file.file);
+        formData.append(
+          `files[${i}][file]`,
+          file.file instanceof Blob ? file.file : file.file,
+        );
       } else if (file.file_path) {
         appendIfDefined(formData, `files[${i}][file_path]`, file.file_path);
       }
@@ -142,31 +201,71 @@ function buildEmployeeFormData(
 
   if (includePaychecksInfo) {
     payload.paychecks_info?.forEach((paycheck, i) => {
-      appendIfDefined(formData, `paychecks_info[${i}][paychecks_id]`, paycheck.paychecks_id);
+      appendIfDefined(
+        formData,
+        `paychecks_info[${i}][paychecks_id]`,
+        paycheck.paychecks_id,
+      );
       const legalStatus = normalizeLegalStatus(paycheck.legal_status);
-      appendIfDefined(formData, `paychecks_info[${i}][legal_status]`, legalStatus);
-      appendBoolean(formData, `paychecks_info[${i}][is_primary]`, paycheck.is_primary === true);
+      appendIfDefined(
+        formData,
+        `paychecks_info[${i}][legal_status]`,
+        legalStatus,
+      );
+      appendBoolean(
+        formData,
+        `paychecks_info[${i}][is_primary]`,
+        paycheck.is_primary === true,
+      );
     });
   }
 
   payload.payment_info?.forEach((payment, i) => {
-    appendIfDefined(formData, `payment_info[${i}][account_number]`, payment.account_number);
+    appendIfDefined(
+      formData,
+      `payment_info[${i}][account_number]`,
+      payment.account_number,
+    );
     const accountType = normalizeAccountType(payment.account_type);
     appendIfDefined(formData, `payment_info[${i}][account_type]`, accountType);
-    appendIfDefined(formData, `payment_info[${i}][routing_number]`, payment.routing_number);
-    appendBoolean(formData, `payment_info[${i}][is_primary]`, payment.is_primary === true);
+    appendIfDefined(
+      formData,
+      `payment_info[${i}][routing_number]`,
+      payment.routing_number,
+    );
+    appendBoolean(
+      formData,
+      `payment_info[${i}][is_primary]`,
+      payment.is_primary === true,
+    );
   });
 
   payload.salary_info?.forEach((salary, i) => {
     appendIfDefined(formData, `salary_info[${i}][base_pay]`, salary.base_pay);
-    appendIfDefined(formData, `salary_info[${i}][performance_pay]`, salary.performance_pay);
-    appendIfDefined(formData, `salary_info[${i}][salary_date]`, salary.salary_date);
+    appendIfDefined(
+      formData,
+      `salary_info[${i}][performance_pay]`,
+      salary.performance_pay,
+    );
+    appendIfDefined(
+      formData,
+      `salary_info[${i}][salary_date]`,
+      salary.salary_date,
+    );
   });
 
   payload.status_history?.forEach((status, i) => {
     appendIfDefined(formData, `status_history[${i}][notes]`, status.notes);
-    appendIfDefined(formData, `status_history[${i}][status_date]`, status.status_date);
-    appendIfDefined(formData, `status_history[${i}][status_type_id]`, status.status_type_id);
+    appendIfDefined(
+      formData,
+      `status_history[${i}][status_date]`,
+      status.status_date,
+    );
+    appendIfDefined(
+      formData,
+      `status_history[${i}][status_type_id]`,
+      status.status_type_id,
+    );
   });
 
   return formData;
@@ -232,7 +331,9 @@ function normalizeEmployeeRecord(record: EmployeeRecord): EmployeeRecord {
   };
 }
 
-function normalizeEmployeesResponse(response: EmployeesResponse): EmployeesResponse {
+function normalizeEmployeesResponse(
+  response: EmployeesResponse,
+): EmployeesResponse {
   return {
     ...response,
     data: {
@@ -273,7 +374,8 @@ export const employeeService = {
     if (params?.altemitrix_id) query.set("altemitrix_id", params.altemitrix_id);
     if (params?.city) query.set("city", params.city);
     if (params?.page != null) query.set("page", String(params.page));
-    if (params?.per_page != null) query.set("per_page", String(params.per_page));
+    if (params?.per_page != null)
+      query.set("per_page", String(params.per_page));
     const qs = query.toString();
     const { data } = await axios.get<EmployeesResponse>(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees${qs ? `?${qs}` : ""}`,
@@ -288,7 +390,10 @@ export const employeeService = {
    */
   async getEmployeesV1(
     storeId: string,
-    params?: Record<string, string | number | boolean | string[] | undefined | null>,
+    params?: Record<
+      string,
+      string | number | boolean | string[] | undefined | null
+    >,
     signal?: AbortSignal,
   ): Promise<EmployeesV1PaginatedResponse> {
     const query = new URLSearchParams();
@@ -348,10 +453,7 @@ export const employeeService = {
    * Delete an employee.
    * Proxied through DELETE /api/hiring-management/[storeId]/employees/[employeeId]
    */
-  async deleteEmployee(
-    storeId: string,
-    employeeId: number,
-  ): Promise<void> {
+  async deleteEmployee(storeId: string, employeeId: number): Promise<void> {
     await axios.delete(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       { headers: buildHeaders(), timeout: 15_000 },
@@ -367,7 +469,10 @@ export const employeeService = {
     employeeId: number,
     payload: CreateEmployeePayload,
   ): Promise<unknown> {
-    const formData = buildEmployeeFormData(payload, { includePaychecksInfo: false, isUpdate: true });
+    const formData = buildEmployeeFormData(payload, {
+      includePaychecksInfo: false,
+      isUpdate: true,
+    });
     const { data } = await axios.post(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees/${employeeId}`,
       formData,
@@ -384,7 +489,9 @@ export const employeeService = {
     storeId: string,
     payload: CreateEmployeePayload,
   ): Promise<unknown> {
-    const formData = buildEmployeeFormData(payload, { includePaychecksInfo: true });
+    const formData = buildEmployeeFormData(payload, {
+      includePaychecksInfo: true,
+    });
     const { data } = await axios.post(
       `/api/hiring-management/${encodeURIComponent(storeId)}/employees`,
       formData,
@@ -397,10 +504,7 @@ export const employeeService = {
    * Import employees from CSV/Excel.
    * Proxied through POST /api/stores/[storeId]/imports/employees
    */
-  async importEmployees(
-    storeId: string,
-    file: File,
-  ): Promise<unknown> {
+  async importEmployees(storeId: string, file: File): Promise<unknown> {
     const formData = new FormData();
     formData.append("file", file, file.name);
 
@@ -417,9 +521,7 @@ export const employeeService = {
    * Export employees and trigger file download in the browser.
    * Proxied through GET /api/stores/[storeId]/exports/employees
    */
-  async exportEmployees(
-    storeId: string,
-  ): Promise<void> {
+  async exportEmployees(storeId: string): Promise<void> {
     const response = await axios.get(
       `/api/stores/${encodeURIComponent(storeId)}/exports/employees`,
       {
@@ -465,12 +567,20 @@ export const employeeService = {
     if (payload.obsession) {
       fd.append("obsession[birth_date]", payload.obsession.birth_date);
       if (payload.obsession.image) {
-        fd.append("obsession[image]", payload.obsession.image, payload.obsession.image.name);
+        fd.append(
+          "obsession[image]",
+          payload.obsession.image,
+          payload.obsession.image.name,
+        );
       }
-      if (payload.obsession.notes) fd.append("obsession[notes]", payload.obsession.notes);
-      if (payload.obsession.race) fd.append("obsession[race]", payload.obsession.race);
-      if (payload.obsession.religion) fd.append("obsession[religion]", payload.obsession.religion);
-      if (payload.obsession.t_shirt) fd.append("obsession[t_shirt]", payload.obsession.t_shirt);
+      if (payload.obsession.notes)
+        fd.append("obsession[notes]", payload.obsession.notes);
+      if (payload.obsession.race)
+        fd.append("obsession[race]", payload.obsession.race);
+      if (payload.obsession.religion)
+        fd.append("obsession[religion]", payload.obsession.religion);
+      if (payload.obsession.t_shirt)
+        fd.append("obsession[t_shirt]", payload.obsession.t_shirt);
     }
 
     payload.addresses?.forEach((a, i) => {
@@ -481,7 +591,8 @@ export const employeeService = {
       fd.append(`addresses[${i}][zip_code]`, a.zip_code);
       if (a.address_2) fd.append(`addresses[${i}][address_2]`, a.address_2);
       if (a.country) fd.append(`addresses[${i}][country]`, a.country);
-      if (a.is_primary !== undefined) fd.append(`addresses[${i}][is_primary]`, a.is_primary ? "1" : "0");
+      if (a.is_primary !== undefined)
+        fd.append(`addresses[${i}][is_primary]`, a.is_primary ? "1" : "0");
     });
 
     payload.attachments?.forEach((att, i) => {
@@ -493,8 +604,14 @@ export const employeeService = {
       fd.append(`availability[${i}][day_of_week]`, av.day_of_week);
       fd.append(`availability[${i}][shift_type]`, av.shift_type);
       av.times.forEach((t, ti) => {
-        fd.append(`availability[${i}][times][${ti}][available_from]`, t.available_from);
-        fd.append(`availability[${i}][times][${ti}][available_to]`, t.available_to);
+        fd.append(
+          `availability[${i}][times][${ti}][available_from]`,
+          t.available_from,
+        );
+        fd.append(
+          `availability[${i}][times][${ti}][available_to]`,
+          t.available_to,
+        );
       });
     });
 
@@ -502,7 +619,8 @@ export const employeeService = {
       fd.append(`contacts[${i}][contact_name]`, c.contact_name);
       fd.append(`contacts[${i}][contact_type]`, c.contact_type);
       fd.append(`contacts[${i}][contact_value]`, c.contact_value);
-      if (c.is_primary !== undefined) fd.append(`contacts[${i}][is_primary]`, c.is_primary ? "1" : "0");
+      if (c.is_primary !== undefined)
+        fd.append(`contacts[${i}][is_primary]`, c.is_primary ? "1" : "0");
     });
 
     payload.employee_ids?.forEach((eid, i) => {
@@ -525,7 +643,10 @@ export const employeeService = {
     payload.pay_history?.forEach((ph, i) => {
       fd.append(`pay_history[${i}][base_pay]`, String(ph.base_pay));
       fd.append(`pay_history[${i}][effective_date]`, ph.effective_date);
-      fd.append(`pay_history[${i}][performance_pay]`, String(ph.performance_pay));
+      fd.append(
+        `pay_history[${i}][performance_pay]`,
+        String(ph.performance_pay),
+      );
     });
 
     payload.positions?.forEach((p, i) => {
@@ -537,7 +658,8 @@ export const employeeService = {
       fd.append(`status_history[${i}][effective_date]`, sh.effective_date);
       fd.append(`status_history[${i}][status]`, sh.status);
       if (sh.notes) fd.append(`status_history[${i}][notes]`, sh.notes);
-      if (sh.store_id) fd.append(`status_history[${i}][store_id]`, String(sh.store_id));
+      if (sh.store_id)
+        fd.append(`status_history[${i}][store_id]`, String(sh.store_id));
     });
 
     payload.store_assignments?.forEach((sa, i) => {
@@ -568,7 +690,7 @@ export const employeeService = {
     );
     return data;
   },
-  
+
   /**
    * Update an employee using the V1 multipart/form-data API.
    * Proxied through POST /api/v1/stores/[storeId]/employees/[employeeId]
@@ -584,18 +706,28 @@ export const employeeService = {
     if (payload.last_name) fd.append("last_name", payload.last_name);
     if (payload.gender) fd.append("gender", payload.gender);
     if (payload.ssn) fd.append("ssn", payload.ssn);
-    if (payload.employment_type) fd.append("employment_type", payload.employment_type);
-    if (payload.middle_name != null) fd.append("middle_name", payload.middle_name);
+    if (payload.employment_type)
+      fd.append("employment_type", payload.employment_type);
+    if (payload.middle_name != null)
+      fd.append("middle_name", payload.middle_name);
 
     if (payload.obsession) {
       fd.append("obsession[birth_date]", payload.obsession.birth_date);
       if (payload.obsession.image) {
-        fd.append("obsession[image]", payload.obsession.image, payload.obsession.image.name);
+        fd.append(
+          "obsession[image]",
+          payload.obsession.image,
+          payload.obsession.image.name,
+        );
       }
-      if (payload.obsession.notes) fd.append("obsession[notes]", payload.obsession.notes);
-      if (payload.obsession.race) fd.append("obsession[race]", payload.obsession.race);
-      if (payload.obsession.religion) fd.append("obsession[religion]", payload.obsession.religion);
-      if (payload.obsession.t_shirt) fd.append("obsession[t_shirt]", payload.obsession.t_shirt);
+      if (payload.obsession.notes)
+        fd.append("obsession[notes]", payload.obsession.notes);
+      if (payload.obsession.race)
+        fd.append("obsession[race]", payload.obsession.race);
+      if (payload.obsession.religion)
+        fd.append("obsession[religion]", payload.obsession.religion);
+      if (payload.obsession.t_shirt)
+        fd.append("obsession[t_shirt]", payload.obsession.t_shirt);
     }
 
     payload.addresses?.forEach((a, i) => {
@@ -606,7 +738,8 @@ export const employeeService = {
       fd.append(`addresses[${i}][zip_code]`, a.zip_code);
       if (a.address_2) fd.append(`addresses[${i}][address_2]`, a.address_2);
       if (a.country) fd.append(`addresses[${i}][country]`, a.country);
-      if (a.is_primary !== undefined) fd.append(`addresses[${i}][is_primary]`, a.is_primary ? "1" : "0");
+      if (a.is_primary !== undefined)
+        fd.append(`addresses[${i}][is_primary]`, a.is_primary ? "1" : "0");
     });
 
     payload.attachments?.forEach((att, i) => {
@@ -618,8 +751,14 @@ export const employeeService = {
       fd.append(`availability[${i}][day_of_week]`, av.day_of_week);
       fd.append(`availability[${i}][shift_type]`, av.shift_type);
       av.times.forEach((t, ti) => {
-        fd.append(`availability[${i}][times][${ti}][available_from]`, t.available_from);
-        fd.append(`availability[${i}][times][${ti}][available_to]`, t.available_to);
+        fd.append(
+          `availability[${i}][times][${ti}][available_from]`,
+          t.available_from,
+        );
+        fd.append(
+          `availability[${i}][times][${ti}][available_to]`,
+          t.available_to,
+        );
       });
     });
 
@@ -627,7 +766,8 @@ export const employeeService = {
       fd.append(`contacts[${i}][contact_name]`, c.contact_name);
       fd.append(`contacts[${i}][contact_type]`, c.contact_type);
       fd.append(`contacts[${i}][contact_value]`, c.contact_value);
-      if (c.is_primary !== undefined) fd.append(`contacts[${i}][is_primary]`, c.is_primary ? "1" : "0");
+      if (c.is_primary !== undefined)
+        fd.append(`contacts[${i}][is_primary]`, c.is_primary ? "1" : "0");
     });
 
     payload.employee_ids?.forEach((eid, i) => {
@@ -650,7 +790,10 @@ export const employeeService = {
     payload.pay_history?.forEach((ph, i) => {
       fd.append(`pay_history[${i}][base_pay]`, String(ph.base_pay));
       fd.append(`pay_history[${i}][effective_date]`, ph.effective_date);
-      fd.append(`pay_history[${i}][performance_pay]`, String(ph.performance_pay));
+      fd.append(
+        `pay_history[${i}][performance_pay]`,
+        String(ph.performance_pay),
+      );
     });
 
     payload.positions?.forEach((p, i) => {
@@ -662,7 +805,8 @@ export const employeeService = {
       fd.append(`status_history[${i}][effective_date]`, sh.effective_date);
       fd.append(`status_history[${i}][status]`, sh.status);
       if (sh.notes) fd.append(`status_history[${i}][notes]`, sh.notes);
-      if (sh.store_id) fd.append(`status_history[${i}][store_id]`, String(sh.store_id));
+      if (sh.store_id)
+        fd.append(`status_history[${i}][store_id]`, String(sh.store_id));
     });
 
     payload.store_assignments?.forEach((sa, i) => {
@@ -703,21 +847,19 @@ export const employeeService = {
   },
 
   /**
-   * Fetch the manager dashboard for a store on a given date.
-   * Returns all active employees with birthday flags, position, pay, and
-   * performance metric (column id 3) for the week containing date.
-   * Proxied through GET /api/hiring-management/[storeId]/manager-dashboard/[date]
+   * Fetch the hiring reports for a store on a given date.
+   * Returns manager-dashboard, high-hours-employees, and average-hourly-pay.
+   * Proxied through GET /api/hiring-management/reports/[storeId]/[date]
    */
   async getManagerDashboard(
     storeId: string,
     date: string,
     signal?: AbortSignal,
-  ): Promise<ManagerDashboardResponse> {
-    const { data } = await axios.get<ManagerDashboardResponse>(
-      `/api/hiring-management/${encodeURIComponent(storeId)}/manager-dashboard/${encodeURIComponent(date)}`,
+  ): Promise<HiringReportsResponse> {
+    const { data } = await axios.get<HiringReportsResponse>(
+      `/api/hiring-management/reports/${encodeURIComponent(storeId)}/${encodeURIComponent(date)}`,
       { headers: buildHeaders(), timeout: 15_000, signal },
     );
-    // API returns the store object directly (not wrapped in { data: [...] })
     return data;
   },
 };

@@ -6,6 +6,7 @@ import { format, subDays, formatDistanceToNow } from "date-fns";
 import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
+import { useHooksWbr } from "@/lib/hooks/use-hooks-wbr";
 import {
   SalesChart,
   TopItemsList,
@@ -85,7 +86,12 @@ function ErrorDisplay({
   onClear,
   locale,
 }: {
-  error: { message: string; code: string; retryable: boolean; retryAfter?: number };
+  error: {
+    message: string;
+    code: string;
+    retryable: boolean;
+    retryAfter?: number;
+  };
   onRetry: () => void;
   onClear: () => void;
   locale: string;
@@ -163,8 +169,10 @@ function ErrorDisplay({
   const Icon = errorConfig.icon;
 
   return (
-    <Card className={cn("border-2", errorConfig.borderColor, errorConfig.bgColor)}>
-        <CardContent className="flex flex-col items-center justify-center py-6 text-center gap-2">
+    <Card
+      className={cn("border-2", errorConfig.borderColor, errorConfig.bgColor)}
+    >
+      <CardContent className="flex flex-col items-center justify-center py-6 text-center gap-2">
         <div className={cn("rounded-full p-2.5", errorConfig.bgColor)}>
           <Icon className={cn("h-6 w-6", errorConfig.color)} />
         </div>
@@ -229,7 +237,9 @@ function ForbiddenWelcomeScreen({ locale }: { locale: string }) {
           </h2>
 
           <p className="mt-2 max-w-xl text-sm text-muted-foreground sm:text-base">
-            Here you can see details about your stores.<br />Enjoy exploring the dashboard.
+            Here you can see details about your stores.
+            <br />
+            Enjoy exploring the dashboard.
           </p>
 
           <div className="mt-5 flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -287,7 +297,9 @@ export function DsprDashboard() {
   const locale = (params?.locale as string) || "en";
 
   // Default date = yesterday
-  const [selectedDate, setSelectedDate] = useState<Date>(subDays(new Date(), 1));
+  const [selectedDate, setSelectedDate] = useState<Date>(
+    subDays(new Date(), 1),
+  );
   const [dateOpen, setDateOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
 
@@ -299,7 +311,7 @@ export function DsprDashboard() {
       setDateOpen(false);
       refetch(toApiDate(date));
     },
-    [refetch]
+    [refetch],
   );
 
   // Re-fetch when the selected store changes
@@ -326,6 +338,9 @@ export function DsprDashboard() {
     toApiDate(selectedDate),
   );
 
+  // Hooks WBR — complaints, feedbacks, money_owed for the week
+  const hooksWbr = useHooksWbr(storeId, toApiDate(selectedDate));
+
   // Format "last updated" time
   const lastUpdatedLabel = useMemo(() => {
     if (!lastFetchedAt) return null;
@@ -339,7 +354,7 @@ export function DsprDashboard() {
     const hasGoals =
       Array.isArray(data?.goal_metrics) &&
       data.goal_metrics.some(
-        (m: { metric_name: string }) => m.metric_name !== "Upselling"
+        (m: { metric_name: string }) => m.metric_name !== "Upselling",
       );
     if (hasGoals) return DSPR_GUIDE_STEPS;
     return DSPR_GUIDE_STEPS.filter((s) => s.id !== "dspr-goals");
@@ -369,7 +384,9 @@ export function DsprDashboard() {
 
     // Hide the screenshot button & refresh shimmer during capture
     const btn = node.querySelector<HTMLElement>("[data-screenshot-btn]");
-    const ignored = node.querySelectorAll<HTMLElement>("[data-screenshot-ignore]");
+    const ignored = node.querySelectorAll<HTMLElement>(
+      "[data-screenshot-ignore]",
+    );
     if (btn) btn.style.display = "none";
     ignored.forEach((el) => (el.style.display = "none"));
 
@@ -423,7 +440,10 @@ export function DsprDashboard() {
     setHideSectionBackgrounds((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem("dspr.hideSectionBackgrounds", JSON.stringify(next));
+        localStorage.setItem(
+          "dspr.hideSectionBackgrounds",
+          JSON.stringify(next),
+        );
       } catch (err) {
         // ignore
       }
@@ -447,7 +467,8 @@ export function DsprDashboard() {
           <div className="space-y-1">
             <h3 className="text-xs font-semibold">No Store Selected</h3>
             <p className="text-[11px] text-muted-foreground max-w-sm">
-              Select a store from the sidebar to view its Daily Store Performance Report.
+              Select a store from the sidebar to view its Daily Store
+              Performance Report.
             </p>
           </div>
         </CardContent>
@@ -482,7 +503,8 @@ export function DsprDashboard() {
           <div className="space-y-1">
             <h3 className="text-xs font-semibold">No Report Data</h3>
             <p className="text-[11px] text-muted-foreground max-w-sm">
-              No data is available for this store. Select a date to load the report.
+              No data is available for this store. Select a date to load the
+              report.
             </p>
           </div>
           <Button
@@ -507,12 +529,15 @@ export function DsprDashboard() {
       className={cn(
         "space-y-1",
         isRefreshing && "relative",
-        hideSectionBackgrounds && "no-section-backgrounds"
+        hideSectionBackgrounds && "no-section-backgrounds",
       )}
     >
       {/* ── Refresh overlay bar ──────────────────────────────────── */}
       {isRefreshing && (
-        <div className="absolute top-0 left-0 right-0 z-10" data-screenshot-ignore="true">
+        <div
+          className="absolute top-0 left-0 right-0 z-10"
+          data-screenshot-ignore="true"
+        >
           <div className="h-0.5 bg-primary/30 rounded-full overflow-hidden">
             <div className="h-full w-1/3 bg-primary rounded-full animate-[shimmer_1.5s_ease-in-out_infinite]" />
           </div>
@@ -520,7 +545,10 @@ export function DsprDashboard() {
       )}
 
       {/* ── Header bar ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1" data-guide-id="dspr-header">
+      <div
+        className="flex flex-wrap items-center gap-1"
+        data-guide-id="dspr-header"
+      >
         {/* Store badge */}
         <Badge
           variant="secondary"
@@ -538,7 +566,7 @@ export function DsprDashboard() {
               size="sm"
               className={cn(
                 "h-6 gap-1 text-xs font-medium",
-                !selectedDate && "text-muted-foreground"
+                !selectedDate && "text-muted-foreground",
               )}
             >
               <CalendarIcon className="h-3 w-3" />
@@ -578,7 +606,12 @@ export function DsprDashboard() {
                 onClick={() => refetch(toApiDate(selectedDate))}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); refetch(toApiDate(selectedDate)); } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    refetch(toApiDate(selectedDate));
+                  }
+                }}
               >
                 <AlertTriangle className="h-3 w-3" />
                 Refresh failed — tap to retry
@@ -600,7 +633,12 @@ export function DsprDashboard() {
                   onClick={refresh}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); refresh(); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      refresh();
+                    }
+                  }}
                 >
                   <Clock className="h-3 w-3" />
                   Stale
@@ -621,9 +659,7 @@ export function DsprDashboard() {
                   {lastUpdatedLabel}
                 </span>
               </TooltipTrigger>
-              <TooltipContent>
-                Last updated {lastUpdatedLabel}
-              </TooltipContent>
+              <TooltipContent>Last updated {lastUpdatedLabel}</TooltipContent>
             </Tooltip>
           )}
 
@@ -681,7 +717,11 @@ export function DsprDashboard() {
                 className="h-6 w-6"
                 onClick={toggleHideBackgrounds}
                 aria-pressed={hideSectionBackgrounds}
-                title={hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
+                title={
+                  hideSectionBackgrounds
+                    ? "Show section backgrounds"
+                    : "Hide section backgrounds"
+                }
               >
                 {hideSectionBackgrounds ? (
                   <EyeOff className="h-3 w-3" />
@@ -691,7 +731,9 @@ export function DsprDashboard() {
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
+              {hideSectionBackgrounds
+                ? "Show section backgrounds"
+                : "Hide section backgrounds"}
             </TooltipContent>
           </Tooltip>
 
@@ -724,8 +766,16 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Weekly Sales + Portal gauges ─────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 lg:grid-cols-4" data-guide-id="dspr-sales">
-        <SalesChart sales={sales} height={190} toolbar={false} className="lg:col-span-2" />
+      <div
+        className="grid grid-cols-1 gap-1 lg:grid-cols-4"
+        data-guide-id="dspr-sales"
+      >
+        <SalesChart
+          sales={sales}
+          height={190}
+          toolbar={false}
+          className="lg:col-span-2"
+        />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
         <StoreScoreCard
           upsellingDay={day.upselling?.total_upselling_day}
@@ -740,10 +790,12 @@ export function DsprDashboard() {
 
       {/* ── HNR · Labor · Top 5 Menu Items ───────────────────────── */}
       {/* <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3"> */}
-             <div className="grid grid-cols-1 gap-1 lg:grid-cols-4" data-guide-id="dspr-channels">
-
+      <div
+        className="grid grid-cols-1 gap-1 lg:grid-cols-4"
+        data-guide-id="dspr-channels"
+      >
         {/* <LaborGauge value={day.labor} /> */}
-        
+
         <HourlyChannelsChart
           hourlyData={day.hourly_sales_and_channels}
           weeklyData={day.hourly_sales_and_channels_week_to_date_avg}
@@ -757,12 +809,19 @@ export function DsprDashboard() {
           height={200}
           toolbar={false}
         />
-         <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
-        <LaborGauge value={day.labor} weeklyValue={day.labor_week_to_date} weeklyAvgValue={day.labor_week_to_date_avg} />
+        <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
+        <LaborGauge
+          value={day.labor}
+          weeklyValue={day.labor_week_to_date}
+          weeklyAvgValue={day.labor_week_to_date_avg}
+        />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4" data-guide-id="dspr-top-lists">
+      <div
+        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
+        data-guide-id="dspr-top-lists"
+      >
         <TopItemsList
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
@@ -773,10 +832,16 @@ export function DsprDashboard() {
         />
         <TopIngredientsList
           mainIngredients={top?.ingredients?.main_5_ingredients_usage ?? []}
-          paperIngredients={top?.ingredients?.top_paper_5_ingredients_usage ?? []}
+          paperIngredients={
+            top?.ingredients?.top_paper_5_ingredients_usage ?? []
+          }
           usedIngredients={top?.ingredients?.top_3_ingredients_used ?? []}
-          highVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_high}
-          lowVarianceIngredients={top?.ingredients?.top_5_ingredients_variance_low}
+          highVarianceIngredients={
+            top?.ingredients?.top_5_ingredients_variance_high
+          }
+          lowVarianceIngredients={
+            top?.ingredients?.top_5_ingredients_variance_low
+          }
           className="sm:col-span-2 lg:col-span-1"
         />
         <RecentMaintenanceTable />
@@ -789,13 +854,15 @@ export function DsprDashboard() {
               storeId: storeNumericId ? String(storeNumericId) : undefined,
             },
           ]}
-        /> 
+        />
       </div>
 
-      
-
       {/* ── Current Employees + Birthday + Top Hours ──────────────── */}
-      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4" data-screenshot-ignore="true" data-guide-id="dspr-employees">
+      <div
+        className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-4"
+        data-screenshot-ignore="true"
+        data-guide-id="dspr-employees"
+      >
         <CurrentEmployeesTable
           requirements={[
             {
@@ -840,31 +907,6 @@ export function DsprDashboard() {
           className="lg:col-span-1"
         /> */}
       </div>
-
-{/* ── WBR Row 1: Customer Sales · Channel Sales · Promos ───────── */}
-      {wbrData && (
-        <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-2">
-          <WbrCustomerSalesCard data={wbrData["customer-count-and-sales"]} />
-          <WbrChannelSalesCard  data={wbrData["channel-sales"]} />
-          <WbrPromoCard         data={wbrData["promo"]} />
-          <WbrPortalWeeklyCard data={wbrData["portal-weekly"]} />
-
-        </div>
-      )}
-
-      {/* ── WBR Row 2: Portal Weekly · Cash Control · Phone Sales ─────── */}
-      {wbrData && (
-        <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-3">
-          <WbrCashControlCard  data={wbrData["cash-control"]} />
-          <WbrPhoneSalesCard   data={wbrData["phone-and-adjusted-sales"]} />
-                  <WbrNonNegotiableCard data={wbrData["non-negotiable-reports"]} />
-
-        </div>
-      )}
-
-      {/* ── WBR Row 3: Non-Negotiable Reports ────────────────────────────── */}
-      {/* {wbrData?.["non-negotiable-reports"] !== undefined && (
-      )} */}
 
       <PageGuide
         steps={guideSteps}
