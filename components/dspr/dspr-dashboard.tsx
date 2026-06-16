@@ -915,44 +915,67 @@ export function DsprDashboard() {
         /> */}
       </div>
 
-      {/* ── WBR · Sales & customers ─────────────────────────────────── */}
+      {/* ── WBR Cards ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <WbrCustomerSalesCard data={wbrData?.["customer-count-and-sales"]} />
-        <WbrPhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} />
-        <WbrChannelSalesCard data={wbrData?.["channel-sales"]} />
-        <WbrCashControlCard data={wbrData?.["cash-control"]} />
-      </div>
+        <div>
+          <WbrCustomerSalesCard data={wbrData?.["customer-count-and-sales"]} />
+        </div>
 
-      {/* ── WBR · Promos · LTO · Portal · Calls ─────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <WbrPromoCard data={wbrData?.promo} />
-        <WbrLtoCard data={wbrData?.lto} />
-        <WbrPortalWeeklyCard data={wbrData?.["portal-weekly"]} />
-        <WbrGoToCard data={wbrData?.["go-to"]} />
-      </div>
+        <div>
+          <WbrPhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} />
+        </div>
 
-      {/* ── WBR · People & feedback (excluded from screenshot) ──────── */}
-      <div
-        className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
-        data-screenshot-ignore="true"
-      >
-        <WbrHighHoursCard data={managerDashboard.highHoursEmployees} />
-        <WbrAveragePayCard data={managerDashboard.averageHourlyPay} />
-        <WbrComplaintsCard data={hooksWbr.data?.complaints} />
-        <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} />
-      </div>
+        <div>
+          <WbrChannelSalesCard data={wbrData?.["channel-sales"]} />
+        </div>
 
-      {/* ── WBR · Incidents + Money owed ────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
-        <WbrNonNegotiableCard
-          data={wbrData?.["non-negotiable-reports"]}
-          className="md:col-span-2"
-        />
-        <div data-screenshot-ignore="true" className="md:col-span-2">
+        <div>
+          <WbrCashControlCard data={wbrData?.["cash-control"]} />
+        </div>
+
+        <div>
+          <WbrPromoCard data={wbrData?.promo} />
+        </div>
+
+        <div>
+          <WbrLtoCard data={wbrData?.lto} />
+        </div>
+
+        <div>
+          <WbrPortalWeeklyCard data={wbrData?.["portal-weekly"]} />
+        </div>
+
+        <div>
+          <WbrGoToCard data={wbrData?.["go-to"]} />
+        </div>
+
+        <div data-screenshot-ignore="true">
+          <WbrHighHoursCard data={managerDashboard.highHoursEmployees} />
+        </div>
+
+        <div data-screenshot-ignore="true">
+          <WbrAveragePayCard data={managerDashboard.averageHourlyPay} />
+        </div>
+
+        <div className="md:col-span-2 lg:col-span-2">
+          <WbrNonNegotiableCard data={wbrData?.["non-negotiable-reports"]} />
+        </div>
+
+        <div
+          className="md:col-span-2 lg:col-span-2"
+          data-screenshot-ignore="true"
+        >
           <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} />
         </div>
-      </div>
 
+        <div data-screenshot-ignore="true">
+          <WbrComplaintsCard data={hooksWbr.data?.complaints} />
+        </div>
+
+        <div data-screenshot-ignore="true">
+          <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} />
+        </div>
+      </div>
       <PageGuide
         steps={guideSteps}
         isOpen={guideOpen}
