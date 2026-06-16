@@ -48,3 +48,4 @@ next-env.d.ts
 # vitepress
 docs/pizza-dashboard-docs/.vitepress/dist
 docs/pizza-dashboard-docs/.vitepress/cache
+dataresponses.json

@@ -722,3 +722,41 @@ export interface ManagerDashboardStoreData {
 
 export interface ManagerDashboardResponse extends ManagerDashboardStoreData {}
 
+export interface HighHoursEmployee {
+  employee_id: number;
+  first_name: string;
+  last_name: string;
+  position: string;
+  total_hours: number;
+  hourly_pay: number;
+  gross_pay: number;
+}
+
+export interface HighHoursEmployees {
+  store: string;
+  date: string;
+  week_start: string;
+  week_end: string;
+  employees: HighHoursEmployee[];
+}
+
+export interface AverageHourlyPay {
+  store: string;
+  date: string;
+  week_start: string;
+  week_end: string;
+  average_hourly_pay: number;
+  maximum_hourly_pay: number;
+  minimum_hourly_pay: number;
+  total_tips: number;
+  total_hours: number;
+  tips_per_hour: number;
+  labor: number;
+}
+
+export interface HiringReportsResponse {
+  "manager-dashboard": ManagerDashboardStoreData;
+  "high-hours-employees": HighHoursEmployees;
+  "average-hourly-pay": AverageHourlyPay;
+}
+

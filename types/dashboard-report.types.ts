@@ -270,9 +270,9 @@ export interface NonNegotiableReport {
   store_number: string;
   action: string;
   date: string;
-  time: string;
-  date_two: string;
-  time_two: string;
+  time: string | null;
+  date_two: string | null;
+  time_two: string | null;
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
