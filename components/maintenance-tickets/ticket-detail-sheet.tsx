@@ -2648,14 +2648,18 @@ function IssueNode({
                                   <ClockIcon className="h-3 w-3" />Work Time
                                 </p>
                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-muted-foreground">Clock In</span>
-                                    <span className="font-medium">{item.startClock ? fmtDateTime(item.startClock) : <em className="text-muted-foreground/50">Missing</em>}</span>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-muted-foreground">Clock Out</span>
-                                    <span className="font-medium">{item.endClock ? fmtDateTime(item.endClock) : <em className="text-muted-foreground/50">Missing</em>}</span>
-                                  </div>
+                                  {item.startClock && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Clock In</span>
+                                      <span className="font-medium">{fmtDateTime(item.startClock)}</span>
+                                    </div>
+                                  )}
+                                  {item.endClock && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Clock Out</span>
+                                      <span className="font-medium">{fmtDateTime(item.endClock)}</span>
+                                    </div>
+                                  )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Duration</span>
@@ -2673,14 +2677,18 @@ function IssueNode({
                               <div className="space-y-1.5 ps-3 border-s">
                                 <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Break</p>
                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-muted-foreground">Start</span>
-                                    <span className="font-medium">{item.startBreak ? fmtDateTime(item.startBreak) : <em className="text-muted-foreground/50">Missing</em>}</span>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-muted-foreground">End</span>
-                                    <span className="font-medium">{item.endBreak ? fmtDateTime(item.endBreak) : <em className="text-muted-foreground/50">Missing</em>}</span>
-                                  </div>
+                                  {item.startBreak && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Start</span>
+                                      <span className="font-medium">{fmtDateTime(item.startBreak)}</span>
+                                    </div>
+                                  )}
+                                  {item.endBreak && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">End</span>
+                                      <span className="font-medium">{fmtDateTime(item.endBreak)}</span>
+                                    </div>
+                                  )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Duration</span>
@@ -2698,14 +2706,18 @@ function IssueNode({
                               <div className="space-y-1.5 ps-3 border-s">
                                 <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Parts Run</p>
                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-muted-foreground">Depart</span>
-                                    <span className="font-medium">{item.startPartsRun ? fmtDateTime(item.startPartsRun) : <em className="text-muted-foreground/50">Missing</em>}</span>
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-muted-foreground">Return</span>
-                                    <span className="font-medium">{item.endPartsRun ? fmtDateTime(item.endPartsRun) : <em className="text-muted-foreground/50">Missing</em>}</span>
-                                  </div>
+                                  {item.startPartsRun && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Depart</span>
+                                      <span className="font-medium">{fmtDateTime(item.startPartsRun)}</span>
+                                    </div>
+                                  )}
+                                  {item.endPartsRun && (
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-muted-foreground">Return</span>
+                                      <span className="font-medium">{fmtDateTime(item.endPartsRun)}</span>
+                                    </div>
+                                  )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Duration</span>
