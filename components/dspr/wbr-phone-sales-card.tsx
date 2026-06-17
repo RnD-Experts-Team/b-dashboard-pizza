@@ -60,7 +60,7 @@ export function WbrPhoneSalesCard({
 
   return (
     <PeriodComparisonCard
-      title="Phone & In-Store"
+      title="Weekly Phone & In-Store"
       icon={Phone}
       iconColor="text-sky-500"
       iconBg="bg-sky-500/15 dark:bg-sky-500/20"

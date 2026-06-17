@@ -39,7 +39,7 @@ export function WbrComplaintsCard({
             <div className="rounded bg-orange-500/15 p-0.5 dark:bg-orange-500/20">
               <MessageSquareWarning className="h-3 w-3 text-orange-500" />
             </div>
-            Complaints
+            Weekly Complaints
             <Badge
               variant="secondary"
               className={cn(

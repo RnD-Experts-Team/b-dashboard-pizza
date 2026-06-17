@@ -81,7 +81,7 @@ export function WbrPromoCard({
             <div className="rounded bg-rose-500/15 p-0.5 dark:bg-rose-500/20">
               <Tag className="h-3 w-3 text-rose-500" />
             </div>
-            Promos
+            Weekly Promos
             <span className="ml-auto font-normal text-muted-foreground">
               {fmtPct(totals.pct_of_store_sales)} of sales
             </span>

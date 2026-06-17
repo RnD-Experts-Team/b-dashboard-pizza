@@ -35,7 +35,7 @@ export function WbrHighHoursCard({
           <div className="rounded bg-teal-500/15 p-0.5 dark:bg-teal-500/20">
             <Timer className="h-3 w-3 text-teal-500" />
           </div>
-          High Hours Employees
+          Weekly Above 60 Hours Employees
           <span className="ml-auto font-normal text-muted-foreground">
             {employees.length}
           </span>

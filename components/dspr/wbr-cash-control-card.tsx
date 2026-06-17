@@ -46,7 +46,7 @@ export function WbrCashControlCard({
           <div className="rounded bg-amber-500/15 p-0.5 dark:bg-amber-500/20">
             <Banknote className="h-3 w-3 text-amber-500" />
           </div>
-          Cash Control
+          Weekly Cash Control
           <span className="ml-auto font-normal text-muted-foreground">
             {filtering.week_start} · P{filtering.period_number}
           </span>

@@ -33,7 +33,7 @@ export function WbrGoToCard({
           <div className="rounded bg-cyan-500/15 p-0.5 dark:bg-cyan-500/20">
             <PhoneCall className="h-3 w-3 text-cyan-500" />
           </div>
-          Go-To Calls
+          Weekly Go-To Calls
           <span className="ml-auto font-normal text-muted-foreground">
             {filtering.week_start} → {filtering.week_end}
           </span>

@@ -33,7 +33,7 @@ export function WbrLtoCard({
           <div className="rounded bg-fuchsia-500/15 p-0.5 dark:bg-fuchsia-500/20">
             <Sparkles className="h-3 w-3 text-fuchsia-500" />
           </div>
-          LTO
+          Weekly LTO
           <span className="ml-auto font-normal text-muted-foreground">
             {filtering.week_start} → {filtering.week_end}
           </span>

@@ -30,7 +30,7 @@ export function WbrAveragePayCard({
           <div className="rounded bg-indigo-500/15 p-0.5 dark:bg-indigo-500/20">
             <Wallet className="h-3 w-3 text-indigo-500" />
           </div>
-          Average Hourly Pay
+          Weekly Average Hourly Pay
           <span className="ml-auto font-normal text-muted-foreground">
             {data.week_start} → {data.week_end}
           </span>

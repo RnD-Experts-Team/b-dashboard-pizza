@@ -961,7 +961,7 @@ export function DsprDashboard() {
         </div>
 
         <div data-screenshot-ignore="true">
-          <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
+          <WbrTransferInOutCard data={wbrData?.["transfer-in-out"]} storeId={storeId} isLoading={isLoading} />
         </div>
 
         <div className="md:col-span-2 lg:col-span-2">
@@ -981,7 +981,7 @@ export function DsprDashboard() {
         </div>
 
         <div>
-          <WbrTransferInOutCard data={wbrData?.["transfer-in-out"]} storeId={storeId} isLoading={isLoading} />
+          <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
         </div>
       </div>
       <PageGuide

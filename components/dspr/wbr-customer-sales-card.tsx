@@ -54,7 +54,7 @@ export function WbrCustomerSalesCard({
 
   return (
     <PeriodComparisonCard
-      title="Customer & Sales"
+      title="Weekly Customer & Sales"
       icon={Users}
       iconColor="text-blue-500"
       iconBg="bg-blue-500/15 dark:bg-blue-500/20"

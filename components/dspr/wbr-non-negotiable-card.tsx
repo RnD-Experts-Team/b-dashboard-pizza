@@ -71,7 +71,7 @@ export function WbrNonNegotiableCard({
                 <ShieldAlert className="h-3 w-3 text-red-500" />
               )}
             </div>
-            Non-Negotiable Reports
+            Weekly Non-Negotiable Reports
             <Badge
               variant="secondary"
               className={cn(

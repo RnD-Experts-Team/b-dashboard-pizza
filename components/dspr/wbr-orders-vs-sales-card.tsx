@@ -40,7 +40,7 @@ export function WbrOrdersVsSalesCard({
           <div className="rounded bg-sky-500/15 p-0.5 dark:bg-sky-500/20">
             <TrendingUp className="h-3 w-3 text-sky-500" />
           </div>
-          Orders vs Sales
+          Weekly Orders vs Sales
           <span className="ml-auto font-normal text-muted-foreground">
             {filtering.week_start} → {filtering.week_end}
           </span>
