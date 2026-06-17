@@ -105,59 +105,53 @@ export function PeriodComparisonCard({
       </CardHeader>
 
       <CardContent className="min-h-0 flex-1 overflow-y-auto px-0 pb-1">
-        <table className={cn(TBL, "[&_th]:!bg-muted")}>
+        {/* Periods as rows, metrics as column headers */}
+        <table className={cn(
+          TBL,
+          "text-[10px]",
+          "[&_th]:!h-auto [&_th]:!px-2 [&_th]:!py-1.5 [&_th]:!bg-muted/50 [&_th]:!text-[10px]",
+          "[&_td]:!px-2 [&_td]:!py-1.5",
+        )}>
           <thead>
             <tr>
-              <th className={TH}>Metric</th>
-              <th className={cn(TH, NUM)}>Current</th>
-              <th className={cn(TH, NUM)}>{baselineLabel}</th>
-              <th className={cn(TH, NUM)}>Δ</th>
+              <th className={cn(TH, "w-20 text-start")} />
+              {metrics.map((m) => (
+                <th key={m.key} className={cn(TH, NUM, "font-semibold text-foreground/80")}>
+                  {m.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {groups.map((g) => (
-              <GroupRows key={g.label} group={g} metrics={metrics} />
+              <tr key={g.label}>
+                <td className={cn(TD, "font-semibold text-foreground/70")}>
+                  {g.label}
+                </td>
+                {metrics.map((m) => {
+                  const curr = g.current[m.key] ?? 0;
+                  const base = g.baseline[m.key] ?? 0;
+                  return (
+                    <td key={m.key} className={cn(TD, NUM)}>
+                      <div className="font-semibold tabular-nums leading-tight">
+                        {m.format(curr)}
+                      </div>
+                      <div className="flex items-center justify-end gap-1 leading-tight">
+                        <span className="text-[9px] text-muted-foreground tabular-nums">
+                          {baselineLabel} {m.format(base)}
+                        </span>
+                        <div className="[&>span]:!text-[9px] [&>span]:!px-1 [&>span]:!py-0 [&>span_svg]:!h-2 [&>span_svg]:!w-2">
+                          <Delta value={pctChangeOrNull(curr, base)} />
+                        </div>
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
             ))}
           </tbody>
         </table>
       </CardContent>
     </Card>
-  );
-}
-
-function GroupRows({
-  group,
-  metrics,
-}: {
-  group: CmpGroup;
-  metrics: CmpMetric[];
-}) {
-  return (
-    <>
-      <tr className="border-b-0">
-        <td
-          colSpan={4}
-          className="bg-muted/30 px-2 pt-1.5 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-        >
-          {group.label}
-        </td>
-      </tr>
-      {metrics.map((m) => {
-        const curr = group.current[m.key] ?? 0;
-        const base = group.baseline[m.key] ?? 0;
-        return (
-          <tr key={m.key}>
-            <td className={cn(TD, "pl-3 text-muted-foreground")}>{m.label}</td>
-            <td className={cn(TD, NUM, "font-medium")}>{m.format(curr)}</td>
-            <td className={cn(TD, NUM, "text-muted-foreground")}>
-              {m.format(base)}
-            </td>
-            <td className={cn(TD, NUM)}>
-              <Delta value={pctChangeOrNull(curr, base)} />
-            </td>
-          </tr>
-        );
-      })}
-    </>
   );
 }

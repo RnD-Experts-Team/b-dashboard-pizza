@@ -530,7 +530,7 @@ export function DsprDashboard() {
   }
 
   // ── Success: render dashboard ──────────────────────────────────────────
-  const { filtering, sales, top, day, goal_metrics } = data;
+  const { filtering, sales, top, day, goal_metrics, store_score } = data;
 
   return (
     <div
@@ -790,6 +790,7 @@ export function DsprDashboard() {
           upsellingDay={day.upselling?.total_upselling_day}
           upsellingWeek={day.upselling?.total_upselling_week_to_date}
           goalMetrics={goal_metrics}
+          storeScore={store_score}
           date={selectedDate}
           className="lg:col-span-1"
         />

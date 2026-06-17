@@ -202,6 +202,38 @@ export interface DsprGoalMetric {
 }
 
 // ============================================================================
+// Store Score
+// ============================================================================
+
+export interface StoreScoreDetail {
+  key: string;
+  label: string;
+  score: number;
+  max: number;
+  actual_percent?: number;
+  goal_percent?: number | null;
+  actual_hours?: number;
+  actual_overtime_hours?: number;
+  has_transfer_in?: boolean;
+  count?: number;
+}
+
+export interface StoreScoreNonNegotiable {
+  entries: number;
+  downtime: number;
+  other: number;
+  penalty: number;
+}
+
+export interface StoreScoreData {
+  score: number;
+  label: string;
+  details: StoreScoreDetail[];
+  non_negotiable: StoreScoreNonNegotiable;
+  raw_score: number;
+}
+
+// ============================================================================
 // Full DSPR Response
 // ============================================================================
 
@@ -211,4 +243,5 @@ export interface DsprResponse {
   top: DsprTop;
   day: DsprDay;
   goal_metrics?: DsprGoalMetric[];
+  store_score?: StoreScoreData;
 }

@@ -27,29 +27,30 @@ export function WbrCustomerSalesCard({
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;
+  const quarterNum = Math.ceil(filtering.period_number / 3);
+  const fyShort = String(filtering.fiscal_year).slice(-2);
 
   const groupsForMode = (mode: CmpMode): CmpGroup[] => [
     {
-      label: "Week",
+      label: `Week ${filtering.week_number}`,
       current: { ...week.current },
       baseline: { ...(mode === "yoy" ? week.same_week_last_year : week.previous) },
     },
     {
-      label: "Period",
+      label: `Period ${filtering.period_number}`,
       current: { ...period.current },
       baseline: {
         ...(mode === "yoy" ? period.same_period_last_year : period.previous),
       },
     },
     {
-      label: "Quarter",
+      label: `Quarter ${quarterNum}`,
       current: { ...quarter.current },
       baseline: {
         ...(mode === "yoy" ? quarter.same_quarter_last_year : quarter.previous),
       },
     },
-    // Year only has current vs previous — same in both modes.
-    { label: "Year", current: { ...year.current }, baseline: { ...year.previous } },
+    { label: `FY 20${fyShort}`, current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (

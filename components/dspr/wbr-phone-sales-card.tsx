@@ -28,17 +28,19 @@ export function WbrPhoneSalesCard({
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;
+  const quarterNum = Math.ceil(filtering.period_number / 3);
+  const fyShort = String(filtering.fiscal_year).slice(-2);
 
   const groupsForMode = (mode: CmpMode): CmpGroup[] => [
     {
-      label: "Week",
+      label: `Week ${filtering.week_number}`,
       current: { ...week.current },
       baseline: {
         ...(mode === "yoy" ? week.same_week_last_year ?? {} : week.previous),
       },
     },
     {
-      label: "Period",
+      label: `Period ${filtering.period_number}`,
       current: { ...period.current },
       baseline: {
         ...(mode === "yoy"
@@ -47,7 +49,7 @@ export function WbrPhoneSalesCard({
       },
     },
     {
-      label: "Quarter",
+      label: `Quarter ${quarterNum}`,
       current: { ...quarter.current },
       baseline: {
         ...(mode === "yoy"
@@ -55,7 +57,7 @@ export function WbrPhoneSalesCard({
           : quarter.previous),
       },
     },
-    { label: "Year", current: { ...year.current }, baseline: { ...year.previous } },
+    { label: `FY 20${fyShort}`, current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (
