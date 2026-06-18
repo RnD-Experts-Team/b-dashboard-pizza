@@ -7,7 +7,7 @@ import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import { useHooksWbr } from "@/lib/hooks/use-hooks-wbr";
-import { StoreGoals, DsprDashboardSkeleton } from "@/components/dspr";
+import { StoreGoals, DsprDashboardSkeleton, DaySummaryStats } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,7 +37,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { V1Section } from "./v1-section";
-import { KpiHero } from "./kpi-hero";
 import {
   V1SalesTrendCard,
   V1ChannelMixCard,
@@ -402,10 +401,10 @@ export function DashboardV1() {
       </div>
 
       {/* ── KPI hero ─────────────────────────────────────────────────────── */}
-      <KpiHero day={day} goalMetrics={goal_metrics} />
+      <DaySummaryStats day={day} />
 
       {/* ── Store goals ribbon ───────────────────────────────────────────── */}
-      <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} />
+      {/* <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} /> */}
 
       {/* ── Sales & Trends ───────────────────────────────────────────────── */}
       <V1Section category="sales">

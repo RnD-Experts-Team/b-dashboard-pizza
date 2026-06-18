@@ -766,9 +766,9 @@ export function DsprDashboard() {
       </div>
 
       {/* ── Store goals ribbon ────────────────────────────────────── */}
-      <div data-guide-id="dspr-goals">
+      {/* <div data-guide-id="dspr-goals">
         <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} />
-      </div>
+      </div> */}
 
       {/* ── Day summary stats ribbon ────────────────────────────── */}
       <div data-guide-id="dspr-summary">
