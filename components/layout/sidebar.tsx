@@ -228,6 +228,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     // Dashboard is always accessible — no requirements
   };
 
+  const dashboardV1Item: NavItem = {
+    title: "Dashboard V1",
+    href: `/${locale}/dashboard/v1`,
+    icon: LayoutDashboard,
+    requirements: [
+      { service: "Data", method: "GET", path: "/reports/dspr/", storeId: effectiveStoreId },
+    ],
+  };
+
   // const maintenanceItem: NavItem = {
   //   title: t("maintenance"),
   //   href: `/${locale}/dashboard/maintenance`,
@@ -743,6 +752,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* 1. Dashboard */}
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+
+          {/* 1·V1. Dashboard V1 (optimized) */}
+           {/* {isNavItemVisible(dashboardV1Item) && renderNavLink(dashboardV1Item)}  */}
 
           {/* 1a. Announcements */}
           {renderNavLink(announcementsItem)}

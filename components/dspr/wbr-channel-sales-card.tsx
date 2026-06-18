@@ -118,7 +118,7 @@ export function WbrChannelSalesCard({
             <div className="rounded bg-violet-500/15 p-0.5 dark:bg-violet-500/20">
               <BarChart2 className="h-3 w-3 text-violet-500" />
             </div>
-            Channel Sales
+            Weekly Channel Sales
             <span className="ml-auto font-normal text-muted-foreground">
               {fmtDate(data.filtering.week_start)} → {fmtDate(data.filtering.week_end)}
             </span>

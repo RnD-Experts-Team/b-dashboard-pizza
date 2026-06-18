@@ -63,7 +63,7 @@ export function WbrMoneyOwedCard({
             <div className="rounded bg-lime-500/15 p-0.5 dark:bg-lime-600/20">
               <HandCoins className="h-3 w-3 text-lime-600" />
             </div>
-            Money Owed
+            Weekly Money Owed
             <Badge
               variant="secondary"
               className={cn(

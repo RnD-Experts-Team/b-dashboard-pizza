@@ -66,7 +66,7 @@ export function WbrTransferInOutCard({
             <div className="rounded bg-violet-500/15 p-0.5 dark:bg-violet-500/20">
               <ArrowLeftRight className="h-3 w-3 text-violet-500" />
             </div>
-            Transfers In/Out
+            Weekly Transfers In/Out
             <div className="ml-auto flex items-center gap-1">
               {inCount > 0 && (
                 <Badge

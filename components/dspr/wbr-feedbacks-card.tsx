@@ -51,7 +51,7 @@ export function WbrFeedbacksCard({
             <div className="rounded bg-pink-500/15 p-0.5 dark:bg-pink-500/20">
               <MessageSquareHeart className="h-3 w-3 text-pink-500" />
             </div>
-            Feedback
+            Weekly Feedback
             <Badge
               variant="secondary"
               className={cn(

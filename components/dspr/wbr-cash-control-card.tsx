@@ -1,11 +1,12 @@
 "use client";
 
+import { addDays, parseISO, format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Banknote } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { CashControl } from "@/types/dashboard-report.types";
-import { fmt$2, fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { fmt$2, fmtDate, fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 function diffColor(n: number) {
   if (n > 0.5) return "text-emerald-600 dark:text-emerald-400";
@@ -26,6 +27,7 @@ export function WbrCashControlCard({
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;
+  const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
 
   const diffRows = [
     { label: "Week", v: week.deposit_minus_cash_sales },
@@ -46,9 +48,9 @@ export function WbrCashControlCard({
           <div className="rounded bg-amber-500/15 p-0.5 dark:bg-amber-500/20">
             <Banknote className="h-3 w-3 text-amber-500" />
           </div>
-          Cash Control
+          Weekly Cash Control
           <span className="ml-auto font-normal text-muted-foreground">
-            {filtering.week_start} · P{filtering.period_number}
+            {fmtDate(filtering.week_start)} → {weekEnd}
           </span>
         </CardTitle>
       </CardHeader>

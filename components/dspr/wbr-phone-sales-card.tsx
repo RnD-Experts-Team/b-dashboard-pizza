@@ -1,8 +1,9 @@
 "use client";
 
+import { addDays, parseISO, format } from "date-fns";
 import { Phone } from "lucide-react";
 import type { PhoneAndAdjustedSales } from "@/types/dashboard-report.types";
-import { fmt$, WbrCardSkeleton } from "./wbr-format";
+import { fmt$, fmtDate, WbrCardSkeleton } from "./wbr-format";
 import {
   PeriodComparisonCard,
   type CmpGroup,
@@ -28,17 +29,20 @@ export function WbrPhoneSalesCard({
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;
+  const quarterNum = Math.ceil(filtering.period_number / 3);
+  const fyShort = String(filtering.fiscal_year).slice(-2);
+  const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
 
   const groupsForMode = (mode: CmpMode): CmpGroup[] => [
     {
-      label: "Week",
+      label: `Week ${filtering.week_number}`,
       current: { ...week.current },
       baseline: {
         ...(mode === "yoy" ? week.same_week_last_year ?? {} : week.previous),
       },
     },
     {
-      label: "Period",
+      label: `Period ${filtering.period_number}`,
       current: { ...period.current },
       baseline: {
         ...(mode === "yoy"
@@ -47,7 +51,7 @@ export function WbrPhoneSalesCard({
       },
     },
     {
-      label: "Quarter",
+      label: `Quarter ${quarterNum}`,
       current: { ...quarter.current },
       baseline: {
         ...(mode === "yoy"
@@ -55,17 +59,17 @@ export function WbrPhoneSalesCard({
           : quarter.previous),
       },
     },
-    { label: "Year", current: { ...year.current }, baseline: { ...year.previous } },
+    { label: `FY 20${fyShort}`, current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (
     <PeriodComparisonCard
-      title="Phone & In-Store"
+      title="Weekly Phone & In-Store"
       icon={Phone}
       iconColor="text-sky-500"
       iconBg="bg-sky-500/15 dark:bg-sky-500/20"
       gradient="from-sky-50 via-sky-100 to-sky-200 dark:from-sky-950/20 dark:via-sky-900/40 dark:to-sky-800/50"
-      headerNote={`Wk ${filtering.week_number} · P${filtering.period_number}`}
+      headerNote={`${fmtDate(filtering.week_start)} → ${weekEnd}`}
       metrics={METRICS}
       groupsForMode={groupsForMode}
       className={className}
