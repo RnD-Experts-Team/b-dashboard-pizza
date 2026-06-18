@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { useTheme } from "next-themes";
 import type { ApexOptions } from "apexcharts";
 import type { DsprSales } from "@/types/dspr.types";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +12,7 @@ import {
 } from "@/components/dspr/wtd-comparison-dialog";
 import { CATEGORIES } from "../category";
 import { fmt$ } from "@/components/dspr/wbr-format";
+import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
@@ -32,10 +32,10 @@ export function V1SalesTrendCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
+  const isDark = useDocumentColorMode() === "dark";
   const [open, setOpen] = useState(false);
   const colors = CATEGORIES.sales.chartColors;
+  const prevWeekColor = "#0ea5e9"; // sky-500 — matches Phone blue in hourly channels
   const lineColor = "#f59e0b";
 
   const thisWeek = useMemo(() => Object.values(sales.this_week_by_day), [sales]);
@@ -56,6 +56,8 @@ export function V1SalesTrendCard({
     [thisWeek, prevWeek, lastYear],
   );
 
+  const labelColor = isDark ? "#a1a1aa" : "#71717a";
+
   const options: ApexOptions = useMemo(
     () => ({
       chart: {
@@ -64,29 +66,44 @@ export function V1SalesTrendCard({
         toolbar: { show: false },
         fontFamily: "inherit",
         background: "transparent",
-        foreColor: isDark ? "#a1a1aa" : "#71717a",
+        foreColor: labelColor,
       },
       theme: { mode: isDark ? "dark" : "light" },
-      colors: [colors[0], colors[1], lineColor],
+      colors: [colors[0], prevWeekColor, lineColor],
       plotOptions: { bar: { borderRadius: 4, columnWidth: "55%" } },
       dataLabels: { enabled: false },
-      stroke: { width: [0, 0, 3], curve: "smooth" },
+      stroke: { width: [0, 0, 3], curve: "smooth", colors: [isDark ? "#18181b" : "#ffffff", isDark ? "#18181b" : "#ffffff", undefined as unknown as string] },
       xaxis: {
         categories: thisWeek.map((_, i) => DAY_NAMES[i] ?? `D${i + 1}`),
-        labels: { style: { fontSize: "10px" } },
+        labels: {
+          style: { fontSize: "10px", colors: labelColor },
+        },
+        axisBorder: { color: isDark ? "#3f3f46" : "#e4e4e7" },
+        axisTicks: { color: isDark ? "#3f3f46" : "#e4e4e7" },
       },
       yaxis: {
         labels: {
           formatter: (v: number) => (v == null ? "" : `$${(v / 1000).toFixed(0)}k`),
-          style: { fontSize: "10px" },
+          style: { fontSize: "10px", colors: labelColor },
         },
       },
-      legend: { position: "top", horizontalAlign: "left", fontSize: "10px" },
+      legend: {
+        position: "top",
+        horizontalAlign: "left",
+        fontSize: "10px",
+        labels: { colors: labelColor },
+      },
       grid: { borderColor: isDark ? "#27272a" : "#e4e4e7" },
-      tooltip: { shared: true, intersect: false, y: { formatter: (v: number) => fmt$(v) } },
+      tooltip: {
+        shared: true,
+        intersect: false,
+        theme: isDark ? "dark" : "light",
+        y: { formatter: (v: number) => fmt$(v) },
+      },
       fill: { opacity: [0.9, 0.9, 1] },
     }),
-    [isDark, colors, thisWeek],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isDark, labelColor, thisWeek.length],
   );
 
   return (
@@ -99,7 +116,13 @@ export function V1SalesTrendCard({
       onExpand={() => setOpen(true)}
       bodyClassName="overflow-hidden"
     >
-      <ReactApexChart options={options} series={series} type="line" height={195} />
+      <ReactApexChart
+        key={isDark ? "dark" : "light"}
+        options={options}
+        series={series}
+        type="line"
+        height={195}
+      />
 
       <WtdComparisonDialog
         open={open}

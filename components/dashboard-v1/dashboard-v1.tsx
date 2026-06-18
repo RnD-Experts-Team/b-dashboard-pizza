@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
-import { format, subDays, formatDistanceToNow } from "date-fns";
+import { format, subDays, formatDistanceToNow, getISOWeek, parseISO } from "date-fns";
 import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
@@ -269,7 +269,7 @@ export function DashboardV1() {
   }
 
   // ── Success ─────────────────────────────────────────────────────────────
-  const { filtering, sales, top, day, goal_metrics } = data;
+  const { filtering, sales, top, day, goal_metrics, store_score } = data;
 
   return (
     <div ref={dashboardRef} className={cn("space-y-2", isRefreshing && "relative")}>
@@ -308,7 +308,7 @@ export function DashboardV1() {
 
         <Badge variant="outline" className="gap-1 px-2.5 py-1 text-xs">
           <CalendarIcon className="h-3 w-3" />
-          Week {filtering.iso_week}
+          Week {getISOWeek(parseISO(filtering.week_start))}
           <span className="text-muted-foreground">
             ({filtering.week_start} → {filtering.week_end})
           </span>
@@ -414,6 +414,7 @@ export function DashboardV1() {
           upsellingDay={day.upselling?.total_upselling_day}
           upsellingWeek={day.upselling?.total_upselling_week_to_date}
           goalMetrics={goal_metrics}
+          storeScore={store_score}
           date={selectedDate}
           span={1}
         />

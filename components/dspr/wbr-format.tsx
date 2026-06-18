@@ -66,7 +66,7 @@ export function fmtDate(iso: string | null | undefined): string {
   const datePart = iso.slice(0, 10);
   const d = parseISO(datePart);
   if (!isValid(d)) return iso;
-  return format(d, "MMM d, yyyy");
+  return format(d, "MMM d");
 }
 
 /** Format a "HH:MM:SS" (or "HH:MM") time string as "h:mm AM/PM". */

@@ -5,7 +5,7 @@ import { Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { Lto } from "@/types/dashboard-report.types";
-import { fmt$2, fmtNum, fmtPct2, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { fmt$2, fmtDate, fmtNum, fmtPct2, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrLtoCard({
   data,
@@ -35,7 +35,7 @@ export function WbrLtoCard({
           </div>
           Weekly LTO
           <span className="ml-auto font-normal text-muted-foreground">
-            {filtering.week_start} → {filtering.week_end}
+            {fmtDate(filtering.week_start)} → {fmtDate(filtering.week_end)}
           </span>
         </CardTitle>
       </CardHeader>

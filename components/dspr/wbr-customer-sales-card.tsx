@@ -1,8 +1,9 @@
 "use client";
 
+import { addDays, parseISO, format } from "date-fns";
 import { Users } from "lucide-react";
 import type { CustomerCountAndSales } from "@/types/dashboard-report.types";
-import { fmt$, fmtNum, WbrCardSkeleton } from "./wbr-format";
+import { fmt$, fmtDate, fmtNum, WbrCardSkeleton } from "./wbr-format";
 import {
   PeriodComparisonCard,
   type CmpGroup,
@@ -29,6 +30,7 @@ export function WbrCustomerSalesCard({
   const { filtering, week, period, quarter, year } = data;
   const quarterNum = Math.ceil(filtering.period_number / 3);
   const fyShort = String(filtering.fiscal_year).slice(-2);
+  const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
 
   const groupsForMode = (mode: CmpMode): CmpGroup[] => [
     {
@@ -60,7 +62,7 @@ export function WbrCustomerSalesCard({
       iconColor="text-blue-500"
       iconBg="bg-blue-500/15 dark:bg-blue-500/20"
       gradient="from-blue-50 via-blue-100 to-blue-200 dark:from-blue-950/20 dark:via-blue-900/40 dark:to-blue-800/50"
-      headerNote={`Wk ${filtering.week_number} · P${filtering.period_number}`}
+      headerNote={`${fmtDate(filtering.week_start)} → ${weekEnd}`}
       metrics={METRICS}
       groupsForMode={groupsForMode}
       className={className}

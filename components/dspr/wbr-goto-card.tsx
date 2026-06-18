@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { PhoneCall } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GoTo } from "@/types/dashboard-report.types";
-import { fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { fmtDate, fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrGoToCard({
   data,
@@ -35,7 +35,7 @@ export function WbrGoToCard({
           </div>
           Weekly Go-To Calls
           <span className="ml-auto font-normal text-muted-foreground">
-            {filtering.week_start} → {filtering.week_end}
+            {fmtDate(filtering.week_start)} → {fmtDate(filtering.week_end)}
           </span>
         </CardTitle>
       </CardHeader>

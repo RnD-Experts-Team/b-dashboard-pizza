@@ -11,30 +11,29 @@ import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 import { V1Card } from "../v1-card";
 import { V1Toggle } from "../v1-ui";
 import { WtdComparisonDialog } from "@/components/dspr/wtd-comparison-dialog";
-import { fmt$ } from "@/components/dspr/wbr-format";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
   loading: () => <Skeleton className="h-[200px] w-full" />,
 });
 
-/* ── Channel definitions (keyed by HourlySalesChannel) ──────────────────── */
-type HourlyKey = keyof HourlySalesChannel;
-
-const CHANNEL_DEFS: { key: HourlyKey; label: string; color: string }[] = [
-  { key: "adjusted_royalty_obligation", label: "Register",    color: "#f97316" },
-  { key: "phone_sales",                 label: "Phone",        color: "#0ea5e9" },
-  { key: "call_center_sales",           label: "Call Center",  color: "#14b8a6" },
-  { key: "drive_thru_sales",            label: "Drive-Thru",   color: "#ec4899" },
-  { key: "website_sales",               label: "Website",      color: "#22c55e" },
-  { key: "mobile_sales",                label: "Mobile",       color: "#f59e0b" },
-  { key: "doordash_sales",              label: "DoorDash",     color: "#ef4444" },
-  { key: "ubereats_sales",              label: "UberEats",     color: "#8b5cf6" },
-  { key: "grubhub_sales",               label: "GrubHub",      color: "#94a3b8" },
+/* ── Channel definitions — exact same colors as the original chart ────────── */
+const CHANNEL_KEYS: { key: keyof HourlySalesChannel; label: string; color: string }[] = [
+  { key: "adjusted_royalty_obligation", label: "Register",   color: "#F97316" },
+  { key: "phone_sales",                 label: "Phone",       color: "#008FFB" },
+  { key: "website_sales",               label: "Website",     color: "#00E396" },
+  { key: "mobile_sales",                label: "Mobile",      color: "#FEB019" },
+  { key: "doordash_sales",              label: "DoorDash",    color: "#FF4560" },
+  { key: "ubereats_sales",              label: "UberEats",    color: "#775DD0" },
+  { key: "grubhub_sales",               label: "Grubhub",     color: "#546E7A" },
+  { key: "call_center_sales",           label: "Call Center", color: "#26a69a" },
+  { key: "drive_thru_sales",            label: "Drive-Thru",  color: "#D10CE8" },
 ];
 
-function numVal(v: number | string | null | undefined): number {
-  return Number(v) || 0;
+function hasUsableValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === "") return false;
+  const n = Number(value);
+  return Number.isFinite(n) && n !== 0;
 }
 
 function formatHour(h: number): string {
@@ -42,10 +41,6 @@ function formatHour(h: number): string {
   if (h < 12) return `${h} AM`;
   if (h === 12) return "12 PM";
   return `${h - 12} PM`;
-}
-
-function rowTotal(row: HourlySalesChannel): number {
-  return CHANNEL_DEFS.reduce((s, c) => s + numVal(row[c.key]), 0);
 }
 
 /* ── Card ────────────────────────────────────────────────────────────────── */
@@ -75,44 +70,30 @@ export function V1HourlyChannelsCard({
     });
   }, []);
 
-  /* Active rows sorted by hour */
-  const activeRows = useMemo(() => {
+  /* ── Data shaping — same logic as original ────────────────────────────── */
+  const { series, categories, channelHasData } = useMemo(() => {
     const src = view === "wtd" && weekly ? weekly : hourly;
-    return [...src].sort((a, b) => a.hour - b.hour);
+    const sorted = [...src].sort((a, b) => a.hour - b.hour);
+
+    const cats = sorted.map((r) => formatHour(r.hour));
+
+    const hasDataByChannel = CHANNEL_KEYS.reduce<Record<string, boolean>>(
+      (acc, { key, label }) => {
+        acc[label] = sorted.some((r) => hasUsableValue(r[key]));
+        return acc;
+      },
+      {},
+    );
+
+    const s = CHANNEL_KEYS.map(({ key, label }) => ({
+      name: label,
+      data: sorted.map((r) => Number(r[key]) || 0),
+    }));
+
+    return { series: s, categories: cats, channelHasData: hasDataByChannel };
   }, [view, weekly, hourly]);
 
-  /* X-axis categories */
-  const categories = useMemo(
-    () => activeRows.map((r) => formatHour(r.hour)),
-    [activeRows],
-  );
-
-  /* One series per channel */
-  const allSeries = useMemo(
-    () =>
-      CHANNEL_DEFS.map((ch) => ({
-        name: ch.label,
-        data: activeRows.map((r) => numVal(r[ch.key])),
-      })),
-    [activeRows],
-  );
-
-  /* Which channels have at least one non-zero value */
-  const channelHasData = useMemo(() => {
-    const out: Record<string, boolean> = {};
-    for (const ch of CHANNEL_DEFS) {
-      out[ch.label] = activeRows.some((r) => numVal(r[ch.key]) > 0);
-    }
-    return out;
-  }, [activeRows]);
-
-  /* Filter to visible channels */
-  const visibleDefs   = CHANNEL_DEFS.filter((c) => !hiddenSeries.has(c.label));
-  const visibleSeries = allSeries.filter((s) => !hiddenSeries.has(s.name));
-  const visibleColors = visibleDefs.map((c) => c.color);
-  const allHidden     = visibleSeries.length === 0;
-
-  /* Comparison rows for the dialog (Day vs WTD avg, per hour) */
+  /* ── Hourly comparison rows for the dialog ────────────────────────────── */
   const compRows = useMemo(() => {
     if (!weekly) return [];
     const allHours = Array.from(
@@ -120,16 +101,22 @@ export function V1HourlyChannelsCard({
     ).sort((a, b) => a - b);
     const dayMap = new Map(hourly.map((h) => [h.hour, h]));
     const wtdMap = new Map(weekly.map((h) => [h.hour, h]));
-    return allHours.map((hour) => ({
-      hour,
-      label: formatHour(hour),
-      dayTotal: dayMap.has(hour) ? rowTotal(dayMap.get(hour)!) : 0,
-      wtdTotal: wtdMap.has(hour) ? rowTotal(wtdMap.get(hour)!) : 0,
-    }));
+    return allHours.map((hour) => {
+      const d = dayMap.get(hour);
+      const w = wtdMap.get(hour);
+      const dayTotal = d ? CHANNEL_KEYS.reduce((s, { key }) => s + (Number(d[key]) || 0), 0) : 0;
+      const wtdTotal = w ? CHANNEL_KEYS.reduce((s, { key }) => s + (Number(w[key]) || 0), 0) : 0;
+      return { hour, label: formatHour(hour), dayTotal, wtdTotal };
+    });
   }, [hourly, weekly]);
 
-  /* ── ApexCharts config ──────────────────────────────────────────────── */
+  /* ── Visible series / colors ─────────────────────────────────────────── */
+  const visibleKeys   = CHANNEL_KEYS.filter((c) => !hiddenSeries.has(c.label));
+  const visibleSeries = series.filter((s) => !hiddenSeries.has(s.name));
+  const visibleColors = visibleKeys.map((c) => c.color);
+  const allHidden     = visibleSeries.length === 0;
 
+  /* ── ApexCharts options — mirrors original exactly ────────────────────── */
   const options: ApexOptions = useMemo(
     () => ({
       chart: {
@@ -147,7 +134,17 @@ export function V1HourlyChannelsCard({
         bar: {
           horizontal: false,
           borderRadius: 2,
-          dataLabels: { total: { enabled: false } },
+          dataLabels: {
+            total: {
+              enabled: false,
+              style: {
+                fontSize: "10px",
+                fontWeight: 700,
+                color: isDark ? "#d4d4d8" : "#3f3f46",
+              },
+              formatter: (val: string) => `$${parseFloat(val).toFixed(0)}`,
+            },
+          },
         },
       },
       dataLabels: { enabled: false },
@@ -165,7 +162,7 @@ export function V1HourlyChannelsCard({
       yaxis: {
         min: 0,
         labels: {
-          formatter: (v: number) => `$${(v / 1000).toFixed(1)}k`,
+          formatter: (v: number) => `$${v.toFixed(0)}`,
           style: { fontSize: "9px", colors: isDark ? "#a1a1aa" : "#71717a" },
         },
       },
@@ -173,7 +170,10 @@ export function V1HourlyChannelsCard({
         shared: true,
         intersect: false,
         theme: isDark ? "dark" : "light",
-        y: { formatter: (v: number) => fmt$(v) },
+        y: {
+          formatter: (val: number) =>
+            `$${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        },
       },
       legend: { show: false },
       grid: { borderColor: isDark ? "#27272a" : "#e4e4e7" },
@@ -189,8 +189,8 @@ export function V1HourlyChannelsCard({
       category="sales"
       period={hasWeekly ? "D·WTD" : "D"}
       span={span}
-      className={className}
-      bodyClassName="overflow-hidden !p-0 flex flex-col"
+      className={cn("!overflow-visible", className)}
+      bodyClassName="!overflow-visible !p-0 flex flex-col"
       onExpand={hasWeekly ? () => setDialog(true) : undefined}
       headerControl={
         hasWeekly ? (
@@ -211,7 +211,7 @@ export function V1HourlyChannelsCard({
         className="flex flex-wrap gap-x-0 gap-y-0.5 px-2.5 py-1 shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
-        {CHANNEL_DEFS.map((ch) => {
+        {CHANNEL_KEYS.map((ch) => {
           const isHidden = hiddenSeries.has(ch.label);
           const hasData  = channelHasData[ch.label];
           return (
@@ -256,7 +256,7 @@ export function V1HourlyChannelsCard({
         </div>
       )}
 
-      {/* Comparison dialog — inside V1Card (never a grid sibling) */}
+      {/* Comparison dialog */}
       {hasWeekly && (
         <WtdComparisonDialog
           open={dialogOpen}
@@ -299,10 +299,10 @@ export function V1HourlyChannelsCard({
                     >
                       <td className="px-4 py-2 font-medium">{row.label}</td>
                       <td className="px-4 py-2 text-right tabular-nums font-mono text-emerald-700 dark:text-emerald-300">
-                        {fmt$(row.dayTotal)}
+                        ${row.dayTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums font-mono">
-                        {fmt$(row.wtdTotal)}
+                        ${row.wtdTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-4 py-2 text-right">
                         {direction !== "same" && pct ? (

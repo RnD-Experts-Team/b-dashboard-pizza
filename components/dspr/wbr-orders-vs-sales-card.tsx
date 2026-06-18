@@ -5,7 +5,7 @@ import { TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { OrdersVsSales } from "@/types/dashboard-report.types";
-import { fmt$, fmtPct, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { fmt$, fmtDate, fmtPct, StatTile, WbrCardSkeleton } from "./wbr-format";
 
 export function WbrOrdersVsSalesCard({
   data,
@@ -42,7 +42,7 @@ export function WbrOrdersVsSalesCard({
           </div>
           Weekly Orders vs Sales
           <span className="ml-auto font-normal text-muted-foreground">
-            {filtering.week_start} → {filtering.week_end}
+            {fmtDate(filtering.week_start)} → {fmtDate(filtering.week_end)}
           </span>
         </CardTitle>
       </CardHeader>
