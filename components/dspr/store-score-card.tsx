@@ -53,8 +53,80 @@ const SCORE_BG: Record<string, string> = {
   red: "bg-red-500/10 dark:bg-red-500/15",
 };
 
-// ── Store Score tab ───────────────────────────────────────────────────────────
+// ── Store Score tab — animated ────────────────────────────────────────────────
 function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
+  const totalBarRef   = useRef<HTMLDivElement | null>(null);
+  const scoreNumRef   = useRef<HTMLSpanElement | null>(null);
+  const detailBarRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const rafRefs       = useRef<Record<string, number>>({});
+
+  function animateTo(
+    key: string,
+    from: number,
+    to: number,
+    duration: number,
+    onUpdate: (val: number) => void,
+  ) {
+    if (rafRefs.current[key]) cancelAnimationFrame(rafRefs.current[key]);
+    const start = performance.now();
+    const diff = to - from;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      onUpdate(from + diff * eased);
+      if (t < 1) {
+        rafRefs.current[key] = requestAnimationFrame(tick);
+      } else {
+        delete rafRefs.current[key];
+      }
+    };
+    rafRefs.current[key] = requestAnimationFrame(tick);
+  }
+
+  useEffect(() => {
+    if (!storeScore) return;
+
+    const { score, details } = storeScore;
+    const totalMax = details.reduce((s, d) => s + d.max, 0) || 100;
+    const totalPct = Math.min(100, (score / totalMax) * 100);
+
+    // Reset all animated elements to zero
+    if (scoreNumRef.current) scoreNumRef.current.textContent = "0";
+    if (totalBarRef.current) totalBarRef.current.style.width = "0%";
+    detailBarRefs.current.forEach((ref) => { if (ref) ref.style.width = "0%"; });
+
+    const dur = 750;
+
+    // Animate total score number
+    animateTo("scoreNum", 0, score, dur, (val) => {
+      if (!scoreNumRef.current) return;
+      const r = Math.round(val * 10) / 10;
+      scoreNumRef.current.textContent = Number.isInteger(r) ? String(r) : r.toFixed(1);
+    });
+
+    // Animate total bar
+    animateTo("totalBar", 0, totalPct, dur, (val) => {
+      if (totalBarRef.current) totalBarRef.current.style.width = `${val}%`;
+    });
+
+    // Stagger detail bars — each starts 60 ms after the previous
+    details.forEach((d, i) => {
+      const pct = d.max > 0 ? Math.min(100, (d.score / d.max) * 100) : 0;
+      setTimeout(() => {
+        animateTo(`bar_${i}`, 0, pct, dur, (val) => {
+          const ref = detailBarRefs.current[i];
+          if (ref) ref.style.width = `${Math.min(100, val)}%`;
+        });
+      }, i * 60);
+    });
+
+    return () => {
+      Object.values(rafRefs.current).forEach((id) => id && cancelAnimationFrame(id));
+      rafRefs.current = {};
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeScore]);
+
   if (!storeScore) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
@@ -63,10 +135,9 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
     );
   }
 
-  const { score, label, details, non_negotiable } = storeScore;
+  const { label, details, non_negotiable } = storeScore;
   const totalMax = details.reduce((s, d) => s + d.max, 0) || 100;
-  const totalPct = Math.min(100, (score / totalMax) * 100);
-  const color = scoreColor(score, totalMax);
+  const color = scoreColor(storeScore.score, totalMax);
   const hasPenalty = non_negotiable.penalty !== 0;
 
   return (
@@ -74,8 +145,11 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
       {/* Total score row */}
       <div className={cn("rounded-md px-2 py-1.5 flex items-center justify-between gap-2", SCORE_BG[color])}>
         <div className="flex items-baseline gap-1">
-          <span className={cn("text-2xl font-extrabold tabular-nums leading-none", SCORE_TEXT[color])}>
-            {score}
+          <span
+            ref={scoreNumRef}
+            className={cn("text-2xl font-extrabold tabular-nums leading-none", SCORE_TEXT[color])}
+          >
+            0
           </span>
           <span className="text-[10px] text-muted-foreground">/ {totalMax} pts</span>
         </div>
@@ -87,15 +161,15 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
       {/* Total progress bar */}
       <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
         <div
-          className={cn("h-full rounded-full transition-all", SCORE_BAR[color])}
-          style={{ width: `${totalPct}%` }}
+          ref={totalBarRef}
+          className={cn("h-full rounded-full", SCORE_BAR[color])}
+          style={{ width: "0%" }}
         />
       </div>
 
       {/* Detail rows */}
       <div className="mt-0.5 space-y-[3px]">
-        {details.map((d) => {
-          const pct = d.max > 0 ? Math.min(100, (d.score / d.max) * 100) : 0;
+        {details.map((d, i) => {
           const c = scoreColor(d.score, d.max);
           const isPerfect = d.score >= d.max;
           return (
@@ -110,8 +184,9 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
               </span>
               <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
                 <div
+                  ref={(el) => { detailBarRefs.current[i] = el; }}
                   className={cn("h-full rounded-full", isPerfect ? "bg-emerald-500" : SCORE_BAR[c])}
-                  style={{ width: `${pct}%` }}
+                  style={{ width: "0%" }}
                 />
               </div>
               <span className={cn("w-12 text-right text-[9px] tabular-nums font-semibold shrink-0", isPerfect ? "text-emerald-600 dark:text-emerald-400" : SCORE_TEXT[c])}>
