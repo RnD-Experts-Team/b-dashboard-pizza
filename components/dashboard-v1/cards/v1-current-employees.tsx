@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ManagerDashboardEmployee } from "@/types/employee.types";
 import { WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
+import { Button } from "@/components/ui/button";
 import {
   V1Empty,
   V1_TBL,
@@ -73,11 +77,21 @@ export function V1CurrentEmployeesCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
+  const params = useParams();
+  const locale = (params?.locale as string) || "en";
   const { data, isLoading } = managerDashboard;
 
   if (isLoading && !data) return <WbrCardSkeleton className={className} />;
 
   const rows: ManagerDashboardEmployee[] = data?.employees ?? [];
+
+  const pageLink = (
+    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" asChild>
+      <Link href={`/${locale}/dashboard/employees`}>
+        <ExternalLink className="h-3 w-3" />
+      </Link>
+    </Button>
+  );
 
   return (
     <V1Card
@@ -88,6 +102,7 @@ export function V1CurrentEmployeesCard({
       className={className}
       bodyClassName="px-0"
       headerNote={rows.length > 0 ? `${rows.length} active` : undefined}
+      headerControl={pageLink}
     >
       {rows.length === 0 ? (
         <V1Empty>No active employees found</V1Empty>

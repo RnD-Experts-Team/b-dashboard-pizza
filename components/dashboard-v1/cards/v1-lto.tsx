@@ -53,7 +53,6 @@ export function V1LtoCard({
       period="W"
       span={span}
       className={className}
-      headerNote={`${filtering.week_start} → ${filtering.week_end}`}
     >
       <div className="space-y-2">
         <V1MetricGrid cols={2}>

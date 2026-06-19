@@ -72,7 +72,6 @@ export function V1CustomerSalesCard({
       period="W"
       span={span}
       className={className}
-      headerNote={`Wk ${filtering.week_number} · P${filtering.period_number}`}
       headerControl={
         <V1Toggle<CmpMode>
           className="ms-1"

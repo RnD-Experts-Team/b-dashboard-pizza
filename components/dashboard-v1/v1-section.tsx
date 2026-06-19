@@ -13,10 +13,12 @@ import { cn } from "@/lib/utils";
 
 export function V1Section({
   category,
+  weekLabel,
   children,
   className,
 }: {
   category: CategoryKey;
+  weekLabel?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -37,6 +39,11 @@ export function V1Section({
         >
           {cat.label}
         </h2>
+        {weekLabel && (
+          <span className="text-[11px] font-normal text-muted-foreground">
+            {weekLabel}
+          </span>
+        )}
         <div className="ms-1 h-px flex-1 bg-linear-to-r from-border to-transparent" />
       </div>
       {/* Dense flow backfills any gap so a short last row never leaves a hole. */}

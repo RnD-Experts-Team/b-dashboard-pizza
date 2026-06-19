@@ -41,7 +41,6 @@ export function V1AveragePayCard({
       period="W"
       span={span}
       className={className}
-      headerNote={`${data.week_start} → ${data.week_end}`}
     >
       <div className="space-y-1.5">
         <V1Metric

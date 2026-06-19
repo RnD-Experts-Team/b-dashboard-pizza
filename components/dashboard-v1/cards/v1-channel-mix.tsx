@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import type { DsprChannelSales } from "@/types/dspr.types";
 import { V1Card } from "../v1-card";
-import { V1Toggle, V1StackedBar, V1DataRow, type V1Segment } from "../v1-ui";
+import { V1Toggle, V1StackedBar, V1DataRow, V1Empty, type V1Segment } from "../v1-ui";
 import { fmt$ } from "@/components/dspr/wbr-format";
 import { CHANNELS, num } from "./channels";
+import { BarChart2 } from "lucide-react";
 
 /* Fresh take on the channel-mix donut: a single horizontal proportion bar
  * plus a ranked list of channels — denser and screenshot-friendly. */
@@ -55,30 +56,34 @@ export function V1ChannelMixCard({
         ) : undefined
       }
     >
-      <div className="flex h-full flex-col gap-2 pt-1">
-        <V1StackedBar segments={segments} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {segments
-            .filter((s) => s.value > 0)
-            .map((s) => (
-              <V1DataRow
-                key={s.label}
-                label={
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
-                    {s.label}
-                  </span>
-                }
-                value={fmt$(s.value)}
-                trailing={
-                  <span className="w-9 text-right text-[10px] font-normal text-muted-foreground">
-                    {total > 0 ? `${((s.value / total) * 100).toFixed(0)}%` : "—"}
-                  </span>
-                }
-              />
-            ))}
+      {total === 0 ? (
+        <V1Empty icon={BarChart2}>No channel sales data for this period</V1Empty>
+      ) : (
+        <div className="flex h-full flex-col gap-2 pt-1">
+          <V1StackedBar segments={segments} />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {segments
+              .filter((s) => s.value > 0)
+              .map((s) => (
+                <V1DataRow
+                  key={s.label}
+                  label={
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
+                      {s.label}
+                    </span>
+                  }
+                  value={fmt$(s.value)}
+                  trailing={
+                    <span className="w-9 text-right text-[10px] font-normal text-muted-foreground">
+                      {`${((s.value / total) * 100).toFixed(0)}%`}
+                    </span>
+                  }
+                />
+              ))}
+          </div>
         </div>
-      </div>
+      )}
     </V1Card>
   );
 }

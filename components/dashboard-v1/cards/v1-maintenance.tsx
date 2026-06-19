@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { ClipboardList, ExternalLink } from "lucide-react";
 
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogTechnician } from "@/types/maintenance-tickets.types";
 
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
@@ -20,15 +22,12 @@ import {
 } from "@/components/dashboard-v1/v1-ui";
 import { fmtDate, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1MaintenanceCard — Dashboard V1, category "quality", period "D".
- *
- *  Read-only re-skin of components/dspr/recent-maintenance-table.tsx. It calls
- *  the SAME hook (maintenanceTicketsService.getTickets) for the selected store
- *  and lists recent tickets (id, status, issue count, created date). The
- *  create/detail dialogs from the source are intentionally omitted.
  * ────────────────────────────────────────────────────────────────────────── */
 
 const STATUS_STYLES: Record<string, string> = {
@@ -63,6 +62,9 @@ export function V1MaintenanceCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
+  const params = useParams();
+  const locale = (params?.locale as string) || "en";
+
   const { selectedStore } = useSelectedStoreStore();
   const storeId = selectedStore?.storeId ?? null;
 
@@ -70,6 +72,12 @@ export function V1MaintenanceCard({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Sheet state
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
+  const techLoadedRef = useRef(false);
 
   const fetchTickets = useCallback(async () => {
     if (!storeId) return;
@@ -104,78 +112,111 @@ export function V1MaintenanceCard({
     return () => abortRef.current?.abort();
   }, [fetchTickets]);
 
-  // Loading.
+  async function handleRowClick(ticket: Ticket) {
+    setSelectedTicketId(ticket.id);
+    setSheetOpen(true);
+    if (!techLoadedRef.current) {
+      techLoadedRef.current = true;
+      try {
+        const techs = await maintenanceTicketsService.getCatalogTechnicians();
+        setTechnicians(techs);
+      } catch {
+        // Sheet works without technicians for read-only viewing
+      }
+    }
+  }
+
+  const pageLink = (
+    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" asChild>
+      <Link href={`/${locale}/dashboard/maintenance-tickets`}>
+        <ExternalLink className="h-3 w-3" />
+      </Link>
+    </Button>
+  );
+
+  // Loading
   if (isLoading && tickets.length === 0) {
     return <WbrCardSkeleton className={className} />;
   }
 
-  // No store selected → show placeholder so the grid slot stays filled.
-  if (!storeId)
+  // No store selected
+  if (!storeId) {
     return (
       <V1Card title="Recent Tickets" category="quality" period="D" span={span} className={className}>
         <V1Empty>No store selected.</V1Empty>
       </V1Card>
     );
+  }
 
-  const card = (children: React.ReactNode) => (
-    <V1Card
-      title="Recent Tickets"
-      category="quality"
-      period="D"
-      span={span}
-      className={className}
-    >
-      {children}
-    </V1Card>
-  );
-
-  // Error or empty.
+  // Error or empty
   if ((error && tickets.length === 0) || (!isLoading && tickets.length === 0)) {
-    return card(
-      <V1Empty icon={ClipboardList}>
-        {error && tickets.length === 0 ? error : "No recent tickets"}
-      </V1Empty>,
+    return (
+      <V1Card title="Recent Tickets" category="quality" period="D" span={span} className={className} headerControl={pageLink}>
+        <V1Empty icon={ClipboardList}>
+          {error ? error : "No recent tickets"}
+        </V1Empty>
+      </V1Card>
     );
   }
 
-  // Data → compact list.
-  return card(
-    <table className={V1_TBL}>
-      <thead>
-        <tr>
-          <th className={V1_TH}>#</th>
-          <th className={V1_TH}>Status</th>
-          <th className={cn(V1_TH, "text-center")}>Issues</th>
-          <th className={cn(V1_TH, "text-right")}>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        {tickets.map((ticket) => (
-          <tr key={ticket.id}>
-            <td className={cn(V1_TD, "font-mono text-muted-foreground")}>
-              {ticket.id}
-            </td>
-            <td className={V1_TD}>
-              <StatusBadge
-                label={ticket.status.label}
-                value={ticket.status.value}
-              />
-            </td>
-            <td className={cn(V1_TD, "text-center tabular-nums")}>
-              {ticket.issueCount}
-            </td>
-            <td
-              className={cn(
-                V1_TD,
-                V1_NUM,
-                "whitespace-nowrap text-muted-foreground",
-              )}
-            >
-              {fmtDate(ticket.createdAt)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>,
+  // Data → compact clickable list
+  return (
+    <>
+      <V1Card
+        title="Recent Tickets"
+        category="quality"
+        period="D"
+        span={span}
+        className={className}
+        headerControl={pageLink}
+      >
+        <table className={V1_TBL}>
+          <thead>
+            <tr>
+              <th className={V1_TH}>#</th>
+              <th className={V1_TH}>Status</th>
+              <th className={cn(V1_TH, "text-center")}>Issues</th>
+              <th className={cn(V1_TH, "text-right")}>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tickets.map((ticket) => (
+              <tr
+                key={ticket.id}
+                className="cursor-pointer hover:bg-muted/40 transition-colors"
+                onClick={() => handleRowClick(ticket)}
+              >
+                <td className={cn(V1_TD, "font-mono text-muted-foreground")}>
+                  {ticket.id}
+                </td>
+                <td className={V1_TD}>
+                  <StatusBadge label={ticket.status.label} value={ticket.status.value} />
+                </td>
+                <td className={cn(V1_TD, "text-center tabular-nums")}>
+                  {ticket.issueCount}
+                </td>
+                <td className={cn(V1_TD, V1_NUM, "whitespace-nowrap text-muted-foreground")}>
+                  {fmtDate(ticket.createdAt)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </V1Card>
+
+      {sheetOpen && storeId && (
+        <TicketDetailSheet
+          open={sheetOpen}
+          ticketId={selectedTicketId}
+          storeId={storeId}
+          tickets={tickets}
+          technicians={technicians}
+          onClose={() => {
+            setSheetOpen(false);
+            setSelectedTicketId(null);
+          }}
+        />
+      )}
+    </>
   );
 }
