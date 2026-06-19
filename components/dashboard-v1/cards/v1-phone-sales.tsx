@@ -48,9 +48,8 @@ export function V1PhoneSalesCard({
       </V1Card>
     );
 
-  const { filtering, week, period, quarter, year } = data;
+  const { filtering, week, period, quarter } = data;
   const quarterNum = Math.ceil(filtering.period_number / 3);
-  const fyShort = String(filtering.fiscal_year).slice(-2);
   const yoy = mode === "yoy";
 
   const groups: CmpGroup[] = [
@@ -68,11 +67,6 @@ export function V1PhoneSalesCard({
       label: `Quarter ${quarterNum}`,
       current: { ...quarter.current } as Record<string, number>,
       baseline: { ...(yoy ? quarter.same_quarter_last_year ?? EMPTY_VALS : quarter.previous) } as Record<string, number>,
-    },
-    {
-      label: `FY 20${fyShort}`,
-      current: { ...year.current } as Record<string, number>,
-      baseline: { ...year.previous } as Record<string, number>,
     },
   ];
 
