@@ -1,32 +1,31 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import type { PhoneAndAdjustedSales } from "@/types/dashboard-report.types";
 import { fmt$, Delta, pctChangeOrNull, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1SubLabel, V1DataRow, V1Toggle, V1Empty } from "@/components/dashboard-v1/v1-ui";
+import { V1Toggle, V1Empty, V1_TBL, V1_TH, V1_TD, V1_NUM } from "@/components/dashboard-v1/v1-ui";
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  V1PhoneSalesCard — weekly phone & in-store sales, grouped by granularity,
- *  each metric compared current vs baseline (Prev / YoY toggle).
- *  Metrics: phone_sales ("Phone") + adjusted_royalty_obligation ("In Store").
- *  Mirrors wbr-phone-sales-card + wbr-comparison.
+ *  V1PhoneSalesCard — periods as rows, metrics as columns.
+ *  Mirrors PeriodComparisonCard layout from the main dashboard.
  * ────────────────────────────────────────────────────────────────────────── */
 
 type CmpMode = "previous" | "yoy";
 
-interface PhoneVals {
-  phone_sales: number;
-  adjusted_royalty_obligation: number;
-}
+const EMPTY_VALS = { phone_sales: 0, adjusted_royalty_obligation: 0 };
+
+const METRICS = [
+  { key: "phone_sales", label: "Phone", fmt: fmt$ },
+  { key: "adjusted_royalty_obligation", label: "In Store", fmt: fmt$ },
+] as const;
 
 interface CmpGroup {
   label: string;
-  current: PhoneVals;
-  baseline: PhoneVals;
+  current: Record<string, number>;
+  baseline: Record<string, number>;
 }
-
-const EMPTY: PhoneVals = { phone_sales: 0, adjusted_royalty_obligation: 0 };
 
 export function V1PhoneSalesCard({
   data,
@@ -50,29 +49,34 @@ export function V1PhoneSalesCard({
     );
 
   const { filtering, week, period, quarter, year } = data;
+  const quarterNum = Math.ceil(filtering.period_number / 3);
+  const fyShort = String(filtering.fiscal_year).slice(-2);
+  const yoy = mode === "yoy";
 
   const groups: CmpGroup[] = [
     {
-      label: "Week",
-      current: week.current,
-      baseline: mode === "yoy" ? week.same_week_last_year ?? EMPTY : week.previous,
+      label: `Week ${filtering.week_number}`,
+      current: { ...week.current } as Record<string, number>,
+      baseline: { ...(yoy ? week.same_week_last_year ?? EMPTY_VALS : week.previous) } as Record<string, number>,
     },
     {
-      label: "Period",
-      current: period.current,
-      baseline:
-        mode === "yoy" ? period.same_period_last_year ?? EMPTY : period.previous,
+      label: `Period ${filtering.period_number}`,
+      current: { ...period.current } as Record<string, number>,
+      baseline: { ...(yoy ? period.same_period_last_year ?? EMPTY_VALS : period.previous) } as Record<string, number>,
     },
     {
-      label: "Quarter",
-      current: quarter.current,
-      baseline:
-        mode === "yoy"
-          ? quarter.same_quarter_last_year ?? EMPTY
-          : quarter.previous,
+      label: `Quarter ${quarterNum}`,
+      current: { ...quarter.current } as Record<string, number>,
+      baseline: { ...(yoy ? quarter.same_quarter_last_year ?? EMPTY_VALS : quarter.previous) } as Record<string, number>,
     },
-    { label: "Year", current: year.current, baseline: year.previous },
+    {
+      label: `FY 20${fyShort}`,
+      current: { ...year.current } as Record<string, number>,
+      baseline: { ...year.previous } as Record<string, number>,
+    },
   ];
+
+  const baseLabel = yoy ? "Last Yr" : "Prev";
 
   return (
     <V1Card
@@ -81,6 +85,7 @@ export function V1PhoneSalesCard({
       period="W"
       span={span}
       className={className}
+      bodyClassName="px-0"
       headerControl={
         <V1Toggle<CmpMode>
           className="ms-1"
@@ -93,33 +98,42 @@ export function V1PhoneSalesCard({
         />
       }
     >
-      <div className="space-y-2">
-        {groups.map((g) => {
-          const phoneDelta = pctChangeOrNull(
-            g.current.phone_sales,
-            g.baseline.phone_sales,
-          );
-          const inStoreDelta = pctChangeOrNull(
-            g.current.adjusted_royalty_obligation,
-            g.baseline.adjusted_royalty_obligation,
-          );
-          return (
-            <div key={g.label}>
-              <V1SubLabel>{g.label}</V1SubLabel>
-              <V1DataRow
-                label="Phone"
-                value={fmt$(g.current.phone_sales)}
-                trailing={<Delta value={phoneDelta} />}
-              />
-              <V1DataRow
-                label="In Store"
-                value={fmt$(g.current.adjusted_royalty_obligation)}
-                trailing={<Delta value={inStoreDelta} />}
-              />
-            </div>
-          );
-        })}
-      </div>
+      <table className={cn(V1_TBL, "[&_th]:!px-3 [&_th]:!py-1.5 [&_td]:!px-3 [&_td]:!py-1.5")}>
+        <thead>
+          <tr>
+            <th className={cn(V1_TH, "w-28")} />
+            {METRICS.map((m) => (
+              <th key={m.key} className={cn(V1_TH, V1_NUM, "font-semibold text-foreground/80")}>
+                {m.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <tr key={g.label}>
+              <td className={cn(V1_TD, "font-semibold text-foreground/70")}>{g.label}</td>
+              {METRICS.map((m) => {
+                const curr = g.current[m.key] ?? 0;
+                const base = g.baseline[m.key] ?? 0;
+                return (
+                  <td key={m.key} className={cn(V1_TD, V1_NUM)}>
+                    <div className="font-semibold tabular-nums leading-tight">{m.fmt(curr)}</div>
+                    <div className="flex items-center justify-end gap-1 leading-tight">
+                      <span className="text-[9px] text-muted-foreground tabular-nums">
+                        {baseLabel} {m.fmt(base)}
+                      </span>
+                      <div className="[&>span]:!text-[9px] [&>span]:!px-1 [&>span]:!py-0 [&>span_svg]:!h-2 [&>span_svg]:!w-2">
+                        <Delta value={pctChangeOrNull(curr, base)} />
+                      </div>
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </V1Card>
   );
 }

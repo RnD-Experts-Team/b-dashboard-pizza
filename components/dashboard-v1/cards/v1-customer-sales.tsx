@@ -1,24 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import type { CustomerCountAndSales } from "@/types/dashboard-report.types";
 import { fmt$, fmtNum, Delta, pctChangeOrNull, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1SubLabel, V1DataRow, V1Toggle, V1Empty } from "@/components/dashboard-v1/v1-ui";
+import { V1Toggle, V1Empty, V1_TBL, V1_TH, V1_TD, V1_NUM } from "@/components/dashboard-v1/v1-ui";
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  V1CustomerSalesCard — weekly customer & sales, grouped by granularity
- *  (Week / Period / Quarter / Year), each metric compared current vs a
- *  baseline (previous, or same-period-last-year via the Prev/YoY toggle).
- *  Mirrors the data shaping of wbr-customer-sales-card + wbr-comparison.
+ *  V1CustomerSalesCard — periods as rows, metrics as columns.
+ *  Mirrors PeriodComparisonCard layout from the main dashboard.
  * ────────────────────────────────────────────────────────────────────────── */
 
 type CmpMode = "previous" | "yoy";
 
+const METRICS = [
+  { key: "total_sales", label: "Sales", fmt: fmt$ },
+  { key: "customer_count", label: "Guests", fmt: fmtNum },
+] as const;
+
 interface CmpGroup {
   label: string;
-  current: { total_sales: number; customer_count: number };
-  baseline: { total_sales: number; customer_count: number };
+  current: Record<string, number>;
+  baseline: Record<string, number>;
 }
 
 export function V1CustomerSalesCard({
@@ -43,27 +47,34 @@ export function V1CustomerSalesCard({
     );
 
   const { filtering, week, period, quarter, year } = data;
+  const quarterNum = Math.ceil(filtering.period_number / 3);
+  const fyShort = String(filtering.fiscal_year).slice(-2);
+  const yoy = mode === "yoy";
 
   const groups: CmpGroup[] = [
     {
-      label: "Week",
-      current: week.current,
-      baseline: mode === "yoy" ? week.same_week_last_year : week.previous,
+      label: `Week ${filtering.week_number}`,
+      current: { ...week.current } as Record<string, number>,
+      baseline: { ...(yoy ? week.same_week_last_year : week.previous) } as Record<string, number>,
     },
     {
-      label: "Period",
-      current: period.current,
-      baseline: mode === "yoy" ? period.same_period_last_year : period.previous,
+      label: `Period ${filtering.period_number}`,
+      current: { ...period.current } as Record<string, number>,
+      baseline: { ...(yoy ? period.same_period_last_year : period.previous) } as Record<string, number>,
     },
     {
-      label: "Quarter",
-      current: quarter.current,
-      baseline:
-        mode === "yoy" ? quarter.same_quarter_last_year : quarter.previous,
+      label: `Quarter ${quarterNum}`,
+      current: { ...quarter.current } as Record<string, number>,
+      baseline: { ...(yoy ? quarter.same_quarter_last_year : quarter.previous) } as Record<string, number>,
     },
-    // Year only has current vs previous — same in both modes.
-    { label: "Year", current: year.current, baseline: year.previous },
+    {
+      label: `FY 20${fyShort}`,
+      current: { ...year.current } as Record<string, number>,
+      baseline: { ...year.previous } as Record<string, number>,
+    },
   ];
+
+  const baseLabel = yoy ? "Last Yr" : "Prev";
 
   return (
     <V1Card
@@ -72,6 +83,7 @@ export function V1CustomerSalesCard({
       period="W"
       span={span}
       className={className}
+      bodyClassName="px-0"
       headerControl={
         <V1Toggle<CmpMode>
           className="ms-1"
@@ -84,33 +96,42 @@ export function V1CustomerSalesCard({
         />
       }
     >
-      <div className="space-y-2">
-        {groups.map((g) => {
-          const salesDelta = pctChangeOrNull(
-            g.current.total_sales,
-            g.baseline.total_sales,
-          );
-          const guestsDelta = pctChangeOrNull(
-            g.current.customer_count,
-            g.baseline.customer_count,
-          );
-          return (
-            <div key={g.label}>
-              <V1SubLabel>{g.label}</V1SubLabel>
-              <V1DataRow
-                label="Sales"
-                value={fmt$(g.current.total_sales)}
-                trailing={<Delta value={salesDelta} />}
-              />
-              <V1DataRow
-                label="Guests"
-                value={fmtNum(g.current.customer_count)}
-                trailing={<Delta value={guestsDelta} />}
-              />
-            </div>
-          );
-        })}
-      </div>
+      <table className={cn(V1_TBL, "[&_th]:!px-3 [&_th]:!py-1.5 [&_td]:!px-3 [&_td]:!py-1.5")}>
+        <thead>
+          <tr>
+            <th className={cn(V1_TH, "w-28")} />
+            {METRICS.map((m) => (
+              <th key={m.key} className={cn(V1_TH, V1_NUM, "font-semibold text-foreground/80")}>
+                {m.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((g) => (
+            <tr key={g.label}>
+              <td className={cn(V1_TD, "font-semibold text-foreground/70")}>{g.label}</td>
+              {METRICS.map((m) => {
+                const curr = g.current[m.key] ?? 0;
+                const base = g.baseline[m.key] ?? 0;
+                return (
+                  <td key={m.key} className={cn(V1_TD, V1_NUM)}>
+                    <div className="font-semibold tabular-nums leading-tight">{m.fmt(curr)}</div>
+                    <div className="flex items-center justify-end gap-1 leading-tight">
+                      <span className="text-[9px] text-muted-foreground tabular-nums">
+                        {baseLabel} {m.fmt(base)}
+                      </span>
+                      <div className="[&>span]:!text-[9px] [&>span]:!px-1 [&>span]:!py-0 [&>span_svg]:!h-2 [&>span_svg]:!w-2">
+                        <Delta value={pctChangeOrNull(curr, base)} />
+                      </div>
+                    </div>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </V1Card>
   );
 }

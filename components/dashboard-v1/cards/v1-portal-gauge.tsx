@@ -39,6 +39,7 @@ export function V1PortalGaugeCard({
         period={hasWeekly ? "D·WTD" : "D"}
         span={span}
         className={className}
+        bodyClassName="overflow-hidden"
         onExpand={hasWeekly ? () => setOpen(true) : undefined}
         headerControl={
           hasWeekly ? (
@@ -54,17 +55,19 @@ export function V1PortalGaugeCard({
           ) : undefined
         }
       >
-        <div className="flex h-full flex-col justify-center gap-1">
-          <SpeedometerGauge
-            value={primary}
-            secondaryValue={secondary}
-            secondaryColor="#22C55E"
-            secondaryLabel=""
-            zones={PERFORMANCE_ZONES}
-            statusLabel={getPerformanceLabel(primary)}
-            statusColor="#DC2626"
-            valueDisplay={`${primary.toFixed(1)}%`}
-          />
+        <div className="flex flex-col gap-1">
+          <div className="mx-auto w-full max-w-[260px]">
+            <SpeedometerGauge
+              value={primary}
+              secondaryValue={secondary}
+              secondaryColor="#22C55E"
+              secondaryLabel=""
+              zones={PERFORMANCE_ZONES}
+              statusLabel={getPerformanceLabel(primary)}
+              statusColor="#DC2626"
+              valueDisplay={`${primary.toFixed(1)}%`}
+            />
+          </div>
           <div className="flex items-center justify-center gap-3">
             <span className="flex items-center gap-1 text-[8px] font-medium text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Put Into Portal
