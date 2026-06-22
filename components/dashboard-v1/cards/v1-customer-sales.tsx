@@ -46,7 +46,7 @@ export function V1CustomerSalesCard({
       </V1Card>
     );
 
-  const { filtering, week, period, quarter } = data;
+  const { filtering, week, period, quarter, year } = data;
   const quarterNum = Math.ceil(filtering.period_number / 3);
   const yoy = mode === "yoy";
 
@@ -66,6 +66,11 @@ export function V1CustomerSalesCard({
       current: { ...quarter.current } as Record<string, number>,
       baseline: { ...(yoy ? quarter.same_quarter_last_year : quarter.previous) } as Record<string, number>,
     },
+    {
+      label: "WTD",
+      current: { ...year.current } as Record<string, number>,
+      baseline: { ...year.previous } as Record<string, number>,
+    },
   ];
 
   const baseLabel = yoy ? "Last Yr" : "Prev";
@@ -77,7 +82,7 @@ export function V1CustomerSalesCard({
       period="W"
       span={span}
       className={className}
-      bodyClassName="px-0"
+      bodyClassName="px-0 overflow-x-hidden"
       headerControl={
         <V1Toggle<CmpMode>
           className="ms-1"
@@ -90,7 +95,7 @@ export function V1CustomerSalesCard({
         />
       }
     >
-      <table className={cn(V1_TBL, "[&_th]:!px-3 [&_th]:!py-1.5 [&_td]:!px-3 [&_td]:!py-1.5")}>
+      <table className={cn(V1_TBL, "[&_th]:!px-1.5 [&_th]:!py-1.5 [&_td]:!px-1.5 [&_td]:!py-1.5")}>
         <thead>
           <tr>
             <th className={cn(V1_TH, "w-28")} />

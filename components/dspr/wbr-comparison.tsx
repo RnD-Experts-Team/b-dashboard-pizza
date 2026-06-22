@@ -104,7 +104,7 @@ export function PeriodComparisonCard({
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="min-h-0 flex-1 overflow-y-auto px-0 pb-1">
+      <CardContent className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-0 pb-1">
         {/* Periods as rows, metrics as column headers */}
         <table className={cn(
           TBL,
