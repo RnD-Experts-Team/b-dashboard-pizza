@@ -142,7 +142,6 @@ export function V1ChannelSalesWeeklyCard({
         span={span}
         className={className}
         bodyClassName="px-0"
-        headerNote={`${fmtDate(data.filtering.week_start)} → ${fmtDate(data.filtering.week_end)}`}
         onExpand={() => setOpen(true)}
       >
         <ChannelTable current={current_week} previous={previous_week} />

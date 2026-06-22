@@ -62,7 +62,6 @@ export function V1CashControlCard({
       period="W"
       span={span}
       className={className}
-      headerNote={`${filtering.week_start} · P${filtering.period_number}`}
     >
       <div className="space-y-2">
         <V1MetricGrid cols={2}>

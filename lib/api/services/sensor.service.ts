@@ -2,6 +2,7 @@ import axios from "axios";
 import type {
   SensorDevice,
   SensorsResponse,
+  BulkSensorsResponse,
   ReportsResponse,
   HistoryResponse,
   AlertsResponse,
@@ -177,6 +178,25 @@ export const sensorService = {
         { params: { unit }, headers: buildHeaders(), timeout: 15_000, signal },
       );
       return normalizeSensorsResponse(data, unit);
+    } catch (err) {
+      throw mapAxiosError(err);
+    }
+  },
+
+  /**
+   * Fetch live sensor data for multiple stores via the bulk endpoint.
+   * Requires the "mos" permission. Passes user's store IDs as query params.
+   */
+  async getMosSensors(storeIds: string[], unit?: "c" | "f", signal?: AbortSignal): Promise<BulkSensorsResponse> {
+    try {
+      const params = new URLSearchParams();
+      storeIds.forEach((id) => params.append("store_ids[]", id));
+      if (unit) params.set("unit", unit === "f" ? "F" : "C");
+      const { data } = await axios.get<BulkSensorsResponse>(
+        `/api/sensors?${params}`,
+        { headers: buildHeaders(), timeout: 15_000, signal },
+      );
+      return data;
     } catch (err) {
       throw mapAxiosError(err);
     }

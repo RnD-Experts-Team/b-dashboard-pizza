@@ -54,6 +54,7 @@ export function V1HnrCard({
         period={hasWeekly ? "D·WTD" : "D"}
         span={span}
         className={className}
+        bodyClassName="overflow-hidden"
         onExpand={hasWeekly ? () => setOpen(true) : undefined}
         headerControl={
           hasWeekly ? (
@@ -69,15 +70,19 @@ export function V1HnrCard({
           ) : undefined
         }
       >
-        <div className="flex h-full flex-col justify-center gap-1.5">
-          <SpeedometerGauge
-            value={pct}
-            max={100}
-            zones={HNR_ZONES}
-            statusLabel={hnrLabel(pct)}
-            statusColor="#DC2626"
-            valueDisplay={`${pct.toFixed(1)}%`}
-          />
+        <div className="flex flex-col gap-1">
+          <div className="mx-auto w-full max-w-[260px]">
+            <SpeedometerGauge
+              value={pct}
+              max={100}
+              zones={HNR_ZONES}
+              statusLabel={hnrLabel(pct)}
+              statusColor="#DC2626"
+              valueDisplay={`${pct.toFixed(1)}%`}
+            />
+          </div>
+          {/* spacer matches Portal's legend row height so grids align */}
+          <div className="h-4 shrink-0" />
           <V1MetricGrid cols={3}>
             <V1Metric size="sm" label="Trans." value={fmtNum(active.hnr_transactions)} />
             <V1Metric

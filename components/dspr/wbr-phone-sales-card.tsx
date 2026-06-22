@@ -30,7 +30,6 @@ export function WbrPhoneSalesCard({
 
   const { filtering, week, period, quarter, year } = data;
   const quarterNum = Math.ceil(filtering.period_number / 3);
-  const fyShort = String(filtering.fiscal_year).slice(-2);
   const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
 
   const groupsForMode = (mode: CmpMode): CmpGroup[] => [
@@ -59,7 +58,7 @@ export function WbrPhoneSalesCard({
           : quarter.previous),
       },
     },
-    { label: `FY 20${fyShort}`, current: { ...year.current }, baseline: { ...year.previous } },
+    { label: "WTD", current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (

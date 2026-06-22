@@ -55,6 +55,7 @@ export function V1LaborCard({
         period={hasWeekly ? "D·WTD" : "D"}
         span={span}
         className={className}
+        bodyClassName="overflow-hidden"
         onExpand={hasWeekly ? () => setOpen(true) : undefined}
         headerControl={
           hasWeekly ? (
@@ -70,16 +71,18 @@ export function V1LaborCard({
           ) : undefined
         }
       >
-        <div className="flex h-full flex-col justify-center">
-          <SpeedometerGauge
-            value={active}
-            max={50}
-            zones={LABOR_ZONES}
-            statusLabel={laborLabel(active)}
-            statusColor="#DC2626"
-            valueDisplay={`${active.toFixed(1)}%`}
-          />
-          <p className="mt-1 text-center text-[9px] font-medium text-muted-foreground">
+        <div className="flex flex-col">
+          <div className="mx-auto w-full max-w-[260px]">
+            <SpeedometerGauge
+              value={active}
+              max={50}
+              zones={LABOR_ZONES}
+              statusLabel={laborLabel(active)}
+              statusColor="#DC2626"
+              valueDisplay={`${active.toFixed(1)}%`}
+            />
+          </div>
+          <p className="text-center text-[9px] font-medium text-muted-foreground">
             Target range:{" "}
             <span className="font-semibold text-emerald-500">19–24%</span>
           </p>

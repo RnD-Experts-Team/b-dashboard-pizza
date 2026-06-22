@@ -159,6 +159,12 @@ export function DashboardV1() {
   const managerDashboard = useManagerDashboard(storeId, toApiDate(selectedDate));
   const hooksWbr = useHooksWbr(storeId, toApiDate(selectedDate));
 
+  const handleRefreshAll = useCallback(() => {
+    refetch(toApiDate(selectedDate));
+    managerDashboard.refetch();
+    hooksWbr.refetch();
+  }, [refetch, selectedDate, managerDashboard, hooksWbr]);
+
   const lastUpdatedLabel = useMemo(() => {
     if (!lastFetchedAt) return null;
     return formatDistanceToNow(lastFetchedAt, { addSuffix: true });
@@ -241,7 +247,7 @@ export function DashboardV1() {
             <h3 className="text-sm font-semibold">Couldn’t load the report</h3>
             <p className="max-w-md text-xs text-muted-foreground">{error.message}</p>
           </div>
-          <Button size="sm" onClick={() => refetch(toApiDate(selectedDate))}>
+          <Button size="sm" onClick={handleRefreshAll}>
             <RefreshCw className="me-1.5 h-4 w-4" />
             Try Again
           </Button>
@@ -269,6 +275,8 @@ export function DashboardV1() {
 
   // ── Success ─────────────────────────────────────────────────────────────
   const { filtering, sales, top, day, goal_metrics, store_score } = data;
+
+  const weekLabel = `Week ${getISOWeek(parseISO(filtering.week_start))} (${format(parseISO(filtering.week_start), "MMM d")} → ${format(parseISO(filtering.week_end), "MMM d")})`;
 
   return (
     <div ref={dashboardRef} className={cn("space-y-2", isRefreshing && "relative")}>
@@ -321,7 +329,7 @@ export function DashboardV1() {
               <Badge
                 variant="destructive"
                 className="cursor-pointer gap-1 text-xs"
-                onClick={() => refetch(toApiDate(selectedDate))}
+                onClick={handleRefreshAll}
                 role="button"
                 tabIndex={0}
               >
@@ -340,7 +348,7 @@ export function DashboardV1() {
                 <Badge
                   variant="outline"
                   className="cursor-pointer gap-1 border-amber-300 text-xs text-amber-600 dark:border-amber-800 dark:text-amber-400"
-                  onClick={refresh}
+                  onClick={handleRefreshAll}
                   role="button"
                   tabIndex={0}
                 >
@@ -365,7 +373,7 @@ export function DashboardV1() {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={() => refetch(toApiDate(selectedDate))}
+                onClick={handleRefreshAll}
                 disabled={isRefreshing}
               >
                 {isRefreshing ? (
@@ -407,7 +415,7 @@ export function DashboardV1() {
       {/* <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} /> */}
 
       {/* ── Sales & Trends ───────────────────────────────────────────────── */}
-      <V1Section category="sales">
+      <V1Section category="sales" weekLabel={weekLabel}>
         <V1SalesTrendCard sales={sales} span={2} />
         <V1StoreScoreCard
           upsellingDay={day.upselling?.total_upselling_day}
@@ -434,7 +442,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Operations & Speed ───────────────────────────────────────────── */}
-      <V1Section category="operations">
+      <V1Section category="operations" weekLabel={weekLabel}>
         <V1PortalGaugeCard portal={day.portal} span={1} />
         <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} span={1} />
         <V1LaborCard
@@ -449,7 +457,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Menu & Product ───────────────────────────────────────────────── */}
-      <V1Section category="menu">
+      <V1Section category="menu" weekLabel={weekLabel}>
         <V1TopItemsCard
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
@@ -471,7 +479,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── People & Labor ───────────────────────────────────────────────── */}
-      <V1Section category="people">
+      <V1Section category="people" weekLabel={weekLabel}>
         <V1CurrentEmployeesCard managerDashboard={managerDashboard} span={2} />
         <V1HighHoursCard
           data={managerDashboard.highHoursEmployees}
@@ -487,7 +495,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Finance & Cash ───────────────────────────────────────────────── */}
-      <V1Section category="finance">
+      <V1Section category="finance" weekLabel={weekLabel}>
         <V1CashControlCard data={wbrData?.["cash-control"]} isLoading={isLoading} span={1} />
         <V1TransferInOutCard
           data={wbrData?.["transfer-in-out"]}
@@ -499,7 +507,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Quality & Voice of Customer ──────────────────────────────────── */}
-      <V1Section category="quality">
+      <V1Section category="quality" weekLabel={weekLabel}>
         <V1QaRatingsCard
           requirements={[
             {
