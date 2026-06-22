@@ -28,7 +28,7 @@ export function WbrPhoneSalesCard({
   if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
-  const { filtering, week, period, quarter } = data;
+  const { filtering, week, period, quarter, year } = data;
   const quarterNum = Math.ceil(filtering.period_number / 3);
   const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
 
@@ -58,6 +58,7 @@ export function WbrPhoneSalesCard({
           : quarter.previous),
       },
     },
+    { label: "WTD", current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (
