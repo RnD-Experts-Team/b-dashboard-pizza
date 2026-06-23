@@ -5,7 +5,6 @@ import {
 } from "@/lib/api/services/sensor.service";
 import type {
   SensorsResponse,
-  BulkSensorsResponse,
   SensorErrorCode,
 } from "@/types/sensor.types";
 
@@ -29,24 +28,18 @@ export interface SensorErrorState {
 interface SensorStoreState {
   /* ── Live sensor data ─────────────────────────────────────────────────── */
   sensors: SensorsResponse | null;
-  mosSensors: BulkSensorsResponse | null;
   sensorsLoading: boolean;
   sensorsError: SensorErrorState | null;
 
-  /* ── Fetch mode ───────────────────────────────────────────────────────── */
-  mode: "store" | "mos";
-
   /* ── Metadata ─────────────────────────────────────────────────────────── */
   lastStoreId: string | null;
-  lastStoreIds: string[] | null;
   lastFetchedAt: number | null;
 
   /* ── Temperature unit toggle (°F ↔ °C) ────────────────────────────────── */
   useCelsius: boolean;
 
   /* ── Actions ──────────────────────────────────────────────────────────── */
-  fetchSensors: (storeIdOrIds: string | string[], unit?: "c" | "f") => Promise<void>;
-  setMode: (mode: "store" | "mos") => void;
+  fetchSensors: (storeId: string, unit?: "c" | "f") => Promise<void>;
   toggleUnit: () => void;
   reset: () => void;
 
@@ -63,6 +56,7 @@ interface SensorStoreState {
 let _autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let _abortController: AbortController | null = null;
 
+/** Convert a caught error into a UI-friendly SensorErrorState */
 function toErrorState(err: unknown): SensorErrorState {
   if (err instanceof SensorError) {
     return { message: err.message, code: err.code, retryable: err.retryable };
@@ -80,70 +74,45 @@ function toErrorState(err: unknown): SensorErrorState {
 
 export const useSensorStore = create<SensorStoreState>()((set, get) => ({
   sensors: null,
-  mosSensors: null,
   sensorsLoading: false,
   sensorsError: null,
 
-  mode: "store",
-
   lastStoreId: null,
-  lastStoreIds: null,
   lastFetchedAt: null,
   useCelsius: true,
 
-  /* ── Fetch live sensors (single store or bulk MOS) ────────────────────── */
-  fetchSensors: async (storeIdOrIds, unit?) => {
-    const mode = get().mode;
+  /* ── Fetch live sensors ───────────────────────────────────────────────── */
+  fetchSensors: async (storeId: string, unit?: "c" | "f") => {
     _abortController?.abort();
     _abortController = new AbortController();
     set({ sensorsLoading: true, sensorsError: null });
     const u = unit ?? (get().useCelsius ? "c" : "f");
-
     try {
-      if (mode === "mos") {
-        const ids = Array.isArray(storeIdOrIds) ? storeIdOrIds : [storeIdOrIds];
-        const data = await sensorService.getMosSensors(ids, u, _abortController.signal);
-        set({ mosSensors: data, sensors: null, sensorsLoading: false, lastStoreIds: ids, lastFetchedAt: Date.now() });
-      } else {
-        const storeId = Array.isArray(storeIdOrIds) ? storeIdOrIds[0] : storeIdOrIds;
-        const data = await sensorService.getSensors(storeId, u, _abortController.signal);
-        set({ sensors: data, mosSensors: null, sensorsLoading: false, lastStoreId: storeId, lastFetchedAt: Date.now() });
-      }
+      const data = await sensorService.getSensors(storeId, u, _abortController.signal);
+      set({ sensors: data, sensorsLoading: false, lastStoreId: storeId, lastFetchedAt: Date.now() });
     } catch (err) {
       if (axios.isCancel(err)) return;
       set({ sensorsLoading: false, sensorsError: toErrorState(err) });
     }
   },
 
-  setMode: (mode) => {
-    set({ mode });
-  },
-
   toggleUnit: () => {
     const s = get();
     const newUseCelsius = !s.useCelsius;
     set({ useCelsius: newUseCelsius });
-    const unit = newUseCelsius ? "c" : "f";
-    if (s.mode === "mos" && s.lastStoreIds) {
-      s.fetchSensors(s.lastStoreIds, unit);
-    } else if (s.lastStoreId) {
-      s.fetchSensors(s.lastStoreId, unit);
+    if (s.lastStoreId) {
+      s.fetchSensors(s.lastStoreId, newUseCelsius ? "c" : "f");
     }
   },
 
   reset: () => {
     _abortController?.abort();
-    if (_autoRefreshTimer) {
-      clearInterval(_autoRefreshTimer);
-      _autoRefreshTimer = null;
-    }
+    if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
     set({
       sensors: null,
-      mosSensors: null,
       sensorsLoading: false,
       sensorsError: null,
       lastStoreId: null,
-      lastStoreIds: null,
       lastFetchedAt: null,
     });
   },
@@ -152,11 +121,8 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
   startAutoRefresh: () => {
     if (_autoRefreshTimer) return;
     _autoRefreshTimer = setInterval(() => {
-      const { mode, lastStoreId, lastStoreIds, isStale } = get();
-      if (!isStale()) return;
-      if (mode === "mos" && lastStoreIds) {
-        get().fetchSensors(lastStoreIds);
-      } else if (lastStoreId) {
+      const { lastStoreId, isStale } = get();
+      if (lastStoreId && isStale()) {
         get().fetchSensors(lastStoreId);
       }
     }, AUTO_REFRESH_MS);
