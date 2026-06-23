@@ -214,6 +214,44 @@ export interface AlertsQueryParams {
   to?: string;
 }
 
+/* ── GET /stores/sensors (MOS — all active stores) ─────────────────────── */
+
+export interface MosSensor {
+  device_id: string;
+  device_name: string;
+  online: boolean;
+  temperature: number | null;
+  temperature_unit: TemperatureUnit | null;
+  success: boolean;
+  error: string | null;
+}
+
+export interface MosHub {
+  device_id: string;
+  device_name: string;
+  online: boolean;
+  temperature: number | null;
+  success: boolean;
+  error: string | null;
+}
+
+export interface MosStoreEntry {
+  store: SensorStoreInfo;
+  hub: MosHub | null;
+  sensors: MosSensor[];
+  count: number;
+}
+
+export interface MosAllStoresResponse {
+  success: boolean;
+  temperature_unit: TemperatureUnit;
+  count: number;
+  stores: MosStoreEntry[];
+  requested: string[];
+  missing: string[];
+  fetched_at: string;
+}
+
 /* ── Error ─────────────────────────────────────────────────────────────── */
 
 export type SensorErrorCode =

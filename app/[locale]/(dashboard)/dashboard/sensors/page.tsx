@@ -1,12 +1,30 @@
-﻿"use client";
+"use client";
 
+import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useSensors } from "@/lib/hooks/use-sensors";
+import { useMosSensors } from "@/lib/hooks/use-mos-sensors";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   RefreshCw,
   Thermometer,
@@ -18,9 +36,14 @@ import {
   ToggleLeft,
   ToggleRight,
   Radio,
+  Search,
+  Building2,
+  ChevronDown,
+  LayoutGrid,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SensorDevice } from "@/types/sensor.types";
+import type { SensorDevice, MosSensor } from "@/types/sensor.types";
 import type { SensorErrorState } from "@/lib/store/sensor.store";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -38,6 +61,19 @@ function formatTemp(value: number | string | null | undefined, useCelsius: boole
   return `${round1(num)}°${useCelsius ? "C" : "F"}`;
 }
 
+function formatMosTemp(
+  temp: number | null,
+  tempUnit: string | null | undefined,
+  useCelsius: boolean,
+): string {
+  if (temp == null) return "—";
+  const isC = (tempUnit ?? "C").toUpperCase() !== "F";
+  let display = temp;
+  if (!useCelsius && isC) display = (temp * 9) / 5 + 32;
+  else if (useCelsius && !isC) display = ((temp - 32) * 5) / 9;
+  return `${round1(display)}°${useCelsius ? "C" : "F"}`;
+}
+
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -49,8 +85,51 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function cleanSensorName(name: string): string {
+  return name.replace(/\s\d+-\d+$/, "").replace(/\./g, " ").trim();
+}
+
+/**
+ * Returns a canonical lowercase key used to deduplicate and match sensor
+ * columns across stores. Handles:
+ *   - Store-number suffix  ("freezer 03795-00038" → "freezer")
+ *   - CamelCase            ("MakingTable"         → "making table")
+ *   - Hyphens / dots       ("Walk-in cooler"      → "walk in cooler")
+ *   - Mixed capitalisation ("Freezer" vs "freezer"→ same key)
+ */
+function sensorKey(rawName: string): string {
+  return rawName
+    .replace(/\s[\d]+-[\d]+$/, "")        // strip store-number suffix
+    .replace(/([a-z])([A-Z])/g, "$1 $2")  // CamelCase → spaced
+    .replace(/[-_.]+/g, " ")              // hyphens / dots → space
+    .replace(/\s+/g, " ")                 // collapse whitespace
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Maps known variant keys → a single canonical key.
+ * Add entries here whenever two different device_name values refer to the same
+ * physical sensor type across stores.
+ */
+const SENSOR_ALIASES: Record<string, string> = {
+  "water":  "hot water",    // some stores report "Water", others "Hot Water"
+  "making": "making table", // some stores report "Making", others "Making Table"
+};
+
+/** Normalizes + resolves aliases so the same sensor type always gets the same key. */
+function canonicalKey(rawName: string): string {
+  const key = sensorKey(rawName);
+  return SENSOR_ALIASES[key] ?? key;
+}
+
+/** Title-case a normalized sensor key for display. */
+function sensorLabel(key: string): string {
+  return key.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Sub-components                                                          */
+/*  User View sub-components                                                */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function ErrorCard({
@@ -91,12 +170,11 @@ function StatsCards({
   t: ReturnType<typeof useTranslations>;
 }) {
   const cards = [
-    { label: t("stats.totalDevices"), value: totalDevices, icon: Radio, color: "text-blue-500" },
-    { label: t("stats.online"), value: onlineCount, icon: Wifi, color: "text-green-500" },
-    { label: t("stats.offline"), value: offlineCount, icon: WifiOff, color: "text-red-500" },
-    { label: t("stats.alerts"), value: alertCount, icon: AlertTriangle, color: "text-amber-500" },
+    { label: t("stats.totalDevices"), value: totalDevices, icon: Radio,         color: "text-blue-500" },
+    { label: t("stats.online"),       value: onlineCount,  icon: Wifi,          color: "text-green-500" },
+    { label: t("stats.offline"),      value: offlineCount, icon: WifiOff,       color: "text-red-500" },
+    { label: t("stats.alerts"),       value: alertCount,   icon: AlertTriangle, color: "text-amber-500" },
   ];
-
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {cards.map((c) => (
@@ -123,21 +201,19 @@ function SensorCard({
   useCelsius: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const state = sensor.state;
-  const isAlert = state?.state === "alert";
+  const state    = sensor.state;
+  const isAlert  = state?.state === "alert";
   const isOnline = sensor.online;
-  const temp = sensor.temperature ?? state?.temperature;
+  const temp     = sensor.temperature ?? state?.temperature;
 
   return (
     <Card className={cn("transition-all", isAlert && "border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/10")}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-      <CardTitle className="text-sm font-semibold">
-          {sensor.device_name
-            .replace(/\s\d+-\d+$/, '')
-            .replace(/\./g, ' ')}
-        </CardTitle>         
-         <div className="flex items-center gap-1.5">
+          <CardTitle className="text-sm font-semibold">
+            {cleanSensorName(sensor.device_name)}
+          </CardTitle>
+          <div className="flex items-center gap-1.5">
             {isAlert && (
               <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
                 {t("alert")}
@@ -148,47 +224,48 @@ function SensorCard({
             </Badge>
           </div>
         </div>
-        {/* <CardDescription className="text-xs">
-          {sensor.model_name} · {sensor.device_type}
-        </CardDescription> */}
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
-        {temp != null && (
-          <div className="flex items-baseline gap-1">
-            <Thermometer className={cn("h-5 w-5", isAlert ? "text-amber-500" : "text-blue-500")} />
-            <span className="text-2xl font-bold tabular-nums">{formatTemp(temp, useCelsius)}</span>
+        {!isOnline ? (
+          <div className="flex flex-col items-center gap-1.5 py-3 text-center">
+            <WifiOff className="h-7 w-7 text-red-400" />
+            <p className="text-xs text-muted-foreground">No data — sensor offline</p>
+            {sensor.reported_at && (
+              <p className="text-[10px] text-muted-foreground/60">
+                Last seen {formatDate(sensor.reported_at)}
+              </p>
+            )}
           </div>
+        ) : (
+          <>
+            {temp != null && (
+              <div className="flex items-baseline gap-1">
+                <Thermometer className={cn("h-5 w-5", isAlert ? "text-amber-500" : "text-blue-500")} />
+                <span className="text-2xl font-bold tabular-nums">{formatTemp(temp, useCelsius)}</span>
+              </div>
+            )}
+            {state?.tempLimit && (
+              <p className="text-xs text-muted-foreground">
+                {t("tempRange")}: {formatTemp(state.tempLimit.min, useCelsius)} – {formatTemp(state.tempLimit.max, useCelsius)}
+              </p>
+            )}
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              {state?.battery != null && (
+                <span className="flex items-center gap-1">
+                  <Battery className="h-3.5 w-3.5" />
+                  {state.battery}/4
+                </span>
+              )}
+              {sensor.reported_at && <span className="ml-auto">{formatDate(sensor.reported_at)}</span>}
+            </div>
+          </>
         )}
-
-        {state?.tempLimit && (
-          <p className="text-xs text-muted-foreground">
-            {t("tempRange")}: {formatTemp(state.tempLimit.min, useCelsius)} – {formatTemp(state.tempLimit.max, useCelsius)}
-          </p>
-        )}
-
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          {state?.battery != null && (
-            <span className="flex items-center gap-1">
-              <Battery className="h-3.5 w-3.5" />
-              {state.battery}/4
-            </span>
-          )}
-          {sensor.reported_at && (
-            <span className="ml-auto">{formatDate(sensor.reported_at)}</span>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
 }
 
-function HubCard({
-  hub,
-  t,
-}: {
-  hub: SensorDevice;
-  t: ReturnType<typeof useTranslations>;
-}) {
+function HubCard({ hub, t }: { hub: SensorDevice; t: ReturnType<typeof useTranslations> }) {
   return (
     <Card className="border-dashed">
       <CardContent className="flex items-center gap-3 p-4">
@@ -241,6 +318,350 @@ function SensorsPageSkeleton() {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/*  MOS View — pivot table (store rows × sensor columns)                   */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+function MosSensorCell({ sensor }: { sensor: MosSensor | undefined; useCelsius: boolean }) {
+  if (!sensor) {
+    return <span className="text-muted-foreground/40 text-xs">—</span>;
+  }
+  if (!sensor.online) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-red-500 dark:text-red-400 font-medium">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />
+        Offline
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium tabular-nums">
+      <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+      {/* temperature rendered by parent so useCelsius prop is available */}
+    </span>
+  );
+}
+
+function MosTableSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-12" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="rounded-md border overflow-hidden">
+        <div className="p-4 space-y-2.5">
+          <Skeleton className="h-9 w-full" />
+          {[...Array(8)].map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MosView({ useCelsius }: { useCelsius: boolean }) {
+  const { mosData, mosLoading, mosError, refetchMos } = useMosSensors();
+  const [search, setSearch] = useState("");
+
+  /* ── Derive pivot columns — one per unique normalized sensor key ────────── */
+  const sensorColumns = useMemo<string[]>(() => {
+    if (!mosData) return [];
+    const keys = new Set<string>();
+    mosData.stores.forEach((entry) => {
+      entry.sensors.forEach((s) => keys.add(canonicalKey(s.device_name)));
+    });
+    return Array.from(keys).sort();
+  }, [mosData]);
+
+  /* ── Loading ── */
+  if (mosLoading && !mosData) {
+    return (
+      <div className="space-y-4">
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+          <span>Loading sensor data for all stores…</span>
+        </div>
+        <MosTableSkeleton />
+      </div>
+    );
+  }
+
+  /* ── Error ── */
+  if (mosError && !mosData) {
+    return (
+      <Card className="border-destructive/50">
+        <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <AlertTriangle className="h-10 w-10 text-destructive" />
+          <h3 className="text-lg font-semibold">Failed to load MOS data</h3>
+          <p className="text-sm text-muted-foreground max-w-sm">{mosError.message}</p>
+          {mosError.retryable && (
+            <Button variant="outline" size="sm" onClick={refetchMos}>
+              <RefreshCw className="h-4 w-4 me-1.5" /> Retry
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!mosData) return null;
+
+  const allStores = mosData.stores;
+
+  /* ── Summary stats ── */
+  const totalSensors      = allStores.reduce((n, s) => n + s.count, 0);
+  const storesHubOnline   = allStores.filter((s) => s.hub?.online).length;
+  const totalOffline      = allStores.reduce(
+    (n, s) => n + s.sensors.filter((d) => !d.online).length, 0,
+  );
+  const storesWithIssues  = allStores.filter(
+    (s) => !s.hub?.online || s.sensors.some((d) => !d.online || !d.success),
+  ).length;
+
+  /* ── Search filter ── */
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? allStores.filter(
+        (s) =>
+          s.store.store_name.toLowerCase().includes(q) ||
+          s.store.store_number.toLowerCase().includes(q),
+      )
+    : allStores;
+
+  const fetchedAt = mosData.fetched_at ? formatDate(mosData.fetched_at) : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Background refresh */}
+      {mosLoading && mosData && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+          <span>Refreshing all-store sensor data…</span>
+        </div>
+      )}
+
+      {/* Partial error */}
+      {mosError && mosData && (
+        <Card className="border-destructive/50">
+          <CardContent className="flex items-center gap-3 py-3 px-4">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            <p className="text-sm text-muted-foreground flex-1">{mosError.message}</p>
+            {mosError.retryable && (
+              <Button variant="outline" size="sm" onClick={refetchMos}>Retry</Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {[
+          { label: "Total Stores",    value: mosData.count,      icon: Building2, color: "text-blue-500" },
+          { label: "Hubs Online",     value: storesHubOnline,    icon: Wifi,      color: "text-green-500" },
+          { label: "Total Sensors",   value: totalSensors,       icon: Radio,     color: "text-violet-500" },
+          {
+            label: "Sensors Offline",
+            value: totalOffline,
+            icon: WifiOff,
+            color: totalOffline > 0 ? "text-red-500" : "text-muted-foreground",
+          },
+        ].map((c) => (
+          <Card key={c.label}>
+            <CardContent className="flex items-center gap-3 p-4">
+              <c.icon className={cn("h-8 w-8 shrink-0", c.color)} />
+              <div>
+                <p className="text-2xl font-bold">{c.value}</p>
+                <p className="text-xs text-muted-foreground">{c.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search store name or number…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="ps-9 h-9 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground ms-auto">
+          {storesWithIssues > 0 && (
+            <span className="flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {storesWithIssues} store{storesWithIssues !== 1 ? "s" : ""} with issues
+            </span>
+          )}
+          {fetchedAt && <span>Updated {fetchedAt}</span>}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={refetchMos}
+            disabled={mosLoading}
+            title="Refresh"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", mosLoading && "animate-spin")} />
+          </Button>
+        </div>
+      </div>
+
+      {/* Pivot table */}
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+            <Search className="h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No stores match &ldquo;{search}&rdquo;</p>
+            <Button variant="ghost" size="sm" onClick={() => setSearch("")}>Clear search</Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="rounded-md border overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                {/* Sticky store column */}
+                <TableHead
+                  className="sticky left-0 z-20 bg-muted/40 min-w-[200px] border-r ps-4"
+                >
+                  Store
+                </TableHead>
+                {/* Hub column */}
+                <TableHead className="min-w-[80px] text-center">Hub</TableHead>
+                {/* One column per unique normalized sensor key */}
+                {sensorColumns.map((col) => (
+                  <TableHead key={col} className="min-w-[120px] text-center">
+                    {sensorLabel(col)}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {filtered.map((entry) => {
+                const hubOnline = entry.hub?.online ?? false;
+
+                /* Build key→sensor lookup for this store */
+                const sensorMap = new Map<string, MosSensor>();
+                entry.sensors.forEach((s) => {
+                  sensorMap.set(canonicalKey(s.device_name), s);
+                });
+
+                const hasIssues =
+                  !hubOnline || entry.sensors.some((s) => !s.online || !s.success);
+
+                return (
+                  <TableRow
+                    key={entry.store.store_number}
+                    className={cn(hasIssues && "bg-red-50/40 dark:bg-red-950/10")}
+                  >
+                    {/* Store name + number — sticky */}
+                    <TableCell
+                      className={cn(
+                        "sticky left-0 z-10 border-r ps-4 py-3",
+                        hasIssues
+                          ? "bg-red-50/60 dark:bg-red-950/20"
+                          : "bg-background"
+                      )}
+                    >
+                      <p className="text-sm font-semibold leading-tight">
+                        {entry.store.store_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        {entry.store.store_number}
+                      </p>
+                    </TableCell>
+
+                    {/* Hub status */}
+                    <TableCell className="text-center py-3">
+                      {entry.hub ? (
+                        <span
+                          className={cn(
+                            "inline-flex items-center justify-center gap-1 text-xs font-medium",
+                            hubOnline
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-red-500 dark:text-red-400"
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              hubOnline ? "bg-green-500" : "bg-red-400"
+                            )}
+                          />
+                          {hubOnline ? "On" : "Off"}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/40 text-xs">—</span>
+                      )}
+                    </TableCell>
+
+                    {/* One cell per sensor column */}
+                    {sensorColumns.map((col) => {
+                      const sensor = sensorMap.get(col);
+
+                      if (!sensor) {
+                        return (
+                          <TableCell key={col} className="text-center py-3">
+                            <span className="text-muted-foreground/30 text-xs">—</span>
+                          </TableCell>
+                        );
+                      }
+
+                      if (!sensor.online) {
+                        return (
+                          <TableCell key={col} className="text-center py-3">
+                            <span className="inline-flex items-center justify-center gap-1 text-xs font-medium text-red-500 dark:text-red-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />
+                              Offline
+                            </span>
+                          </TableCell>
+                        );
+                      }
+
+                      return (
+                        <TableCell key={col} className="text-center py-3">
+                          <span className="inline-flex items-center justify-center gap-1.5 text-sm font-medium tabular-nums">
+                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
+                            {formatMosTemp(sensor.temperature, sensor.temperature_unit, useCelsius)}
+                          </span>
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /*  Main Page Component                                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -256,13 +677,24 @@ export default function SensorsPage() {
     toggleUnit,
   } = useSensors();
 
-  const isLoading = !!selectedStore && !sensors && !sensorsError;
+  const { canAccessRoute } = useAuthStore();
+  const [activeView, setActiveView] = useState<"user" | "mos">("mos");
+
+  const hasMosAccess = canAccessRoute({
+    service: "Sensors",
+    method: "GET",
+    path: "/stores/sensors",
+    storeId: (selectedStore as any)?.id,
+  });
+
+  const showUserView = !hasMosAccess || activeView === "user";
+  const isUserLoading = !!selectedStore && !sensors && !sensorsError;
 
   const pageTitle = selectedStore
-    ? `${selectedStore.name} \u2014 ${t("sensorsSection")}`
+    ? `${selectedStore.name} — ${t("sensorsSection")}`
     : t("title");
 
-  /* ── No store selected ────────────────────────────────────────────────── */
+  /* ── Only unconditional early return: no store selected ──────────────── */
   if (!selectedStore) {
     return (
       <div className="space-y-6">
@@ -278,152 +710,160 @@ export default function SensorsPage() {
     );
   }
 
-  /* ── Full-page loading ────────────────────────────────────────────────── */
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={pageTitle} description={t("description")} />
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-        >
-          <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
-          <span className="flex-1">Fetching sensor data…</span>
-        </div>
-        <SensorsPageSkeleton />
-      </div>
-    );
-  }
-
-  /* ── 404: no sensors for this store ──────────────────────────────────── */
-  if (sensorsError && !sensors && sensorsError.code === "NOT_FOUND") {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={pageTitle} description={t("description")} />
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <Radio className="h-10 w-10 text-muted-foreground" />
-            <h3 className="text-lg font-semibold">{t("notFound.title")}</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">{t("notFound.description")}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  /* ── Error ────────────────────────────────────────────────────────────── */
-  if (sensorsError && !sensors) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={pageTitle} description={t("description")} />
-        <Card className="border-destructive/50">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <AlertTriangle className="h-10 w-10 text-destructive" />
-            <h3 className="text-lg font-semibold">{t("error.title")}</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">{sensorsError.message}</p>
-            <Button variant="outline" size="sm" onClick={refetch}>
-              {t("error.retry")}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  /* ── No sensors ───────────────────────────────────────────────────────── */
-  if (sensors && sensors.count === 0) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={pageTitle} description={t("description")} />
-        <Card>
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <Thermometer className="h-10 w-10 text-muted-foreground" />
-            <h3 className="text-lg font-semibold">{t("noSensors.title")}</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">{t("noSensors.description")}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const sensorList = sensors?.sensors ?? [];
-  const onlineCount = sensorList.filter((s: SensorDevice) => s.online).length;
+  const sensorList   = sensors?.sensors ?? [];
+  const onlineCount  = sensorList.filter((s: SensorDevice) => s.online).length;
   const offlineCount = sensorList.length - onlineCount;
-  const alertCount = sensorList.filter((s: SensorDevice) => s.state?.state === "alert").length;
-  const fetchedAt = sensors?.fetched_at ? formatDate(sensors.fetched_at) : null;
+  const alertCount   = sensorList.filter((s: SensorDevice) => s.state?.state === "alert").length;
+  const fetchedAt    = sensors?.fetched_at ? formatDate(sensors.fetched_at) : null;
 
   return (
     <div className="space-y-6">
       {/* Page header */}
       <PageHeader title={pageTitle} description={t("description")}>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* °F / °C toggle */}
           <Button variant="outline" size="sm" onClick={toggleUnit} title={t("toggleUnit")}>
-            {useCelsius ? <ToggleRight className="h-4 w-4 me-1.5" /> : <ToggleLeft className="h-4 w-4 me-1.5" />}
+            {useCelsius
+              ? <ToggleRight className="h-4 w-4 me-1.5" />
+              : <ToggleLeft  className="h-4 w-4 me-1.5" />}
             {useCelsius ? "°C" : "°F"}
           </Button>
-          {/* Refresh */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={refetch}
-            disabled={sensorsLoading}
-          >
-            <RefreshCw className={cn("me-1.5 h-4 w-4", sensorsLoading && "animate-spin")} />
-            {t("refresh")}
-          </Button>
+
+          {hasMosAccess && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {activeView === "mos"
+                    ? <Monitor className="h-4 w-4 me-1.5" />
+                    : <LayoutGrid className="h-4 w-4 me-1.5" />}
+                  {activeView === "mos" ? "MOS View" : "User View"}
+                  <ChevronDown className="h-3.5 w-3.5 ms-1.5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => setActiveView("user")}
+                  className={cn(activeView === "user" && "font-medium")}
+                >
+                  <LayoutGrid className="h-4 w-4 me-2 text-muted-foreground" />
+                  User View
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => setActiveView("mos")}
+                  className={cn(activeView === "mos" && "font-medium")}
+                >
+                  <Monitor className="h-4 w-4 me-2 text-muted-foreground" />
+                  MOS View
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {showUserView && (
+            <Button variant="outline" size="sm" onClick={refetch} disabled={sensorsLoading}>
+              <RefreshCw className={cn("me-1.5 h-4 w-4", sensorsLoading && "animate-spin")} />
+              {t("refresh")}
+            </Button>
+          )}
         </div>
       </PageHeader>
 
-      {/* Background refresh indicator */}
-      {sensorsLoading && sensors && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-        >
-          <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
-          <span className="flex-1">Fetching latest sensor data…</span>
-        </div>
+      {/* ── MOS View — handles its own loading / error states ─────────────── */}
+      {hasMosAccess && activeView === "mos" && (
+        <MosView useCelsius={useCelsius} />
       )}
 
-      {/* Partial error while data is still shown */}
-      {sensorsError && sensors && (
-        <ErrorCard error={sensorsError} onRetry={refetch} />
-      )}
+      {/* ── User View — all states handled inline ─────────────────────────── */}
+      {showUserView && (
+        <>
+          {/* Initial load skeleton */}
+          {isUserLoading && <SensorsPageSkeleton />}
 
-      {/* Stats row */}
-      <StatsCards
-        totalDevices={sensorList.length}
-        onlineCount={onlineCount}
-        offlineCount={offlineCount}
-        alertCount={alertCount}
-        t={t}
-      />
-
-      {/* Hub status */}
-      {sensors?.hub && (
-        <div>
-          <h2 className="text-sm font-medium text-muted-foreground mb-2">Hub</h2>
-          <HubCard hub={sensors.hub} t={t} />
-        </div>
-      )}
-
-      {/* Sensor cards */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">{t("sensorsSection")}</h2>
-          {fetchedAt && (
-            <p className="text-xs text-muted-foreground">Updated {fetchedAt}</p>
+          {/* 404 */}
+          {!isUserLoading && sensorsError && !sensors && sensorsError.code === "NOT_FOUND" && (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <Radio className="h-10 w-10 text-muted-foreground" />
+                <h3 className="text-lg font-semibold">{t("notFound.title")}</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">{t("notFound.description")}</p>
+              </CardContent>
+            </Card>
           )}
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sensorList.map((sensor: SensorDevice) => (
-            <SensorCard key={sensor.device_id} sensor={sensor} useCelsius={useCelsius} t={t} />
-          ))}
-        </div>
-      </div>
+
+          {/* Other errors (no existing data) */}
+          {!isUserLoading && sensorsError && !sensors && sensorsError.code !== "NOT_FOUND" && (
+            <Card className="border-destructive/50">
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <AlertTriangle className="h-10 w-10 text-destructive" />
+                <h3 className="text-lg font-semibold">{t("error.title")}</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">{sensorsError.message}</p>
+                <Button variant="outline" size="sm" onClick={refetch}>
+                  {t("error.retry")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* No sensors */}
+          {!isUserLoading && sensors && sensors.count === 0 && (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                <Thermometer className="h-10 w-10 text-muted-foreground" />
+                <h3 className="text-lg font-semibold">{t("noSensors.title")}</h3>
+                <p className="text-sm text-muted-foreground max-w-sm">{t("noSensors.description")}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Data */}
+          {!isUserLoading && sensors && sensors.count > 0 && (
+            <>
+              {/* Background refresh indicator */}
+              {sensorsLoading && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+                >
+                  <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+                  <span className="flex-1">Fetching latest sensor data…</span>
+                </div>
+              )}
+
+              {/* Partial refresh error */}
+              {sensorsError && <ErrorCard error={sensorsError} onRetry={refetch} />}
+
+              <StatsCards
+                totalDevices={sensorList.length}
+                onlineCount={onlineCount}
+                offlineCount={offlineCount}
+                alertCount={alertCount}
+                t={t}
+              />
+
+              {sensors.hub && (
+                <div>
+                  <h2 className="text-sm font-medium text-muted-foreground mb-2">Hub</h2>
+                  <HubCard hub={sensors.hub} t={t} />
+                </div>
+              )}
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">{t("sensorsSection")}</h2>
+                  {fetchedAt && (
+                    <p className="text-xs text-muted-foreground">Updated {fetchedAt}</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {sensorList.map((sensor: SensorDevice) => (
+                    <SensorCard key={sensor.device_id} sensor={sensor} useCelsius={useCelsius} t={t} />
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type {
   ReportsResponse,
   HistoryResponse,
   AlertsResponse,
+  MosAllStoresResponse,
   ReportPeriod,
   HistoryQueryParams,
   AlertsQueryParams,
@@ -219,6 +220,22 @@ export const sensorService = {
       const { data } = await axios.get<HistoryResponse>(
         `/api/sensors/${encodeURIComponent(storeId)}/history`,
         { params: { ...params, unit }, headers: buildHeaders(), timeout: 15_000, signal },
+      );
+      return data;
+    } catch (err) {
+      throw mapAxiosError(err);
+    }
+  },
+
+  /**
+   * Fetch live sensor data for ALL active stores (MOS view).
+   * Proxied through /api/sensors/all → sensors.pnefoods.com/stores/sensors
+   */
+  async getMosAllStores(signal?: AbortSignal): Promise<MosAllStoresResponse> {
+    try {
+      const { data } = await axios.get<MosAllStoresResponse>(
+        `/api/sensors/all`,
+        { headers: buildHeaders(), timeout: 30_000, signal },
       );
       return data;
     } catch (err) {
