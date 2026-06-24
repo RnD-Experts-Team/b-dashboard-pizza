@@ -123,14 +123,24 @@ const SENSOR_ALIASES: Record<string, string> = {
   "making": "making table", // some stores report "Making", others "Making Table"
 };
 
-/** Static temperature ranges shown under each sensor column header. Values are in °F. */
-const SENSOR_RANGES: Record<string, string> = {
-  "freezer":        "-10 to 10°F",
-  "walk in cooler": "<40°F",
-  "making table":   "<40°F",
-  "ingredients":    "<40°F",
-  "hot water":      ">100°F",
-};
+/** Returns temperature range labels for each canonical sensor key in the current unit. */
+function getSensorRanges(useCelsius: boolean): Record<string, string> {
+  return useCelsius
+    ? {
+        "freezer":        "-23 to -12°C",
+        "walk in cooler": "<5°C",
+        "making table":   "<5°C",
+        "ingredients":    "<5°C",
+        "hot water":      ">38°C",
+      }
+    : {
+        "freezer":        "-10 to 10°F",
+        "walk in cooler": "<41°F",
+        "making table":   "<41°F",
+        "ingredients":    "<41°F",
+        "hot water":      ">100°F",
+      };
+}
 
 /** Normalizes + resolves aliases so the same sensor type always gets the same key. */
 function canonicalKey(rawName: string): string {
@@ -379,6 +389,8 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
   const { mosData, mosLoading, mosError, refetchMos } = useMosSensors();
   const [search, setSearch] = useState("");
 
+  const sensorRanges = getSensorRanges(useCelsius);
+
   /* ── Derive pivot columns — one per unique normalized sensor key ────────── */
   const sensorColumns = useMemo<string[]>(() => {
     if (!mosData) return [];
@@ -559,9 +571,9 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
                   >
                     <div className="flex flex-col items-center gap-0.5">
                       <span>{sensorLabel(col)}</span>
-                      {SENSOR_RANGES[col] && (
+                      {sensorRanges[col] && (
                         <span className="text-[10px] font-normal text-muted-foreground">
-                          {SENSOR_RANGES[col]}
+                          {sensorRanges[col]}
                         </span>
                       )}
                     </div>
