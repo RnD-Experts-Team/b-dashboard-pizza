@@ -16,7 +16,7 @@ const SENSORS_BASE_URL =
 const SENSORS_API_TOKEN = process.env.SENSORS_API_TOKEN;
 
 const UPSTREAM_TIMEOUT_MS =
-  Number(process.env.SENSORS_TIMEOUT_MS) || 15_000;
+  Number(process.env.SENSORS_TIMEOUT_MS) || 30_000;
 
 const MAX_RETRIES = 2;
 const RETRY_BASE_MS = 500;
@@ -26,30 +26,23 @@ const RETRY_BASE_MS = 500;
 /* ────────────────────────────────────────────────────────────────────────── */
 
 type ErrorCode =
-  | "INVALID_PARAM"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "UPSTREAM_ERROR"
   | "TIMEOUT"
-  | "NETWORK_ERROR"
   | "RATE_LIMITED"
   | "INTERNAL_ERROR";
 
-function errorResponse(
-  code: ErrorCode,
-  message: string,
-  status: number,
-  details?: Record<string, unknown>,
-) {
+function errorResponse(code: ErrorCode, message: string, status: number) {
   return NextResponse.json(
-    { success: false, error: { code, message, ...(details && { details }) } },
+    { success: false, error: { code, message } },
     { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } },
   );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Fetch with retry + exponential back-off for 5xx / network errors        */
+/*  Fetch with retry + exponential back-off                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 async function fetchWithRetry(
@@ -83,7 +76,8 @@ async function fetchWithRetry(
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  GET /api/sensors  →  upstream /api/stores/sensors (bulk multi-store)    */
+/*  GET /api/sensors/all  →  upstream GET /stores/sensors (all active)      */
+/*  Omitting store_ids returns all active stores per the API contract.      */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export async function GET(request: NextRequest) {
@@ -95,16 +89,7 @@ export async function GET(request: NextRequest) {
       ? `Bearer ${SENSORS_API_TOKEN}`
       : getAuthorizationHeader(request)!;
 
-    const sp = request.nextUrl.searchParams;
-    const unit = sp.get("unit");
-    const storeIds = sp.getAll("store_ids[]");
-
-    const qs = new URLSearchParams();
-    storeIds.forEach((id) => qs.append("store_ids[]", id));
-    if (unit) qs.set("unit", unit);
-
-    const qsStr = qs.toString() ? `?${qs}` : "";
-    const upstreamUrl = `${SENSORS_BASE_URL}/stores/sensors${qsStr}`;
+    const upstreamUrl = `${SENSORS_BASE_URL}/stores/sensors`;
 
     const upstream = await fetchWithRetry(upstreamUrl, {
       method: "GET",
@@ -120,20 +105,19 @@ export async function GET(request: NextRequest) {
       const status = upstream.status;
       if (status === 401) return errorResponse("UNAUTHORIZED", "Authentication failed", 401);
       if (status === 403) return errorResponse("FORBIDDEN", "Access denied", 403);
-      if (status === 404) return errorResponse("NOT_FOUND", "Sensors not found", 404);
+      if (status === 404) return errorResponse("NOT_FOUND", "No stores found", 404);
       if (status === 429) return errorResponse("RATE_LIMITED", "Too many requests", 429);
       return errorResponse("UPSTREAM_ERROR", body?.message || "Upstream error", status);
     }
 
-    // Live data — no caching
     return NextResponse.json(body, {
-      headers: { "Cache-Control": "no-store" },
+      headers: { "Cache-Control": "public, s-maxage=60, max-age=30, stale-while-revalidate=120" },
     });
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === "AbortError") {
       return errorResponse("TIMEOUT", "Upstream request timed out", 504);
     }
-    console.error("[sensors/bulk] proxy error:", err);
+    console.error("[sensors/all] proxy error:", err);
     return errorResponse("INTERNAL_ERROR", "Internal server error", 500);
   }
 }

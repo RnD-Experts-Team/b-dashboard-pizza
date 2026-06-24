@@ -280,14 +280,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       //   href: `/${locale}/dashboard/scheduling`,
       //   icon: CalendarDays,
       // },
-       {
-        title: t("sensors"),
-        href: `/${locale}/dashboard/sensors`,
-        icon: Gauge,
-        requirements: [
-          { service: "Sensors", method: "GET", path: "/stores/*/reports", storeId: effectiveStoreId }
-        ],
-      },
     ],
   };
 
@@ -523,8 +515,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId: effectiveStoreId }
         ],
       },
-
-
+      {
+        title: t("sensors"),
+        href: `/${locale}/dashboard/sensors`,
+        icon: Gauge,
+        requirements: [
+          { service: "Sensors", method: "GET", path: "/stores/*/reports", storeId: effectiveStoreId }
+        ],
+      },
     ],
   };
   // Dev tools navigation (controlled by feature flags)

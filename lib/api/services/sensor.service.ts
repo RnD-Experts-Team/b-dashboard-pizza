@@ -2,10 +2,10 @@ import axios from "axios";
 import type {
   SensorDevice,
   SensorsResponse,
-  BulkSensorsResponse,
   ReportsResponse,
   HistoryResponse,
   AlertsResponse,
+  MosAllStoresResponse,
   ReportPeriod,
   HistoryQueryParams,
   AlertsQueryParams,
@@ -184,25 +184,6 @@ export const sensorService = {
   },
 
   /**
-   * Fetch live sensor data for multiple stores via the bulk endpoint.
-   * Requires the "mos" permission. Passes user's store IDs as query params.
-   */
-  async getMosSensors(storeIds: string[], unit?: "c" | "f", signal?: AbortSignal): Promise<BulkSensorsResponse> {
-    try {
-      const params = new URLSearchParams();
-      storeIds.forEach((id) => params.append("store_ids[]", id));
-      if (unit) params.set("unit", unit === "f" ? "F" : "C");
-      const { data } = await axios.get<BulkSensorsResponse>(
-        `/api/sensors?${params}`,
-        { headers: buildHeaders(), timeout: 15_000, signal },
-      );
-      return data;
-    } catch (err) {
-      throw mapAxiosError(err);
-    }
-  },
-
-  /**
    * Fetch aggregated reports (daily / weekly / monthly) for a store.
    * Includes overall summary, hourly time-series, and per-device breakdown.
    */
@@ -239,6 +220,22 @@ export const sensorService = {
       const { data } = await axios.get<HistoryResponse>(
         `/api/sensors/${encodeURIComponent(storeId)}/history`,
         { params: { ...params, unit }, headers: buildHeaders(), timeout: 15_000, signal },
+      );
+      return data;
+    } catch (err) {
+      throw mapAxiosError(err);
+    }
+  },
+
+  /**
+   * Fetch live sensor data for ALL active stores (MOS view).
+   * Proxied through /api/sensors/all → sensors.pnefoods.com/stores/sensors
+   */
+  async getMosAllStores(signal?: AbortSignal): Promise<MosAllStoresResponse> {
+    try {
+      const { data } = await axios.get<MosAllStoresResponse>(
+        `/api/sensors/all`,
+        { headers: buildHeaders(), timeout: 30_000, signal },
       );
       return data;
     } catch (err) {

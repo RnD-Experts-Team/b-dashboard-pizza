@@ -214,35 +214,39 @@ export interface AlertsQueryParams {
   to?: string;
 }
 
-/* ── GET /stores/sensors (bulk multi-store) ────────────────────────────── */
+/* ── GET /stores/sensors (MOS — all active stores) ─────────────────────── */
 
-export interface MosSensorEntry {
+export interface MosSensor {
   device_id: string;
   device_name: string;
-  device_type: string;
-  model_name: string | null;
-  is_hub: boolean;
-  online: boolean | null;
+  online: boolean;
   temperature: number | null;
-  temperature_unit: TemperatureUnit;
-  state: Record<string, unknown> | null;
-  reported_at: string | null;
+  temperature_unit: TemperatureUnit | null;
   success: boolean;
   error: string | null;
 }
 
-export interface MosStoreSensors {
-  store: { store_number: string; store_name: string };
-  hub: MosSensorEntry | null;
-  sensors: MosSensorEntry[];
+export interface MosHub {
+  device_id: string;
+  device_name: string;
+  online: boolean;
+  temperature: number | null;
+  success: boolean;
+  error: string | null;
+}
+
+export interface MosStoreEntry {
+  store: SensorStoreInfo;
+  hub: MosHub | null;
+  sensors: MosSensor[];
   count: number;
 }
 
-export interface BulkSensorsResponse {
-  success: true;
+export interface MosAllStoresResponse {
+  success: boolean;
   temperature_unit: TemperatureUnit;
   count: number;
-  stores: MosStoreSensors[];
+  stores: MosStoreEntry[];
   requested: string[];
   missing: string[];
   fetched_at: string;
