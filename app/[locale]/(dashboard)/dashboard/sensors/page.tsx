@@ -18,6 +18,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Table,
   TableBody,
   TableCell,
@@ -41,6 +46,7 @@ import {
   ChevronDown,
   LayoutGrid,
   Monitor,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SensorDevice, MosSensor } from "@/types/sensor.types";
@@ -115,6 +121,15 @@ function sensorKey(rawName: string): string {
 const SENSOR_ALIASES: Record<string, string> = {
   "water":  "hot water",    // some stores report "Water", others "Hot Water"
   "making": "making table", // some stores report "Making", others "Making Table"
+};
+
+/** Static temperature ranges shown under each sensor column header. Values are in °F. */
+const SENSOR_RANGES: Record<string, string> = {
+  "freezer":        "-10 to 10°F",
+  "walk in cooler": "<40°F",
+  "making table":   "<40°F",
+  "ingredients":    "<40°F",
+  "hot water":      ">100°F",
 };
 
 /** Normalizes + resolves aliases so the same sensor type always gets the same key. */
@@ -344,18 +359,9 @@ function MosSensorCell({ sensor }: { sensor: MosSensor | undefined; useCelsius: 
 function MosTableSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Card key={i}>
-            <CardContent className="flex items-center gap-3 p-4">
-              <Skeleton className="h-8 w-8 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-12" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-9 flex-1 max-w-sm" />
+        <Skeleton className="h-9 w-9 shrink-0" />
       </div>
       <div className="rounded-md border overflow-hidden">
         <div className="p-4 space-y-2.5">
@@ -428,10 +434,6 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
   const totalOffline      = allStores.reduce(
     (n, s) => n + s.sensors.filter((d) => !d.online).length, 0,
   );
-  const storesWithIssues  = allStores.filter(
-    (s) => !s.hub?.online || s.sensors.some((d) => !d.online || !d.success),
-  ).length;
-
   /* ── Search filter ── */
   const q = search.trim().toLowerCase();
   const filtered = q
@@ -471,33 +473,9 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
         </Card>
       )}
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {[
-          { label: "Total Stores",    value: mosData.count,      icon: Building2, color: "text-blue-500" },
-          { label: "Hubs Online",     value: storesHubOnline,    icon: Wifi,      color: "text-green-500" },
-          { label: "Total Sensors",   value: totalSensors,       icon: Radio,     color: "text-violet-500" },
-          {
-            label: "Sensors Offline",
-            value: totalOffline,
-            icon: WifiOff,
-            color: totalOffline > 0 ? "text-red-500" : "text-muted-foreground",
-          },
-        ].map((c) => (
-          <Card key={c.label}>
-            <CardContent className="flex items-center gap-3 p-4">
-              <c.icon className={cn("h-8 w-8 shrink-0", c.color)} />
-              <div>
-                <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-muted-foreground">{c.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Toolbar — search + info popover + meta */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Search */}
         <div className="relative flex-1 min-w-48 max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -507,13 +485,42 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
             className="ps-9 h-9 text-sm"
           />
         </div>
+
+        {/* Info popover */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="Summary">
+              <Info className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3" align="start">
+            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Summary</p>
+            <div className="space-y-1.5">
+              {[
+                { label: "Total Stores",    value: mosData.count,   icon: Building2, color: "text-blue-500" },
+                { label: "Hubs Online",     value: storesHubOnline, icon: Wifi,      color: "text-green-500" },
+                { label: "Total Sensors",   value: totalSensors,    icon: Radio,     color: "text-violet-500" },
+                {
+                  label: "Sensors Offline",
+                  value: totalOffline,
+                  icon: WifiOff,
+                  color: totalOffline > 0 ? "text-red-500" : "text-muted-foreground",
+                },
+              ].map((c) => (
+                <div key={c.label} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <c.icon className={cn("h-3.5 w-3.5 shrink-0", c.color)} />
+                    <span className="text-xs text-muted-foreground">{c.label}</span>
+                  </div>
+                  <span className="text-xs font-semibold tabular-nums">{c.value}</span>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Right side meta */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground ms-auto">
-          {storesWithIssues > 0 && (
-            <span className="flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {storesWithIssues} store{storesWithIssues !== 1 ? "s" : ""} with issues
-            </span>
-          )}
           {fetchedAt && <span>Updated {fetchedAt}</span>}
           <Button
             variant="ghost"
@@ -538,123 +545,88 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                {/* Sticky store column */}
-                <TableHead
-                  className="sticky left-0 z-20 bg-muted/40 min-w-[200px] border-r ps-4"
-                >
+        <div className="rounded-md border overflow-auto max-h-[calc(100vh-18rem)]">
+          <table className="w-full caption-bottom text-sm border-collapse">
+            <thead className="sticky top-0 z-30">
+              <tr className="border-b bg-muted/70">
+                <th className="sticky left-0 z-40 bg-muted/70 min-w-[200px] border-r px-4 py-3 text-start text-sm font-medium text-foreground whitespace-nowrap">
                   Store
-                </TableHead>
-                {/* Hub column */}
-                <TableHead className="min-w-[80px] text-center">Hub</TableHead>
-                {/* One column per unique normalized sensor key */}
+                </th>
                 {sensorColumns.map((col) => (
-                  <TableHead key={col} className="min-w-[120px] text-center">
-                    {sensorLabel(col)}
-                  </TableHead>
+                  <th
+                    key={col}
+                    className="min-w-[120px] px-2 py-2 text-center text-sm font-medium text-foreground bg-muted/70 whitespace-nowrap"
+                  >
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span>{sensorLabel(col)}</span>
+                      {SENSOR_RANGES[col] && (
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {SENSOR_RANGES[col]}
+                        </span>
+                      )}
+                    </div>
+                  </th>
                 ))}
-              </TableRow>
-            </TableHeader>
+              </tr>
+            </thead>
 
-            <TableBody>
+            <tbody className="[&_tr:last-child]:border-0">
               {filtered.map((entry) => {
-                const hubOnline = entry.hub?.online ?? false;
-
-                /* Build key→sensor lookup for this store */
                 const sensorMap = new Map<string, MosSensor>();
                 entry.sensors.forEach((s) => {
                   sensorMap.set(canonicalKey(s.device_name), s);
                 });
 
-                const hasIssues =
-                  !hubOnline || entry.sensors.some((s) => !s.online || !s.success);
+                const hasIssues = entry.sensors.some((s) => !s.online || !s.success);
 
                 return (
-                  <TableRow
-                    key={entry.store.store_number}
-                    className={cn(hasIssues && "bg-red-50/40 dark:bg-red-950/10")}
-                  >
-                    {/* Store name + number — sticky */}
-                    <TableCell
+                  <tr key={entry.store.store_number} className="border-b transition-colors hover:bg-muted/30">
+                    <td
                       className={cn(
-                        "sticky left-0 z-10 border-r ps-4 py-3",
-                        hasIssues
-                          ? "bg-red-50/60 dark:bg-red-950/20"
-                          : "bg-background"
+                        "sticky left-0 z-10 border-r px-4 py-3 whitespace-nowrap",
+                        hasIssues ? "bg-muted/50" : "bg-background"
                       )}
                     >
-                      <p className="text-sm font-semibold leading-tight">
-                        {entry.store.store_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                        {entry.store.store_number}
-                      </p>
-                    </TableCell>
+                      <p className="text-sm font-semibold leading-tight">{entry.store.store_name}</p>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{entry.store.store_number}</p>
+                    </td>
 
-                    {/* Hub status */}
-                    <TableCell className="text-center py-3">
-                      {entry.hub ? (
-                        <span
-                          className={cn(
-                            "inline-flex items-center justify-center gap-1 text-xs font-medium",
-                            hubOnline
-                              ? "text-green-600 dark:text-green-400"
-                              : "text-red-500 dark:text-red-400"
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "h-2 w-2 rounded-full",
-                              hubOnline ? "bg-green-500" : "bg-red-400"
-                            )}
-                          />
-                          {hubOnline ? "On" : "Off"}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/40 text-xs">—</span>
-                      )}
-                    </TableCell>
-
-                    {/* One cell per sensor column */}
                     {sensorColumns.map((col) => {
                       const sensor = sensorMap.get(col);
 
                       if (!sensor) {
                         return (
-                          <TableCell key={col} className="text-center py-3">
+                          <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
                             <span className="text-muted-foreground/30 text-xs">—</span>
-                          </TableCell>
+                          </td>
                         );
                       }
 
                       if (!sensor.online) {
                         return (
-                          <TableCell key={col} className="text-center py-3">
+                          <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
                             <span className="inline-flex items-center justify-center gap-1 text-xs font-medium text-red-500 dark:text-red-400">
                               <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />
                               Offline
                             </span>
-                          </TableCell>
+                          </td>
                         );
                       }
 
                       return (
-                        <TableCell key={col} className="text-center py-3">
+                        <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
                           <span className="inline-flex items-center justify-center gap-1.5 text-sm font-medium tabular-nums">
                             <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />
                             {formatMosTemp(sensor.temperature, sensor.temperature_unit, useCelsius)}
                           </span>
-                        </TableCell>
+                        </td>
                       );
                     })}
-                  </TableRow>
+                  </tr>
                 );
               })}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
       )}
     </div>

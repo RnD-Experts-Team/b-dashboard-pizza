@@ -79,7 +79,7 @@ export const useSensorStore = create<SensorStoreState>()((set, get) => ({
 
   lastStoreId: null,
   lastFetchedAt: null,
-  useCelsius: true,
+  useCelsius: false,
 
   /* ── Fetch live sensors ───────────────────────────────────────────────── */
   fetchSensors: async (storeId: string, unit?: "c" | "f") => {
