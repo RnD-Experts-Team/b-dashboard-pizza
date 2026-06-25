@@ -6,8 +6,8 @@ import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 
 /**
  * Convenience hook that wires the Sensor Zustand store to the sidebar's
- * selected store.  Automatically fetches sensor data when the store
- * changes and manages auto-refresh / visibility-change re-fetching.
+ * selected store. Fetches on mount and whenever the selected store changes.
+ * Refresh is manual only — no auto-refresh or visibility-based re-fetch.
  */
 export function useSensors() {
   const { selectedStore } = useSelectedStoreStore();
@@ -38,25 +38,6 @@ export function useSensors() {
     } else {
       store.reset();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
-
-  /* ── Auto-refresh lifecycle ───────────────────────────────────────────── */
-  useEffect(() => {
-    store.startAutoRefresh();
-    return () => store.stopAutoRefresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ── Re-fetch stale data on tab focus ─────────────────────────────────── */
-  useEffect(() => {
-    const onVisibility = () => {
-      if (document.visibilityState === "visible" && store.isStale() && storeId) {
-        store.fetchSensors(storeId);
-      }
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 

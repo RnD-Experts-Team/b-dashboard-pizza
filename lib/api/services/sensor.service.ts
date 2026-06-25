@@ -231,11 +231,11 @@ export const sensorService = {
    * Fetch live sensor data for ALL active stores (MOS view).
    * Proxied through /api/sensors/all → sensors.pnefoods.com/stores/sensors
    */
-  async getMosAllStores(signal?: AbortSignal): Promise<MosAllStoresResponse> {
+  async getMosAllStores(unit?: "c" | "f", signal?: AbortSignal): Promise<MosAllStoresResponse> {
     try {
       const { data } = await axios.get<MosAllStoresResponse>(
         `/api/sensors/all`,
-        { headers: buildHeaders(), timeout: 30_000, signal },
+        { params: { unit }, headers: buildHeaders(), timeout: 30_000, signal },
       );
       return data;
     } catch (err) {

@@ -13,7 +13,7 @@ interface MosSensorStore {
   loading: boolean;
   error: MosSensorErrorState | null;
   lastFetchedAt: number | null;
-  fetchAll: (signal?: AbortSignal) => Promise<void>;
+  fetchAll: (unit?: "c" | "f", signal?: AbortSignal) => Promise<void>;
   reset: () => void;
 }
 
@@ -23,10 +23,10 @@ export const useMosSensorStore = create<MosSensorStore>((set) => ({
   error: null,
   lastFetchedAt: null,
 
-  async fetchAll(signal?: AbortSignal) {
+  async fetchAll(unit?: "c" | "f", signal?: AbortSignal) {
     set({ loading: true, error: null });
     try {
-      const data = await sensorService.getMosAllStores(signal);
+      const data = await sensorService.getMosAllStores(unit, signal);
       set({ data, loading: false, lastFetchedAt: Date.now() });
     } catch (err) {
       if (signal?.aborted) return;
