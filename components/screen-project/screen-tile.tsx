@@ -461,43 +461,32 @@ function ScreenTileInner({
       </div>
 
       {observerMode ? (
-        /* Observer mode — show ALL participant cameras in a responsive grid */
-        allVideoTracks.length > 0 ? (
-          <div
-            className={cn(
-              "absolute inset-0 grid gap-1 p-1",
-              allVideoTracks.length === 1 ? "grid-cols-1" : "grid-cols-2",
-            )}
-          >
-            {allVideoTracks.map((t) => (
-              <div
-                key={t.publication.trackSid}
-                className="relative overflow-hidden rounded-lg bg-neutral-900"
-              >
-                <VideoTrack
-                  trackRef={t}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-                <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[0.6rem] font-medium text-white/80 backdrop-blur-sm">
-                  {t.participant.identity}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none bg-neutral-900">
-            <div className="rounded-full bg-black/30 flex items-center justify-center h-20 w-20">
-              {isConnecting ? (
-                <div className="animate-spin rounded-full border-2 border-white/20 border-t-white/70 h-9 w-9" />
+        /* Observer mode — fixed 2-panel layout: station (left) + supervisor (right) */
+        <div className="absolute inset-0 grid grid-cols-2 gap-1 p-1">
+          {([allVideoTracks[0], allVideoTracks[1]] as const).map((t, i) => (
+            <div
+              key={t?.publication.trackSid ?? `placeholder-${i}`}
+              className="relative overflow-hidden rounded-lg bg-neutral-900"
+            >
+              {t ? (
+                <>
+                  <VideoTrack
+                    trackRef={t}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[0.6rem] font-medium text-white/80 backdrop-blur-sm">
+                    {t.participant.identity}
+                  </span>
+                </>
               ) : (
-                <VideoOff className="text-white/40 h-9 w-9" />
+                <div className="flex h-full flex-col items-center justify-center gap-2 select-none pointer-events-none">
+                  <VideoOff className="h-7 w-7 text-white/25" />
+                  <span className="text-[0.65rem] text-white/40">Not streaming</span>
+                </div>
               )}
             </div>
-            <span className="font-medium truncate max-w-[88%] text-center text-white/60 text-base">
-              {isConnecting ? "Connecting..." : name}
-            </span>
-          </div>
-        )
+          ))}
+        </div>
       ) : videoTrack && isVideoEnabled ? (
         <VideoTrack
           trackRef={videoTrack}

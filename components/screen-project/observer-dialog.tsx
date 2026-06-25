@@ -51,7 +51,7 @@ export function ObserverDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col gap-0 p-0 bg-neutral-950 border-neutral-800 [&>button]:hidden">
+      <DialogContent className="!max-w-[72vw] w-full h-[90vh] flex flex-col gap-0 p-0 bg-neutral-950 border-neutral-800 [&>button]:hidden">
         {/* ── Header ── */}
         <DialogHeader className="flex-row items-center gap-3 px-4 py-3 border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-2 flex-1 min-w-0">
