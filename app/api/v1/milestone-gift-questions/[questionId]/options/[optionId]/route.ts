@@ -25,7 +25,12 @@ async function proxyFetch(url: string, init: RequestInit): Promise<NextResponse>
     const upstream = await fetch(url, { ...init, signal: controller.signal });
     clearTimeout(timer);
 
-    const responseBody = await upstream.text();
+    // 204/205/304 must not carry a body — Response throws otherwise.
+    const isNullBody =
+      upstream.status === 204 ||
+      upstream.status === 205 ||
+      upstream.status === 304;
+    const responseBody = isNullBody ? null : await upstream.text();
 
     return new NextResponse(responseBody, {
       status: upstream.status,
