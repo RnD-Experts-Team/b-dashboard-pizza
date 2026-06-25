@@ -1,3 +1,5 @@
+import type { MilestoneGiftDetail } from "@/types/milestone-gift.types";
+
 export type AvailabilityNeeded = "weekday" | "weekends" | "open_availability";
 
 /** Shape used when creating a request (POST body) */
@@ -427,7 +429,7 @@ export interface StoreRequestHiringDetail {
 
 export interface StoreRequest {
   id: number;
-  request_type: "hiring" | "separation";
+  request_type: "hiring" | "separation" | "milestone_gift";
   store_id: number;
   requested_by_user_id: number;
   requested_at: string;
@@ -435,6 +437,7 @@ export interface StoreRequest {
   latest_decision: StoreRequestLatestDecision | null;
   separation_request: StoreRequestSeparationDetail | null;
   hiring_request: StoreRequestHiringDetail | null;
+  milestone_gift_request: MilestoneGiftDetail | null;
 }
 
 export interface StoreRequestsResponse {
