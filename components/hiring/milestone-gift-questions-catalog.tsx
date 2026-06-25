@@ -11,6 +11,8 @@ import {
   Loader2,
   ListChecks,
   RefreshCw,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -92,6 +94,9 @@ export function MilestoneGiftQuestionsCatalog({
   const [deleteTarget, setDeleteTarget] = useState<MilestoneGiftQuestion | null>(
     null,
   );
+
+  // Inactive questions are collapsed by default
+  const [showInactive, setShowInactive] = useState(false);
 
   const loadQuestions = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -236,6 +241,179 @@ export function MilestoneGiftQuestionsCatalog({
   }
 
   const canCreateStoreSpecific = storeId != null;
+
+  const activeQuestions = questions.filter((q) => q.is_active);
+  const inactiveQuestions = questions.filter((q) => !q.is_active);
+
+  const renderQuestionCard = (q: MilestoneGiftQuestion) => (
+    <div
+      key={q.id}
+      className={`rounded-lg border p-4 space-y-3 ${
+        q.is_active ? "" : "opacity-70"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1.5 min-w-0">
+          <p className="text-sm font-medium leading-snug">{q.question_text}</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="secondary">
+              {q.question_type === "multi_select"
+                ? "Multi Select"
+                : "Single Select"}
+            </Badge>
+            <Badge variant={q.store_id == null ? "default" : "outline"}>
+              {q.store_id == null ? "Global" : "Store"}
+            </Badge>
+            {!q.is_active && <Badge variant="destructive">Inactive</Badge>}
+            <span className="text-xs text-muted-foreground">
+              order {q.sort_order}
+            </span>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => openEdit(q)}
+            disabled={busy}
+            aria-label="Edit question"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={() => setDeleteTarget(q)}
+            disabled={busy || !q.is_active}
+            aria-label="Delete question"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Options */}
+      <div className="space-y-1.5 ps-1">
+        {q.options.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">No options yet.</p>
+        )}
+        {[...q.options]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((opt) => {
+            const isEditing =
+              editingOption?.questionId === q.id &&
+              editingOption?.optionId === opt.id;
+            return (
+              <div
+                key={opt.id}
+                className="flex items-center gap-2 rounded-md border px-2 py-1.5"
+              >
+                {isEditing ? (
+                  <>
+                    <Input
+                      value={optionEditText}
+                      onChange={(e) => setOptionEditText(e.target.value)}
+                      className="h-7 text-sm"
+                      maxLength={255}
+                      autoFocus
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={handleSaveOption}
+                      disabled={busy || optionEditText.trim() === ""}
+                      aria-label="Save option"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => {
+                        setEditingOption(null);
+                        setOptionEditText("");
+                      }}
+                      disabled={busy}
+                      aria-label="Cancel edit"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 truncate text-sm">
+                      {opt.option_text}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => {
+                        setEditingOption({
+                          questionId: q.id,
+                          optionId: opt.id,
+                        });
+                        setOptionEditText(opt.option_text);
+                      }}
+                      disabled={busy}
+                      aria-label="Edit option"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteOption(q.id, opt.id)}
+                      disabled={busy}
+                      aria-label="Delete option"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+
+        {/* Add option */}
+        <div className="flex items-center gap-2 pt-1">
+          <Input
+            value={addOptionText[q.id] ?? ""}
+            onChange={(e) =>
+              setAddOptionText((prev) => ({
+                ...prev,
+                [q.id]: e.target.value,
+              }))
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddOption(q.id);
+              }
+            }}
+            placeholder="Add an option…"
+            className="h-8 text-sm"
+            maxLength={255}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0"
+            onClick={() => handleAddOption(q.id)}
+            disabled={busy || (addOptionText[q.id] ?? "").trim() === ""}
+          >
+            <Plus className="me-1 h-4 w-4" />
+            Add
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -426,185 +604,37 @@ export function MilestoneGiftQuestionsCatalog({
                 No questions yet. Create one to get started.
               </div>
             ) : (
-              questions.map((q) => (
-                <div
-                  key={q.id}
-                  className={`rounded-lg border p-4 space-y-3 ${
-                    q.is_active ? "" : "opacity-60"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1.5 min-w-0">
-                      <p className="text-sm font-medium leading-snug">
-                        {q.question_text}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge variant="secondary">
-                          {q.question_type === "multi_select"
-                            ? "Multi Select"
-                            : "Single Select"}
-                        </Badge>
-                        <Badge variant={q.store_id == null ? "default" : "outline"}>
-                          {q.store_id == null ? "Global" : "Store"}
-                        </Badge>
-                        {!q.is_active && (
-                          <Badge variant="destructive">Inactive</Badge>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          order {q.sort_order}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => openEdit(q)}
-                        disabled={busy}
-                        aria-label="Edit question"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(q)}
-                        disabled={busy || !q.is_active}
-                        aria-label="Delete question"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+              <>
+                {/* Active questions */}
+                {activeQuestions.map(renderQuestionCard)}
 
-                  {/* Options */}
-                  <div className="space-y-1.5 ps-1">
-                    {q.options.length === 0 && (
-                      <p className="text-xs text-muted-foreground italic">
-                        No options yet.
-                      </p>
-                    )}
-                    {[...q.options]
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map((opt) => {
-                        const isEditing =
-                          editingOption?.questionId === q.id &&
-                          editingOption?.optionId === opt.id;
-                        return (
-                          <div
-                            key={opt.id}
-                            className="flex items-center gap-2 rounded-md border px-2 py-1.5"
-                          >
-                            {isEditing ? (
-                              <>
-                                <Input
-                                  value={optionEditText}
-                                  onChange={(e) =>
-                                    setOptionEditText(e.target.value)
-                                  }
-                                  className="h-7 text-sm"
-                                  maxLength={255}
-                                  autoFocus
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0"
-                                  onClick={handleSaveOption}
-                                  disabled={busy || optionEditText.trim() === ""}
-                                  aria-label="Save option"
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0"
-                                  onClick={() => {
-                                    setEditingOption(null);
-                                    setOptionEditText("");
-                                  }}
-                                  disabled={busy}
-                                  aria-label="Cancel edit"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="flex-1 truncate text-sm">
-                                  {opt.option_text}
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0"
-                                  onClick={() => {
-                                    setEditingOption({
-                                      questionId: q.id,
-                                      optionId: opt.id,
-                                    });
-                                    setOptionEditText(opt.option_text);
-                                  }}
-                                  disabled={busy}
-                                  aria-label="Edit option"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
-                                  onClick={() =>
-                                    handleDeleteOption(q.id, opt.id)
-                                  }
-                                  disabled={busy}
-                                  aria-label="Delete option"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                    {/* Add option */}
-                    <div className="flex items-center gap-2 pt-1">
-                      <Input
-                        value={addOptionText[q.id] ?? ""}
-                        onChange={(e) =>
-                          setAddOptionText((prev) => ({
-                            ...prev,
-                            [q.id]: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleAddOption(q.id);
-                          }
-                        }}
-                        placeholder="Add an option…"
-                        className="h-8 text-sm"
-                        maxLength={255}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 shrink-0"
-                        onClick={() => handleAddOption(q.id)}
-                        disabled={busy || (addOptionText[q.id] ?? "").trim() === ""}
-                      >
-                        <Plus className="me-1 h-4 w-4" />
-                        Add
-                      </Button>
-                    </div>
+                {activeQuestions.length === 0 && (
+                  <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
+                    No active questions.
                   </div>
-                </div>
-              ))
+                )}
+
+                {/* Inactive questions — collapsed by default */}
+                {inactiveQuestions.length > 0 && (
+                  <div className="space-y-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowInactive((v) => !v)}
+                      className="flex w-full items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50"
+                    >
+                      {showInactive ? (
+                        <ChevronDown className="h-4 w-4 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      )}
+                      <span className="font-medium">
+                        Inactive questions ({inactiveQuestions.length})
+                      </span>
+                    </button>
+                    {showInactive && inactiveQuestions.map(renderQuestionCard)}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </DialogContent>
