@@ -160,6 +160,7 @@ export function ScreenProjectView() {
 
   const [myMicMuted, setMyMicMuted] = useState(true);
   const [myVideoOff, setMyVideoOff] = useState(true);
+  const [myScreenShareEnabled, setMyScreenShareEnabled] = useState(false);
   const [myCamVisible, setMyCamVisible] = useState(false);
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
@@ -358,6 +359,14 @@ export function ScreenProjectView() {
       ...prev,
       [id]: { ...prev[id], myCamEnabled: !prev[id].myCamEnabled },
     }));
+  }, []);
+
+  const handleToggleScreenShare = useCallback(() => {
+    setMyScreenShareEnabled((prev) => {
+      const next = !prev;
+      if (next) setMyVideoOff(true); // turn camera off when screen share starts
+      return next;
+    });
   }, []);
 
   const handleCamToAllToggle = useCallback(() => {
@@ -626,6 +635,8 @@ export function ScreenProjectView() {
                   myMicEnabled={!myMicMuted && (broadcastToAll || s.isMain)}
                   myCamEnabled={!myVideoOff && (s.isMain || (screenStates[s.room_name]?.myCamEnabled ?? false))}
                   onToggleMyCam={!s.isMain ? () => handleToggleMyCam(s.room_name) : undefined}
+                  myScreenShareEnabled={s.isMain ? myScreenShareEnabled : undefined}
+                  onToggleMyScreenShare={s.isMain ? handleToggleScreenShare : undefined}
                   onClick={!s.isMain ? () => handleSwap(s.room_name) : undefined}
                   isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
                   isAudioEnabled={screenStates[s.room_name]?.audioEnabled ?? false}
