@@ -47,6 +47,7 @@ import {
   LayoutGrid,
   Monitor,
   Info,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SensorDevice, MosSensor } from "@/types/sensor.types";
@@ -226,13 +227,19 @@ function SensorCard({
   useCelsius: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const state    = sensor.state;
-  const isAlert  = state?.state === "alert";
-  const isOnline = sensor.online;
-  const temp     = sensor.temperature ?? state?.temperature;
+  const state       = sensor.state;
+  const isAlert     = state?.state === "alert";
+  const isStale     = sensor.stale ?? false;
+  const isUnavailable = sensor.source === "unavailable" || (!sensor.success && sensor.temperature == null);
+  const temp        = sensor.temperature ?? (typeof state?.temperature === "number" ? state.temperature : undefined);
+  const displayTime = sensor.as_of ?? sensor.reported_at;
 
   return (
-    <Card className={cn("transition-all", isAlert && "border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/10")}>
+    <Card className={cn(
+      "transition-all",
+      isAlert && "border-amber-500/60 bg-amber-50/30 dark:bg-amber-950/10",
+      isStale && !isAlert && "border-amber-300/50",
+    )}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold">
@@ -244,14 +251,22 @@ function SensorCard({
                 {t("alert")}
               </Badge>
             )}
-            <Badge variant={isOnline ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
-              {isOnline ? t("online") : t("offline")}
-            </Badge>
+            {isStale && !isUnavailable && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-600 dark:text-amber-400">
+                Last reading
+              </Badge>
+            )}
+            {!isStale && (
+              <Badge variant={sensor.online ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+                {sensor.online ? t("online") : t("offline")}
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
-        {!isOnline ? (
+        {isUnavailable ? (
+          /* No reading available at all */
           <div className="flex flex-col items-center gap-1.5 py-3 text-center">
             <WifiOff className="h-7 w-7 text-red-400" />
             <p className="text-xs text-muted-foreground">No data — sensor offline</p>
@@ -274,6 +289,12 @@ function SensorCard({
                 {t("tempRange")}: {formatTemp(state.tempLimit.min, useCelsius)} – {formatTemp(state.tempLimit.max, useCelsius)}
               </p>
             )}
+            {isStale && displayTime && (
+              <p className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+                <Clock className="h-3 w-3 shrink-0" />
+                {sensor.notice ?? `Last reading · ${formatDate(displayTime)}`}
+              </p>
+            )}
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               {state?.battery != null && (
                 <span className="flex items-center gap-1">
@@ -281,7 +302,9 @@ function SensorCard({
                   {state.battery}/4
                 </span>
               )}
-              {sensor.reported_at && <span className="ml-auto">{formatDate(sensor.reported_at)}</span>}
+              {!isStale && sensor.reported_at && (
+                <span className="ml-auto">{formatDate(sensor.reported_at)}</span>
+              )}
             </div>
           </>
         )}
@@ -291,6 +314,8 @@ function SensorCard({
 }
 
 function HubCard({ hub, t }: { hub: SensorDevice; t: ReturnType<typeof useTranslations> }) {
+  const isStale   = hub.stale ?? false;
+  const asOfLabel = hub.as_of ?? hub.reported_at;
   return (
     <Card className="border-dashed">
       <CardContent className="flex items-center gap-3 p-4">
@@ -298,6 +323,12 @@ function HubCard({ hub, t }: { hub: SensorDevice; t: ReturnType<typeof useTransl
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{hub.device_name}</p>
           <p className="text-xs text-muted-foreground">{hub.model_name} · {hub.device_type}</p>
+          {isStale && asOfLabel && (
+            <p className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+              <Clock className="h-3 w-3 shrink-0" />
+              Last reading · {formatDate(asOfLabel)}
+            </p>
+          )}
         </div>
         <Badge variant={hub.online ? "default" : "secondary"} className="text-[10px] shrink-0">
           {hub.online ? t("online") : t("offline")}
@@ -386,7 +417,7 @@ function MosTableSkeleton() {
 }
 
 function MosView({ useCelsius }: { useCelsius: boolean }) {
-  const { mosData, mosLoading, mosError, refetchMos } = useMosSensors();
+  const { mosData, mosLoading, mosError, refetchMos } = useMosSensors(useCelsius ? "c" : "f");
   const [search, setSearch] = useState("");
 
   const sensorRanges = getSensorRanges(useCelsius);
@@ -606,6 +637,7 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
                     {sensorColumns.map((col) => {
                       const sensor = sensorMap.get(col);
 
+                      /* No sensor reported for this column in this store */
                       if (!sensor) {
                         return (
                           <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
@@ -614,17 +646,38 @@ function MosView({ useCelsius }: { useCelsius: boolean }) {
                         );
                       }
 
-                      if (!sensor.online) {
+                      /* No reading available (rate-limited with no history) */
+                      if (sensor.source === "unavailable" || !sensor.success) {
                         return (
                           <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
-                            <span className="inline-flex items-center justify-center gap-1 text-xs font-medium text-red-500 dark:text-red-400">
-                              <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />
-                              Offline
-                            </span>
+                            <span className="text-muted-foreground/30 text-xs">—</span>
                           </td>
                         );
                       }
 
+                      const isStale = sensor.stale ?? false;
+                      const asOf    = sensor.as_of;
+
+                      /* Stale reading — last_report, show temp with amber indicator */
+                      if (isStale) {
+                        return (
+                          <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="inline-flex items-center justify-center gap-1.5 text-sm font-medium tabular-nums">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" />
+                                {formatMosTemp(sensor.temperature, sensor.temperature_unit, useCelsius)}
+                              </span>
+                              {asOf && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                  {formatDate(asOf)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      /* Live or cache — current data */
                       return (
                         <td key={col} className="px-2 py-3 text-center whitespace-nowrap">
                           <span className="inline-flex items-center justify-center gap-1.5 text-sm font-medium tabular-nums">

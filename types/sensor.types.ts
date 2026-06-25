@@ -12,6 +12,8 @@ export interface SensorStoreInfo {
 
 export type TemperatureUnit = "C" | "F";
 
+export type SensorSource = "live" | "cache" | "last_report" | "unavailable";
+
 /* ── GET /stores/:id/sensors ───────────────────────────────────────────── */
 
 /** Alarm flags reported by the sensor hardware */
@@ -63,6 +65,10 @@ export interface SensorDevice {
   temperature_unit?: TemperatureUnit | null;
   state: SensorState | null;
   reported_at: string | null;
+  source: SensorSource;
+  stale: boolean;
+  as_of: string | null;
+  notice: string | null;
   success: boolean;
   error: string | null;
 }
@@ -222,6 +228,10 @@ export interface MosSensor {
   online: boolean;
   temperature: number | null;
   temperature_unit: TemperatureUnit | null;
+  source: SensorSource;
+  stale: boolean;
+  as_of: string | null;
+  notice: string | null;
   success: boolean;
   error: string | null;
 }
@@ -231,6 +241,10 @@ export interface MosHub {
   device_name: string;
   online: boolean;
   temperature: number | null;
+  source: SensorSource;
+  stale: boolean;
+  as_of: string | null;
+  notice: string | null;
   success: boolean;
   error: string | null;
 }

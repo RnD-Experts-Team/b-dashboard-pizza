@@ -89,7 +89,10 @@ export async function GET(request: NextRequest) {
       ? `Bearer ${SENSORS_API_TOKEN}`
       : getAuthorizationHeader(request)!;
 
-    const upstreamUrl = `${SENSORS_BASE_URL}/stores/sensors`;
+    const unit = request.nextUrl.searchParams.get("unit");
+    const upstreamUrl = unit
+      ? `${SENSORS_BASE_URL}/stores/sensors?unit=${unit}`
+      : `${SENSORS_BASE_URL}/stores/sensors`;
 
     const upstream = await fetchWithRetry(upstreamUrl, {
       method: "GET",
