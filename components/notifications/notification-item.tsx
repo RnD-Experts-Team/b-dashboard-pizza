@@ -13,6 +13,10 @@ import {
   Bell,
   ExternalLink,
   KeyRound,
+  Briefcase,
+  Gift,
+  TrendingUp,
+  UserMinus,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 
@@ -47,6 +51,18 @@ function getTypeVisuals(type: string) {
   }
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400" };
+  }
+  if (type.startsWith("hiring_request")) {
+    return { Icon: Briefcase, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
+  }
+  if (type.startsWith("milestone_gift_request")) {
+    return { Icon: Gift, bg: "bg-pink-500/10 text-pink-600 dark:text-pink-400" };
+  }
+  if (type.startsWith("employee_promoted")) {
+    return { Icon: TrendingUp, bg: "bg-green-500/10 text-green-600 dark:text-green-400" };
+  }
+  if (type.startsWith("separation_request")) {
+    return { Icon: UserMinus, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
   }
   if (type.includes("warning") || type.includes("alert")) {
     return { Icon: AlertTriangle, bg: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" };
@@ -120,11 +136,16 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
   const isUnread = notification.read_at === null;
   const isDebriefType = notification.type.startsWith("data_entry_key");
   const isAnnouncementType = notification.type.startsWith("announcement");
-  const pageSegment = isDebriefType || isAnnouncementType
+  const isHiringType =
+    notification.type.startsWith("hiring_request") ||
+    notification.type.startsWith("milestone_gift_request") ||
+    notification.type.startsWith("separation_request");
+  const isEmployeeType = notification.type.startsWith("employee_promoted");
+  const pageSegment = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType
     ? null
     : getPageSegment(notification.action_url);
 
-  const isClickable = isDebriefType || isAnnouncementType || !!pageSegment;
+  const isClickable = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || !!pageSegment;
 
   function handleClick() {
     if (!isClickable) return;
@@ -141,6 +162,16 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
       if (parsed) {
         openDebriefKey(parsed.keyId, parsed.date, parsed.storeId);
       }
+      return;
+    }
+
+    if (isHiringType) {
+      router.push(`/${locale}/dashboard/hiring-request`);
+      return;
+    }
+
+    if (isEmployeeType) {
+      router.push(`/${locale}/dashboard/employees`);
       return;
     }
 
@@ -192,6 +223,10 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
                   ? "Announcements"
                   : isDebriefType
                   ? "Open Debrief"
+                  : isHiringType
+                  ? "Hiring Requests"
+                  : isEmployeeType
+                  ? "Employees"
                   : formatPageLabel(pageSegment!)}
               </span>
             </>
