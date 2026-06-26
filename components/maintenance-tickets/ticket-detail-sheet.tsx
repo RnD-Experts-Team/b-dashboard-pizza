@@ -1950,10 +1950,10 @@ function StatusHistory({ changes }: { changes: TicketIssue["statusChanges"] }) {
           {changes.map((c) => (
             <div key={c.id} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <StatusChip value={c.status.value} label={c.status.label} />
-              {c.changedBy && (
+              {(c.creator || c.changedBy) && (
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" />
-                  Changed by: {c.changedBy}
+                  {c.creator ? c.creator.name : c.changedBy}
                 </span>
               )}
               <span>{fmtDateTime(c.createdAt)}</span>
@@ -2323,32 +2323,49 @@ function IssueNode({
                   )}
                 </div>
 
-                {/* Technicians */}
-                {issue.technicians.length > 0 && <hr className="border-border" />}
-                {issue.technicians.length > 0 && (
-                  <SectionCollapse title="Assigned Technicians" count={issue.technicians.length}>
-                    <div className="flex flex-col gap-1.5">
-                      {issue.technicians.map((tech) => (
-                        <div key={tech.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm font-medium">{tech.name}</span>
-                          </div>
-                          {tech.creator && (
-                            <span className="text-xs text-muted-foreground">
-                              Added by: {tech.creator.name}
-                            </span>
-                          )}
+                {/* Assignments & Technicians — combined */}
+                {(issue.technicians.length > 0 || issue.assignments.length > 0) && <hr className="border-border" />}
+                {(issue.technicians.length > 0 || issue.assignments.length > 0) && (
+                  <SectionCollapse
+                    title="Assignments & Technicians"
+                    count={issue.technicians.length + issue.assignments.length}
+                  >
+                    {/* Technicians first */}
+                    {issue.technicians.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+                          Technicians
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {issue.technicians.map((tech) => (
+                            <div key={tech.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="text-sm font-medium">{tech.name}</span>
+                              </div>
+                              {tech.creator && (
+                                <span className="text-xs text-muted-foreground">
+                                  Added by: {tech.creator.name}
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </SectionCollapse>
-                )}
+                      </div>
+                    )}
 
-                {/* Assignments */}
-                {issue.assignments.length > 0 && <hr className="border-border" />}
-                {issue.assignments.length > 0 && (
-                  <SectionCollapse title="Assignments" count={issue.assignments.length}>
+                    {/* Divider between technicians and assignments */}
+                    {issue.technicians.length > 0 && issue.assignments.length > 0 && (
+                      <hr className="border-border" />
+                    )}
+
+                    {/* Assignments */}
+                    {issue.assignments.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+                          Assignments
+                        </p>
+                        <div className="space-y-2">
                     {issue.assignments.map((a) => (
                       <div key={a.id} className={cn("rounded-md border bg-card p-3 space-y-2", a.mistaken && "opacity-60")}>
                         {/* Mistaken banner or ··· menu */}
@@ -2469,6 +2486,9 @@ function IssueNode({
                         />
                       </div>
                     ))}
+                        </div>
+                      </div>
+                    )}
                   </SectionCollapse>
                 )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, CheckSquare, Square } from "lucide-react";
+import { Loader2, CheckSquare, Square, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -22,6 +22,9 @@ import type { Ticket, TicketIssue } from "@/types/maintenance-tickets.types";
 interface TicketIssuePickerDialogProps {
   open: boolean;
   storeId: string;
+  /** Only issues assigned to this technician are shown. */
+  technicianId: number;
+  technicianName: string;
   selectedIssueIds: number[];
   onClose: () => void;
   onConfirm: (issueIds: number[]) => void;
@@ -39,9 +42,21 @@ function formatDate(iso: string): string {
   }
 }
 
+/**
+ * An issue counts as "assigned to" a technician when that technician is either
+ * directly attached to the issue or part of one of its assignments.
+ */
+function isAssignedToTechnician(issue: TicketIssue, technicianId: number): boolean {
+  if (issue.technicians?.some((t) => t.id === technicianId)) return true;
+  if (issue.assignments?.some((a) => a.technicians?.some((t) => t.id === technicianId))) return true;
+  return false;
+}
+
 export function TicketIssuePickerDialog({
   open,
   storeId,
+  technicianId,
+  technicianName,
   selectedIssueIds,
   onClose,
   onConfirm,
@@ -59,7 +74,8 @@ export function TicketIssuePickerDialog({
     new Set(selectedIssueIds)
   );
 
-  // Fetch tickets when the dialog opens.
+  // Fetch tickets when the dialog opens. The technician_id filter narrows the
+  // list to tickets that have at least one issue assigned to this technician.
   useEffect(() => {
     if (!open) return;
 
@@ -73,7 +89,7 @@ export function TicketIssuePickerDialog({
     setTicketsError(null);
 
     maintenanceTicketsService
-      .getTickets(storeId, { per_page: 50 }, ctrl.signal)
+      .getTickets(storeId, { per_page: 1000, technician_id: technicianId }, ctrl.signal)
       .then((res) => {
         if (ctrl.signal.aborted) return;
         setTickets(res.data);
@@ -135,12 +151,17 @@ export function TicketIssuePickerDialog({
     onConfirm(Array.from(localSelected));
   }
 
+  // Only issues assigned to the chosen technician are selectable.
+  const visibleIssues = issues.filter((issue) => isAssignedToTechnician(issue, technicianId));
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] w-[95vw] overflow-hidden sm:max-w-4xl flex flex-col">
         <DialogHeader>
           <DialogTitle>Browse Tickets &amp; Issues</DialogTitle>
           <DialogDescription>
+            Showing only tickets and issues assigned to{" "}
+            <span className="font-medium text-foreground">{technicianName || "this technician"}</span>.
             Click a ticket to view its issues, then check the ones to link.
           </DialogDescription>
         </DialogHeader>
@@ -235,13 +256,13 @@ export function TicketIssuePickerDialog({
               </div>
             )}
 
-            {selectedTicket && !isLoadingIssues && !issuesError && issues.length === 0 && (
+            {selectedTicket && !isLoadingIssues && !issuesError && visibleIssues.length === 0 && (
               <div className="flex-1 px-3 py-4 text-center text-xs text-muted-foreground">
-                This ticket has no issues.
+                No issues on this ticket are assigned to {technicianName || "this technician"}.
               </div>
             )}
 
-            {selectedTicket && !isLoadingIssues && !issuesError && issues.length > 0 && (
+            {selectedTicket && !isLoadingIssues && !issuesError && visibleIssues.length > 0 && (
               <div className="flex-1 overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-background">
@@ -253,7 +274,7 @@ export function TicketIssuePickerDialog({
                     </tr>
                   </thead>
                   <tbody>
-                    {issues.map((issue) => {
+                    {visibleIssues.map((issue) => {
                       const checked = localSelected.has(issue.id);
                       const title =
                         issue.issueTitle ?? issue.otherTitle ?? "Untitled";
@@ -266,18 +287,22 @@ export function TicketIssuePickerDialog({
                           )}
                           onClick={() => toggleIssue(issue.id)}
                         >
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 align-top">
                             {checked ? (
                               <CheckSquare className="h-4 w-4 text-primary" />
                             ) : (
                               <Square className="h-4 w-4 text-muted-foreground" />
                             )}
                           </td>
-                          <td className="px-3 py-2 font-mono">{issue.id}</td>
-                          <td className="px-3 py-2 max-w-[180px] truncate">
-                            {title}
+                          <td className="px-3 py-2 font-mono align-top">{issue.id}</td>
+                          <td className="px-3 py-2 max-w-[180px]">
+                            <span className="block truncate">{title}</span>
+                            <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <User className="h-3 w-3" />
+                              Assigned to {technicianName || "technician"}
+                            </span>
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-3 py-2 align-top">
                             <Badge
                               variant="outline"
                               className="text-[10px] px-1.5 py-0"

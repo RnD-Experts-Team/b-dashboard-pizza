@@ -214,6 +214,7 @@ function transformStatusChange(raw: ApiTicketIssueStatusChange): TicketIssueStat
     id: raw.id,
     status: { value: raw.to_status, label },
     changedBy: raw.created_by != null ? String(raw.created_by) : null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     reason: raw.reason,
     createdAt: raw.created_at,
   };
@@ -256,7 +257,10 @@ function transformTicket(raw: ApiTicket): Ticket {
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    issueCount: raw.issues_count ?? 0,
+    issueCount: raw.issues_count ?? raw.issues?.length ?? 0,
+    issueTitles: (raw.issues ?? [])
+      .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)
+      .filter((t): t is string => !!t),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     deletedAt: raw.deleted_at,

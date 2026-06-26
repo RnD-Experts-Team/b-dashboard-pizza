@@ -1,17 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus,
   BookOpen,
@@ -26,11 +20,155 @@ import {
   AlertCircle,
   CircleDot,
   Flag,
+  Check,
+  Search,
 } from "lucide-react";
 import type { CatalogIssue, CatalogTechnician, TicketsFilters } from "@/types/maintenance-tickets.types";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { cn } from "@/lib/utils";
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Searchable Select                                                        */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+interface SearchableSelectOption {
+  value: string;
+  label: string;
+  subLabel?: string;
+}
+
+interface SearchableSelectProps {
+  value: string;
+  options: SearchableSelectOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  disabled?: boolean;
+  active?: boolean;
+  className?: string;
+  icon?: React.ReactNode;
+}
+
+function SearchableSelect({
+  value,
+  options,
+  onChange,
+  placeholder = "Select…",
+  searchPlaceholder = "Search…",
+  disabled,
+  active,
+  className,
+  icon,
+}: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = options.find((o) => o.value === value);
+  const filtered = search.trim()
+    ? options.filter(
+        (o) =>
+          o.label.toLowerCase().includes(search.toLowerCase()) ||
+          o.subLabel?.toLowerCase().includes(search.toLowerCase())
+      )
+    : options;
+
+  useEffect(() => {
+    if (open) {
+      setSearch("");
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "flex h-9 w-full items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors",
+            "hover:bg-accent hover:text-accent-foreground",
+            "focus:outline-none focus:ring-1 focus:ring-ring",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            active && "border-primary/40 bg-primary/5",
+            className
+          )}
+        >
+          {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
+          <span className={cn("flex-1 truncate text-start", !selected && "text-muted-foreground")}>
+            {selected ? selected.label : placeholder}
+          </span>
+          <ChevronDown
+            className={cn(
+              "ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+              open && "rotate-180"
+            )}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="w-[var(--radix-popover-trigger-width)] min-w-[180px] p-0 shadow-md"
+      >
+        {/* Search input */}
+        <div className="border-b px-2 py-1.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full rounded-sm bg-transparent py-1 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        </div>
+        {/* Options list */}
+        <div className="max-h-48 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">No results</p>
+          ) : (
+            filtered.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+                  opt.value === value && "bg-accent/60 font-medium"
+                )}
+              >
+                <Check
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 text-primary",
+                    opt.value !== value && "invisible"
+                  )}
+                />
+                <span className="truncate">{opt.label}</span>
+                {opt.subLabel && (
+                  <span className="ms-auto shrink-0 text-xs text-muted-foreground">
+                    {opt.subLabel}
+                  </span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Filters bar                                                             */
+/* ────────────────────────────────────────────────────────────────────────── */
 
 interface TicketsFiltersBarProps {
   filters: TicketsFilters;
@@ -86,7 +224,6 @@ export function TicketsFiltersBar({
     onFiltersChange({ ...filters, [key]: value });
   }
 
-  // Count all active filters (including status + priority now inside panel)
   const activeFilterCount = [
     filters.status,
     filters.priority,
@@ -106,41 +243,93 @@ export function TicketsFiltersBar({
     return s ? (s.storeId ?? s.name ?? s.id) : null;
   })();
 
+  /* ── Option lists ──────────────────────────────────────────────────────── */
+
+  const storeOptions: SearchableSelectOption[] = [
+    ...(canAccessAllStores ? [{ value: "all", label: t("filters.allStores") }] : []),
+    ...(stores ?? [])
+      .filter((s) => s.isActive)
+      .map((s) => ({
+        value: s.storeId ?? s.id,
+        label: s.storeId ?? s.name ?? s.id,
+      })),
+  ];
+
+  const ticketStatusOptions: SearchableSelectOption[] = [
+    { value: "all", label: "All statuses" },
+    { value: "pending", label: "Pending" },
+    { value: "assigned", label: "Assigned" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "complete", label: "Complete" },
+    { value: "cancelled", label: "Cancelled" },
+  ];
+
+  const priorityOptions: SearchableSelectOption[] = [
+    { value: "all", label: "All priorities" },
+    { value: "urgent", label: "Urgent" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
+  const issueOptions: SearchableSelectOption[] = [
+    { value: "all", label: "All issues" },
+    ...catalogIssues.map((i) => ({ value: String(i.id), label: i.title })),
+  ];
+
+  const issueStatusOptions: SearchableSelectOption[] = [
+    { value: "all", label: "All statuses" },
+    { value: "pending", label: "Pending" },
+    { value: "assigned", label: "Assigned" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "complete", label: "Complete" },
+    { value: "deferred", label: "Deferred" },
+    { value: "cancelled", label: "Cancelled" },
+  ];
+
+  const technicianOptions: SearchableSelectOption[] = [
+    { value: "all", label: "All technicians" },
+    ...catalogTechnicians.map((tech) => ({
+      value: String(tech.id),
+      label: tech.name,
+      subLabel: tech.categoryName ?? undefined,
+    })),
+  ];
+
+  const trashedOptions: SearchableSelectOption[] = [
+    { value: "none", label: "Active only" },
+    { value: "with", label: "Include deleted" },
+    { value: "only", label: "Deleted only" },
+  ];
+
+  const perPageOptions: SearchableSelectOption[] = [
+    { value: "default", label: "Default" },
+    { value: "5", label: "5" },
+    { value: "10", label: "10" },
+    { value: "15", label: "15" },
+    { value: "20", label: "20" },
+    { value: "25", label: "25" },
+  ];
+
   return (
     <div className="space-y-2">
       {/* ── Main toolbar ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
 
-        {/* Store selector — always visible, outside filters */}
+        {/* Store selector — searchable */}
         {stores && stores.length > 0 && onStoreChange && (
-          <Select
-            value={selectedStoreId ?? "all"}
-            onValueChange={(v) => onStoreChange(v as string | "all")}
-            disabled={disabled}
-          >
-            <SelectTrigger
-              className={cn(
-                "h-9 w-44 gap-1.5 text-sm",
-                selectedStoreName && "border-primary/40 bg-primary/5 text-primary font-medium"
-              )}
-            >
-              <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <SelectValue placeholder={t("filters.allStores")} />
-            </SelectTrigger>
-            <SelectContent
-              position="popper"
-              style={{ maxHeight: "200px", overflowY: "auto" }}
-            >
-              {canAccessAllStores && (
-                <SelectItem value="all">{t("filters.allStores")}</SelectItem>
-              )}
-              {stores.filter((s) => s.isActive).map((store) => (
-                <SelectItem key={store.id} value={store.storeId ?? store.id}>
-                  {store.storeId ?? store.name ?? store.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="w-44">
+            <SearchableSelect
+              value={selectedStoreId ?? "all"}
+              options={storeOptions}
+              onChange={(v) => onStoreChange(v as string | "all")}
+              placeholder={t("filters.allStores")}
+              searchPlaceholder="Search stores…"
+              disabled={disabled}
+              active={!!selectedStoreName}
+              icon={<Store className="h-3.5 w-3.5" />}
+            />
+          </div>
         )}
 
         {/* Filters toggle */}
@@ -234,23 +423,14 @@ export function TicketsFiltersBar({
                 <CircleDot className="h-3 w-3" />
                 Ticket Status
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.status || "all"}
-                onValueChange={(v) => updateField("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
+                options={ticketStatusOptions}
+                onChange={(v) => updateField("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
                 disabled={disabled}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.status && "border-primary/40 bg-primary/5")}>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="complete">Complete</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+                active={!!filters.status}
+                searchPlaceholder="Search statuses…"
+              />
             </div>
 
             {/* Priority */}
@@ -259,22 +439,14 @@ export function TicketsFiltersBar({
                 <Flag className="h-3 w-3" />
                 Priority
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.priority || "all"}
-                onValueChange={(v) => updateField("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
+                options={priorityOptions}
+                onChange={(v) => updateField("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
                 disabled={disabled}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.priority && "border-primary/40 bg-primary/5")}>
-                  <SelectValue placeholder="All priorities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All priorities</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
+                active={!!filters.priority}
+                searchPlaceholder="Search priorities…"
+              />
             </div>
 
             {/* Issue */}
@@ -283,26 +455,15 @@ export function TicketsFiltersBar({
                 <AlertCircle className="h-3 w-3" />
                 Issue
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.issue_id != null ? String(filters.issue_id) : "all"}
-                onValueChange={(v) => updateField("issue_id", v === "all" ? undefined : Number(v))}
+                options={catalogLoading ? [{ value: "all", label: "Loading…" }] : issueOptions}
+                onChange={(v) => updateField("issue_id", v === "all" ? undefined : Number(v))}
                 disabled={disabled || catalogLoading}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.issue_id != null && "border-primary/40 bg-primary/5")}>
-                  <SelectValue placeholder={catalogLoading ? "Loading…" : "All issues"} />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  style={{ maxHeight: "200px", overflowY: "auto" }}
-                >
-                  <SelectItem value="all">All issues</SelectItem>
-                  {catalogIssues.map((issue) => (
-                    <SelectItem key={issue.id} value={String(issue.id)}>
-                      {issue.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                active={filters.issue_id != null}
+                placeholder={catalogLoading ? "Loading…" : "All issues"}
+                searchPlaceholder="Search issues…"
+              />
             </div>
 
             {/* Issue Status */}
@@ -311,24 +472,14 @@ export function TicketsFiltersBar({
                 <span className="h-3 w-3 rounded-full border-2 border-muted-foreground/50" />
                 Issue Status
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.issue_status || "all"}
-                onValueChange={(v) => updateField("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
+                options={issueStatusOptions}
+                onChange={(v) => updateField("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
                 disabled={disabled}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.issue_status && "border-primary/40 bg-primary/5")}>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="complete">Complete</SelectItem>
-                  <SelectItem value="deferred">Deferred</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+                active={!!filters.issue_status}
+                searchPlaceholder="Search statuses…"
+              />
             </div>
 
             {/* Technician */}
@@ -337,29 +488,15 @@ export function TicketsFiltersBar({
                 <User className="h-3 w-3" />
                 Technician
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.technician_id != null ? String(filters.technician_id) : "all"}
-                onValueChange={(v) => updateField("technician_id", v === "all" ? undefined : Number(v))}
+                options={catalogLoading ? [{ value: "all", label: "Loading…" }] : technicianOptions}
+                onChange={(v) => updateField("technician_id", v === "all" ? undefined : Number(v))}
                 disabled={disabled || catalogLoading}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.technician_id != null && "border-primary/40 bg-primary/5")}>
-                  <SelectValue placeholder={catalogLoading ? "Loading…" : "All technicians"} />
-                </SelectTrigger>
-                <SelectContent
-                  position="popper"
-                  style={{ maxHeight: "200px", overflowY: "auto" }}
-                >
-                  <SelectItem value="all">All technicians</SelectItem>
-                  {catalogTechnicians.map((tech) => (
-                    <SelectItem key={tech.id} value={String(tech.id)}>
-                      {tech.name}
-                      {tech.categoryName && (
-                        <span className="ms-1.5 text-muted-foreground text-xs">· {tech.categoryName}</span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                active={filters.technician_id != null}
+                placeholder={catalogLoading ? "Loading…" : "All technicians"}
+                searchPlaceholder="Search technicians…"
+              />
             </div>
 
             {/* Min part cost */}
@@ -392,20 +529,14 @@ export function TicketsFiltersBar({
                 <Trash2 className="h-3 w-3" />
                 Deleted records
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.trashed || "none"}
-                onValueChange={(v) => updateField("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
+                options={trashedOptions}
+                onChange={(v) => updateField("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
                 disabled={disabled}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.trashed && "border-primary/40 bg-primary/5")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Active only</SelectItem>
-                  <SelectItem value="with">Include deleted</SelectItem>
-                  <SelectItem value="only">Deleted only</SelectItem>
-                </SelectContent>
-              </Select>
+                active={!!filters.trashed}
+                searchPlaceholder="Search…"
+              />
             </div>
 
             {/* Results per page */}
@@ -414,23 +545,14 @@ export function TicketsFiltersBar({
                 <List className="h-3 w-3" />
                 Results per page
               </label>
-              <Select
+              <SearchableSelect
                 value={filters.per_page != null ? String(filters.per_page) : "default"}
-                onValueChange={(v) => updateField("per_page", v === "default" ? undefined : Number(v))}
+                options={perPageOptions}
+                onChange={(v) => updateField("per_page", v === "default" ? undefined : Number(v))}
                 disabled={disabled}
-              >
-                <SelectTrigger className={cn("h-9 text-sm", filters.per_page != null && "border-primary/40 bg-primary/5")}>
-                  <SelectValue placeholder="Default" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Default</SelectItem>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="15">15</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                </SelectContent>
-              </Select>
+                active={filters.per_page != null}
+                searchPlaceholder="Search…"
+              />
             </div>
 
           </div>

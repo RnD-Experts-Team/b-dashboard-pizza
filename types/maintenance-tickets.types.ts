@@ -109,6 +109,7 @@ export interface TicketIssueStatusChange {
   id: number;
   status: EnumField;
   changedBy: string | null;
+  creator: UserRef | null;
   reason: string | null;
   createdAt: string;
 }
@@ -270,6 +271,8 @@ export interface Ticket {
   attachments: TicketAttachment[];
   creator: UserRef | null;
   issueCount: number;
+  /** Issue titles from the list response (may be empty if API doesn't include them). */
+  issueTitles: string[];
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -524,6 +527,7 @@ export interface ApiTicketIssueStatusChange {
   to_status: string;
   reason: string | null;
   created_by: number | null;
+  creator?: { id: number; name: string; email: string } | null;
   created_at: string;
 }
 
@@ -674,6 +678,7 @@ export interface ApiTicket {
   attachments?: ApiTicketAttachment[];
   creator?: { id: number; name: string; email: string } | null;
   issues_count?: number;
+  issues?: Array<{ id: number; display_title?: string | null; title?: string | null; catalog_issue?: { title?: string | null } | null }>;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

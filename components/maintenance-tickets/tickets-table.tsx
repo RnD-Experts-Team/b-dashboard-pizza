@@ -22,7 +22,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,14 +32,29 @@ import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/se
 /*  Status badge                                                            */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+const STATUS_COLORS: Record<string, string> = {
+  pending:     "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
+  assigned:    "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
+  in_progress: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30 dark:text-indigo-400",
+  complete:    "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
+  cancelled:   "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
+  deferred:    "bg-orange-500/10 text-orange-700 border-orange-500/30 dark:text-orange-400",
+};
+
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations("maintenanceTickets.status");
   const key = status as TicketStatus;
-  // `cancelled` has no translation key yet — fall back to a humanized label.
   const label = key === "cancelled"
     ? "Cancelled"
     : t(key as keyof ReturnType<typeof useTranslations<"maintenanceTickets.status">>);
-  return <Badge>{label}</Badge>;
+  return (
+    <span className={cn(
+      "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+      STATUS_COLORS[status] ?? "bg-muted text-foreground border-border"
+    )}>
+      {label}
+    </span>
+  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -107,16 +121,38 @@ function TicketRow({ ticket, onClick, onChanged, canCancelTicket = true }: Ticke
         <TableCell>
           <StatusBadge status={ticket.status.value} />
         </TableCell>
-        <TableCell>
-          <span className="text-sm">
-            {ticket.issueCount} {t("columns.issuesCount")}
-          </span>
+        <TableCell className="max-w-[220px]">
+          {ticket.issueTitles.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {ticket.issueTitles.slice(0, 2).map((title, i) => (
+                <span
+                  key={i}
+                  className="inline-block max-w-[160px] truncate rounded-full bg-muted px-2 py-0.5 text-xs text-foreground"
+                  title={title}
+                >
+                  {title}
+                </span>
+              ))}
+              {ticket.issueTitles.length > 2 && (
+                <span
+                  className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+                  title={ticket.issueTitles.slice(2).join(", ")}
+                >
+                  +{ticket.issueTitles.length - 2}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              {ticket.issueCount} {t("columns.issuesCount")}
+            </span>
+          )}
         </TableCell>
-        <TableCell className="text-sm text-muted-foreground">{ticket.storeId}</TableCell>
-        <TableCell className="text-sm text-muted-foreground">
+        <TableCell className="text-sm text-muted-foreground dark:text-white">{ticket.storeId}</TableCell>
+        <TableCell className="text-sm text-muted-foreground dark:text-white">
           {ticket.creator?.name ?? <span className="opacity-40">—</span>}
         </TableCell>
-        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        <TableCell className="text-sm text-muted-foreground dark:text-white whitespace-nowrap">
           {format(new Date(ticket.createdAt), "MMM d, yyyy")}
         </TableCell>
         {canCancelTicket && (
