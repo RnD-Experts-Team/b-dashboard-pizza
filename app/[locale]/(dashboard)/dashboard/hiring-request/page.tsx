@@ -27,6 +27,7 @@ import {
   AlertCircle,
   UserPlus,
   UserMinus,
+  Gift,
   MoreHorizontal,
   Pencil,
   ClipboardCheck,
@@ -37,6 +38,7 @@ import { EditHiringRequestDialog } from "@/components/hiring/edit-hiring-request
 import { HiringReviewDialog } from "@/components/hiring/hiring-review-dialog";
 import { HiringRequestSheet } from "@/components/hiring/hiring-request-sheet";
 import { SeparationRequestTab } from "@/components/hiring/separation-request-tab";
+import { MilestoneGiftTab } from "@/components/hiring/milestone-gift-tab";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
@@ -263,7 +265,7 @@ export default function HiringRequestPage() {
         onValueChange={setActiveTab}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
+        <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-grid">
           <TabsTrigger value="hiring" className="gap-2">
             <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Hiring Request</span>
@@ -273,6 +275,11 @@ export default function HiringRequestPage() {
             <UserMinus className="h-4 w-4" />
             <span className="hidden sm:inline">Separation Request</span>
             <span className="sm:hidden">Separation</span>
+          </TabsTrigger>
+          <TabsTrigger value="milestone_gift" className="gap-2">
+            <Gift className="h-4 w-4" />
+            <span className="hidden sm:inline">Milestone Gift</span>
+            <span className="sm:hidden">Gift</span>
           </TabsTrigger>
         </TabsList>
 
@@ -455,6 +462,13 @@ export default function HiringRequestPage() {
         <TabsContent value="separation" className="mt-4" tabIndex={-1}>
           <SeparationRequestTab
             active={activeTab === "separation"}
+          />
+        </TabsContent>
+
+        {/* ── Milestone Gift Tab ── */}
+        <TabsContent value="milestone_gift" className="mt-4" tabIndex={-1}>
+          <MilestoneGiftTab
+            active={activeTab === "milestone_gift"}
           />
         </TabsContent>
       </Tabs>

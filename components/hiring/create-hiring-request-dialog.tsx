@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { hiringService } from "@/lib/api/services/hiring.service";
+import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type {
   AvailabilityType,
@@ -93,7 +94,7 @@ export function CreateHiringRequestDialog({
   const [candidates, setCandidates] = useState<HiringRequestCandidateInput[]>([]);
   const [finalNotes, setFinalNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ParsedApiError | null>(null);
   const [showConfirmExit, setShowConfirmExit] = useState(false);
 
   // Auto-sync positions count = employeesNeeded - candidates.length
@@ -190,7 +191,7 @@ export function CreateHiringRequestDialog({
     if (!isFormValid) return;
 
     if (!selectedStore?.storeId) {
-      setError("No store selected. Please select a store from the sidebar.");
+      setError({ message: "No store selected. Please select a store from the sidebar.", details: [] });
       return;
     }
 
@@ -222,9 +223,7 @@ export function CreateHiringRequestDialog({
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create hiring request.",
-      );
+      setError(parseApiError(err, "Failed to create hiring request."));
     } finally {
       setIsSubmitting(false);
     }
@@ -255,7 +254,16 @@ export function CreateHiringRequestDialog({
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>
+                    <span>{error.message}</span>
+                    {error.details.length > 0 && (
+                      <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
+                        {error.details.map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 

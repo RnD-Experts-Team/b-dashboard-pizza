@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
 import { employeeService } from "@/lib/api/services/employee.service";
+import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type {
   SeparationType,
@@ -154,7 +155,7 @@ export function CreateSeparationRequestDialog({
   const [attachments, setAttachments] = useState<File[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ParsedApiError | null>(null);
   const [showConfirmExit, setShowConfirmExit] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -278,7 +279,7 @@ export function CreateSeparationRequestDialog({
     if (!isFormValid) return;
 
     if (!selectedStore?.storeId) {
-      setError("No store selected. Please select a store from the sidebar.");
+      setError({ message: "No store selected. Please select a store from the sidebar.", details: [] });
       return;
     }
 
@@ -315,11 +316,7 @@ export function CreateSeparationRequestDialog({
       onSuccess?.();
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "CanceledError") return;
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to create separation request.",
-      );
+      setError(parseApiError(err, "Failed to create separation request."));
     } finally {
       setIsSubmitting(false);
     }
@@ -353,7 +350,16 @@ export function CreateSeparationRequestDialog({
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>
+                    <span>{error.message}</span>
+                    {error.details.length > 0 && (
+                      <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
+                        {error.details.map((d, i) => (
+                          <li key={i}>{d}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </AlertDescription>
                 </Alert>
               )}
 

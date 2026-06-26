@@ -10,11 +10,27 @@ import {
   Megaphone,
   Bell,
   X,
+  Briefcase,
+  Gift,
+  TrendingUp,
+  UserMinus,
 } from "lucide-react";
 
 function getToastVisuals(type: string) {
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, color: "text-purple-600 dark:text-purple-400" };
+  }
+  if (type.startsWith("hiring_request")) {
+    return { Icon: Briefcase, color: "text-blue-600 dark:text-blue-400" };
+  }
+  if (type.startsWith("milestone_gift_request")) {
+    return { Icon: Gift, color: "text-pink-600 dark:text-pink-400" };
+  }
+  if (type.startsWith("employee_promoted")) {
+    return { Icon: TrendingUp, color: "text-green-600 dark:text-green-400" };
+  }
+  if (type.startsWith("separation_request")) {
+    return { Icon: UserMinus, color: "text-amber-600 dark:text-amber-400" };
   }
   if (type.includes("warning") || type.includes("alert")) {
     return { Icon: AlertTriangle, color: "text-yellow-600 dark:text-yellow-400" };

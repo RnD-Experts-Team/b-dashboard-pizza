@@ -11,7 +11,7 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff } from "lucide-react";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -85,6 +85,10 @@ export interface ScreenTileProps {
   onToggleAudio: () => void;
   /** Toggle the supervisor's camera for this specific room */
   onToggleMyCam?: () => void;
+  /** Whether the supervisor's screen share should be published into this room */
+  myScreenShareEnabled?: boolean;
+  /** Toggle the supervisor's screen share for this room (main tile only) */
+  onToggleMyScreenShare?: () => void;
   /** 0-1 local volume gain */
   volume?: number;
   onVolumeChange?: (v: number) => void;
@@ -137,6 +141,8 @@ interface InnerProps {
   onToggleVideo: () => void;
   onToggleAudio: () => void;
   onToggleMyCam?: () => void;
+  myScreenShareEnabled?: boolean;
+  onToggleMyScreenShare?: () => void;
   volume: number;
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
@@ -244,6 +250,8 @@ function ScreenTileInner({
   onToggleVideo,
   onToggleAudio,
   onToggleMyCam,
+  myScreenShareEnabled,
+  onToggleMyScreenShare,
   volume,
   onVolumeChange,
   videoQuality,
@@ -275,16 +283,21 @@ function ScreenTileInner({
     Track.Source.ScreenShareAudio,
   ]);
 
-  // Stations publish Camera; ScreenShare included as fallback.
-  // Exclude muted publications — setCameraEnabled(false) mutes rather than
-  // unpublishes the track, so we must check isMuted to detect "camera off".
-  const videoTrack = allTracks.find(
+  // Prefer ScreenShare over Camera — when a supervisor shares their screen it
+  // takes priority over their camera feed.
+  const screenShareTrack = allTracks.find(
     (t) =>
       !t.participant.isLocal &&
       !t.publication.isMuted &&
-      (t.publication.source === Track.Source.Camera ||
-        t.publication.source === Track.Source.ScreenShare),
+      t.publication.source === Track.Source.ScreenShare,
   );
+  const cameraTrack = allTracks.find(
+    (t) =>
+      !t.participant.isLocal &&
+      !t.publication.isMuted &&
+      t.publication.source === Track.Source.Camera,
+  );
+  const videoTrack = screenShareTrack ?? cameraTrack;
 
   // Observer mode: all non-local, non-muted video tracks in a multi-camera grid
   const allVideoTracks = observerMode
@@ -348,6 +361,14 @@ function ScreenTileInner({
     if (connectionState !== ConnectionState.Connected) return;
     room.localParticipant.setCameraEnabled(myCamEnabled).catch(() => {});
   }, [myCamEnabled, connectionState, room]);
+
+  // Publish / unpublish supervisor's screen share (main tile only)
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    room.localParticipant
+      .setScreenShareEnabled(!!myScreenShareEnabled, { audio: true })
+      .catch(() => {});
+  }, [myScreenShareEnabled, connectionState, room]);
 
   // Switch active microphone device when the selected audio device changes
   useEffect(() => {
@@ -461,43 +482,32 @@ function ScreenTileInner({
       </div>
 
       {observerMode ? (
-        /* Observer mode — show ALL participant cameras in a responsive grid */
-        allVideoTracks.length > 0 ? (
-          <div
-            className={cn(
-              "absolute inset-0 grid gap-1 p-1",
-              allVideoTracks.length === 1 ? "grid-cols-1" : "grid-cols-2",
-            )}
-          >
-            {allVideoTracks.map((t) => (
-              <div
-                key={t.publication.trackSid}
-                className="relative overflow-hidden rounded-lg bg-neutral-900"
-              >
-                <VideoTrack
-                  trackRef={t}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-                <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[0.6rem] font-medium text-white/80 backdrop-blur-sm">
-                  {t.participant.identity}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none bg-neutral-900">
-            <div className="rounded-full bg-black/30 flex items-center justify-center h-20 w-20">
-              {isConnecting ? (
-                <div className="animate-spin rounded-full border-2 border-white/20 border-t-white/70 h-9 w-9" />
+        /* Observer mode — fixed 2-panel layout: station (left) + supervisor (right) */
+        <div className="absolute inset-0 grid grid-cols-2 gap-1 p-1">
+          {([allVideoTracks[0], allVideoTracks[1]] as const).map((t, i) => (
+            <div
+              key={t?.publication.trackSid ?? `placeholder-${i}`}
+              className="relative overflow-hidden rounded-lg bg-neutral-900"
+            >
+              {t ? (
+                <>
+                  <VideoTrack
+                    trackRef={t}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                  <span className="absolute bottom-1 left-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[0.6rem] font-medium text-white/80 backdrop-blur-sm">
+                    {t.participant.identity}
+                  </span>
+                </>
               ) : (
-                <VideoOff className="text-white/40 h-9 w-9" />
+                <div className="flex h-full flex-col items-center justify-center gap-2 select-none pointer-events-none">
+                  <VideoOff className="h-7 w-7 text-white/25" />
+                  <span className="text-[0.65rem] text-white/40">Not streaming</span>
+                </div>
               )}
             </div>
-            <span className="font-medium truncate max-w-[88%] text-center text-white/60 text-base">
-              {isConnecting ? "Connecting..." : name}
-            </span>
-          </div>
-        )
+          ))}
+        </div>
       ) : videoTrack && isVideoEnabled ? (
         <VideoTrack
           trackRef={videoTrack}
@@ -701,6 +711,26 @@ function ScreenTileInner({
             )}
           </Button>
 
+          {/* Screen share toggle — main tile only */}
+          {isMain && onToggleMyScreenShare && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={myScreenShareEnabled ? "Stop sharing screen" : "Share screen"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleMyScreenShare();
+              }}
+              className={cn(
+                "h-8 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                myScreenShareEnabled && "text-red-400 hover:text-red-300",
+              )}
+            >
+              <Monitor className="h-3.5 w-3.5" />
+              <span>{myScreenShareEnabled ? "Stop Share" : "Share Screen"}</span>
+            </Button>
+          )}
+
           {/* My camera toggle — bottom-right: controls whether supervisor's cam is sent to THIS room (side tiles only) */}
           {!isMain && onToggleMyCam && (
             <Button
@@ -772,6 +802,8 @@ export function ScreenTile({
   onToggleVideo,
   onToggleAudio,
   onToggleMyCam,
+  myScreenShareEnabled,
+  onToggleMyScreenShare,
   volume = 1,
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
@@ -858,6 +890,8 @@ export function ScreenTile({
         onToggleVideo={onToggleVideo}
         onToggleAudio={onToggleAudio}
         onToggleMyCam={onToggleMyCam}
+        myScreenShareEnabled={myScreenShareEnabled}
+        onToggleMyScreenShare={onToggleMyScreenShare}
         volume={volume}
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}
