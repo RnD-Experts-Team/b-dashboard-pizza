@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type { StoreRequest } from "@/types/hiring.types";
 
@@ -96,9 +95,9 @@ export function SeparationRequestSheet({
   const employeeName = emp
     ? [emp.first_name, emp.middle_name, emp.last_name].filter(Boolean).join(" ")
     : null;
-  const { selectedStore } = useSelectedStoreStore();
+  const rowStoreNumber = sep?.store?.store_number ?? "";
   const { canAccessRoute, overviewStores } = useAuthStore();
-  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const effectiveStoreId = overviewStores?.[0]?.id;
   const canSubmitDecision = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/separation-requests/*/decision", storeId: effectiveStoreId });
 
   return (
@@ -241,10 +240,10 @@ export function SeparationRequestSheet({
                     {sep.attachments.map((att) => (
                       <div key={att.id} className="rounded-lg border p-3 space-y-2">
                         <div className="flex items-start gap-3">
-                          <AttachmentThumb url={att.file_path} />
+                          <AttachmentThumb url={att.attachment_url ?? att.file_path} />
                           <div className="flex-1 min-w-0 space-y-1">
                             <a
-                              href={att.file_path}
+                              href={att.attachment_url ?? att.file_path}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
@@ -296,6 +295,7 @@ export function SeparationRequestSheet({
                 <Separator />
                 <SupervisorDecisionSection
                   separationId={sep.id}
+                  storeId={rowStoreNumber}
                   onSuccess={() => {
                     onSuccess?.();
                     onOpenChange(false);
@@ -313,24 +313,24 @@ export function SeparationRequestSheet({
 /* -- Approve / Reject Decision Sub-component -- */
 function SupervisorDecisionSection({
   separationId,
+  storeId,
   onSuccess,
 }: {
   separationId: number;
+  storeId: string;
   onSuccess: () => void;
 }) {
-  const { selectedStore } = useSelectedStoreStore();
-
   const [decision, setDecision] = useState<"completed" | "rejected" | null>(null);
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit() {
-    if (decision === null || !selectedStore?.storeId) return;
+    if (decision === null || !storeId) return;
     setIsSubmitting(true);
 
     try {
       await separationService.submitSeparationDecision(
-        selectedStore.storeId,
+        storeId,
         separationId,
         {
           decision,
