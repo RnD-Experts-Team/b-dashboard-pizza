@@ -174,6 +174,7 @@ export interface MilestoneGiftDetail {
   rating: MilestoneGiftRating | null;
   decision: MilestoneGiftDecision | null;
   final_status: MilestoneGiftFinalStatusRecord | null;
+  store?: { id: number; store_number: string } | null;
 }
 
 /* ── Payloads ──────────────────────────────────────────────────────────── */

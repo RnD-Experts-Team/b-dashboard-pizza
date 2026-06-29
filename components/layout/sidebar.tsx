@@ -437,7 +437,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   const hiringManagementGroup: NavGroup = {
-    label: t("hiringManagement"),
+    label: "Employee Management",
     icon: Briefcase,
     items: [
       {

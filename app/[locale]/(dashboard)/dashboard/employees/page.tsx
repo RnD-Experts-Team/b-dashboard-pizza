@@ -64,6 +64,7 @@ import { toast } from "sonner";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
 import type { EmployeeV1Record } from "@/types/employee.types";
 
 type EmployeeFilterOptions = {
@@ -238,13 +239,28 @@ export default function EmployeesPage() {
   const [editEmployeeId, setEditEmployeeId] = useState<number | null>(null);
   const [changeStatusOpen, setChangeStatusOpen] = useState(false);
   const [changeStatusEmployeeId, setChangeStatusEmployeeId] = useState<number | null>(null);
+  const [actionStoreNumber, setActionStoreNumber] = useState<string>("");
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
+    const fallback = (overviewStores ?? []).flatMap((s) => s.storeId ? [s.storeId] : []);
+    try {
+      const raw = localStorage.getItem("store-filter:employees");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
+      }
+    } catch {}
+    return fallback;
+  });
+
+  function handleStoreApply(ids: string[]) {
+    setSelectedStoreIds(ids);
+    try { localStorage.setItem("store-filter:employees", JSON.stringify(ids)); } catch {}
+  }
+
   const [rows, setRows] = useState<EmployeeV1Record[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isStoreHydrated, setIsStoreHydrated] = useState(
-    () => useSelectedStoreStore.persist.hasHydrated(),
-  );
-  const [resolvedStoreId, setResolvedStoreId] = useState<string | null>(null);
+  const [resolvedStoreKey, setResolvedStoreKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
@@ -260,23 +276,6 @@ export default function EmployeesPage() {
   function getCurrentFilters(): EmployeeFilterOptions {
     return { ...filters, page };
   }
-
-  useEffect(() => {
-    const persistApi = useSelectedStoreStore.persist;
-    setIsStoreHydrated(persistApi.hasHydrated());
-
-    const unsubscribeHydrate = persistApi.onHydrate(() => {
-      setIsStoreHydrated(false);
-    });
-    const unsubscribeFinishHydration = persistApi.onFinishHydration(() => {
-      setIsStoreHydrated(true);
-    });
-
-    return () => {
-      unsubscribeHydrate();
-      unsubscribeFinishHydration();
-    };
-  }, []);
 
   /* Fetch reference catalog on every page mount */
   useEffect(() => {
@@ -298,7 +297,7 @@ export default function EmployeesPage() {
 
   const fetchData = useCallback(
     async (opts?: EmployeeFilterOptions) => {
-      if (!selectedStore?.storeId) {
+      if (selectedStoreIds.length === 0) {
         setIsLoading(false);
         return;
       }
@@ -313,8 +312,8 @@ export default function EmployeesPage() {
       try {
         const params = buildV1Params(opts);
 
-        const res = await employeeService.getEmployeesV1(
-          selectedStore.storeId,
+        const res = await employeeService.getEmployeesAll(
+          selectedStoreIds,
           params,
           controller.signal,
         );
@@ -332,26 +331,25 @@ export default function EmployeesPage() {
         setIsLoading(false);
       }
     },
-    [selectedStore?.storeId],
+    [selectedStoreIds],
   );
 
-  /* Initial load - wait for persisted store hydration, then bootstrap page data */
+  /* Initial load — bootstrap whenever the selected store IDs change */
   useEffect(() => {
-    if (!isStoreHydrated) return;
+    const storeKey = selectedStoreIds.slice().sort().join(",");
 
-    if (!selectedStore?.storeId) {
+    if (selectedStoreIds.length === 0) {
       abortRef.current?.abort();
       setRows([]);
       setError(null);
       setIsLoading(false);
-      setResolvedStoreId(null);
+      setResolvedStoreKey(null);
       setTotalPages(1);
       setPage(1);
       setTotalItems(0);
       return;
     }
 
-    const storeId = selectedStore.storeId;
     const params = buildV1Params(getCurrentFilters());
 
     abortRef.current?.abort();
@@ -365,8 +363,8 @@ export default function EmployeesPage() {
       setError(null);
 
       try {
-        const res = await employeeService.getEmployeesV1(
-          storeId,
+        const res = await employeeService.getEmployeesAll(
+          selectedStoreIds,
           params,
           controller.signal,
         );
@@ -393,7 +391,7 @@ export default function EmployeesPage() {
       } finally {
         if (!cancelled) {
           setIsLoading(false);
-          setResolvedStoreId(storeId);
+          setResolvedStoreKey(storeKey);
         }
       }
     };
@@ -405,13 +403,12 @@ export default function EmployeesPage() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isStoreHydrated, selectedStore?.storeId]);
+  }, [selectedStoreIds]);
 
-  const hasStore = !!selectedStore?.storeId;
-  const isBootstrappingCurrentStore =
-    hasStore && resolvedStoreId !== selectedStore?.storeId;
-  const shouldShowSkeleton =
-    !isStoreHydrated || (hasStore && (isLoading || isBootstrappingCurrentStore));
+  const hasStore = selectedStoreIds.length > 0;
+  const currentStoreKey = selectedStoreIds.slice().sort().join(",");
+  const isBootstrappingCurrentStore = hasStore && resolvedStoreKey !== currentStoreKey;
+  const shouldShowSkeleton = hasStore && (isLoading || isBootstrappingCurrentStore);
   const isEmpty = hasStore && !shouldShowSkeleton && !error && rows.length === 0;
 
   function handleSearch(e: React.FormEvent) {
@@ -498,6 +495,11 @@ export default function EmployeesPage() {
       <form onSubmit={handleSearch} className="flex flex-col gap-3">
         {/* Top bar */}
         <div className="flex flex-wrap gap-2 items-center">
+          <StoreMultiSelect
+            stores={(overviewStores ?? []).flatMap((s) => s.storeId ? [{ storeId: s.storeId, name: s.name }] : [])}
+            value={selectedStoreIds}
+            onApply={handleStoreApply}
+          />
           <div className="relative flex-1 min-w-48">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
@@ -1129,10 +1131,10 @@ export default function EmployeesPage() {
       {/* Skeleton */}
       {shouldShowSkeleton && <TableSkeleton />}
 
-      {/* No store */}
-      {isStoreHydrated && !shouldShowSkeleton && !hasStore && (
+      {/* No store selected */}
+      {!shouldShowSkeleton && !hasStore && (
         <div className="rounded-lg border p-10 text-center text-muted-foreground text-sm">
-          Select a store to view employees.
+          Select at least one store to view employees.
         </div>
       )}
 
@@ -1177,6 +1179,7 @@ export default function EmployeesPage() {
                       className={canViewEmployeeDetails ? "cursor-pointer hover:bg-muted/50" : ""}
                       onClick={canViewEmployeeDetails ? () => {
                         setSelectedEmployeeId(emp.id);
+                        setActionStoreNumber(emp.latest_store?.store?.store_number ?? "");
                         setDetailsOpen(true);
                       } : undefined}
                     >
@@ -1215,6 +1218,7 @@ export default function EmployeesPage() {
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setEditEmployeeId(emp.id);
+                                    setActionStoreNumber(emp.latest_store?.store?.store_number ?? "");
                                     setEditDialogOpen(true);
                                   }}
                                 >
@@ -1226,6 +1230,7 @@ export default function EmployeesPage() {
                                 <DropdownMenuItem
                                   onClick={() => {
                                     setChangeStatusEmployeeId(emp.id);
+                                    setActionStoreNumber(emp.latest_store?.store?.store_number ?? "");
                                     setChangeStatusOpen(true);
                                   }}
                                 >
@@ -1331,6 +1336,7 @@ export default function EmployeesPage() {
 
       <EmployeeDetailsSheet
         employeeId={selectedEmployeeId}
+        storeId={actionStoreNumber}
         open={detailsOpen}
         onOpenChange={(nextOpen) => {
           setDetailsOpen(nextOpen);
@@ -1342,6 +1348,7 @@ export default function EmployeesPage() {
 
       <EditEmployeeDialog
         employeeId={editEmployeeId}
+        storeId={actionStoreNumber}
         open={editDialogOpen}
         onOpenChange={(nextOpen) => {
           setEditDialogOpen(nextOpen);
@@ -1359,6 +1366,7 @@ export default function EmployeesPage() {
 
       <ChangeEmployeeStatusDialog
         employeeId={changeStatusEmployeeId}
+        storeId={actionStoreNumber}
         open={changeStatusOpen}
         onOpenChange={(nextOpen) => {
           setChangeStatusOpen(nextOpen);

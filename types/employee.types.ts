@@ -275,6 +275,20 @@ export interface EmployeeV1Record {
   employment_type: string | null;
   created_at: string;
   updated_at: string;
+  latest_store?: {
+    id: number;
+    store_id: number;
+    employee_id: number;
+    effective_date: string;
+    created_at: string | null;
+    updated_at: string | null;
+    store: {
+      id: number;
+      store_number: string;
+      created_at: string | null;
+      updated_at: string | null;
+    };
+  } | null;
 }
 
 export interface EmployeesV1PaginatedResponse {

@@ -265,6 +265,26 @@ export const hiringService = {
   },
 
   /**
+   * Fetch all requests across one or more stores.
+   * Proxied through GET /api/v1/requests
+   * → GET {HIRING_BASE_URL}/v1/requests?storeIds[]=X&storeIds[]=Y&page=N
+   */
+  async getRequests(
+    storeIds: string[],
+    page = 1,
+    signal?: AbortSignal,
+  ): Promise<StoreRequestsResponse> {
+    const params = new URLSearchParams();
+    storeIds.forEach((id) => params.append("storeIds[]", id));
+    params.set("page", String(page));
+    const { data } = await axios.get<StoreRequestsResponse>(
+      `/api/v1/requests?${params.toString()}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
+  /**
    * Submit a hiring decision (complete hiring).
    * Proxied through POST /api/v1/stores/[storeId]/hiring-requests/[requestId]/decision
    */

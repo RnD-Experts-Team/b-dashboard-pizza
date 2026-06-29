@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   AlertCircle,
   Plus,
@@ -13,6 +13,8 @@ import {
   RefreshCw,
   ChevronRight,
   ChevronDown,
+  ChevronsUpDown,
+  Building2,
 } from "lucide-react";
 import {
   Dialog,
@@ -21,6 +23,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +55,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { milestoneGiftService } from "@/lib/api/services/milestone-gift.service";
 import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
   MilestoneGiftQuestion,
   MilestoneGiftQuestionType,
@@ -56,17 +64,32 @@ import type {
 interface MilestoneGiftQuestionsCatalogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Numeric store id used to create store-specific questions (null = global only) */
-  storeId?: number | string | null;
-  storeName?: string | null;
 }
 
 export function MilestoneGiftQuestionsCatalog({
   open,
   onOpenChange,
-  storeId,
-  storeName,
 }: MilestoneGiftQuestionsCatalogProps) {
+  const { overviewStores } = useAuthStore();
+
+  // Internal store selection
+  const [catalogStoreId, setCatalogStoreId] = useState("");       // human-readable store number
+  const [catalogInternalId, setCatalogInternalId] = useState(""); // numeric auth id, used as integer store_id
+  const [catalogStoreName, setCatalogStoreName] = useState("");
+  const [storeSearch, setStoreSearch] = useState("");
+  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
+
+  const filteredStores = useMemo(() => {
+    const all = overviewStores ?? [];
+    if (!storeSearch.trim()) return all;
+    const lower = storeSearch.toLowerCase();
+    return all.filter(
+      (s) =>
+        s.name.toLowerCase().includes(lower) ||
+        (s.storeId ?? "").toLowerCase().includes(lower),
+    );
+  }, [overviewStores, storeSearch]);
+
   const [questions, setQuestions] = useState<MilestoneGiftQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -91,9 +114,7 @@ export function MilestoneGiftQuestionsCatalog({
   const [busy, setBusy] = useState(false);
 
   // Delete-question confirmation
-  const [deleteTarget, setDeleteTarget] = useState<MilestoneGiftQuestion | null>(
-    null,
-  );
+  const [deleteTarget, setDeleteTarget] = useState<MilestoneGiftQuestion | null>(null);
 
   // Inactive questions are collapsed by default
   const [showInactive, setShowInactive] = useState(false);
@@ -114,12 +135,36 @@ export function MilestoneGiftQuestionsCatalog({
     }
   }, []);
 
+  // Reset store selection when dialog closes
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setCatalogStoreId("");
+      setCatalogInternalId("");
+      setCatalogStoreName("");
+      setStoreSearch("");
+      setStoreDropdownOpen(false);
+    }
+  }, [open]);
+
+  // Load questions once a store is selected
+  useEffect(() => {
+    if (!open || !catalogStoreId) return;
     const controller = new AbortController();
     void loadQuestions(controller.signal);
     return () => controller.abort();
-  }, [open, loadQuestions]);
+  }, [open, catalogStoreId, loadQuestions]);
+
+  // Reset questions and form when store changes
+  useEffect(() => {
+    setQuestions([]);
+    setLoadError(null);
+    setFormMode("none");
+    setEditingQuestionId(null);
+    setFText("");
+    setFSortOrder("0");
+    setFStoreSpecific(false);
+    setFormError(null);
+  }, [catalogStoreId]);
 
   function resetForm() {
     setFormMode("none");
@@ -154,12 +199,14 @@ export function MilestoneGiftQuestionsCatalog({
     try {
       const sortOrder = Number(fSortOrder) || 0;
       if (formMode === "create") {
-        await milestoneGiftService.createQuestion({
+        const questionPayload = {
           question_text: fText.trim(),
           question_type: fType,
           sort_order: sortOrder,
-          store_id:
-            fStoreSpecific && storeId != null ? Number(storeId) : null,
+        };
+        await milestoneGiftService.createQuestion({
+          ...questionPayload,
+          store_id: fStoreSpecific && catalogInternalId !== "" ? Number(catalogInternalId) : null,
         });
         toast.success("Question created.");
       } else if (formMode === "edit" && editingQuestionId !== null) {
@@ -240,7 +287,7 @@ export function MilestoneGiftQuestionsCatalog({
     }
   }
 
-  const canCreateStoreSpecific = storeId != null;
+  const canCreateStoreSpecific = catalogStoreId !== "";
 
   const activeQuestions = questions.filter((q) => q.is_active);
   const inactiveQuestions = questions.filter((q) => !q.is_active);
@@ -248,26 +295,20 @@ export function MilestoneGiftQuestionsCatalog({
   const renderQuestionCard = (q: MilestoneGiftQuestion) => (
     <div
       key={q.id}
-      className={`rounded-lg border p-4 space-y-3 ${
-        q.is_active ? "" : "opacity-70"
-      }`}
+      className={`rounded-lg border p-4 space-y-3 ${q.is_active ? "" : "opacity-70"}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1.5 min-w-0">
           <p className="text-sm font-medium leading-snug">{q.question_text}</p>
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="secondary">
-              {q.question_type === "multi_select"
-                ? "Multi Select"
-                : "Single Select"}
+              {q.question_type === "multi_select" ? "Multi Select" : "Single Select"}
             </Badge>
             <Badge variant={q.store_id == null ? "default" : "outline"}>
               {q.store_id == null ? "Global" : "Store"}
             </Badge>
             {!q.is_active && <Badge variant="destructive">Inactive</Badge>}
-            <span className="text-xs text-muted-foreground">
-              order {q.sort_order}
-            </span>
+            <span className="text-xs text-muted-foreground">order {q.sort_order}</span>
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -303,8 +344,7 @@ export function MilestoneGiftQuestionsCatalog({
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((opt) => {
             const isEditing =
-              editingOption?.questionId === q.id &&
-              editingOption?.optionId === opt.id;
+              editingOption?.questionId === q.id && editingOption?.optionId === opt.id;
             return (
               <div
                 key={opt.id}
@@ -345,18 +385,13 @@ export function MilestoneGiftQuestionsCatalog({
                   </>
                 ) : (
                   <>
-                    <span className="flex-1 truncate text-sm">
-                      {opt.option_text}
-                    </span>
+                    <span className="flex-1 truncate text-sm">{opt.option_text}</span>
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 shrink-0"
                       onClick={() => {
-                        setEditingOption({
-                          questionId: q.id,
-                          optionId: opt.id,
-                        });
+                        setEditingOption({ questionId: q.id, optionId: opt.id });
                         setOptionEditText(opt.option_text);
                       }}
                       disabled={busy}
@@ -385,10 +420,7 @@ export function MilestoneGiftQuestionsCatalog({
           <Input
             value={addOptionText[q.id] ?? ""}
             onChange={(e) =>
-              setAddOptionText((prev) => ({
-                ...prev,
-                [q.id]: e.target.value,
-              }))
+              setAddOptionText((prev) => ({ ...prev, [q.id]: e.target.value }))
             }
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -427,9 +459,75 @@ export function MilestoneGiftQuestionsCatalog({
             <DialogDescription>
               Manage the rating questions used across milestone gift requests.
               Global questions apply to every store; store questions only appear
-              for {storeName ?? "the selected store"}.
+              for {catalogStoreName || "the selected store"}.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Store selector */}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm">Store</Label>
+            <Popover open={storeDropdownOpen} onOpenChange={setStoreDropdownOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {catalogStoreId
+                      ? `${catalogStoreName} (${catalogStoreId})`
+                      : "Select a store…"}
+                  </span>
+                  <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <div className="p-2 border-b">
+                  <Input
+                    placeholder="Search stores…"
+                    value={storeSearch}
+                    onChange={(e) => setStoreSearch(e.target.value)}
+                    className="h-8 text-sm"
+                    autoFocus
+                  />
+                </div>
+                <div
+                  className="max-h-52 overflow-y-auto"
+                  onWheel={(e) => e.stopPropagation()}
+                >
+                  {filteredStores.length === 0 ? (
+                    <div className="py-4 text-center text-sm text-muted-foreground">
+                      No stores found.
+                    </div>
+                  ) : (
+                    filteredStores.map((s) => (
+                      <button
+                        key={s.storeId}
+                        type="button"
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent ${
+                          catalogStoreId === s.storeId ? "bg-accent font-medium" : ""
+                        }`}
+                        onClick={() => {
+                          setCatalogStoreId(s.storeId ?? "");
+                          setCatalogInternalId(s.id);
+                          setCatalogStoreName(s.name);
+                          setStoreSearch("");
+                          setStoreDropdownOpen(false);
+                        }}
+                      >
+                        <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{s.name}</span>
+                        <span className="ms-auto text-xs text-muted-foreground font-mono">
+                          {s.storeId}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
 
           {/* Toolbar */}
           <div className="flex items-center justify-between gap-2">
@@ -437,7 +535,7 @@ export function MilestoneGiftQuestionsCatalog({
               variant="outline"
               size="sm"
               onClick={() => loadQuestions()}
-              disabled={isLoading || busy}
+              disabled={isLoading || busy || !catalogStoreId}
             >
               <RefreshCw
                 className={isLoading ? "me-2 h-4 w-4 animate-spin" : "me-2 h-4 w-4"}
@@ -445,7 +543,7 @@ export function MilestoneGiftQuestionsCatalog({
               Refresh
             </Button>
             {formMode === "none" && (
-              <Button size="sm" onClick={openCreate}>
+              <Button size="sm" onClick={openCreate} disabled={!catalogStoreId}>
                 <Plus className="me-2 h-4 w-4" />
                 New Question
               </Button>
@@ -505,17 +603,13 @@ export function MilestoneGiftQuestionsCatalog({
                   </Label>
                   <Select
                     value={fType}
-                    onValueChange={(v) =>
-                      setFType(v as MilestoneGiftQuestionType)
-                    }
+                    onValueChange={(v) => setFType(v as MilestoneGiftQuestionType)}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="single_select">
-                        Single Select
-                      </SelectItem>
+                      <SelectItem value="single_select">Single Select</SelectItem>
                       <SelectItem value="multi_select">Multi Select</SelectItem>
                     </SelectContent>
                   </Select>
@@ -545,7 +639,7 @@ export function MilestoneGiftQuestionsCatalog({
                     htmlFor="q-store-specific"
                     className="text-sm font-normal cursor-pointer"
                   >
-                    Store-specific (only {storeName ?? "this store"})
+                    Store-specific (only {catalogStoreName || "this store"})
                     {!canCreateStoreSpecific && (
                       <span className="text-muted-foreground ms-1">
                         — no store selected, will be global
@@ -595,7 +689,14 @@ export function MilestoneGiftQuestionsCatalog({
 
           {/* Questions list */}
           <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-3">
-            {isLoading && questions.length === 0 ? (
+            {!catalogStoreId ? (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-10 text-center gap-3">
+                <Building2 className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">
+                  Select a store above to view and manage its questions.
+                </p>
+              </div>
+            ) : isLoading && questions.length === 0 ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-24 w-full" />
               ))

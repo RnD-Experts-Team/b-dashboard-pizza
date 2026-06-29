@@ -418,6 +418,40 @@ export const employeeService = {
   },
 
   /**
+   * Fetch employees across one or more stores using the new global endpoint.
+   * Proxied through GET /api/v1/employees
+   * → GET {HIRING_BASE_URL}/v1/employees?storeIds[]=X&storeIds[]=Y&...
+   */
+  async getEmployeesAll(
+    storeIds: string[],
+    params?: Record<string, string | number | boolean | string[] | undefined | null>,
+    signal?: AbortSignal,
+  ): Promise<EmployeesV1PaginatedResponse> {
+    const query = new URLSearchParams();
+    for (const id of storeIds) {
+      query.append("storeIds[]", id);
+    }
+    if (params) {
+      for (const [key, val] of Object.entries(params)) {
+        if (val === undefined || val === null || val === "") continue;
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            query.append(`${key}[]`, String(item));
+          }
+        } else {
+          query.set(key, String(val));
+        }
+      }
+    }
+    const qs = query.toString();
+    const { data } = await axios.get<EmployeesV1PaginatedResponse>(
+      `/api/v1/employees${qs ? `?${qs}` : ""}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
+  /**
    * Fetch a single employee by ID.
    * Proxied through GET /api/hiring-management/[storeId]/employees/[employeeId]
    */

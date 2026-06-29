@@ -397,6 +397,7 @@ export interface StoreRequestSeparationDetail {
   user: StoreRequestUser;
   employee: StoreRequestEmployee;
   decisions: unknown[];
+  store?: { id: number; store_number: string } | null;
 }
 
 export interface HiringRequestDecisionRecord {

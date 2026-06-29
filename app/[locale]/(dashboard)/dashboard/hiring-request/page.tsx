@@ -42,6 +42,7 @@ import { MilestoneGiftTab } from "@/components/hiring/milestone-gift-tab";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
 import type { StoreRequest } from "@/types/hiring.types";
 
 const AVAILABILITY_LABELS: Record<string, string> = {
@@ -137,34 +138,32 @@ export default function HiringRequestPage() {
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
-  const [isStoreHydrated, setIsStoreHydrated] = useState(
-    () => useSelectedStoreStore.persist.hasHydrated(),
-  );
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    const persistApi = useSelectedStoreStore.persist;
-    setIsStoreHydrated(persistApi.hasHydrated());
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
+    const fallback = (overviewStores ?? []).flatMap((s) => s.storeId ? [s.storeId] : []);
+    try {
+      const raw = localStorage.getItem("store-filter:hiring-request");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
+      }
+    } catch {}
+    return fallback;
+  });
 
-    const unsubscribeHydrate = persistApi.onHydrate(() => {
-      setIsStoreHydrated(false);
-    });
-    const unsubscribeFinishHydration = persistApi.onFinishHydration(() => {
-      setIsStoreHydrated(true);
-    });
-
-    return () => {
-      unsubscribeHydrate();
-      unsubscribeFinishHydration();
-    };
-  }, []);
+  function handleStoreApply(ids: string[]) {
+    setSelectedStoreIds(ids);
+    try { localStorage.setItem("store-filter:hiring-request", JSON.stringify(ids)); } catch {}
+  }
 
   const fetchData = useCallback(
     async (targetPage: number) => {
-      if (!selectedStore?.storeId) {
+      const ids = selectedStoreIds;
+      if (ids.length === 0) {
         setIsLoading(false);
         return;
       }
@@ -177,8 +176,8 @@ export default function HiringRequestPage() {
       setError(null);
 
       try {
-        const res = await hiringService.getStoreRequests(
-          selectedStore.storeId,
+        const res = await hiringService.getRequests(
+          ids,
           targetPage,
           controller.signal,
         );
@@ -194,17 +193,15 @@ export default function HiringRequestPage() {
         setIsLoading(false);
       }
     },
-    [selectedStore?.storeId],
+    [selectedStoreIds],
   );
 
   useEffect(() => {
-    if (!isStoreHydrated) return;
-
     if (activeTab !== "hiring") {
       return;
     }
 
-    if (!selectedStore?.storeId) {
+    if (selectedStoreIds.length === 0) {
       abortRef.current?.abort();
       setRows([]);
       setError(null);
@@ -240,11 +237,10 @@ export default function HiringRequestPage() {
       cancelled = true;
       abortRef.current?.abort();
     };
-  }, [activeTab, fetchData, isStoreHydrated, selectedStore?.storeId]);
+  }, [activeTab, fetchData]);
 
-  const hasStore = !!selectedStore?.storeId;
-  const shouldShowSkeleton =
-    activeTab === "hiring" && (!isStoreHydrated || !isInitialLoadComplete);
+  const hasStore = selectedStoreIds.length > 0;
+  const shouldShowSkeleton = activeTab === "hiring" && !isInitialLoadComplete;
   const isEmpty =
     activeTab === "hiring" &&
     hasStore &&
@@ -287,23 +283,30 @@ export default function HiringRequestPage() {
         <TabsContent value="hiring" className="mt-4" tabIndex={-1}>
           <div className="flex flex-col gap-4">
             {/* Actions row */}
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => fetchData(page)}
-                disabled={!isStoreHydrated || isLoading}
-                aria-label="Refresh"
-              >
-                <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              </Button>
-              {canCreateHiringRequest && (
-                <Button onClick={() => setDialogOpen(true)}>
-                  <Plus className="me-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Create Hiring Request</span>
-                  <span className="sm:hidden">New</span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <StoreMultiSelect
+                stores={(overviewStores ?? []).flatMap((s) => s.storeId ? [{ storeId: s.storeId, name: s.name }] : [])}
+                value={selectedStoreIds}
+                onApply={handleStoreApply}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => fetchData(page)}
+                  disabled={isLoading}
+                  aria-label="Refresh"
+                >
+                  <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
                 </Button>
-              )}
+                {canCreateHiringRequest && (
+                  <Button onClick={() => setDialogOpen(true)}>
+                    <Plus className="me-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Create Hiring Request</span>
+                    <span className="sm:hidden">New</span>
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* Error */}

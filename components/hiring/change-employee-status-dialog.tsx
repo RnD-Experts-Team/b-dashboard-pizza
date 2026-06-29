@@ -23,7 +23,6 @@ import {
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 
 type EmployeeStatus = "hired" | "resigned" | "terminated" | "rehired" | "OJE";
 
@@ -37,6 +36,7 @@ const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
 
 interface ChangeEmployeeStatusDialogProps {
   employeeId: number | null;
+  storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -44,11 +44,11 @@ interface ChangeEmployeeStatusDialogProps {
 
 export function ChangeEmployeeStatusDialog({
   employeeId,
+  storeId,
   open,
   onOpenChange,
   onSuccess,
 }: ChangeEmployeeStatusDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
   const [status, setStatus] = useState<EmployeeStatus | "">("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -66,12 +66,12 @@ export function ChangeEmployeeStatusDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!status || !selectedStore?.storeId || employeeId === null) return;
+    if (!status || !storeId || employeeId === null) return;
 
     setIsSubmitting(true);
     try {
       await employeeService.updateEmployeeStatus(
-        selectedStore.storeId,
+        storeId,
         employeeId,
         {
           status,
