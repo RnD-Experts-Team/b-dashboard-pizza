@@ -427,6 +427,7 @@ export interface StoreRequestHiringDetail {
   candidates: StoreRequestHiringCandidate[];
   positions: StoreRequestHiringPosition[];
   decisions: HiringRequestDecisionRecord[];
+  store?: { id: number; store_number: string } | null;
 }
 
 export interface StoreRequest {

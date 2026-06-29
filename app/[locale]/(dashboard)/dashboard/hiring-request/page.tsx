@@ -134,6 +134,7 @@ export default function HiringRequestPage() {
   /* Hiring review dialog */
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewRequestId, setReviewRequestId] = useState<number | null>(null);
+  const [reviewStoreNumber, setReviewStoreNumber] = useState<string>("");
 
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -346,9 +347,9 @@ export default function HiringRequestPage() {
                       <TableHead className="hidden md:table-cell">Desired Start</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden lg:table-cell">Decision</TableHead>
-                      <TableHead className="w-12">
+                      {/* <TableHead className="w-12">
                         <span className="sr-only">Actions</span>
-                      </TableHead>
+                      </TableHead> */}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -390,7 +391,7 @@ export default function HiringRequestPage() {
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        {/* <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -418,6 +419,10 @@ export default function HiringRequestPage() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setReviewRequestId(req.id);
+                                  setReviewStoreNumber(
+                                    req.hiring_request?.store?.store_number ??
+                                    (overviewStores?.find((s) => Number(s.id) === req.store_id)?.storeId ?? "")
+                                  );
                                   setReviewDialogOpen(true);
                                 }}
                               >
@@ -426,7 +431,7 @@ export default function HiringRequestPage() {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </TableCell>
+                        </TableCell> */}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -492,6 +497,7 @@ export default function HiringRequestPage() {
 
       <HiringReviewDialog
         requestId={reviewRequestId}
+        storeId={reviewStoreNumber}
         open={reviewDialogOpen}
         onOpenChange={setReviewDialogOpen}
         onSuccess={() => fetchData(page)}

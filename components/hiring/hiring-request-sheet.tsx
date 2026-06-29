@@ -17,7 +17,6 @@ import { Separator } from "@/components/ui/separator";
 import { User, UserPlus, CalendarDays, Clock, ClipboardList, CheckCheck, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { hiringService } from "@/lib/api/services/hiring.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type { StoreRequest, StoreRequestEmployee } from "@/types/hiring.types";
 
@@ -75,20 +74,26 @@ export function HiringRequestSheet({
   onSuccess,
 }: HiringRequestSheetProps) {
   const hr = request?.hiring_request ?? null;
-  const { selectedStore } = useSelectedStoreStore();
   const { canAccessRoute, overviewStores } = useAuthStore();
-  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const effectiveStoreId = overviewStores?.[0]?.id;
   const canCompleteHiring = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/hiring-requests/*/decision", storeId: effectiveStoreId });
+
+  // Prefer the store_number embedded in the row; fall back to overviewStores lookup by numeric store_id.
+  const rowStoreNumber =
+    hr?.store?.store_number ??
+    overviewStores?.find((s) => request && Number(s.id) === request.store_id)?.storeId ??
+    "";
+
   const [employees, setEmployees] = useState<StoreRequestEmployee[]>([]);
   const [employeesLoading, setEmployeesLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !selectedStore?.storeId) return;
+    if (!open || !rowStoreNumber) return;
     let cancelled = false;
     setEmployeesLoading(true);
     const controller = new AbortController();
     hiringService
-      .getStoreEmployees(selectedStore.storeId, controller.signal)
+      .getStoreEmployees(rowStoreNumber, controller.signal)
       .then((list) => { if (!cancelled) setEmployees(list); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setEmployeesLoading(false); });
@@ -96,7 +101,7 @@ export function HiringRequestSheet({
       cancelled = true;
       controller.abort();
     };
-  }, [open, selectedStore?.storeId]);
+  }, [open, rowStoreNumber]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -273,6 +278,7 @@ export function HiringRequestSheet({
                 <Separator />
                 <CompleteHiringSection
                   hiringRequestId={hr.id}
+                  storeId={rowStoreNumber}
                   employeesNeeded={hr.employees_needed ?? 1}
                   employees={employees}
                   employeesLoading={employeesLoading}
@@ -293,18 +299,19 @@ export function HiringRequestSheet({
 /* ── Complete Hiring Sub-component ── */
 function CompleteHiringSection({
   hiringRequestId,
+  storeId,
   employeesNeeded,
   employees,
   employeesLoading,
   onSuccess,
 }: {
   hiringRequestId: number;
+  storeId: string;
   employeesNeeded: number;
   employees: StoreRequestEmployee[];
   employeesLoading: boolean;
   onSuccess: () => void;
 }) {
-  const { selectedStore } = useSelectedStoreStore();
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [query, setQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -333,10 +340,10 @@ function CompleteHiringSection({
   async function handleSubmit() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    if (!selectedStore?.storeId) return;
+    if (!storeId) return;
     setIsSubmitting(true);
     try {
-      await hiringService.submitHiringDecision(selectedStore.storeId, hiringRequestId, {
+      await hiringService.submitHiringDecision(storeId, hiringRequestId, {
         employee_ids: ids,
         number_hired: ids.length,
       });
