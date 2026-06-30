@@ -9,7 +9,6 @@ import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
   V1Toggle,
-  V1Progress,
   V1Empty,
   V1SubLabel,
   V1_TBL,
@@ -79,7 +78,7 @@ export function V1TopItemsCard({
 }) {
   const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState<"day" | "wtd">("day");
-  const [metric, setMetric] = useState<"sales" | "count">("sales");
+  const [metric, setMetric] = useState<"sales" | "count" | "upsell">("sales");
 
   if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!items)
@@ -98,11 +97,11 @@ export function V1TopItemsCard({
     ? weeklyCountItems ?? countItems ?? []
     : countItems ?? [];
 
+  const upsellData = parseUpselling(
+    isWeekly ? upselling?.week_to_date ?? {} : upselling?.day ?? {},
+  );
+
   const activeItems = metric === "count" ? countData : salesData;
-  const topValue =
-    metric === "count"
-      ? Math.max(...activeItems.map((i) => i.quantity_sold), 1)
-      : Math.max(...activeItems.map((i) => i.gross_sales), 1);
 
   return (
       <V1Card
@@ -132,45 +131,62 @@ export function V1TopItemsCard({
               options={[
                 { value: "sales", label: "Sales" },
                 { value: "count", label: "Count" },
+                { value: "upsell", label: "Upsell" },
               ]}
               value={metric}
               onChange={setMetric}
             />
           </div>
 
-          {activeItems.length === 0 ? (
+          {metric === "upsell" ? (
+            upsellData.length === 0 ? (
+              <V1Empty icon={TrendingUp}>No upselling data</V1Empty>
+            ) : (
+              <div className="space-y-1.5">
+                {upsellData.map(({ name, count }, idx) => (
+                  <div key={name} className="flex items-center justify-between gap-1.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold",
+                          RANK_BADGE[idx] ?? RANK_BADGE[3],
+                        )}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span className="truncate text-[13px] font-medium">{name}</span>
+                    </div>
+                    <span className="shrink-0 text-[13px] font-bold tabular-nums">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : activeItems.length === 0 ? (
             <V1Empty icon={TrendingUp}>No data available</V1Empty>
           ) : (
             <div className="space-y-1.5">
-              {activeItems.map((item, idx) => {
-                const value =
-                  metric === "count" ? item.quantity_sold : item.gross_sales;
-                return (
-                  <div key={item.item_id} className="space-y-0.5">
-                    <div className="flex items-center justify-between gap-1.5">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold",
-                            RANK_BADGE[idx] ?? RANK_BADGE[3],
-                          )}
-                        >
-                          {idx + 1}
-                        </span>
-                        <span className="truncate text-[11px] font-medium">
-                          {item.menu_item_name}
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-[11px] font-bold tabular-nums">
-                        {metric === "count"
-                          ? `${item.quantity_sold} sold`
-                          : fmtSales(item.gross_sales)}
-                      </span>
-                    </div>
-                    <V1Progress value={value} max={topValue} category="menu" />
+              {activeItems.map((item, idx) => (
+                <div key={item.item_id} className="flex items-center justify-between gap-1.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold",
+                        RANK_BADGE[idx] ?? RANK_BADGE[3],
+                      )}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span className="truncate text-[13px] font-medium">
+                      {item.menu_item_name}
+                    </span>
                   </div>
-                );
-              })}
+                  <span className="shrink-0 text-[13px] font-bold tabular-nums">
+                    {metric === "count"
+                      ? `${item.quantity_sold} sold`
+                      : fmtSales(item.gross_sales)}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>

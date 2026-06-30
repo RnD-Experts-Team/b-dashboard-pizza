@@ -6,7 +6,7 @@ import { Package } from "lucide-react";
 import type { TopIngredient } from "@/types/dspr.types";
 import { WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Toggle, V1Progress, V1Empty } from "@/components/dashboard-v1/v1-ui";
+import { V1Toggle, V1Empty } from "@/components/dashboard-v1/v1-ui";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1TopIngredientsCard — ranked ingredient usage across 5-Used / Main / Paper
@@ -79,8 +79,6 @@ export function V1TopIngredientsCard({
     );
   }
 
-  const maxUsage = Math.max(...data.map((i) => i?.actual_usage ?? 0), 1);
-
   return (
     <V1Card
       title="Top Ingredients"
@@ -124,40 +122,37 @@ export function V1TopIngredientsCard({
               const variance = formatVariance(ing?.variance_value);
               const negative = (ing?.variance_value ?? 0) < 0;
               return (
-                <div key={ing?.ingredient_id ?? idx} className="space-y-0.5">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <div className="flex min-w-0 items-center gap-1.5">
+                <div key={ing?.ingredient_id ?? idx} className="flex items-center justify-between gap-1.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold",
+                        RANK_BADGE[idx] ?? RANK_BADGE[3],
+                      )}
+                    >
+                      {idx + 1}
+                    </span>
+                    <span className="truncate text-[13px] font-medium">
+                      {ing?.ingredient_description ?? "?"}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-[13px] font-semibold tabular-nums">
+                      {usage} units
+                    </span>
+                    {variance && (
                       <span
                         className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold",
-                          RANK_BADGE[idx] ?? RANK_BADGE[3],
+                          "text-[10px] font-semibold tabular-nums",
+                          negative
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-green-600 dark:text-green-400",
                         )}
                       >
-                        {idx + 1}
+                        {variance}
                       </span>
-                      <span className="truncate text-[11px] font-medium">
-                        {ing?.ingredient_description ?? "?"}
-                      </span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <span className="text-[11px] font-semibold tabular-nums">
-                        {usage} units
-                      </span>
-                      {variance && (
-                        <span
-                          className={cn(
-                            "text-[10px] font-semibold tabular-nums",
-                            negative
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-green-600 dark:text-green-400",
-                          )}
-                        >
-                          {variance}
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
-                  <V1Progress value={usage} max={maxUsage} category="menu" />
                 </div>
               );
             })}
