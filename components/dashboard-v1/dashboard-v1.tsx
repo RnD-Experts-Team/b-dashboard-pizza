@@ -442,7 +442,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Operations & Speed ───────────────────────────────────────────── */}
-      <V1Section category="operations" weekLabel={weekLabel}>
+      <V1Section category="operations" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1PortalGaugeCard portal={day.portal} span={1} />
         <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} span={1} />
         <V1LaborCard
@@ -458,7 +458,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Menu & Product ───────────────────────────────────────────────── */}
-      <V1Section category="menu" weekLabel={weekLabel}>
+      <V1Section category="menu" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1TopItemsCard
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
@@ -480,7 +480,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── People & Labor ───────────────────────────────────────────────── */}
-      <V1Section category="people" weekLabel={weekLabel}>
+      <V1Section category="people" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1CurrentEmployeesCard managerDashboard={managerDashboard} span={2} />
         <V1HighHoursCard
           data={managerDashboard.highHoursEmployees}
@@ -496,7 +496,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Finance & Cash ───────────────────────────────────────────────── */}
-      <V1Section category="finance" weekLabel={weekLabel}>
+      <V1Section category="finance" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1CashControlCard data={wbrData?.["cash-control"]} isLoading={isLoading} span={1} />
         <V1TransferInOutCard
           data={wbrData?.["transfer-in-out"]}
@@ -508,7 +508,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Quality & Voice of Customer ──────────────────────────────────── */}
-      <V1Section category="quality" weekLabel={weekLabel}>
+      <V1Section category="quality" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1QaRatingsCard
           requirements={[
             {

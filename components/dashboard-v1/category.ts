@@ -69,6 +69,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
       "bg-linear-to-br from-sky-50/80 via-sky-50/30 to-transparent dark:from-sky-950/30 dark:via-sky-950/10 dark:to-transparent",
     headerText: "text-sky-700 dark:text-sky-300",
     chartColors: ["#0ea5e9", "#38bdf8", "#bae6fd"],
+    cardBorder: "border border-sky-500/25 dark:border-sky-400/15",
   },
   menu: {
     key: "menu",
@@ -81,6 +82,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
       "bg-linear-to-br from-amber-50/80 via-amber-50/30 to-transparent dark:from-amber-950/30 dark:via-amber-950/10 dark:to-transparent",
     headerText: "text-amber-700 dark:text-amber-300",
     chartColors: ["#f59e0b", "#fbbf24", "#fde68a"],
+    cardBorder: "border border-amber-500/25 dark:border-amber-400/15",
   },
   people: {
     key: "people",
@@ -93,6 +95,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
       "bg-linear-to-br from-violet-50/80 via-violet-50/30 to-transparent dark:from-violet-950/30 dark:via-violet-950/10 dark:to-transparent",
     headerText: "text-violet-700 dark:text-violet-300",
     chartColors: ["#8b5cf6", "#a78bfa", "#ddd6fe"],
+    cardBorder: "border border-violet-500/25 dark:border-violet-400/15",
   },
   finance: {
     key: "finance",
@@ -105,6 +108,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
       "bg-linear-to-br from-rose-50/80 via-rose-50/30 to-transparent dark:from-rose-950/30 dark:via-rose-950/10 dark:to-transparent",
     headerText: "text-rose-700 dark:text-rose-300",
     chartColors: ["#f43f5e", "#fb7185", "#fecdd3"],
+    cardBorder: "border border-rose-500/25 dark:border-rose-400/15",
   },
   quality: {
     key: "quality",
@@ -117,6 +121,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
       "bg-linear-to-br from-cyan-50/80 via-cyan-50/30 to-transparent dark:from-cyan-950/30 dark:via-cyan-950/10 dark:to-transparent",
     headerText: "text-cyan-700 dark:text-cyan-300",
     chartColors: ["#06b6d4", "#22d3ee", "#a5f3fc"],
+    cardBorder: "border border-cyan-500/25 dark:border-cyan-400/15",
   },
 };
 
