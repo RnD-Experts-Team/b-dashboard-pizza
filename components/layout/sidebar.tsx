@@ -446,6 +446,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: ClipboardList,
         requirements: [
           { service: "Hiring", method: "GET", path: "/v1/stores/*/requests", storeId: effectiveStoreId },
+          { service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" },
         ],
       },
       // {

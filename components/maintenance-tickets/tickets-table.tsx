@@ -87,7 +87,7 @@ function TicketRow({ ticket, onClick, onChanged, canCancelTicket = true }: Ticke
     setIsSubmitting(true);
     setError(null);
     try {
-      await maintenanceTicketsService.cancelTicket(ticket.storeId, ticket.id, { reason: reason.trim() });
+      await maintenanceTicketsService.cancelTicket(ticket.storeId ?? "", ticket.id, { reason: reason.trim() });
       setDialogOpen(false);
       toast.success("Ticket cancelled successfully.");
       onChanged();
@@ -102,7 +102,7 @@ function TicketRow({ ticket, onClick, onChanged, canCancelTicket = true }: Ticke
   async function handleRestore(e: React.MouseEvent) {
     e.stopPropagation();
     try {
-      await maintenanceTicketsService.restoreTicket(ticket.storeId, ticket.id);
+      await maintenanceTicketsService.restoreTicket(ticket.storeId ?? "", ticket.id);
       toast.success("Ticket restored successfully.");
       onChanged();
     } catch (err) {
@@ -148,7 +148,7 @@ function TicketRow({ ticket, onClick, onChanged, canCancelTicket = true }: Ticke
             </span>
           )}
         </TableCell>
-        <TableCell className="text-sm text-muted-foreground dark:text-white">{ticket.storeId}</TableCell>
+        <TableCell className="text-sm text-muted-foreground dark:text-white">{ticket.storeId ?? ticket.otherStore ?? "Other"}</TableCell>
         <TableCell className="text-sm text-muted-foreground dark:text-white">
           {ticket.creator?.name ?? <span className="opacity-40">—</span>}
         </TableCell>

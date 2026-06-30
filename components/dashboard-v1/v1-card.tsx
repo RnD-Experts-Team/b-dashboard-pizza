@@ -60,7 +60,8 @@ export function V1Card({
     <Card
       onClick={onExpand}
       className={cn(
-        "flex h-[280px] flex-col gap-0 overflow-hidden border-l-2 py-1.5 transition-shadow border-none",
+        "flex h-[280px] flex-col gap-0 overflow-hidden border-l-2 py-1.5 transition-shadow",
+        cat.cardBorder ?? "border-none",
         cat.border,
         cat.gradient,
         clickable && "cursor-pointer hover:shadow-md",

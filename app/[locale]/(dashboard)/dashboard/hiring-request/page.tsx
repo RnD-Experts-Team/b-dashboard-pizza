@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -123,9 +123,13 @@ export default function HiringRequestPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<import("@/types/hiring.types").StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
-  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { canAccessRoute, isSuperAdmin, overviewStores } = useAuthStore();
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateHiringRequest = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/hiring-requests", storeId: effectiveStoreId });
+  // Not store-scoped: true means this user is a dedicated milestone-gift manager.
+  // canAccessRoute returns true for superadmins too (bypass), so gate on !isSuperAdmin()
+  // to keep superadmins in the full three-tab view.
+  const isMilestoneGiftManager = !isSuperAdmin() && canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" });
 
   /* Edit dialog */
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -144,17 +148,36 @@ export default function HiringRequestPage() {
   const [page, setPage] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
 
+  const validStoreIds = useMemo(
+    () => new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : []))),
+    [overviewStores],
+  );
+
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
-    const fallback = (overviewStores ?? []).flatMap((s) => s.storeId ? [s.storeId] : []);
+    const valid = new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : [])));
+    const fallback = [...valid];
     try {
       const raw = localStorage.getItem("store-filter:hiring-request");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Only keep IDs that belong to this user's stores
+          const clamped = (parsed as string[]).filter((id) => valid.has(id));
+          if (clamped.length > 0) return clamped;
+        }
       }
     } catch {}
     return fallback;
   });
+
+  // Re-clamp when overviewStores changes (e.g. after a re-login or store re-assignment)
+  useEffect(() => {
+    if (validStoreIds.size === 0) return;
+    setSelectedStoreIds((prev) => {
+      const clamped = prev.filter((id) => validStoreIds.has(id));
+      return clamped.length > 0 ? clamped : [...validStoreIds];
+    });
+  }, [validStoreIds]);
 
   function handleStoreApply(ids: string[]) {
     setSelectedStoreIds(ids);
@@ -257,11 +280,16 @@ export default function HiringRequestPage() {
         description="Manage hiring and separation requests for your stores."
       />
 
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="w-full"
-      >
+      {isMilestoneGiftManager ? (
+        /* ── Milestone-only view ── */
+        <MilestoneGiftTab active={true} fullAccess={true} />
+      ) : (
+        <>
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="w-full"
+        >
         <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-grid">
           <TabsTrigger value="hiring" className="gap-2">
             <UserPlus className="h-4 w-4" />
@@ -344,6 +372,7 @@ export default function HiringRequestPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="hidden sm:table-cell">Date of Request</TableHead>
+                      <TableHead className="hidden md:table-cell">Store #</TableHead>
                       <TableHead className="hidden md:table-cell">Desired Start</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="hidden lg:table-cell">Decision</TableHead>
@@ -366,6 +395,9 @@ export default function HiringRequestPage() {
                           {req.requested_at
                             ? new Date(req.requested_at).toLocaleDateString()
                             : "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs hidden md:table-cell">
+                          {req.hiring_request?.store?.store_number ?? "—"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap hidden md:table-cell">
                           {req.hiring_request?.desired_start_date
@@ -477,6 +509,7 @@ export default function HiringRequestPage() {
         <TabsContent value="milestone_gift" className="mt-4" tabIndex={-1}>
           <MilestoneGiftTab
             active={activeTab === "milestone_gift"}
+            fullAccess={isSuperAdmin() || canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" })}
           />
         </TabsContent>
       </Tabs>
@@ -509,6 +542,9 @@ export default function HiringRequestPage() {
         onOpenChange={setSheetOpen}
         onSuccess={() => fetchData(page)}
       />
+
+        </>
+      )}
 
     </div>
   );

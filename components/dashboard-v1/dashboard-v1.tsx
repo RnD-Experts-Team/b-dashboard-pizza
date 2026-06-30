@@ -415,7 +415,7 @@ export function DashboardV1() {
       {/* <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} /> */}
 
       {/* ── Sales & Trends ───────────────────────────────────────────────── */}
-      <V1Section category="sales" weekLabel={weekLabel}>
+      <V1Section category="sales" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1SalesTrendCard sales={sales} span={2} />
         <V1StoreScoreCard
           upsellingDay={day.upselling?.total_upselling_day}

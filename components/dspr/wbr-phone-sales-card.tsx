@@ -58,7 +58,7 @@ export function WbrPhoneSalesCard({
           : quarter.previous),
       },
     },
-    { label: "WTD", current: { ...year.current }, baseline: { ...year.previous } },
+    { label: "YTD", current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (

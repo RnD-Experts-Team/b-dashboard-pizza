@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -82,6 +82,7 @@ function SepTableSkeleton() {
         <TableHeader>
           <TableRow>
             {["Final Work Date",
+              "Store #",
               "Employee",
               "Separation Type",
               "Reason",
@@ -131,17 +132,34 @@ export function SeparationRequestTab({
   /* Store number resolved from the row, used for all action dialogs */
   const [actionStoreId, setActionStoreId] = useState<string>("");
 
+  const validStoreIds = useMemo(
+    () => new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : []))),
+    [overviewStores],
+  );
+
   const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
-    const fallback = (overviewStores ?? []).flatMap((s) => s.storeId ? [s.storeId] : []);
+    const valid = new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : [])));
+    const fallback = [...valid];
     try {
       const raw = localStorage.getItem("store-filter:separation");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clamped = (parsed as string[]).filter((id) => valid.has(id));
+          if (clamped.length > 0) return clamped;
+        }
       }
     } catch {}
     return fallback;
   });
+
+  useEffect(() => {
+    if (validStoreIds.size === 0) return;
+    setSelectedStoreIds((prev) => {
+      const clamped = prev.filter((id) => validStoreIds.has(id));
+      return clamped.length > 0 ? clamped : [...validStoreIds];
+    });
+  }, [validStoreIds]);
 
   function handleStoreApply(ids: string[]) {
     setSelectedStoreIds(ids);
@@ -277,6 +295,7 @@ export function SeparationRequestTab({
             <TableHeader>
               <TableRow>
                 <TableHead>Final Work Date</TableHead>
+                <TableHead>Store #</TableHead>
                 <TableHead>Employee</TableHead>
                 <TableHead>Separation Type</TableHead>
                 <TableHead>Reason</TableHead>
@@ -303,6 +322,9 @@ export function SeparationRequestTab({
                       {sep?.final_working_day
                         ? new Date(sep.final_working_day).toLocaleDateString()
                         : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      {sep?.store?.store_number ?? "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {sep?.employee

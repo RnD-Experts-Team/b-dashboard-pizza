@@ -23,7 +23,7 @@ import {
   Check,
   Search,
 } from "lucide-react";
-import type { CatalogIssue, CatalogTechnician, TicketsFilters } from "@/types/maintenance-tickets.types";
+import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus } from "@/types/maintenance-tickets.types";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { cn } from "@/lib/utils";
@@ -225,15 +225,16 @@ export function TicketsFiltersBar({
   }
 
   const activeFilterCount = [
-    filters.status,
-    filters.priority,
-    filters.issue_id,
-    filters.issue_status,
+    filters.statuses?.length,
+    filters.priorities?.length,
+    filters.issue_ids?.length,
+    filters.issue_statuses?.length,
+    filters.technician_ids?.length,
+    filters.types?.length,
     filters.part_cost_total_gt,
-    filters.technician_id,
     filters.trashed,
     filters.per_page,
-  ].filter((v) => v != null && v !== "").length;
+  ].filter((v) => v != null && v !== 0).length;
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -294,6 +295,12 @@ export function TicketsFiltersBar({
       label: tech.name,
       subLabel: tech.categoryName ?? undefined,
     })),
+  ];
+
+  const typeOptions: SearchableSelectOption[] = [
+    { value: "all", label: "All types" },
+    { value: "normal", label: "Normal" },
+    { value: "preventive_maintenance", label: "Preventive Maintenance" },
   ];
 
   const trashedOptions: SearchableSelectOption[] = [
@@ -424,11 +431,11 @@ export function TicketsFiltersBar({
                 Ticket Status
               </label>
               <SearchableSelect
-                value={filters.status || "all"}
+                value={filters.statuses?.[0] || "all"}
                 options={ticketStatusOptions}
-                onChange={(v) => updateField("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
+                onChange={(v) => updateField("statuses", v === "all" ? [] : [v as TicketStatus])}
                 disabled={disabled}
-                active={!!filters.status}
+                active={!!filters.statuses?.length}
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -440,11 +447,11 @@ export function TicketsFiltersBar({
                 Priority
               </label>
               <SearchableSelect
-                value={filters.priority || "all"}
+                value={filters.priorities?.[0] || "all"}
                 options={priorityOptions}
-                onChange={(v) => updateField("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
+                onChange={(v) => updateField("priorities", v === "all" ? [] : [v as Priority])}
                 disabled={disabled}
-                active={!!filters.priority}
+                active={!!filters.priorities?.length}
                 searchPlaceholder="Search priorities…"
               />
             </div>
@@ -456,11 +463,11 @@ export function TicketsFiltersBar({
                 Issue
               </label>
               <SearchableSelect
-                value={filters.issue_id != null ? String(filters.issue_id) : "all"}
+                value={filters.issue_ids?.[0] != null ? String(filters.issue_ids[0]) : "all"}
                 options={catalogLoading ? [{ value: "all", label: "Loading…" }] : issueOptions}
-                onChange={(v) => updateField("issue_id", v === "all" ? undefined : Number(v))}
+                onChange={(v) => updateField("issue_ids", v === "all" ? [] : [Number(v)])}
                 disabled={disabled || catalogLoading}
-                active={filters.issue_id != null}
+                active={!!filters.issue_ids?.length}
                 placeholder={catalogLoading ? "Loading…" : "All issues"}
                 searchPlaceholder="Search issues…"
               />
@@ -473,11 +480,11 @@ export function TicketsFiltersBar({
                 Issue Status
               </label>
               <SearchableSelect
-                value={filters.issue_status || "all"}
+                value={filters.issue_statuses?.[0] || "all"}
                 options={issueStatusOptions}
-                onChange={(v) => updateField("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
+                onChange={(v) => updateField("issue_statuses", v === "all" ? [] : [v as IssueStatus])}
                 disabled={disabled}
-                active={!!filters.issue_status}
+                active={!!filters.issue_statuses?.length}
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -489,13 +496,29 @@ export function TicketsFiltersBar({
                 Technician
               </label>
               <SearchableSelect
-                value={filters.technician_id != null ? String(filters.technician_id) : "all"}
+                value={filters.technician_ids?.[0] != null ? String(filters.technician_ids[0]) : "all"}
                 options={catalogLoading ? [{ value: "all", label: "Loading…" }] : technicianOptions}
-                onChange={(v) => updateField("technician_id", v === "all" ? undefined : Number(v))}
+                onChange={(v) => updateField("technician_ids", v === "all" ? [] : [Number(v)])}
                 disabled={disabled || catalogLoading}
-                active={filters.technician_id != null}
+                active={!!filters.technician_ids?.length}
                 placeholder={catalogLoading ? "Loading…" : "All technicians"}
                 searchPlaceholder="Search technicians…"
+              />
+            </div>
+
+            {/* Ticket Type */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <List className="h-3 w-3" />
+                Ticket Type
+              </label>
+              <SearchableSelect
+                value={filters.types?.[0] || "all"}
+                options={typeOptions}
+                onChange={(v) => updateField("types", v === "all" ? [] : [v as TicketType])}
+                disabled={disabled}
+                active={!!filters.types?.length}
+                searchPlaceholder="Search types…"
               />
             </div>
 

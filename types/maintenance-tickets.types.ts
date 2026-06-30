@@ -16,6 +16,7 @@ export type IssueStatus =
   | "deferred"
   | "cancelled";
 export type Priority = "urgent" | "high" | "medium" | "low";
+export type TicketType = "normal" | "preventive_maintenance";
 
 /** Typed closing-note categories on a ticket. Generic notes use `null`. */
 export type NoteType = "final_notes" | "what_we_learned";
@@ -264,7 +265,9 @@ export interface TicketIssue {
 
 export interface Ticket {
   id: number;
-  storeId: string;
+  storeId: string | null;
+  otherStore: string | null;
+  type: EnumField | null;
   status: EnumField;
   /** All ticket notes (closing notes have a non-null `type`; generic notes are null). */
   notes: TicketNote[];
@@ -331,6 +334,7 @@ export interface CreateTicketPayload {
   notes?: Array<{ body: string; type?: string | null }>;
   /** Files to attach directly to the ticket (multipart only) */
   files?: File[];
+  type?: TicketType;
 }
 
 export interface AssignIssuesPayload {
@@ -426,14 +430,22 @@ export interface ChangeAssignmentTechniciansPayload {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export interface TicketsFilters {
-  status?: TicketStatus | "";
-  priority?: Priority | "";
-  issue_id?: number;
-  issue_status?: IssueStatus | "";
+  statuses?: TicketStatus[];
+  priorities?: Priority[];
+  issue_ids?: number[];
+  issue_statuses?: IssueStatus[];
+  technician_ids?: number[];
+  types?: TicketType[];
   part_cost_total_gt?: number;
-  technician_id?: number;
+  part_cost_single_gt?: number;
+  created_from?: string;
+  created_to?: string;
+  assigned_from?: string;
+  assigned_to?: string;
   /** Include soft-deleted tickets: "with" = all, "only" = only deleted */
   trashed?: "with" | "only";
+  sort?: string;
+  dir?: "asc" | "desc";
   page?: number;
   per_page?: number;
 }
@@ -666,7 +678,9 @@ export interface ApiTicketIssue {
 
 export interface ApiTicket {
   id: number;
-  store_id: number | string;
+  store_id: number | string | null;
+  other_store: string | null;
+  type: ApiEnumField | null;
   store?: {
     id: number | string;
     store_number: string;

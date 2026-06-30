@@ -240,7 +240,10 @@ export function CreateHiringRequestDialog({
           </DialogTitle>
           <DialogDescription>
             Submit a new hiring request for{" "}
-            {selectedStore?.name ?? "your store"}.
+            <strong className="font-semibold text-foreground">
+              {selectedStore?.name ?? "your store"}
+            </strong>
+            .
           </DialogDescription>
         </DialogHeader>
 

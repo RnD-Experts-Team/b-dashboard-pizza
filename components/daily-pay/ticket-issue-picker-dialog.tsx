@@ -89,7 +89,7 @@ export function TicketIssuePickerDialog({
     setTicketsError(null);
 
     maintenanceTicketsService
-      .getTickets(storeId, { per_page: 1000, technician_id: technicianId }, ctrl.signal)
+      .getTickets(storeId, { per_page: 1000, technician_ids: [technicianId] }, ctrl.signal)
       .then((res) => {
         if (ctrl.signal.aborted) return;
         setTickets(res.data);
@@ -119,7 +119,7 @@ export function TicketIssuePickerDialog({
     setIssues([]);
 
     maintenanceTicketsService
-      .getTicketIssues(selectedTicket.storeId, selectedTicket.id, ctrl.signal)
+      .getTicketIssues(selectedTicket.storeId ?? "", selectedTicket.id, ctrl.signal)
       .then((res) => {
         if (ctrl.signal.aborted) return;
         setIssues(res.data);
@@ -216,7 +216,7 @@ export function TicketIssuePickerDialog({
                         onClick={() => setSelectedTicket(ticket)}
                       >
                         <td className="px-3 py-2 font-mono">{ticket.id}</td>
-                        <td className="px-3 py-2">{ticket.storeId}</td>
+                        <td className="px-3 py-2">{ticket.storeId ?? ticket.otherStore ?? "Other"}</td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {formatDate(ticket.createdAt)}
                         </td>

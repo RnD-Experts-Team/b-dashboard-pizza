@@ -40,6 +40,8 @@ export interface CategoryToken {
   headerText: string;
   /** Chart palette ramp [primary, secondary, tertiary]. */
   chartColors: [string, string, string];
+  /** Optional full border applied to each card in the section. */
+  cardBorder?: string;
 }
 
 export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
@@ -54,6 +56,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryToken> = {
       "bg-linear-to-br from-emerald-50/80 via-emerald-50/30 to-transparent dark:from-emerald-950/30 dark:via-emerald-950/10 dark:to-transparent",
     headerText: "text-emerald-700 dark:text-emerald-300",
     chartColors: ["#10b981", "#34d399", "#a7f3d0"],
+    cardBorder: "border border-emerald-500/25 dark:border-emerald-400/15",
   },
   operations: {
     key: "operations",

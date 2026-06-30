@@ -51,7 +51,7 @@ export function WbrCustomerSalesCard({
         ...(mode === "yoy" ? quarter.same_quarter_last_year : quarter.previous),
       },
     },
-    { label: "WTD", current: { ...year.current }, baseline: { ...year.previous } },
+    { label: "YTD", current: { ...year.current }, baseline: { ...year.previous } },
   ];
 
   return (

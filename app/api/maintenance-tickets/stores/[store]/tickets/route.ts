@@ -41,29 +41,25 @@ export async function GET(
   const authorization = getAuthorizationHeader(request)!;
   const { searchParams } = new URL(request.url);
 
-  // Forward allowed filter params
+  // Forward filter params to upstream
   const forwardParams = new URLSearchParams();
-  for (const key of [
-    "status",
-    "priority",
-    "created_from",
-    "created_to",
-    "issue_id",
-    "issue_status",
-    "assigned_from",
-    "assigned_to",
-    "part_cost_single_gt",
-    "part_cost_total_gt",
-    "technician_id",
-    "creator_id",
-    "trashed",
-    "sort",
-    "dir",
-    "page",
-    "per_page",
-  ]) {
+
+  const SCALAR_KEYS = [
+    "created_from", "created_to", "assigned_from", "assigned_to",
+    "part_cost_single_gt", "part_cost_total_gt",
+    "trashed", "sort", "dir", "page", "per_page",
+  ];
+  const ARRAY_KEYS = [
+    "statuses[]", "priorities[]", "issue_ids[]",
+    "issue_statuses[]", "technician_ids[]", "types[]",
+  ];
+
+  for (const key of SCALAR_KEYS) {
     const v = searchParams.get(key);
     if (v) forwardParams.set(key, v);
+  }
+  for (const key of ARRAY_KEYS) {
+    searchParams.getAll(key).forEach((v) => forwardParams.append(key, v));
   }
 
   const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets${forwardParams.toString() ? `?${forwardParams}` : ""}`;
