@@ -826,6 +826,7 @@ export function DsprDashboard() {
           value={day.labor}
           weeklyValue={day.labor_week_to_date}
           weeklyAvgValue={day.labor_week_to_date_avg}
+          weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
         />
       </div>
 

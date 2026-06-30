@@ -768,9 +768,21 @@ export interface AverageHourlyPay {
   labor: number;
 }
 
+export interface WeeklyLaborEntry {
+  week_start: string;
+  week_end: string;
+  labor: number | null;
+}
+
+export interface WeeklyLabor {
+  store: string;
+  entries: WeeklyLaborEntry[];
+}
+
 export interface HiringReportsResponse {
   "manager-dashboard": ManagerDashboardStoreData;
   "high-hours-employees": HighHoursEmployees;
   "average-hourly-pay": AverageHourlyPay;
+  "weekly-labor"?: WeeklyLabor;
 }
 

@@ -449,6 +449,7 @@ export function DashboardV1() {
           value={day.labor}
           weeklyValue={day.labor_week_to_date}
           weeklyAvgValue={day.labor_week_to_date_avg}
+          weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
           span={1}
         />
         <V1GoToCard data={wbrData?.["go-to"]} isLoading={isLoading} span={1} />
