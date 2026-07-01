@@ -17,10 +17,10 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 
 interface SeparationReviewDialogProps {
   separationId: number | null;
+  storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -28,11 +28,11 @@ interface SeparationReviewDialogProps {
 
 export function SeparationReviewDialog({
   separationId,
+  storeId,
   open,
   onOpenChange,
   onSuccess,
 }: SeparationReviewDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
 
   const [isCompleted, setIsCompleted] = useState(false);
   const [notes, setNotes] = useState("");
@@ -52,14 +52,14 @@ export function SeparationReviewDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (separationId === null || !selectedStore?.storeId) return;
+    if (separationId === null || !storeId) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
       await separationService.submitSeparationReview(
-        selectedStore.storeId,
+        storeId,
         separationId,
         {
           is_completed: isCompleted,

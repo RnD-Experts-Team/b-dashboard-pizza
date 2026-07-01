@@ -124,7 +124,7 @@ export default function MaintenanceTicketsPage() {
 
   function handleTicketClick(ticket: Ticket) {
     setDetailTicketId(ticket.id);
-    setDetailStoreId(ticket.storeId);
+    setDetailStoreId(ticket.storeId ?? "");
     setSheetOpen(true);
   }
 

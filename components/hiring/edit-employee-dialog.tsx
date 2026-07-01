@@ -42,7 +42,6 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
@@ -67,6 +66,7 @@ interface AttachmentDraft {
 
 interface EditEmployeeDialogProps {
   employeeId: number | null;
+  storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -284,11 +284,11 @@ function extractApiError(err: unknown): string {
 /* ------------------------------------------------------------------ */
 export function EditEmployeeDialog({
   employeeId,
+  storeId,
   open,
   onOpenChange,
   onSuccess,
 }: EditEmployeeDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
   const { overviewStores } = useAuthStore();
   const {
     positions: positionOptions,
@@ -337,7 +337,10 @@ export function EditEmployeeDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("personal");
 
-  const storeIdNum = selectedStore?.id ? parseInt(selectedStore.id, 10) : 0;
+  const storeIdNum = parseInt(
+    overviewStores?.find((s) => s.storeId === storeId)?.id ?? "0",
+    10,
+  );
 
   /* -- Populate form from V1 detail record -- */
   function populateForm(emp: import("@/types/employee.types").EmployeeV1DetailRecord) {
@@ -453,7 +456,7 @@ export function EditEmployeeDialog({
 
   /* -- Load employee data when dialog opens -- */
   useEffect(() => {
-    if (!open || !employeeId || !selectedStore?.storeId) return;
+    if (!open || !employeeId || !storeId) return;
     let cancelled = false;
 
     setIsLoadingEmployee(true);
@@ -462,7 +465,7 @@ export function EditEmployeeDialog({
     setActiveTab("personal");
 
     employeeService
-      .getEmployeeDetailsV1(selectedStore.storeId, employeeId)
+      .getEmployeeDetailsV1(storeId, employeeId)
       .then((res) => {
         if (!cancelled) populateForm(res.data);
       })
@@ -481,7 +484,7 @@ export function EditEmployeeDialog({
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, employeeId, selectedStore?.storeId]);
+  }, [open, employeeId, storeId]);
 
   function handleClose() {
     onOpenChange(false);
@@ -533,7 +536,7 @@ export function EditEmployeeDialog({
   /* -- Submit -- */
   async function handleSubmit() {
     if (!isFormValid) return;
-    if (!selectedStore?.storeId || !employeeId) {
+    if (!storeId || !employeeId) {
       setSubmitError("No store or employee selected.");
       return;
     }
@@ -544,7 +547,7 @@ export function EditEmployeeDialog({
     const hasObsession = !!obsession.birth_date;
 
     try {
-      await employeeService.updateEmployeeV1(selectedStore.storeId, employeeId, {
+      await employeeService.updateEmployeeV1(storeId, employeeId, {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         ...(middleName.trim() ? { middle_name: middleName.trim() } : {}),
@@ -1919,7 +1922,7 @@ export function EditEmployeeDialog({
             )}
           </DialogTitle>
           <DialogDescription>
-            Update employee details for {selectedStore?.name ?? "your store"}.
+            Update employee details for {storeId || "your store"}.
           </DialogDescription>
         </DialogHeader>
 

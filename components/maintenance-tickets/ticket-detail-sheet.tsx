@@ -95,7 +95,9 @@ import type {
   Ticket,
   TicketIssue,
   TicketIssuesResponse,
+  TicketStatus,
   IssueStatus,
+  Priority,
   CatalogIssue,
   CatalogTechnician,
   CatalogPart,
@@ -342,20 +344,20 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
     ? tickets.filter(
         (tk) =>
           String(tk.id).includes(search.trim()) ||
-          tk.storeId.toLowerCase().includes(search.trim().toLowerCase())
+          (tk.storeId ?? tk.otherStore ?? "").toLowerCase().includes(search.trim().toLowerCase())
       )
     : tickets;
 
   const activeFilterCount = [
-    filters?.status,
-    filters?.priority,
-    filters?.issue_status,
-    filters?.technician_id,
-    filters?.issue_id,
+    filters?.statuses?.length,
+    filters?.priorities?.length,
+    filters?.issue_statuses?.length,
+    filters?.technician_ids?.length,
+    filters?.issue_ids?.length,
     filters?.part_cost_total_gt,
     filters?.trashed,
     filters?.per_page,
-  ].filter((v) => v != null && v !== "").length;
+  ].filter((v) => v != null && v !== 0).length;
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -433,8 +435,8 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                 <div className="min-w-0 space-y-0.5">
                   <p className={labelCls}>Status</p>
                   <Select
-                    value={filters?.status || "all"}
-                    onValueChange={(v) => updateFilter("status", v === "all" ? "" : (v as TicketsFilters["status"]))}
+                    value={filters?.statuses?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("statuses", v === "all" ? [] : [v as TicketStatus])}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -452,8 +454,8 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                 <div className="min-w-0 space-y-0.5">
                   <p className={labelCls}>Priority</p>
                   <Select
-                    value={filters?.priority || "all"}
-                    onValueChange={(v) => updateFilter("priority", v === "all" ? "" : (v as TicketsFilters["priority"]))}
+                    value={filters?.priorities?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("priorities", v === "all" ? [] : [v as Priority])}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -470,8 +472,8 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                 <div className="min-w-0 space-y-0.5">
                   <p className={labelCls}>Issue status</p>
                   <Select
-                    value={filters?.issue_status || "all"}
-                    onValueChange={(v) => updateFilter("issue_status", v === "all" ? "" : (v as TicketsFilters["issue_status"]))}
+                    value={filters?.issue_statuses?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("issue_statuses", v === "all" ? [] : [v as IssueStatus])}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -490,8 +492,8 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                 <div className="min-w-0 space-y-0.5">
                   <p className={labelCls}>Technician</p>
                   <Select
-                    value={filters?.technician_id != null ? String(filters.technician_id) : "all"}
-                    onValueChange={(v) => updateFilter("technician_id", v === "all" ? undefined : Number(v))}
+                    value={filters?.technician_ids?.[0] != null ? String(filters.technician_ids[0]) : "all"}
+                    onValueChange={(v) => updateFilter("technician_ids", v === "all" ? [] : [Number(v)])}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -509,8 +511,8 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                 <div className="min-w-0 space-y-0.5">
                   <p className={labelCls}>Issue</p>
                   <Select
-                    value={filters?.issue_id != null ? String(filters.issue_id) : "all"}
-                    onValueChange={(v) => updateFilter("issue_id", v === "all" ? undefined : Number(v))}
+                    value={filters?.issue_ids?.[0] != null ? String(filters.issue_ids[0]) : "all"}
+                    onValueChange={(v) => updateFilter("issue_ids", v === "all" ? [] : [Number(v)])}
                     disabled={catalogLoading}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
@@ -615,7 +617,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
             <p className={cn("text-[11px] font-semibold truncate", ticket.id === activeId ? "text-foreground" : "text-muted-foreground")}>
               ID #{ticket.id}
             </p>
-            <p className="text-[10px] text-muted-foreground truncate">{ticket.storeId}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{ticket.storeId ?? ticket.otherStore ?? "Other"}</p>
             <div className="mt-1 flex items-center gap-1 flex-wrap">
               <span className="inline-flex items-center rounded-sm border px-1 py-px text-[9px] text-muted-foreground shrink-0">
                 {t("navigator.issueCount", { count: ticket.issueCount })}
@@ -1950,10 +1952,10 @@ function StatusHistory({ changes }: { changes: TicketIssue["statusChanges"] }) {
           {changes.map((c) => (
             <div key={c.id} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <StatusChip value={c.status.value} label={c.status.label} />
-              {c.changedBy && (
+              {(c.creator || c.changedBy) && (
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" />
-                  Changed by: {c.changedBy}
+                  {c.creator ? c.creator.name : c.changedBy}
                 </span>
               )}
               <span>{fmtDateTime(c.createdAt)}</span>
@@ -2323,32 +2325,49 @@ function IssueNode({
                   )}
                 </div>
 
-                {/* Technicians */}
-                {issue.technicians.length > 0 && <hr className="border-border" />}
-                {issue.technicians.length > 0 && (
-                  <SectionCollapse title="Assigned Technicians" count={issue.technicians.length}>
-                    <div className="flex flex-col gap-1.5">
-                      {issue.technicians.map((tech) => (
-                        <div key={tech.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm font-medium">{tech.name}</span>
-                          </div>
-                          {tech.creator && (
-                            <span className="text-xs text-muted-foreground">
-                              Added by: {tech.creator.name}
-                            </span>
-                          )}
+                {/* Assignments & Technicians — combined */}
+                {(issue.technicians.length > 0 || issue.assignments.length > 0) && <hr className="border-border" />}
+                {(issue.technicians.length > 0 || issue.assignments.length > 0) && (
+                  <SectionCollapse
+                    title="Assignments & Technicians"
+                    count={issue.technicians.length + issue.assignments.length}
+                  >
+                    {/* Technicians first */}
+                    {issue.technicians.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+                          Technicians
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          {issue.technicians.map((tech) => (
+                            <div key={tech.id} className="flex items-center justify-between rounded-md border bg-card px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="text-sm font-medium">{tech.name}</span>
+                              </div>
+                              {tech.creator && (
+                                <span className="text-xs text-muted-foreground">
+                                  Added by: {tech.creator.name}
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </SectionCollapse>
-                )}
+                      </div>
+                    )}
 
-                {/* Assignments */}
-                {issue.assignments.length > 0 && <hr className="border-border" />}
-                {issue.assignments.length > 0 && (
-                  <SectionCollapse title="Assignments" count={issue.assignments.length}>
+                    {/* Divider between technicians and assignments */}
+                    {issue.technicians.length > 0 && issue.assignments.length > 0 && (
+                      <hr className="border-border" />
+                    )}
+
+                    {/* Assignments */}
+                    {issue.assignments.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground px-0.5">
+                          Assignments
+                        </p>
+                        <div className="space-y-2">
                     {issue.assignments.map((a) => (
                       <div key={a.id} className={cn("rounded-md border bg-card p-3 space-y-2", a.mistaken && "opacity-60")}>
                         {/* Mistaken banner or ··· menu */}
@@ -2469,6 +2488,9 @@ function IssueNode({
                         />
                       </div>
                     ))}
+                        </div>
+                      </div>
+                    )}
                   </SectionCollapse>
                 )}
 
@@ -3437,11 +3459,14 @@ function RightPanel({
               </SheetTitle>
             </div>
             {activeTicket && <StatusChip value={activeTicket.status.value} label={activeTicket.status.label} />}
+            {activeTicket?.type && (
+              <Badge variant="outline" className="text-xs">{activeTicket.type.label}</Badge>
+            )}
           </div>
           {activeTicket && (
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <Store className="h-3.5 w-3.5" />
-              <span>{activeTicket.storeId}</span>
+              <span>{activeTicket.storeId ?? activeTicket.otherStore ?? "Other"}</span>
               {activeTicket.issueCount > 0 && (
                 <>
                   <span>·</span>
@@ -4169,7 +4194,7 @@ export function TicketDetailSheet({
   // (from a different store) inside the navigator, we must use THAT ticket's
   // own storeId — not the frozen prop value.
   const effectiveStoreId =
-    tickets.find((t) => t.id === activeTicketId)?.storeId ?? storeId;
+    tickets.find((t) => t.id === activeTicketId)?.storeId ?? storeId ?? "";
 
   const loadIssues = useCallback(async () => {
     if (!activeTicketId || !effectiveStoreId) return;

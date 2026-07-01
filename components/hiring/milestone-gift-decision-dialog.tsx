@@ -18,12 +18,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { milestoneGiftService } from "@/lib/api/services/milestone-gift.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
 import type { MilestoneGiftDecision } from "@/types/milestone-gift.types";
 
 interface MilestoneGiftDecisionDialogProps {
   requestId: number | null;
+  storeId: string;
   /** Existing decision (for upsert / pre-fill) */
   decision?: MilestoneGiftDecision | null;
   open: boolean;
@@ -33,12 +33,12 @@ interface MilestoneGiftDecisionDialogProps {
 
 export function MilestoneGiftDecisionDialog({
   requestId,
+  storeId,
   decision,
   open,
   onOpenChange,
   onSuccess,
 }: MilestoneGiftDecisionDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
 
   const [isCancelled, setIsCancelled] = useState(false);
 
@@ -90,20 +90,12 @@ export function MilestoneGiftDecisionDialog({
     e.preventDefault();
     if (!isFormValid || requestId === null) return;
 
-    if (!selectedStore?.storeId) {
-      setError({
-        message: "No store selected. Please select a store from the sidebar.",
-        details: [],
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
 
     try {
       await milestoneGiftService.submitGiftDecision(
-        selectedStore.storeId,
+        storeId,
         requestId,
         isCancelled
           ? {

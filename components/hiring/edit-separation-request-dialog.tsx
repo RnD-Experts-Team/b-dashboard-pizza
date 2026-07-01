@@ -44,7 +44,6 @@ import { toast } from "sonner";
 import { separationService } from "@/lib/api/services/separation.service";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type {
   SeparationReasonType,
   SeparationType,
@@ -63,6 +62,7 @@ interface ExistingAttachmentEntry {
 
 interface EditSeparationRequestDialogProps {
   separationId: number | null;
+  storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -122,11 +122,11 @@ function NewAttachmentThumb({ file }: { file: File }) {
 
 export function EditSeparationRequestDialog({
   separationId,
+  storeId,
   open,
   onOpenChange,
   onSuccess,
 }: EditSeparationRequestDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
 
   const [separationReasons, setSeparationReasons] = useState<SeparationReasonRecord[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -170,15 +170,15 @@ export function EditSeparationRequestDialog({
 
   // Fetch the request + separation reasons when dialog opens
   useEffect(() => {
-    if (!open || separationId === null || !selectedStore?.storeId) return;
+    if (!open || separationId === null || !storeId) return;
 
     let cancelled = false;
     setIsLoadingData(true);
     setLoadError(null);
 
     Promise.all([
-      separationService.getSeparationRequest(selectedStore.storeId, separationId),
-      hiringService.getCreateEmployeePage(selectedStore.storeId),
+      separationService.getSeparationRequest(storeId, separationId),
+      hiringService.getCreateEmployeePage(storeId),
     ])
       .then(([detail, pageData]) => {
         if (cancelled) return;
@@ -247,7 +247,7 @@ export function EditSeparationRequestDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, separationId, selectedStore?.storeId]);
+  }, [open, separationId, storeId]);
 
   // When separation type changes, auto-align reason_type and reset reason selection
   useEffect(() => {
@@ -322,11 +322,6 @@ export function EditSeparationRequestDialog({
     e.preventDefault();
     if (!isFormValid || separationId === null) return;
 
-    if (!selectedStore?.storeId) {
-      setError({ message: "No store selected. Please select a store from the sidebar.", details: [] });
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
 
@@ -344,7 +339,7 @@ export function EditSeparationRequestDialog({
           : undefined;
 
       await separationService.updateSeparationRequest(
-        selectedStore.storeId,
+        storeId,
         separationId,
         {
           final_work_date: finalWorkDate,

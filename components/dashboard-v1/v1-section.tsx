@@ -16,11 +16,13 @@ export function V1Section({
   weekLabel,
   children,
   className,
+  gridClassName,
 }: {
   category: CategoryKey;
   weekLabel?: string;
   children: ReactNode;
   className?: string;
+  gridClassName?: string;
 }) {
   const cat = CATEGORIES[category];
   const Icon = cat.icon;
@@ -47,7 +49,7 @@ export function V1Section({
         <div className="ms-1 h-px flex-1 bg-linear-to-r from-border to-transparent" />
       </div>
       {/* Dense flow backfills any gap so a short last row never leaves a hole. */}
-      <div className="grid [grid-auto-flow:dense] grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4">
+      <div className={cn("grid [grid-auto-flow:dense] grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4", gridClassName)}>
         {children}
       </div>
     </section>

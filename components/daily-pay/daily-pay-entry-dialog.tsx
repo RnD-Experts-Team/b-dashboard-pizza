@@ -522,8 +522,14 @@ export function DailyPayEntryDialog({
                         size="sm"
                         type="button"
                         className="h-8 gap-1.5 text-xs"
-                        disabled={isSubmitting || !line.storeId}
-                        title={!line.storeId ? "Select a store first" : undefined}
+                        disabled={isSubmitting || !line.storeId || !line.technicianId}
+                        title={
+                          !line.storeId
+                            ? "Select a store first"
+                            : !line.technicianId
+                              ? "Select a technician first"
+                              : undefined
+                        }
                         onClick={() => {
                           const storeNum =
                             stores.find((s) => String(s.id) === line.storeId)
@@ -682,18 +688,24 @@ export function DailyPayEntryDialog({
           </div>
         )}
 
-        {pickerLineIndex !== null && (
-          <TicketIssuePickerDialog
-            open={pickerLineIndex !== null}
-            storeId={pickerStoreId}
-            selectedIssueIds={lines[pickerLineIndex]?.ticketIssueIds ?? []}
-            onClose={() => setPickerLineIndex(null)}
-            onConfirm={(ids) => {
-              updateLine(pickerLineIndex, { ticketIssueIds: ids });
-              setPickerLineIndex(null);
-            }}
-          />
-        )}
+        {pickerLineIndex !== null && (() => {
+          const pickerTechId = toNum(lines[pickerLineIndex]?.technicianId ?? "");
+          const pickerTech = technicians.find((t) => t.id === pickerTechId);
+          return (
+            <TicketIssuePickerDialog
+              open={pickerLineIndex !== null}
+              storeId={pickerStoreId}
+              technicianId={pickerTechId ?? 0}
+              technicianName={pickerTech?.name ?? ""}
+              selectedIssueIds={lines[pickerLineIndex]?.ticketIssueIds ?? []}
+              onClose={() => setPickerLineIndex(null)}
+              onConfirm={(ids) => {
+                updateLine(pickerLineIndex, { ticketIssueIds: ids });
+                setPickerLineIndex(null);
+              }}
+            />
+          );
+        })()}
 
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>

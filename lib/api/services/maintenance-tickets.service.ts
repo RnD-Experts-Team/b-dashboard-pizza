@@ -214,6 +214,7 @@ function transformStatusChange(raw: ApiTicketIssueStatusChange): TicketIssueStat
     id: raw.id,
     status: { value: raw.to_status, label },
     changedBy: raw.created_by != null ? String(raw.created_by) : null,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     reason: raw.reason,
     createdAt: raw.created_at,
   };
@@ -251,12 +252,17 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
 function transformTicket(raw: ApiTicket): Ticket {
   return {
     id: raw.id,
-    storeId: raw.store?.store_number ?? String(raw.store_id),
+    storeId: raw.store_id != null ? (raw.store?.store_number ?? String(raw.store_id)) : null,
+    otherStore: raw.other_store ?? null,
+    type: raw.type ? transformEnumField(raw.type) : null,
     status: transformEnumField(raw.status),
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    issueCount: raw.issues_count ?? 0,
+    issueCount: raw.issues_count ?? raw.issues?.length ?? 0,
+    issueTitles: (raw.issues ?? [])
+      .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)
+      .filter((t): t is string => !!t),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     deletedAt: raw.deleted_at,
@@ -377,7 +383,31 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
 
   (payload.files ?? []).forEach((file) => form.append(`files[]`, file));
 
+  if (payload.type) form.append("type", payload.type);
+
   return form;
+}
+
+function buildFilterParams(filters: TicketsFilters): URLSearchParams {
+  const p = new URLSearchParams();
+  (filters.statuses ?? []).forEach((v) => v && p.append("statuses[]", v));
+  (filters.priorities ?? []).forEach((v) => v && p.append("priorities[]", v));
+  (filters.issue_ids ?? []).forEach((v) => p.append("issue_ids[]", String(v)));
+  (filters.issue_statuses ?? []).forEach((v) => v && p.append("issue_statuses[]", v));
+  (filters.technician_ids ?? []).forEach((v) => p.append("technician_ids[]", String(v)));
+  (filters.types ?? []).forEach((v) => p.append("types[]", v));
+  if (filters.part_cost_total_gt != null) p.set("part_cost_total_gt", String(filters.part_cost_total_gt));
+  if (filters.part_cost_single_gt != null) p.set("part_cost_single_gt", String(filters.part_cost_single_gt));
+  if (filters.created_from)  p.set("created_from",  filters.created_from);
+  if (filters.created_to)    p.set("created_to",    filters.created_to);
+  if (filters.assigned_from) p.set("assigned_from", filters.assigned_from);
+  if (filters.assigned_to)   p.set("assigned_to",   filters.assigned_to);
+  if (filters.trashed)       p.set("trashed",       filters.trashed);
+  if (filters.sort)          p.set("sort",          filters.sort);
+  if (filters.dir)           p.set("dir",           filters.dir);
+  if (filters.page)          p.set("page",          String(filters.page));
+  if (filters.per_page)      p.set("per_page",      String(filters.per_page));
+  return p;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -550,27 +580,15 @@ export const maintenanceTicketsService = {
     signal?: AbortSignal
   ): Promise<TicketsListResponse> {
     const token = requireToken();
-    const params: Record<string, string | number> = {};
-    if (filters?.status) params.status = filters.status;
-    if (filters?.priority) params.priority = filters.priority;
-    if (filters?.issue_id) params.issue_id = filters.issue_id;
-    if (filters?.issue_status) params.issue_status = filters.issue_status;
-    if (filters?.part_cost_total_gt != null) params.part_cost_total_gt = filters.part_cost_total_gt;
-    if (filters?.technician_id) params.technician_id = filters.technician_id;
-    if (filters?.trashed) params.trashed = filters.trashed;
-    if (filters?.page) params.page = filters.page;
-    if (filters?.per_page) params.per_page = filters.per_page;
+    const qs = filters ? buildFilterParams(filters).toString() : "";
+    const url = `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets${qs ? `?${qs}` : ""}`;
 
     try {
-      const res = await axios.get<ApiTicketsListResponse>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets`,
-        {
-          params,
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-          signal,
-        }
-      );
+      const res = await axios.get<ApiTicketsListResponse>(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeout: 15_000,
+        signal,
+      });
       return {
         data: res.data.data.map(transformTicket),
         links: transformLinks(res.data),
@@ -596,6 +614,29 @@ export const maintenanceTicketsService = {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
           },
+          timeout: 15_000,
+        }
+      );
+      return { data: transformTicket(res.data.data) };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Create a ticket for a location that is not a system store ("Others" flow) */
+  async createTicketOther(
+    otherStore: string,
+    payload: CreateTicketPayload
+  ): Promise<{ data: Ticket }> {
+    const token = requireToken();
+    const form = buildTicketFormData(payload);
+    form.append("other_store", otherStore);
+    try {
+      const res = await axios.post<{ data: ApiTicket }>(
+        `/api/maintenance-tickets/tickets`,
+        form,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           timeout: 15_000,
         }
       );
@@ -1032,20 +1073,12 @@ export const maintenanceTicketsService = {
   /** List tickets across all stores (no store scope) */
   async getGlobalTickets(filters?: TicketsFilters, signal?: AbortSignal): Promise<TicketsListResponse> {
     const token = requireToken();
-    const params: Record<string, string | number> = {};
-    if (filters?.status) params.status = filters.status;
-    if (filters?.priority) params.priority = filters.priority;
-    if (filters?.issue_id) params.issue_id = filters.issue_id;
-    if (filters?.issue_status) params.issue_status = filters.issue_status;
-    if (filters?.part_cost_total_gt != null) params.part_cost_total_gt = filters.part_cost_total_gt;
-    if (filters?.technician_id) params.technician_id = filters.technician_id;
-    if (filters?.trashed) params.trashed = filters.trashed;
-    if (filters?.page) params.page = filters.page;
-    if (filters?.per_page) params.per_page = filters.per_page;
+    const qs = filters ? buildFilterParams(filters).toString() : "";
+    const url = `/api/maintenance-tickets/tickets${qs ? `?${qs}` : ""}`;
     try {
       const res = await axios.get<ApiTicketsListResponse>(
-        "/api/maintenance-tickets/tickets",
-        { params, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+        url,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
       );
       return {
         data: res.data.data.map(transformTicket),

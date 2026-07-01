@@ -67,7 +67,7 @@ export function V1CustomerSalesCard({
       baseline: { ...(yoy ? quarter.same_quarter_last_year : quarter.previous) } as Record<string, number>,
     },
     {
-      label: "WTD",
+      label: "YTD",
       current: { ...year.current } as Record<string, number>,
       baseline: { ...year.previous } as Record<string, number>,
     },

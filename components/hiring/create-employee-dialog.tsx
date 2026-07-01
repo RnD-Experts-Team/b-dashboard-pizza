@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Plus,
   Trash2,
   UserPlus,
   AlertCircle,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -48,9 +50,13 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TimePicker } from "@/components/ui/time-picker";
 import { DatePicker } from "@/components/ui/date-picker";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
@@ -269,7 +275,6 @@ export function CreateEmployeeDialog({
   onOpenChange,
   onSuccess,
 }: CreateEmployeeDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
   const { overviewStores } = useAuthStore();
   const {
     positions: positionOptions,
@@ -316,10 +321,28 @@ export function CreateEmployeeDialog({
   const [showConfirmExit, setShowConfirmExit] = useState(false);
   const [activeTab, setActiveTab] = useState("personal");
 
-  const storeIdNum = selectedStore?.id ? parseInt(selectedStore.id, 10) : 0;
+  /* -- Store picker state -- */
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [storeSearch, setStoreSearch] = useState("");
+  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
+
+  const filteredStores = useMemo(() => {
+    const q = storeSearch.toLowerCase();
+    return overviewStores.filter(
+      (s) =>
+        (s.storeId ?? "").toLowerCase().includes(q) ||
+        (s.name ?? "").toLowerCase().includes(q),
+    );
+  }, [overviewStores, storeSearch]);
+
+  const storeIdNum = parseInt(
+    overviewStores?.find((s) => s.storeId === selectedStoreId)?.id ?? "0",
+    10,
+  );
 
   /* -- Dirty check -- */
   const isDirty =
+    selectedStoreId !== "" ||
     firstName !== "" ||
     middleName !== "" ||
     lastName !== "" ||
@@ -345,6 +368,9 @@ export function CreateEmployeeDialog({
     attachments.length > 0;
 
   function resetForm() {
+    setSelectedStoreId("");
+    setStoreSearch("");
+    setStoreDropdownOpen(false);
     setFirstName("");
     setMiddleName("");
     setLastName("");
@@ -384,6 +410,7 @@ export function CreateEmployeeDialog({
 
   /* -- Validation -- */
   const isFormValid =
+    selectedStoreId !== "" &&
     firstName.trim() !== "" &&
     lastName.trim() !== "" &&
     employmentType !== "" &&
@@ -429,7 +456,7 @@ export function CreateEmployeeDialog({
   /* -- Submit -- */
   async function handleSubmit() {
     if (!isFormValid) return;
-    if (!selectedStore?.storeId) {
+    if (!selectedStoreId) {
       setError("No store selected.");
       return;
     }
@@ -502,7 +529,7 @@ export function CreateEmployeeDialog({
     };
 
     try {
-      await employeeService.createEmployeeV1(selectedStore.storeId, payload);
+      await employeeService.createEmployeeV1(selectedStoreId, payload);
       toast.success("Employee created successfully.");
       resetForm();
       onOpenChange(false);
@@ -580,6 +607,70 @@ export function CreateEmployeeDialog({
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Store picker */}
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
+            <Label>
+              Store <span className="text-destructive">*</span>
+            </Label>
+            <Popover open={storeDropdownOpen} onOpenChange={setStoreDropdownOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                >
+                  <span className={selectedStoreId ? "text-foreground" : "text-muted-foreground"}>
+                    {selectedStoreId
+                      ? (() => {
+                          const s = overviewStores.find((s) => s.storeId === selectedStoreId);
+                          return s?.name ? `${s.name} — ${selectedStoreId}` : selectedStoreId;
+                        })()
+                      : "Select a store…"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <div className="p-2 border-b">
+                  <input
+                    className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                    placeholder="Search stores…"
+                    value={storeSearch}
+                    onChange={(e) => setStoreSearch(e.target.value)}
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto" onWheelCapture={(e) => e.stopPropagation()}>
+                  {filteredStores.length === 0 ? (
+                    <p className="px-3 py-4 text-sm text-muted-foreground text-center">No stores found.</p>
+                  ) : (
+                    filteredStores.map((store) => (
+                      <button
+                        key={store.id}
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                        onClick={() => {
+                          setSelectedStoreId(store.storeId ?? "");
+                          setStoreDropdownOpen(false);
+                          setStoreSearch("");
+                        }}
+                      >
+                        <Check
+                          className={`h-4 w-4 shrink-0 ${selectedStoreId === store.storeId ? "opacity-100" : "opacity-0"}`}
+                        />
+                        <span className="flex flex-col text-start">
+                          <span>{store.name ?? store.storeId ?? store.id}</span>
+                          {store.storeId && (
+                            <span className="text-xs text-muted-foreground">{store.storeId}</span>
+                          )}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
           <div className="space-y-1.5">
             <Label>
               First Name <span className="text-destructive">*</span>
@@ -1683,6 +1774,7 @@ export function CreateEmployeeDialog({
   /*  Per-tab validation error counts                                 */
   /* ---------------------------------------------------------------- */
   const personalTabErrors = [
+    selectedStoreId === "" ? 1 : 0,
     firstName.trim() === "" ? 1 : 0,
     lastName.trim() === "" ? 1 : 0,
     gender === "" ? 1 : 0,
@@ -1754,7 +1846,7 @@ export function CreateEmployeeDialog({
               Add Employee
             </DialogTitle>
             <DialogDescription>
-              Create a new employee for {selectedStore?.name ?? "your store"}.
+              Create a new employee. Select a store below.
             </DialogDescription>
           </DialogHeader>
 

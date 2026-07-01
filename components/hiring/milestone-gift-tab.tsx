@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -38,6 +45,7 @@ import { MilestoneGiftQuestionsCatalog } from "@/components/hiring/milestone-gif
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
 import type { StoreRequest } from "@/types/hiring.types";
 import type {
   Milestone,
@@ -82,7 +90,7 @@ function MgTableSkeleton() {
       <Table>
         <TableHeader>
           <TableRow>
-            {["Employee", "Milestone", "Stage", "Date of Request"].map((h) => (
+            {["Employee", "Store #", "Milestone", "Stage", "Date of Request"].map((h) => (
               <TableHead key={h}>{h}</TableHead>
             ))}
           </TableRow>
@@ -105,8 +113,12 @@ function MgTableSkeleton() {
 
 export function MilestoneGiftTab({
   active = true,
+  fullAccess = false,
 }: {
   active?: boolean;
+  /** true = milestone-gift manager: all buttons + all actions visible.
+   *  false = general user: no create/manage buttons, no gift-decision/final-status actions. */
+  fullAccess?: boolean;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -132,6 +144,40 @@ export function MilestoneGiftTab({
   /* Question management catalog */
   const [catalogOpen, setCatalogOpen] = useState(false);
 
+  const validStoreIds = useMemo(
+    () => new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : []))),
+    [overviewStores],
+  );
+
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
+    const valid = new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : [])));
+    const fallback = [...valid];
+    try {
+      const raw = localStorage.getItem("store-filter:milestone-gift");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clamped = (parsed as string[]).filter((id) => valid.has(id));
+          if (clamped.length > 0) return clamped;
+        }
+      }
+    } catch {}
+    return fallback;
+  });
+
+  useEffect(() => {
+    if (validStoreIds.size === 0) return;
+    setSelectedStoreIds((prev) => {
+      const clamped = prev.filter((id) => validStoreIds.has(id));
+      return clamped.length > 0 ? clamped : [...validStoreIds];
+    });
+  }, [validStoreIds]);
+
+  function handleStoreApply(ids: string[]) {
+    setSelectedStoreIds(ids);
+    try { localStorage.setItem("store-filter:milestone-gift", JSON.stringify(ids)); } catch {}
+  }
+
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
@@ -140,9 +186,26 @@ export function MilestoneGiftTab({
   const [page, setPage] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
 
+  /* Frontend filters */
+  const [filterStage, setFilterStage] = useState<MilestoneGiftStage | "all">("all");
+  const [filterMilestone, setFilterMilestone] = useState<Milestone | "all">("all");
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      const mg = r.milestone_gift_request;
+      if (filterStage !== "all" && mg?.stage !== filterStage) return false;
+      if (filterMilestone !== "all" && mg?.milestone !== filterMilestone) return false;
+      return true;
+    });
+  }, [rows, filterStage, filterMilestone]);
+
   const fetchData = useCallback(
     async (targetPage: number) => {
-      if (!selectedStore?.storeId) return;
+      if (selectedStoreIds.length === 0) {
+        setRows([]);
+        setIsLoading(false);
+        return;
+      }
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -152,8 +215,8 @@ export function MilestoneGiftTab({
       setError(null);
 
       try {
-        const res = await hiringService.getStoreRequests(
-          selectedStore.storeId,
+        const res = await hiringService.getRequests(
+          selectedStoreIds,
           targetPage,
           controller.signal,
         );
@@ -171,7 +234,7 @@ export function MilestoneGiftTab({
         setIsLoading(false);
       }
     },
-    [selectedStore?.storeId],
+    [selectedStoreIds],
   );
 
   useEffect(() => {
@@ -193,36 +256,49 @@ export function MilestoneGiftTab({
     isInitialLoadComplete && !isLoading && !error && rows.length === 0;
 
   const actionMg = actionRequest?.milestone_gift_request ?? null;
+  // Prefer store_number from the row when the backend returns it; fall back to the
+  // first store in the current filter (covers the common single-store case).
+  const actionStoreId = actionMg?.store?.store_number ?? selectedStoreIds[0] ?? "";
+  const actionEmployeeName = actionMg?.employee
+    ? `${actionMg.employee.first_name} ${actionMg.employee.last_name}`.trim()
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
       {/* Actions row */}
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => fetchData(page)}
-          disabled={isLoading}
-          aria-label="Refresh"
-        >
-          <RefreshCw
-            className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
-          />
-        </Button>
-        {canCreateMilestoneGift && (
-          <Button variant="outline" onClick={() => setCatalogOpen(true)}>
-            <ListChecks className="me-2 h-4 w-4" />
-            <span className="hidden sm:inline">Manage Questions</span>
-            <span className="sm:hidden">Questions</span>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <StoreMultiSelect
+          stores={(overviewStores ?? []).flatMap((s) => s.storeId ? [{ storeId: s.storeId, name: s.name }] : [])}
+          value={selectedStoreIds}
+          onApply={handleStoreApply}
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fetchData(page)}
+            disabled={isLoading}
+            aria-label="Refresh"
+          >
+            <RefreshCw
+              className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+            />
           </Button>
-        )}
-        {canCreateMilestoneGift && (
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="me-2 h-4 w-4" />
-            <span className="hidden sm:inline">Create Milestone Gift</span>
-            <span className="sm:hidden">New</span>
-          </Button>
-        )}
+          {fullAccess && (
+            <Button variant="outline" onClick={() => setCatalogOpen(true)}>
+              <ListChecks className="me-2 h-4 w-4" />
+              <span className="hidden sm:inline">Manage Questions</span>
+              <span className="sm:hidden">Questions</span>
+            </Button>
+          )}
+          {fullAccess && (
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="me-2 h-4 w-4" />
+              <span className="hidden sm:inline">Create Milestone Gift</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Error */}
@@ -238,6 +314,56 @@ export function MilestoneGiftTab({
         </Alert>
       )}
 
+      {/* Filters */}
+      {isInitialLoadComplete && !error && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            value={filterStage}
+            onValueChange={(v) => setFilterStage(v as MilestoneGiftStage | "all")}
+          >
+            <SelectTrigger className="h-8 w-40 text-xs">
+              <SelectValue placeholder="All Stages" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stages</SelectItem>
+              <SelectItem value="created">Created</SelectItem>
+              <SelectItem value="rating">Rating</SelectItem>
+              <SelectItem value="gift_decision">Gift Decision</SelectItem>
+              <SelectItem value="final_status">Final Status</SelectItem>
+              <SelectItem value="closed">Closed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={filterMilestone}
+            onValueChange={(v) => setFilterMilestone(v as Milestone | "all")}
+          >
+            <SelectTrigger className="h-8 w-40 text-xs">
+              <SelectValue placeholder="All Milestones" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Milestones</SelectItem>
+              <SelectItem value="30_days">30 Days</SelectItem>
+              <SelectItem value="90_days">90 Days</SelectItem>
+              <SelectItem value="6_months">6 Months</SelectItem>
+              <SelectItem value="1_year">1 Year</SelectItem>
+              <SelectItem value="2_years">2 Years</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          {(filterStage !== "all" || filterMilestone !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground"
+              onClick={() => { setFilterStage("all"); setFilterMilestone("all"); }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Loading skeleton */}
       {(!isInitialLoadComplete || isLoading) && <MgTableSkeleton />}
 
@@ -248,13 +374,21 @@ export function MilestoneGiftTab({
         </div>
       )}
 
+      {/* Filtered empty */}
+      {isInitialLoadComplete && !isLoading && !error && rows.length > 0 && filteredRows.length === 0 && (
+        <div className="rounded-lg border p-10 text-center text-muted-foreground text-sm">
+          No requests match the selected filters.
+        </div>
+      )}
+
       {/* Table */}
-      {!isLoading && !error && rows.length > 0 && (
+      {!isLoading && !error && filteredRows.length > 0 && (
         <div className="rounded-lg border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
+                <TableHead>Store #</TableHead>
                 <TableHead>Milestone</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Date of Request</TableHead>
@@ -264,13 +398,16 @@ export function MilestoneGiftTab({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((req) => {
+              {filteredRows.map((req) => {
                 const mg = req.milestone_gift_request;
                 const employeeName = mg?.employee
                   ? `${mg.employee.first_name} ${mg.employee.last_name}`
                   : "—";
                 const stage = mg?.stage;
                 const isTerminal = stage === "closed" || stage === "cancelled";
+                const canRating = stage === "created";
+                const canDecision = stage === "rating";
+                const canFinalStatus = stage === "gift_decision" || stage === "final_status";
                 return (
                   <TableRow
                     key={req.id}
@@ -282,6 +419,9 @@ export function MilestoneGiftTab({
                   >
                     <TableCell className="whitespace-nowrap">
                       {employeeName}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      {mg?.store?.store_number ?? "—"}
                     </TableCell>
                     <TableCell>
                       {mg ? (
@@ -320,6 +460,7 @@ export function MilestoneGiftTab({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
+                            disabled={!canRating}
                             onClick={(e) => {
                               e.stopPropagation();
                               setActionRequest(req);
@@ -329,26 +470,32 @@ export function MilestoneGiftTab({
                             <ClipboardList className="me-2 h-4 w-4" />
                             Submit Rating
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActionRequest(req);
-                              setDecisionDialogOpen(true);
-                            }}
-                          >
-                            <Gift className="me-2 h-4 w-4" />
-                            Gift Decision
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActionRequest(req);
-                              setFinalStatusDialogOpen(true);
-                            }}
-                          >
-                            <PackageCheck className="me-2 h-4 w-4" />
-                            Final Status
-                          </DropdownMenuItem>
+                          {fullAccess && (
+                            <DropdownMenuItem
+                              disabled={!canDecision}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActionRequest(req);
+                                setDecisionDialogOpen(true);
+                              }}
+                            >
+                              <Gift className="me-2 h-4 w-4" />
+                              Gift Decision
+                            </DropdownMenuItem>
+                          )}
+                          {fullAccess && (
+                            <DropdownMenuItem
+                              disabled={!canFinalStatus}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActionRequest(req);
+                                setFinalStatusDialogOpen(true);
+                              }}
+                            >
+                              <PackageCheck className="me-2 h-4 w-4" />
+                              Final Status
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -393,6 +540,8 @@ export function MilestoneGiftTab({
 
       <MilestoneGiftRatingDialog
         requestId={actionMg?.id ?? null}
+        storeId={actionStoreId}
+        employeeName={actionEmployeeName}
         open={ratingDialogOpen}
         onOpenChange={setRatingDialogOpen}
         onSuccess={() => fetchData(page)}
@@ -400,6 +549,7 @@ export function MilestoneGiftTab({
 
       <MilestoneGiftDecisionDialog
         requestId={actionMg?.id ?? null}
+        storeId={actionStoreId}
         decision={actionMg?.decision ?? null}
         open={decisionDialogOpen}
         onOpenChange={setDecisionDialogOpen}
@@ -408,6 +558,7 @@ export function MilestoneGiftTab({
 
       <MilestoneGiftFinalStatusDialog
         requestId={actionMg?.id ?? null}
+        storeId={actionStoreId}
         finalStatus={actionMg?.final_status ?? null}
         open={finalStatusDialogOpen}
         onOpenChange={setFinalStatusDialogOpen}
@@ -423,8 +574,6 @@ export function MilestoneGiftTab({
       <MilestoneGiftQuestionsCatalog
         open={catalogOpen}
         onOpenChange={setCatalogOpen}
-        storeId={effectiveStoreId}
-        storeName={selectedStore?.name}
       />
     </div>
   );

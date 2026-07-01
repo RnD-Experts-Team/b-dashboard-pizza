@@ -437,7 +437,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   const hiringManagementGroup: NavGroup = {
-    label: t("hiringManagement"),
+    label: "Employee Management",
     icon: Briefcase,
     items: [
       {
@@ -446,6 +446,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: ClipboardList,
         requirements: [
           { service: "Hiring", method: "GET", path: "/v1/stores/*/requests", storeId: effectiveStoreId },
+          { service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" },
         ],
       },
       // {
@@ -468,6 +469,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     label: "Reports",
     icon: FileText,
     items: [
+      // {
+      //   title: "Business Reports",
+      //   href: `/${locale}/dashboard/business-reports`,
+      //   icon: BarChart3,
+      //   // No auth rule defined yet — always visible for stores the user can access.
+      // },
       // {
       //   title: "WBR Reports",
       //   href: `/${locale}/dashboard/wbr-reports`,

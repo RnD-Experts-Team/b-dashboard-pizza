@@ -356,6 +356,7 @@ export interface StoreRequestAttachment {
   file_size: number;
   created_at: string;
   updated_at: string;
+  attachment_url?: string | null;
 }
 
 export interface StoreRequestHiringCandidate {
@@ -397,6 +398,7 @@ export interface StoreRequestSeparationDetail {
   user: StoreRequestUser;
   employee: StoreRequestEmployee;
   decisions: unknown[];
+  store?: { id: number; store_number: string } | null;
 }
 
 export interface HiringRequestDecisionRecord {
@@ -425,6 +427,7 @@ export interface StoreRequestHiringDetail {
   candidates: StoreRequestHiringCandidate[];
   positions: StoreRequestHiringPosition[];
   decisions: HiringRequestDecisionRecord[];
+  store?: { id: number; store_number: string } | null;
 }
 
 export interface StoreRequest {

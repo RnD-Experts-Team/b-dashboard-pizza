@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Loader2, Paperclip, X, Store } from "lucide-react";
+import { Plus, Trash2, Loader2, Paperclip, X, Store, ChevronDown, Check, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,13 +18,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SearchCreateCombobox } from "./search-create-combobox";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
-import type { CatalogIssue, Priority } from "@/types/maintenance-tickets.types";
+import type { CatalogIssue, Priority, TicketType } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                   */
@@ -33,6 +36,7 @@ import type { CatalogIssue, Priority } from "@/types/maintenance-tickets.types";
 interface IssueRow {
   id: string;
   issueId: number | null;
+  otherTitle: string;
   priority: Priority;
   description: string;
   note: string;
@@ -43,6 +47,7 @@ function makeRow(): IssueRow {
   return {
     id: Math.random().toString(36).slice(2),
     issueId: null,
+    otherTitle: "",
     priority: "medium",
     description: "",
     note: "",
@@ -82,7 +87,22 @@ export function CreateTicketDialog({
   // When storeId prop is empty (all-stores mode), the user picks a store inside the dialog.
   const needsStorePick = !storeId && !!stores?.length;
   const [pickedStoreId, setPickedStoreId] = useState<string>("");
-  const activeStoreId = storeId || pickedStoreId;
+  const [ticketType, setTicketType] = useState<TicketType>("normal");
+  const [otherStoreText, setOtherStoreText] = useState("");
+  const isOtherStore = pickedStoreId === "__other__";
+  const activeStoreId = storeId || (isOtherStore ? "" : pickedStoreId);
+
+  // Store picker popover state
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
+  const [storeSearch, setStoreSearch] = useState("");
+  const storeSearchRef = useRef<HTMLInputElement>(null);
+  const filteredStores = storeSearch.trim()
+    ? (stores ?? []).filter((s) => {
+        const id = s.storeId ?? s.id;
+        const label = s.name ? `${s.name} (${id})` : id;
+        return label.toLowerCase().includes(storeSearch.toLowerCase());
+      })
+    : (stores ?? []);
 
   // Local catalog issues — seeded from prop, grows when user creates new ones in-session
   const [localCatalogIssues, setLocalCatalogIssues] = useState<CatalogIssue[]>(() =>
@@ -94,14 +114,27 @@ export function CreateTicketDialog({
   useEffect(() => {
     if (open) {
       setPickedStoreId("");
+      setTicketType("normal");
+      setOtherStoreText("");
+      setStoreSearch("");
+      setStorePickerOpen(false);
       setLocalCatalogIssues(catalogIssues.filter((i) => !i.deletedAt));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Focus search input when store picker opens
+  useEffect(() => {
+    if (storePickerOpen) {
+      setStoreSearch("");
+      const t = setTimeout(() => storeSearchRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [storePickerOpen]);
+
   // When a store is picked inside the dialog, fetch that store's catalog issues.
   useEffect(() => {
-    if (!pickedStoreId) return;
+    if (!pickedStoreId || pickedStoreId === "__other__") return;
     let cancelled = false;
     setCatalogLoading(true);
     maintenanceTicketsService.getCatalogIssues(undefined, pickedStoreId)
@@ -147,8 +180,13 @@ export function CreateTicketDialog({
       return;
     }
 
+    if (isOtherStore && !otherStoreText.trim()) {
+      setSubmitError("Please enter a location description.");
+      return;
+    }
+
     for (const row of rows) {
-      if (!row.issueId) {
+      if (isOtherStore ? !row.otherTitle.trim() : !row.issueId) {
         setSubmitError(t("createDialog.validationSelectIssue"));
         return;
       }
@@ -160,15 +198,25 @@ export function CreateTicketDialog({
 
     setIsSubmitting(true);
     try {
-      await maintenanceTicketsService.createTicket(activeStoreId, {
+      const payload = {
         issues: rows.map((row) => ({
-          issue_id: row.issueId!,
+          ...(isOtherStore
+            ? { other_title: row.otherTitle.trim() }
+            : { issue_id: row.issueId! }),
           priority: row.priority,
           description: row.description.trim(),
           ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
           ...(row.files.length ? { files: row.files } : {}),
         })),
-      });
+        type: ticketType,
+      };
+
+      if (isOtherStore) {
+        await maintenanceTicketsService.createTicketOther(otherStoreText.trim(), payload);
+      } else {
+        await maintenanceTicketsService.createTicket(activeStoreId, payload);
+      }
+
       setRows([makeRow()]);
       setSubmitError(null);
       onSuccess();
@@ -201,23 +249,107 @@ export function CreateTicketDialog({
                 <Store className="h-4 w-4 text-muted-foreground" />
                 Store <span className="text-destructive">*</span>
               </Label>
-              <Select value={pickedStoreId} onValueChange={setPickedStoreId}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="Select a store…" />
-                </SelectTrigger>
-                <SelectContent position="popper" style={{ maxHeight: "200px", overflowY: "auto" }}>
-                  {stores!.map((s) => {
-                    const id = s.storeId ?? s.id;
-                    return (
-                      <SelectItem key={id} value={id}>
-                        {s.name ? `${s.name} (${id})` : id}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                {/* Searchable store dropdown */}
+                <Popover open={storePickerOpen} onOpenChange={setStorePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={isOtherStore}
+                      className={cn(
+                        "flex h-9 flex-1 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors",
+                        "hover:bg-accent hover:text-accent-foreground",
+                        "focus:outline-none focus:ring-1 focus:ring-ring",
+                        "disabled:cursor-not-allowed disabled:opacity-50",
+                        !isOtherStore && pickedStoreId && "border-primary/40 bg-primary/5"
+                      )}
+                    >
+                      <span className={cn("flex-1 truncate text-start", (!pickedStoreId || isOtherStore) && "text-muted-foreground")}>
+                        {!isOtherStore && pickedStoreId
+                          ? (() => {
+                              const s = stores!.find((s) => (s.storeId ?? s.id) === pickedStoreId);
+                              return s ? (s.name ? `${s.name} (${pickedStoreId})` : pickedStoreId) : pickedStoreId;
+                            })()
+                          : "Select a store…"}
+                      </span>
+                      <ChevronDown className={cn("ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150", storePickerOpen && "rotate-180")} />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" sideOffset={4} className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0 shadow-md">
+                    <div className="border-b px-2 py-1.5">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          ref={storeSearchRef}
+                          value={storeSearch}
+                          onChange={(e) => setStoreSearch(e.target.value)}
+                          placeholder="Search stores…"
+                          className="w-full rounded-sm bg-transparent py-1 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-52 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+                      {filteredStores.length === 0 ? (
+                        <p className="py-4 text-center text-xs text-muted-foreground">No results</p>
+                      ) : (
+                        filteredStores.map((s) => {
+                          const id = s.storeId ?? s.id;
+                          const label = s.name ? `${s.name} (${id})` : id;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => { setPickedStoreId(id); setStorePickerOpen(false); }}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+                                id === pickedStoreId && "bg-accent/60 font-medium"
+                              )}
+                            >
+                              <Check className={cn("h-3.5 w-3.5 shrink-0", id === pickedStoreId ? "opacity-100" : "opacity-0")} />
+                              {label}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                {/* Other button */}
+                <Button
+                  type="button"
+                  variant={isOtherStore ? "default" : "outline"}
+                  size="sm"
+                  className="h-9 shrink-0"
+                  onClick={() => setPickedStoreId(isOtherStore ? "" : "__other__")}
+                >
+                  Other
+                </Button>
+              </div>
+              {isOtherStore && (
+                <Input
+                  className="mt-1 text-sm"
+                  placeholder="e.g. Main Warehouse — Building C"
+                  value={otherStoreText}
+                  onChange={(e) => setOtherStoreText(e.target.value)}
+                />
+              )}
             </div>
           )}
+
+          {/* Ticket type */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-medium">Type</Label>
+            <Select value={ticketType} onValueChange={(v) => setTicketType(v as TicketType)}>
+              <SelectTrigger className="text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="preventive_maintenance">Preventive Maintenance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className={needsStorePick && !pickedStoreId ? "pointer-events-none opacity-40" : undefined}>
           {rows.map((row, idx) => (
@@ -239,18 +371,27 @@ export function CreateTicketDialog({
                 )}
               </div>
 
-              {/* Issue search + create */}
+              {/* Issue title */}
               <div className="space-y-1">
                 <Label className="text-sm">
                   {t("createDialog.issueLabel")} <span className="text-destructive">*</span>
                 </Label>
-                <SearchCreateCombobox
-                  items={comboItems}
-                  selectedId={row.issueId}
-                  onSelect={(id) => updateRow(row.id, { issueId: id })}
-                  onCreate={createCatalogIssue}
-                  placeholder={catalogLoading ? "Loading issues…" : "Search issues or type to create a new one…"}
-                />
+                {isOtherStore ? (
+                  <Input
+                    className="text-sm"
+                    placeholder="Describe the issue…"
+                    value={row.otherTitle}
+                    onChange={(e) => updateRow(row.id, { otherTitle: e.target.value })}
+                  />
+                ) : (
+                  <SearchCreateCombobox
+                    items={comboItems}
+                    selectedId={row.issueId}
+                    onSelect={(id) => updateRow(row.id, { issueId: id })}
+                    onCreate={createCatalogIssue}
+                    placeholder={catalogLoading ? "Loading issues…" : "Search issues or type to create a new one…"}
+                  />
+                )}
               </div>
 
               {/* Priority */}

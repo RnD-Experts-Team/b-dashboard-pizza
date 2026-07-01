@@ -290,10 +290,17 @@ function SensorCard({
               </p>
             )}
             {isStale && displayTime && (
-              <p className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
-                <Clock className="h-3 w-3 shrink-0" />
-                {sensor.notice ?? `Last reading · ${formatDate(displayTime)}`}
-              </p>
+              <div className="flex flex-col gap-0.5">
+                <p className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
+                  <Clock className="h-3 w-3 shrink-0" />
+                  Last reading · {formatDate(displayTime)}
+                </p>
+                {sensor.notice && (
+                  <p className="text-[10px] text-amber-600/70 dark:text-amber-400/70 ps-4">
+                    {sensor.notice}
+                  </p>
+                )}
+              </div>
             )}
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               {state?.battery != null && (

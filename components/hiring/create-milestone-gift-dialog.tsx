@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   AlertCircle,
   Loader2,
   ChevronsUpDown,
   Check,
   Gift,
+  Store,
 } from "lucide-react";
 import {
   Popover,
@@ -45,7 +46,7 @@ import {
 import { toast } from "sonner";
 import { milestoneGiftService } from "@/lib/api/services/milestone-gift.service";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
 import type { Milestone } from "@/types/milestone-gift.types";
 import type { EmployeeV1Record } from "@/types/employee.types";
@@ -70,14 +71,19 @@ export function CreateMilestoneGiftDialog({
   onOpenChange,
   onSuccess,
 }: CreateMilestoneGiftDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
+  const { overviewStores } = useAuthStore();
+
+  // Store combobox
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [storeSearch, setStoreSearch] = useState("");
+  const [storeDropdownOpen, setStoreDropdownOpen] = useState(false);
 
   // Employees
   const [employees, setEmployees] = useState<EmployeeV1Record[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Employee search combobox
+  // Employee combobox
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false);
 
@@ -95,15 +101,22 @@ export function CreateMilestoneGiftDialog({
     if (milestone !== "other") setMilestoneOther("");
   }, [milestone]);
 
-  // Fetch employees when dialog opens
+  // Fetch employees when store selection changes
   useEffect(() => {
-    if (!open || !selectedStore?.storeId) return;
+    if (!open || !selectedStoreId) {
+      setEmployees([]);
+      return;
+    }
+
     let cancelled = false;
-    setIsLoadingData(true);
+    setIsLoadingEmployees(true);
     setLoadError(null);
 
     employeeService
-      .getEmployeesV1(selectedStore.storeId, { per_page: 99 })
+      .getEmployeesV1(selectedStoreId, {
+          per_page: 99,
+          status_in: ["hired", "rehired", "OJE"],
+        })
       .then((res) => {
         if (cancelled) return;
         setEmployees(res.data);
@@ -116,23 +129,46 @@ export function CreateMilestoneGiftDialog({
         );
       })
       .finally(() => {
-        if (!cancelled) setIsLoadingData(false);
+        if (!cancelled) setIsLoadingEmployees(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [open, selectedStore?.storeId]);
+  }, [open, selectedStoreId]);
+
+  // Clear employee selection when store changes
+  useEffect(() => {
+    setSelectedEmployeeId("");
+    setEmployeeSearch("");
+  }, [selectedStoreId]);
+
+  const filteredStores = useMemo(() => {
+    const q = storeSearch.toLowerCase();
+    if (!q) return overviewStores ?? [];
+    return (overviewStores ?? []).filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.storeId ?? "").toLowerCase().includes(q),
+    );
+  }, [overviewStores, storeSearch]);
+
+  const selectedStore = overviewStores?.find((s) => s.storeId === selectedStoreId);
 
   const isDirty =
     selectedEmployeeId !== "" || milestone !== "" || milestoneOther !== "";
 
   function resetForm() {
+    setSelectedStoreId("");
+    setStoreSearch("");
+    setStoreDropdownOpen(false);
     setSelectedEmployeeId("");
     setEmployeeSearch("");
     setEmployeeDropdownOpen(false);
     setMilestone("");
     setMilestoneOther("");
+    setEmployees([]);
+    setLoadError(null);
     setError(null);
   }
 
@@ -152,6 +188,7 @@ export function CreateMilestoneGiftDialog({
   }
 
   const isFormValid =
+    selectedStoreId !== "" &&
     selectedEmployeeId !== "" &&
     milestone !== "" &&
     (milestone !== "other" || milestoneOther.trim() !== "");
@@ -160,27 +197,16 @@ export function CreateMilestoneGiftDialog({
     e.preventDefault();
     if (!isFormValid) return;
 
-    if (!selectedStore?.storeId) {
-      setError({
-        message: "No store selected. Please select a store from the sidebar.",
-        details: [],
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
 
     try {
-      await milestoneGiftService.createMilestoneGiftRequest(
-        selectedStore.storeId,
-        {
-          employee_id: Number(selectedEmployeeId),
-          milestone: milestone as Milestone,
-          milestone_other:
-            milestone === "other" ? milestoneOther.trim() : undefined,
-        },
-      );
+      await milestoneGiftService.createMilestoneGiftRequest(selectedStoreId, {
+        employee_id: Number(selectedEmployeeId),
+        milestone: milestone as Milestone,
+        milestone_other:
+          milestone === "other" ? milestoneOther.trim() : undefined,
+      });
 
       toast.success("Milestone gift request created successfully.");
       resetForm();
@@ -204,45 +230,129 @@ export function CreateMilestoneGiftDialog({
               Create Milestone Gift Request
             </DialogTitle>
             <DialogDescription>
-              Start a milestone gift workflow for an employee at this store.
+              Select a store and employee to start a milestone gift workflow.
             </DialogDescription>
           </DialogHeader>
 
-          {loadError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{loadError}</AlertDescription>
-            </Alert>
-          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <span>{error.message}</span>
+                  {error.details.length > 0 && (
+                    <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
+                      {error.details.map((d, i) => (
+                        <li key={i}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {isLoadingData ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading employees…
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <span>{error.message}</span>
-                    {error.details.length > 0 && (
-                      <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
-                        {error.details.map((d, i) => (
-                          <li key={i}>{d}</li>
-                        ))}
-                      </ul>
+            {/* ── Store ── */}
+            <div className="space-y-2">
+              <Label>
+                Store <span className="text-destructive">*</span>
+              </Label>
+              <Popover
+                open={storeDropdownOpen}
+                onOpenChange={setStoreDropdownOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={storeDropdownOpen}
+                    className="w-full justify-between font-normal h-9 px-3"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-sm">
+                        {selectedStore
+                          ? `${selectedStore.name} — ${selectedStore.storeId}`
+                          : "Select a store"}
+                      </span>
+                    </span>
+                    <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[--radix-popover-trigger-width] p-0"
+                  align="start"
+                >
+                  <div className="border-b p-2">
+                    <Input
+                      placeholder="Search by name or number…"
+                      value={storeSearch}
+                      onChange={(e) => setStoreSearch(e.target.value)}
+                      className="h-8 text-sm"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-52 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/20">
+                    {filteredStores.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        No stores found.
+                      </p>
+                    ) : (
+                      filteredStores.map((store) => {
+                        const isSelected = store.storeId === selectedStoreId;
+                        return (
+                          <button
+                            key={store.storeId}
+                            type="button"
+                            className={`flex w-full items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
+                              isSelected
+                                ? "bg-accent text-accent-foreground"
+                                : ""
+                            }`}
+                            onClick={() => {
+                              setSelectedStoreId(store.storeId ?? "");
+                              setStoreSearch("");
+                              setStoreDropdownOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={`h-4 w-4 shrink-0 ${
+                                isSelected ? "opacity-100" : "opacity-0"
+                              }`}
+                            />
+                            <div className="flex flex-col items-start min-w-0">
+                              <span className="truncate font-medium">
+                                {store.name}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {store.storeId}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })
                     )}
-                  </AlertDescription>
-                </Alert>
-              )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
 
-              {/* ── Employee ── */}
-              <div className="space-y-2">
-                <Label>
-                  Employee <span className="text-destructive">*</span>
-                </Label>
+            {/* ── Employee ── */}
+            <div className="space-y-2">
+              <Label>
+                Employee <span className="text-destructive">*</span>
+              </Label>
+              {isLoadingEmployees ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled
+                  className="w-full justify-start font-normal h-9 px-3 text-muted-foreground"
+                >
+                  <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                  Loading employees…
+                </Button>
+              ) : (
                 <Popover
                   open={employeeDropdownOpen}
                   onOpenChange={setEmployeeDropdownOpen}
@@ -253,6 +363,7 @@ export function CreateMilestoneGiftDialog({
                       variant="outline"
                       role="combobox"
                       aria-expanded={employeeDropdownOpen}
+                      disabled={!selectedStoreId}
                       className="w-full justify-between font-normal h-9 px-3"
                     >
                       <span className="truncate text-sm">
@@ -265,7 +376,9 @@ export function CreateMilestoneGiftDialog({
                                 ? `${emp.first_name} ${emp.last_name}`
                                 : `Employee #${selectedEmployeeId}`;
                             })()
-                          : "Select an employee"}
+                          : selectedStoreId
+                            ? "Select an employee"
+                            : "Select a store first"}
                       </span>
                       <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -282,14 +395,16 @@ export function CreateMilestoneGiftDialog({
                         className="h-8 text-sm"
                       />
                     </div>
-                    <div className="max-h-56 overflow-y-auto">
+                    <div className="max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-foreground/20" onWheel={(e) => e.stopPropagation()}>
                       {(() => {
                         const filtered = employees.filter((emp) => {
                           if (!employeeSearch.trim()) return true;
                           const q = employeeSearch.toLowerCase();
                           const name =
                             `${emp.first_name} ${emp.last_name}`.toLowerCase();
-                          return name.includes(q) || String(emp.id).includes(q);
+                          return (
+                            name.includes(q) || String(emp.id).includes(q)
+                          );
                         });
                         if (filtered.length === 0) {
                           return (
@@ -330,62 +445,65 @@ export function CreateMilestoneGiftDialog({
                     </div>
                   </PopoverContent>
                 </Popover>
-              </div>
-
-              {/* ── Milestone ── */}
-              <div className="space-y-2">
-                <Label>
-                  Milestone <span className="text-destructive">*</span>
-                </Label>
-                <Select
-                  value={milestone}
-                  onValueChange={(v) => setMilestone(v as Milestone)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a milestone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MILESTONES.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* ── Milestone "Other" detail ── */}
-              {milestone === "other" && (
-                <div className="space-y-2">
-                  <Label htmlFor="milestone-other">
-                    Describe the Milestone{" "}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="milestone-other"
-                    value={milestoneOther}
-                    onChange={(e) => setMilestoneOther(e.target.value)}
-                    placeholder="e.g. Custom celebration"
-                    maxLength={255}
-                  />
-                </div>
               )}
+              {loadError && (
+                <p className="text-xs text-destructive">{loadError}</p>
+              )}
+            </div>
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClose}
-                  disabled={isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={!isFormValid || isSubmitting}>
-                  {isSubmitting ? "Submitting…" : "Create Request"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
+            {/* ── Milestone ── */}
+            <div className="space-y-2">
+              <Label>
+                Milestone <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={milestone}
+                onValueChange={(v) => setMilestone(v as Milestone)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a milestone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MILESTONES.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ── Milestone "Other" detail ── */}
+            {milestone === "other" && (
+              <div className="space-y-2">
+                <Label htmlFor="milestone-other">
+                  Describe the Milestone{" "}
+                  <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="milestone-other"
+                  value={milestoneOther}
+                  onChange={(e) => setMilestoneOther(e.target.value)}
+                  placeholder="e.g. Custom celebration"
+                  maxLength={255}
+                />
+              </div>
+            )}
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClose}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!isFormValid || isSubmitting}>
+                {isSubmitting ? "Submitting…" : "Create Request"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

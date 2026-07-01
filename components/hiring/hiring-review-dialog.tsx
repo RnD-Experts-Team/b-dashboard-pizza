@@ -17,10 +17,9 @@ import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { hiringService } from "@/lib/api/services/hiring.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-
 interface HiringReviewDialogProps {
   requestId: number | null;
+  storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -28,11 +27,11 @@ interface HiringReviewDialogProps {
 
 export function HiringReviewDialog({
   requestId,
+  storeId,
   open,
   onOpenChange,
   onSuccess,
 }: HiringReviewDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
 
   const [isCompleted, setIsCompleted] = useState(false);
   const [notes, setNotes] = useState("");
@@ -52,13 +51,13 @@ export function HiringReviewDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (requestId === null || !selectedStore?.storeId) return;
+    if (requestId === null || !storeId) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      await hiringService.submitHiringReview(selectedStore.storeId, requestId, {
+      await hiringService.submitHiringReview(storeId, requestId, {
         is_completed: isCompleted,
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       });

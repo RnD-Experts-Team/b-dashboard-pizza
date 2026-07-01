@@ -6,12 +6,14 @@ import type {
   ManagerDashboardStoreData,
   HighHoursEmployees,
   AverageHourlyPay,
+  WeeklyLabor,
 } from "@/types/employee.types";
 
 export interface UseManagerDashboardResult {
   data: ManagerDashboardStoreData | null;
   highHoursEmployees: HighHoursEmployees | null;
   averageHourlyPay: AverageHourlyPay | null;
+  weeklyLabor: WeeklyLabor | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => void;
@@ -30,6 +32,7 @@ export function useManagerDashboard(
     useState<HighHoursEmployees | null>(null);
   const [averageHourlyPay, setAverageHourlyPay] =
     useState<AverageHourlyPay | null>(null);
+  const [weeklyLabor, setWeeklyLabor] = useState<WeeklyLabor | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -54,6 +57,7 @@ export function useManagerDashboard(
         setData(response["manager-dashboard"]);
         setHighHoursEmployees(response["high-hours-employees"] ?? null);
         setAverageHourlyPay(response["average-hourly-pay"] ?? null);
+        setWeeklyLabor(response["weekly-labor"] ?? null);
       }
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -78,6 +82,7 @@ export function useManagerDashboard(
     data,
     highHoursEmployees,
     averageHourlyPay,
+    weeklyLabor,
     isLoading,
     error,
     refetch: fetchData,

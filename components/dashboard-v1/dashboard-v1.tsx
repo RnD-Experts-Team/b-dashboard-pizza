@@ -415,7 +415,7 @@ export function DashboardV1() {
       {/* <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} /> */}
 
       {/* ── Sales & Trends ───────────────────────────────────────────────── */}
-      <V1Section category="sales" weekLabel={weekLabel}>
+      <V1Section category="sales" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1SalesTrendCard sales={sales} span={2} />
         <V1StoreScoreCard
           upsellingDay={day.upselling?.total_upselling_day}
@@ -442,13 +442,14 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Operations & Speed ───────────────────────────────────────────── */}
-      <V1Section category="operations" weekLabel={weekLabel}>
+      <V1Section category="operations" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1PortalGaugeCard portal={day.portal} span={1} />
         <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} span={1} />
         <V1LaborCard
           value={day.labor}
           weeklyValue={day.labor_week_to_date}
           weeklyAvgValue={day.labor_week_to_date_avg}
+          weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
           span={1}
         />
         <V1GoToCard data={wbrData?.["go-to"]} isLoading={isLoading} span={1} />
@@ -457,7 +458,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Menu & Product ───────────────────────────────────────────────── */}
-      <V1Section category="menu" weekLabel={weekLabel}>
+      <V1Section category="menu" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1TopItemsCard
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
@@ -479,7 +480,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── People & Labor ───────────────────────────────────────────────── */}
-      <V1Section category="people" weekLabel={weekLabel}>
+      <V1Section category="people" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1CurrentEmployeesCard managerDashboard={managerDashboard} span={2} />
         <V1HighHoursCard
           data={managerDashboard.highHoursEmployees}
@@ -495,7 +496,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Finance & Cash ───────────────────────────────────────────────── */}
-      <V1Section category="finance" weekLabel={weekLabel}>
+      <V1Section category="finance" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1CashControlCard data={wbrData?.["cash-control"]} isLoading={isLoading} span={1} />
         <V1TransferInOutCard
           data={wbrData?.["transfer-in-out"]}
@@ -507,7 +508,7 @@ export function DashboardV1() {
       </V1Section>
 
       {/* ── Quality & Voice of Customer ──────────────────────────────────── */}
-      <V1Section category="quality" weekLabel={weekLabel}>
+      <V1Section category="quality" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1QaRatingsCard
           requirements={[
             {

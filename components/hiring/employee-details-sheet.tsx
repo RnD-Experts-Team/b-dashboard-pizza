@@ -34,7 +34,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { employeeService } from "@/lib/api/services/employee.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import type { EmployeeV1DetailRecord } from "@/types/employee.types";
 
@@ -54,6 +53,7 @@ function formatFileSize(bytes?: number | null): string | null {
 
 interface EmployeeDetailsSheetProps {
   employeeId: number | null;
+  storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -124,10 +124,10 @@ function formatSSN(ssn: string | null | undefined, visible: boolean): string {
 
 export function EmployeeDetailsSheet({
   employeeId,
+  storeId,
   open,
   onOpenChange,
 }: EmployeeDetailsSheetProps) {
-  const { selectedStore } = useSelectedStoreStore();
   const { idTypes, attachmentTypes } = useReferenceCatalogStore();
   const [data, setData] = useState<EmployeeV1DetailRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -135,7 +135,7 @@ export function EmployeeDetailsSheet({
   const [ssnVisible, setSsnVisible] = useState(false);
 
   useEffect(() => {
-    if (!open || employeeId === null || !selectedStore?.storeId) {
+    if (!open || employeeId === null || !storeId) {
       setData(null);
       setError(null);
       setIsLoading(false);
@@ -148,7 +148,7 @@ export function EmployeeDetailsSheet({
     setData(null);
 
     employeeService
-      .getEmployeeDetailsV1(selectedStore.storeId, employeeId)
+      .getEmployeeDetailsV1(storeId, employeeId)
       .then((res) => {
         if (!cancelled) setData(res.data);
       })
@@ -163,7 +163,7 @@ export function EmployeeDetailsSheet({
     return () => {
       cancelled = true;
     };
-  }, [open, employeeId, selectedStore?.storeId]);
+  }, [open, employeeId, storeId]);
 
   const fullName = data
     ? [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ")

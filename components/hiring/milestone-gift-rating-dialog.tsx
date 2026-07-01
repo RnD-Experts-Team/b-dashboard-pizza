@@ -17,12 +17,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { milestoneGiftService } from "@/lib/api/services/milestone-gift.service";
-import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
 import type { MilestoneGiftQuestion } from "@/types/milestone-gift.types";
 
 interface MilestoneGiftRatingDialogProps {
   requestId: number | null;
+  storeId: string;
+  employeeName?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
@@ -30,11 +31,12 @@ interface MilestoneGiftRatingDialogProps {
 
 export function MilestoneGiftRatingDialog({
   requestId,
+  storeId,
+  employeeName,
   open,
   onOpenChange,
   onSuccess,
 }: MilestoneGiftRatingDialogProps) {
-  const { selectedStore } = useSelectedStoreStore();
 
   const [questions, setQuestions] = useState<MilestoneGiftQuestion[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -56,7 +58,7 @@ export function MilestoneGiftRatingDialog({
 
   // Fetch the store's active questions when the dialog opens
   useEffect(() => {
-    if (!open || !selectedStore?.storeId) return;
+    if (!open || !storeId) return;
     let cancelled = false;
     setIsLoadingData(true);
     setLoadError(null);
@@ -64,7 +66,7 @@ export function MilestoneGiftRatingDialog({
     setAdditionalComments("");
 
     milestoneGiftService
-      .getStoreQuestions(selectedStore.storeId)
+      .getStoreQuestions(storeId)
       .then((qs) => {
         if (cancelled) return;
         setQuestions([...qs].sort((a, b) => a.sort_order - b.sort_order));
@@ -83,7 +85,7 @@ export function MilestoneGiftRatingDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, selectedStore?.storeId]);
+  }, [open, storeId]);
 
   function toggleOption(
     question: MilestoneGiftQuestion,
@@ -116,20 +118,12 @@ export function MilestoneGiftRatingDialog({
     e.preventDefault();
     if (!isFormValid || requestId === null) return;
 
-    if (!selectedStore?.storeId) {
-      setError({
-        message: "No store selected. Please select a store from the sidebar.",
-        details: [],
-      });
-      return;
-    }
-
     setIsSubmitting(true);
     setError(null);
 
     try {
       await milestoneGiftService.submitRating(
-        selectedStore.storeId,
+        storeId,
         requestId,
         {
           answers: questions.map((q) => ({
@@ -164,6 +158,22 @@ export function MilestoneGiftRatingDialog({
             Answer the questions about this employee to advance the request.
           </DialogDescription>
         </DialogHeader>
+
+        {(employeeName || storeId) && (
+          <div className="flex items-center gap-3 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            {employeeName && (
+              <span className="font-medium truncate">{employeeName}</span>
+            )}
+            {employeeName && storeId && (
+              <span className="text-muted-foreground shrink-0">·</span>
+            )}
+            {storeId && (
+              <span className="font-mono text-xs text-muted-foreground shrink-0">
+                {storeId}
+              </span>
+            )}
+          </div>
+        )}
 
         {loadError && (
           <Alert variant="destructive">

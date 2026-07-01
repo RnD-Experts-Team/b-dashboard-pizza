@@ -18,7 +18,6 @@ import {
   V1Metric,
   V1MetricGrid,
   V1DataRow,
-  V1Progress,
   V1SubLabel,
   V1Empty,
   V1_TBL,
@@ -82,7 +81,6 @@ export function V1PromoCard({
     })),
     ...(others > 0 ? [{ label: "Others", value: others }] : []),
   ];
-  const maxGroup = Math.max(...groupRows.map((g) => g.value), 1);
   const storeSales = current_week.total_store_sales || 1;
 
   // Full ungrouped current-week breakdown for the dialog (sorted desc).
@@ -143,19 +141,17 @@ export function V1PromoCard({
             <V1SubLabel className="mb-1">Top Promo Groups</V1SubLabel>
             <div className="space-y-1.5">
               {groupRows.map((g) => (
-                <div key={g.label} className="space-y-0.5">
-                  <V1DataRow
-                    label={g.label}
-                    value={fmt$(g.value)}
-                    trailing={
-                      <span className="text-[10px] text-muted-foreground">
-                        {fmtPct((g.value / storeSales) * 100)}
-                      </span>
-                    }
-                    className="border-0 py-0"
-                  />
-                  <V1Progress value={g.value} max={maxGroup} category="menu" />
-                </div>
+                <V1DataRow
+                  key={g.label}
+                  label={g.label}
+                  value={fmt$(g.value)}
+                  trailing={
+                    <span className="text-[10px] text-muted-foreground">
+                      {fmtPct((g.value / storeSales) * 100)}
+                    </span>
+                  }
+                  className="border-0 py-0"
+                />
               ))}
             </div>
           </div>

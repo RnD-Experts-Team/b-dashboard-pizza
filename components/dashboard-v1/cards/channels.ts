@@ -2,6 +2,7 @@ import type { DsprChannelSales } from "@/types/dspr.types";
 
 /** Sales channels shared by the channel-mix and hourly charts. */
 export const CHANNELS: { key: keyof DsprChannelSales; label: string; color: string }[] = [
+  { key: "royalty_obligation", label: "Register", color: "#FF6B35" },
   { key: "phone_sales", label: "Phone", color: "#0ea5e9" },
   { key: "call_center_sales", label: "Call Center", color: "#14b8a6" },
   { key: "drive_thru_sales", label: "Drive-Thru", color: "#ec4899" },

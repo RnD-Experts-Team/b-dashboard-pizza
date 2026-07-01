@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -35,6 +35,7 @@ import { SeparationReviewDialog } from "@/components/hiring/separation-review-di
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
 import type { StoreRequest } from "@/types/hiring.types";
 import type {
   SeparationType,
@@ -81,6 +82,7 @@ function SepTableSkeleton() {
         <TableHeader>
           <TableRow>
             {["Final Work Date",
+              "Store #",
               "Employee",
               "Separation Type",
               "Reason",
@@ -127,6 +129,43 @@ export function SeparationRequestTab({
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewSeparationId, setReviewSeparationId] = useState<number | null>(null);
 
+  /* Store number resolved from the row, used for all action dialogs */
+  const [actionStoreId, setActionStoreId] = useState<string>("");
+
+  const validStoreIds = useMemo(
+    () => new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : []))),
+    [overviewStores],
+  );
+
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
+    const valid = new Set((overviewStores ?? []).flatMap((s) => (s.storeId ? [s.storeId] : [])));
+    const fallback = [...valid];
+    try {
+      const raw = localStorage.getItem("store-filter:separation");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clamped = (parsed as string[]).filter((id) => valid.has(id));
+          if (clamped.length > 0) return clamped;
+        }
+      }
+    } catch {}
+    return fallback;
+  });
+
+  useEffect(() => {
+    if (validStoreIds.size === 0) return;
+    setSelectedStoreIds((prev) => {
+      const clamped = prev.filter((id) => validStoreIds.has(id));
+      return clamped.length > 0 ? clamped : [...validStoreIds];
+    });
+  }, [validStoreIds]);
+
+  function handleStoreApply(ids: string[]) {
+    setSelectedStoreIds(ids);
+    try { localStorage.setItem("store-filter:separation", JSON.stringify(ids)); } catch {}
+  }
+
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
@@ -137,7 +176,11 @@ export function SeparationRequestTab({
 
   const fetchData = useCallback(
     async (targetPage: number) => {
-      if (!selectedStore?.storeId) return;
+      if (selectedStoreIds.length === 0) {
+        setRows([]);
+        setIsLoading(false);
+        return;
+      }
 
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -147,8 +190,8 @@ export function SeparationRequestTab({
       setError(null);
 
       try {
-        const res = await hiringService.getStoreRequests(
-          selectedStore.storeId,
+        const res = await hiringService.getRequests(
+          selectedStoreIds,
           targetPage,
           controller.signal,
         );
@@ -166,7 +209,7 @@ export function SeparationRequestTab({
         setIsLoading(false);
       }
     },
-    [selectedStore?.storeId],
+    [selectedStoreIds],
   );
 
   useEffect(() => {
@@ -190,25 +233,32 @@ export function SeparationRequestTab({
   return (
     <div className="flex flex-col gap-4">
       {/* Actions row */}
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => fetchData(page)}
-          disabled={isLoading}
-          aria-label="Refresh"
-        >
-          <RefreshCw
-            className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
-          />
-        </Button>
-        {canCreateSeparationRequest && (
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="me-2 h-4 w-4" />
-            <span className="hidden sm:inline">Create Separation Request</span>
-            <span className="sm:hidden">New</span>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <StoreMultiSelect
+          stores={(overviewStores ?? []).flatMap((s) => s.storeId ? [{ storeId: s.storeId, name: s.name }] : [])}
+          value={selectedStoreIds}
+          onApply={handleStoreApply}
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => fetchData(page)}
+            disabled={isLoading}
+            aria-label="Refresh"
+          >
+            <RefreshCw
+              className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+            />
           </Button>
-        )}
+          {canCreateSeparationRequest && (
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="me-2 h-4 w-4" />
+              <span className="hidden sm:inline">Create Separation Request</span>
+              <span className="sm:hidden">New</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Error */}
@@ -245,6 +295,7 @@ export function SeparationRequestTab({
             <TableHeader>
               <TableRow>
                 <TableHead>Final Work Date</TableHead>
+                <TableHead>Store #</TableHead>
                 <TableHead>Employee</TableHead>
                 <TableHead>Separation Type</TableHead>
                 <TableHead>Reason</TableHead>
@@ -271,6 +322,9 @@ export function SeparationRequestTab({
                       {sep?.final_working_day
                         ? new Date(sep.final_working_day).toLocaleDateString()
                         : "—"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap font-mono text-xs">
+                      {sep?.store?.store_number ?? "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {sep?.employee
@@ -310,20 +364,22 @@ export function SeparationRequestTab({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
+                          {/* <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditSeparationId(req.id);
+                              setActionStoreId(req.separation_request?.store?.store_number ?? "");
                               setEditDialogOpen(true);
                             }}
                           >
                             <Pencil className="me-2 h-4 w-4" />
                             Edit
-                          </DropdownMenuItem>
+                          </DropdownMenuItem> */}
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               setReviewSeparationId(req.id);
+                              setActionStoreId(req.separation_request?.store?.store_number ?? "");
                               setReviewDialogOpen(true);
                             }}
                           >
@@ -373,6 +429,7 @@ export function SeparationRequestTab({
 
       <EditSeparationRequestDialog
         separationId={editSeparationId}
+        storeId={actionStoreId}
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         onSuccess={() => fetchData(page)}
@@ -387,6 +444,7 @@ export function SeparationRequestTab({
 
       <SeparationReviewDialog
         separationId={reviewSeparationId}
+        storeId={actionStoreId}
         open={reviewDialogOpen}
         onOpenChange={setReviewDialogOpen}
         onSuccess={() => fetchData(page)}

@@ -275,6 +275,20 @@ export interface EmployeeV1Record {
   employment_type: string | null;
   created_at: string;
   updated_at: string;
+  latest_store?: {
+    id: number;
+    store_id: number;
+    employee_id: number;
+    effective_date: string;
+    created_at: string | null;
+    updated_at: string | null;
+    store: {
+      id: number;
+      store_number: string;
+      created_at: string | null;
+      updated_at: string | null;
+    };
+  } | null;
 }
 
 export interface EmployeesV1PaginatedResponse {
@@ -754,9 +768,21 @@ export interface AverageHourlyPay {
   labor: number;
 }
 
+export interface WeeklyLaborEntry {
+  week_start: string;
+  week_end: string;
+  labor: number | null;
+}
+
+export interface WeeklyLabor {
+  store: string;
+  entries: WeeklyLaborEntry[];
+}
+
 export interface HiringReportsResponse {
   "manager-dashboard": ManagerDashboardStoreData;
   "high-hours-employees": HighHoursEmployees;
   "average-hourly-pay": AverageHourlyPay;
+  "weekly-labor"?: WeeklyLabor;
 }
 
