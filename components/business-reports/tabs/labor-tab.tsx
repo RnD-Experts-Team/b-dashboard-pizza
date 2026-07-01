@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Cake } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StoreNav, type StoreNavItem } from "../store-nav";
@@ -19,6 +19,7 @@ import type {
   V1StoreReport,
 } from "@/types/business-reports.types";
 import { TabEmpty, TabError } from "../states";
+import { ExpandChevronButton, useExpandedRows } from "../expandable-row";
 
 interface Props {
   data: V1ReportsResponse | null;
@@ -38,6 +39,7 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
   const avgPay = report["average-hourly-pay"]?.employees ?? [];
   const roster = report["manager-dashboard"]?.employees ?? [];
   const birthdays = roster.filter((e) => e.birthday?.is_upcoming);
+  const rosterExpand = useExpandedRows();
 
   return (
     <ReportCard
@@ -67,37 +69,79 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
                 </tr>
               </thead>
               <tbody>
-                {roster.map((e) => (
-                  <tr key={e.employee_id}>
-                    <td className={TD}>
-                      {[e.name?.first, e.name?.middle, e.name?.last]
-                        .filter(Boolean)
-                        .join(" ")}
-                    </td>
-                    <td className={TD}>{e.position ?? "—"}</td>
-                    <td className={cn(TD, NUM)}>
-                      {e.base_pay ? fmt$2(Number(e.base_pay)) : "—"}
-                    </td>
-                    <td className={cn(TD, NUM)}>
-                      {e.performance_pay ? fmt$2(Number(e.performance_pay)) : "—"}
-                    </td>
-                    <td className={TD}>
-                      <Chip tone={e.status === "active" ? "ok" : "muted"}>
-                        {e.status}
-                      </Chip>
-                    </td>
-                    <td className={TD}>
-                      {e.birthday?.is_upcoming ? (
-                        <Chip tone="info">
-                          <Cake className="h-3 w-3" />
-                          {e.birthday.days_until}d · turns {e.birthday.turns_age}
-                        </Chip>
-                      ) : (
-                        "—"
+                {roster.map((e) => {
+                  const metrics = e.metrics ?? [];
+                  const open = rosterExpand.isExpanded(String(e.employee_id));
+                  return (
+                    <Fragment key={e.employee_id}>
+                      <tr>
+                        <td className={TD}>
+                          <ExpandChevronButton
+                            expanded={open}
+                            onClick={() => rosterExpand.toggle(String(e.employee_id))}
+                          />
+                          {[e.name?.first, e.name?.middle, e.name?.last]
+                            .filter(Boolean)
+                            .join(" ")}
+                        </td>
+                        <td className={TD}>{e.position ?? "—"}</td>
+                        <td className={cn(TD, NUM)}>
+                          {e.base_pay ? fmt$2(Number(e.base_pay)) : "—"}
+                        </td>
+                        <td className={cn(TD, NUM)}>
+                          {e.performance_pay ? fmt$2(Number(e.performance_pay)) : "—"}
+                        </td>
+                        <td className={TD}>
+                          <Chip tone={e.status === "active" ? "ok" : "muted"}>
+                            {e.status}
+                          </Chip>
+                        </td>
+                        <td className={TD}>
+                          {e.birthday?.is_upcoming ? (
+                            <Chip tone="info">
+                              <Cake className="h-3 w-3" />
+                              {e.birthday.days_until}d · turns {e.birthday.turns_age}
+                            </Chip>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr>
+                          <td colSpan={6} className="bg-muted/20 p-2">
+                            {metrics.length === 0 ? (
+                              <p className="p-2 text-xs text-muted-foreground">
+                                No per-day metrics for this employee.
+                              </p>
+                            ) : (
+                              <table className={TBL}>
+                                <thead>
+                                  <tr>
+                                    <th className={TH}>Date</th>
+                                    <th className={TH}>Metric</th>
+                                    <th className={cn(TH, NUM)}>Value</th>
+                                    <th className={cn(TH, NUM)}>Numeric</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {metrics.map((m, i) => (
+                                    <tr key={`${m.metric_date}-${m.label}-${i}`}>
+                                      <td className={TD}>{m.metric_date}</td>
+                                      <td className={TD}>{m.label}</td>
+                                      <td className={cn(TD, NUM)}>{m.value}</td>
+                                      <td className={cn(TD, NUM)}>{m.value_numeric}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </TblWrap>
@@ -189,6 +233,7 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
                   <th className={TH}>Employee</th>
                   <th className={TH}>Position</th>
                   <th className={cn(TH, NUM)}>Hours</th>
+                  <th className={cn(TH, NUM)}>Hourly Pay</th>
                   <th className={cn(TH, NUM)}>Gross Pay</th>
                 </tr>
               </thead>
@@ -200,6 +245,9 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
                     </td>
                     <td className={TD}>{e.position ?? "—"}</td>
                     <td className={cn(TD, NUM)}>{e.total_hours ?? "—"}</td>
+                    <td className={cn(TD, NUM)}>
+                      {e.hourly_pay === null ? "—" : fmt$2(e.hourly_pay)}
+                    </td>
                     <td className={cn(TD, NUM)}>
                       {e.gross_pay === null ? "—" : fmt$2(e.gross_pay)}
                     </td>

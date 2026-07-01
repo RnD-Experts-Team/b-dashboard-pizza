@@ -26,7 +26,6 @@ import {
   HardHat,
   ClipboardCheck,
   FolderPlus,
-  FileText,
   List,
   Landmark,
   Camera,
@@ -235,6 +234,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     requirements: [
       { service: "Data", method: "GET", path: "/reports/dspr/", storeId: effectiveStoreId },
     ],
+  };
+
+  const businessReportsItem: NavItem = {
+    title: "Business Reports",
+    href: `/${locale}/dashboard/business-reports`,
+    icon: BarChart3,
+    // No auth rule defined yet — always visible for stores the user can access.
   };
 
   // const maintenanceItem: NavItem = {
@@ -465,42 +471,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
-  const Reports: NavGroup = {
-    label: "Reports",
-    icon: FileText,
-    items: [
-      // {
-      //   title: "Business Reports",
-      //   href: `/${locale}/dashboard/business-reports`,
-      //   icon: BarChart3,
-      //   // No auth rule defined yet — always visible for stores the user can access.
-      // },
-      // {
-      //   title: "WBR Reports",
-      //   href: `/${locale}/dashboard/wbr-reports`,
-      //   icon: BarChart3,
-      // },
-      // {
-      //   title: t("maintenance"),
-      //   href: `/${locale}/dashboard/maintenance`,
-      //   icon: HardHat,
-      //   requirements: [
-      //     { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
-      //   ],
-      //   // No rule or management permission defined yet — always visible
-      // },
-      // {
-      //   title: t("maintenanceTickets"),
-      //   href: `/${locale}/dashboard/maintenance-tickets`,
-      //   icon: Ticket,
-      //   requirements: [
-      //     { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
-      //   ],
-      // },
-      
-    ],
-  };
-
   const Maintenance: NavGroup = {
     label: "Maintenance",
     icon: Wrench,
@@ -623,7 +593,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleUserManagementGroup = filterGroup(userManagementGroup);
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
   const visibleDataManagementGroup = filterGroup(dataManagementGroup);
-  const visibleReports = filterGroup(Reports);
   const visibleMaintenance = filterGroup(Maintenance);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
@@ -758,6 +727,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
+          {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
+          {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}
+
           {/* 1·V1. Dashboard V1 (optimized) */}
            {/* {isNavItemVisible(dashboardV1Item) && renderNavLink(dashboardV1Item)} */}
 
@@ -811,16 +783,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 6. Reports */}
-          {visibleReports && (
-            <SidebarNavGroup
-              group={visibleReports}
-              pathname={pathname}
-              locale={locale}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          )}
 {/* 6. Maintenance */}
           {visibleMaintenance && (
             <SidebarNavGroup
