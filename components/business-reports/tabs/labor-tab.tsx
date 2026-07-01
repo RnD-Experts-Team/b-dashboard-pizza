@@ -20,6 +20,13 @@ import type {
 } from "@/types/business-reports.types";
 import { TabEmpty, TabError } from "../states";
 import { ExpandChevronButton, useExpandedRows } from "../expandable-row";
+import { CATEGORIES as REPORT_COLORS } from "@/components/dashboard-v1/category";
+
+const PEOPLE = REPORT_COLORS.people;
+const SUB_LABEL = cn(
+  "text-[11px] font-semibold uppercase tracking-wide",
+  PEOPLE.headerText,
+);
 
 interface Props {
   data: V1ReportsResponse | null;
@@ -47,12 +54,11 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
       hint={`${roster.length} employees`}
       className="lg:col-span-2"
       bodyClassName="grid gap-4 p-4 lg:grid-cols-2"
+      accent={PEOPLE}
     >
       {/* Employee roster (full manager-dashboard) */}
       <div className="space-y-2 lg:col-span-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Employee Roster
-        </p>
+        <p className={SUB_LABEL}>Employee Roster</p>
         {roster.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No employees.</p>
         ) : (
@@ -150,9 +156,7 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
 
       {/* Weekly labor */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Weekly Labor
-        </p>
+        <p className={SUB_LABEL}>Weekly Labor</p>
         <TblWrap>
           <table className={TBL}>
             <thead>
@@ -181,9 +185,7 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
 
       {/* Average hourly pay */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Hourly Pay &amp; Labor
-        </p>
+        <p className={SUB_LABEL}>Hourly Pay &amp; Labor</p>
         <TblWrap>
           <table className={TBL}>
             <thead>
@@ -220,9 +222,7 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
 
       {/* High-hours employees */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          High-Hours Employees (60h+)
-        </p>
+        <p className={SUB_LABEL}>High-Hours Employees (60h+)</p>
         {highHours.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">None in range.</p>
         ) : (
@@ -261,9 +261,7 @@ function StoreLaborBlock({ storeNum, report }: { storeNum: string; report: V1Sto
 
       {/* Upcoming birthdays */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Upcoming Birthdays
-        </p>
+        <p className={SUB_LABEL}>Upcoming Birthdays</p>
         {birthdays.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">None upcoming.</p>
         ) : (

@@ -31,6 +31,7 @@ import type {
 } from "@/types/business-reports.types";
 import { TabEmpty, TabError } from "../states";
 import { ExpandChevronButton, useExpandedRows } from "../expandable-row";
+import { CATEGORIES as REPORT_COLORS } from "@/components/dashboard-v1/category";
 
 interface Props {
   data: MultiDashboardResponse | null;
@@ -333,6 +334,7 @@ export function SalesOpsTab({ data, error }: Props) {
         title="Store Performance"
         hint={`${storeRows.length} store${storeRows.length === 1 ? "" : "s"} · click a row to expand daily detail`}
         className="lg:col-span-2"
+        accent={REPORT_COLORS.sales}
       >
         <TblWrap tall>
           <table className={TBL}>
@@ -402,7 +404,11 @@ export function SalesOpsTab({ data, error }: Props) {
       </ReportCard>
 
       {/* Channel mix */}
-      <ReportCard title="Channel Mix" hint="Sales by ordering channel">
+      <ReportCard
+        title="Channel Mix"
+        hint="Sales by ordering channel"
+        accent={REPORT_COLORS.sales}
+      >
         <div className="space-y-2.5 p-4">
           {channels.map(([label, sales, orders]) => (
             <div key={label} className="flex items-center gap-3 text-[12.5px]">
@@ -422,7 +428,11 @@ export function SalesOpsTab({ data, error }: Props) {
       </ReportCard>
 
       {/* Fulfillment split */}
-      <ReportCard title="Fulfillment Split" hint="Delivery vs Carryout">
+      <ReportCard
+        title="Fulfillment Split"
+        hint="Delivery vs Carryout"
+        accent={REPORT_COLORS.operations}
+      >
         <TblWrap>
           <table className={TBL}>
             <thead>
@@ -464,6 +474,7 @@ export function SalesOpsTab({ data, error }: Props) {
         title="Product Category Mix"
         hint="Sales by category × fulfillment"
         className="lg:col-span-2"
+        accent={REPORT_COLORS.menu}
       >
         <TblWrap>
           <table className={TBL}>
@@ -492,7 +503,11 @@ export function SalesOpsTab({ data, error }: Props) {
       </ReportCard>
 
       {/* Tips & cash control */}
-      <ReportCard title="Tips & Cash" hint="Tips, cash and reconciliation">
+      <ReportCard
+        title="Tips & Cash"
+        hint="Tips, cash and reconciliation"
+        accent={REPORT_COLORS.finance}
+      >
         <TblWrap>
           <table className={TBL}>
             <tbody>
@@ -526,7 +541,11 @@ export function SalesOpsTab({ data, error }: Props) {
       </ReportCard>
 
       {/* Order quality & adjustments */}
-      <ReportCard title="Order Quality & Adjustments" hint="Royalty, cancellations & modifications">
+      <ReportCard
+        title="Order Quality & Adjustments"
+        hint="Royalty, cancellations & modifications"
+        accent={REPORT_COLORS.quality}
+      >
         <TblWrap>
           <table className={TBL}>
             <tbody>
@@ -548,7 +567,11 @@ export function SalesOpsTab({ data, error }: Props) {
       </ReportCard>
 
       {/* Portal / digital / HNR operations */}
-      <ReportCard title="Portal & HNR Operations" hint="Fulfillment quality">
+      <ReportCard
+        title="Portal & HNR Operations"
+        hint="Fulfillment quality"
+        accent={REPORT_COLORS.operations}
+      >
         <TblWrap>
           <table className={TBL}>
             <tbody>
@@ -582,7 +605,11 @@ export function SalesOpsTab({ data, error }: Props) {
       </ReportCard>
 
       {/* Per-store/day averages */}
-      <ReportCard title="Per-Store/Day Averages" hint="Normalized across stores & days">
+      <ReportCard
+        title="Per-Store/Day Averages"
+        hint="Normalized across stores & days"
+        accent={REPORT_COLORS.sales}
+      >
         <TblWrap>
           <table className={TBL}>
             <tbody>
@@ -616,6 +643,7 @@ export function SalesOpsTab({ data, error }: Props) {
         title="Daily Trend"
         hint={`${dateRows.length} day${dateRows.length === 1 ? "" : "s"} · click a row to expand store detail`}
         className="lg:col-span-2"
+        accent={REPORT_COLORS.sales}
       >
         <TblWrap tall>
           <table className={TBL}>

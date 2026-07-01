@@ -20,6 +20,12 @@ import type {
 } from "@/types/business-reports.types";
 import { TabEmpty, TabError } from "../states";
 import { ExpandChevronButton, useExpandedRows } from "../expandable-row";
+import { CATEGORIES as REPORT_COLORS } from "@/components/dashboard-v1/category";
+
+const QUALITY = REPORT_COLORS.quality;
+const FINANCE = REPORT_COLORS.finance;
+const subLabel = (cat: typeof QUALITY) =>
+  cn("text-[11px] font-semibold uppercase tracking-wide", cat.headerText);
 
 interface Props {
   data: WbrBulkResponse | null;
@@ -43,12 +49,11 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
       hint={`${feedbacks.length} feedback · ${complaints.length} complaints · ${money_owed.length} expenses`}
       className="lg:col-span-2"
       bodyClassName="grid gap-4 p-4"
+      accent={QUALITY}
     >
       {/* Employee feedback */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Employee Feedback
-        </p>
+        <p className={subLabel(QUALITY)}>Employee Feedback</p>
         {feedbacks.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No feedback.</p>
         ) : (
@@ -97,9 +102,7 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
 
       {/* Complaints */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Complaints
-        </p>
+        <p className={subLabel(QUALITY)}>Complaints</p>
         {complaints.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No complaints.</p>
         ) : (
@@ -159,9 +162,7 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
 
       {/* Money owed */}
       <div className="space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Money Owed
-        </p>
+        <p className={subLabel(FINANCE)}>Money Owed</p>
         {money_owed.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No expenses.</p>
         ) : (
