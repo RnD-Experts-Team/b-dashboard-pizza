@@ -38,7 +38,7 @@ export function StoreNav({
   value,
   onChange,
   allowAll = true,
-  allLabel = "All",
+  allLabel = "All Stores",
 }: StoreNavProps) {
   const [query, setQuery] = React.useState("");
 

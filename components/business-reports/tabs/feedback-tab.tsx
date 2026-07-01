@@ -212,12 +212,7 @@ export function FeedbackTab({ data, error }: Props) {
 
   return (
     <div className="space-y-4">
-      <StoreNav
-        items={navItems}
-        value={effective}
-        onChange={setSel}
-        allLabel={`All (${stores.length})`}
-      />
+      <StoreNav items={navItems} value={effective} onChange={setSel} />
       <div className="grid gap-4 lg:grid-cols-2">
         {shown.map((store) => (
           <StoreFeedbackBlock key={store.store_number} store={store} />

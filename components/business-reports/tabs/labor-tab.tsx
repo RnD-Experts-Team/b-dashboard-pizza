@@ -252,7 +252,6 @@ export function LaborTab({ data, error }: Props) {
           key: id,
           code: shortStore(id),
           label: `Store ${shortStore(id)} · ${id}`,
-          badge: count,
           muted: count === 0,
         };
       }),
@@ -273,12 +272,7 @@ export function LaborTab({ data, error }: Props) {
 
   return (
     <div className="space-y-4">
-      <StoreNav
-        items={navItems}
-        value={effective}
-        onChange={setSel}
-        allLabel={`All (${entries.length})`}
-      />
+      <StoreNav items={navItems} value={effective} onChange={setSel} />
       <div className="grid gap-4 lg:grid-cols-2">
         {shown.map(([storeNum, report]) => (
           <StoreLaborBlock key={storeNum} storeNum={storeNum} report={report} />
