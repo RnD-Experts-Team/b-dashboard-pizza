@@ -469,6 +469,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     label: "Reports",
     icon: FileText,
     items: [
+      {
+        title: "Business Reports",
+        href: `/${locale}/dashboard/business-reports`,
+        icon: BarChart3,
+        // No auth rule defined yet — always visible for stores the user can access.
+      },
       // {
       //   title: "WBR Reports",
       //   href: `/${locale}/dashboard/wbr-reports`,
