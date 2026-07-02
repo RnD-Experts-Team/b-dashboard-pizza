@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { V1Section } from "./v1-section";
 import {
   V1SalesTrendCard,
+  V1SalesHistoryCard,
   V1ChannelMixCard,
   V1HourlyChannelsCard,
   V1StoreScoreCard,
@@ -439,6 +440,7 @@ export function DashboardV1() {
         />
         <V1OrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} isLoading={isLoading} span={2} />
         <V1ChannelSalesWeeklyCard data={wbrData?.["channel-sales"]} isLoading={isLoading} span={2} />
+        <V1SalesHistoryCard data={wbrData?.["sales-history"]} isLoading={isLoading} span={4} />
       </V1Section>
 
       {/* ── Operations & Speed ───────────────────────────────────────────── */}

@@ -18,6 +18,7 @@ import {
   PortalOnTimeDualGauge,
   StoreScoreCard,
   LaborGauge,
+  SalesHistoryCard,
   DsprDashboardSkeleton,
   RecentMaintenanceTable,
   CurrentEmployeesTable,
@@ -828,6 +829,11 @@ export function DsprDashboard() {
           weeklyAvgValue={day.labor_week_to_date_avg}
           weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
         />
+      </div>
+
+      {/* ── Sales History ─────────────────────────────────────────── */}
+      <div data-guide-id="dspr-sales-history">
+        <SalesHistoryCard data={wbrData?.["sales-history"]} isLoading={isLoading} />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}

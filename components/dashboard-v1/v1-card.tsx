@@ -16,18 +16,19 @@ import { CATEGORIES, PERIOD_LABEL, type CategoryKey, type Period } from "./categ
  *  they have a detail view, own their own dialog + pass `onExpand`.
  * ────────────────────────────────────────────────────────────────────────── */
 
-const SPAN_CLASS: Record<1 | 2 | 3, string> = {
+const SPAN_CLASS: Record<1 | 2 | 3 | 4, string> = {
   1: "col-span-1 md:col-span-1 lg:col-span-1",
   2: "col-span-1 md:col-span-1 lg:col-span-2",
   3: "col-span-1 md:col-span-1 lg:col-span-3",
+  4: "col-span-1 md:col-span-2 lg:col-span-4",
 };
 
 export interface V1CardProps {
   title: string;
   category: CategoryKey;
   period: Period;
-  /** Grid column span — never 4. */
-  span?: 1 | 2 | 3;
+  /** Grid column span. Reserve 4 (full-width) for a rare, deliberately bigger feature card. */
+  span?: 1 | 2 | 3 | 4;
   /** Right-aligned note in the header (e.g. a week range). */
   headerNote?: ReactNode;
   /** Inline control rendered after the period badge (e.g. a Day/WTD toggle). */
@@ -36,6 +37,8 @@ export interface V1CardProps {
   onExpand?: () => void;
   /** Override the default fixed height (e.g. for chart cards). */
   bodyClassName?: string;
+  /** Override the default 280px card height, in pixels. */
+  height?: number;
   className?: string;
   children: ReactNode;
 }
@@ -49,6 +52,7 @@ export function V1Card({
   headerControl,
   onExpand,
   bodyClassName,
+  height,
   className,
   children,
 }: V1CardProps) {
@@ -59,8 +63,10 @@ export function V1Card({
   return (
     <Card
       onClick={onExpand}
+      style={height ? { height } : undefined}
       className={cn(
-        "flex h-[280px] flex-col gap-0 overflow-hidden border-l-2 py-1.5 transition-shadow",
+        "flex flex-col gap-0 overflow-hidden border-l-2 py-1.5 transition-shadow",
+        !height && "h-[280px]",
         cat.cardBorder ?? "border-none",
         cat.border,
         cat.gradient,

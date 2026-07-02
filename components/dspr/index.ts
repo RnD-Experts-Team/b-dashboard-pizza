@@ -31,3 +31,4 @@ export { WbrFeedbacksCard } from "./wbr-feedbacks-card";
 export { WbrMoneyOwedCard } from "./wbr-money-owed-card";
 export { WbrOrdersVsSalesCard } from "./wbr-orders-vs-sales-card";
 export { WbrTransferInOutCard } from "./wbr-transfer-in-out-card";
+export { SalesHistoryCard } from "./sales-history-card";
