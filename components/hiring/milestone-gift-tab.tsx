@@ -45,7 +45,9 @@ import { MilestoneGiftQuestionsCatalog } from "@/components/hiring/milestone-gif
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { useHiringActionStore } from "@/lib/store/hiring-action.store";
 import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
+import { cn } from "@/lib/utils";
 import type { StoreRequest } from "@/types/hiring.types";
 import type {
   Milestone,
@@ -178,6 +180,26 @@ export function MilestoneGiftTab({
     try { localStorage.setItem("store-filter:milestone-gift", JSON.stringify(ids)); } catch {}
   }
 
+  // ── Deep-link from a milestone_gift_request notification ────────────────
+  const pendingHiringAction = useHiringActionStore((s) => s.pendingHiringAction);
+  const clearPendingHiringAction = useHiringActionStore((s) => s.clearPendingHiringAction);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<number | null>(null);
+  const [pendingHighlightId, setPendingHighlightId] = useState<number | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
+
+  // Effect A: apply the store filter, stash the target id locally
+  useEffect(() => {
+    if (!pendingHiringAction || pendingHiringAction.tab !== "milestone_gift") return;
+    if (!validStoreIds.has(pendingHiringAction.storeNumber)) {
+      clearPendingHiringAction();
+      return;
+    }
+    handleStoreApply([pendingHiringAction.storeNumber]);
+    setPendingHighlightId(pendingHiringAction.requestId);
+    clearPendingHiringAction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingHiringAction, validStoreIds, clearPendingHiringAction]);
+
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
@@ -251,6 +273,21 @@ export function MilestoneGiftTab({
       abortRef.current?.abort();
     };
   }, [active, fetchData]);
+
+  // Effect B: once the (re-)filtered rows land, highlight the matching row for 1.5s
+  useEffect(() => {
+    if (pendingHighlightId === null || !isInitialLoadComplete || isLoading) return;
+    const target = rows.find((r) => r.milestone_gift_request?.id === pendingHighlightId);
+    setPendingHighlightId(null);
+    if (target) {
+      setHighlightedRequestId(target.id);
+      if (highlightTimeoutRef.current != null) window.clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = window.setTimeout(() => {
+        setHighlightedRequestId(null);
+        highlightTimeoutRef.current = null;
+      }, 1500);
+    }
+  }, [rows, pendingHighlightId, isInitialLoadComplete, isLoading]);
 
   const isEmpty =
     isInitialLoadComplete && !isLoading && !error && rows.length === 0;
@@ -411,7 +448,10 @@ export function MilestoneGiftTab({
                 return (
                   <TableRow
                     key={req.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50 transition-shadow",
+                      highlightedRequestId === req.id && "ring-2 ring-inset ring-primary"
+                    )}
                     onClick={() => {
                       setSelectedRequest(req);
                       setSheetOpen(true);
