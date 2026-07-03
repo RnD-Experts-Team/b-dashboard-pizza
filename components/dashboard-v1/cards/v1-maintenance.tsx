@@ -3,14 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ClipboardList, ExternalLink } from "lucide-react";
+import { ClipboardList, ExternalLink, Loader2, Plus } from "lucide-react";
 
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
 
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
@@ -24,6 +24,7 @@ import { fmtDate, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
 import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -79,6 +80,11 @@ export function V1MaintenanceCard({
   const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
   const techLoadedRef = useRef(false);
 
+  // Create dialog state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+
   const fetchTickets = useCallback(async () => {
     if (!storeId) return;
     abortRef.current?.abort();
@@ -126,12 +132,45 @@ export function V1MaintenanceCard({
     }
   }
 
+  // Load issues before opening so the combobox is already populated.
+  async function handleOpenCreate() {
+    if (catalogIssues.length === 0 && !catalogLoading) {
+      setCatalogLoading(true);
+      try {
+        const issues = await maintenanceTicketsService.getCatalogIssues(undefined, storeId ?? undefined);
+        setCatalogIssues(issues);
+      } catch {
+        // Dialog still usable — user can create new issues inline
+      } finally {
+        setCatalogLoading(false);
+      }
+    }
+    setCreateOpen(true);
+  }
+
   const pageLink = (
     <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" asChild>
       <Link href={`/${locale}/dashboard/maintenance-tickets`}>
         <ExternalLink className="h-3 w-3" />
       </Link>
     </Button>
+  );
+
+  const headerActions = (
+    <div className="flex items-center gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-5 gap-0.5 px-1.5 text-[9px]"
+        onClick={handleOpenCreate}
+        disabled={catalogLoading}
+        aria-label="Create ticket"
+      >
+        {catalogLoading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Plus className="h-2.5 w-2.5" />}
+        New
+      </Button>
+      {pageLink}
+    </div>
   );
 
   // Loading
@@ -151,11 +190,20 @@ export function V1MaintenanceCard({
   // Error or empty
   if ((error && tickets.length === 0) || (!isLoading && tickets.length === 0)) {
     return (
-      <V1Card title="Recent Tickets" category="quality" period="D" span={span} className={className} headerControl={pageLink}>
-        <V1Empty icon={ClipboardList}>
-          {error ? error : "No recent tickets"}
-        </V1Empty>
-      </V1Card>
+      <>
+        <V1Card title="Recent Tickets" category="quality" period="D" span={span} className={className} headerControl={headerActions}>
+          <V1Empty icon={ClipboardList}>
+            {error ? error : "No recent tickets"}
+          </V1Empty>
+        </V1Card>
+        <CreateTicketDialog
+          open={createOpen}
+          storeId={storeId}
+          catalogIssues={catalogIssues}
+          onClose={() => setCreateOpen(false)}
+          onSuccess={() => { setCreateOpen(false); fetchTickets(); }}
+        />
+      </>
     );
   }
 
@@ -168,7 +216,7 @@ export function V1MaintenanceCard({
         period="D"
         span={span}
         className={className}
-        headerControl={pageLink}
+        headerControl={headerActions}
       >
         <table className={V1_TBL}>
           <thead>
@@ -217,6 +265,14 @@ export function V1MaintenanceCard({
           }}
         />
       )}
+
+      <CreateTicketDialog
+        open={createOpen}
+        storeId={storeId}
+        catalogIssues={catalogIssues}
+        onClose={() => setCreateOpen(false)}
+        onSuccess={() => { setCreateOpen(false); fetchTickets(); }}
+      />
     </>
   );
 }

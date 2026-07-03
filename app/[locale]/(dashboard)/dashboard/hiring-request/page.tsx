@@ -42,7 +42,9 @@ import { MilestoneGiftTab } from "@/components/hiring/milestone-gift-tab";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { useHiringActionStore } from "@/lib/store/hiring-action.store";
 import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
+import { cn } from "@/lib/utils";
 import type { StoreRequest } from "@/types/hiring.types";
 
 const AVAILABILITY_LABELS: Record<string, string> = {
@@ -184,6 +186,38 @@ export default function HiringRequestPage() {
     try { localStorage.setItem("store-filter:hiring-request", JSON.stringify(ids)); } catch {}
   }
 
+  // ── Deep-link from a hiring/separation/milestone-gift notification ─────
+  const pendingHiringAction = useHiringActionStore((s) => s.pendingHiringAction);
+  const clearPendingHiringAction = useHiringActionStore((s) => s.clearPendingHiringAction);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<number | null>(null);
+  const [pendingHighlightId, setPendingHighlightId] = useState<number | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
+
+  // Switch to the right tab whenever a pending action arrives. Only clears it
+  // here if the current view can't show that tab at all (e.g. a milestone-gift
+  // manager's single-tab view) — otherwise the owning tab consumes/clears it.
+  useEffect(() => {
+    if (!pendingHiringAction) return;
+    if (isMilestoneGiftManager && pendingHiringAction.tab !== "milestone_gift") {
+      clearPendingHiringAction();
+      return;
+    }
+    setActiveTab(pendingHiringAction.tab);
+  }, [pendingHiringAction, isMilestoneGiftManager, clearPendingHiringAction]);
+
+  // Effect A: apply the store filter for the Hiring tab, stash the target id locally
+  useEffect(() => {
+    if (!pendingHiringAction || pendingHiringAction.tab !== "hiring") return;
+    if (!validStoreIds.has(pendingHiringAction.storeNumber)) {
+      clearPendingHiringAction();
+      return;
+    }
+    handleStoreApply([pendingHiringAction.storeNumber]);
+    setPendingHighlightId(pendingHiringAction.requestId);
+    clearPendingHiringAction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingHiringAction, validStoreIds, clearPendingHiringAction]);
+
   const fetchData = useCallback(
     async (targetPage: number) => {
       const ids = selectedStoreIds;
@@ -262,6 +296,21 @@ export default function HiringRequestPage() {
       abortRef.current?.abort();
     };
   }, [activeTab, fetchData]);
+
+  // Effect B: once the (re-)filtered rows land, highlight the matching row for 1.5s
+  useEffect(() => {
+    if (pendingHighlightId === null || !isInitialLoadComplete || isLoading) return;
+    const target = rows.find((r) => r.hiring_request?.id === pendingHighlightId);
+    setPendingHighlightId(null);
+    if (target) {
+      setHighlightedRequestId(target.id);
+      if (highlightTimeoutRef.current != null) window.clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = window.setTimeout(() => {
+        setHighlightedRequestId(null);
+        highlightTimeoutRef.current = null;
+      }, 1500);
+    }
+  }, [rows, pendingHighlightId, isInitialLoadComplete, isLoading]);
 
   const hasStore = selectedStoreIds.length > 0;
   const shouldShowSkeleton = activeTab === "hiring" && !isInitialLoadComplete;
@@ -385,7 +434,10 @@ export default function HiringRequestPage() {
                     {rows.map((req) => (
                       <TableRow
                         key={req.id}
-                        className="cursor-pointer hover:bg-muted/50"
+                        className={cn(
+                          "cursor-pointer hover:bg-muted/50 transition-shadow",
+                          highlightedRequestId === req.id && "ring-2 ring-inset ring-primary"
+                        )}
                         onClick={() => {
                           setSelectedRequest(req);
                           setSheetOpen(true);

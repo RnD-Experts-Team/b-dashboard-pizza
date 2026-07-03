@@ -18,6 +18,7 @@ import {
   PortalOnTimeDualGauge,
   StoreScoreCard,
   LaborGauge,
+  SalesHistoryCard,
   DsprDashboardSkeleton,
   RecentMaintenanceTable,
   CurrentEmployeesTable,
@@ -41,6 +42,7 @@ import {
   WbrMoneyOwedCard,
   WbrOrdersVsSalesCard,
   WbrTransferInOutCard,
+  WbrCleaningReviewCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -830,6 +832,11 @@ export function DsprDashboard() {
         />
       </div>
 
+      {/* ── Sales History ─────────────────────────────────────────── */}
+      <div data-guide-id="dspr-sales-history">
+        <SalesHistoryCard data={wbrData?.["sales-history"]} isLoading={isLoading} />
+      </div>
+
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
       <div
         className="grid grid-cols-1 gap-1 md:grid-cols-2 lg:grid-cols-4"
@@ -985,6 +992,10 @@ export function DsprDashboard() {
 
         <div>
           <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
+        </div>
+
+        <div>
+          <WbrCleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} />
         </div>
       </div>
       <PageGuide

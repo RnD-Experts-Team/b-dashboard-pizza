@@ -356,6 +356,84 @@ export interface TransferInOut {
 }
 
 // ============================================================================
+// sales-history
+// ============================================================================
+
+export interface SalesHistoryMetrics {
+  total_sales: number;
+  customer_count: number;
+  royalty_obligation: number;
+  phone_sales: number;
+  call_center_sales: number;
+  drive_thru_sales: number;
+  website_sales: number;
+  mobile_sales: number;
+  doordash_sales: number;
+  ubereats_sales: number;
+  grubhub_sales: number;
+}
+
+export interface SalesHistoryWeek extends SalesHistoryMetrics {
+  week_start: string;
+  week_end: string;
+  fiscal_year: number;
+  week_number: number;
+  period_number: number;
+  quarter_number: number;
+}
+
+export interface SalesHistoryPeriod extends SalesHistoryMetrics {
+  fiscal_year: number;
+  period_number: number;
+  period_start: string;
+  period_end: string;
+  weeks_count: number;
+}
+
+export interface SalesHistoryQuarter extends SalesHistoryMetrics {
+  fiscal_year: number;
+  quarter_number: number;
+  quarter_start: string;
+  quarter_end: string;
+  weeks_count: number;
+}
+
+export interface SalesHistoryYear extends SalesHistoryMetrics {
+  fiscal_year: number;
+  year_start: string;
+  year_end: string;
+  weeks_count: number;
+}
+
+export interface SalesHistory {
+  filtering: { store: string; date: string };
+  weeks: SalesHistoryWeek[];
+  periods: SalesHistoryPeriod[];
+  quarters: SalesHistoryQuarter[];
+  years: SalesHistoryYear[];
+}
+
+// ============================================================================
+// cleaning-review
+// ============================================================================
+
+export interface CleaningReviewEntry {
+  review_place: string;
+  score: string;
+}
+
+export interface CleaningReview {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+  };
+  overall_score: number;
+  entries: CleaningReviewEntry[];
+}
+
+// ============================================================================
 // Full extras envelope
 // ============================================================================
 
@@ -371,4 +449,6 @@ export interface DashboardReportExtras {
   "non-negotiable-reports"?: NonNegotiableReport[];
   "orders-vs-sales"?: OrdersVsSales;
   "transfer-in-out"?: TransferInOut;
+  "sales-history"?: SalesHistory;
+  "cleaning-review"?: CleaningReview;
 }

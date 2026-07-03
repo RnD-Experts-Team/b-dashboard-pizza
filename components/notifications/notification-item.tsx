@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/notification.types";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   UserMinus,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
+import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
 
 /**
  * Parse a debrief action URL and extract keyId, date, and storeId.
@@ -36,6 +37,34 @@ function parseDebriefActionUrl(
     const storeId = parsed.searchParams.get("store_id") ?? "";
     if (!keyId || !date || !storeId) return null;
     return { keyId, date, storeId };
+  } catch {
+    return null;
+  }
+}
+
+const HIRING_SEGMENT_TO_TAB: Record<string, HiringActionTab> = {
+  "hiring-requests": "hiring",
+  "separation-requests": "separation",
+  "milestone-gift-requests": "milestone_gift",
+};
+
+/**
+ * Parse a hiring/separation/milestone-gift action URL into its tab, request id, and store number.
+ * e.g. /hiring/store/03795-00001/separation-requests/42
+ */
+function parseHiringActionUrl(
+  url: string
+): { tab: HiringActionTab; requestId: number; storeNumber: string } | null {
+  try {
+    const parsed = new URL(url, "http://x");
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    // pathname segments: ["hiring", "store", "03795-00001", "separation-requests", "42"]
+    if (parts.length < 5 || parts[0] !== "hiring" || parts[1] !== "store") return null;
+    const storeNumber = parts[2];
+    const tab = HIRING_SEGMENT_TO_TAB[parts[3]];
+    const requestId = Number(parts[4]);
+    if (!tab || !storeNumber || !requestId) return null;
+    return { tab, requestId, storeNumber };
   } catch {
     return null;
   }
@@ -129,8 +158,11 @@ interface NotificationItemProps {
 export function NotificationItem({ notification, onMarkAsRead, onNavigate }: NotificationItemProps) {
   const router = useRouter();
   const params = useParams();
+  const pathname = usePathname();
   const locale = (params?.locale as string) || "en";
   const openDebriefKey = useDebriefActionStore((s) => s.openDebriefKey);
+  const openHiringRequest = useHiringActionStore((s) => s.openHiringRequest);
+  const isOnDueKeysPage = pathname?.includes("/due-keys") ?? false;
 
   const { Icon, bg } = getTypeVisuals(notification.type);
   const isUnread = notification.read_at === null;
@@ -149,6 +181,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
 
   function handleClick() {
     if (!isClickable) return;
+    if (isDebriefType && isOnDueKeysPage) return;
     if (isUnread) onMarkAsRead(notification.id);
     onNavigate?.();
 
@@ -166,6 +199,10 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
     }
 
     if (isHiringType) {
+      const parsed = parseHiringActionUrl(notification.action_url ?? "");
+      if (parsed) {
+        openHiringRequest(parsed.tab, parsed.requestId, parsed.storeNumber);
+      }
       router.push(`/${locale}/dashboard/hiring-request`);
       return;
     }

@@ -16,6 +16,7 @@ import {
   UserRound,
   KeyRound,
   ClipboardList,
+  Pencil,
   Download,
   File,
   FileText,
@@ -391,6 +392,15 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
                   {formatTime(v.createdAt)}
                 </span>
                 <div className="flex items-center gap-1 min-w-0">
+                  {v.correctedFromId != null && (
+                    <span
+                      className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
+                      title="This value was corrected"
+                    >
+                      <Pencil className="h-2 w-2" />
+                      Edited
+                    </span>
+                  )}
                   {displayValue && (
                     <span className="text-[10px] font-medium text-foreground/70 break-all whitespace-pre-line max-w-xs">
                       {displayValue}
