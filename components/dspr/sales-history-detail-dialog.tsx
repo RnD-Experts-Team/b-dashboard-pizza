@@ -88,6 +88,7 @@ export function SalesHistoryDetailDialog({
             toolbar: false,
             metric: view,
             color: METRIC_TABS.find((m) => m.key === view)!.color,
+            showWeekNumber: true,
           })
         : null,
     [categories, buckets, granularity, isDark, view],

@@ -71,16 +71,19 @@ export function bucketRangeLabel(
 
 /**
  * Same as bucketLabel, but weeks also carry the fiscal year (e.g. "Mar 24, 2026"
- * instead of just "Mar 24"). Used only for tooltip headers — the axis/table labels
- * stay short since periods/quarters/years already spell out "FY26" in their label.
+ * instead of just "Mar 24") and, optionally, the week number (weeks run Tue–Mon).
+ * Used only for tooltip headers — the axis/table labels stay short since
+ * periods/quarters/years already spell out "FY26" in their label.
  */
 export function bucketTooltipLabel(
   granularity: SalesHistoryGranularity,
   bucket: SalesHistoryBucket,
+  opts?: { showWeekNumber?: boolean },
 ): string {
   if (granularity === "weeks") {
     const b = bucket as SalesHistoryWeek;
-    return `${fmtDate(b.week_start)}, ${b.fiscal_year}`;
+    const base = `${fmtDate(b.week_start)}, ${b.fiscal_year}`;
+    return opts?.showWeekNumber ? `${base} · Week ${b.week_number}` : base;
   }
   return bucketLabel(granularity, bucket);
 }
@@ -179,6 +182,7 @@ export function buildMetricAreaOptions({
   toolbar = false,
   metric,
   color,
+  showWeekNumber = false,
 }: {
   categories: string[];
   /** Used only to build the year-inclusive tooltip header — the axis keeps the short `categories` labels. */
@@ -189,8 +193,10 @@ export function buildMetricAreaOptions({
   toolbar?: boolean;
   metric: SalesHistoryMetricKey;
   color: string;
+  /** Also show the week number in the tooltip header when granularity is "weeks". */
+  showWeekNumber?: boolean;
 }): ApexOptions {
-  const tooltipCategories = buckets.map((b) => bucketTooltipLabel(granularity, b));
+  const tooltipCategories = buckets.map((b) => bucketTooltipLabel(granularity, b, { showWeekNumber }));
   const axisTextColor = isDark ? "#a1a1aa" : "#71717a";
   const gridColor = isDark ? "#27272a" : "#e4e4e7";
   const axisLineColor = isDark ? "#3f3f46" : "#e4e4e7";
@@ -267,7 +273,7 @@ export function useChannelBreakdown(
 ) {
   const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set());
   const tooltipCategories = useMemo(
-    () => buckets.map((b) => bucketTooltipLabel(granularity, b)),
+    () => buckets.map((b) => bucketTooltipLabel(granularity, b, { showWeekNumber: true })),
     [buckets, granularity],
   );
 
