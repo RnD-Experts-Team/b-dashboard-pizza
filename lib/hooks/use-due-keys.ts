@@ -161,7 +161,7 @@ interface UseSetDueKeysBulkReturn {
       note?: string | null;
       attachments?: File[] | null;
     }>
-  ) => Promise<boolean>;
+  ) => Promise<DueKeyValue[] | null>;
   isSubmitting: boolean;
   error: string | null;
   clearError: () => void;
@@ -186,21 +186,20 @@ export function useSetDueKeysBulk(): UseSetDueKeysBulkReturn {
         note?: string | null;
         attachments?: File[] | null;
       }>
-    ): Promise<boolean> => {
+    ): Promise<DueKeyValue[] | null> => {
       setIsSubmitting(true);
       setError(null);
 
       try {
-        await dueKeysService.setDueKeysBulk(storeId, date, items as any);
-        return true;
+        return await dueKeysService.setDueKeysBulk(storeId, date, items as any);
       } catch (err) {
-        if (isCanceledError(err)) return false;
+        if (isCanceledError(err)) return null;
         if (err instanceof DueKeysError) {
           setError(err.message);
         } else {
           setError(err instanceof Error ? err.message : "Failed to update due keys.");
         }
-        return false;
+        return null;
       } finally {
         setIsSubmitting(false);
       }

@@ -221,6 +221,8 @@ export function InlineDueKeyInput({
         if (raw) userName = (JSON.parse(raw) as { name?: string }).name ?? null;
       } catch { /* ignore */ }
       onSuccess?.(submissionDate, finalPayload.key_id, { ...result, userName });
+      const corrected =
+        result.correctedFromId != null || (result.mistakenVersions?.length ?? 0) > 0;
       const action = !selectedKey!.filled && hasValue
         ? "created"
         : selectedKey!.filled && !hasValue
@@ -231,7 +233,9 @@ export function InlineDueKeyInput({
           ? `"${selectedKey!.label}" submitted.`
           : action === "deactivated"
             ? `"${selectedKey!.label}" cleared.`
-            : `"${selectedKey!.label}" updated.`
+            : corrected
+              ? `"${selectedKey!.label}" corrected.`
+              : `"${selectedKey!.label}" updated.`
       );
       // Reset form — do NOT refresh the feed
       setTextValue("");

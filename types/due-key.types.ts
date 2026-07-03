@@ -47,6 +47,14 @@ export interface ApiDueKeyValue {
   updated_at: string;
   note: string | null;
   attachments: ApiDueKeyAttachment[];
+  /** false for the current value, true for a superseded (corrected-away) value. */
+  is_mistaken?: boolean;
+  /** When this value was replaced. null for the current value. */
+  superseded_at?: string | null;
+  /** On a current value, the id of the mistaken row it replaced (null if never edited). */
+  corrected_from_id?: number | null;
+  /** Newest-first history of superseded values. Only returned by the save (POST) endpoints. */
+  mistaken_versions?: ApiDueKeyValue[];
   user?: {
     id?: number;
     name?: string | null;
@@ -126,6 +134,14 @@ export interface DueKeyValue {
   updatedAt: string;
   note: string | null;
   attachments: DueKeyAttachment[];
+  /** false for the current value, true for a superseded (corrected-away) value. */
+  isMistaken: boolean;
+  /** When this value was replaced. null for the current value. */
+  supersededAt: string | null;
+  /** On a current value, the id of the mistaken row it replaced (null if never edited). */
+  correctedFromId: number | null;
+  /** Newest-first history of superseded values. Only populated from a save (POST) response. */
+  mistakenVersions?: DueKeyValue[];
 }
 
 export interface DueKeyItem {

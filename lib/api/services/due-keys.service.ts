@@ -63,6 +63,10 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
       updatedAt: v.updated_at,
       note: v.note,
       attachments,
+      isMistaken: v.is_mistaken ?? false,
+      supersededAt: v.superseded_at ?? null,
+      correctedFromId: v.corrected_from_id ?? null,
+      // The daily grid / range endpoints return only the current value (no history).
     };
   }
   return {
@@ -86,9 +90,11 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
   };
 }
 
-// Transforms the POST /values response body into a DueKeyValue.
-// userName is not returned by this endpoint and must be enriched by the caller.
-function transformDueKeyValueFromPost(raw: Record<string, unknown>): DueKeyValue {
+// Transforms a raw value object (from the POST /values + /values/bulk response bodies)
+// into a DueKeyValue, including the newest-first mistaken_versions history.
+// userName is not returned by these endpoints and must be enriched by the caller.
+function mapRawValue(raw: Record<string, unknown>): DueKeyValue {
+  const rawHistory = (raw.mistaken_versions as unknown[]) ?? [];
   return {
     id: raw.id as number,
     keyId: raw.key_id as number,
@@ -103,6 +109,10 @@ function transformDueKeyValueFromPost(raw: Record<string, unknown>): DueKeyValue
     note: (raw.note as string | null) ?? null,
     createdAt: raw.created_at as string,
     updatedAt: raw.updated_at as string,
+    isMistaken: (raw.is_mistaken as boolean | undefined) ?? false,
+    supersededAt: (raw.superseded_at as string | null) ?? null,
+    correctedFromId: (raw.corrected_from_id as number | null) ?? null,
+    mistakenVersions: rawHistory.map((h) => mapRawValue(h as Record<string, unknown>)),
     attachments: ((raw.attachments as unknown[]) ?? []).map((a) => {
       const att = a as Record<string, unknown>;
       return {
@@ -329,7 +339,7 @@ export const dueKeysService = {
           },
           timeout: 30_000,
         });
-        return transformDueKeyValueFromPost(formResponse.data as Record<string, unknown>);
+        return mapRawValue(formResponse.data as Record<string, unknown>);
       } else {
         const { attachments: _a, ...jsonPayload } = payload;
         const jsonResponse = await axios.post(url, jsonPayload, {
@@ -340,7 +350,7 @@ export const dueKeysService = {
           },
           timeout: 30_000,
         });
-        return transformDueKeyValueFromPost(jsonResponse.data as Record<string, unknown>);
+        return mapRawValue(jsonResponse.data as Record<string, unknown>);
       }
     } catch (err) {
       throw handleAxiosError(err);
@@ -350,7 +360,7 @@ export const dueKeysService = {
     storeId: string,
     date: string,
     items: DueKeyValuePayload[]
-  ): Promise<void> {
+  ): Promise<DueKeyValue[]> {
     const token = getToken();
     if (!token) {
       throw new DueKeysError(
@@ -391,7 +401,7 @@ export const dueKeysService = {
           }
         });
 
-        await axios.post(
+        const formResponse = await axios.post(
           `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
             date
           )}/values/bulk`,
@@ -404,10 +414,11 @@ export const dueKeysService = {
             timeout: 60_000,
           }
         );
+        return mapBulkResponse(formResponse.data);
       } else {
         // No attachments — use JSON for efficiency
         const jsonItems = items.map(({ attachments: _a, ...rest }) => rest);
-        await axios.post(
+        const jsonResponse = await axios.post(
           `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
             date
           )}/values/bulk`,
@@ -421,9 +432,18 @@ export const dueKeysService = {
             timeout: 30_000,
           }
         );
+        return mapBulkResponse(jsonResponse.data);
       }
     } catch (err) {
       throw handleAxiosError(err);
     }
   },
 };
+
+// Maps the { items: [...] } bulk-save response body into DueKeyValue[].
+// Tolerant of the legacy shape ({ success: true }) → returns [].
+function mapBulkResponse(data: unknown): DueKeyValue[] {
+  const items = (data as { items?: unknown[] } | null)?.items;
+  if (!Array.isArray(items)) return [];
+  return items.map((it) => mapRawValue(it as Record<string, unknown>));
+}

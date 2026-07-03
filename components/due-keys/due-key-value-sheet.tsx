@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Paperclip, X } from "lucide-react";
-import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
+import { ChevronDown, Clock, History, Paperclip, Pencil, X } from "lucide-react";
+import type { DueKeyItem, DueKeyValue, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface DueKeyValueSheetProps {
   open: boolean;
@@ -35,19 +36,21 @@ interface DueKeyValueSheetProps {
   onSubmit: (
     payload: DueKeyValuePayload,
     mode: "created" | "updated" | "deactivated"
-  ) => Promise<void>;
+  ) => Promise<DueKeyValue | null>;
 }
 
-function normalizeValueForInput(item: DueKeyItem | null): string {
-  if (!item || item.value == null) return "";
-  const v = item.value;
-  if (item.dataType === "text") return v.valueText ?? "";
-  if (item.dataType === "number" || item.dataType === "decimal")
-    return v.valueNumber != null ? String(v.valueNumber) : "";
-  if (item.dataType === "boolean") return ""; // handled separately via setBooleanValue
-  if (item.dataType === "json") {
+function normalizeValueForInput(
+  value: DueKeyValue | null,
+  dataType: DueKeyItem["dataType"]
+): string {
+  if (value == null) return "";
+  if (dataType === "text") return value.valueText ?? "";
+  if (dataType === "number" || dataType === "decimal")
+    return value.valueNumber != null ? String(value.valueNumber) : "";
+  if (dataType === "boolean") return ""; // handled separately via setBooleanValue
+  if (dataType === "json") {
     try {
-      return v.valueJson != null ? JSON.stringify(v.valueJson, null, 2) : "";
+      return value.valueJson != null ? JSON.stringify(value.valueJson, null, 2) : "";
     } catch {
       return "";
     }
@@ -55,22 +58,34 @@ function normalizeValueForInput(item: DueKeyItem | null): string {
   return "";
 }
 
-function getFilledValueDisplay(item: DueKeyItem): { label: string; display: string; raw: unknown } {
-  const v = item.value;
-  if (v == null) return { label: "Value", display: "—", raw: null };
+function getValueDisplay(v: DueKeyValue | null): { label: string; display: string } {
+  if (v == null) return { label: "Value", display: "—" };
 
-  if (v.valueText != null) return { label: "Text Value", display: String(v.valueText), raw: v.valueText };
-  if (v.valueNumber != null) return { label: "Number Value", display: String(v.valueNumber), raw: v.valueNumber };
-  if (v.valueBoolean != null) return { label: "Boolean Value", display: v.valueBoolean ? "Yes" : "No", raw: v.valueBoolean };
+  if (v.valueText != null) return { label: "Text Value", display: String(v.valueText) };
+  if (v.valueNumber != null) return { label: "Number Value", display: String(v.valueNumber) };
+  if (v.valueBoolean != null) return { label: "Boolean Value", display: v.valueBoolean ? "Yes" : "No" };
   if (v.valueJson != null) {
     try {
-      return { label: "JSON Value", display: JSON.stringify(v.valueJson, null, 2), raw: v.valueJson };
+      return { label: "JSON Value", display: JSON.stringify(v.valueJson, null, 2) };
     } catch {
-      return { label: "JSON Value", display: String(v.valueJson), raw: v.valueJson };
+      return { label: "JSON Value", display: String(v.valueJson) };
     }
   }
 
-  return { label: "Value", display: "—", raw: null };
+  return { label: "Value", display: "—" };
+}
+
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function DueKeyValueSheet({
@@ -91,31 +106,50 @@ export function DueKeyValueSheet({
   const [note, setNote] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [isHoveringAttachments, setIsHoveringAttachments] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [savedValue, setSavedValue] = useState<DueKeyValue | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // The current value the sheet displays: freshly-saved value takes precedence over the
+  // value that came from the daily grid, so the history + correction show immediately.
+  const currentValue = savedValue ?? item?.value ?? null;
+  const effectiveFilled = (item?.filled ?? false) || savedValue != null;
+  const history = currentValue?.mistakenVersions ?? [];
+  const wasEdited = (currentValue?.correctedFromId ?? null) != null || history.length > 0;
+  const showEditForm = !!item && (!effectiveFilled || isEditing);
+
+  // Reset per-key view state when a different key is opened.
+  useEffect(() => {
+    setSavedValue(null);
+    setIsEditing(false);
+    setHistoryOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.keyId]);
+
+  // Initialise the edit inputs from the current value (pre-fill when correcting a filled key).
   useEffect(() => {
     if (!item) return;
-    const normalized = normalizeValueForInput(item);
+    const src = savedValue ?? item.value ?? null;
+    const normalized = normalizeValueForInput(src, item.dataType);
     setTextValue(item.dataType === "text" ? normalized : "");
     setNumberValue(
       item.dataType === "number" || item.dataType === "decimal" ? normalized : ""
     );
     setBooleanValue(
       item.dataType === "boolean"
-        ? item.value == null
+        ? src?.valueBoolean == null
           ? "null"
-          : item.value.valueBoolean === null
-            ? "null"
-            : item.value.valueBoolean
-              ? "true"
-              : "false"
+          : src.valueBoolean
+            ? "true"
+            : "false"
         : "null"
     );
     setJsonValue(item.dataType === "json" ? normalized : "");
     setJsonError(null);
-    setNote("");
+    setNote(src?.note ?? "");
     setAttachments([]);
-  }, [item]);
+  }, [item, savedValue, isEditing]);
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -208,10 +242,10 @@ export function DueKeyValueSheet({
       payload.value_boolean !== null ||
       payload.value_json !== null;
 
-    if (!item.filled && hasNewValue) return "created";
-    if (item.filled && !hasNewValue) return "deactivated";
+    if (!effectiveFilled && hasNewValue) return "created";
+    if (effectiveFilled && !hasNewValue) return "deactivated";
     return "updated";
-  }, [item, payload]);
+  }, [item, payload, effectiveFilled]);
 
   const handleSubmit = async () => {
     if (!item) return;
@@ -227,10 +261,17 @@ export function DueKeyValueSheet({
     }
 
     if (!payload) return;
-    await onSubmit(
+    const result = await onSubmit(
       { ...payload, note: note.trim() || null, attachments: attachments.length > 0 ? attachments : null },
       submitMode
     );
+    if (result) {
+      // Show the fresh current value + whatever it just superseded, without closing the sheet.
+      setSavedValue(result);
+      setIsEditing(false);
+      setAttachments([]);
+      setHistoryOpen((result.mistakenVersions?.length ?? 0) > 0);
+    }
   };
 
   return (
@@ -246,7 +287,7 @@ export function DueKeyValueSheet({
         </SheetHeader>
 
         {item ? (
-          item.filled ? (
+          !showEditForm ? (
             /* ── Read-only detail view for filled keys ── */
             <div className="space-y-4 p-4">
               <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
@@ -260,14 +301,25 @@ export function DueKeyValueSheet({
               <Separator />
 
               {(() => {
-                const { label, display } = getFilledValueDisplay(item);
+                const { label, display } = getValueDisplay(currentValue);
                 const isJson = item.dataType === "json" || display.startsWith("{") || display.startsWith("[");
-                const storedNote = (item.value as unknown as Record<string, unknown>)?.note as string | undefined;
-                const storedAttachments = (item.value as unknown as Record<string, unknown>)?.attachments as unknown[] | undefined;
+                const storedNote = currentValue?.note ?? null;
+                const storedAttachments = currentValue?.attachments ?? [];
                 return (
                   <>
                     <div className="space-y-2">
-                      <Label>{label}</Label>
+                      <div className="flex items-center justify-between gap-2">
+                        <Label>{label}</Label>
+                        {wasEdited && (
+                          <Badge
+                            variant="secondary"
+                            className="gap-1 text-[10px] text-amber-700 bg-amber-500/15 dark:text-amber-400 border-0"
+                          >
+                            <Pencil className="h-2.5 w-2.5" />
+                            Edited
+                          </Badge>
+                        )}
+                      </div>
                       {isJson ? (
                         <pre className="rounded-md border bg-muted p-3 text-xs overflow-auto max-h-60 whitespace-pre-wrap break-all">
                           {display}
@@ -288,35 +340,102 @@ export function DueKeyValueSheet({
                       </div>
                     ) : null}
 
-                    {storedAttachments && storedAttachments.length > 0 ? (
+                    {storedAttachments.length > 0 ? (
                       <div className="space-y-2">
                         <Label>Attachments</Label>
                         <ul className="space-y-1">
-                          {storedAttachments.map((att, idx) => {
-                            const a = att as Record<string, unknown>;
-                            const name = String(a?.name ?? a?.file_name ?? `Attachment ${idx + 1}`);
-                            const url = a?.url ?? a?.path;
-                            return (
-                              <li key={idx} className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
-                                <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                {url ? (
-                                  <a
-                                    href={String(url)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-1 truncate text-primary hover:underline"
-                                  >
-                                    {name}
-                                  </a>
-                                ) : (
-                                  <span className="flex-1 truncate">{name}</span>
-                                )}
-                              </li>
-                            );
-                          })}
+                          {storedAttachments.map((a) => (
+                            <li key={a.id} className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
+                              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <a
+                                href={a.attachmentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 truncate text-primary hover:underline"
+                              >
+                                {a.originalName}
+                              </a>
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     ) : null}
+
+                    {/* ── Correction history ── */}
+                    {wasEdited && (
+                      <div className="space-y-2 rounded-md border border-amber-500/25 bg-amber-500/5 p-3">
+                        {history.length > 0 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setHistoryOpen((o) => !o)}
+                              className="flex w-full items-center gap-2 text-xs font-medium text-foreground"
+                            >
+                              <History className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                              Previous values ({history.length})
+                              <ChevronDown
+                                className={cn(
+                                  "ml-auto h-3.5 w-3.5 text-muted-foreground transition-transform",
+                                  historyOpen && "rotate-180"
+                                )}
+                              />
+                            </button>
+                            {historyOpen && (
+                              <ul className="space-y-2 pt-1">
+                                {history.map((h) => {
+                                  const hv = getValueDisplay(h);
+                                  return (
+                                    <li key={h.id} className="rounded-md border border-border/60 bg-background/60 px-2.5 py-2">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <span className="text-sm break-all line-through decoration-muted-foreground/50 text-muted-foreground">
+                                          {hv.display}
+                                        </span>
+                                        {h.supersededAt && (
+                                          <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                                            <Clock className="h-2.5 w-2.5" />
+                                            {formatDateTime(h.supersededAt)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mt-0.5 text-[10px] text-muted-foreground/80">
+                                        {h.userName ?? `User #${h.userId}`}
+                                      </p>
+                                      {h.note ? (
+                                        <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap break-all">
+                                          {h.note}
+                                        </p>
+                                      ) : null}
+                                      {h.attachments.length > 0 && (
+                                        <ul className="mt-1 space-y-1">
+                                          {h.attachments.map((a) => (
+                                            <li key={a.id} className="flex items-center gap-1.5 text-[11px]">
+                                              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                              <a
+                                                href={a.attachmentUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="truncate text-primary hover:underline"
+                                              >
+                                                {a.originalName}
+                                              </a>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </>
+                        ) : (
+                          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                            <History className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                            This value was corrected. Its history appears the next time you edit it.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </>
                 );
               })()}
@@ -324,6 +443,10 @@ export function DueKeyValueSheet({
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   Close
+                </Button>
+                <Button onClick={() => setIsEditing(true)} className="gap-1.5">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
                 </Button>
               </div>
             </div>
@@ -333,7 +456,7 @@ export function DueKeyValueSheet({
               <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
                 <p>Store: {storeId}</p>
                 <p>Date: {date}</p>
-                <p>Status: {item.filled ? "Filled" : "Not Filled"}</p>
+                <p>Status: {effectiveFilled ? "Correcting value" : "Not Filled"}</p>
               </div>
 
               <Separator />
@@ -428,6 +551,12 @@ export function DueKeyValueSheet({
                     <span className="ml-2 text-xs text-muted-foreground/70">· Ctrl+V to paste</span>
                   )}
                 </Label>
+                {effectiveFilled && (currentValue?.attachments.length ?? 0) > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {currentValue!.attachments.length} existing file
+                    {currentValue!.attachments.length !== 1 ? "s" : ""} will be kept unless you add new ones below.
+                  </p>
+                )}
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
@@ -496,13 +625,17 @@ export function DueKeyValueSheet({
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button
                   variant="outline"
-                  onClick={() => onOpenChange(false)}
+                  onClick={() => (effectiveFilled ? setIsEditing(false) : onOpenChange(false))}
                   disabled={isSubmitting}
                 >
-                  Close
+                  {effectiveFilled ? "Cancel" : "Close"}
                 </Button>
                 <Button onClick={handleSubmit} disabled={isSubmitting || !payload}>
-                  {isSubmitting ? "Submitting..." : "Submit"}
+                  {isSubmitting
+                    ? "Submitting..."
+                    : effectiveFilled
+                      ? "Save correction"
+                      : "Submit"}
                 </Button>
               </div>
             </div>
