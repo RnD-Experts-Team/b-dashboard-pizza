@@ -118,6 +118,7 @@ function SidebarNavGroup({
     (item) => pathname === item.href || pathname.startsWith(item.href)
   );
   const [open, setOpen] = useState(hasActiveChild);
+  const { setSidebarCollapsed } = useUIStore();
 
   // Auto-open when a child becomes active (e.g. direct URL navigation)
   useEffect(() => {
@@ -128,6 +129,16 @@ function SidebarNavGroup({
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
+          onClick={(e) => {
+            // While collapsed, a click should expand the sidebar and open
+            // this dropdown so the user can pick an item, instead of just
+            // toggling `open` on content that isn't rendered yet.
+            if (collapsed) {
+              e.preventDefault();
+              setSidebarCollapsed(false);
+              setOpen(true);
+            }
+          }}
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             hasActiveChild

@@ -6,7 +6,7 @@ import type {
   SalesHistoryQuarter,
   SalesHistoryYear,
 } from "@/types/dashboard-report.types";
-import { fmtDate, fmt$ } from "./wbr-format";
+import { fmtDate, fmtMonth, fmt$ } from "./wbr-format";
 
 export type SalesHistoryGranularity = "weeks" | "periods" | "quarters" | "years";
 
@@ -42,6 +42,32 @@ export function bucketLabel(
     case "years":
       return `FY${(bucket as SalesHistoryYear).fiscal_year}`;
   }
+}
+
+/**
+ * X-axis category labels for a chart. Every bucket still gets its own column/tick
+ * (no data is merged), but for "weeks" — which can span dozens of columns — a week
+ * is only labeled when its start date rolls into a new calendar month, so the axis
+ * reads as month markers instead of a date under every single bar. Grouping is by
+ * the week's actual calendar month (not fiscal period, which doesn't line up with
+ * month boundaries), so every week shown between two month labels genuinely falls
+ * in that month. Other granularities are unaffected and keep their normal label.
+ */
+export function buildChartCategories(
+  granularity: SalesHistoryGranularity,
+  buckets: SalesHistoryBucket[],
+): string[] {
+  if (granularity !== "weeks") {
+    return buckets.map((b) => bucketLabel(granularity, b));
+  }
+  let prevMonthKey: string | null = null;
+  return buckets.map((bucket) => {
+    const week = bucket as SalesHistoryWeek;
+    const monthKey = week.week_start.slice(0, 7); // "YYYY-MM"
+    const isNewMonth = monthKey !== prevMonthKey;
+    prevMonthKey = monthKey;
+    return isNewMonth ? fmtMonth(week.week_start) : "";
+  });
 }
 
 /** Full date-range label for a bucket, e.g. "Mar 24 – Mar 30". */

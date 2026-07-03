@@ -13,7 +13,7 @@ import { WbrCardSkeleton } from "./wbr-format";
 import {
   GRANULARITY_OPTIONS,
   METRIC_TABS,
-  bucketLabel,
+  buildChartCategories,
   buildMetricAreaOptions,
   buildMetricAreaSeries,
   useChannelBreakdown,
@@ -44,7 +44,7 @@ export function SalesHistoryCard({ data, isLoading, className }: SalesHistoryCar
   const buckets = useMemo(() => data?.[granularity] ?? [], [data, granularity]);
 
   const categories = useMemo(
-    () => buckets.map((b) => bucketLabel(granularity, b)),
+    () => buildChartCategories(granularity, buckets),
     [buckets, granularity],
   );
 
