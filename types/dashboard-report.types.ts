@@ -414,6 +414,26 @@ export interface SalesHistory {
 }
 
 // ============================================================================
+// cleaning-review
+// ============================================================================
+
+export interface CleaningReviewEntry {
+  review_place: string;
+  score: string;
+}
+
+export interface CleaningReview {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+  };
+  overall_score: number;
+  entries: CleaningReviewEntry[];
+}
+
+// ============================================================================
 // Full extras envelope
 // ============================================================================
 
@@ -430,4 +450,5 @@ export interface DashboardReportExtras {
   "orders-vs-sales"?: OrdersVsSales;
   "transfer-in-out"?: TransferInOut;
   "sales-history"?: SalesHistory;
+  "cleaning-review"?: CleaningReview;
 }

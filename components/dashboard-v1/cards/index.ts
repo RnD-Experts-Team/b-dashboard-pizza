@@ -39,3 +39,4 @@ export { V1ComplaintsCard } from "./v1-complaints";
 export { V1FeedbacksCard } from "./v1-feedbacks";
 export { V1QaRatingsCard } from "./v1-qa-ratings";
 export { V1MaintenanceCard } from "./v1-maintenance";
+export { V1CleaningReviewCard } from "./v1-cleaning-review";

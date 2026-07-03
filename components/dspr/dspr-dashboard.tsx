@@ -42,6 +42,7 @@ import {
   WbrMoneyOwedCard,
   WbrOrdersVsSalesCard,
   WbrTransferInOutCard,
+  WbrCleaningReviewCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -991,6 +992,10 @@ export function DsprDashboard() {
 
         <div>
           <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
+        </div>
+
+        <div>
+          <WbrCleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} />
         </div>
       </div>
       <PageGuide
