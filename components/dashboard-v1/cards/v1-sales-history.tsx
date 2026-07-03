@@ -6,15 +6,16 @@ import type { ApexOptions } from "apexcharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { V1Card } from "../v1-card";
-import { V1Toggle, V1MetricGrid, V1Metric, V1Empty } from "../v1-ui";
+import { V1Toggle, V1Empty } from "../v1-ui";
 import { CATEGORIES } from "../category";
 import { CHANNELS, num } from "./channels";
 import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
-import { fmt$, fmtNum, Delta, pctChangeOrNull } from "@/components/dspr/wbr-format";
+import { fmt$ } from "@/components/dspr/wbr-format";
 import {
   GRANULARITY_OPTIONS,
   CHANNEL_FIELDS,
   bucketLabel,
+  bucketTooltipLabel,
   buildCustomTooltip,
   buildMetricAreaOptions,
   buildMetricAreaSeries,
@@ -74,10 +75,12 @@ export function V1SalesHistoryCard({
   };
 
   const buckets = useMemo(() => data?.[granularity] ?? [], [data, granularity]);
-  const latest = buckets[buckets.length - 1];
-  const previous = buckets[buckets.length - 2];
   const categories = useMemo(
     () => buckets.map((b) => bucketLabel(granularity, b)),
+    [buckets, granularity],
+  );
+  const tooltipCategories = useMemo(
+    () => buckets.map((b) => bucketTooltipLabel(granularity, b)),
     [buckets, granularity],
   );
 
@@ -95,6 +98,8 @@ export function V1SalesHistoryCard({
       view !== "channels"
         ? buildMetricAreaOptions({
             categories,
+            buckets,
+            granularity,
             isDark,
             height: 220,
             toolbar: false,
@@ -102,7 +107,7 @@ export function V1SalesHistoryCard({
             color: colors[0],
           })
         : null,
-    [categories, isDark, view, colors],
+    [categories, buckets, granularity, isDark, view, colors],
   );
 
   const visibleFields = useMemo(
@@ -153,13 +158,13 @@ export function V1SalesHistoryCard({
       tooltip: {
         shared: true,
         intersect: false,
-        custom: buildCustomTooltip(isDark, categories, (val) => fmt$(val), (i) => {
+        custom: buildCustomTooltip(isDark, tooltipCategories, (val) => fmt$(val), (i) => {
           const b = buckets[i];
           return b ? { label: "Total Sales", value: fmt$(b.total_sales) } : null;
         }),
       },
     }),
-    [categories, isDark, labelColor, gridColor, axisLineColor, visibleFields, buckets, colors],
+    [categories, tooltipCategories, isDark, labelColor, gridColor, axisLineColor, visibleFields, buckets, colors],
   );
 
   if (isLoading) {
@@ -249,26 +254,6 @@ export function V1SalesHistoryCard({
                   <V1Empty>No channels selected</V1Empty>
                 )}
               </>
-            )}
-            {latest && (
-              <V1MetricGrid cols={3}>
-                <V1Metric
-                  label="Total Sales"
-                  value={fmt$(latest.total_sales)}
-                  sub={previous && <Delta value={pctChangeOrNull(latest.total_sales, previous.total_sales)} />}
-                  accent={CATEGORIES.sales.text}
-                />
-                <V1Metric
-                  label="Customers"
-                  value={fmtNum(latest.customer_count)}
-                  sub={previous && <Delta value={pctChangeOrNull(latest.customer_count, previous.customer_count)} />}
-                />
-                <V1Metric
-                  label="Royalty"
-                  value={fmt$(latest.royalty_obligation)}
-                  sub={previous && <Delta value={pctChangeOrNull(latest.royalty_obligation, previous.royalty_obligation)} />}
-                />
-              </V1MetricGrid>
             )}
           </div>
         )}

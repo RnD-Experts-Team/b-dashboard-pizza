@@ -81,6 +81,8 @@ export function SalesHistoryDetailDialog({
       view !== "channels"
         ? buildMetricAreaOptions({
             categories,
+            buckets,
+            granularity,
             isDark,
             height: 340,
             toolbar: false,
@@ -88,7 +90,7 @@ export function SalesHistoryDetailDialog({
             color: METRIC_TABS.find((m) => m.key === view)!.color,
           })
         : null,
-    [categories, isDark, view],
+    [categories, buckets, granularity, isDark, view],
   );
 
   const {
@@ -98,7 +100,7 @@ export function SalesHistoryDetailDialog({
     hiddenChannels,
     toggleChannel,
     hasVisible: hasVisibleChannels,
-  } = useChannelBreakdown(buckets, categories, isDark, 340, open);
+  } = useChannelBreakdown(buckets, categories, isDark, 340, granularity, open);
 
   const avgTicket = (b?: SalesHistoryBucket) =>
     b && b.customer_count > 0 ? b.total_sales / b.customer_count : 0;

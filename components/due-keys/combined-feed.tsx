@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useEffect, useMemo } from "react";
+import { useLayoutEffect, useRef, useEffect, useMemo, useState } from "react";
 import React from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useDueKeysFeed } from "@/lib/hooks/use-due-keys-feed";
 import { useDebriefsFeed } from "@/lib/hooks/use-debriefs-feed";
+import { DueKeyHistoryDialog } from "@/components/due-keys/due-key-history-dialog";
 import type { DueKeyItem, DueKeyValue, Employee, DueKeyAttachment } from "@/types/due-key.types";
 import type { DebriefAttachment, EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
@@ -327,6 +328,7 @@ interface DueKeyCardProps {
 }
 
 function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
+  const [historyOpen, setHistoryOpen] = useState(false);
   const v = item.value!;
   const fullName = v.userName
     ? v.userName
@@ -393,13 +395,15 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
                 </span>
                 <div className="flex items-center gap-1 min-w-0">
                   {v.correctedFromId != null && (
-                    <span
-                      className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:text-amber-400"
-                      title="This value was corrected"
+                    <button
+                      type="button"
+                      onClick={() => setHistoryOpen(true)}
+                      title="View correction history"
+                      className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/25 dark:text-amber-400"
                     >
                       <Pencil className="h-2 w-2" />
                       Edited
-                    </span>
+                    </button>
                   )}
                   {displayValue && (
                     <span className="text-[10px] font-medium text-foreground/70 break-all whitespace-pre-line max-w-xs">
@@ -434,6 +438,17 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
           </div>
         </div>
       </div>
+
+      {v.correctedFromId != null && (
+        <DueKeyHistoryDialog
+          open={historyOpen}
+          onOpenChange={setHistoryOpen}
+          storeId={storeId}
+          keyId={item.keyId}
+          date={v.entryDate}
+          label={item.label}
+        />
+      )}
     </div>
   );
 }

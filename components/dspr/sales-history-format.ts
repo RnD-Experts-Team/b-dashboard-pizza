@@ -70,6 +70,22 @@ export function bucketRangeLabel(
 }
 
 /**
+ * Same as bucketLabel, but weeks also carry the fiscal year (e.g. "Mar 24, 2026"
+ * instead of just "Mar 24"). Used only for tooltip headers — the axis/table labels
+ * stay short since periods/quarters/years already spell out "FY26" in their label.
+ */
+export function bucketTooltipLabel(
+  granularity: SalesHistoryGranularity,
+  bucket: SalesHistoryBucket,
+): string {
+  if (granularity === "weeks") {
+    const b = bucket as SalesHistoryWeek;
+    return `${fmtDate(b.week_start)}, ${b.fiscal_year}`;
+  }
+  return bucketLabel(granularity, bucket);
+}
+
+/**
  * Custom tooltip renderer — ApexCharts' built-in `tooltip.theme` doesn't reliably
  * pick up dark mode in this app (same fix already used by sales-chart.tsx), so we
  * render the tooltip HTML ourselves with explicit dark/light colors.
@@ -156,6 +172,8 @@ export function buildMetricAreaSeries(buckets: SalesHistoryBucket[], metric: Sal
  */
 export function buildMetricAreaOptions({
   categories,
+  buckets,
+  granularity,
   isDark,
   height,
   toolbar = false,
@@ -163,12 +181,16 @@ export function buildMetricAreaOptions({
   color,
 }: {
   categories: string[];
+  /** Used only to build the year-inclusive tooltip header — the axis keeps the short `categories` labels. */
+  buckets: SalesHistoryBucket[];
+  granularity: SalesHistoryGranularity;
   isDark: boolean;
   height: number;
   toolbar?: boolean;
   metric: SalesHistoryMetricKey;
   color: string;
 }): ApexOptions {
+  const tooltipCategories = buckets.map((b) => bucketTooltipLabel(granularity, b));
   const axisTextColor = isDark ? "#a1a1aa" : "#71717a";
   const gridColor = isDark ? "#27272a" : "#e4e4e7";
   const axisLineColor = isDark ? "#3f3f46" : "#e4e4e7";
@@ -208,7 +230,7 @@ export function buildMetricAreaOptions({
     tooltip: {
       shared: true,
       intersect: false,
-      custom: buildCustomTooltip(isDark, categories, (val) => valueFormatter(val)),
+      custom: buildCustomTooltip(isDark, tooltipCategories, (val) => valueFormatter(val)),
     },
   };
 }
@@ -240,9 +262,14 @@ export function useChannelBreakdown(
   categories: string[],
   isDark: boolean,
   height: number,
+  granularity: SalesHistoryGranularity,
   resetKey?: unknown,
 ) {
   const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set());
+  const tooltipCategories = useMemo(
+    () => buckets.map((b) => bucketTooltipLabel(granularity, b)),
+    [buckets, granularity],
+  );
 
   useEffect(() => {
     setHiddenChannels(new Set());
@@ -323,13 +350,13 @@ export function useChannelBreakdown(
       tooltip: {
         shared: true,
         intersect: false,
-        custom: buildCustomTooltip(isDark, categories, (val) => fmt$(val), (dataPointIndex) => {
+        custom: buildCustomTooltip(isDark, tooltipCategories, (val) => fmt$(val), (dataPointIndex) => {
           const b = buckets[dataPointIndex];
           return b ? { label: "Total Sales", value: fmt$(b.total_sales) } : null;
         }),
       },
     }),
-    [categories, isDark, axisTextColor, axisLineColor, gridColor, buckets, visibleFields, visibleColors, height],
+    [categories, isDark, axisTextColor, axisLineColor, gridColor, buckets, visibleFields, visibleColors, height, tooltipCategories],
   );
 
   return {
