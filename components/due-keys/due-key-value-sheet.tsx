@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { getValueDisplay, formatDateTime } from "@/components/due-keys/due-key-value-format";
+import { DueKeyHistoryDialog } from "@/components/due-keys/due-key-history-dialog";
 
 interface DueKeyValueSheetProps {
   open: boolean;
@@ -58,36 +60,6 @@ function normalizeValueForInput(
   return "";
 }
 
-function getValueDisplay(v: DueKeyValue | null): { label: string; display: string } {
-  if (v == null) return { label: "Value", display: "—" };
-
-  if (v.valueText != null) return { label: "Text Value", display: String(v.valueText) };
-  if (v.valueNumber != null) return { label: "Number Value", display: String(v.valueNumber) };
-  if (v.valueBoolean != null) return { label: "Boolean Value", display: v.valueBoolean ? "Yes" : "No" };
-  if (v.valueJson != null) {
-    try {
-      return { label: "JSON Value", display: JSON.stringify(v.valueJson, null, 2) };
-    } catch {
-      return { label: "JSON Value", display: String(v.valueJson) };
-    }
-  }
-
-  return { label: "Value", display: "—" };
-}
-
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function DueKeyValueSheet({
   open,
   onOpenChange,
@@ -109,6 +81,7 @@ export function DueKeyValueSheet({
   const [isEditing, setIsEditing] = useState(false);
   const [savedValue, setSavedValue] = useState<DueKeyValue | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [fullHistoryOpen, setFullHistoryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // The current value the sheet displays: freshly-saved value takes precedence over the
@@ -124,6 +97,7 @@ export function DueKeyValueSheet({
     setSavedValue(null);
     setIsEditing(false);
     setHistoryOpen(false);
+    setFullHistoryOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.keyId]);
 
@@ -429,10 +403,14 @@ export function DueKeyValueSheet({
                             )}
                           </>
                         ) : (
-                          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                            <History className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                            This value was corrected. Its history appears the next time you edit it.
-                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setFullHistoryOpen(true)}
+                            className="flex w-full items-center gap-2 text-[11px] font-medium text-amber-700 transition-colors hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            This value was corrected. View full history…
+                          </button>
                         )}
                       </div>
                     )}
@@ -644,6 +622,17 @@ export function DueKeyValueSheet({
           <p className="p-4 text-sm text-muted-foreground">No due key selected.</p>
         )}
       </SheetContent>
+
+      {item && (
+        <DueKeyHistoryDialog
+          open={fullHistoryOpen}
+          onOpenChange={setFullHistoryOpen}
+          storeId={storeId}
+          keyId={item.keyId}
+          date={date}
+          label={item.label}
+        />
+      )}
     </Sheet>
   );
 }

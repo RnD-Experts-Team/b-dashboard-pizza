@@ -16,6 +16,7 @@ import {
   CHANNEL_FIELDS,
   bucketLabel,
   bucketRangeLabel,
+  bucketTooltipLabel,
   buildCustomTooltip,
   buildMetricAreaOptions,
   buildMetricAreaSeries,
@@ -84,6 +85,10 @@ export function V1SalesHistoryDetailDialog({
     () => buckets.map((b) => bucketLabel(granularity, b)),
     [buckets, granularity],
   );
+  const tooltipCategories = useMemo(
+    () => buckets.map((b) => bucketTooltipLabel(granularity, b)),
+    [buckets, granularity],
+  );
 
   const labelColor = isDark ? "#a1a1aa" : "#71717a";
   const gridColor = isDark ? "#27272a" : "#e4e4e7";
@@ -99,6 +104,8 @@ export function V1SalesHistoryDetailDialog({
       view !== "channels"
         ? buildMetricAreaOptions({
             categories,
+            buckets,
+            granularity,
             isDark,
             height: 320,
             toolbar: false,
@@ -106,7 +113,7 @@ export function V1SalesHistoryDetailDialog({
             color: colors[0],
           })
         : null,
-    [categories, isDark, view, colors],
+    [categories, buckets, granularity, isDark, view, colors],
   );
 
   const visibleFields = useMemo(
@@ -158,13 +165,13 @@ export function V1SalesHistoryDetailDialog({
       tooltip: {
         shared: true,
         intersect: false,
-        custom: buildCustomTooltip(isDark, categories, (val) => fmt$(val), (i) => {
+        custom: buildCustomTooltip(isDark, tooltipCategories, (val) => fmt$(val), (i) => {
           const b = buckets[i];
           return b ? { label: "Total Sales", value: fmt$(b.total_sales) } : null;
         }),
       },
     }),
-    [categories, isDark, labelColor, gridColor, axisLineColor, visibleFields, buckets, colors],
+    [categories, tooltipCategories, isDark, labelColor, gridColor, axisLineColor, visibleFields, buckets, colors],
   );
 
   const avgTicket = (b?: SalesHistoryBucket) =>

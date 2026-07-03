@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { ChartColumn, Layers } from "lucide-react";
 import type { SalesHistory } from "@/types/dashboard-report.types";
-import { fmt$, fmtNum, Delta, pctChangeOrNull, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { WbrCardSkeleton } from "./wbr-format";
 import {
   GRANULARITY_OPTIONS,
   METRIC_TABS,
@@ -42,8 +42,6 @@ export function SalesHistoryCard({ data, isLoading, className }: SalesHistoryCar
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const buckets = useMemo(() => data?.[granularity] ?? [], [data, granularity]);
-  const latest = buckets[buckets.length - 1];
-  const previous = buckets[buckets.length - 2];
 
   const categories = useMemo(
     () => buckets.map((b) => bucketLabel(granularity, b)),
@@ -60,6 +58,8 @@ export function SalesHistoryCard({ data, isLoading, className }: SalesHistoryCar
       view !== "channels"
         ? buildMetricAreaOptions({
             categories,
+            buckets,
+            granularity,
             isDark,
             height: 260,
             toolbar: false,
@@ -67,7 +67,7 @@ export function SalesHistoryCard({ data, isLoading, className }: SalesHistoryCar
             color: METRIC_TABS.find((m) => m.key === view)!.color,
           })
         : null,
-    [categories, isDark, view],
+    [categories, buckets, granularity, isDark, view],
   );
 
   const {
@@ -77,7 +77,7 @@ export function SalesHistoryCard({ data, isLoading, className }: SalesHistoryCar
     hiddenChannels,
     toggleChannel,
     hasVisible: hasVisibleChannels,
-  } = useChannelBreakdown(buckets, categories, isDark, 260, granularity);
+  } = useChannelBreakdown(buckets, categories, isDark, 260, granularity, granularity);
 
   if (isLoading) return <WbrCardSkeleton className={cn("h-[400px]", className)} />;
   if (!data) return null;
@@ -211,25 +211,6 @@ export function SalesHistoryCard({ data, isLoading, className }: SalesHistoryCar
                     </div>
                   )}
                 </>
-              )}
-              {latest && (
-                <div className="mt-2 grid grid-cols-3 gap-1.5">
-                  <StatTile
-                    label="Total Sales"
-                    value={fmt$(latest.total_sales)}
-                    sub={previous && <Delta value={pctChangeOrNull(latest.total_sales, previous.total_sales)} />}
-                  />
-                  <StatTile
-                    label="Customers"
-                    value={fmtNum(latest.customer_count)}
-                    sub={previous && <Delta value={pctChangeOrNull(latest.customer_count, previous.customer_count)} />}
-                  />
-                  <StatTile
-                    label="Royalty"
-                    value={fmt$(latest.royalty_obligation)}
-                    sub={previous && <Delta value={pctChangeOrNull(latest.royalty_obligation, previous.royalty_obligation)} />}
-                  />
-                </div>
               )}
             </>
           )}

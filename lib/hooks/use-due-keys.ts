@@ -214,3 +214,47 @@ export function useSetDueKeysBulk(): UseSetDueKeysBulkReturn {
     clearError,
   };
 }
+
+interface UseDueKeyValueHistoryReturn {
+  history: DueKeyValue[] | null;
+  isLoading: boolean;
+  error: string | null;
+  fetchHistory: (storeId: string, keyId: number, date: string) => Promise<void>;
+  reset: () => void;
+}
+
+export function useDueKeyValueHistory(): UseDueKeyValueHistoryReturn {
+  const [history, setHistory] = useState<DueKeyValue[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHistory = useCallback(
+    async (storeId: string, keyId: number, date: string) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await dueKeysService.getValueHistory(storeId, keyId, date);
+        setHistory(result);
+      } catch (err) {
+        if (isCanceledError(err)) return;
+        if (err instanceof DueKeysError) {
+          setError(err.message);
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to load value history.");
+        }
+        setHistory(null);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const reset = useCallback(() => {
+    setHistory(null);
+    setError(null);
+  }, []);
+
+  return { history, isLoading, error, fetchHistory, reset };
+}
