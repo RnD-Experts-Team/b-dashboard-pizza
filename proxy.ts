@@ -14,6 +14,9 @@ export const config = {
   // - Static files (/_next, /favicon.ico, etc.)
   // - Public files
   matcher: [
-    "/((?!api|_next|_vercel|.*\\..*).*)",
+    // Exclude API routes (also covers the inventory route.ts proxies under
+    // /api/inventory and /api/public/inventory), the inventory image storage
+    // rewrite path, Next internals, and static files.
+    "/((?!api|inventory-storage|_next|_vercel|.*\\..*).*)",
   ],
 };

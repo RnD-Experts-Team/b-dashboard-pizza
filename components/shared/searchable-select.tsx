@@ -1,50 +1,53 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-export interface MultiSelectOption<TValue extends string | number = number> {
+export interface SearchableSelectOption<TValue extends string | number = string> {
   value: TValue;
   label: string;
   hint?: string;
 }
 
-interface MultiSelectProps<TValue extends string | number = number> {
-  options: MultiSelectOption<TValue>[];
-  selected: TValue[];
-  onChange: (values: TValue[]) => void;
+interface SearchableSelectProps<TValue extends string | number = string> {
+  options: SearchableSelectOption<TValue>[];
+  value: TValue | "" | undefined;
+  onChange: (value: TValue) => void;
   placeholder?: string;
-  icon?: React.ReactNode;
-  disabled?: boolean;
-  className?: string;
   searchPlaceholder?: string;
   emptyText?: string;
+  disabled?: boolean;
+  loading?: boolean;
+  className?: string;
+  icon?: React.ReactNode;
 }
 
 /**
- * Lightweight multi-select built on Popover + a searchable checkbox list.
- * Used for the technician / store filters (the project has no `command` UI).
+ * Single-select combobox: a Popover-backed trigger with a searchable,
+ * scrollable option list. The single-select counterpart to `MultiSelect` —
+ * same visual language (search row, checkable rows, scroll body) for
+ * consistency across every picker in the app.
  */
-export function MultiSelect<TValue extends string | number = number>({
+export function SearchableSelect<TValue extends string | number = string>({
   options,
-  selected,
+  value,
   onChange,
   placeholder = "Select…",
-  icon,
-  disabled,
-  className,
   searchPlaceholder = "Search…",
   emptyText = "No results.",
-}: MultiSelectProps<TValue>) {
+  disabled,
+  loading,
+  className,
+  icon,
+}: SearchableSelectProps<TValue>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -58,48 +61,36 @@ export function MultiSelect<TValue extends string | number = number>({
     );
   }, [options, query]);
 
-  const selectedSet = useMemo(() => new Set(selected), [selected]);
-
-  function toggle(value: TValue) {
-    if (selectedSet.has(value)) {
-      onChange(selected.filter((v) => v !== value));
-    } else {
-      onChange([...selected, value]);
-    }
-  }
-
-  const count = selected.length;
+  const selected = options.find((o) => o.value === value);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
+          type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          disabled={disabled}
+          disabled={disabled || loading}
           className={cn(
             "h-9 w-full justify-between gap-1.5 text-sm font-normal",
-            count > 0 && "border-primary/40 bg-primary/5",
+            !selected && "text-muted-foreground",
             className
           )}
         >
           <span className="flex items-center gap-1.5 truncate">
             {icon}
-            <span className="truncate text-muted-foreground">
-              {count === 0 ? placeholder : `${count} selected`}
+            <span className="truncate">
+              {loading ? "Loading…" : selected ? selected.label : placeholder}
             </span>
           </span>
-          {count > 0 ? (
-            <Badge
-              variant="secondary"
-              className="ms-auto h-4 min-w-4 px-1 text-[10px] leading-none"
-            >
-              {count}
-            </Badge>
-          ) : (
-            <ChevronsUpDown className="ms-auto h-3.5 w-3.5 shrink-0 opacity-50" />
-          )}
+          <ChevronsUpDown className="ms-auto h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -113,35 +104,30 @@ export function MultiSelect<TValue extends string | number = number>({
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchPlaceholder}
             className="h-7 border-0 p-0 text-sm shadow-none focus-visible:ring-0"
+            autoFocus
           />
-          {count > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-destructive"
-              onClick={() => onChange([])}
-            >
-              <X className="me-0.5 h-3 w-3" />
-              Clear
-            </Button>
-          )}
         </div>
-        <div className="max-h-[240px] overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+        <div className="max-h-[240px] overflow-y-auto p-1">
           {filtered.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               {emptyText}
             </p>
           ) : (
             filtered.map((option) => {
-              const isSelected = selectedSet.has(option.value);
+              const isSelected = option.value === value;
               return (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => toggle(option.value)}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    setQuery("");
+                  }}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground"
+                    "hover:bg-accent hover:text-accent-foreground",
+                    isSelected && "bg-accent/60"
                   )}
                 >
                   <span

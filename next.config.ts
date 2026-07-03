@@ -38,6 +38,16 @@ const reverbWss = reverbWsHost ? `wss://${reverbWsHost}` : "";
 const reverbAuthUrl = process.env.NEXT_PUBLIC_REVERB_AUTH_ENDPOINT || "";
 const reverbAuthDomain = getApiDomain(reverbAuthUrl);
 
+// Inventory backend (remote testing host). Data/API calls are proxied through
+// app/api/inventory/.../route.ts (server-side, auth-validated) — only the
+// item-image storage path still goes through a Next.js rewrite below.
+const inventoryApiUrl =
+  process.env.NEXT_PUBLIC_INVENTORY_API_URL ||
+  "https://inventorytesting.lcportal.cloud/api";
+// Bare origin, e.g. "https://inventorytesting.lcportal.cloud" — used for the /storage image path.
+const inventoryOrigin =
+  getApiDomain(inventoryApiUrl) || "https://inventorytesting.lcportal.cloud";
+
 const nextConfig: NextConfig = {
   // Security headers
   async headers() {
@@ -98,6 +108,23 @@ const nextConfig: NextConfig = {
   },
   // Powered by header disabled for security
   poweredByHeader: false,
+
+  // ── Inventory item-image proxy (CORS-free) ───────────────────────────────
+  // Data/API calls go through app/api/inventory/.../route.ts instead. Images are
+  // static binary passthrough, so a plain rewrite (rather than a route.ts) is enough.
+  // `beforeFiles` guarantees this wins over any App Router route matching.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        // Item images: /inventory-storage/inventory/items/1/x.jpg → http://127.0.0.1:8000/storage/inventory/items/1/x.jpg
+        // Keeps <img> same-origin so the existing CSP (img-src 'self') already allows it.
+        {
+          source: "/inventory-storage/:path*",
+          destination: `${inventoryOrigin}/storage/:path*`,
+        },
+      ],
+    };
+  },
 };
 
 export default withNextIntl(nextConfig);

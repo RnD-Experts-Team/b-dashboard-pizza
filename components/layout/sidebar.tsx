@@ -41,6 +41,10 @@ import {
   LifeBuoy,
   Ticket,
   Wallet,
+  Package,
+  Boxes,
+  Ruler,
+  Link2,
 } from "lucide-react";
 import {
   Dialog,
@@ -465,6 +469,35 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
+  // Inventory Management — no requiredPermission/requirements yet,
+  // so every item is always visible (per current requirements).
+  const inventoryManagementGroup: NavGroup = {
+    label: t("inventoryManagement"),
+    icon: Package,
+    items: [
+      {
+        title: t("inventoryUnits"),
+        href: `/${locale}/dashboard/inventory/units`,
+        icon: Ruler,
+      },
+      {
+        title: t("inventoryItems"),
+        href: `/${locale}/dashboard/inventory/items`,
+        icon: Boxes,
+      },
+      {
+        title: t("inventoryLinks"),
+        href: `/${locale}/dashboard/inventory/links`,
+        icon: Link2,
+      },
+      {
+        title: t("inventoryEntries"),
+        href: `/${locale}/dashboard/inventory/entries`,
+        icon: ClipboardList,
+      },
+    ],
+  };
+
   const Reports: NavGroup = {
     label: "Reports",
     icon: FileText,
@@ -621,6 +654,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleMaintenance = filterGroup(Maintenance);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
+  const visibleInventoryManagementGroup = filterGroup(inventoryManagementGroup);
 
   /* ---- Helper: render a single flat nav link ---- */
   const renderNavLink = (item: NavItem) => {
@@ -829,6 +863,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {visibleHiringManagementGroup && (
             <SidebarNavGroup
               group={visibleHiringManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
+
+          {/* 7b. Inventory Management */}
+          {visibleInventoryManagementGroup && (
+            <SidebarNavGroup
+              group={visibleInventoryManagementGroup}
               pathname={pathname}
               locale={locale}
               collapsed={collapsed}
