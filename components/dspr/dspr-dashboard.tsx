@@ -77,10 +77,12 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  FileDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageGuide } from "@/components/shared/page-guide";
 import { DSPR_GUIDE_STEPS } from "./dspr-guide-config";
+import { buildDsprReportHtml } from "./dspr-report-template";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
 function toApiDate(date: Date): string {
@@ -447,6 +449,27 @@ export function DsprDashboard() {
     }
   }, [isCapturing, selectedStore, selectedDate]);
 
+  // ── Download printable "Focus on the Five" HTML report ──────────────────
+  const handleDownloadReport = useCallback(() => {
+    if (!data) return;
+    try {
+      const html = buildDsprReportHtml(data, selectedDate);
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const storeName = selectedStore?.storeId ?? selectedStore?.id ?? "store";
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `DSPR-Report-${storeName}-${dateStr}.html`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Report download failed:", err);
+    }
+  }, [data, selectedDate, selectedStore]);
+
   const toggleHideBackgrounds = useCallback(() => {
     setHideSectionBackgrounds((prev) => {
       const next = !prev;
@@ -718,6 +741,23 @@ export function DsprDashboard() {
             <TooltipContent>
               {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
             </TooltipContent>
+          </Tooltip>
+
+          {/* Download printable report */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-screenshot-ignore="true"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleDownloadReport}
+                disabled={!data}
+              >
+                <FileDown className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Download report (HTML)</TooltipContent>
           </Tooltip>
 
           {/* Toggle remove section backgrounds */}
