@@ -105,7 +105,7 @@ export function ItemForm({
 
   /** Client-side validation mirroring the API rules; returns an error or null. */
   const validate = (): string | null => {
-    if (!values.ultimatrix_id.trim()) return "Ultimatrix ID is required.";
+    if (!values.ultimatrix_id.trim()) return "Altametrics ID is required.";
     if (!values.name_en.trim() || !values.name_ar.trim() || !values.name_es.trim())
       return "Name (EN, AR, ES) are all required.";
     if (!values.unit_1_id || !values.unit_2_id)
@@ -165,7 +165,7 @@ export function ItemForm({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="ultimatrix_id">
-              Ultimatrix ID <span className="text-destructive">*</span>
+              Altametrics ID <span className="text-destructive">*</span>
             </Label>
             <Input
               id="ultimatrix_id"
