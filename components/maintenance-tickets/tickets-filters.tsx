@@ -167,6 +167,181 @@ function SearchableSelect({
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/*  Store Multi-Select — staged locally, only commits on Apply              */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+interface StoreMultiSelectProps {
+  /** The committed/applied selection — what the page is currently fetching for. */
+  value: string[];
+  options: OverviewStore[];
+  /** Called only when the user clicks Apply. Triggers the actual fetch. */
+  onApply: (value: string[]) => void;
+  disabled?: boolean;
+}
+
+function StoreMultiSelect({ value, options, onApply, disabled }: StoreMultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Draft = what the user is checking/unchecking; not committed until Apply.
+  const [draft, setDraft] = useState<string[]>(value);
+
+  useEffect(() => {
+    if (open) {
+      setDraft(value);
+      setSearch("");
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const filtered = search.trim()
+    ? options.filter((s) => {
+        const id = s.storeId ?? s.id;
+        const label = s.storeId ?? s.name ?? s.id;
+        return (
+          label.toLowerCase().includes(search.toLowerCase()) ||
+          id.toLowerCase().includes(search.toLowerCase())
+        );
+      })
+    : options;
+
+  const allSelected = options.length > 0 && draft.length === options.length;
+
+  function toggleStore(id: string) {
+    setDraft((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  }
+
+  function toggleAll() {
+    setDraft(allSelected ? [] : options.map((s) => s.storeId ?? s.id));
+  }
+
+  function handleApply() {
+    if (draft.length === 0) return; // must keep at least one store selected
+    onApply(draft);
+    setOpen(false);
+  }
+
+  // Trigger label always reflects the committed `value`, not the draft.
+  const label =
+    options.length > 0 && value.length === options.length
+      ? "All Stores"
+      : value.length === 1
+      ? (() => {
+          const s = options.find((s) => (s.storeId ?? s.id) === value[0]);
+          return s ? (s.storeId ?? s.name ?? s.id) : value[0];
+        })()
+      : `${value.length} stores`;
+
+  const hasPending = draft.length !== value.length || draft.some((id) => !value.includes(id));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "flex h-9 w-full items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors",
+            "hover:bg-accent hover:text-accent-foreground",
+            "focus:outline-none focus:ring-1 focus:ring-ring",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            value.length < options.length && "border-primary/40 bg-primary/5"
+          )}
+        >
+          <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="flex-1 truncate text-start">{label}</span>
+          <ChevronDown
+            className={cn(
+              "ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+              open && "rotate-180"
+            )}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0 shadow-md"
+      >
+        <div className="border-b px-2 py-1.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search stores…"
+              className="w-full rounded-sm bg-transparent py-1 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        </div>
+
+        {options.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <span
+                className={cn(
+                  "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border",
+                  allSelected ? "border-primary bg-primary text-primary-foreground" : "border-input"
+                )}
+              >
+                {allSelected && <Check className="h-3 w-3" />}
+              </span>
+              {allSelected ? "Deselect all" : "Select all"}
+            </button>
+            <div className="border-b" />
+          </>
+        )}
+
+        <div className="max-h-52 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+          {filtered.length === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">No results</p>
+          ) : (
+            filtered.map((s) => {
+              const id = s.storeId ?? s.id;
+              const storeLabel = s.storeId ?? s.name ?? s.id;
+              const checked = draft.includes(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => toggleStore(id)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  <span
+                    className={cn(
+                      "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border",
+                      checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
+                    )}
+                  >
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate">{storeLabel}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <div className="border-t p-1.5">
+          <Button size="sm" className="h-8 w-full" onClick={handleApply} disabled={draft.length === 0}>
+            {hasPending ? `Apply (${draft.length})` : "Apply"}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /*  Filters bar                                                             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -179,9 +354,8 @@ interface TicketsFiltersBarProps {
   storeId?: string;
   disabled?: boolean;
   stores?: OverviewStore[];
-  selectedStoreId?: string | "all";
-  onStoreChange?: (storeId: string | "all") => void;
-  canAccessAllStores?: boolean;
+  selectedStoreIds?: string[];
+  onStoreApply?: (selection: string[]) => void;
 }
 
 export function TicketsFiltersBar({
@@ -193,9 +367,8 @@ export function TicketsFiltersBar({
   storeId,
   disabled,
   stores,
-  selectedStoreId,
-  onStoreChange,
-  canAccessAllStores,
+  selectedStoreIds,
+  onStoreApply,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -238,23 +411,9 @@ export function TicketsFiltersBar({
 
   const hasAnyFilter = activeFilterCount > 0;
 
-  const selectedStoreName = (() => {
-    if (!stores || !selectedStoreId || selectedStoreId === "all") return null;
-    const s = stores.find((s) => (s.storeId ?? s.id) === selectedStoreId);
-    return s ? (s.storeId ?? s.name ?? s.id) : null;
-  })();
+  const activeStoresList = (stores ?? []).filter((s) => s.isActive);
 
   /* ── Option lists ──────────────────────────────────────────────────────── */
-
-  const storeOptions: SearchableSelectOption[] = [
-    ...(canAccessAllStores ? [{ value: "all", label: t("filters.allStores") }] : []),
-    ...(stores ?? [])
-      .filter((s) => s.isActive)
-      .map((s) => ({
-        value: s.storeId ?? s.id,
-        label: s.storeId ?? s.name ?? s.id,
-      })),
-  ];
 
   const ticketStatusOptions: SearchableSelectOption[] = [
     { value: "all", label: "All statuses" },
@@ -323,18 +482,14 @@ export function TicketsFiltersBar({
       {/* ── Main toolbar ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
 
-        {/* Store selector — searchable */}
-        {stores && stores.length > 0 && onStoreChange && (
-          <div className="w-44">
-            <SearchableSelect
-              value={selectedStoreId ?? "all"}
-              options={storeOptions}
-              onChange={(v) => onStoreChange(v as string | "all")}
-              placeholder={t("filters.allStores")}
-              searchPlaceholder="Search stores…"
+        {/* Store selector — multi-select, staged locally, committed via Apply */}
+        {stores && stores.length > 0 && onStoreApply && (
+          <div className="w-48">
+            <StoreMultiSelect
+              value={selectedStoreIds ?? []}
+              options={activeStoresList}
+              onApply={onStoreApply}
               disabled={disabled}
-              active={!!selectedStoreName}
-              icon={<Store className="h-3.5 w-3.5" />}
             />
           </div>
         )}

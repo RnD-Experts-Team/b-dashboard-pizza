@@ -436,6 +436,8 @@ export interface TicketsFilters {
   issue_statuses?: IssueStatus[];
   technician_ids?: number[];
   types?: TicketType[];
+  /** Global index only: limit to tickets for these store numbers (multi-select, OR logic) */
+  stores?: string[];
   part_cost_total_gt?: number;
   part_cost_single_gt?: number;
   created_from?: string;

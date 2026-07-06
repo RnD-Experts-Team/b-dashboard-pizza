@@ -396,6 +396,7 @@ function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   (filters.issue_statuses ?? []).forEach((v) => v && p.append("issue_statuses[]", v));
   (filters.technician_ids ?? []).forEach((v) => p.append("technician_ids[]", String(v)));
   (filters.types ?? []).forEach((v) => p.append("types[]", v));
+  (filters.stores ?? []).forEach((v) => v && p.append("stores[]", v));
   if (filters.part_cost_total_gt != null) p.set("part_cost_total_gt", String(filters.part_cost_total_gt));
   if (filters.part_cost_single_gt != null) p.set("part_cost_single_gt", String(filters.part_cost_single_gt));
   if (filters.created_from)  p.set("created_from",  filters.created_from);
@@ -614,7 +615,7 @@ export const maintenanceTicketsService = {
             Authorization: `Bearer ${token}`,
             Accept: "application/json",
           },
-          timeout: 15_000,
+          timeout: 120_000, // generous: issues can carry file attachments
         }
       );
       return { data: transformTicket(res.data.data) };
@@ -637,7 +638,7 @@ export const maintenanceTicketsService = {
         form,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
+          timeout: 120_000, // generous: issues can carry file attachments
         }
       );
       return { data: transformTicket(res.data.data) };
@@ -786,7 +787,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicket }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/final-note`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
       );
       return transformTicket(res.data.data);
     } catch (err) {
@@ -809,7 +810,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicketNote }>(
         `/api/maintenance-tickets${entityPath}/notes`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
       );
       return transformNote(res.data.data);
     } catch (err) {
@@ -828,7 +829,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicketAttachment[] }>(
         `/api/maintenance-tickets${entityPath}/attachments`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
       );
       return (res.data.data ?? []).map(transformAttachment);
     } catch (err) {
@@ -1163,7 +1164,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicketIssueDiagnosis }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/diagnoses`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
       );
       return transformDiagnosis(res.data.data);
     } catch (err) { return handleAxiosError(err); }
@@ -1196,7 +1197,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 120_000 }
       );
       return transformAttendance(res.data.data);
     } catch (err) { return handleAxiosError(err); }
@@ -1229,7 +1230,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicketIssuePartUsage }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
       );
       return transformPartUsage(res.data.data);
     } catch (err) { return handleAxiosError(err); }
@@ -1293,7 +1294,7 @@ export const maintenanceTicketsService = {
       const res = await axios.post<{ data: ApiTicketIssueWarranty }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 30_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
       );
       return transformWarranty(res.data.data);
     } catch (err) { return handleAxiosError(err); }

@@ -54,12 +54,15 @@ export default function MaintenanceTicketsPage() {
 
   // ─── Page-level store selection (independent from sidebar) ────────────────
   /**
-   * `null`  → still initializing (renders skeleton / nothing)
-   * `"all"` → global mode, fetches all stores
-   * string  → specific store's human-readable storeId (e.g. "03795-00001")
+   * `null`   → still initializing (renders skeleton / nothing)
+   * string[] → one or more specific store ids the user has applied.
+   *            length === 1 uses the per-store endpoint; length > 1 (or all
+   *            of them) uses the global endpoint scoped via stores[] — unless
+   *            the user has blanket GET /tickets access, in which case
+   *            selecting every store is sent unrestricted.
    */
-  const [pageSelectedStoreId, setPageSelectedStoreId] = useState<
-    string | "all" | null
+  const [pageStoreSelection, setPageStoreSelection] = useState<
+    string[] | null
   >(null);
 
   const initRef = useRef(false);
@@ -68,24 +71,25 @@ export default function MaintenanceTicketsPage() {
     initRef.current = true;
 
     if (canAccessAllStores) {
-      setPageSelectedStoreId("all");
+      setPageStoreSelection(activeStores.map((s) => s.storeId ?? s.id));
+      setScopedStoreIds(null);
       setMode("global");
     } else {
       const first = activeStores[0];
       if (first) {
         const id = first.storeId ?? first.id;
-        setPageSelectedStoreId(id);
+        setPageStoreSelection([id]);
         setMode("store");
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** storeId passed to the hook: undefined when "all" so mode drives fetch. */
-  const hookStoreId =
-    pageSelectedStoreId && pageSelectedStoreId !== "all"
-      ? pageSelectedStoreId
-      : undefined;
+  const isSingleStore =
+    Array.isArray(pageStoreSelection) && pageStoreSelection.length === 1;
+
+  /** storeId passed to the hook: only set for a single specific store selection. */
+  const hookStoreId = isSingleStore ? pageStoreSelection![0] : undefined;
 
   // ─── Tickets hook ─────────────────────────────────────────────────────────
   const {
@@ -97,6 +101,7 @@ export default function MaintenanceTicketsPage() {
     filters,
     refetch,
     setMode,
+    setScopedStoreIds,
     clearError,
     goToPage,
     applyFilters,
@@ -113,12 +118,19 @@ export default function MaintenanceTicketsPage() {
   const [catalogOpen, setCatalogOpen] = useState(false);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
-  function handleStoreChange(storeId: string | "all") {
-    setPageSelectedStoreId(storeId);
-    if (storeId === "all") {
-      setMode("global");
-    } else {
+  /** Called only when the user clicks Apply in the store filter — not per checkbox click. */
+  function handleStoreApply(selection: string[]) {
+    if (selection.length === 0) return; // must keep at least one store selected
+    setPageStoreSelection(selection);
+    const isEveryStoreSelected =
+      activeStores.length > 0 && selection.length === activeStores.length;
+    if (selection.length === 1) {
+      setScopedStoreIds(null);
       setMode("store");
+    } else {
+      // Unrestricted for users with blanket access when every store is picked; otherwise scope via stores[].
+      setScopedStoreIds(canAccessAllStores && isEveryStoreSelected ? null : selection);
+      setMode("global");
     }
   }
 
@@ -138,11 +150,10 @@ export default function MaintenanceTicketsPage() {
   }
 
   // ─── Derived values ───────────────────────────────────────────────────────
-  const hasSelection = pageSelectedStoreId !== null;
-  const isStoreMode =
-    pageSelectedStoreId !== null && pageSelectedStoreId !== "all";
+  const hasSelection = pageStoreSelection !== null;
+  const isStoreMode = isSingleStore;
   /** storeId forwarded to child components that need a specific store context */
-  const activeStoreId = isStoreMode ? pageSelectedStoreId : undefined;
+  const activeStoreId = isSingleStore ? pageStoreSelection![0] : undefined;
 
   /**
    * Store sent as X-Store-Id on catalog/issues GET and POST.
@@ -183,9 +194,8 @@ export default function MaintenanceTicketsPage() {
           storeId={catalogStoreId}
           disabled={isLoading}
           stores={activeStores}
-          selectedStoreId={pageSelectedStoreId ?? undefined}
-          onStoreChange={handleStoreChange}
-          canAccessAllStores={canAccessAllStores}
+          selectedStoreIds={pageStoreSelection ?? []}
+          onStoreApply={handleStoreApply}
         />
       )}
 
