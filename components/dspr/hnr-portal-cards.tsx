@@ -98,7 +98,7 @@ interface HnrCardProps {
 export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProps) {
   const [isWeekly, setIsWeekly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const activeHnr = isWeekly && weeklyHnr ? weeklyHnr : hnr;
+  const activeHnr = isWeekly && weeklyHnr ? weeklyAvgHnr ?? weeklyHnr : hnr;
   const pct = activeHnr.hnr_promise_met_percent;
 
   return (
@@ -108,7 +108,7 @@ export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProp
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
             <Timer className="h-3 w-3 text-orange-500" />
           </div>
-          Hot-N-Ready
+          Hot-N-Ready{isWeekly ? " (WTD)" : ""}
           {weeklyHnr ? (
             <Tooltip>
               <TooltipTrigger asChild>
