@@ -13,6 +13,8 @@ import type {
   EntryItem,
   UpdateEntryItemPayload,
   ListParams,
+  EntryListParams,
+  LinkListParams,
   PublicLink,
   PublicSubmitItem,
   PublicSubmitResponse,
@@ -224,12 +226,23 @@ export const linkService = {
 
   listByStore: async (
     storeId: string,
-    params?: ListParams,
+    params?: LinkListParams,
     signal?: AbortSignal
   ): Promise<PaginatedResponse<Link>> => {
     const { data } = await inventoryClient.get<InventoryPaginated<Link>>(
       `/inventory/stores/${encodeURIComponent(storeId)}/links`,
-      { params: { page: params?.page, per_page: params?.perPage }, signal }
+      {
+        params: {
+          page: params?.page,
+          per_page: params?.perPage,
+          date_from: params?.date_from,
+          date_to: params?.date_to,
+          type: params?.type,
+          status: params?.status,
+          employee_id: params?.employee_id,
+        },
+        signal,
+      }
     );
     return toPaginated(data);
   },
@@ -247,19 +260,41 @@ export const linkService = {
 export const entryService = {
   listByStore: async (
     storeId: string,
-    params?: ListParams,
+    params?: EntryListParams,
     signal?: AbortSignal
   ): Promise<PaginatedResponse<Entry>> => {
     const { data } = await inventoryClient.get<InventoryPaginated<Entry>>(
       `/inventory/stores/${encodeURIComponent(storeId)}/entries`,
-      { params: { page: params?.page, per_page: params?.perPage }, signal }
+      {
+        params: {
+          page: params?.page,
+          per_page: params?.perPage,
+          date_from: params?.date_from,
+          date_to: params?.date_to,
+          type: params?.type,
+          submitted_by: params?.submitted_by,
+          edited: params?.edited !== undefined ? (params.edited ? 1 : 0) : undefined,
+        },
+        signal,
+      }
     );
     return toPaginated(data);
   },
 
+  // Basic detail — never includes is_edited/edits (see getHistory for that).
   get: async (id: number, signal?: AbortSignal): Promise<EntryDetail> => {
     const { data } = await inventoryClient.get<Wrapped<EntryDetail>>(
       `/inventory/entries/${id}`,
+      { signal }
+    );
+    return data.data;
+  },
+
+  // Full detail with each item's is_edited + edits[]. 403s for callers without
+  // the history permission — see useEntryDetail for the fallback strategy.
+  getHistory: async (id: number, signal?: AbortSignal): Promise<EntryDetail> => {
+    const { data } = await inventoryClient.get<Wrapped<EntryDetail>>(
+      `/inventory/entries/${id}/history`,
       { signal }
     );
     return data.data;

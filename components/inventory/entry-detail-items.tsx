@@ -88,10 +88,12 @@ function EditLogEntry({ edit }: { edit: EntryItemEdit }) {
 /**
  * Renders an entry's item rows with counts and totals.
  *
- * `is_edited`/`edits` only come back for inventory_specialist tokens, so we detect
- * their presence rather than assuming it. When present we show an "edited" badge
- * and an expandable audit-log row; recount is always offered (the backend
- * authorizes store_manager and inventory_specialist alike).
+ * `is_edited`/`edits` are only present when the entry was fetched via the
+ * `/history` endpoint (see `useEntryDetail`'s fetch strategy) — a plain-fetched
+ * entry simply omits them, which the optional chaining below handles safely.
+ * When present we show an "edited" badge and an expandable audit-log row;
+ * recount is always offered (the backend authorizes store_manager and
+ * inventory_specialist alike).
  */
 export function EntryDetailItems({ items }: { items: EntryItem[] }) {
   const [recountTarget, setRecountTarget] = useState<EntryItem | null>(null);

@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Copy, Plus, RefreshCw } from "lucide-react";
+import { ChevronDown, Copy, Plus, RefreshCw, SlidersHorizontal, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { publicCountUrl } from "@/lib/inventory/public-link-url";
 import { DataTable } from "@/components/shared/data-table";
 import { InventoryStoreSelect } from "@/components/inventory/inventory-store-select";
+import { LinkFiltersBar, countLinkFilters } from "@/components/inventory/link-filters-bar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -15,7 +16,7 @@ import { useInventoryStores } from "@/lib/hooks/use-inventory-stores";
 import { isDisplayableErrorMessage } from "@/lib/api/inventory-errors";
 import { cn } from "@/lib/utils";
 import { CreateLinkDialog } from "@/components/inventory/create-link-dialog";
-import type { Link as InventoryLink } from "@/types/inventory.types";
+import type { Link as InventoryLink, LinkListParams } from "@/types/inventory.types";
 
 /** Status → badge variant mapping. */
 function statusVariant(status: string): "default" | "secondary" | "outline" {
@@ -35,6 +36,8 @@ export default function LinksPage() {
   }));
 
   const [storeId, setStoreId] = useState("");
+  const [filters, setFilters] = useState<LinkListParams>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
   // Auto-select the first store when the list loads.
@@ -45,7 +48,7 @@ export default function LinksPage() {
   }, [stores, storeId]);
 
   const { links, pagination, isLoading, error, handlePageChange, refetch } =
-    useStoreLinks(storeId || null);
+    useStoreLinks(storeId || null, filters);
 
   useEffect(() => {
     if (isDisplayableErrorMessage(error)) toast.error(error);
@@ -66,6 +69,8 @@ export default function LinksPage() {
     },
     [storeId, refetch]
   );
+
+  const activeCount = countLinkFilters(filters);
 
   const columns = [
     {
@@ -123,28 +128,83 @@ export default function LinksPage() {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <InventoryStoreSelect
             stores={storeOptions}
             value={storeId}
             onChange={setStoreId}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            onClick={() => refetch()}
-            disabled={isLoading || !storeId}
-            aria-label="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-          </Button>
+
+          {storeId && (
+            <>
+              <Button
+                variant={filtersOpen ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setFiltersOpen((v) => !v)}
+                disabled={isLoading}
+                className={cn(
+                  "h-9 gap-1.5",
+                  activeCount > 0 && !filtersOpen && "border-primary/40 bg-primary/5 text-primary"
+                )}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span>Filters</span>
+                {activeCount > 0 ? (
+                  <Badge variant="default" className="h-4 min-w-4 px-1 text-[10px] leading-none">
+                    {activeCount}
+                  </Badge>
+                ) : (
+                  <ChevronDown
+                    className={cn(
+                      "h-3 w-3 transition-transform duration-200",
+                      filtersOpen && "rotate-180"
+                    )}
+                  />
+                )}
+              </Button>
+
+              {activeCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFilters({})}
+                  disabled={isLoading}
+                  className="h-9 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span className="text-xs">Clear</span>
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() => refetch()}
+                disabled={isLoading}
+                aria-label="Refresh"
+              >
+                <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+              </Button>
+            </>
+          )}
         </div>
+
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
           Generate links
         </Button>
       </div>
+
+      {storeId && (
+        <LinkFiltersBar
+          open={filtersOpen}
+          storeId={storeId}
+          filters={filters}
+          onFiltersChange={setFilters}
+          disabled={isLoading}
+        />
+      )}
 
       {storeId ? (
         <DataTable

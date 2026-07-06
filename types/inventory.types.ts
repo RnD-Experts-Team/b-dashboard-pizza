@@ -164,7 +164,12 @@ export interface EntryItem {
   count_unit_2: string;
   count_unit_3: string;
   total_in_unit_1: string;
-  /** Only present for inventory_specialist tokens — detect, don't assume. */
+  /**
+   * Only present when the entry was fetched via `GET /inventory/entries/{id}/history`
+   * (requires the history permission) — never via the plain `/inventory/entries/{id}`.
+   * The endpoint choice is now deterministic (see `useEntryDetail`), not detected
+   * per-field, but these stay optional since a basic-fetched item never has them.
+   */
   is_edited?: boolean;
   edits?: EntryItemEdit[];
 }
@@ -172,6 +177,26 @@ export interface EntryItem {
 /** Full entry detail = Entry + the items array. */
 export interface EntryDetail extends Entry {
   items: EntryItem[];
+}
+
+/* ── List filters ──────────────────────────────────────────────────────── */
+export interface EntryListParams extends ListParams {
+  date_from?: string;
+  date_to?: string;
+  type?: InventoryType;
+  /** LIKE search on the submitter's name snapshot. */
+  submitted_by?: string;
+  /** true = only entries with at least one edited item; false = only entries with none. */
+  edited?: boolean;
+}
+
+export interface LinkListParams extends ListParams {
+  date_from?: string;
+  date_to?: string;
+  type?: InventoryType;
+  /** Only "active" | "submitted" are valid filter values (unlike the full LinkStatus). */
+  status?: "active" | "submitted";
+  employee_id?: number;
 }
 
 export interface UpdateEntryItemPayload {

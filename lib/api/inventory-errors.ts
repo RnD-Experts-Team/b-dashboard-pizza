@@ -34,6 +34,12 @@ export function isDisplayableErrorMessage(
   return Boolean(message && !cancelErrorPattern.test(message));
 }
 
+/** True when the error is a 403 — used to fall back from a permission-gated
+ *  endpoint (e.g. entry history) to its unrestricted counterpart. */
+export function isForbiddenError(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 403;
+}
+
 /**
  * Extract a readable message from any inventory error.
  * Handles Laravel validation (422) by joining the first error of each field.

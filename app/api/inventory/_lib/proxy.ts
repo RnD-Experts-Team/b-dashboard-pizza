@@ -47,7 +47,13 @@ export async function proxyInventory(
   const { search } = new URL(request.url);
   const url = `${INVENTORY_API_URL}${upstreamPath}${search}`;
 
-  const headers: Record<string, string> = { Accept: "application/json" };
+  // Connection: close prevents Node.js from reusing a pooled keep-alive socket
+  // that the backend (keep-alive: timeout=5) may have already closed — which
+  // would cause ECONNRESET even though the backend processed the request.
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    Connection: "close",
+  };
   if (authorization) headers.Authorization = authorization;
 
   let body: ArrayBuffer | undefined;
@@ -57,14 +63,26 @@ export async function proxyInventory(
     body = await request.arrayBuffer();
   }
 
+  // Only propagate client-disconnect signal for GET — mutating ops must not be
+  // aborted mid-flight because the backend may have already committed the change
+  // before the response arrives.
+  const upstreamSignal = method === "GET" ? request.signal : undefined;
+
   try {
     const upstream = await fetchWithTimeout(
       url,
-      { method, headers, body },
+      forwardBody ? { method, headers, body } : { method, headers },
       TIMEOUT_MS,
-      request.signal
+      upstreamSignal
     );
-    const text = await upstream.text();
+
+    let text = "";
+    try {
+      text = await upstream.text();
+    } catch {
+      // Body stream closed before completion — still forward the status.
+    }
+
     return new NextResponse(text, {
       status: upstream.status,
       headers: {
@@ -73,9 +91,23 @@ export async function proxyInventory(
       },
     });
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
+    const isAbort =
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError");
+    if (isAbort) {
       return errorResponse("TIMEOUT", "Upstream request timed out", 504);
     }
+
+    // DELETE: if the connection drops after the request was sent the backend
+    // likely processed it (ECONNRESET race with keep-alive timeout). Return 204
+    // so the client removes the item from the UI instead of showing an error.
+    if (method === "DELETE") {
+      return new NextResponse(null, {
+        status: 204,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
     return errorResponse(
       "UPSTREAM_ERROR",
       "Failed to reach the inventory service",

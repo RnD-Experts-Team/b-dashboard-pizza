@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect } from "react";
 import { useLinksStore } from "@/lib/store/inventory-links.store";
-import type { ListParams } from "@/types/inventory.types";
+import type { LinkListParams } from "@/types/inventory.types";
 
 /**
  * Links for one store + create. Re-fetches whenever the storeId changes.
- * Pass null storeId to avoid fetching until a store is chosen.
+ * Pass null storeId to avoid fetching until a store is chosen. Pass live
+ * filters as `initialParams` on every render to auto-refetch on filter change.
  */
-export function useStoreLinks(storeId: string | null, initialParams?: ListParams) {
+export function useStoreLinks(
+  storeId: string | null,
+  initialParams?: LinkListParams
+) {
   const {
     links,
     pagination,
@@ -22,7 +26,7 @@ export function useStoreLinks(storeId: string | null, initialParams?: ListParams
   }, [storeId, fetchLinks, initialParams]);
 
   const refetch = useCallback(
-    (params?: ListParams) => {
+    (params?: LinkListParams) => {
       if (storeId) fetchLinks(storeId, { ...initialParams, ...params });
     },
     [storeId, fetchLinks, initialParams]

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { linkService } from "@/lib/api/services/inventory.service";
 import { getInventoryErrorMessage, isCanceledError } from "@/lib/api/inventory-errors";
-import type { Link, CreateLinkPayload, ListParams } from "@/types/inventory.types";
+import type { Link, CreateLinkPayload, LinkListParams } from "@/types/inventory.types";
 import type { PaginatedResponse } from "@/types/api.types";
 
 /**
@@ -19,7 +19,7 @@ interface LinksState {
   error: string | null;
   createError: string | null;
 
-  fetchLinks: (storeId: string, params?: ListParams) => Promise<void>;
+  fetchLinks: (storeId: string, params?: LinkListParams) => Promise<void>;
   createLinks: (payload: CreateLinkPayload) => Promise<Link[]>;
   clearCreated: () => void;
   clearErrors: () => void;

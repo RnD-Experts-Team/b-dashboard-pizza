@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect } from "react";
 import { useEntriesStore } from "@/lib/store/inventory-entries.store";
-import type { ListParams } from "@/types/inventory.types";
+import type { EntryListParams } from "@/types/inventory.types";
 
 /**
  * Entries for one store. Pass null storeId to wait until a store is chosen.
+ * Pass live filters as `initialParams` on every render — the effect below
+ * re-fetches whenever the store OR the params object changes.
  */
-export function useStoreEntries(storeId: string | null, initialParams?: ListParams) {
+export function useStoreEntries(
+  storeId: string | null,
+  initialParams?: EntryListParams
+) {
   const { entries, pagination, isLoading, error, fetchEntries } =
     useEntriesStore();
 
@@ -16,7 +21,7 @@ export function useStoreEntries(storeId: string | null, initialParams?: ListPara
   }, [storeId, fetchEntries, initialParams]);
 
   const refetch = useCallback(
-    (params?: ListParams) => {
+    (params?: EntryListParams) => {
       if (storeId) fetchEntries(storeId, { ...initialParams, ...params });
     },
     [storeId, fetchEntries, initialParams]
@@ -38,6 +43,7 @@ export function useStoreEntries(storeId: string | null, initialParams?: ListPara
 export function useEntryDetail(id: number | null) {
   const {
     currentEntry,
+    hasHistoryAccess,
     isLoadingDetail,
     detailError,
     isSaving,
@@ -53,6 +59,7 @@ export function useEntryDetail(id: number | null) {
 
   return {
     entry: currentEntry,
+    hasHistoryAccess,
     isLoading: isLoadingDetail,
     error: detailError,
     isSaving,
