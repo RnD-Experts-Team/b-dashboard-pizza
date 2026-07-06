@@ -46,12 +46,12 @@ export function V1HnrCard({
   const hasWeekly = Boolean(weeklyHnr);
   const [view, setView] = useState<"day" | "wtd">("day");
   const [open, setOpen] = useState(false);
-  const active = view === "wtd" && weeklyHnr ? weeklyHnr : hnr;
+  const active = view === "wtd" && weeklyHnr ? weeklyAvgHnr ?? weeklyHnr : hnr;
   const pct = active.hnr_promise_met_percent;
 
   return (
       <V1Card
-        title="Hot-N-Ready"
+        title={view === "wtd" ? "Hot-N-Ready (WTD)" : "Hot-N-Ready"}
         category="operations"
         period={hasWeekly ? "D·WTD" : "D"}
         span={span}
