@@ -823,7 +823,7 @@ export function DsprDashboard() {
           toolbar={false}
           className="md:col-span-2 lg:col-span-1"
         />
-        <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
+        <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} weeklyAvgHnr={day.hnr_week_to_date_avg} />
         <LaborGauge
           value={day.labor}
           weeklyValue={day.labor_week_to_date}

@@ -447,7 +447,7 @@ export function DashboardV1() {
       {/* ── Operations & Speed ───────────────────────────────────────────── */}
       <V1Section category="operations" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1PortalGaugeCard portal={day.portal} span={1} />
-        <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} span={1} />
+        <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} weeklyAvgHnr={day.hnr_week_to_date_avg} span={1} />
         <V1LaborCard
           value={day.labor}
           weeklyValue={day.labor_week_to_date}

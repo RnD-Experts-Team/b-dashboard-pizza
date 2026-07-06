@@ -23,6 +23,7 @@ import {
   METRIC_TABS,
   bucketLabel,
   bucketRangeLabel,
+  buildChartCategories,
   buildMetricAreaOptions,
   buildMetricAreaSeries,
   useChannelBreakdown,
@@ -67,7 +68,7 @@ export function SalesHistoryDetailDialog({
   const previous = buckets[buckets.length - 2];
 
   const categories = useMemo(
-    () => buckets.map((b) => bucketLabel(granularity, b)),
+    () => buildChartCategories(granularity, buckets),
     [buckets, granularity],
   );
 

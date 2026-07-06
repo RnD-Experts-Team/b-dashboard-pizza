@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SearchCreateCombobox } from "./search-create-combobox";
+import { useAuth } from "@/lib/auth/use-auth";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { CatalogIssue, Priority, TicketType } from "@/types/maintenance-tickets.types";
@@ -79,6 +80,12 @@ export function CreateTicketDialog({
   onSuccess,
 }: CreateTicketDialogProps) {
   const t = useTranslations("maintenanceTickets");
+  const { canAccessRoute } = useAuth();
+  const canChooseTicketType = canAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/technicians",
+  });
   const [rows, setRows] = useState<IssueRow[]>([makeRow()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -337,18 +344,24 @@ export function CreateTicketDialog({
             </div>
           )}
 
-          {/* Ticket type */}
+          {/* Ticket type — only users with catalog-management access may choose it */}
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Type</Label>
-            <Select value={ticketType} onValueChange={(v) => setTicketType(v as TicketType)}>
-              <SelectTrigger className="text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="preventive_maintenance">Preventive Maintenance</SelectItem>
-              </SelectContent>
-            </Select>
+            {canChooseTicketType ? (
+              <Select value={ticketType} onValueChange={(v) => setTicketType(v as TicketType)}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="preventive_maintenance">Preventive Maintenance</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                Normal
+              </div>
+            )}
           </div>
 
           <div className={needsStorePick && !pickedStoreId ? "pointer-events-none opacity-40" : undefined}>
