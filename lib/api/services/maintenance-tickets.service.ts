@@ -837,12 +837,12 @@ export const maintenanceTicketsService = {
     }
   },
 
-  /** Load catalog issues (for dropdowns) */
+  /** Load catalog issues (for dropdowns). Requests a large page so all issues come back in one shot. */
   async getCatalogIssues(signal?: AbortSignal, storeId?: string): Promise<CatalogIssue[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogIssue[] }>(
-        "/api/maintenance-tickets/catalog/issues",
+        "/api/maintenance-tickets/catalog/issues?per_page=1000",
         {
           headers: {
             Authorization: `Bearer ${token}`,
