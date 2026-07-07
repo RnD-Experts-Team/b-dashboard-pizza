@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -100,8 +102,13 @@ function formatMetricDisplay(label: string, rawValue: string | number): string {
   }).format(numericValue);
 }
 
-function getEmployeeMetricDisplay(employee: ManagerDashboardEmployee, label: string): string {
-  const metric = (employee.metrics ?? []).find((item) => item.label === label);
+function getEmployeeMetricDisplay(
+  employee: ManagerDashboardEmployee,
+  label: string,
+  week: "current" | "past",
+): string {
+  const metrics = week === "current" ? employee.current_metrics : employee.metrics;
+  const metric = (metrics ?? []).find((item) => item.label === label);
   if (!metric) return "-";
 
   return formatMetricDisplay(label, metric.value_numeric ?? metric.value);
@@ -110,6 +117,15 @@ function getEmployeeMetricDisplay(employee: ManagerDashboardEmployee, label: str
 function formatStatus(status?: string | null): string {
   if (!status) return "-";
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function formatDateRange(start?: string, end?: string): string | null {
+  if (!start || !end) return null;
+  try {
+    return `${format(parseISO(start), "MMM d")} – ${format(parseISO(end), "MMM d, yyyy")}`;
+  } catch {
+    return null;
+  }
 }
 
 export function CurrentEmployeesTable({
@@ -121,6 +137,7 @@ export function CurrentEmployeesTable({
   const locale = (params?.locale as string) || "en";
   const { canAccessRoute } = useAuth();
   const { selectedStore } = useSelectedStoreStore();
+  const [week, setWeek] = useState<"current" | "past">("current");
 
   const { data, isLoading, error, refetch } = managerDashboard;
 
@@ -161,6 +178,11 @@ export function CurrentEmployeesTable({
   }
 
   const rows: ManagerDashboardEmployee[] = data?.employees ?? [];
+  const dateRange = data
+    ? week === "current"
+      ? formatDateRange(data.week_start, data.week_end)
+      : formatDateRange(data.previous_week_start, data.previous_week_end)
+    : null;
 
   return (
     <Card
@@ -174,10 +196,33 @@ export function CurrentEmployeesTable({
           <div>
             <CardTitle className="text-[11px]">Current Employees</CardTitle>
             <CardDescription className="text-[9px] mt-0.5">
-              Showing {rows.length} active employees for the previous week of the selected date
+              Showing {rows.length} active employees
+              {dateRange ? ` · ${dateRange}` : ""}
             </CardDescription>
           </div>
           <div className="flex items-center gap-1.5">
+            <div className="inline-flex overflow-hidden rounded-md border border-border/60 bg-background/40 text-[9px] font-semibold shrink-0">
+              <button
+                type="button"
+                onClick={() => setWeek("current")}
+                className={cn(
+                  "px-1.5 py-0.5 transition-colors",
+                  week === "current" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                Current Week
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeek("past")}
+                className={cn(
+                  "px-1.5 py-0.5 transition-colors",
+                  week === "past" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                Past Week
+              </button>
+            </div>
             {isLoading && (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             )}
@@ -238,7 +283,7 @@ export function CurrentEmployeesTable({
                       </TableCell>
                       {METRIC_COLUMNS.map((label) => (
                         <TableCell key={label} className="text-[9px] text-muted-foreground py-2">
-                          {getEmployeeMetricDisplay(employee, label)}
+                          {getEmployeeMetricDisplay(employee, label, week)}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -275,7 +320,7 @@ export function CurrentEmployeesTable({
                     {METRIC_COLUMNS.map((label) => (
                       <div key={label} className="flex items-center justify-between gap-2">
                         <span className="truncate">{label}</span>
-                        <span className="shrink-0">{getEmployeeMetricDisplay(employee, label)}</span>
+                        <span className="shrink-0">{getEmployeeMetricDisplay(employee, label, week)}</span>
                       </div>
                     ))}
                   </div>

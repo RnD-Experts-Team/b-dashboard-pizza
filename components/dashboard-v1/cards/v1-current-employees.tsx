@@ -1,15 +1,18 @@
 "use client";
 
+import { useState } from "react";
+import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ManagerDashboardEmployee } from "@/types/employee.types";
+import type { ManagerDashboardEmployee, ManagerDashboardStoreData } from "@/types/employee.types";
 import { WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { Button } from "@/components/ui/button";
 import {
   V1Empty,
+  V1Toggle,
   V1_TBL,
   V1_TH,
   V1_TD,
@@ -53,8 +56,10 @@ function formatMetricDisplay(label: string, rawValue: string | number): string {
 function getEmployeeMetricDisplay(
   employee: ManagerDashboardEmployee,
   label: string,
+  week: "current" | "past",
 ): string {
-  const metric = (employee.metrics ?? []).find((item) => item.label === label);
+  const metrics = week === "current" ? employee.current_metrics : employee.metrics;
+  const metric = (metrics ?? []).find((item) => item.label === label);
   if (!metric) return "-";
   return formatMetricDisplay(label, metric.value_numeric ?? metric.value);
 }
@@ -64,13 +69,22 @@ function formatStatus(status?: string | null): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function formatDateRange(start?: string, end?: string): string | null {
+  if (!start || !end) return null;
+  try {
+    return `${format(parseISO(start), "MMM d")} – ${format(parseISO(end), "MMM d, yyyy")}`;
+  } catch {
+    return null;
+  }
+}
+
 export function V1CurrentEmployeesCard({
   managerDashboard,
   span,
   className,
 }: {
   managerDashboard: {
-    data?: { employees: ManagerDashboardEmployee[] } | null;
+    data?: ManagerDashboardStoreData | null;
     isLoading?: boolean;
   };
   isLoading?: boolean;
@@ -80,10 +94,16 @@ export function V1CurrentEmployeesCard({
   const params = useParams();
   const locale = (params?.locale as string) || "en";
   const { data, isLoading } = managerDashboard;
+  const [week, setWeek] = useState<"current" | "past">("current");
 
   if (isLoading && !data) return <WbrCardSkeleton className={className} />;
 
   const rows: ManagerDashboardEmployee[] = data?.employees ?? [];
+  const dateRange = data
+    ? week === "current"
+      ? formatDateRange(data.week_start, data.week_end)
+      : formatDateRange(data.previous_week_start, data.previous_week_end)
+    : null;
 
   const pageLink = (
     <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" asChild>
@@ -101,8 +121,26 @@ export function V1CurrentEmployeesCard({
       span={span}
       className={className}
       bodyClassName="px-0"
-      headerNote={rows.length > 0 ? `${rows.length} active` : undefined}
-      headerControl={pageLink}
+      headerNote={
+        rows.length > 0 ? (
+          <span>
+            {rows.length} active{dateRange ? ` · ${dateRange}` : ""}
+          </span>
+        ) : undefined
+      }
+      headerControl={
+        <div className="flex items-center gap-1">
+          <V1Toggle
+            options={[
+              { value: "current", label: "Current" },
+              { value: "past", label: "Past" },
+            ]}
+            value={week}
+            onChange={setWeek}
+          />
+          {pageLink}
+        </div>
+      }
     >
       {rows.length === 0 ? (
         <V1Empty>No active employees found</V1Empty>
@@ -130,7 +168,7 @@ export function V1CurrentEmployeesCard({
                 </td>
                 {METRIC_COLUMNS.map((label) => (
                   <td key={label} className={cn(V1_TD, V1_NUM)}>
-                    {getEmployeeMetricDisplay(employee, label)}
+                    {getEmployeeMetricDisplay(employee, label, week)}
                   </td>
                 ))}
               </tr>
