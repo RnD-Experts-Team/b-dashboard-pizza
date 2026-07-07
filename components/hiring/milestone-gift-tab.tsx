@@ -68,10 +68,10 @@ const MILESTONE_LABELS: Record<Milestone, string> = {
 };
 
 const STAGE_LABELS: Record<MilestoneGiftStage, string> = {
-  created: "Created",
-  rating: "Rating",
-  gift_decision: "Gift Decision",
-  final_status: "Final Status",
+  created: "Submitted",
+  rating: "Rated",
+  gift_decision: "Decided",
+  final_status: "Finalized",
   closed: "Closed",
   cancelled: "Cancelled",
 };
@@ -367,12 +367,12 @@ export function MilestoneGiftTab({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Stages</SelectItem>
-              <SelectItem value="created">Created</SelectItem>
-              <SelectItem value="rating">Rating</SelectItem>
-              <SelectItem value="gift_decision">Gift Decision</SelectItem>
-              <SelectItem value="final_status">Final Status</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="created">{STAGE_LABELS.created}</SelectItem>
+              <SelectItem value="rating">{STAGE_LABELS.rating}</SelectItem>
+              <SelectItem value="gift_decision">{STAGE_LABELS.gift_decision}</SelectItem>
+              <SelectItem value="final_status">{STAGE_LABELS.final_status}</SelectItem>
+              <SelectItem value="closed">{STAGE_LABELS.closed}</SelectItem>
+              <SelectItem value="cancelled">{STAGE_LABELS.cancelled}</SelectItem>
             </SelectContent>
           </Select>
           <Select

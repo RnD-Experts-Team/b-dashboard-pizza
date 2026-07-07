@@ -37,10 +37,10 @@ const MILESTONE_LABELS: Record<Milestone, string> = {
 };
 
 const STAGE_LABELS: Record<MilestoneGiftStage, string> = {
-  created: "Created",
-  rating: "Rating",
-  gift_decision: "Gift Decision",
-  final_status: "Final Status",
+  created: "Submitted",
+  rating: "Rated",
+  gift_decision: "Decided",
+  final_status: "Finalized",
   closed: "Closed",
   cancelled: "Cancelled",
 };
