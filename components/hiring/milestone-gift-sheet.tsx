@@ -24,11 +24,15 @@ import type {
 } from "@/types/milestone-gift.types";
 
 const MILESTONE_LABELS: Record<Milestone, string> = {
-  "30_days": "30 Days",
-  "90_days": "90 Days",
+  "8_days": "8 Days",
+  "1_month": "1 Month",
+  "2_months": "2 Months",
+  "3_months": "3 Months",
+  "4_months": "4 Months",
+  "5_months": "5 Months",
   "6_months": "6 Months",
+  "8_months": "8 Months",
   "1_year": "1 Year",
-  "2_years": "2 Years",
   other: "Other",
 };
 

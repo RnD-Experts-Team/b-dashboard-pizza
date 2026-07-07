@@ -58,11 +58,15 @@ interface CreateMilestoneGiftDialogProps {
 }
 
 const MILESTONES: { value: Milestone; label: string }[] = [
-  { value: "30_days", label: "30 Days" },
-  { value: "90_days", label: "90 Days" },
+  { value: "8_days", label: "8 Days" },
+  { value: "1_month", label: "1 Month" },
+  { value: "2_months", label: "2 Months" },
+  { value: "3_months", label: "3 Months" },
+  { value: "4_months", label: "4 Months" },
+  { value: "5_months", label: "5 Months" },
   { value: "6_months", label: "6 Months" },
+  { value: "8_months", label: "8 Months" },
   { value: "1_year", label: "1 Year" },
-  { value: "2_years", label: "2 Years" },
   { value: "other", label: "Other" },
 ];
 

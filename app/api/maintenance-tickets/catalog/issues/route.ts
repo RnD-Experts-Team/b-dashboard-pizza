@@ -35,8 +35,13 @@ export async function GET(request: NextRequest) {
   const authorization = getAuthorizationHeader(request)!;
   const storeId = request.headers.get("x-store-id");
   const { searchParams } = new URL(request.url);
+  const forwardParams = new URLSearchParams();
   const trashed = searchParams.get("trashed");
-  const upstreamUrl = `${BASE_URL}/issues${trashed ? `?trashed=${trashed}` : ""}`;
+  if (trashed) forwardParams.set("trashed", trashed);
+  const perPage = searchParams.get("per_page");
+  if (perPage) forwardParams.set("per_page", perPage);
+  const qs = forwardParams.toString();
+  const upstreamUrl = `${BASE_URL}/issues${qs ? `?${qs}` : ""}`;
 
   try {
     const res = await fetchWithTimeout(upstreamUrl, {

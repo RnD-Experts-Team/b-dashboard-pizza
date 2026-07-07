@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Loader2, Paperclip, X, Store, ChevronDown, Check, Search } from "lucide-react";
+import { Plus, Trash2, Loader2, Paperclip, X, Store, ChevronDown, Check, Search, ClipboardPaste } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SearchCreateCombobox } from "./search-create-combobox";
 import { useAuth } from "@/lib/auth/use-auth";
+import { toast } from "sonner";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { CatalogIssue, Priority, TicketType } from "@/types/maintenance-tickets.types";
@@ -139,17 +140,22 @@ export function CreateTicketDialog({
     }
   }, [storePickerOpen]);
 
-  // When a store is picked inside the dialog, fetch that store's catalog issues.
+  // Fetch issues for the effective store — either the one passed via prop
+  // (single-store users with no in-dialog picker) or the one picked here in
+  // all-stores mode. This ensures issues load even when the user cannot pick a
+  // store. Skips only the free-text "Other" location, which has no catalog.
   useEffect(() => {
-    if (!pickedStoreId || pickedStoreId === "__other__") return;
+    if (!open) return;
+    const effectiveStore = storeId || (pickedStoreId !== "__other__" ? pickedStoreId : "");
+    if (!effectiveStore) return;
     let cancelled = false;
     setCatalogLoading(true);
-    maintenanceTicketsService.getCatalogIssues(undefined, pickedStoreId)
+    maintenanceTicketsService.getCatalogIssues(undefined, effectiveStore)
       .then((issues) => { if (!cancelled) setLocalCatalogIssues(issues.filter((i) => !i.deletedAt)); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setCatalogLoading(false); });
     return () => { cancelled = true; };
-  }, [pickedStoreId]);
+  }, [open, storeId, pickedStoreId]);
 
   const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
@@ -163,6 +169,33 @@ export function CreateTicketDialog({
 
   function addRow() {
     setRows((prev) => [...prev, makeRow()]);
+  }
+
+  /** Pastes clipboard images/files into a row's attachments (Ctrl+V on the file zone). */
+  function handleRowPaste(row: IssueRow, e: React.ClipboardEvent) {
+    const pasted = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === "file")
+      .map((item, i) => {
+        const blob = item.getAsFile();
+        if (!blob) return null;
+        const ext = blob.type ? blob.type.split("/")[1] ?? "bin" : "bin";
+        return new File([blob], `paste-${Date.now()}-${i}.${ext}`, { type: blob.type });
+      })
+      .filter((f): f is File => f !== null);
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    updateRow(row.id, { files: [...row.files, ...pasted] });
+  }
+
+  /** Arms the file zone for pasting when the mouse enters it (unless actively typing). */
+  function handleZoneMouseEnter(e: React.MouseEvent<HTMLDivElement>) {
+    const active = document.activeElement as HTMLElement | null;
+    // Only avoid stealing focus while the user is typing in a text field — a
+    // focused button (e.g. the dialog trigger) should not block arming the zone.
+    const isTyping =
+      active &&
+      (["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName) || active.isContentEditable);
+    if (!isTyping) e.currentTarget.focus({ preventScroll: true });
   }
 
   function handleClose() {
@@ -226,12 +259,14 @@ export function CreateTicketDialog({
 
       setRows([makeRow()]);
       setSubmitError(null);
+      toast.success(rows.length > 1 ? "Ticket created with all issues." : "Ticket created successfully.");
       onSuccess();
       onClose();
     } catch (err) {
-      setSubmitError(
-        err instanceof MaintenanceTicketsError ? err.message : t("createDialog.submitError")
-      );
+      const message =
+        err instanceof MaintenanceTicketsError ? err.message : t("createDialog.submitError");
+      setSubmitError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -451,7 +486,7 @@ export function CreateTicketDialog({
                 />
               </div>
 
-              {/* File attachments */}
+              {/* File attachments — paste-aware: hover the zone and Ctrl+V to attach */}
               <div className="space-y-1">
                 <Label className="text-sm text-muted-foreground">
                   {t("createDialog.filesLabel")}
@@ -468,33 +503,49 @@ export function CreateTicketDialog({
                     e.target.value = "";
                   }}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRefs.current[row.id]?.click()}
+                <div
+                  tabIndex={-1}
+                  onPaste={(e) => handleRowPaste(row, e)}
+                  onMouseEnter={handleZoneMouseEnter}
+                  className={cn(
+                    "rounded-md border border-dashed bg-muted/20 p-2 outline-none transition-all",
+                    "hover:border-primary/50 hover:bg-primary/5",
+                    "focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/30"
+                  )}
                 >
-                  <Paperclip className="me-1.5 h-3.5 w-3.5" />
-                  {t("createDialog.attachFiles")}
-                </Button>
-                {row.files.length > 0 && (
-                  <ul className="mt-1 space-y-1">
-                    {row.files.map((file, fi) => (
-                      <li key={fi} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Paperclip className="h-3 w-3 shrink-0 opacity-50" />
-                        <span className="truncate max-w-[220px]">{file.name}</span>
-                        <button
-                          type="button"
-                          aria-label={t("createDialog.removeFile")}
-                          onClick={() => updateRow(row.id, { files: row.files.filter((_, idx) => idx !== fi) })}
-                          className="ms-auto text-destructive hover:opacity-80"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                  <div className="flex items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRefs.current[row.id]?.click()}
+                    >
+                      <Paperclip className="me-1.5 h-3.5 w-3.5" />
+                      {t("createDialog.attachFiles")}
+                    </Button>
+                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
+                      <ClipboardPaste className="h-3 w-3" /> Paste
+                    </span>
+                  </div>
+                  {row.files.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {row.files.map((file, fi) => (
+                        <li key={fi} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Paperclip className="h-3 w-3 shrink-0 opacity-50" />
+                          <span className="truncate max-w-[220px]">{file.name}</span>
+                          <button
+                            type="button"
+                            aria-label={t("createDialog.removeFile")}
+                            onClick={() => updateRow(row.id, { files: row.files.filter((_, idx) => idx !== fi) })}
+                            className="ms-auto text-destructive hover:opacity-80"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             </div>
           ))}
