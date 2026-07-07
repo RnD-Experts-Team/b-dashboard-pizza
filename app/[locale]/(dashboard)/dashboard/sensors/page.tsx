@@ -233,6 +233,8 @@ function SensorCard({
   const isUnavailable = sensor.source === "unavailable" || (!sensor.success && sensor.temperature == null);
   const temp        = sensor.temperature ?? (typeof state?.temperature === "number" ? state.temperature : undefined);
   const displayTime = sensor.as_of ?? sensor.reported_at;
+  // Use the same static, unit-aware ranges as the MOS view (not the backend tempLimit).
+  const staticRange = getSensorRanges(useCelsius)[canonicalKey(sensor.device_name)];
 
   return (
     <Card className={cn(
@@ -284,9 +286,9 @@ function SensorCard({
                 <span className="text-2xl font-bold tabular-nums">{formatTemp(temp, useCelsius)}</span>
               </div>
             )}
-            {state?.tempLimit && (
+            {staticRange && (
               <p className="text-xs text-muted-foreground">
-                {t("tempRange")}: {formatTemp(state.tempLimit.min, useCelsius)} – {formatTemp(state.tempLimit.max, useCelsius)}
+                {t("tempRange")}: {staticRange}
               </p>
             )}
             {isStale && displayTime && (

@@ -722,7 +722,10 @@ export interface ManagerDashboardEmployee {
   position: string | null;
   base_pay: string | null;
   performance_pay: string | null;
+  /** Previous week's scores. */
   metrics: ManagerDashboardEmployeeMetric[];
+  /** Current week's scores — may be empty mid-week before an employee is scored. */
+  current_metrics: ManagerDashboardEmployeeMetric[];
   metric?: ManagerDashboardEmployeeMetric | null;
 }
 
@@ -731,6 +734,8 @@ export interface ManagerDashboardStoreData {
   date: string;
   week_start: string;
   week_end: string;
+  previous_week_start: string;
+  previous_week_end: string;
   employees: ManagerDashboardEmployee[];
 }
 

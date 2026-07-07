@@ -264,10 +264,16 @@ export function DueKeyValueSheet({
           !showEditForm ? (
             /* ── Read-only detail view for filled keys ── */
             <div className="space-y-4 p-4">
-              <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                <p>Store: {storeId}</p>
-                <p>Date: {date}</p>
-                <p className="flex items-center gap-1.5">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
+                    Store {storeId}
+                  </span>
+                  <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
+                    {date}
+                  </span>
+                </div>
+                <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   Status: <Badge variant="default" className="text-xs">Filled</Badge>
                 </p>
               </div>
@@ -431,10 +437,18 @@ export function DueKeyValueSheet({
           ) : (
             /* ── Edit form (unfilled keys, or edit mode for filled keys) ── */
             <div className="space-y-4 p-4">
-              <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                <p>Store: {storeId}</p>
-                <p>Date: {date}</p>
-                <p>Status: {effectiveFilled ? "Correcting value" : "Not Filled"}</p>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
+                    Store {storeId}
+                  </span>
+                  <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
+                    {date}
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Status: {effectiveFilled ? "Correcting value" : "Not Filled"}
+                </p>
               </div>
 
               <Separator />
