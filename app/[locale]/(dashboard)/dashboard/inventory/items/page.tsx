@@ -16,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useItems } from "@/lib/hooks/use-inventory-items";
 import { isDisplayableErrorMessage } from "@/lib/api/inventory-errors";
 import { DeleteConfirmDialog } from "@/components/inventory/delete-confirm-dialog";
@@ -31,8 +33,21 @@ export default function ItemsPage() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
+  // Ambient dashboard store — GET /inventory/items[/:id] are store-scoped, so we
+  // send the human store_number (not the internal id) as X-Store-Id; the backend
+  // resolves it to authorize the store's permission set.
+  const overviewStores = useAuthStore((s) => s.overviewStores);
+  const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
+  const storeNumber = selectedStore?.storeId ?? overviewStores?.[0]?.storeId;
+
   const { items, pagination, isLoading, isDeleting, error, deleteError, deleteItem, handlePageChange } =
-    useItems();
+    useItems(undefined, storeNumber);
+
+  // Rule-based UI gating. GET (list) is scoped; POST/PUT/DELETE remain non-scoped.
+  const { canAccessRoute } = useAuthStore();
+  const canCreateItem = canAccessRoute({ service: "Inventory", method: "POST", path: "/inventory/items" });
+  const canEditItem = canAccessRoute({ service: "Inventory", method: "PUT", path: "/inventory/items/*" });
+  const canDeleteItem = canAccessRoute({ service: "Inventory", method: "DELETE", path: "/inventory/items/*" });
 
   const [deleting, setDeleting] = useState<Item | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
@@ -115,44 +130,51 @@ export default function ItemsPage() {
       key: "actions",
       header: "",
       className: "w-12 text-right",
-      cell: (item: Item) => (
-        <div data-no-row-click="true" className="text-right">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() =>
-                  router.push(`/${locale}/dashboard/inventory/items/${item.id}/edit`)
-                }
-              >
-                <Pencil className="me-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setDeleting(item)}
-              >
-                <Trash2 className="me-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
+      cell: (item: Item) =>
+        canEditItem || canDeleteItem ? (
+          <div data-no-row-click="true" className="text-right">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canEditItem && (
+                  <DropdownMenuItem
+                    onClick={() =>
+                      router.push(`/${locale}/dashboard/inventory/items/${item.id}/edit`)
+                    }
+                  >
+                    <Pencil className="me-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {canDeleteItem && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleting(item)}
+                  >
+                    <Trash2 className="me-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : null,
     },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader title="Items" description="Catalog items with units, types and images.">
-        <Button onClick={() => router.push(`/${locale}/dashboard/inventory/items/create`)}>
-          <Plus className="me-2 h-4 w-4" />
-          New item
-        </Button>
+        {canCreateItem && (
+          <Button onClick={() => router.push(`/${locale}/dashboard/inventory/items/create`)}>
+            <Plus className="me-2 h-4 w-4" />
+            New item
+          </Button>
+        )}
       </PageHeader>
 
       <DataTable
@@ -177,6 +199,7 @@ export default function ItemsPage() {
 
       <ItemDetailSheet
         itemId={selectedItemId}
+        storeId={storeNumber}
         open={selectedItemId !== null}
         onOpenChange={(o) => !o && setSelectedItemId(null)}
       />

@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { useUnits } from "@/lib/hooks/use-inventory-units";
 import { isDisplayableErrorMessage } from "@/lib/api/inventory-errors";
 import { UnitFormDialog } from "@/components/inventory/unit-form-dialog";
@@ -26,6 +27,12 @@ import type { Unit } from "@/types/inventory.types";
 export default function UnitsPage() {
   const { units, pagination, isLoading, isDeleting, error, deleteError, deleteUnit, handlePageChange } =
     useUnits();
+
+  // Rule-based UI gating (Inventory service, non-scoped units rules).
+  const { canAccessRoute } = useAuthStore();
+  const canCreateUnit = canAccessRoute({ service: "Inventory", method: "POST", path: "/inventory/units" });
+  const canEditUnit = canAccessRoute({ service: "Inventory", method: "PUT", path: "/inventory/units/*" });
+  const canDeleteUnit = canAccessRoute({ service: "Inventory", method: "DELETE", path: "/inventory/units/*" });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Unit | null>(null);
@@ -69,40 +76,47 @@ export default function UnitsPage() {
       key: "actions",
       header: "",
       className: "w-12 text-right",
-      cell: (u: Unit) => (
-        <div data-no-row-click="true" className="text-right">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openEdit(u)}>
-                <Pencil className="me-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={() => setDeleting(u)}
-              >
-                <Trash2 className="me-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
+      cell: (u: Unit) =>
+        canEditUnit || canDeleteUnit ? (
+          <div data-no-row-click="true" className="text-right">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canEditUnit && (
+                  <DropdownMenuItem onClick={() => openEdit(u)}>
+                    <Pencil className="me-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                )}
+                {canDeleteUnit && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeleting(u)}
+                  >
+                    <Trash2 className="me-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : null,
     },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader title="Units" description="Measurement units used by inventory items.">
-        <Button onClick={openCreate}>
-          <Plus className="me-2 h-4 w-4" />
-          New unit
-        </Button>
+        {canCreateUnit && (
+          <Button onClick={openCreate}>
+            <Plus className="me-2 h-4 w-4" />
+            New unit
+          </Button>
+        )}
       </PageHeader>
 
       <DataTable

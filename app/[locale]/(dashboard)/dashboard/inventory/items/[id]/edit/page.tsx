@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { ItemForm } from "@/components/inventory/item-form";
 import { useItem } from "@/lib/hooks/use-inventory-items";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 
 /** Skeleton that mirrors the ItemForm card/field layout exactly. */
 function ItemFormSkeleton() {
@@ -132,7 +134,16 @@ export default function EditItemPage() {
   const id = Number(params?.id);
   const listHref = `/${locale}/dashboard/inventory/items`;
 
-  const { item, isLoading, error } = useItem(Number.isFinite(id) ? id : null);
+  // Ambient dashboard store — GET /inventory/items/{id} is store-scoped, so we
+  // send the human store_number (not the internal id) as X-Store-Id.
+  const overviewStores = useAuthStore((s) => s.overviewStores);
+  const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
+  const storeNumber = selectedStore?.storeId ?? overviewStores?.[0]?.storeId;
+
+  const { item, isLoading, error } = useItem(
+    Number.isFinite(id) ? id : null,
+    storeNumber
+  );
 
   return (
     <div className="space-y-6">

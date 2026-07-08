@@ -89,16 +89,19 @@ function ItemDetailSkeleton() {
 
 interface ItemDetailSheetProps {
   itemId: number | null;
+  /** Ambient dashboard store, forwarded as X-Store-Id — see `useItemDetail`. */
+  storeId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function ItemDetailSheet({
   itemId,
+  storeId,
   open,
   onOpenChange,
 }: ItemDetailSheetProps) {
-  const { item, isLoading, error } = useItemDetail(open ? itemId : null);
+  const { item, isLoading, error } = useItemDetail(open ? itemId : null, storeId);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   return (

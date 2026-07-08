@@ -22,8 +22,8 @@ interface ItemsState {
   saveError: string | null;
   deleteError: string | null;
 
-  fetchItems: (params?: ListParams) => Promise<void>;
-  fetchItem: (id: number) => Promise<Item | null>;
+  fetchItems: (params?: ListParams, storeId?: string) => Promise<void>;
+  fetchItem: (id: number, storeId?: string) => Promise<Item | null>;
   createItem: (values: ItemFormValues) => Promise<Item>;
   updateItem: (id: number, values: ItemFormValues) => Promise<Item>;
   deleteItem: (id: number) => Promise<void>;
@@ -43,10 +43,10 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
   saveError: null,
   deleteError: null,
 
-  fetchItems: async (params) => {
+  fetchItems: async (params, storeId) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await itemService.list(params);
+      const res = await itemService.list(params, storeId);
       set({ items: res.data, pagination: res.meta, isLoading: false });
     } catch (error) {
       if (isCanceledError(error)) return;
@@ -54,10 +54,10 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
     }
   },
 
-  fetchItem: async (id) => {
+  fetchItem: async (id, storeId) => {
     set({ isLoadingItem: true, itemError: null, currentItem: null });
     try {
-      const item = await itemService.get(id);
+      const item = await itemService.get(id, storeId);
       set({ currentItem: item, isLoadingItem: false });
       return item;
     } catch (error) {

@@ -11,13 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useStoreEntries } from "@/lib/hooks/use-inventory-entries";
-import { useInventoryStores } from "@/lib/hooks/use-inventory-stores";
+import { useInventoryStoreScope } from "@/lib/hooks/use-inventory-store-scope";
 import { isDisplayableErrorMessage } from "@/lib/api/inventory-errors";
 import { cn } from "@/lib/utils";
 import type { Entry, EntryListParams } from "@/types/inventory.types";
 
 export default function EntriesPage() {
-  const { stores } = useInventoryStores();
+  const { stores, isLocked, lockedStoreId } = useInventoryStoreScope();
   const storeOptions = stores.map((s) => ({
     storeId: s.storeId ?? s.id,
     name: s.name,
@@ -28,12 +28,15 @@ export default function EntriesPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
 
-  // Auto-select the first store when the list loads.
+  // Auto-select the store when the list loads. A locked store_manager is always
+  // pinned to their store; everyone else defaults to the first assigned store.
   useEffect(() => {
-    if (!storeId && stores.length > 0) {
+    if (isLocked && lockedStoreId && storeId !== lockedStoreId) {
+      setStoreId(lockedStoreId);
+    } else if (!storeId && stores.length > 0) {
       setStoreId(stores[0].storeId ?? stores[0].id);
     }
-  }, [stores, storeId]);
+  }, [stores, storeId, isLocked, lockedStoreId]);
 
   const { entries, pagination, isLoading, error, handlePageChange } =
     useStoreEntries(storeId || null, filters);
@@ -86,6 +89,7 @@ export default function EntriesPage() {
           stores={storeOptions}
           value={storeId}
           onChange={setStoreId}
+          disabled={isLocked}
         />
 
         {storeId && (
@@ -162,6 +166,7 @@ export default function EntriesPage() {
 
       <EntryDetailSheet
         entryId={selectedEntryId}
+        storeId={storeId}
         open={selectedEntryId !== null}
         onOpenChange={(o) => !o && setSelectedEntryId(null)}
       />

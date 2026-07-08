@@ -16,6 +16,8 @@ interface InventoryStoreSelectProps {
   stores: InventoryStoreOption[];
   value: string;
   onChange: (storeId: string) => void;
+  /** When true, the store is fixed and the picker cannot be opened (read-only). */
+  disabled?: boolean;
 }
 
 /**
@@ -28,6 +30,7 @@ export function InventoryStoreSelect({
   stores,
   value,
   onChange,
+  disabled = false,
 }: InventoryStoreSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -54,8 +57,9 @@ export function InventoryStoreSelect({
 
   return (
     <Popover
-      open={open}
+      open={disabled ? false : open}
       onOpenChange={(next) => {
+        if (disabled) return;
         setOpen(next);
         if (!next) setSearch("");
       }}
@@ -64,18 +68,21 @@ export function InventoryStoreSelect({
         <Button
           variant="outline"
           size="sm"
+          disabled={disabled}
           className="h-9 gap-2 min-w-[150px] max-w-[220px] justify-between"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <Store className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{label}</span>
           </span>
-          <ChevronDown
-            className={cn(
-              "h-3.5 w-3.5 shrink-0 transition-transform",
-              open && "rotate-180"
-            )}
-          />
+          {!disabled && (
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 transition-transform",
+                open && "rotate-180"
+              )}
+            />
+          )}
         </Button>
       </PopoverTrigger>
 

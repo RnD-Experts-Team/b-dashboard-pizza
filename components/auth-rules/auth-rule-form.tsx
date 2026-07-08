@@ -288,7 +288,7 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
           priority: formData.priority,
           isActive: formData.isActive,
           storeScopeMode: formData.storeScopeMode,
-          storeIdSources: formData.storeIdSources,
+          storeIdSources: formData.storeIdSources && formData.storeIdSources.length > 0 ? formData.storeIdSources : null,
           storeMatchPolicy: formData.storeMatchPolicy,
           storeAllowsEmpty: formData.storeAllowsEmpty,
         };
@@ -306,7 +306,7 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               priority: formData.priority,
               isActive: formData.isActive,
               storeScopeMode: formData.storeScopeMode,
-              storeIdSources: formData.storeIdSources,
+              storeIdSources: formData.storeIdSources && formData.storeIdSources.length > 0 ? formData.storeIdSources : null,
               storeMatchPolicy: formData.storeMatchPolicy,
               storeAllowsEmpty: formData.storeAllowsEmpty,
             }
@@ -320,7 +320,7 @@ export function AuthRuleForm({ rule, mode = "create", onSuccess }: AuthRuleFormP
               priority: formData.priority,
               isActive: formData.isActive,
               storeScopeMode: formData.storeScopeMode,
-              storeIdSources: formData.storeIdSources,
+              storeIdSources: formData.storeIdSources && formData.storeIdSources.length > 0 ? formData.storeIdSources : null,
               storeMatchPolicy: formData.storeMatchPolicy,
               storeAllowsEmpty: formData.storeAllowsEmpty,
             };

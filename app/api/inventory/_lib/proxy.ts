@@ -56,6 +56,12 @@ export async function proxyInventory(
   };
   if (authorization) headers.Authorization = authorization;
 
+  // Forward the store-scope hint header. Endpoints whose URL carries no store
+  // (e.g. GET /inventory/entries/{id}) rely on this so the backend's
+  // store-scoped auth rule can resolve the store for a store_manager.
+  const storeIdHeader = request.headers.get("x-store-id");
+  if (storeIdHeader) headers["X-Store-Id"] = storeIdHeader;
+
   let body: ArrayBuffer | undefined;
   if (forwardBody) {
     headers["Content-Type"] =

@@ -21,6 +21,9 @@ interface EntriesState {
   entries: Entry[];
   pagination: PaginatedResponse<Entry>["meta"] | null;
   currentEntry: EntryDetail | null;
+  /** Internal store id the current entry was fetched with — reused so a recount
+   *  PATCH can send the same X-Store-Id the backend needs to authorize it. */
+  currentStoreId: string | null;
   /** True when currentEntry came from /history (i.e. items carry is_edited/edits). */
   hasHistoryAccess: boolean;
 
@@ -33,7 +36,7 @@ interface EntriesState {
   saveError: string | null;
 
   fetchEntries: (storeId: string, params?: EntryListParams) => Promise<void>;
-  fetchEntry: (id: number) => Promise<EntryDetail | null>;
+  fetchEntry: (id: number, storeId?: string) => Promise<EntryDetail | null>;
   recountItem: (
     entryItemId: number,
     payload: UpdateEntryItemPayload
@@ -45,6 +48,7 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
   entries: [],
   pagination: null,
   currentEntry: null,
+  currentStoreId: null,
   hasHistoryAccess: false,
   isLoading: false,
   isLoadingDetail: false,
@@ -67,15 +71,16 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
   // Deterministic per the API: try the history endpoint first (it returns
   // is_edited/edits on every item); a 403 means this user isn't permitted to
   // see history, so fall back to the plain endpoint instead of erroring out.
-  fetchEntry: async (id) => {
+  fetchEntry: async (id, storeId) => {
     set({
       isLoadingDetail: true,
       detailError: null,
       currentEntry: null,
+      currentStoreId: storeId ?? null,
       hasHistoryAccess: false,
     });
     try {
-      const entry = await entryService.getHistory(id);
+      const entry = await entryService.getHistory(id, storeId);
       set({ currentEntry: entry, hasHistoryAccess: true, isLoadingDetail: false });
       return entry;
     } catch (error) {
@@ -85,7 +90,7 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
         return null;
       }
       try {
-        const entry = await entryService.get(id);
+        const entry = await entryService.get(id, storeId);
         set({ currentEntry: entry, hasHistoryAccess: false, isLoadingDetail: false });
         return entry;
       } catch (fallbackError) {
@@ -102,7 +107,11 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
   recountItem: async (entryItemId, payload) => {
     set({ isSaving: true, saveError: null });
     try {
-      const updated = await entryService.updateEntryItem(entryItemId, payload);
+      const updated = await entryService.updateEntryItem(
+        entryItemId,
+        payload,
+        get().currentStoreId ?? undefined
+      );
       // Merge the updated counts/edits back into the loaded entry detail.
       set((state) => {
         if (!state.currentEntry) return { isSaving: false };

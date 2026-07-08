@@ -469,8 +469,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
-  // Inventory Management — no requiredPermission/requirements yet,
-  // so every item is always visible (per current requirements).
+  // Inventory Management — all four items are gated. Units/Items use non-scoped
+  // Inventory GET rules; Links and Entries use store-scoped rules (so they stay
+  // visible to store_manager on their store).
   const inventoryManagementGroup: NavGroup = {
     label: t("inventoryManagement"),
     icon: Package,
@@ -479,21 +480,34 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("inventoryUnits"),
         href: `/${locale}/dashboard/inventory/units`,
         icon: Ruler,
+        requirements: [
+          { service: "Inventory", method: "GET", path: "/inventory/units" },
+        ],
       },
       {
         title: t("inventoryItems"),
         href: `/${locale}/dashboard/inventory/items`,
         icon: Boxes,
+        requirements: [
+          { service: "Inventory", method: "GET", path: "/inventory/items", storeId: effectiveStoreId },
+        ],
       },
       {
         title: t("inventoryLinks"),
         href: `/${locale}/dashboard/inventory/links`,
         icon: Link2,
+        requirements: [
+          { service: "Inventory", method: "POST", path: "/inventory/links", storeId: effectiveStoreId },
+          { service: "Inventory", method: "GET", path: "/inventory/links/*", storeId: effectiveStoreId },
+        ],
       },
       {
         title: t("inventoryEntries"),
         href: `/${locale}/dashboard/inventory/entries`,
         icon: ClipboardList,
+        requirements: [
+          { service: "Inventory", method: "GET", path: "/inventory/entries/*", storeId: effectiveStoreId },
+        ],
       },
     ],
   };

@@ -28,7 +28,7 @@ import { InventoryStoreSelect } from "@/components/inventory/inventory-store-sel
 import { toast } from "sonner";
 import { useCreateLinks } from "@/lib/hooks/use-inventory-links";
 import { useInventoryEmployees } from "@/lib/hooks/use-inventory-employees";
-import { useInventoryStores } from "@/lib/hooks/use-inventory-stores";
+import { useInventoryStoreScope } from "@/lib/hooks/use-inventory-store-scope";
 import { publicCountUrl } from "@/lib/inventory/public-link-url";
 import type { InventoryType } from "@/types/inventory.types";
 
@@ -72,7 +72,7 @@ export function CreateLinkDialog({
     clearErrors,
   } = useCreateLinks();
 
-  const { stores } = useInventoryStores();
+  const { stores, isLocked, lockedStoreId } = useInventoryStoreScope();
   const storeOptions = stores.map((s) => ({ storeId: s.storeId ?? s.id, name: s.name }));
 
   const [storeId, setStoreId] = useState(initialStoreId);
@@ -89,8 +89,9 @@ export function CreateLinkDialog({
 
   useEffect(() => {
     if (open) {
-      // Reset form each time the dialog opens.
-      setStoreId(initialStoreId);
+      // Reset form each time the dialog opens. A locked store_manager is always
+      // pinned to their own store regardless of the caller's initialStoreId.
+      setStoreId(isLocked && lockedStoreId ? lockedStoreId : initialStoreId);
       setSelectedEmployees([]);
       setManualIds("");
       setType("daily");
@@ -98,7 +99,7 @@ export function CreateLinkDialog({
       clearCreated();
       clearErrors();
     }
-  }, [open, initialStoreId, clearCreated, clearErrors]);
+  }, [open, initialStoreId, isLocked, lockedStoreId, clearCreated, clearErrors]);
 
   // Switching stores invalidates any picked employees (they belong to the old store).
   const handleStoreChange = (next: string) => {
@@ -231,6 +232,7 @@ export function CreateLinkDialog({
                 stores={storeOptions}
                 value={storeId}
                 onChange={handleStoreChange}
+                disabled={isLocked}
               />
             </div>
 

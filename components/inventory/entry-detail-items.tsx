@@ -13,6 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { RecountDialog } from "./recount-dialog";
 import type { EntryItem, EntryItemEdit } from "@/types/inventory.types";
 
@@ -91,19 +93,43 @@ function EditLogEntry({ edit }: { edit: EntryItemEdit }) {
  * `is_edited`/`edits` are only present when the entry was fetched via the
  * `/history` endpoint (see `useEntryDetail`'s fetch strategy) — a plain-fetched
  * entry simply omits them, which the optional chaining below handles safely.
- * When present we show an "edited" badge and an expandable audit-log row;
- * recount is always offered (the backend authorizes store_manager and
- * inventory_specialist alike).
+ * Edit history (badge + expandable audit log) is shown only when the user is
+ * authorized for it (`canViewHistory`, i.e. the `/history` fetch succeeded —
+ * admin/inventory_specialist). Recount is gated on the entry-items PATCH rule,
+ * which store_manager, inventory_specialist and admin all satisfy.
  */
-export function EntryDetailItems({ items }: { items: EntryItem[] }) {
+export function EntryDetailItems({
+  items,
+  canViewHistory,
+}: {
+  items: EntryItem[];
+  canViewHistory: boolean;
+}) {
   const [recountTarget, setRecountTarget] = useState<EntryItem | null>(null);
   // Pre-expand every item that already has edits so history is visible immediately.
   const [expanded, setExpanded] = useState<Set<number>>(
-    () => new Set(items.filter((i) => i.edits && i.edits.length > 0).map((i) => i.id))
+    () =>
+      new Set(
+        canViewHistory
+          ? items.filter((i) => i.edits && i.edits.length > 0).map((i) => i.id)
+          : []
+      )
   );
 
-  const canEdit = true;
-  const colSpan = canEdit ? 6 : 5;
+  // Recount is a store-scoped-or-global action; pass the effective store so a
+  // store_manager (store-scoped perm) passes, while admin/specialist pass via
+  // global perms / super-admin bypass.
+  const canAccessRoute = useAuthStore((s) => s.canAccessRoute);
+  const overviewStores = useAuthStore((s) => s.overviewStores);
+  const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
+  const canRecount = canAccessRoute({
+    service: "Inventory",
+    method: "PATCH",
+    path: "/inventory/entry-items/*",
+    storeId: effectiveStoreId,
+  });
+  const colSpan = canRecount ? 6 : 5;
 
   const toggleExpanded = (itemId: number) =>
     setExpanded((prev) => {
@@ -124,7 +150,7 @@ export function EntryDetailItems({ items }: { items: EntryItem[] }) {
               <TableHead className="text-right">Unit 2</TableHead>
               <TableHead className="text-right">Unit 3</TableHead>
               <TableHead className="text-right">Total (U1)</TableHead>
-              {canEdit && <TableHead className="text-right">Actions</TableHead>}
+              {canRecount && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -136,7 +162,8 @@ export function EntryDetailItems({ items }: { items: EntryItem[] }) {
               </TableRow>
             ) : (
               items.map((item) => {
-                const hasHistory = Boolean(item.edits && item.edits.length > 0);
+                const hasHistory =
+                  canViewHistory && Boolean(item.edits && item.edits.length > 0);
                 const isOpen = expanded.has(item.id);
 
                 return (
@@ -145,7 +172,7 @@ export function EntryDetailItems({ items }: { items: EntryItem[] }) {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{item.item.name_en}</span>
-                          {item.is_edited && (
+                          {item.is_edited && canViewHistory && (
                             <Badge
                               variant="outline"
                               className="border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-600 dark:text-amber-400"
@@ -184,7 +211,7 @@ export function EntryDetailItems({ items }: { items: EntryItem[] }) {
                       <TableCell className="text-right font-medium">
                         {item.total_in_unit_1}
                       </TableCell>
-                      {canEdit && (
+                      {canRecount && (
                         <TableCell className="text-right">
                           <Button
                             variant="outline"

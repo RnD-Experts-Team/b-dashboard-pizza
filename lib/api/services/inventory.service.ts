@@ -171,22 +171,34 @@ export const unitService = {
 
 /* ── Items ─────────────────────────────────────────────────────────────── */
 export const itemService = {
+  // The list endpoint carries no store in its URL; pass the ambient store as an
+  // X-Store-Id header so its now-scoped rule can authorize store-scoped permissions.
   list: async (
     params?: ListParams,
+    storeId?: string,
     signal?: AbortSignal
   ): Promise<PaginatedResponse<Item>> => {
     const { data } = await inventoryClient.get<InventoryPaginated<Item>>(
       "/inventory/items",
-      { params: { page: params?.page, per_page: params?.perPage }, signal }
+      {
+        params: { page: params?.page, per_page: params?.perPage },
+        headers: storeId ? { "X-Store-Id": storeId } : undefined,
+        signal,
+      }
     );
     const paginated = toPaginated(data);
     return { ...paginated, data: paginated.data.map(normalizeItem) };
   },
 
-  get: async (id: number, signal?: AbortSignal): Promise<Item> => {
+  // Same store-header need as list() — the detail URL has no store either.
+  get: async (
+    id: number,
+    storeId?: string,
+    signal?: AbortSignal
+  ): Promise<Item> => {
     const { data } = await inventoryClient.get<Wrapped<Item>>(
       `/inventory/items/${id}`,
-      { signal }
+      { headers: storeId ? { "X-Store-Id": storeId } : undefined, signal }
     );
     return normalizeItem(data.data);
   },
@@ -282,32 +294,47 @@ export const entryService = {
   },
 
   // Basic detail — never includes is_edited/edits (see getHistory for that).
-  get: async (id: number, signal?: AbortSignal): Promise<EntryDetail> => {
+  // The entry URL carries no store, so we pass the current store as an
+  // X-Store-Id header: the backend's store-scoped rule needs it to authorize a
+  // store_manager (admins/specialists pass regardless).
+  get: async (
+    id: number,
+    storeId?: string,
+    signal?: AbortSignal
+  ): Promise<EntryDetail> => {
     const { data } = await inventoryClient.get<Wrapped<EntryDetail>>(
       `/inventory/entries/${id}`,
-      { signal }
+      { signal, headers: storeId ? { "X-Store-Id": storeId } : undefined }
     );
     return data.data;
   },
 
   // Full detail with each item's is_edited + edits[]. 403s for callers without
   // the history permission — see useEntryDetail for the fallback strategy.
-  getHistory: async (id: number, signal?: AbortSignal): Promise<EntryDetail> => {
+  getHistory: async (
+    id: number,
+    storeId?: string,
+    signal?: AbortSignal
+  ): Promise<EntryDetail> => {
     const { data } = await inventoryClient.get<Wrapped<EntryDetail>>(
       `/inventory/entries/${id}/history`,
-      { signal }
+      { signal, headers: storeId ? { "X-Store-Id": storeId } : undefined }
     );
     return data.data;
   },
 
   // Recount one entry item; the backend logs the change to an append-only history.
+  // The entry-items URL carries no store, so we pass the current store as an
+  // X-Store-Id header — the backend needs it to authorize a store_manager's edit.
   updateEntryItem: async (
     entryItemId: number,
-    payload: UpdateEntryItemPayload
+    payload: UpdateEntryItemPayload,
+    storeId?: string
   ): Promise<EntryItem> => {
     const { data } = await inventoryClient.patch<Wrapped<EntryItem>>(
       `/inventory/entry-items/${entryItemId}`,
-      payload
+      payload,
+      { headers: storeId ? { "X-Store-Id": storeId } : undefined }
     );
     return data.data;
   },

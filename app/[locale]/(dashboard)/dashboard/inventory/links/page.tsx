@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useStoreLinks } from "@/lib/hooks/use-inventory-links";
-import { useInventoryStores } from "@/lib/hooks/use-inventory-stores";
+import { useInventoryStoreScope } from "@/lib/hooks/use-inventory-store-scope";
 import { isDisplayableErrorMessage } from "@/lib/api/inventory-errors";
 import { cn } from "@/lib/utils";
 import { CreateLinkDialog } from "@/components/inventory/create-link-dialog";
@@ -29,7 +29,7 @@ export default function LinksPage() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
-  const { stores } = useInventoryStores();
+  const { stores, isLocked, lockedStoreId } = useInventoryStoreScope();
   const storeOptions = stores.map((s) => ({
     storeId: s.storeId ?? s.id,
     name: s.name,
@@ -40,12 +40,15 @@ export default function LinksPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Auto-select the first store when the list loads.
+  // Auto-select the store when the list loads. A locked store_manager is always
+  // pinned to their store; everyone else defaults to the first assigned store.
   useEffect(() => {
-    if (!storeId && stores.length > 0) {
+    if (isLocked && lockedStoreId && storeId !== lockedStoreId) {
+      setStoreId(lockedStoreId);
+    } else if (!storeId && stores.length > 0) {
       setStoreId(stores[0].storeId ?? stores[0].id);
     }
-  }, [stores, storeId]);
+  }, [stores, storeId, isLocked, lockedStoreId]);
 
   const { links, pagination, isLoading, error, handlePageChange, refetch } =
     useStoreLinks(storeId || null, filters);
@@ -133,6 +136,7 @@ export default function LinksPage() {
             stores={storeOptions}
             value={storeId}
             onChange={setStoreId}
+            disabled={isLocked}
           />
 
           {storeId && (

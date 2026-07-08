@@ -39,8 +39,12 @@ export function useStoreEntries(
 
 /**
  * Single entry detail + recount. Pass null to skip fetching.
+ *
+ * `storeId` (the internal store id of the entry's store) is sent to the backend
+ * so its store-scoped entry-detail rule can authorize a store_manager — the
+ * `/inventory/entries/{id}` URL carries no store of its own.
  */
-export function useEntryDetail(id: number | null) {
+export function useEntryDetail(id: number | null, storeId?: string) {
   const {
     currentEntry,
     hasHistoryAccess,
@@ -54,8 +58,8 @@ export function useEntryDetail(id: number | null) {
   } = useEntriesStore();
 
   useEffect(() => {
-    if (id != null) fetchEntry(id);
-  }, [id, fetchEntry]);
+    if (id != null) fetchEntry(id, storeId);
+  }, [id, storeId, fetchEntry]);
 
   return {
     entry: currentEntry,

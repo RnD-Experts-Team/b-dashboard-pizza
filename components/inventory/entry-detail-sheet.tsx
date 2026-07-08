@@ -65,16 +65,23 @@ function EntryDetailSkeleton() {
 
 interface EntryDetailSheetProps {
   entryId: number | null;
+  /** Internal store id of the entry's store — sent so the backend can authorize
+   *  a store_manager on the store-scoped entry-detail rule. */
+  storeId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function EntryDetailSheet({
   entryId,
+  storeId,
   open,
   onOpenChange,
 }: EntryDetailSheetProps) {
-  const { entry, isLoading, error } = useEntryDetail(open ? entryId : null);
+  const { entry, hasHistoryAccess, isLoading, error } = useEntryDetail(
+    open ? entryId : null,
+    storeId
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -155,7 +162,7 @@ export function EntryDetailSheet({
                 </div>
               </Card>
 
-              <EntryDetailItems items={entry.items} />
+              <EntryDetailItems items={entry.items} canViewHistory={hasHistoryAccess} />
             </div>
           ) : null}
         </ScrollArea>

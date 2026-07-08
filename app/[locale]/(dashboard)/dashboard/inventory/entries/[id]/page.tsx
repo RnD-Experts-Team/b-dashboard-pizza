@@ -18,6 +18,8 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EntryDetailItems } from "@/components/inventory/entry-detail-items";
 import { useEntryDetail } from "@/lib/hooks/use-inventory-entries";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
 
 /** A single metric cell in the bottom stats strip. */
@@ -57,8 +59,15 @@ export default function EntryDetailPage() {
   const locale = (params?.locale as string) || "en";
   const id = Number(params?.id);
 
-  const { entry, isLoading, error } = useEntryDetail(
-    Number.isFinite(id) ? id : null
+  // The entry URL has no store; send the user's current store_number (human id,
+  // not internal) as X-Store-Id so the store-scoped entry-detail rule authorizes.
+  const overviewStores = useAuthStore((s) => s.overviewStores);
+  const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
+  const storeNumber = selectedStore?.storeId ?? overviewStores?.[0]?.storeId;
+
+  const { entry, hasHistoryAccess, isLoading, error } = useEntryDetail(
+    Number.isFinite(id) ? id : null,
+    storeNumber
   );
 
   return (
@@ -152,7 +161,7 @@ export default function EntryDetailPage() {
             </div>
           </Card>
 
-          <EntryDetailItems items={entry.items} />
+          <EntryDetailItems items={entry.items} canViewHistory={hasHistoryAccess} />
         </>
       ) : null}
     </div>
