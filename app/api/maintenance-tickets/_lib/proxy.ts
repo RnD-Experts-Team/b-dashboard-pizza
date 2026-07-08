@@ -9,7 +9,8 @@ export const BASE_URL =
   process.env.NEXT_PUBLIC_NEW_MAINTENANCE_API_URL ||
   "https://maintenance.lcportal.cloud";
 
-const TIMEOUT_MS = 30_000;
+// Generous timeout to accommodate attachment uploads (photos, PDFs) on slow connections.
+const TIMEOUT_MS = 120_000;
 
 export async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
   const controller = new AbortController();

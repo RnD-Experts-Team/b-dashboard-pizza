@@ -10,6 +10,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import type { CategoryToken } from "@/components/dashboard-v1/category";
 
 /* ──────────────────────────────────────────────────────────────────────
  *  Shared presentational primitives for the WBR Reports page.
@@ -23,17 +24,35 @@ export function ReportCard({
   children,
   className,
   bodyClassName,
+  accent,
 }: {
   title: string;
   hint?: string;
   children: React.ReactNode;
   className?: string;
   bodyClassName?: string;
+  /** Optional category color token (see components/dashboard-v1/category.ts) — a subtle left border + tinted icon/title. Body stays plain. Omit for the neutral card. */
+  accent?: CategoryToken;
 }) {
+  const Icon = accent?.icon;
   return (
-    <Card className={cn("gap-0 overflow-hidden py-0", className)}>
+    <Card
+      className={cn(
+        "gap-0 overflow-hidden py-0",
+        accent && "border-l-2",
+        accent?.border,
+        className,
+      )}
+    >
       <CardHeader className="flex flex-row items-baseline justify-between gap-3 space-y-0 border-b px-4 py-3">
-        <CardTitle className="text-sm">{title}</CardTitle>
+        <CardTitle className={cn("flex items-center gap-1.5 text-sm", accent?.headerText)}>
+          {Icon && (
+            <span className={cn("inline-flex shrink-0 rounded p-0.5", accent.iconBg)}>
+              <Icon className={cn("h-3 w-3", accent.text)} />
+            </span>
+          )}
+          {title}
+        </CardTitle>
         {hint && (
           <CardDescription className="whitespace-nowrap text-[11px]">
             {hint}
@@ -105,15 +124,23 @@ export function Kpi({
   label,
   value,
   delta,
+  accent,
 }: {
   label: string;
   value: React.ReactNode;
   delta?: number;
+  /** Optional category color token — tints the label and left border. Omit for the neutral tile. */
+  accent?: CategoryToken;
 }) {
   return (
-    <Card className="gap-1 py-3">
+    <Card className={cn("gap-1 py-3", accent && "border-l-2", accent?.border)}>
       <CardContent className="px-3.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p
+          className={cn(
+            "text-[11px] font-semibold uppercase tracking-wide",
+            accent?.headerText ?? "text-muted-foreground",
+          )}
+        >
           {label}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">

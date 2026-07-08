@@ -275,24 +275,28 @@ export function FloatingDebriefButton() {
     payload: DueKeyValuePayload,
     mode: "created" | "updated" | "deactivated"
   ) => {
-    if (!selectedStoreId) return;
-    const success = await setDueKeyValue(selectedStoreId, selectedDate, payload);
-    if (!success) {
+    if (!selectedStoreId) return null;
+    const result = await setDueKeyValue(selectedStoreId, selectedDate, payload);
+    if (!result) {
       if (dueKeySubmitError) toast.error(dueKeySubmitError);
-      return;
+      return null;
     }
+    const corrected =
+      result.correctedFromId != null || (result.mistakenVersions?.length ?? 0) > 0;
     if (mode === "created") toast.success("Key value created.");
     else if (mode === "deactivated") toast.success("Key value deactivated.");
+    else if (corrected) toast.success("Value corrected — previous value kept in history.");
     else toast.success("Key value updated.");
-    setDueKeySheetOpen(false);
+    // Keep the sheet open so the correction + history are shown; refresh the list in the background.
     refetchDueKeys();
+    return result;
   };
 
   const handleBulkSubmit = async (payload: { items: DueKeyValuePayload[] }): Promise<boolean> => {
     if (!selectedStoreId) return false;
-    const success = await setDueKeysBulk(selectedStoreId, selectedDate, payload.items);
-    if (success) refetchDueKeys();
-    return success;
+    const result = await setDueKeysBulk(selectedStoreId, selectedDate, payload.items);
+    if (result) refetchDueKeys();
+    return !!result;
   };
 
   const toggleTag = (tagId: number) => {
@@ -574,8 +578,14 @@ export function FloatingDebriefButton() {
                       {item.filled ? "Filled" : "Unfilled"}
                     </Badge>
                     {item.filled && (
-                      <span className="shrink-0 text-[11px] text-muted-foreground max-w-18 truncate">
-                        {renderValuePreview(item)}
+                      <span className="shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground max-w-24 truncate">
+                        {item.value?.correctedFromId != null && (
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+                            title="This value was corrected"
+                          />
+                        )}
+                        <span className="truncate">{renderValuePreview(item)}</span>
                       </span>
                     )}
                   </button>

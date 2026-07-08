@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { V1Section } from "./v1-section";
 import {
   V1SalesTrendCard,
+  V1SalesHistoryCard,
   V1ChannelMixCard,
   V1HourlyChannelsCard,
   V1StoreScoreCard,
@@ -67,6 +68,7 @@ import {
   V1FeedbacksCard,
   V1QaRatingsCard,
   V1MaintenanceCard,
+  V1CleaningReviewCard,
 } from "./cards";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
@@ -439,12 +441,13 @@ export function DashboardV1() {
         />
         <V1OrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} isLoading={isLoading} span={2} />
         <V1ChannelSalesWeeklyCard data={wbrData?.["channel-sales"]} isLoading={isLoading} span={2} />
+        <V1SalesHistoryCard data={wbrData?.["sales-history"]} isLoading={isLoading} span={4} />
       </V1Section>
 
       {/* ── Operations & Speed ───────────────────────────────────────────── */}
       <V1Section category="operations" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1PortalGaugeCard portal={day.portal} span={1} />
-        <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} span={1} />
+        <V1HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} weeklyAvgHnr={day.hnr_week_to_date_avg} span={1} />
         <V1LaborCard
           value={day.labor}
           weeklyValue={day.labor_week_to_date}
@@ -523,6 +526,7 @@ export function DashboardV1() {
         <V1MaintenanceCard span={2} />
         <V1ComplaintsCard data={hooksWbr.data?.complaints} isLoading={hooksWbr.isLoading} span={2} />
         <V1FeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} span={2} />
+        <V1CleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} span={2} />
       </V1Section>
     </div>
   );

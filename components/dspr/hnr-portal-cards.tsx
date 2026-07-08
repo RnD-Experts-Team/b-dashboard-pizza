@@ -91,13 +91,14 @@ function getLaborLabel(value: number): string {
 interface HnrCardProps {
   hnr: DsprHnr;
   weeklyHnr?: DsprHnr;
+  weeklyAvgHnr?: DsprHnr;
   className?: string;
 }
 
-export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
+export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProps) {
   const [isWeekly, setIsWeekly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const activeHnr = isWeekly && weeklyHnr ? weeklyHnr : hnr;
+  const activeHnr = isWeekly && weeklyHnr ? weeklyAvgHnr ?? weeklyHnr : hnr;
   const pct = activeHnr.hnr_promise_met_percent;
 
   return (
@@ -107,7 +108,7 @@ export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
             <Timer className="h-3 w-3 text-orange-500" />
           </div>
-          Hot-N-Ready
+          Hot-N-Ready{isWeekly ? " (WTD)" : ""}
           {weeklyHnr ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -164,7 +165,9 @@ export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
       </CardContent>
 
       {/* WTD Comparison Dialog */}
-      {weeklyHnr && (
+      {weeklyHnr && (() => {
+        const avgHnr = weeklyAvgHnr ?? weeklyHnr;
+        return (
         <WtdComparisonDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
@@ -187,13 +190,13 @@ export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
             wtd={
               <div className="space-y-2">
                 <p className="text-2xl font-bold text-primary tabular-nums">
-                  {weeklyHnr.hnr_promise_met_percent.toFixed(1)}%
+                  {avgHnr.hnr_promise_met_percent.toFixed(1)}%
                 </p>
                 <p className="text-[10px] text-muted-foreground">Promise Met (Avg)</p>
                 <div className="flex gap-3 mt-2">
-                  <span className="text-[11px]">Trans: <b>{weeklyHnr.hnr_transactions}</b></span>
-                  <span className="text-[11px]">Kept: <b>{weeklyHnr.hnr_promise_met}</b></span>
-                  <span className="text-[11px]">Broken: <b>{weeklyHnr.hnr_broken_promises}</b></span>
+                  <span className="text-[11px]">Trans: <b>{avgHnr.hnr_transactions}</b></span>
+                  <span className="text-[11px]">Kept: <b>{avgHnr.hnr_promise_met}</b></span>
+                  <span className="text-[11px]">Broken: <b>{avgHnr.hnr_broken_promises}</b></span>
                 </div>
               </div>
             }
@@ -203,39 +206,40 @@ export function HnrCard({ hnr, weeklyHnr, className }: HnrCardProps) {
               {
                 label: "Promise Met %",
                 daily: `${hnr.hnr_promise_met_percent.toFixed(1)}%`,
-                wtd: `${weeklyHnr.hnr_promise_met_percent.toFixed(1)}%`,
+                wtd: `${avgHnr.hnr_promise_met_percent.toFixed(1)}%`,
                 dailyNum: hnr.hnr_promise_met_percent,
-                wtdNum: weeklyHnr.hnr_promise_met_percent,
+                wtdNum: avgHnr.hnr_promise_met_percent,
                 higherIsBetter: true,
               },
               {
                 label: "Transactions",
                 daily: `${hnr.hnr_transactions}`,
-                wtd: `${weeklyHnr.hnr_transactions}`,
+                wtd: `${avgHnr.hnr_transactions}`,
                 dailyNum: hnr.hnr_transactions,
-                wtdNum: weeklyHnr.hnr_transactions,
+                wtdNum: avgHnr.hnr_transactions,
                 higherIsBetter: true,
               },
               {
                 label: "Promises Kept",
                 daily: `${hnr.hnr_promise_met}`,
-                wtd: `${weeklyHnr.hnr_promise_met}`,
+                wtd: `${avgHnr.hnr_promise_met}`,
                 dailyNum: hnr.hnr_promise_met,
-                wtdNum: weeklyHnr.hnr_promise_met,
+                wtdNum: avgHnr.hnr_promise_met,
                 higherIsBetter: true,
               },
               {
                 label: "Broken Promises",
                 daily: `${hnr.hnr_broken_promises}`,
-                wtd: `${weeklyHnr.hnr_broken_promises}`,
+                wtd: `${avgHnr.hnr_broken_promises}`,
                 dailyNum: hnr.hnr_broken_promises,
-                wtdNum: weeklyHnr.hnr_broken_promises,
+                wtdNum: avgHnr.hnr_broken_promises,
                 higherIsBetter: false,
               },
             ]}
           />
         </WtdComparisonDialog>
-      )}
+        );
+      })()}
     </Card>
   );
 }

@@ -26,7 +26,6 @@ import {
   HardHat,
   ClipboardCheck,
   FolderPlus,
-  FileText,
   List,
   Landmark,
   Camera,
@@ -123,6 +122,7 @@ function SidebarNavGroup({
     (item) => pathname === item.href || pathname.startsWith(item.href)
   );
   const [open, setOpen] = useState(hasActiveChild);
+  const { setSidebarCollapsed } = useUIStore();
 
   // Auto-open when a child becomes active (e.g. direct URL navigation)
   useEffect(() => {
@@ -133,6 +133,16 @@ function SidebarNavGroup({
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
+          onClick={(e) => {
+            // While collapsed, a click should expand the sidebar and open
+            // this dropdown so the user can pick an item, instead of just
+            // toggling `open` on content that isn't rendered yet.
+            if (collapsed) {
+              e.preventDefault();
+              setSidebarCollapsed(false);
+              setOpen(true);
+            }
+          }}
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             hasActiveChild
@@ -239,6 +249,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     requirements: [
       { service: "Data", method: "GET", path: "/reports/dspr/", storeId: effectiveStoreId },
     ],
+  };
+
+  const businessReportsItem: NavItem = {
+    title: "Business Reports",
+    href: `/${locale}/dashboard/business-reports`,
+    icon: BarChart3,
+    // No auth rule defined yet — always visible for stores the user can access.
   };
 
   // const maintenanceItem: NavItem = {
@@ -512,36 +529,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
-  const Reports: NavGroup = {
-    label: "Reports",
-    icon: FileText,
-    items: [
-      // {
-      //   title: "WBR Reports",
-      //   href: `/${locale}/dashboard/wbr-reports`,
-      //   icon: BarChart3,
-      // },
-      // {
-      //   title: t("maintenance"),
-      //   href: `/${locale}/dashboard/maintenance`,
-      //   icon: HardHat,
-      //   requirements: [
-      //     { service: "Maintenance", method: "GET", path: "/stores/*/maintenance-requests", storeId: effectiveStoreId }
-      //   ],
-      //   // No rule or management permission defined yet — always visible
-      // },
-      // {
-      //   title: t("maintenanceTickets"),
-      //   href: `/${locale}/dashboard/maintenance-tickets`,
-      //   icon: Ticket,
-      //   requirements: [
-      //     { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
-      //   ],
-      // },
-      
-    ],
-  };
-
   const Maintenance: NavGroup = {
     label: "Maintenance",
     icon: Wrench,
@@ -664,7 +651,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleUserManagementGroup = filterGroup(userManagementGroup);
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
   const visibleDataManagementGroup = filterGroup(dataManagementGroup);
-  const visibleReports = filterGroup(Reports);
   const visibleMaintenance = filterGroup(Maintenance);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
@@ -800,6 +786,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* {renderNavLink(dashboardItem)} */}
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
+          {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
+          {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}
+
           {/* 1·V1. Dashboard V1 (optimized) */}
            {/* {isNavItemVisible(dashboardV1Item) && renderNavLink(dashboardV1Item)} */}
 
@@ -853,16 +842,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 6. Reports */}
-          {visibleReports && (
-            <SidebarNavGroup
-              group={visibleReports}
-              pathname={pathname}
-              locale={locale}
-              collapsed={collapsed}
-              onNavigate={onNavigate}
-            />
-          )}
 {/* 6. Maintenance */}
           {visibleMaintenance && (
             <SidebarNavGroup

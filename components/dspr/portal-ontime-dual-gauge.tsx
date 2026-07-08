@@ -20,7 +20,7 @@ interface Props {
 export function PortalOnTimeDualGauge({ portal, className }: Props) {
   const [isWeekly, setIsWeekly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const weeklyPortal = portal.week_to_date;
+  const weeklyPortal = portal.week_to_date_avg;
   const activePortal = isWeekly && weeklyPortal ? weeklyPortal : portal;
   const primary = activePortal.put_into_portal_percent;
   const secondary = activePortal.in_portal_on_time_percent;

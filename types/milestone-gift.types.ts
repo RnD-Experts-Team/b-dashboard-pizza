@@ -6,11 +6,15 @@
  * ────────────────────────────────────────────────────────────────────────── */
 
 export type Milestone =
-  | "30_days"
-  | "90_days"
+  | "8_days"
+  | "1_month"
+  | "2_months"
+  | "3_months"
+  | "4_months"
+  | "5_months"
   | "6_months"
+  | "8_months"
   | "1_year"
-  | "2_years"
   | "other";
 
 export type MilestoneGiftStage =

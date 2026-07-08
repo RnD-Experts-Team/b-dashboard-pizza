@@ -18,6 +18,7 @@ import {
   PortalOnTimeDualGauge,
   StoreScoreCard,
   LaborGauge,
+  SalesHistoryCard,
   DsprDashboardSkeleton,
   RecentMaintenanceTable,
   CurrentEmployeesTable,
@@ -41,6 +42,7 @@ import {
   WbrMoneyOwedCard,
   WbrOrdersVsSalesCard,
   WbrTransferInOutCard,
+  WbrCleaningReviewCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertCircle,
   RefreshCw,
@@ -75,10 +83,13 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  ImageDown,
+  MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageGuide } from "@/components/shared/page-guide";
 import { DSPR_GUIDE_STEPS } from "./dspr-guide-config";
+import { buildDsprReportHtml } from "./dspr-report-template";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
 function toApiDate(date: Date): string {
@@ -372,6 +383,7 @@ export function DsprDashboard() {
   // ── Screenshot ref & handler ───────────────────────────────────────────
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCapturingReport, setIsCapturingReport] = useState(false);
 
   // Toggle to remove section backgrounds (persisted in localStorage)
   const [hideSectionBackgrounds, setHideSectionBackgrounds] = useState(false);
@@ -444,6 +456,70 @@ export function DsprDashboard() {
       setIsCapturing(false);
     }
   }, [isCapturing, selectedStore, selectedDate]);
+
+  // ── Screenshot the printable "Focus on the Five" HTML report as a PNG ───
+  // Renders the report off-screen in a hidden iframe (so its own fonts/CSS
+  // apply), waits for it to finish loading, then captures it with the same
+  // html2canvas approach as the live dashboard screenshot.
+  const handleScreenshotReport = useCallback(async () => {
+    if (!data || isCapturingReport) return;
+    setIsCapturingReport(true);
+
+    const html = buildDsprReportHtml(data, selectedDate);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.top = "0";
+    iframe.style.left = "-99999px";
+    iframe.style.width = "1180px";
+    iframe.style.height = "2000px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("Failed to render report"));
+        iframe.srcdoc = html;
+      });
+
+      const doc = iframe.contentDocument;
+      const dashboardEl = doc?.querySelector<HTMLElement>(".dashboard");
+      if (!doc || !dashboardEl) throw new Error("Report content did not render");
+
+      // Wait for web fonts + Font Awesome icons to finish loading.
+      try {
+        await doc.fonts?.ready;
+      } catch {
+        // ignore — fall through to the fixed delay below
+      }
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Resize the iframe to the report's actual rendered height before capture.
+      iframe.style.height = `${dashboardEl.scrollHeight}px`;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const canvas = await html2canvas(dashboardEl, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#efefef",
+        logging: false,
+        imageTimeout: 8000,
+      });
+
+      const storeName = selectedStore?.storeId ?? selectedStore?.id ?? "store";
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const link = document.createElement("a");
+      link.download = `DSPR-Report-${storeName}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Report screenshot failed:", err);
+    } finally {
+      document.body.removeChild(iframe);
+      setIsCapturingReport(false);
+    }
+  }, [data, isCapturingReport, selectedDate, selectedStore]);
 
   const toggleHideBackgrounds = useCallback(() => {
     setHideSectionBackgrounds((prev) => {
@@ -695,57 +771,42 @@ export function DsprDashboard() {
             </TooltipContent>
           </Tooltip>
 
-          {/* Screenshot button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
+          {/* Screenshot / Download report / Toggle section backgrounds */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 data-screenshot-btn
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={handleScreenshot}
-                disabled={isCapturing}
+                title="Export & view options"
               >
-                {isCapturing ? (
+                {isCapturing || isCapturingReport ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Camera className="h-3 w-3" />
+                  <MoreVertical className="h-3 w-3" />
                 )}
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Toggle remove section backgrounds */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={toggleHideBackgrounds}
-                aria-pressed={hideSectionBackgrounds}
-                title={
-                  hideSectionBackgrounds
-                    ? "Show section backgrounds"
-                    : "Hide section backgrounds"
-                }
-              >
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={handleScreenshot} disabled={isCapturing}>
+                <Camera className="h-3.5 w-3.5 me-2" />
+                {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleScreenshotReport} disabled={!data || isCapturingReport}>
+                <ImageDown className="h-3.5 w-3.5 me-2" />
+                {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={toggleHideBackgrounds}>
                 {hideSectionBackgrounds ? (
-                  <EyeOff className="h-3 w-3" />
+                  <Eye className="h-3.5 w-3.5 me-2" />
                 ) : (
-                  <Eye className="h-3 w-3" />
+                  <EyeOff className="h-3.5 w-3.5 me-2" />
                 )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {hideSectionBackgrounds
-                ? "Show section backgrounds"
-                : "Hide section backgrounds"}
-            </TooltipContent>
-          </Tooltip>
+                {hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Page guide button */}
           <Tooltip>
@@ -821,13 +882,18 @@ export function DsprDashboard() {
           toolbar={false}
           className="md:col-span-2 lg:col-span-1"
         />
-        <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} />
+        <HnrCard hnr={day.hnr} weeklyHnr={day.hnr_week_to_date} weeklyAvgHnr={day.hnr_week_to_date_avg} />
         <LaborGauge
           value={day.labor}
           weeklyValue={day.labor_week_to_date}
           weeklyAvgValue={day.labor_week_to_date_avg}
           weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
         />
+      </div>
+
+      {/* ── Sales History ─────────────────────────────────────────── */}
+      <div data-guide-id="dspr-sales-history">
+        <SalesHistoryCard data={wbrData?.["sales-history"]} isLoading={isLoading} />
       </div>
 
       {/* ── Hourly + Daily Channel Sales ────────────────────────── */}
@@ -985,6 +1051,10 @@ export function DsprDashboard() {
 
         <div>
           <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
+        </div>
+
+        <div>
+          <WbrCleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} />
         </div>
       </div>
       <PageGuide

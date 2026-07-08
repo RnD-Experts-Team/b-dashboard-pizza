@@ -1,5 +1,6 @@
 // Sales
 export { V1SalesTrendCard } from "./v1-sales-trend";
+export { V1SalesHistoryCard } from "./v1-sales-history";
 export { V1ChannelMixCard } from "./v1-channel-mix";
 export { V1HourlyChannelsCard } from "./v1-hourly-channels";
 export { V1StoreScoreCard } from "./v1-store-score";
@@ -38,3 +39,4 @@ export { V1ComplaintsCard } from "./v1-complaints";
 export { V1FeedbacksCard } from "./v1-feedbacks";
 export { V1QaRatingsCard } from "./v1-qa-ratings";
 export { V1MaintenanceCard } from "./v1-maintenance";
+export { V1CleaningReviewCard } from "./v1-cleaning-review";

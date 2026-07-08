@@ -33,23 +33,25 @@ function hnrLabel(v: number): string {
 export function V1HnrCard({
   hnr,
   weeklyHnr,
+  weeklyAvgHnr,
   span,
   className,
 }: {
   hnr: DsprHnr;
   weeklyHnr?: DsprHnr;
+  weeklyAvgHnr?: DsprHnr;
   span?: 1 | 2 | 3;
   className?: string;
 }) {
   const hasWeekly = Boolean(weeklyHnr);
   const [view, setView] = useState<"day" | "wtd">("day");
   const [open, setOpen] = useState(false);
-  const active = view === "wtd" && weeklyHnr ? weeklyHnr : hnr;
+  const active = view === "wtd" && weeklyHnr ? weeklyAvgHnr ?? weeklyHnr : hnr;
   const pct = active.hnr_promise_met_percent;
 
   return (
       <V1Card
-        title="Hot-N-Ready"
+        title={view === "wtd" ? "Hot-N-Ready (WTD)" : "Hot-N-Ready"}
         category="operations"
         period={hasWeekly ? "D·WTD" : "D"}
         span={span}
@@ -109,18 +111,21 @@ export function V1HnrCard({
             />
           </V1MetricGrid>
         </div>
-      {weeklyHnr && (
-        <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Hot-N-Ready — Day vs Week-to-Date">
-          <ComparisonTable
-            rows={[
-              { label: "Promise Met %", daily: `${hnr.hnr_promise_met_percent.toFixed(1)}%`, wtd: `${weeklyHnr.hnr_promise_met_percent.toFixed(1)}%`, dailyNum: hnr.hnr_promise_met_percent, wtdNum: weeklyHnr.hnr_promise_met_percent, higherIsBetter: true },
-              { label: "Transactions", daily: `${hnr.hnr_transactions}`, wtd: `${weeklyHnr.hnr_transactions}`, dailyNum: hnr.hnr_transactions, wtdNum: weeklyHnr.hnr_transactions, higherIsBetter: true },
-              { label: "Promises Kept", daily: `${hnr.hnr_promise_met}`, wtd: `${weeklyHnr.hnr_promise_met}`, dailyNum: hnr.hnr_promise_met, wtdNum: weeklyHnr.hnr_promise_met, higherIsBetter: true },
-              { label: "Broken Promises", daily: `${hnr.hnr_broken_promises}`, wtd: `${weeklyHnr.hnr_broken_promises}`, dailyNum: hnr.hnr_broken_promises, wtdNum: weeklyHnr.hnr_broken_promises, higherIsBetter: false },
-            ]}
-          />
-        </WtdComparisonDialog>
-      )}
+      {weeklyHnr && (() => {
+        const avg = weeklyAvgHnr ?? weeklyHnr;
+        return (
+          <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Hot-N-Ready — Day vs Week-to-Date">
+            <ComparisonTable
+              rows={[
+                { label: "Promise Met %", daily: `${hnr.hnr_promise_met_percent.toFixed(1)}%`, wtd: `${avg.hnr_promise_met_percent.toFixed(1)}%`, dailyNum: hnr.hnr_promise_met_percent, wtdNum: avg.hnr_promise_met_percent, higherIsBetter: true },
+                { label: "Transactions", daily: `${hnr.hnr_transactions}`, wtd: `${avg.hnr_transactions}`, dailyNum: hnr.hnr_transactions, wtdNum: avg.hnr_transactions, higherIsBetter: true },
+                { label: "Promises Kept", daily: `${hnr.hnr_promise_met}`, wtd: `${avg.hnr_promise_met}`, dailyNum: hnr.hnr_promise_met, wtdNum: avg.hnr_promise_met, higherIsBetter: true },
+                { label: "Broken Promises", daily: `${hnr.hnr_broken_promises}`, wtd: `${avg.hnr_broken_promises}`, dailyNum: hnr.hnr_broken_promises, wtdNum: avg.hnr_broken_promises, higherIsBetter: false },
+              ]}
+            />
+          </WtdComparisonDialog>
+        );
+      })()}
     </V1Card>
   );
 }

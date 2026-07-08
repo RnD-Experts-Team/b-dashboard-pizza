@@ -54,7 +54,10 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
       userId: v.user_id,
       userName: v.user_name ?? null,
       imageUrl: v.user?.image_url ?? null,
-      entryDate: v.entry_date,
+      // The grid/range API returns a full ISO timestamp here (e.g. "...T00:00:00.000000Z");
+      // normalize to YYYY-MM-DD to match every other date field (and what the values-history
+      // endpoint's date filter expects).
+      entryDate: v.entry_date.slice(0, 10),
       valueText: v.value_text,
       valueNumber: v.value_number,
       valueBoolean: v.value_boolean,
@@ -63,6 +66,10 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
       updatedAt: v.updated_at,
       note: v.note,
       attachments,
+      isMistaken: v.is_mistaken ?? false,
+      supersededAt: v.superseded_at ?? null,
+      correctedFromId: v.corrected_from_id ?? null,
+      // The daily grid / range endpoints return only the current value (no history).
     };
   }
   return {
@@ -86,15 +93,19 @@ function transformDueKeyItem(raw: ApiDueKeysResponse["items"][number]): DueKeyIt
   };
 }
 
-// Transforms the POST /values response body into a DueKeyValue.
-// userName is not returned by this endpoint and must be enriched by the caller.
-function transformDueKeyValueFromPost(raw: Record<string, unknown>): DueKeyValue {
+// Transforms a raw value object (from the POST /values + /values/bulk response bodies, and
+// from the values-history listing endpoint) into a DueKeyValue, including the newest-first
+// mistaken_versions history. The POST endpoints don't return a user name (caller must enrich
+// it), but the listing endpoint may — so read it opportunistically rather than hardcode null.
+function mapRawValue(raw: Record<string, unknown>): DueKeyValue {
+  const rawHistory = (raw.mistaken_versions as unknown[]) ?? [];
+  const nestedUser = raw.user as Record<string, unknown> | null | undefined;
   return {
     id: raw.id as number,
     keyId: raw.key_id as number,
     storeId: raw.store_id as string,
     userId: raw.user_id as number,
-    userName: null,
+    userName: (raw.user_name as string | null | undefined) ?? (nestedUser?.name as string | null | undefined) ?? null,
     entryDate: (raw.entry_date as string).slice(0, 10),
     valueText: (raw.value_text as string | null) ?? null,
     valueNumber: (raw.value_number as number | null) ?? null,
@@ -103,6 +114,10 @@ function transformDueKeyValueFromPost(raw: Record<string, unknown>): DueKeyValue
     note: (raw.note as string | null) ?? null,
     createdAt: raw.created_at as string,
     updatedAt: raw.updated_at as string,
+    isMistaken: (raw.is_mistaken as boolean | undefined) ?? false,
+    supersededAt: (raw.superseded_at as string | null) ?? null,
+    correctedFromId: (raw.corrected_from_id as number | null) ?? null,
+    mistakenVersions: rawHistory.map((h) => mapRawValue(h as Record<string, unknown>)),
     attachments: ((raw.attachments as unknown[]) ?? []).map((a) => {
       const att = a as Record<string, unknown>;
       return {
@@ -329,7 +344,7 @@ export const dueKeysService = {
           },
           timeout: 30_000,
         });
-        return transformDueKeyValueFromPost(formResponse.data as Record<string, unknown>);
+        return mapRawValue(formResponse.data as Record<string, unknown>);
       } else {
         const { attachments: _a, ...jsonPayload } = payload;
         const jsonResponse = await axios.post(url, jsonPayload, {
@@ -340,7 +355,7 @@ export const dueKeysService = {
           },
           timeout: 30_000,
         });
-        return transformDueKeyValueFromPost(jsonResponse.data as Record<string, unknown>);
+        return mapRawValue(jsonResponse.data as Record<string, unknown>);
       }
     } catch (err) {
       throw handleAxiosError(err);
@@ -350,7 +365,7 @@ export const dueKeysService = {
     storeId: string,
     date: string,
     items: DueKeyValuePayload[]
-  ): Promise<void> {
+  ): Promise<DueKeyValue[]> {
     const token = getToken();
     if (!token) {
       throw new DueKeysError(
@@ -391,7 +406,7 @@ export const dueKeysService = {
           }
         });
 
-        await axios.post(
+        const formResponse = await axios.post(
           `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
             date
           )}/values/bulk`,
@@ -404,10 +419,11 @@ export const dueKeysService = {
             timeout: 60_000,
           }
         );
+        return mapBulkResponse(formResponse.data);
       } else {
         // No attachments — use JSON for efficiency
         const jsonItems = items.map(({ attachments: _a, ...rest }) => rest);
-        await axios.post(
+        const jsonResponse = await axios.post(
           `/api/data/stores/${encodeURIComponent(storeId)}/dates/${encodeURIComponent(
             date
           )}/values/bulk`,
@@ -421,9 +437,75 @@ export const dueKeysService = {
             timeout: 30_000,
           }
         );
+        return mapBulkResponse(jsonResponse.data);
       }
     } catch (err) {
       throw handleAxiosError(err);
     }
   },
+
+  // Fetches the full value history (current + mistaken rows) for one key/date from the
+  // store-level listing endpoint, which — unlike the daily grid/range endpoints — intentionally
+  // still includes superseded rows. The exact upstream filter params aren't guaranteed, so we
+  // send best-effort filters and always narrow client-side to be correct regardless.
+  async getValueHistory(
+    storeId: string,
+    keyId: number,
+    date: string,
+    signal?: AbortSignal
+  ): Promise<DueKeyValue[]> {
+    const token = getToken();
+    if (!token) {
+      throw new DueKeysError(
+        "You must be logged in to view value history.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    try {
+      const response = await axios.get(
+        `/api/data/stores/${encodeURIComponent(storeId)}/values`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          timeout: 15_000,
+          signal,
+          params: { key_id: keyId, date },
+        }
+      );
+
+      const raw = response.data as unknown;
+      const list: unknown[] = Array.isArray(raw)
+        ? raw
+        : Array.isArray((raw as { data?: unknown[] })?.data)
+          ? (raw as { data: unknown[] }).data
+          : Array.isArray((raw as { items?: unknown[] })?.items)
+            ? (raw as { items: unknown[] }).items
+            : Array.isArray((raw as { values?: unknown[] })?.values)
+              ? (raw as { values: unknown[] }).values
+              : [];
+
+      return list
+        .map((v) => mapRawValue(v as Record<string, unknown>))
+        .filter((v) => v.keyId === keyId && v.entryDate === date)
+        .sort((a, b) => {
+          if (a.isMistaken !== b.isMistaken) return a.isMistaken ? 1 : -1;
+          const at = a.supersededAt ?? a.updatedAt;
+          const bt = b.supersededAt ?? b.updatedAt;
+          return bt.localeCompare(at);
+        });
+    } catch (err) {
+      throw handleAxiosError(err);
+    }
+  },
 };
+
+// Maps the { items: [...] } bulk-save response body into DueKeyValue[].
+// Tolerant of the legacy shape ({ success: true }) → returns [].
+function mapBulkResponse(data: unknown): DueKeyValue[] {
+  const items = (data as { items?: unknown[] } | null)?.items;
+  if (!Array.isArray(items)) return [];
+  return items.map((it) => mapRawValue(it as Record<string, unknown>));
+}

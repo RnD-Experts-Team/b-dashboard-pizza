@@ -45,7 +45,9 @@ import { MilestoneGiftQuestionsCatalog } from "@/components/hiring/milestone-gif
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { useHiringActionStore } from "@/lib/store/hiring-action.store";
 import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
+import { cn } from "@/lib/utils";
 import type { StoreRequest } from "@/types/hiring.types";
 import type {
   Milestone,
@@ -53,19 +55,23 @@ import type {
 } from "@/types/milestone-gift.types";
 
 const MILESTONE_LABELS: Record<Milestone, string> = {
-  "30_days": "30 Days",
-  "90_days": "90 Days",
+  "8_days": "8 Days",
+  "1_month": "1 Month",
+  "2_months": "2 Months",
+  "3_months": "3 Months",
+  "4_months": "4 Months",
+  "5_months": "5 Months",
   "6_months": "6 Months",
+  "8_months": "8 Months",
   "1_year": "1 Year",
-  "2_years": "2 Years",
   other: "Other",
 };
 
 const STAGE_LABELS: Record<MilestoneGiftStage, string> = {
-  created: "Created",
-  rating: "Rating",
-  gift_decision: "Gift Decision",
-  final_status: "Final Status",
+  created: "Submitted",
+  rating: "Rated",
+  gift_decision: "Decided",
+  final_status: "Finalized",
   closed: "Closed",
   cancelled: "Cancelled",
 };
@@ -178,6 +184,26 @@ export function MilestoneGiftTab({
     try { localStorage.setItem("store-filter:milestone-gift", JSON.stringify(ids)); } catch {}
   }
 
+  // ── Deep-link from a milestone_gift_request notification ────────────────
+  const pendingHiringAction = useHiringActionStore((s) => s.pendingHiringAction);
+  const clearPendingHiringAction = useHiringActionStore((s) => s.clearPendingHiringAction);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<number | null>(null);
+  const [pendingHighlightId, setPendingHighlightId] = useState<number | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
+
+  // Effect A: apply the store filter, stash the target id locally
+  useEffect(() => {
+    if (!pendingHiringAction || pendingHiringAction.tab !== "milestone_gift") return;
+    if (!validStoreIds.has(pendingHiringAction.storeNumber)) {
+      clearPendingHiringAction();
+      return;
+    }
+    handleStoreApply([pendingHiringAction.storeNumber]);
+    setPendingHighlightId(pendingHiringAction.requestId);
+    clearPendingHiringAction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingHiringAction, validStoreIds, clearPendingHiringAction]);
+
   const [rows, setRows] = useState<StoreRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
@@ -251,6 +277,21 @@ export function MilestoneGiftTab({
       abortRef.current?.abort();
     };
   }, [active, fetchData]);
+
+  // Effect B: once the (re-)filtered rows land, highlight the matching row for 1.5s
+  useEffect(() => {
+    if (pendingHighlightId === null || !isInitialLoadComplete || isLoading) return;
+    const target = rows.find((r) => r.milestone_gift_request?.id === pendingHighlightId);
+    setPendingHighlightId(null);
+    if (target) {
+      setHighlightedRequestId(target.id);
+      if (highlightTimeoutRef.current != null) window.clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = window.setTimeout(() => {
+        setHighlightedRequestId(null);
+        highlightTimeoutRef.current = null;
+      }, 1500);
+    }
+  }, [rows, pendingHighlightId, isInitialLoadComplete, isLoading]);
 
   const isEmpty =
     isInitialLoadComplete && !isLoading && !error && rows.length === 0;
@@ -326,12 +367,12 @@ export function MilestoneGiftTab({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Stages</SelectItem>
-              <SelectItem value="created">Created</SelectItem>
-              <SelectItem value="rating">Rating</SelectItem>
-              <SelectItem value="gift_decision">Gift Decision</SelectItem>
-              <SelectItem value="final_status">Final Status</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="created">{STAGE_LABELS.created}</SelectItem>
+              <SelectItem value="rating">{STAGE_LABELS.rating}</SelectItem>
+              <SelectItem value="gift_decision">{STAGE_LABELS.gift_decision}</SelectItem>
+              <SelectItem value="final_status">{STAGE_LABELS.final_status}</SelectItem>
+              <SelectItem value="closed">{STAGE_LABELS.closed}</SelectItem>
+              <SelectItem value="cancelled">{STAGE_LABELS.cancelled}</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -343,11 +384,15 @@ export function MilestoneGiftTab({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Milestones</SelectItem>
-              <SelectItem value="30_days">30 Days</SelectItem>
-              <SelectItem value="90_days">90 Days</SelectItem>
+              <SelectItem value="8_days">8 Days</SelectItem>
+              <SelectItem value="1_month">1 Month</SelectItem>
+              <SelectItem value="2_months">2 Months</SelectItem>
+              <SelectItem value="3_months">3 Months</SelectItem>
+              <SelectItem value="4_months">4 Months</SelectItem>
+              <SelectItem value="5_months">5 Months</SelectItem>
               <SelectItem value="6_months">6 Months</SelectItem>
+              <SelectItem value="8_months">8 Months</SelectItem>
               <SelectItem value="1_year">1 Year</SelectItem>
-              <SelectItem value="2_years">2 Years</SelectItem>
               <SelectItem value="other">Other</SelectItem>
             </SelectContent>
           </Select>
@@ -411,7 +456,10 @@ export function MilestoneGiftTab({
                 return (
                   <TableRow
                     key={req.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50 transition-shadow",
+                      highlightedRequestId === req.id && "ring-2 ring-inset ring-primary"
+                    )}
                     onClick={() => {
                       setSelectedRequest(req);
                       setSheetOpen(true);

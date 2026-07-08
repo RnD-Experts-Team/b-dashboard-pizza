@@ -161,7 +161,7 @@ interface UseSetDueKeysBulkReturn {
       note?: string | null;
       attachments?: File[] | null;
     }>
-  ) => Promise<boolean>;
+  ) => Promise<DueKeyValue[] | null>;
   isSubmitting: boolean;
   error: string | null;
   clearError: () => void;
@@ -186,21 +186,20 @@ export function useSetDueKeysBulk(): UseSetDueKeysBulkReturn {
         note?: string | null;
         attachments?: File[] | null;
       }>
-    ): Promise<boolean> => {
+    ): Promise<DueKeyValue[] | null> => {
       setIsSubmitting(true);
       setError(null);
 
       try {
-        await dueKeysService.setDueKeysBulk(storeId, date, items as any);
-        return true;
+        return await dueKeysService.setDueKeysBulk(storeId, date, items as any);
       } catch (err) {
-        if (isCanceledError(err)) return false;
+        if (isCanceledError(err)) return null;
         if (err instanceof DueKeysError) {
           setError(err.message);
         } else {
           setError(err instanceof Error ? err.message : "Failed to update due keys.");
         }
-        return false;
+        return null;
       } finally {
         setIsSubmitting(false);
       }
@@ -214,4 +213,48 @@ export function useSetDueKeysBulk(): UseSetDueKeysBulkReturn {
     error,
     clearError,
   };
+}
+
+interface UseDueKeyValueHistoryReturn {
+  history: DueKeyValue[] | null;
+  isLoading: boolean;
+  error: string | null;
+  fetchHistory: (storeId: string, keyId: number, date: string) => Promise<void>;
+  reset: () => void;
+}
+
+export function useDueKeyValueHistory(): UseDueKeyValueHistoryReturn {
+  const [history, setHistory] = useState<DueKeyValue[] | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchHistory = useCallback(
+    async (storeId: string, keyId: number, date: string) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const result = await dueKeysService.getValueHistory(storeId, keyId, date);
+        setHistory(result);
+      } catch (err) {
+        if (isCanceledError(err)) return;
+        if (err instanceof DueKeysError) {
+          setError(err.message);
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to load value history.");
+        }
+        setHistory(null);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
+
+  const reset = useCallback(() => {
+    setHistory(null);
+    setError(null);
+  }, []);
+
+  return { history, isLoading, error, fetchHistory, reset };
 }

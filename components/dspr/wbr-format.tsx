@@ -69,6 +69,15 @@ export function fmtDate(iso: string | null | undefined): string {
   return format(d, "MMM d");
 }
 
+/** Format an ISO date as just the month, e.g. "Mar". */
+export function fmtMonth(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const datePart = iso.slice(0, 10);
+  const d = parseISO(datePart);
+  if (!isValid(d)) return "";
+  return format(d, "MMM");
+}
+
 /** Format a "HH:MM:SS" (or "HH:MM") time string as "h:mm AM/PM". */
 export function fmtTime(t: string | null | undefined): string {
   if (!t) return "—";

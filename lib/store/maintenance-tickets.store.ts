@@ -23,9 +23,12 @@ interface MaintenanceTicketsState {
   mode: "store" | "global";
   filters: TicketsFilters;
   lastStoreId: string | null;
+  /** Global-index scoping: restricts a "global" fetch to these store numbers (stores[]). Null = unrestricted. */
+  scopedStoreIds: string[] | null;
 
   fetchTickets: (storeId?: string, filters?: TicketsFilters, page?: number) => Promise<void>;
   setMode: (mode: "store" | "global") => void;
+  setScopedStoreIds: (ids: string[] | null) => void;
   goToPage: (page: number) => void;
   setFilters: (filters: TicketsFilters) => void;
   clearError: () => void;
@@ -52,6 +55,7 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
     mode: "store",
     filters: {},
     lastStoreId: null,
+    scopedStoreIds: null,
 
     fetchTickets: async (storeId?: string, filters?: TicketsFilters, page = 1) => {
       // Cancel any in-flight request
@@ -73,7 +77,12 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
       }
 
       const hasExistingData = get().data !== null;
-      const mergedFilters = { ...(filters ?? get().filters), page };
+      const scopedStoreIds = get().scopedStoreIds;
+      const mergedFilters = {
+        ...(filters ?? get().filters),
+        page,
+        ...(mode === "global" && scopedStoreIds?.length ? { stores: scopedStoreIds } : {}),
+      };
 
       set({
         isLoading: !hasExistingData,
@@ -130,6 +139,10 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
       }
     },
 
+    setScopedStoreIds: (ids: string[] | null) => {
+      set({ scopedStoreIds: ids });
+    },
+
     goToPage: (page: number) => {
       const { mode, lastStoreId, filters, fetchTickets } = get();
       if (mode === "global") {
@@ -162,6 +175,7 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
         mode: "store",
         filters: {},
         lastStoreId: null,
+        scopedStoreIds: null,
       });
     },
   })
