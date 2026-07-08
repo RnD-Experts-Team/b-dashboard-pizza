@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useEffect, useRef, useState } from "react";
 import {
   Plus,
@@ -22,6 +23,7 @@ import {
   Flag,
   Check,
   Search,
+  CalendarDays,
 } from "lucide-react";
 import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus } from "@/types/maintenance-tickets.types";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
@@ -376,6 +378,16 @@ export function TicketsFiltersBar({
   const [catalogTechnicians, setCatalogTechnicians] = useState<CatalogTechnician[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
 
+  // Draft = staged filter edits; not committed (no request fires) until Apply is clicked.
+  const [draftFilters, setDraftFilters] = useState<TicketsFilters>(filters);
+
+  // Every time the panel opens, reset the draft to the currently applied filters —
+  // discards any unsaved edits from a previous open, same as the store selector.
+  useEffect(() => {
+    if (advancedOpen) setDraftFilters(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advancedOpen]);
+
   useEffect(() => {
     if (!advancedOpen || catalogIssues.length > 0 || catalogTechnicians.length > 0) return;
     const ctrl = new AbortController();
@@ -393,9 +405,36 @@ export function TicketsFiltersBar({
     return () => ctrl.abort();
   }, [advancedOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Updates the local draft only — does not fire a request. */
   function updateField<K extends keyof TicketsFilters>(key: K, value: TicketsFilters[K]) {
-    onFiltersChange({ ...filters, [key]: value });
+    setDraftFilters((prev) => ({ ...prev, [key]: value }));
   }
+
+  function handleApplyFilters() {
+    onFiltersChange(draftFilters);
+  }
+
+  function handleClearAll() {
+    setDraftFilters({});
+    onFiltersChange({});
+  }
+
+  const FILTER_KEYS: (keyof TicketsFilters)[] = [
+    "statuses", "priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
+    "part_cost_total_gt", "part_cost_single_gt", "created_from", "created_to",
+    "assigned_from", "assigned_to", "trashed", "sort", "dir", "page", "per_page",
+  ];
+
+  function fieldEqual(a: unknown, b: unknown): boolean {
+    if (Array.isArray(a) || Array.isArray(b)) {
+      const aArr = (a as unknown[] | undefined) ?? [];
+      const bArr = (b as unknown[] | undefined) ?? [];
+      return aArr.length === bArr.length && aArr.every((v, i) => v === bArr[i]);
+    }
+    return a === b;
+  }
+
+  const hasPendingChanges = FILTER_KEYS.some((k) => !fieldEqual(draftFilters[k], filters[k]));
 
   const activeFilterCount = [
     filters.statuses?.length,
@@ -407,7 +446,11 @@ export function TicketsFiltersBar({
     filters.part_cost_total_gt,
     filters.trashed,
     filters.per_page,
-  ].filter((v) => v != null && v !== 0).length;
+    filters.created_from,
+    filters.created_to,
+    filters.assigned_from,
+    filters.assigned_to,
+  ].filter((v) => v != null && v !== 0 && v !== "").length;
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -523,7 +566,7 @@ export function TicketsFiltersBar({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onFiltersChange({})}
+            onClick={handleClearAll}
             disabled={disabled}
             className="h-9 gap-1.5 px-2 text-muted-foreground hover:text-foreground"
           >
@@ -563,17 +606,27 @@ export function TicketsFiltersBar({
                 </Badge>
               )}
             </div>
-            {activeFilterCount > 0 && (
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px] text-muted-foreground hover:text-destructive"
+                  onClick={handleClearAll}
+                >
+                  <X className="me-1 h-3 w-3" />
+                  Clear all
+                </Button>
+              )}
               <Button
-                variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-[11px] text-muted-foreground hover:text-destructive"
-                onClick={() => onFiltersChange({})}
+                className="h-7 px-3 text-xs"
+                onClick={handleApplyFilters}
+                disabled={disabled || !hasPendingChanges}
               >
-                <X className="me-1 h-3 w-3" />
-                Clear all
+                {hasPendingChanges ? "Apply filters" : "Applied"}
               </Button>
-            )}
+            </div>
           </div>
 
           {/* Filter fields grid */}
@@ -586,11 +639,11 @@ export function TicketsFiltersBar({
                 Ticket Status
               </label>
               <SearchableSelect
-                value={filters.statuses?.[0] || "all"}
+                value={draftFilters.statuses?.[0] || "all"}
                 options={ticketStatusOptions}
                 onChange={(v) => updateField("statuses", v === "all" ? [] : [v as TicketStatus])}
                 disabled={disabled}
-                active={!!filters.statuses?.length}
+                active={!!draftFilters.statuses?.length}
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -602,11 +655,11 @@ export function TicketsFiltersBar({
                 Priority
               </label>
               <SearchableSelect
-                value={filters.priorities?.[0] || "all"}
+                value={draftFilters.priorities?.[0] || "all"}
                 options={priorityOptions}
                 onChange={(v) => updateField("priorities", v === "all" ? [] : [v as Priority])}
                 disabled={disabled}
-                active={!!filters.priorities?.length}
+                active={!!draftFilters.priorities?.length}
                 searchPlaceholder="Search priorities…"
               />
             </div>
@@ -618,11 +671,11 @@ export function TicketsFiltersBar({
                 Issue
               </label>
               <SearchableSelect
-                value={filters.issue_ids?.[0] != null ? String(filters.issue_ids[0]) : "all"}
+                value={draftFilters.issue_ids?.[0] != null ? String(draftFilters.issue_ids[0]) : "all"}
                 options={catalogLoading ? [{ value: "all", label: "Loading…" }] : issueOptions}
                 onChange={(v) => updateField("issue_ids", v === "all" ? [] : [Number(v)])}
                 disabled={disabled || catalogLoading}
-                active={!!filters.issue_ids?.length}
+                active={!!draftFilters.issue_ids?.length}
                 placeholder={catalogLoading ? "Loading…" : "All issues"}
                 searchPlaceholder="Search issues…"
               />
@@ -635,11 +688,11 @@ export function TicketsFiltersBar({
                 Issue Status
               </label>
               <SearchableSelect
-                value={filters.issue_statuses?.[0] || "all"}
+                value={draftFilters.issue_statuses?.[0] || "all"}
                 options={issueStatusOptions}
                 onChange={(v) => updateField("issue_statuses", v === "all" ? [] : [v as IssueStatus])}
                 disabled={disabled}
-                active={!!filters.issue_statuses?.length}
+                active={!!draftFilters.issue_statuses?.length}
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -651,11 +704,11 @@ export function TicketsFiltersBar({
                 Technician
               </label>
               <SearchableSelect
-                value={filters.technician_ids?.[0] != null ? String(filters.technician_ids[0]) : "all"}
+                value={draftFilters.technician_ids?.[0] != null ? String(draftFilters.technician_ids[0]) : "all"}
                 options={catalogLoading ? [{ value: "all", label: "Loading…" }] : technicianOptions}
                 onChange={(v) => updateField("technician_ids", v === "all" ? [] : [Number(v)])}
                 disabled={disabled || catalogLoading}
-                active={!!filters.technician_ids?.length}
+                active={!!draftFilters.technician_ids?.length}
                 placeholder={catalogLoading ? "Loading…" : "All technicians"}
                 searchPlaceholder="Search technicians…"
               />
@@ -668,13 +721,121 @@ export function TicketsFiltersBar({
                 Ticket Type
               </label>
               <SearchableSelect
-                value={filters.types?.[0] || "all"}
+                value={draftFilters.types?.[0] || "all"}
                 options={typeOptions}
                 onChange={(v) => updateField("types", v === "all" ? [] : [v as TicketType])}
                 disabled={disabled}
-                active={!!filters.types?.length}
+                active={!!draftFilters.types?.length}
                 searchPlaceholder="Search types…"
               />
+            </div>
+
+            {/* Created from */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Created from
+              </label>
+              <div className="flex items-center gap-1">
+                <DatePicker
+                  value={draftFilters.created_from ?? ""}
+                  onChange={(v) => updateField("created_from", v || undefined)}
+                  disabled={disabled}
+                  className={cn("flex-1", draftFilters.created_from && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  onClick={() => updateField("created_from", undefined)}
+                  disabled={disabled || !draftFilters.created_from}
+                  aria-label="Clear created from date"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Created to */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Created to
+              </label>
+              <div className="flex items-center gap-1">
+                <DatePicker
+                  value={draftFilters.created_to ?? ""}
+                  onChange={(v) => updateField("created_to", v || undefined)}
+                  disabled={disabled}
+                  className={cn("flex-1", draftFilters.created_to && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  onClick={() => updateField("created_to", undefined)}
+                  disabled={disabled || !draftFilters.created_to}
+                  aria-label="Clear created to date"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Assigned from */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Assigned from
+              </label>
+              <div className="flex items-center gap-1">
+                <DatePicker
+                  value={draftFilters.assigned_from ?? ""}
+                  onChange={(v) => updateField("assigned_from", v || undefined)}
+                  disabled={disabled}
+                  className={cn("flex-1", draftFilters.assigned_from && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  onClick={() => updateField("assigned_from", undefined)}
+                  disabled={disabled || !draftFilters.assigned_from}
+                  aria-label="Clear assigned from date"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Assigned to */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Assigned to
+              </label>
+              <div className="flex items-center gap-1">
+                <DatePicker
+                  value={draftFilters.assigned_to ?? ""}
+                  onChange={(v) => updateField("assigned_to", v || undefined)}
+                  disabled={disabled}
+                  className={cn("flex-1", draftFilters.assigned_to && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  onClick={() => updateField("assigned_to", undefined)}
+                  disabled={disabled || !draftFilters.assigned_to}
+                  aria-label="Clear assigned to date"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
 
             {/* Min part cost */}
@@ -687,7 +848,7 @@ export function TicketsFiltersBar({
                 <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-xs text-muted-foreground">$</span>
                 <Input
                   placeholder="0.00"
-                  value={filters.part_cost_total_gt ?? ""}
+                  value={draftFilters.part_cost_total_gt ?? ""}
                   onChange={(e) => updateField("part_cost_total_gt", e.target.value ? Number(e.target.value) : undefined)}
                   disabled={disabled}
                   type="number"
@@ -695,7 +856,7 @@ export function TicketsFiltersBar({
                   step="0.01"
                   className={cn(
                     "h-9 ps-6 text-sm",
-                    filters.part_cost_total_gt != null && "border-primary/40 bg-primary/5"
+                    draftFilters.part_cost_total_gt != null && "border-primary/40 bg-primary/5"
                   )}
                 />
               </div>
@@ -708,11 +869,11 @@ export function TicketsFiltersBar({
                 Deleted records
               </label>
               <SearchableSelect
-                value={filters.trashed || "none"}
+                value={draftFilters.trashed || "none"}
                 options={trashedOptions}
                 onChange={(v) => updateField("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
                 disabled={disabled}
-                active={!!filters.trashed}
+                active={!!draftFilters.trashed}
                 searchPlaceholder="Search…"
               />
             </div>
@@ -724,11 +885,11 @@ export function TicketsFiltersBar({
                 Results per page
               </label>
               <SearchableSelect
-                value={filters.per_page != null ? String(filters.per_page) : "default"}
+                value={draftFilters.per_page != null ? String(draftFilters.per_page) : "default"}
                 options={perPageOptions}
                 onChange={(v) => updateField("per_page", v === "default" ? undefined : Number(v))}
                 disabled={disabled}
-                active={filters.per_page != null}
+                active={draftFilters.per_page != null}
                 searchPlaceholder="Search…"
               />
             </div>
