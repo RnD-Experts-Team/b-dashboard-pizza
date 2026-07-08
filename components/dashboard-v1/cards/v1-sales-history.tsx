@@ -14,7 +14,7 @@ import { fmt$ } from "@/components/dspr/wbr-format";
 import {
   GRANULARITY_OPTIONS,
   CHANNEL_FIELDS,
-  bucketLabel,
+  buildChartCategories,
   bucketTooltipLabel,
   buildCustomTooltip,
   buildMetricAreaOptions,
@@ -45,7 +45,7 @@ const V1_METRIC_TABS: { key: SalesHistoryMetricKey; label: string }[] = [
 ];
 
 /** This card is the one deliberately full-width feature chart on Dashboard V1 — same idea as its counterpart on the main dashboard. */
-const CARD_HEIGHT = 400;
+const CARD_HEIGHT = 280;
 
 export function V1SalesHistoryCard({
   data,
@@ -76,11 +76,11 @@ export function V1SalesHistoryCard({
 
   const buckets = useMemo(() => data?.[granularity] ?? [], [data, granularity]);
   const categories = useMemo(
-    () => buckets.map((b) => bucketLabel(granularity, b)),
+    () => buildChartCategories(granularity, buckets),
     [buckets, granularity],
   );
   const tooltipCategories = useMemo(
-    () => buckets.map((b) => bucketTooltipLabel(granularity, b)),
+    () => buckets.map((b) => bucketTooltipLabel(granularity, b, { showWeekNumber: true })),
     [buckets, granularity],
   );
 
@@ -105,6 +105,7 @@ export function V1SalesHistoryCard({
             toolbar: false,
             metric: view,
             color: colors[0],
+            showWeekNumber: true,
           })
         : null,
     [categories, buckets, granularity, isDark, view, colors],

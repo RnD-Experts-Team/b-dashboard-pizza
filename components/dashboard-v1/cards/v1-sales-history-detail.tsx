@@ -17,6 +17,7 @@ import {
   bucketLabel,
   bucketRangeLabel,
   bucketTooltipLabel,
+  buildChartCategories,
   buildCustomTooltip,
   buildMetricAreaOptions,
   buildMetricAreaSeries,
@@ -82,11 +83,11 @@ export function V1SalesHistoryDetailDialog({
   const latest = buckets[buckets.length - 1];
   const previous = buckets[buckets.length - 2];
   const categories = useMemo(
-    () => buckets.map((b) => bucketLabel(granularity, b)),
+    () => buildChartCategories(granularity, buckets),
     [buckets, granularity],
   );
   const tooltipCategories = useMemo(
-    () => buckets.map((b) => bucketTooltipLabel(granularity, b)),
+    () => buckets.map((b) => bucketTooltipLabel(granularity, b, { showWeekNumber: true })),
     [buckets, granularity],
   );
 
@@ -111,6 +112,7 @@ export function V1SalesHistoryDetailDialog({
             toolbar: false,
             metric: view,
             color: colors[0],
+            showWeekNumber: true,
           })
         : null,
     [categories, buckets, granularity, isDark, view, colors],
