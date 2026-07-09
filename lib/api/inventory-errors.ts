@@ -13,6 +13,12 @@ import axios from "axios";
 // Matches words like "canceled", "cancelled", "abort", "aborted".
 const cancelErrorPattern = /cancel(?:ed|led)|abort(?:ed|error)?/i;
 
+// Matches the raw MySQL/Laravel foreign-key / integrity-constraint error that
+// leaks through when deleting a row that is still referenced elsewhere. We never
+// want to show this SQL text to the user — it means "record is in use".
+const constraintErrorPattern =
+  /SQLSTATE\[23000\]|Integrity constraint violation|foreign key constraint|\b1451\b|SQL:\s*delete from/i;
+
 /** True when the error is just a canceled/aborted request — do NOT surface these. */
 export function isCanceledError(error: unknown): boolean {
   if (axios.isCancel(error)) return true;
@@ -64,6 +70,12 @@ export function getInventoryErrorMessage(
         .flat()
         .filter(Boolean);
       if (lines.length > 0) return lines.join(" ");
+    }
+
+    // 409 / FK constraint — the record is still referenced elsewhere. Never
+    // surface the raw SQL; show a clear, actionable message instead.
+    if (status === 409 || constraintErrorPattern.test(data?.message ?? "")) {
+      return "This item can't be deleted because it's used in one or more inventory entries.";
     }
 
     // 410 — public link already submitted (kept for completeness).

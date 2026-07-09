@@ -17,7 +17,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useEntriesStore } from "@/lib/store/inventory-entries.store";
+import { formatUnitQty } from "@/lib/utils/number";
 import type { EntryItem } from "@/types/inventory.types";
+
+/** Block decimal separators / exponent / sign so only whole numbers are typed. */
+function blockNonInteger(e: React.KeyboardEvent<HTMLInputElement>) {
+  if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+}
 
 /**
  * Recount dialog — edits one entry item's counts and requires a reason (5–1000 chars).
@@ -45,9 +51,9 @@ export function RecountDialog({
 
   useEffect(() => {
     if (open && entryItem) {
-      setCount1(entryItem.count_unit_1 ?? "0");
-      setCount2(entryItem.count_unit_2 ?? "0");
-      setCount3(entryItem.count_unit_3 ?? "0");
+      setCount1(formatUnitQty(entryItem.count_unit_1));
+      setCount2(formatUnitQty(entryItem.count_unit_2));
+      setCount3(formatUnitQty(entryItem.count_unit_3));
       setReason("");
       setLocalError(null);
       clearErrors();
@@ -110,7 +116,8 @@ export function RecountDialog({
                 id="c1"
                 type="number"
                 min="0"
-                step="any"
+                step="1"
+                onKeyDown={blockNonInteger}
                 value={count1}
                 onChange={(e) => setCount1(e.target.value)}
                 required
@@ -124,7 +131,8 @@ export function RecountDialog({
                 id="c2"
                 type="number"
                 min="0"
-                step="any"
+                step="1"
+                onKeyDown={blockNonInteger}
                 value={count2}
                 onChange={(e) => setCount2(e.target.value)}
                 required
@@ -137,7 +145,8 @@ export function RecountDialog({
                   id="c3"
                   type="number"
                   min="0"
-                  step="any"
+                  step="1"
+                  onKeyDown={blockNonInteger}
                   value={count3}
                   onChange={(e) => setCount3(e.target.value)}
                 />

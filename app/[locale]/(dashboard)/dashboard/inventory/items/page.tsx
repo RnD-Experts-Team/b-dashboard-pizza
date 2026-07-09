@@ -19,7 +19,10 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useItems } from "@/lib/hooks/use-inventory-items";
-import { isDisplayableErrorMessage } from "@/lib/api/inventory-errors";
+import {
+  getInventoryErrorMessage,
+  isDisplayableErrorMessage,
+} from "@/lib/api/inventory-errors";
 import { DeleteConfirmDialog } from "@/components/inventory/delete-confirm-dialog";
 import { ItemDetailSheet } from "@/components/inventory/item-detail-sheet";
 import type { Item } from "@/types/inventory.types";
@@ -40,7 +43,7 @@ export default function ItemsPage() {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeNumber = selectedStore?.storeId ?? overviewStores?.[0]?.storeId;
 
-  const { items, pagination, isLoading, isDeleting, error, deleteError, deleteItem, handlePageChange } =
+  const { items, pagination, isLoading, isDeleting, error, deleteItem, handlePageChange } =
     useItems(undefined, storeNumber);
 
   // Rule-based UI gating. GET (list) is scoped; POST/PUT/DELETE remain non-scoped.
@@ -62,8 +65,13 @@ export default function ItemsPage() {
       await deleteItem(deleting.id);
       toast.success("Item deleted.");
       setDeleting(null);
-    } catch {
-      if (isDisplayableErrorMessage(deleteError)) toast.error(deleteError);
+      // Also close the detail sheet if the deleted item was open in it.
+      if (selectedItemId === deleting.id) setSelectedItemId(null);
+    } catch (err) {
+      // Map the thrown error directly — reading `deleteError` from the render
+      // closure is stale on the first press (it only updates next render).
+      const message = getInventoryErrorMessage(err);
+      if (isDisplayableErrorMessage(message)) toast.error(message);
     }
   };
 
@@ -202,6 +210,12 @@ export default function ItemsPage() {
         storeId={storeNumber}
         open={selectedItemId !== null}
         onOpenChange={(o) => !o && setSelectedItemId(null)}
+        canEdit={canEditItem}
+        onEdit={(item) =>
+          router.push(`/${locale}/dashboard/inventory/items/${item.id}/edit`)
+        }
+        canDelete={canDeleteItem}
+        onDelete={(item) => setDeleting(item)}
       />
     </div>
   );

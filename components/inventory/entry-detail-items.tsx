@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatUnitQty, formatTotal } from "@/lib/utils/number";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { RecountDialog } from "./recount-dialog";
@@ -24,11 +25,13 @@ function DiffField({
   prev,
   next,
   emphasize,
+  format = (v) => v,
 }: {
   label: string;
   prev: string;
   next: string;
   emphasize?: boolean;
+  format?: (v: string) => string;
 }) {
   const changed = Number(prev) !== Number(next);
   const increased = Number(next) > Number(prev);
@@ -42,7 +45,7 @@ function DiffField({
         {changed ? (
           <>
             <span className="text-muted-foreground line-through decoration-muted-foreground/50">
-              {prev}
+              {format(prev)}
             </span>
             <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
             <span
@@ -52,11 +55,11 @@ function DiffField({
                   : "text-orange-600 dark:text-orange-400"
               }
             >
-              {next}
+              {format(next)}
             </span>
           </>
         ) : (
-          <span>{next}</span>
+          <span>{format(next)}</span>
         )}
       </p>
     </div>
@@ -78,10 +81,10 @@ function EditLogEntry({ edit }: { edit: EntryItemEdit }) {
         </p>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        <DiffField label="Unit 1" prev={edit.prev_count_unit_1} next={edit.new_count_unit_1} />
-        <DiffField label="Unit 2" prev={edit.prev_count_unit_2} next={edit.new_count_unit_2} />
-        <DiffField label="Unit 3" prev={edit.prev_count_unit_3} next={edit.new_count_unit_3} />
-        <DiffField label="Total (U1)" prev={edit.prev_total} next={edit.new_total} emphasize />
+        <DiffField label="Unit 1" prev={edit.prev_count_unit_1} next={edit.new_count_unit_1} format={formatUnitQty} />
+        <DiffField label="Unit 2" prev={edit.prev_count_unit_2} next={edit.new_count_unit_2} format={formatUnitQty} />
+        <DiffField label="Unit 3" prev={edit.prev_count_unit_3} next={edit.new_count_unit_3} format={formatUnitQty} />
+        <DiffField label="Total (U1)" prev={edit.prev_total} next={edit.new_total} emphasize format={formatTotal} />
       </div>
     </li>
   );
@@ -205,11 +208,11 @@ export function EntryDetailItems({
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">{item.count_unit_1}</TableCell>
-                      <TableCell className="text-right">{item.count_unit_2}</TableCell>
-                      <TableCell className="text-right">{item.count_unit_3}</TableCell>
+                      <TableCell className="text-right">{formatUnitQty(item.count_unit_1)}</TableCell>
+                      <TableCell className="text-right">{formatUnitQty(item.count_unit_2)}</TableCell>
+                      <TableCell className="text-right">{formatUnitQty(item.count_unit_3)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {item.total_in_unit_1}
+                        {formatTotal(item.total_in_unit_1)}
                       </TableCell>
                       {canRecount && (
                         <TableCell className="text-right">

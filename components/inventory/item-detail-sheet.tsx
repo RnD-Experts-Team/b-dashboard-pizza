@@ -14,12 +14,14 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, ImageOff, Store, ZoomIn } from "lucide-react";
+import { AlertCircle, ImageOff, Pencil, Store, Trash2, ZoomIn } from "lucide-react";
 
 import { useItemDetail } from "@/lib/hooks/use-inventory-items";
+import type { Item } from "@/types/inventory.types";
 
 /**
  * Full-screen image lightbox — built on the real Dialog primitive (not a
@@ -93,6 +95,12 @@ interface ItemDetailSheetProps {
   storeId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Show the Edit action; invoked with the loaded item. */
+  canEdit?: boolean;
+  onEdit?: (item: Item) => void;
+  /** Show the Delete action; invoked with the loaded item. */
+  canDelete?: boolean;
+  onDelete?: (item: Item) => void;
 }
 
 export function ItemDetailSheet({
@@ -100,6 +108,10 @@ export function ItemDetailSheet({
   storeId,
   open,
   onOpenChange,
+  canEdit,
+  onEdit,
+  canDelete,
+  onDelete,
 }: ItemDetailSheetProps) {
   const { item, isLoading, error } = useItemDetail(open ? itemId : null, storeId);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -114,10 +126,39 @@ export function ItemDetailSheet({
     >
       <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl">
         <SheetHeader className="shrink-0 border-b px-6 py-4">
-          <SheetTitle>{item ? item.name_en : "Item"}</SheetTitle>
-          <SheetDescription>
-            {item ? item.ultimatrix_id : "Catalog item detail."}
-          </SheetDescription>
+          {/* pe-8 keeps the title clear of the Sheet's absolute close (X) button. */}
+          <div className="flex items-start justify-between gap-4 pe-8">
+            <div className="min-w-0 space-y-1">
+              <SheetTitle>{item ? item.name_en : "Item"}</SheetTitle>
+              <SheetDescription>
+                {item ? item.ultimatrix_id : "Catalog item detail."}
+              </SheetDescription>
+            </div>
+            {item && (canEdit || canDelete) && (
+              <div className="flex shrink-0 gap-2">
+                {canEdit && onEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(item)}
+                  >
+                    <Pencil className="me-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                )}
+                {canDelete && onDelete && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => onDelete(item)}
+                  >
+                    <Trash2 className="me-1.5 h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </SheetHeader>
 
         <ScrollArea className="min-h-0 flex-1">

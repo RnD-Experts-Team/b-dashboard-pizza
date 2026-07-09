@@ -152,38 +152,43 @@ function UnitField({
       <Input
         id={id}
         type="number"
-        inputMode="decimal"
+        inputMode="numeric"
         min="0"
-        step="any"
+        step="1"
         placeholder="0"
         className="h-11 w-full text-center text-base"
         value={value}
+        onKeyDown={(e) => {
+          // Whole numbers only — block decimal separators / exponent / sign.
+          if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+        }}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
   );
 }
 
-/** Human-readable conversion hint, e.g. "1 Carton = 6 Box · 1 Box = 12 Piece". */
-function conversionHint(item: PublicLinkItem): string | null {
-  const parts: string[] = [];
-  const u1 = item.unit_1.name;
-  const u2 = item.unit_2.name;
-  const u3 = item.unit_3?.name;
-  if (u1 && u2 && item.unit_2_per_unit_1) {
-    parts.push(`1 ${u1} = ${Number(item.unit_2_per_unit_1)} ${u2}`);
-  }
-  if (u2 && u3 && item.unit_3_per_unit_2) {
-    parts.push(`1 ${u2} = ${Number(item.unit_3_per_unit_2)} ${u3}`);
-  }
-  return parts.length ? parts.join(" · ") : null;
+/**
+ * The item's Details text for the current URL locale, falling back to English.
+ * Returns null when no details are set so the caller can render nothing.
+ */
+function detailsFor(item: PublicLinkItem, locale: string): string | null {
+  const localized =
+    locale === "ar" ? item.details_ar : locale === "es" ? item.details_es : item.details_en;
+  return localized?.trim() || item.details_en?.trim() || null;
 }
 
 /**
  * The public, no-auth inventory count form an employee opens via their link.
  * Loads the token's items, collects counts, and submits once (single-use link).
  */
-export function PublicCountForm({ token }: { token: string }) {
+export function PublicCountForm({
+  token,
+  locale,
+}: {
+  token: string;
+  locale: string;
+}) {
   const { link, status, error, submit, isSubmitting, submitError, result } =
     usePublicInventoryLink(token);
 
@@ -362,7 +367,7 @@ export function PublicCountForm({ token }: { token: string }) {
           ) : (
             link.items.map((item) => {
               const entered = itemEntered(item.id);
-              const hint = conversionHint(item);
+              const details = detailsFor(item, locale);
               return (
                 <div
                   key={item.id}
@@ -405,14 +410,16 @@ export function PublicCountForm({ token }: { token: string }) {
                       )}
                     </div>
 
-                    {/* Item name, ID, conversion hint */}
+                    {/* Item name, ID, details */}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold leading-tight">{item.name_en}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {item.ultimatrix_id}
                       </p>
-                      {hint && (
-                        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+                      {details && (
+                        <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                          {details}
+                        </p>
                       )}
                     </div>
                   </div>
