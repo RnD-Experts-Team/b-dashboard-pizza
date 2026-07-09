@@ -7,6 +7,8 @@ import { useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ClipboardList,
   ImageOff,
   Link2Off,
@@ -144,26 +146,55 @@ function UnitField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  // Whole-number count; custom steppers (native number arrows aren't shown on
+  // mobile, and we hide them anyway to avoid double arrows on desktop).
+  const current = Number.parseInt(value || "0", 10) || 0;
+  const step = (delta: number) => onChange(String(Math.max(0, current + delta)));
+
   return (
     <div className="min-w-0 flex-1 space-y-1">
       <Label htmlFor={id} className="block text-xs font-normal text-muted-foreground">
         {label}
       </Label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min="0"
-        step="1"
-        placeholder="0"
-        className="h-11 w-full text-center text-base"
-        value={value}
-        onKeyDown={(e) => {
-          // Whole numbers only — block decimal separators / exponent / sign.
-          if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
-        }}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="relative">
+        <Input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min="0"
+          step="1"
+          placeholder="0"
+          className="h-11 w-full pe-7 text-center text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          value={value}
+          onKeyDown={(e) => {
+            // Whole numbers only — block decimal separators / exponent / sign.
+            if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+          }}
+          onChange={(e) => onChange(e.target.value)}
+        />
+        {/* Always-visible stepper arrows (works on touch + desktop). */}
+        <div className="absolute inset-y-1 end-1 flex flex-col overflow-hidden rounded-md border">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={`Increase ${label}`}
+            className="flex flex-1 items-center justify-center px-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            onClick={() => step(1)}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={`Decrease ${label}`}
+            disabled={current <= 0}
+            className="flex flex-1 items-center justify-center border-t px-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+            onClick={() => step(-1)}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

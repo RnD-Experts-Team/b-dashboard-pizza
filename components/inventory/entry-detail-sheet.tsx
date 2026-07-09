@@ -11,7 +11,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertCircle,
   Boxes,
@@ -36,14 +35,14 @@ function MetricCell({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1 px-5 py-3.5">
+    <div className="flex min-w-0 flex-col gap-1 px-3 py-3.5 sm:px-5">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Icon className="h-3.5 w-3.5 shrink-0" />
-        {label}
+        <span className="truncate">{label}</span>
       </div>
       <p
         className={cn(
-          "text-sm font-semibold tabular-nums",
+          "truncate text-sm font-semibold tabular-nums",
           highlight && "text-amber-600 dark:text-amber-400"
         )}
       >
@@ -93,7 +92,11 @@ export function EntryDetailSheet({
           <SheetDescription>Submitted count detail.</SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
+        {/* Plain block scroll container (not Radix ScrollArea, whose display:table
+            viewport grows to the widest child and stretches the whole sheet). A
+            block div constrains children to the sheet width, so the wide items
+            table scrolls inside its own overflow-x container instead. */}
+        <div className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
           {isLoading ? (
             <EntryDetailSkeleton />
           ) : error ? (
@@ -165,7 +168,7 @@ export function EntryDetailSheet({
               <EntryDetailItems items={entry.items} canViewHistory={hasHistoryAccess} />
             </div>
           ) : null}
-        </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   );
