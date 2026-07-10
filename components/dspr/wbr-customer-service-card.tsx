@@ -1,10 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Users } from "lucide-react";
+import { Users, Smile, DoorOpen, Car } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { CustomerService, CustomerServiceEntry } from "@/types/dashboard-report.types";
-import { fmtDate, fmtNumD, fmtPct, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { fmtDate, fmtNumD, fmtPct, WbrCardSkeleton } from "./wbr-format";
 
 /** Mean of a field across entries, skipping nulls. null when every entry is null. */
 function average(
@@ -14,6 +14,44 @@ function average(
   const values = entries.map((e) => e[field]).filter((v): v is number => v != null);
   if (values.length === 0) return null;
   return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+function StatBlock({
+  icon: Icon,
+  label,
+  value,
+  direction,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  /** "up" = higher is better (green), "down" = higher is worse (red). */
+  direction: "up" | "down";
+}) {
+  const good = direction === "up";
+  return (
+    <div className="flex flex-1 items-center gap-3 rounded-lg bg-background/55 px-3">
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+          good ? "bg-emerald-500/15 dark:bg-emerald-500/20" : "bg-red-500/15 dark:bg-red-500/20",
+        )}
+      >
+        <Icon className={cn("h-4 w-4", good ? "text-emerald-500" : "text-red-500")} />
+      </div>
+      <p className="flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "shrink-0 text-2xl font-bold tabular-nums leading-none",
+          good ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
 }
 
 export function WbrCustomerServiceCard({
@@ -52,26 +90,31 @@ export function WbrCustomerServiceCard({
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-2">
+      <CardContent className="flex min-h-0 flex-1 px-3 pb-2">
         {entries.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-1.5 py-4 text-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 py-4 text-center">
             <Users className="h-5 w-5 text-muted-foreground/40" />
             <p className="text-[11px] text-muted-foreground">No customer service data this period.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-1.5">
-            <StatTile
+          <div className="flex flex-1 flex-col gap-2">
+            <StatBlock
+              icon={Smile}
               label="Guest Service"
               value={guestService != null ? fmtPct(guestService) : "—"}
-              valueClass="text-cyan-600 dark:text-cyan-400"
+              direction="up"
             />
-            <StatTile
+            <StatBlock
+              icon={DoorOpen}
               label="Lobby Points"
               value={lobbyPoints != null ? fmtNumD(lobbyPoints) : "—"}
+              direction="down"
             />
-            <StatTile
+            <StatBlock
+              icon={Car}
               label="Drive-Thru Points"
               value={driveThruPoints != null ? fmtNumD(driveThruPoints) : "—"}
+              direction="down"
             />
           </div>
         )}
