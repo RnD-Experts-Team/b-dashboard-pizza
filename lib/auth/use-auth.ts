@@ -38,6 +38,11 @@ export function useAuth() {
     login: storeLogin,
     logout: storeLogout,
     checkAuth,
+    // Impersonation
+    isImpersonating,
+    isImpersonationLoading,
+    impersonateUser: storeImpersonateUser,
+    stopImpersonating: storeStopImpersonating,
     // Permission methods
     hasPermission,
     hasAnyPermission,
@@ -69,25 +74,48 @@ export function useAuth() {
     router.push(`/${locale}/auth/login`);
   }, [storeLogout, router, locale]);
 
+  // Impersonation switches identity out from under every zustand store in
+  // the app, most of which aren't wired to reset themselves — a full page
+  // reload (not router.push) is required to guarantee no stale, previous-
+  // identity data survives the switch.
+  const impersonateUser = useCallback(
+    async (userId: string) => {
+      await storeImpersonateUser(userId);
+      window.location.href = `/${locale}/dashboard`;
+    },
+    [storeImpersonateUser, locale]
+  );
+
+  const stopImpersonating = useCallback(() => {
+    storeStopImpersonating();
+    window.location.href = `/${locale}/dashboard`;
+  }, [storeStopImpersonating, locale]);
+
   return {
     // User data
     user,
     token,
-    
+
     // Status
     isAuthenticated,
     isLoading,
     isInitialized,
-    
+
     // Derived data
     permissions,
     roles,
-    
+
     // Actions
     login,
     logout,
     checkAuth,
-    
+
+    // Impersonation
+    isImpersonating,
+    isImpersonationLoading,
+    impersonateUser,
+    stopImpersonating,
+
     // Permission checks
     hasPermission,
     hasAnyPermission,

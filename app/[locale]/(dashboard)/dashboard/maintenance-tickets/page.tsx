@@ -252,6 +252,11 @@ export default function MaintenanceTicketsPage() {
         filters={filters}
         onFiltersChange={applyFilters}
         onClose={handleSheetClose}
+        currentPage={currentPage}
+        totalPages={data?.meta.lastPage}
+        isPageLoading={isLoading || isRefreshing}
+        onNextPage={() => goToPage(currentPage + 1)}
+        onPreviousPage={() => goToPage(currentPage - 1)}
       />
 
       {/* Catalog management dialog */}

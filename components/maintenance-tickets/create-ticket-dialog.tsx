@@ -69,6 +69,73 @@ interface CreateTicketDialogProps {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/*  Priority Select — colored dot + label + short description per level    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const PRIORITY_LEVELS: { value: Priority; label: string; description: string; dotClass: string }[] = [
+  { value: "urgent", label: "Emergency", description: "Store cannot operate", dotClass: "bg-red-500" },
+  { value: "high", label: "High", description: "Issue affects operations", dotClass: "bg-orange-500" },
+  { value: "medium", label: "Normal", description: "Repair needed but store can operate", dotClass: "bg-yellow-500" },
+  { value: "low", label: "Low", description: "Cosmetic or small issue", dotClass: "bg-blue-500" },
+];
+
+function PrioritySelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Priority;
+  onChange: (v: Priority) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = PRIORITY_LEVELS.find((p) => p.value === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors",
+            "hover:bg-accent hover:text-accent-foreground",
+            "focus:outline-none focus:ring-1 focus:ring-ring",
+            "disabled:cursor-not-allowed disabled:opacity-50"
+          )}
+        >
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", selected?.dotClass)} />
+          <span className="flex-1 truncate text-start">{selected?.label ?? "Select priority…"}</span>
+          <ChevronDown className={cn("ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-180")} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={4} className="w-[var(--radix-popover-trigger-width)] min-w-[260px] p-1 shadow-md">
+        {PRIORITY_LEVELS.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => { onChange(p.value); setOpen(false); }}
+            className={cn(
+              "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-start transition-colors hover:bg-accent hover:text-accent-foreground",
+              p.value === value && "bg-accent/60"
+            )}
+          >
+            <span className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", p.dotClass)} />
+            <span className="flex-1 min-w-0">
+              <span className="flex items-center gap-1.5">
+                <span className="text-sm font-medium">{p.label}</span>
+                <Check className={cn("h-3.5 w-3.5 shrink-0 text-primary", p.value !== value && "invisible")} />
+              </span>
+              <span className="block text-xs text-muted-foreground">{p.description}</span>
+            </span>
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /*  Component                                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -445,20 +512,10 @@ export function CreateTicketDialog({
               {/* Priority */}
               <div className="space-y-1">
                 <Label className="text-sm">{t("createDialog.priorityLabel")}</Label>
-                <Select
+                <PrioritySelect
                   value={row.priority}
-                  onValueChange={(v) => updateRow(row.id, { priority: v as Priority })}
-                >
-                  <SelectTrigger className="text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="urgent">{t("priority.urgent")}</SelectItem>
-                    <SelectItem value="high">{t("priority.high")}</SelectItem>
-                    <SelectItem value="medium">{t("priority.medium")}</SelectItem>
-                    <SelectItem value="low">{t("priority.low")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => updateRow(row.id, { priority: v })}
+                />
               </div>
 
               {/* Description */}
