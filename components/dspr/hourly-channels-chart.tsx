@@ -80,6 +80,16 @@ export function HourlyChannelsChart({
       return next;
     });
   }, []);
+
+  // Ctrl/Cmd+click a legend item to isolate it (hide every other channel).
+  // Ctrl/Cmd+click the already-isolated item again to restore all channels.
+  const isolateSeries = useCallback((label: string) => {
+    setHiddenSeries((prev) => {
+      const others = CHANNEL_KEYS.map((c) => c.label).filter((l) => l !== label);
+      const alreadyIsolated = !prev.has(label) && others.every((l) => prev.has(l));
+      return alreadyIsolated ? new Set() : new Set(others);
+    });
+  }, []);
   const mode = useDocumentColorMode();
   const isDark = mode === "dark";
 
@@ -284,7 +294,7 @@ export function HourlyChannelsChart({
             return (
               <button
                 key={label}
-                onClick={() => toggleSeries(label)}
+                onClick={(e) => (e.ctrlKey || e.metaKey ? isolateSeries(label) : toggleSeries(label))}
                 className={cn(
                   "flex items-center gap-1 rounded-full border-none px-1 py-0.5 text-[9px] font-medium transition-all",
                   isHidden

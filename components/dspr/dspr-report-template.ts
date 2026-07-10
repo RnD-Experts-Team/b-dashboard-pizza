@@ -13,6 +13,15 @@ import type { DsprResponse, DsprGoalMetric } from "@/types/dspr.types";
 
 type MetricColor = "green" | "blue" | "purple" | "orange" | "red";
 
+/**
+ * Where a card's comparison baseline came from:
+ *  - "goal"     — a real target from goal_metrics / store_score
+ *  - "fallback" — no real goal; comparing against a real historical baseline
+ *                 (week-to-date average, or "goals on track" for Store Score)
+ *  - "none"     — nothing to compare against at all
+ */
+type ComparisonMode = "goal" | "fallback" | "none";
+
 /** One card's worth of injected data. `null` fields render as "No data". */
 interface ReportMetric {
   key: string;
@@ -24,13 +33,17 @@ interface ReportMetric {
   value: string | null;
   /** Numeric percent used for the scorecard ring (0–100), or null. */
   rawValue: number | null;
+  /** Label shown for the ring in the scorecard summary (e.g. "TOTAL SALES"). */
+  ringLabel: string;
   goalLabel: string;
-  /** Formatted goal (e.g. "$1,200" or "75.00%"), or null when no goal. */
+  /** Formatted goal/baseline (e.g. "$1,200" or "75.00%"), or null when nothing to show. */
   goal: string | null;
-  /** "gauge" (sales % of goal) | "delta" (actual − goal). */
+  /** "gauge" (% of goal/avg) | "delta" (actual − goal/avg). */
   bottomType: "gauge" | "delta";
-  /** For gauge: the % of goal number. For delta: the point difference. null → No data. */
+  /** For gauge: the % number. For delta: the point difference. null → No data. */
   bottomValue: number | null;
+  /** Small heading shown above the gauge/delta value (e.g. "% OF GOAL", "VS WTD AVG"). */
+  bottomSubLabel: string;
   banner: { icon: string; big: string; small: string };
 }
 
@@ -69,77 +82,142 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Banner tone derived from performance vs goal (never fabricates numbers). */
+/**
+ * Banner tone derived from performance vs the effective baseline (goal or
+ * fallback) — never fabricates numbers, and never claims a target was hit
+ * when there wasn't one to compare against.
+ */
 function bannerFor(
-  color: MetricColor,
   status: "met" | "close" | "behind" | "nodata",
+  mode: "goal" | "fallback",
 ): { icon: string; big: string; small: string } {
-  switch (status) {
-    case "met":
-      return { icon: "fa-solid fa-trophy", big: "GREAT JOB!", small: "KEEP IT UP!" };
-    case "close":
-      return { icon: "fa-solid fa-bolt", big: "ALMOST THERE!", small: "PUSH TO THE GOAL!" };
-    case "behind":
-      return { icon: "fa-solid fa-bullseye", big: "FOCUS AREA", small: "LET'S HIT THAT TARGET!" };
-    default:
-      return { icon: "fa-solid fa-circle-info", big: "NO DATA", small: "NOT AVAILABLE TODAY" };
+  if (status === "nodata") {
+    return { icon: "fa-solid fa-circle-info", big: "NO DATA", small: "NOT AVAILABLE TODAY" };
   }
+  if (status === "met") {
+    return { icon: "fa-solid fa-trophy", big: "GREAT JOB!", small: "KEEP IT UP!" };
+  }
+  if (mode === "goal") {
+    if (status === "close") {
+      return { icon: "fa-solid fa-bolt", big: "ALMOST THERE!", small: "PUSH TO THE GOAL!" };
+    }
+    return { icon: "fa-solid fa-bullseye", big: "FOCUS AREA", small: "LET'S HIT THAT TARGET!" };
+  }
+  if (status === "close") {
+    return { icon: "fa-solid fa-bolt", big: "ALMOST THERE!", small: "CLOSE TO YOUR AVERAGE!" };
+  }
+  return { icon: "fa-solid fa-chart-line", big: "BELOW AVERAGE", small: "LET'S BOUNCE BACK!" };
 }
 
-/** Status for a percentage metric compared to its goal. */
-function pctStatus(actual: number | null, goal: number | null): "met" | "close" | "behind" | "nodata" {
-  if (actual == null) return "nodata";
-  if (goal == null) return actual >= 0 ? "met" : "behind"; // no goal → treat as informational
-  if (actual >= goal) return "met";
-  if (actual >= goal * 0.8) return "close";
+/** Status comparing an actual value to a baseline (goal or fallback), same units. */
+function pctStatus(actual: number | null, baseline: number | null): "met" | "close" | "behind" | "nodata" {
+  if (actual == null || baseline == null) return "nodata";
+  if (actual >= baseline) return "met";
+  if (actual >= baseline * 0.8) return "close";
   return "behind";
+}
+
+/** Mean of a date→amount map's values, optionally excluding one date key. */
+function weekAverage(map: Record<string, number> | undefined, excludeDate?: string): number | null {
+  if (!map) return null;
+  const values = Object.entries(map)
+    .filter(([d]) => d !== excludeDate)
+    .map(([, v]) => v);
+  if (values.length === 0) return null;
+  return values.reduce((s, v) => s + v, 0) / values.length;
 }
 
 /* ── Metric builders ────────────────────────────────────────────────────────── */
 
+const fmtScore = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
+
 function buildMetrics(data: DsprResponse): ReportMetric[] {
   const { sales, day, goal_metrics, store_score, filtering } = data;
 
-  /* (1) Total Sales — daily value = that day's total; daily goal = weekly / 7. */
+  /* (1) Total Sales — daily value = that day's total.
+   * Goal = weekly goal / 7. Fallback = average of this week's other days,
+   * or the previous week's average if this is the first day of the week. */
   const dailySales = sales?.this_week_by_day?.[filtering.date] ?? null;
   const weeklySalesGoal = goalValueByName(goal_metrics, (n) => n.includes("sales"));
-  const dailySalesGoal = weeklySalesGoal != null ? weeklySalesGoal / 7 : null;
+  let salesBaseline: number | null = null;
+  let salesMode: ComparisonMode = "none";
+  if (weeklySalesGoal != null) {
+    salesBaseline = weeklySalesGoal / 7;
+    salesMode = "goal";
+  } else {
+    const fallback =
+      weekAverage(sales?.this_week_by_day, filtering.date) ?? weekAverage(sales?.previous_week_by_day);
+    if (fallback != null) {
+      salesBaseline = fallback;
+      salesMode = "fallback";
+    }
+  }
   const salesPct =
-    dailySales != null && dailySalesGoal != null && dailySalesGoal > 0
-      ? (dailySales / dailySalesGoal) * 100
+    dailySales != null && salesBaseline != null && salesBaseline > 0
+      ? (dailySales / salesBaseline) * 100
       : null;
-  const salesStatus = pctStatus(salesPct, salesPct != null ? 100 : null);
+  const salesStatus = pctStatus(dailySales, salesBaseline);
+  const salesHasRealGoal = salesMode === "goal";
+  const salesMetRealGoal = salesHasRealGoal && salesStatus === "met";
 
-  /* (2) Store Score — overall store_score.score out of its max points. */
-  const scoreMax = store_score
-    ? store_score.details?.reduce((s, d) => s + d.max, 0) || 100
-    : null;
-  const scoreVal = store_score?.score ?? null;
-  const scorePct =
-    scoreVal != null && scoreMax != null && scoreMax > 0 ? (scoreVal / scoreMax) * 100 : null;
-  const scoreStatus = pctStatus(scorePct, scorePct != null ? 100 : null);
-  const fmtScore = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
-
-  /* (3) Put Into Portal — daily. */
+  /* (2) Put Into Portal — daily. Fallback = week-to-date average. */
   const portalVal = day?.portal?.put_into_portal_percent ?? null;
   const portalGoal = goalValueByName(
     goal_metrics,
     (n) => n.includes("portal") && (n.includes("put") || n.includes("into")),
   );
-  const portalStatus = pctStatus(portalVal, portalGoal);
+  const portalWtdAvg = day?.portal?.week_to_date_avg?.put_into_portal_percent ?? null;
+  const portalBaseline = portalGoal ?? portalWtdAvg;
+  const portalMode: ComparisonMode = portalGoal != null ? "goal" : portalWtdAvg != null ? "fallback" : "none";
+  const portalStatus = pctStatus(portalVal, portalBaseline);
+  const portalHasRealGoal = portalMode === "goal";
+  const portalMetRealGoal = portalHasRealGoal && portalStatus === "met";
 
-  /* (4) In Portal On Time — daily. */
+  /* (3) In Portal On Time — daily. Fallback = week-to-date average. */
   const onTimeVal = day?.portal?.in_portal_on_time_percent ?? null;
   const onTimeGoal = goalValueByName(
     goal_metrics,
     (n) => n.includes("on-time") || n.includes("on time") || (n.includes("portal") && n.includes("time")),
   );
-  const onTimeStatus = pctStatus(onTimeVal, onTimeGoal);
+  const onTimeWtdAvg = day?.portal?.week_to_date_avg?.in_portal_on_time_percent ?? null;
+  const onTimeBaseline = onTimeGoal ?? onTimeWtdAvg;
+  const onTimeMode: ComparisonMode = onTimeGoal != null ? "goal" : onTimeWtdAvg != null ? "fallback" : "none";
+  const onTimeStatus = pctStatus(onTimeVal, onTimeBaseline);
+  const onTimeHasRealGoal = onTimeMode === "goal";
+  const onTimeMetRealGoal = onTimeHasRealGoal && onTimeStatus === "met";
 
-  /* (5) HNR Promise Met — daily. */
+  /* (4) HNR Promise Met — daily. Fallback = week-to-date average. */
   const hnrVal = day?.hnr?.hnr_promise_met_percent ?? null;
   const hnrGoal = goalValueByName(goal_metrics, (n) => n.includes("hnr") || n.includes("promise"));
-  const hnrStatus = pctStatus(hnrVal, hnrGoal);
+  const hnrWtdAvg = day?.hnr_week_to_date_avg?.hnr_promise_met_percent ?? null;
+  const hnrBaseline = hnrGoal ?? hnrWtdAvg;
+  const hnrMode: ComparisonMode = hnrGoal != null ? "goal" : hnrWtdAvg != null ? "fallback" : "none";
+  const hnrStatus = pctStatus(hnrVal, hnrBaseline);
+  const hnrHasRealGoal = hnrMode === "goal";
+  const hnrMetRealGoal = hnrHasRealGoal && hnrStatus === "met";
+
+  /* (5) Store Score — overall store_score.score out of its max points.
+   * Fallback (no store_score): "Goals On Track" tally across the 4 metrics
+   * above that have a real goal — never invents a score. */
+  const scoreMax = store_score
+    ? store_score.details?.reduce((s, d) => s + d.max, 0) || 100
+    : null;
+  const scoreVal = store_score?.score ?? null;
+
+  const realGoalFlags = [salesHasRealGoal, portalHasRealGoal, onTimeHasRealGoal, hnrHasRealGoal];
+  const metGoalFlags = [salesMetRealGoal, portalMetRealGoal, onTimeMetRealGoal, hnrMetRealGoal];
+  const hasGoalCount = realGoalFlags.filter(Boolean).length;
+  const metGoalCount = metGoalFlags.filter((m, i) => realGoalFlags[i] && m).length;
+  const onTrackPct = hasGoalCount > 0 ? (metGoalCount / hasGoalCount) * 100 : null;
+
+  const scorePct =
+    scoreVal != null && scoreMax != null && scoreMax > 0 ? (scoreVal / scoreMax) * 100 : null;
+
+  const scoreHasRealScore = scoreVal != null && scoreMax != null;
+  const scoreMode: ComparisonMode = scoreHasRealScore ? "goal" : hasGoalCount > 0 ? "fallback" : "none";
+  const scoreStatus = scoreHasRealScore
+    ? pctStatus(scoreVal, scoreMax)
+    : pctStatus(onTrackPct, onTrackPct != null ? 100 : null);
 
   return [
     {
@@ -148,27 +226,49 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
       title: "1. TOTAL SALES",
       icon: "fa-solid fa-dollar-sign",
       color: "green",
+      ringLabel: "TOTAL SALES",
       value: dailySales != null ? fmtMoney2(dailySales) : null,
       rawValue: salesPct != null ? Math.min(salesPct, 100) : null,
-      goalLabel: "DAILY GOAL",
-      goal: dailySalesGoal != null ? fmtMoney0(dailySalesGoal) : null,
+      goalLabel: salesMode === "fallback" ? "WTD AVG" : "DAILY GOAL",
+      goal: salesBaseline != null ? fmtMoney0(salesBaseline) : null,
       bottomType: "gauge",
       bottomValue: salesPct,
-      banner: bannerFor("green", salesStatus),
+      bottomSubLabel: salesMode === "fallback" ? "% OF WTD AVG" : "% OF GOAL",
+      banner: bannerFor(salesStatus, salesMode === "fallback" ? "fallback" : "goal"),
     },
     {
       key: "score",
       num: 2,
-      title: store_score?.label ? `2. STORE SCORE — ${store_score.label.toUpperCase()}` : "2. STORE SCORE",
+      title: scoreHasRealScore
+        ? store_score?.label
+          ? `2. STORE SCORE — ${store_score.label.toUpperCase()}`
+          : "2. STORE SCORE"
+        : hasGoalCount > 0
+          ? "2. GOALS ON TRACK"
+          : "2. STORE SCORE",
       icon: "fa-solid fa-star",
       color: "blue",
-      value: scoreVal != null ? fmtScore(scoreVal) : null,
-      rawValue: scorePct != null ? Math.min(scorePct, 100) : null,
+      ringLabel: scoreHasRealScore ? "STORE SCORE" : "GOALS ON TRACK",
+      value: scoreHasRealScore ? fmtScore(scoreVal as number) : hasGoalCount > 0 ? String(metGoalCount) : null,
+      rawValue: scoreHasRealScore
+        ? scorePct != null
+          ? Math.min(scorePct, 100)
+          : null
+        : onTrackPct != null
+          ? Math.min(onTrackPct, 100)
+          : null,
       goalLabel: "OUT OF",
-      goal: scoreMax != null ? `${fmtScore(scoreMax)} PTS` : null,
+      goal: scoreHasRealScore
+        ? scoreMax != null
+          ? `${fmtScore(scoreMax)} PTS`
+          : null
+        : hasGoalCount > 0
+          ? `${hasGoalCount} GOALS`
+          : null,
       bottomType: "gauge",
-      bottomValue: scorePct,
-      banner: bannerFor("blue", scoreStatus),
+      bottomValue: scoreHasRealScore ? scorePct : onTrackPct,
+      bottomSubLabel: scoreHasRealScore ? "% OF MAX" : "% ON TRACK",
+      banner: bannerFor(scoreStatus, scoreMode === "fallback" ? "fallback" : "goal"),
     },
     {
       key: "portal",
@@ -176,13 +276,15 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
       title: "3. PUT INTO PORTAL",
       icon: "fa-solid fa-display",
       color: "purple",
+      ringLabel: "PUT INTO PORTAL",
       value: portalVal != null ? fmtPct2(portalVal) : null,
       rawValue: portalVal != null ? Math.min(portalVal, 100) : null,
-      goalLabel: "DAILY GOAL",
-      goal: portalGoal != null ? fmtPct2(portalGoal) : null,
+      goalLabel: portalMode === "fallback" ? "WTD AVG" : "DAILY GOAL",
+      goal: portalBaseline != null ? fmtPct2(portalBaseline) : null,
       bottomType: "delta",
-      bottomValue: portalVal != null && portalGoal != null ? portalVal - portalGoal : null,
-      banner: bannerFor("purple", portalStatus),
+      bottomValue: portalVal != null && portalBaseline != null ? portalVal - portalBaseline : null,
+      bottomSubLabel: portalMode === "fallback" ? "VS WTD AVG" : "VS GOAL",
+      banner: bannerFor(portalStatus, portalMode === "fallback" ? "fallback" : "goal"),
     },
     {
       key: "ontime",
@@ -190,13 +292,15 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
       title: "4. IN PORTAL ON TIME",
       icon: "fa-regular fa-clock",
       color: "orange",
+      ringLabel: "IN PORTAL ON TIME",
       value: onTimeVal != null ? fmtPct2(onTimeVal) : null,
       rawValue: onTimeVal != null ? Math.min(onTimeVal, 100) : null,
-      goalLabel: "DAILY GOAL",
-      goal: onTimeGoal != null ? fmtPct2(onTimeGoal) : null,
+      goalLabel: onTimeMode === "fallback" ? "WTD AVG" : "DAILY GOAL",
+      goal: onTimeBaseline != null ? fmtPct2(onTimeBaseline) : null,
       bottomType: "delta",
-      bottomValue: onTimeVal != null && onTimeGoal != null ? onTimeVal - onTimeGoal : null,
-      banner: bannerFor("orange", onTimeStatus),
+      bottomValue: onTimeVal != null && onTimeBaseline != null ? onTimeVal - onTimeBaseline : null,
+      bottomSubLabel: onTimeMode === "fallback" ? "VS WTD AVG" : "VS GOAL",
+      banner: bannerFor(onTimeStatus, onTimeMode === "fallback" ? "fallback" : "goal"),
     },
     {
       key: "hnr",
@@ -204,13 +308,15 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
       title: "5. HNR PROMISE MET %",
       icon: "fa-solid fa-bullseye",
       color: "red",
+      ringLabel: "HNR PROMISE MET %",
       value: hnrVal != null ? fmtPct2(hnrVal) : null,
       rawValue: hnrVal != null ? Math.min(hnrVal, 100) : null,
-      goalLabel: "DAILY GOAL",
-      goal: hnrGoal != null ? fmtPct2(hnrGoal) : null,
+      goalLabel: hnrMode === "fallback" ? "WTD AVG" : "DAILY GOAL",
+      goal: hnrBaseline != null ? fmtPct2(hnrBaseline) : null,
       bottomType: "delta",
-      bottomValue: hnrVal != null && hnrGoal != null ? hnrVal - hnrGoal : null,
-      banner: bannerFor("red", hnrStatus),
+      bottomValue: hnrVal != null && hnrBaseline != null ? hnrVal - hnrBaseline : null,
+      bottomSubLabel: hnrMode === "fallback" ? "VS WTD AVG" : "VS GOAL",
+      banner: bannerFor(hnrStatus, hnrMode === "fallback" ? "fallback" : "goal"),
     },
   ];
 }
@@ -796,25 +902,25 @@ metrics.forEach(m => {
   let bottomHtml = '';
   if (m.bottomType === 'gauge') {
     if (m.bottomValue == null) {
-      bottomHtml = '<div class="metric-sub-label">% OF GOAL</div><div style="margin-top:10px;">' + NO_DATA + '</div>';
+      bottomHtml = '<div class="metric-sub-label">' + m.bottomSubLabel + '</div><div style="margin-top:10px;">' + NO_DATA + '</div>';
     } else {
       const pct = Math.max(0, Math.min(100, m.bottomValue));
       const gaugeColor = 'var(--' + (m.color === 'orange' ? 'orange-icon' : m.color) + ')';
       bottomHtml =
-        '<div class="metric-sub-label">' + (m.key === 'score' ? '% OF MAX' : '% OF GOAL') + '</div>' +
+        '<div class="metric-sub-label">' + m.bottomSubLabel + '</div>' +
         '<div class="gauge">' + buildGauge(pct, gaugeColor) +
         '<div class="gauge-value">' + m.bottomValue.toFixed(2) + '%</div></div>';
     }
   } else { /* delta */
     if (m.bottomValue == null) {
-      bottomHtml = '<div class="metric-trend-label">VS GOAL</div><div style="margin-top:6px;">' + NO_DATA + '</div>';
+      bottomHtml = '<div class="metric-trend-label">' + m.bottomSubLabel + '</div><div style="margin-top:6px;">' + NO_DATA + '</div>';
     } else if (m.bottomValue >= 0) {
       bottomHtml =
-        '<div class="metric-trend-label">TREND</div>' +
+        '<div class="metric-trend-label">' + m.bottomSubLabel + '</div>' +
         '<div class="trend-up">UP ' + m.bottomValue.toFixed(2) + '% <i class="fa-solid fa-arrow-up"></i></div>';
     } else {
       bottomHtml =
-        '<div class="metric-sub-label">GAP TO GOAL</div>' +
+        '<div class="metric-sub-label">' + m.bottomSubLabel + '</div>' +
         '<div class="trend-down" style="margin-top:6px;">' + m.bottomValue.toFixed(2) + '%</div>';
     }
   }
@@ -857,13 +963,6 @@ metrics.forEach(m => {
 
 /* ---------- SCORECARD RINGS ---------- */
 const ringsEl = document.getElementById('scorecardRings');
-const ringLabels = {
-  sales:   'TOTAL SALES',
-  score:   'STORE SCORE',
-  portal:  'PUT INTO PORTAL',
-  ontime:  'IN PORTAL ON TIME',
-  hnr:     'HNR PROMISE MET %'
-};
 metrics.forEach(m => {
   const colorVar = 'var(--' + (m.color === 'orange' ? 'orange-icon' : m.color) + ')';
   const pct = m.rawValue == null ? 0 : Math.max(0, Math.min(100, m.rawValue));
@@ -872,7 +971,7 @@ metrics.forEach(m => {
     '<div class="ring-wrap">' +
       '<div class="ring">' + buildRing(pct, colorVar) +
         '<div class="ring-value">' + centerHtml + '</div></div>' +
-      '<div class="ring-label">' + (ringLabels[m.key] || '') + '</div>' +
+      '<div class="ring-label">' + (m.ringLabel || '') + '</div>' +
     '</div>');
 });
 

@@ -17,8 +17,12 @@ import { CheckCircle2, ChevronDown, Clock, Eraser, FileImage, Loader2, Paperclip
 import type { CreateDebriefPayload } from "@/lib/hooks/use-employee-debriefs";
 import type { Employee } from "@/types/due-key.types";
 
-const DRAFT_KEY = "employee-debrief-draft";
 const MAX_NOTE = 5000;
+
+/** Each store keeps its own independent draft. */
+function draftKey(storeId: string | null): string {
+  return `employee-debrief-draft:${storeId ?? "none"}`;
+}
 
 function formatTodayDate(): string {
   const now = new Date();
@@ -33,12 +37,12 @@ interface DraftData {
   date: string;
 }
 
-function loadDraft(): DraftData {
+function loadDraft(storeId: string | null): DraftData {
   if (typeof window === "undefined") {
     return { note: "", date: formatTodayDate() };
   }
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = localStorage.getItem(draftKey(storeId));
     if (!raw) return { note: "", date: formatTodayDate() };
     const parsed = JSON.parse(raw) as Partial<DraftData>;
     return {
@@ -50,14 +54,14 @@ function loadDraft(): DraftData {
   }
 }
 
-function saveDraft(draft: DraftData): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+function saveDraft(storeId: string | null, draft: DraftData): void {
+  if (typeof window === "undefined" || !storeId) return;
+  localStorage.setItem(draftKey(storeId), JSON.stringify(draft));
 }
 
-function clearDraft(): void {
+function clearDraft(storeId: string | null): void {
   if (typeof window === "undefined") return;
-  localStorage.removeItem(DRAFT_KEY);
+  localStorage.removeItem(draftKey(storeId));
 }
 
 function charCountColor(count: number, max: number): string {
@@ -106,13 +110,13 @@ export function CreateEmployeeDebriefForm({
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load draft on mount (client only)
+  // Load this store's draft — runs on mount and whenever the store changes.
   useEffect(() => {
-    const draft = loadDraft();
+    const draft = loadDraft(storeId);
     setNote(draft.note);
     setDate(draft.date);
     setHydrated(true);
-  }, []);
+  }, [storeId]);
 
   // Reset employee selection whenever the store changes
   useEffect(() => {
@@ -127,7 +131,7 @@ export function CreateEmployeeDebriefForm({
     if (!hydrated) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
-      saveDraft({ note, date });
+      saveDraft(storeId, { note, date });
       if (note) {
         setDraftSavedFlash(true);
         if (flashTimer.current) clearTimeout(flashTimer.current);
@@ -137,7 +141,7 @@ export function CreateEmployeeDebriefForm({
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [note, date, hydrated]);
+  }, [note, date, hydrated, storeId]);
 
   // Clipboard paste into attachment area on hover
   useEffect(() => {
@@ -176,7 +180,7 @@ export function CreateEmployeeDebriefForm({
     setNote("");
     setDate(formatTodayDate());
     setAttachments([]);
-    clearDraft();
+    clearDraft(storeId);
     onClearError();
   };
 
@@ -198,7 +202,7 @@ export function CreateEmployeeDebriefForm({
       setNote("");
       setDate(formatTodayDate());
       setAttachments([]);
-      clearDraft();
+      clearDraft(storeId);
       setSuccessFlash(true);
       if (flashTimer.current) clearTimeout(flashTimer.current);
       flashTimer.current = setTimeout(() => setSuccessFlash(false), 4000);

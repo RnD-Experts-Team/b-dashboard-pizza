@@ -14,7 +14,19 @@ interface BreadcrumbItem {
   label: string;
   href: string;
   key: string;
+  /** False when this segment has no real page of its own (e.g. an ID that
+   *  only exists under .../edit) — rendered as plain text instead of a link
+   *  so the trail never points at a 404. Defaults to true. */
+  clickable?: boolean;
 }
+
+/**
+ * Resources whose ID segment has no standalone "view" page — only
+ * `.../{id}/edit` (or similar) exists. Their ID crumb is rendered as text.
+ * Resources with a real detail page (stores, users, roles, auth-rules) are
+ * handled separately below and stay clickable.
+ */
+const EDIT_ONLY_RESOURCES = ["items"];
 
 function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
   const segments = pathname.split("/").filter(Boolean);
@@ -28,9 +40,14 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i];
     currentPath += `/${segment}`;
-    
+
     // Skip locale segment in breadcrumbs
     if (i < startIndex) continue;
+
+    // Inventory sub-pages breadcrumb directly under Dashboard (e.g.
+    // "Dashboard > Items"), matching the flat pattern used elsewhere
+    // (e.g. "Dashboard > Hiring request") instead of "Dashboard > Inventory > Items".
+    if (segment === "inventory") continue;
 
     // Check if this is an ID segment for known detail routes
     const isStoreId = i > 0 && segments[i - 1] === "stores" && segment !== "stores";
@@ -40,6 +57,11 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
       i > 0 && segments[i - 1] === "roles" && segment !== "roles" && segment !== "create";
     const isAuthRuleId =
       i > 0 && segments[i - 1] === "auth-rules" && segment !== "auth-rules" && segment !== "create";
+    const isEditOnlyResourceId =
+      i > 0 &&
+      EDIT_ONLY_RESOURCES.includes(segments[i - 1]) &&
+      segment !== segments[i - 1] &&
+      segment !== "create";
 
     const label = isStoreId
       ? "Store Details"
@@ -57,6 +79,7 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
       label,
       href: currentPath,
       key,
+      clickable: !isEditOnlyResourceId,
     });
   }
 
@@ -117,18 +140,28 @@ export function Breadcrumbs({ pathname, className }: BreadcrumbsProps) {
         {breadcrumbs.map((crumb, index) => {
           const isLast = index === breadcrumbs.length - 1;
           const label = getLabel(crumb.key);
+          // Only render a link when this segment resolves to a real page —
+          // the last crumb (current page) and any "no page of its own" segment
+          // (e.g. an items/{id} that only has .../edit) render as plain text.
+          const isLink = !isLast && crumb.clickable !== false;
           return (
             <li key={crumb.href} className="flex items-center gap-1.5">
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              {isLast ? (
-                <span className="font-medium text-foreground">{label}</span>
-              ) : (
+              {isLink ? (
                 <Link
                   href={crumb.href}
                   className="text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {label}
                 </Link>
+              ) : (
+                <span
+                  className={cn(
+                    isLast ? "font-medium text-foreground" : "text-muted-foreground"
+                  )}
+                >
+                  {label}
+                </span>
               )}
             </li>
           );

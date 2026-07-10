@@ -12,18 +12,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-export interface MultiSelectOption {
-  value: number;
+export interface MultiSelectOption<TValue extends string | number = number> {
+  value: TValue;
   label: string;
   hint?: string;
 }
 
-interface MultiSelectProps {
-  options: MultiSelectOption[];
+interface MultiSelectProps<TValue extends string | number = number> {
+  options: MultiSelectOption<TValue>[];
   /** The committed/applied selection — what the page is currently fetching for. */
-  selected: number[];
+  selected: TValue[];
   /** Called only when the user clicks Apply. Triggers the actual fetch. */
-  onChange: (values: number[]) => void;
+  onChange: (values: TValue[]) => void;
   placeholder?: string;
   icon?: React.ReactNode;
   disabled?: boolean;
@@ -37,7 +37,7 @@ interface MultiSelectProps {
  * Selections are staged locally (`draft`) and only committed — firing
  * `onChange` — when the user clicks Apply, to avoid a request per checkbox click.
  */
-export function MultiSelect({
+export function MultiSelect<TValue extends string | number = number>({
   options,
   selected,
   onChange,
@@ -47,11 +47,11 @@ export function MultiSelect({
   className,
   searchPlaceholder = "Search…",
   emptyText = "No results.",
-}: MultiSelectProps) {
+}: MultiSelectProps<TValue>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   // Draft = what the user is checking/unchecking; not committed until Apply.
-  const [draft, setDraft] = useState<number[]>(selected);
+  const [draft, setDraft] = useState<TValue[]>(selected);
 
   useEffect(() => {
     if (open) {
@@ -73,7 +73,7 @@ export function MultiSelect({
 
   const draftSet = useMemo(() => new Set(draft), [draft]);
 
-  function toggle(value: number) {
+  function toggle(value: TValue) {
     setDraft((prev) =>
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
     );

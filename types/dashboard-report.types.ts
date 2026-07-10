@@ -434,6 +434,27 @@ export interface CleaningReview {
 }
 
 // ============================================================================
+// customer-service
+// ============================================================================
+
+export interface CustomerServiceEntry {
+  date: string;
+  guest_service: number | null;
+  lobby_points: number | null;
+  drive_thru_points: number | null;
+}
+
+export interface CustomerService {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+  };
+  entries: CustomerServiceEntry[];
+}
+
+// ============================================================================
 // Full extras envelope
 // ============================================================================
 
@@ -451,4 +472,5 @@ export interface DashboardReportExtras {
   "transfer-in-out"?: TransferInOut;
   "sales-history"?: SalesHistory;
   "cleaning-review"?: CleaningReview;
+  "customer-service"?: CustomerService;
 }

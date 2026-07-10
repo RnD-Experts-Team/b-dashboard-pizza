@@ -40,6 +40,11 @@ import {
   LifeBuoy,
   Ticket,
   Wallet,
+  Package,
+  Boxes,
+  Ruler,
+  Link2,
+  LogOut,
 } from "lucide-react";
 import {
   Dialog,
@@ -58,10 +63,12 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { UserMenu } from "./user-menu";
+import { ImpersonateDialog } from "./impersonate-dialog";
 import { useUIStore } from "@/lib/store/ui.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useFeature, Feature } from "@/lib/config";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { useAuth } from "@/lib/auth/use-auth";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
@@ -202,7 +209,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const isRtl = locale === "ar";
   const t = useTranslations("nav");
   const { toggleSidebar } = useUIStore();
-  const { canAccessRoute, hasPermission, overviewStores } = useAuthStore();
+  const { canAccessRoute, hasPermission, overviewStores, isSuperAdmin, user } =
+    useAuthStore();
+  const { isImpersonating, isImpersonationLoading, stopImpersonating } = useAuth();
+  const [isImpersonateDialogOpen, setIsImpersonateDialogOpen] = useState(false);
 
   // Zustand store selection (must be declared before nav items that reference it)
   const { selectedStore: zustandSelectedStore, setSelectedStore } =
@@ -482,6 +492,49 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
+  // Inventory Management — all four items are gated. Units/Items use non-scoped
+  // Inventory GET rules; Links and Entries use store-scoped rules (so they stay
+  // visible to store_manager on their store).
+  const inventoryManagementGroup: NavGroup = {
+    label: t("inventoryManagement"),
+    icon: Package,
+    items: [
+      {
+        title: t("inventoryUnits"),
+        href: `/${locale}/dashboard/inventory/units`,
+        icon: Ruler,
+        requirements: [
+          { service: "Inventory", method: "GET", path: "/inventory/units" },
+        ],
+      },
+      {
+        title: t("inventoryItems"),
+        href: `/${locale}/dashboard/inventory/items`,
+        icon: Boxes,
+        requirements: [
+          { service: "Inventory", method: "GET", path: "/inventory/items", storeId: effectiveStoreId },
+        ],
+      },
+      {
+        title: t("inventoryLinks"),
+        href: `/${locale}/dashboard/inventory/links`,
+        icon: Link2,
+        requirements: [
+          { service: "Inventory", method: "POST", path: "/inventory/links", storeId: effectiveStoreId },
+          { service: "Inventory", method: "GET", path: "/inventory/links/*", storeId: effectiveStoreId },
+        ],
+      },
+      {
+        title: t("inventoryEntries"),
+        href: `/${locale}/dashboard/inventory/entries`,
+        icon: ClipboardList,
+        requirements: [
+          { service: "Inventory", method: "GET", path: "/inventory/entries/*", storeId: effectiveStoreId },
+        ],
+      },
+    ],
+  };
+
   const Maintenance: NavGroup = {
     label: "Maintenance",
     icon: Wrench,
@@ -607,6 +660,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleMaintenance = filterGroup(Maintenance);
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
+  const visibleInventoryManagementGroup = filterGroup(inventoryManagementGroup);
 
   /* ---- Helper: render a single flat nav link ---- */
   const renderNavLink = (item: NavItem) => {
@@ -739,7 +793,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
           {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
-          {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}
+          {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)} */}
 
           {/* 1·V1. Dashboard V1 (optimized) */}
            {/* {isNavItemVisible(dashboardV1Item) && renderNavLink(dashboardV1Item)} */}
@@ -815,6 +869,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
+          {/* 7b. Inventory Management */}
+          {/* {visibleInventoryManagementGroup && (
+            <SidebarNavGroup
+              group={visibleInventoryManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )} */}
+
           {/* 8. High Level Management */}
           {visibleHighLevelMgmtGroup && (
             <SidebarNavGroup
@@ -855,6 +920,49 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {!collapsed && <span className="truncate">Support</span>}
         </a>
       </div>
+
+      <Separator />
+
+      {/* Impersonate User — super admin only, or while impersonating (so
+          the "exit" control stays available even after roles/menus have
+          switched to the impersonated user's own permissions). */}
+      {/* {(isSuperAdmin() || isImpersonating) && (
+        <div className={cn("px-2 sm:px-3 py-2", collapsed && "flex justify-center")}>
+          <button
+            type="button"
+            disabled={isImpersonationLoading}
+            onClick={() =>
+              isImpersonating ? stopImpersonating() : setIsImpersonateDialogOpen(true)
+            }
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full",
+              isImpersonating
+                ? "text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              collapsed && "justify-center px-2",
+              isImpersonationLoading && "opacity-60 cursor-not-allowed"
+            )}
+          >
+            {isImpersonating ? (
+              <LogOut className="h-5 w-5 shrink-0" />
+            ) : (
+              <UserCog className="h-5 w-5 shrink-0" />
+            )}
+            {!collapsed && (
+              <span className="truncate">
+                {isImpersonating
+                  ? `Exit Impersonation${user?.name ? ` (${user.name})` : ""}`
+                  : "Impersonate User"}
+              </span>
+            )}
+          </button>
+        </div>
+      )} */}
+
+      <ImpersonateDialog
+        open={isImpersonateDialogOpen}
+        onOpenChange={setIsImpersonateDialogOpen}
+      />
 
       <Separator />
 

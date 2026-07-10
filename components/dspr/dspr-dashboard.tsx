@@ -43,6 +43,7 @@ import {
   WbrOrdersVsSalesCard,
   WbrTransferInOutCard,
   WbrCleaningReviewCard,
+  WbrCustomerServiceCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertCircle,
   RefreshCw,
@@ -77,7 +84,8 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
-  FileDown,
+  ImageDown,
+  MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageGuide } from "@/components/shared/page-guide";
@@ -376,6 +384,7 @@ export function DsprDashboard() {
   // ── Screenshot ref & handler ───────────────────────────────────────────
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCapturingReport, setIsCapturingReport] = useState(false);
 
   // Toggle to remove section backgrounds (persisted in localStorage)
   const [hideSectionBackgrounds, setHideSectionBackgrounds] = useState(false);
@@ -449,26 +458,69 @@ export function DsprDashboard() {
     }
   }, [isCapturing, selectedStore, selectedDate]);
 
-  // ── Download printable "Focus on the Five" HTML report ──────────────────
-  const handleDownloadReport = useCallback(() => {
-    if (!data) return;
+  // ── Screenshot the printable "Focus on the Five" HTML report as a PNG ───
+  // Renders the report off-screen in a hidden iframe (so its own fonts/CSS
+  // apply), waits for it to finish loading, then captures it with the same
+  // html2canvas approach as the live dashboard screenshot.
+  const handleScreenshotReport = useCallback(async () => {
+    if (!data || isCapturingReport) return;
+    setIsCapturingReport(true);
+
+    const html = buildDsprReportHtml(data, selectedDate);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.top = "0";
+    iframe.style.left = "-99999px";
+    iframe.style.width = "1180px";
+    iframe.style.height = "2000px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
     try {
-      const html = buildDsprReportHtml(data, selectedDate);
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("Failed to render report"));
+        iframe.srcdoc = html;
+      });
+
+      const doc = iframe.contentDocument;
+      const dashboardEl = doc?.querySelector<HTMLElement>(".dashboard");
+      if (!doc || !dashboardEl) throw new Error("Report content did not render");
+
+      // Wait for web fonts + Font Awesome icons to finish loading.
+      try {
+        await doc.fonts?.ready;
+      } catch {
+        // ignore — fall through to the fixed delay below
+      }
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Resize the iframe to the report's actual rendered height before capture.
+      iframe.style.height = `${dashboardEl.scrollHeight}px`;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const canvas = await html2canvas(dashboardEl, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#efefef",
+        logging: false,
+        imageTimeout: 8000,
+      });
+
       const storeName = selectedStore?.storeId ?? selectedStore?.id ?? "store";
       const dateStr = format(selectedDate, "yyyy-MM-dd");
       const link = document.createElement("a");
-      link.href = url;
-      link.download = `DSPR-Report-${storeName}-${dateStr}.html`;
-      document.body.appendChild(link);
+      link.download = `DSPR-Report-${storeName}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
       link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Report download failed:", err);
+      console.error("Report screenshot failed:", err);
+    } finally {
+      document.body.removeChild(iframe);
+      setIsCapturingReport(false);
     }
-  }, [data, selectedDate, selectedStore]);
+  }, [data, isCapturingReport, selectedDate, selectedStore]);
 
   const toggleHideBackgrounds = useCallback(() => {
     setHideSectionBackgrounds((prev) => {
@@ -720,74 +772,42 @@ export function DsprDashboard() {
             </TooltipContent>
           </Tooltip>
 
-          {/* Screenshot button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
+          {/* Screenshot / Download report / Toggle section backgrounds */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 data-screenshot-btn
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={handleScreenshot}
-                disabled={isCapturing}
+                title="Export & view options"
               >
-                {isCapturing ? (
+                {isCapturing || isCapturingReport ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Camera className="h-3 w-3" />
+                  <MoreVertical className="h-3 w-3" />
                 )}
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Download printable report */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                data-screenshot-ignore="true"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={handleDownloadReport}
-                disabled={!data}
-              >
-                <FileDown className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Download report (HTML)</TooltipContent>
-          </Tooltip>
-
-          {/* Toggle remove section backgrounds */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={toggleHideBackgrounds}
-                aria-pressed={hideSectionBackgrounds}
-                title={
-                  hideSectionBackgrounds
-                    ? "Show section backgrounds"
-                    : "Hide section backgrounds"
-                }
-              >
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={handleScreenshot} disabled={isCapturing}>
+                <Camera className="h-3.5 w-3.5 me-2" />
+                {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleScreenshotReport} disabled={!data || isCapturingReport}>
+                <ImageDown className="h-3.5 w-3.5 me-2" />
+                {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={toggleHideBackgrounds}>
                 {hideSectionBackgrounds ? (
-                  <EyeOff className="h-3 w-3" />
+                  <Eye className="h-3.5 w-3.5 me-2" />
                 ) : (
-                  <Eye className="h-3 w-3" />
+                  <EyeOff className="h-3.5 w-3.5 me-2" />
                 )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {hideSectionBackgrounds
-                ? "Show section backgrounds"
-                : "Hide section backgrounds"}
-            </TooltipContent>
-          </Tooltip>
+                {hideSectionBackgrounds ? "Show section backgrounds" : "Hide section backgrounds"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Page guide button */}
           <Tooltip>
@@ -1026,7 +1046,7 @@ export function DsprDashboard() {
           <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} />
         </div>
 
-        <div className="md:col-span-2 lg:col-span-2" data-screenshot-ignore="true">
+        <div className="md:col-span-2 lg:col-span-1" data-screenshot-ignore="true">
           <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} isLoading={hooksWbr.isLoading} />
         </div>
 
@@ -1034,6 +1054,10 @@ export function DsprDashboard() {
           <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
         </div>
 
+        <div>
+          <WbrCustomerServiceCard data={wbrData?.["customer-service"]} isLoading={isLoading} />
+        </div>
+        
         <div>
           <WbrCleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} />
         </div>

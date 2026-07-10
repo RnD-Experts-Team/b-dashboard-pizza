@@ -89,7 +89,7 @@ interface CreateAuthRuleBase {
   permissionsAny?: string[];
   permissionsAll?: string[];
   storeScopeMode?: string;
-  storeIdSources?: string[];
+  storeIdSources?: string[] | null;
   storeMatchPolicy?: string;
   storeAllowsEmpty?: boolean;
 }
@@ -127,7 +127,7 @@ export interface UpdateAuthRulePayload {
   permissionsAny?: string[];
   permissionsAll?: string[];
   storeScopeMode?: string;
-  storeIdSources?: string[];
+  storeIdSources?: string[] | null;
   storeMatchPolicy?: string;
   storeAllowsEmpty?: boolean;
 }

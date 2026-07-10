@@ -160,6 +160,11 @@ export function DataTable<T extends object>({
                   onClick={(event) => {
                     if (!onRowClick) return;
                     const target = event.target as HTMLElement | null;
+                    const ct = event.currentTarget as HTMLElement | null;
+                    // React 18 bubbles portal events (e.g. Radix DropdownMenuContent)
+                    // through the component tree. Guard against that by checking that
+                    // the click originated inside this row's real DOM subtree.
+                    if (target && ct && !ct.contains(target)) return;
                     if (target?.closest('[data-no-row-click="true"]')) return;
                     onRowClick(item);
                   }}
@@ -168,6 +173,8 @@ export function DataTable<T extends object>({
                   onKeyDown={(event) => {
                     if (!onRowClick) return;
                     const target = event.target as HTMLElement | null;
+                    const ct = event.currentTarget as HTMLElement | null;
+                    if (target && ct && !ct.contains(target)) return;
                     if (target?.closest('[data-no-row-click="true"]')) return;
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
@@ -189,7 +196,7 @@ export function DataTable<T extends object>({
         </Table>
       </div>
 
-      {pagination && onPageChange && (
+      {pagination && onPageChange && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between px-2">
           <div className="flex-1 text-sm text-muted-foreground">
             {pagination.total > 0 ? (

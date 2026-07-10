@@ -40,6 +40,7 @@ import {
 import {
   CalendarIcon,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ClockIcon,
   Loader2,
@@ -290,10 +291,20 @@ function StatusChip({ value, label }: { value: string; label: string }) {
   );
 }
 
-function PriorityChip({ label }: { value: string; label: string }) {
+/** Priority levels: urgent = Emergency (store cannot operate), high = affects operations,
+ *  medium = Normal (store can operate), low = cosmetic. Colors mirror that severity order. */
+const PRIORITY_DOT_COLORS: Record<string, string> = {
+  urgent: "bg-red-500",
+  high: "bg-orange-500",
+  medium: "bg-yellow-500",
+  low: "bg-blue-500",
+};
+
+function PriorityChip({ value, label }: { value: string; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className="font-medium text-foreground/70">Priority:</span>
+      <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_COLORS[value] ?? "bg-muted-foreground/40")} />
       {label}
     </span>
   );
@@ -313,9 +324,14 @@ interface NavigatorProps {
   onFiltersChange?: (f: TicketsFilters) => void;
   technicians?: CatalogTechnician[];
   storeId?: string;
+  currentPage?: number;
+  totalPages?: number;
+  isPageLoading?: boolean;
+  onNextPage?: () => void;
+  onPreviousPage?: () => void;
 }
 
-function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, filters, onFiltersChange, technicians, storeId }: NavigatorProps) {
+function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, filters, onFiltersChange, technicians, storeId, currentPage, totalPages, isPageLoading, onNextPage, onPreviousPage }: NavigatorProps) {
   const t = useTranslations("maintenanceTickets");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
@@ -631,6 +647,47 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
           </button>
         ))}
       </div>
+
+      {/* Pagination — fetches the previous/next page of tickets from the server */}
+      {(onNextPage || onPreviousPage) && (
+        <div className="border-t p-2 shrink-0 space-y-1">
+          {currentPage != null && totalPages != null && (
+            <p className="text-center text-[10px] text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </p>
+          )}
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 flex-1 gap-0.5 text-[11px]"
+              onClick={onPreviousPage}
+              disabled={!onPreviousPage || isPageLoading || (currentPage != null && currentPage <= 1)}
+            >
+              <ChevronLeft className="h-3 w-3" />
+              Prev
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 flex-1 gap-0.5 text-[11px]"
+              onClick={onNextPage}
+              disabled={!onNextPage || isPageLoading || (totalPages != null && currentPage != null && currentPage >= totalPages)}
+            >
+              {isPageLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <>
+                  Next
+                  <ChevronRight className="h-3 w-3" />
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -3327,7 +3384,10 @@ function MobileTicketSwitcher({ tickets, activeId, onSelect }: MobileSwitcherPro
 
 interface RightPanelProps {
   activeTicketId: number | null;
-  tickets: Ticket[];
+  /** The full ticket object for `activeTicketId`, resolved from an accumulated
+   * cache so it stays available even after the navigator pages away from the
+   * page it was originally listed on. */
+  activeTicket: Ticket | undefined;
   storeId: string;
   technicians: CatalogTechnician[];
   issuesResponse: TicketIssuesResponse | null;
@@ -3339,7 +3399,7 @@ interface RightPanelProps {
 
 function RightPanel({
   activeTicketId,
-  tickets,
+  activeTicket,
   storeId,
   technicians,
   issuesResponse,
@@ -3418,7 +3478,6 @@ function RightPanel({
     }, 1200);
   }
 
-  const activeTicket = tickets.find((tk) => tk.id === activeTicketId);
   const effectiveNotes = ticketNotes ?? activeTicket?.notes ?? [];
   const effectiveAttachments = ticketAttachments ?? activeTicket?.attachments ?? [];
   const isClosingType = (t: string | null) => t === "final_notes" || t === "what_we_learned";
@@ -4152,6 +4211,16 @@ export interface TicketDetailSheetProps {
   filters?: TicketsFilters;
   onFiltersChange?: (f: TicketsFilters) => void;
   onClose: () => void;
+  /** Current page number of `tickets` (for the navigator's pagination control). */
+  currentPage?: number;
+  /** Total number of pages available, from the list response's pagination meta. */
+  totalPages?: number;
+  /** True while a page fetch is in flight — disables the Prev/Next page buttons. */
+  isPageLoading?: boolean;
+  /** Fetches the next page of tickets. Omit to hide the pagination control. */
+  onNextPage?: () => void;
+  /** Fetches the previous page of tickets. Omit to hide the Prev button. */
+  onPreviousPage?: () => void;
 }
 
 export function TicketDetailSheet({
@@ -4163,6 +4232,11 @@ export function TicketDetailSheet({
   filters,
   onFiltersChange,
   onClose,
+  currentPage,
+  totalPages,
+  isPageLoading,
+  onNextPage,
+  onPreviousPage,
 }: TicketDetailSheetProps) {
   const [activeTicketId, setActiveTicketId] = useState<number | null>(ticketId);
   const [search, setSearch] = useState("");
@@ -4172,6 +4246,28 @@ export function TicketDetailSheet({
 
   const draft = useTicketDraft(storeId, activeTicketId);
 
+  // Accumulates every ticket we've ever seen across pages, keyed by id, so the
+  // currently active ticket's details/badges keep working even after the
+  // navigator pages away from the page it was originally listed on — the
+  // `tickets` prop only ever holds ONE page's worth of results.
+  const [knownTickets, setKnownTickets] = useState<Map<number, Ticket>>(new Map());
+  useEffect(() => {
+    if (tickets.length === 0) return;
+    setKnownTickets((prev) => {
+      const next = new Map(prev);
+      tickets.forEach((tk) => next.set(tk.id, tk));
+      return next;
+    });
+  }, [tickets]);
+  // Reset the cache once the sheet closes so a later open starts fresh.
+  useEffect(() => {
+    if (!open) setKnownTickets(new Map());
+  }, [open]);
+
+  const activeTicket =
+    (activeTicketId != null ? knownTickets.get(activeTicketId) : undefined) ??
+    tickets.find((tk) => tk.id === activeTicketId);
+
   // Keep local active ticket synchronized with external selection.
   // Clearing to null is intentional to avoid stale ticket caching.
   useEffect(() => {
@@ -4179,7 +4275,10 @@ export function TicketDetailSheet({
   }, [ticketId]);
 
   // When opening, ensure we always land on the externally selected ticket
-  // (or fallback to first available ticket if parent passes null).
+  // (or fallback to first available ticket if parent passes null). Deliberately
+  // depends only on `open` — NOT `tickets` — so that paginating or refetching
+  // the ticket list while the sheet is open doesn't clobber whatever ticket
+  // the user has since navigated to inside the sheet.
   useEffect(() => {
     if (!open) return;
     if (ticketId != null) {
@@ -4187,14 +4286,14 @@ export function TicketDetailSheet({
       return;
     }
     setActiveTicketId((prev) => prev ?? tickets[0]?.id ?? null);
-  }, [open, ticketId, tickets]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // When showing "all stores" the prop storeId belongs to whichever ticket was
   // clicked to open the sheet. If the user then navigates to a different ticket
   // (from a different store) inside the navigator, we must use THAT ticket's
   // own storeId — not the frozen prop value.
-  const effectiveStoreId =
-    tickets.find((t) => t.id === activeTicketId)?.storeId ?? storeId ?? "";
+  const effectiveStoreId = activeTicket?.storeId ?? storeId ?? "";
 
   const loadIssues = useCallback(async () => {
     if (!activeTicketId || !effectiveStoreId) return;
@@ -4264,7 +4363,7 @@ export function TicketDetailSheet({
         <div className="flex flex-1 overflow-hidden">
           <RightPanel
             activeTicketId={activeTicketId}
-            tickets={tickets}
+            activeTicket={activeTicket}
             storeId={effectiveStoreId}
             technicians={technicians}
             issuesResponse={issuesResponse}
@@ -4283,6 +4382,11 @@ export function TicketDetailSheet({
             onFiltersChange={onFiltersChange}
             technicians={technicians}
             storeId={effectiveStoreId}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            isPageLoading={isPageLoading}
+            onNextPage={onNextPage}
+            onPreviousPage={onPreviousPage}
           />
         </div>
       </SheetContent>

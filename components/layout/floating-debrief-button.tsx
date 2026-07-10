@@ -178,10 +178,19 @@ export function FloatingDebriefButton() {
   useEffect(() => {
     const parsed = parseAuthUserStores();
     setStores(parsed);
-    if (parsed.length > 0) {
+    if (parsed.length > 0 && !selectedStoreId) {
       setSelectedStoreId(parsed[0].id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep the panel's selected store in sync with the sidebar's selection.
+  // A manual pick inside the panel's own dropdown is still allowed, but the
+  // next time the sidebar store changes, it takes priority again.
+  useEffect(() => {
+    const sidebarStoreId = selectedStore?.storeId ?? selectedStore?.id ?? null;
+    if (sidebarStoreId) setSelectedStoreId(sidebarStoreId);
+  }, [selectedStore]);
 
   // Detect mobile and initialise FAB position
   useEffect(() => {
