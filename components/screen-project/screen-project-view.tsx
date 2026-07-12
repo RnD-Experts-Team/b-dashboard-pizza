@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -744,10 +744,11 @@ export function ScreenProjectView() {
       </div>
 
       {/* Bottom control bar — modern floating dark toolbar */}
-      <div className="flex items-center justify-between rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30">
+      <div className="flex items-center rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30 max-[425px]:overflow-x-auto">
+      <div className="flex w-full min-w-full items-center justify-between gap-3 max-[425px]:w-max">
 
         {/* ── Left: status + station management ── */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <NetworkBadge status={networkStatus} />
           <div className="w-px h-5 bg-white/10" />
           <StationsDialog
@@ -758,7 +759,7 @@ export function ScreenProjectView() {
         </div>
 
         {/* ── Center: personal A/V controls ── */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
 
           {/* Mic toggle */}
           <button
@@ -795,7 +796,7 @@ export function ScreenProjectView() {
                 : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
             )}
           >
-            {myVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+            {myVideoOff ? <CameraOff className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
             {myVideoOff && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-neutral-900" />
             )}
@@ -848,7 +849,7 @@ export function ScreenProjectView() {
         </div>
 
         {/* ── Right: broadcast to screens ── */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           <div className="w-px h-5 bg-white/10 mr-1" />
 
           {/* Mute / unmute all screens */}
@@ -890,6 +891,7 @@ export function ScreenProjectView() {
           </button>
         </div>
 
+      </div>
       </div>
     </div>
   );

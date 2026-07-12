@@ -607,11 +607,11 @@ function ScreenTileInner({
           isMain ? "px-2 pb-2 pt-12" : "px-1.5 pb-1.5 pt-10",
         )}
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 overflow-x-auto flex-nowrap">
           {/* Sound button + volume popup */}
           {isMain ? (
             <div
-              className="relative flex items-center"
+              className="relative flex items-center shrink-0"
               onMouseEnter={openVol}
               onMouseLeave={scheduleClose}
             >
@@ -674,7 +674,7 @@ function ScreenTileInner({
                 onToggleAudio();
               }}
               className={cn(
-                "h-6 w-6 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                "h-6 w-6 shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
                 !isAudioEnabled && "text-red-400 hover:text-red-300",
               )}
             >
@@ -696,7 +696,7 @@ function ScreenTileInner({
               onToggleVideo();
             }}
             className={cn(
-              "text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+              "shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
               isMain ? "h-8 gap-1.5 px-2.5 text-xs" : "h-6 w-6",
               !isVideoEnabled && "text-red-400 hover:text-red-300",
             )}
@@ -722,7 +722,7 @@ function ScreenTileInner({
                 onToggleMyScreenShare();
               }}
               className={cn(
-                "h-8 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                "h-8 shrink-0 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
                 myScreenShareEnabled && "text-red-400 hover:text-red-300",
               )}
             >
@@ -742,7 +742,7 @@ function ScreenTileInner({
                 onToggleMyCam();
               }}
               className={cn(
-                "ml-auto text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                "ml-auto shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
                 isMain ? "h-8 gap-1.5 px-2.5 text-xs" : "h-6 w-6",
                 !myCamEnabled && "text-red-400 hover:text-red-300",
               )}
