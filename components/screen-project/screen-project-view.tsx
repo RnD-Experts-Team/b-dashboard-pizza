@@ -475,42 +475,89 @@ export function ScreenProjectView() {
   /* ── View selection (both auth rules available) ──────────────────── */
   if (viewMode === "select") {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-6 text-center max-w-sm w-full px-4">
-          <div className="flex flex-col items-center gap-2">
-            <h2 className="text-lg font-semibold">Select View</h2>
+      <div className="flex h-full items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
+          <div className="flex flex-col items-center gap-1.5 text-center">
+            <h2 className="text-xl font-semibold tracking-tight">How do you want to connect?</h2>
             <p className="text-sm text-muted-foreground">
-              Choose how you want to access the screen project.
+              Choose a view based on what you need to do in this session.
             </p>
           </div>
-          <div className="flex flex-col gap-3 w-full">
-            <Button
-              variant="outline"
-              size="lg"
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+            {/* Observer card */}
+            <button
               onClick={() => { setViewMode("observer"); setActiveTokenType("observer"); }}
-              className="gap-2 w-full justify-start px-4"
+              className={cn(
+                "group relative flex flex-col items-start gap-4 rounded-2xl border p-6 text-left",
+                "transition-all duration-200",
+                "hover:border-amber-400/50 hover:bg-amber-400/5 hover:shadow-lg",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60",
+              )}
             >
-              <Eye className="h-5 w-5 text-amber-400" />
-              <span>Observer View</span>
-              <span className="ml-auto text-xs text-muted-foreground">Listen only</span>
-            </Button>
-            <div className="flex flex-col gap-1.5">
-              <Button
-                variant="default"
-                size="lg"
-                onClick={() => { setViewMode("supervisor"); setActiveTokenType("supervisor"); }}
-                className="gap-2 w-full justify-start px-4"
-              >
-                <Monitor className="h-5 w-5" />
-                <span>Supervisor View</span>
-              </Button>
-              <div className="flex items-center gap-1.5 px-1">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span className="text-xs text-amber-400">
-                  This view allows active interaction with stations. Use with caution.
+              <div className="flex items-center justify-between w-full">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400/10 ring-1 ring-amber-400/20 transition-colors group-hover:bg-amber-400/15">
+                  <Eye className="h-5 w-5 text-amber-400" />
+                </div>
+                <span className="rounded-full bg-amber-400/10 px-2.5 py-0.5 text-[0.65rem] font-medium text-amber-400 ring-1 ring-inset ring-amber-400/25">
+                  Passive
                 </span>
               </div>
-            </div>
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold text-foreground">Observer View</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Watch any station silently. Nothing is broadcast from your device — audio and camera stay off.
+                </p>
+              </div>
+              <ul className="flex flex-col gap-1.5 w-full">
+                {["View all station live feeds", "Open any station in fullscreen", "Listen with volume control"].map((item) => (
+                  <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="h-1 w-1 rounded-full bg-amber-400/60 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </button>
+
+            {/* Store Manager card */}
+            <button
+              onClick={() => { setViewMode("supervisor"); setActiveTokenType("supervisor"); }}
+              className={cn(
+                "group relative flex flex-col items-start gap-4 rounded-2xl border p-6 text-left",
+                "transition-all duration-200",
+                "hover:border-primary/50 hover:bg-primary/5 hover:shadow-lg",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+              )}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 transition-colors group-hover:bg-primary/15">
+                  <Monitor className="h-5 w-5 text-primary" />
+                </div>
+                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.65rem] font-medium text-primary ring-1 ring-inset ring-primary/25">
+                  Active
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold text-foreground">Store Manager View</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Full control over all stations. Broadcast audio, push your camera, and manage station rooms.
+                </p>
+              </div>
+              <ul className="flex flex-col gap-1.5 w-full">
+                {["Broadcast voice to all stations", "Push your camera to any screen", "Manage station rooms & passwords"].map((item) => (
+                  <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="h-1 w-1 rounded-full bg-primary/60 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-start gap-2 rounded-lg bg-amber-400/8 border border-amber-400/15 px-3 py-2 w-full mt-auto">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-400 leading-snug">
+                  Active interaction with stations. Use with caution.
+                </p>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -597,6 +644,7 @@ export function ScreenProjectView() {
             token={tokenMap[observingStation.room_name] ?? ""}
             serverUrl={serverUrl}
             onClose={() => setObservingRoom(null)}
+            onRetry={refetch}
           />
         )}
       </div>
@@ -655,6 +703,7 @@ export function ScreenProjectView() {
                   }}
                   stationNumber={s.id}
                   storeId={storeId}
+                  onRetry={refetch}
                   className="h-full w-full"
                 />
               </motion.div>

@@ -11,7 +11,7 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor } from "lucide-react";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -124,6 +124,12 @@ export interface ScreenTileProps {
   /** Pre-loaded media items (e.g. from the station token response). When
    * provided, skips the initial API fetch and shows the primary item immediately. */
   initialMedia?: StationMedia[];
+  /**
+   * Called when the user retries after a stuck "waiting for token" state or a
+   * failed LiveKit connection. Typically wired to the parent's `refetch()` so a
+   * fresh token is requested. If omitted, retry falls back to reloading the page.
+   */
+  onRetry?: () => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -785,6 +791,80 @@ function ScreenTileInner({
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
+/*  StatusCard — shared "waiting" / "error" placeholder shown in place of    */
+/*  the tile's video (no token yet, connection timed out, or LiveKit error). */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+interface StatusCardProps {
+  isMain: boolean;
+  variant: "loading" | "error";
+  title: string;
+  subtitle?: string;
+  onRetry?: () => void;
+  onClick?: () => void;
+  className?: string;
+}
+
+function StatusCard({ isMain, variant, title, subtitle, onRetry, onClick, className }: StatusCardProps) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-xl bg-neutral-900 flex flex-col items-center justify-center gap-2 p-3 text-center",
+        !isMain &&
+          "cursor-pointer ring-2 ring-transparent hover:ring-white/40 transition-shadow duration-200",
+        className,
+      )}
+      onClick={!isMain ? onClick : undefined}
+    >
+      <div
+        className={cn(
+          "rounded-full flex items-center justify-center",
+          variant === "error" ? "bg-red-500/10" : "bg-black/30",
+          isMain ? "h-20 w-20" : "h-10 w-10",
+        )}
+      >
+        {variant === "error" ? (
+          <AlertTriangle className={cn("text-red-400", isMain ? "h-9 w-9" : "h-5 w-5")} />
+        ) : (
+          <div
+            className={cn(
+              "animate-spin rounded-full border-2 border-white/20 border-t-white/70",
+              isMain ? "h-9 w-9" : "h-5 w-5",
+            )}
+          />
+        )}
+      </div>
+      <span
+        className={cn(
+          "font-medium truncate max-w-[92%]",
+          variant === "error" ? "text-red-400" : "text-white/50",
+          isMain ? "text-base" : "text-[0.65rem] leading-tight",
+        )}
+      >
+        {title}
+      </span>
+      {subtitle && isMain && (
+        <span className="text-xs text-white/40 max-w-[85%]">{subtitle}</span>
+      )}
+      {onRetry && isMain && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetry();
+          }}
+          className="mt-1 gap-1.5 h-7 text-xs bg-white/5 border-white/15 text-white hover:bg-white/10 hover:text-white"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Retry
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
 /*  Public component — wraps inner tile in a LiveKitRoom                    */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
@@ -817,42 +897,12 @@ export function ScreenTile({
   stationNumber,
   storeId,
   initialMedia,
+  onRetry,
 }: ScreenTileProps) {
-  if (!token || !serverUrl) {
-    return (
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-xl bg-neutral-900 flex flex-col items-center justify-center gap-2",
-          !isMain &&
-            "cursor-pointer ring-2 ring-transparent hover:ring-white/40 transition-shadow duration-200",
-          className,
-        )}
-        onClick={!isMain ? onClick : undefined}
-      >
-        <div
-          className={cn(
-            "rounded-full bg-black/30 flex items-center justify-center",
-            isMain ? "h-20 w-20" : "h-10 w-10",
-          )}
-        >
-          <div
-            className={cn(
-              "animate-spin rounded-full border-2 border-white/20 border-t-white/70",
-              isMain ? "h-9 w-9" : "h-5 w-5",
-            )}
-          />
-        </div>
-        <span
-          className={cn(
-            "font-medium text-white/50 truncate max-w-[88%] text-center",
-            isMain ? "text-base" : "text-[0.65rem] leading-tight",
-          )}
-        >
-          {name}
-        </span>
-      </div>
-    );
-  }
+  // Hooks must run unconditionally on every render (rules of hooks) — the
+  // token/serverUrl guard below only affects what gets returned, not which
+  // hooks are called, so it can safely flip between renders without a
+  // "rendered fewer/more hooks than expected" crash.
 
   // Memoize options so the object reference stays stable between renders.
   // A new object on every render would cause LiveKitRoom to tear down and
@@ -862,15 +912,74 @@ export function ScreenTile({
       audioCaptureDefaults: selectedAudioDeviceId ? { deviceId: selectedAudioDeviceId } : undefined,
       videoCaptureDefaults: selectedVideoDeviceId ? { deviceId: selectedVideoDeviceId } : undefined,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // Only re-create when the initial device IDs change (not on every render).
     // Device switching after connect is handled via room.switchActiveDevice inside ScreenTileInner.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
+  // Waiting for a token/serverUrl to arrive from the parent — after a grace
+  // period, swap the spinner for an explicit "taking too long" error card
+  // instead of spinning forever.
+  const hasConnectionInfo = !!token && !!serverUrl;
+  const [waitTimedOut, setWaitTimedOut] = useState(false);
+  useEffect(() => {
+    if (hasConnectionInfo) {
+      setWaitTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setWaitTimedOut(true), 12000);
+    return () => clearTimeout(timer);
+  }, [hasConnectionInfo]);
+
+  // LiveKit connection failure (bad/expired token, unreachable server, etc.).
+  // `attempt` is bumped on retry and used as the LiveKitRoom `key` to force a
+  // full remount + fresh connection attempt.
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const handleRetry = () => {
+    setWaitTimedOut(false);
+    setConnectError(null);
+    setAttempt((a) => a + 1);
+    if (onRetry) {
+      onRetry();
+    } else if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  };
+
+  if (!hasConnectionInfo) {
+    return (
+      <StatusCard
+        isMain={isMain}
+        variant={waitTimedOut ? "error" : "loading"}
+        title={waitTimedOut ? "Couldn't connect" : name}
+        subtitle={waitTimedOut ? "This station is taking too long to respond." : undefined}
+        onRetry={waitTimedOut ? handleRetry : undefined}
+        onClick={onClick}
+        className={className}
+      />
+    );
+  }
+
+  if (connectError) {
+    return (
+      <StatusCard
+        isMain={isMain}
+        variant="error"
+        title="Connection failed"
+        subtitle={connectError}
+        onRetry={handleRetry}
+        onClick={onClick}
+        className={className}
+      />
+    );
+  }
+
   return (
     <LiveKitRoom
+      key={attempt}
       serverUrl={serverUrl}
       token={token}
       connect
@@ -878,6 +987,7 @@ export function ScreenTile({
       video={false}
       options={roomOptions}
       style={{ display: "contents" }}
+      onError={(err) => setConnectError(err.message || "Unable to connect to the station stream.")}
     >
       <ScreenTileInner
         name={name}

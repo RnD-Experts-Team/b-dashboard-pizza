@@ -28,6 +28,8 @@ interface ObserverDialogProps {
   serverUrl: string;
   /** Called when the dialog should close */
   onClose: () => void;
+  /** Called when the user retries after a connection failure — typically wired to a token refetch */
+  onRetry?: () => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -40,6 +42,7 @@ export function ObserverDialog({
   token,
   serverUrl,
   onClose,
+  onRetry,
 }: ObserverDialogProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -92,6 +95,7 @@ export function ObserverDialog({
             videoQuality={VideoQuality.HIGH}
             viewerOnly
             observerMode
+            onRetry={onRetry}
             className="h-full w-full"
           />
         </div>

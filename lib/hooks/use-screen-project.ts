@@ -66,19 +66,34 @@ export function useScreenProject(
       .then(([stationsResult, tokensResult]) => {
         if (signal.aborted) return;
 
+        // Stations error takes priority since it's the more fundamental failure —
+        // token errors are only surfaced when stations loaded successfully.
+        let nextError: string | null = null;
+
         if (stationsResult.status === "fulfilled") {
           setStations(stationsResult.value);
         } else {
-          const message =
+          nextError =
             stationsResult.reason?.response?.data?.error?.message ??
             stationsResult.reason?.message ??
             "Failed to load stations";
-          setError(message);
         }
 
-        if (tokensResult.status === "fulfilled" && tokensResult.value) {
-          setTokenData(tokensResult.value);
+        if (tokenType !== null) {
+          if (tokensResult.status === "fulfilled" && tokensResult.value) {
+            setTokenData(tokensResult.value);
+          } else if (tokensResult.status === "rejected") {
+            setTokenData(null);
+            if (!nextError) {
+              nextError =
+                tokensResult.reason?.response?.data?.error?.message ??
+                tokensResult.reason?.message ??
+                "Failed to connect to station streams";
+            }
+          }
         }
+
+        setError(nextError);
       })
       .finally(() => {
         if (!signal.aborted) setIsLoading(false);
