@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageGuide } from "@/components/shared/page-guide";
-import { SCREEN_PROJECT_GUIDE_STEPS } from "./screen-project-guide-config";
+import { createScreenProjectGuideSteps } from "./screen-project-guide-config";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Per-screen A/V state                                                     */
@@ -136,6 +136,7 @@ export function ScreenProjectView() {
 
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeId = selectedStore?.storeId ?? "";
+  const guideSteps = useMemo(() => createScreenProjectGuideSteps(storeId), [storeId]);
 
   const canSupervisor = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/supervisor` });
   const canObserver = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/observer` });
@@ -168,6 +169,7 @@ export function ScreenProjectView() {
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [sessionExited, setSessionExited] = useState(false);
 
   /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = auth-gated entry screen */
   const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select">(() => {
@@ -653,7 +655,7 @@ export function ScreenProjectView() {
 
   /* ── Main view ──────────────────────────────────────────────────── */
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="relative flex h-full flex-col gap-3">
       {/*
        * Single tile area — ALL ScreenTile instances live here permanently.
        * Clicking a side tile only changes `mainId` state. Each tile's
@@ -661,7 +663,7 @@ export function ScreenProjectView() {
        * so no tile ever unmounts and LiveKit connections stay alive.
        */}
       <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef} data-guide-id="sp-tile-area">
-        {containerSize.width > 0 &&
+        {!sessionExited && containerSize.width > 0 &&
           stationsMeta.map((s) => {
             const rect = computeTileRect(
               s.isMain,
@@ -711,7 +713,7 @@ export function ScreenProjectView() {
           })}
 
         {/* Side-panel scroll arrows */}
-        {hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
+        {!sessionExited && hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
           isLg ? (
             <>
               {canScrollBack && (
@@ -758,7 +760,7 @@ export function ScreenProjectView() {
         )}
 
         {/* PiP self-view — draggable overlay constrained to the tile area */}
-        <motion.div
+        {!sessionExited && <motion.div
           drag
           dragConstraints={tileAreaDomRef}
           dragElastic={0.08}
@@ -793,7 +795,7 @@ export function ScreenProjectView() {
               </div>
             )}
           </div>
-        </motion.div>
+        </motion.div>}
       </div>
 
       {/* Bottom control bar — modern floating dark toolbar */}
@@ -961,16 +963,63 @@ export function ScreenProjectView() {
             </TooltipTrigger>
             <TooltipContent side="top">Page guide</TooltipContent>
           </Tooltip>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
+          {/* Exit session button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-guide-id="sp-exit-session"
+                className="h-9 w-9 text-white/50 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
+                onClick={() => setSessionExited(true)}
+                aria-label="Exit session"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Exit session</TooltipContent>
+          </Tooltip>
         </div>
 
       </div>
       </div>
 
       <PageGuide
-        steps={SCREEN_PROJECT_GUIDE_STEPS}
+        steps={guideSteps}
         isOpen={guideOpen}
         onClose={() => setGuideOpen(false)}
       />
+
+      {/* Exit overlay — covers tile area + bottom bar; actual disconnect via tile suppression above */}
+      {sessionExited && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-2xl">
+          <div className="flex flex-col items-center gap-5 text-center px-8 max-w-sm">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10">
+              <LogOut className="h-7 w-7 text-white/60" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-lg font-semibold text-white">You have exited the session</p>
+              <p className="text-sm text-white/50 leading-relaxed">
+                All station connections have been disconnected.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                setSessionExited(false);
+                setBroadcastToAll(false);
+                refetch();
+              }}
+              className="gap-2 bg-white text-black hover:bg-white/90 rounded-xl px-6"
+            >
+              <Radio className="h-4 w-4" />
+              Reconnect
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

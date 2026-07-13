@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Check, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [vp, setVp] = useState({ w: 0, h: 0 });
+  const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentStep = steps[currentIndex] ?? steps[0];
@@ -79,6 +80,9 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [isOpen, currentStep, scrollAndMeasure]);
+
+  // Reset copy state when step changes
+  useEffect(() => { setCopied(false); }, [currentIndex]);
 
   // Keyboard: Esc close, left/right arrows navigate
   useEffect(() => {
@@ -219,6 +223,28 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
                         </li>
                       ))}
                     </ul>
+                  )}
+
+                  {/* Copyable URL chip */}
+                  {currentStep.copyableUrl && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+                      <code className="flex-1 truncate text-[11px] text-muted-foreground">
+                        {typeof window !== "undefined" ? window.location.origin : ""}{currentStep.copyableUrl}
+                      </code>
+                      <button
+                        onClick={() => {
+                          const url = (typeof window !== "undefined" ? window.location.origin : "") + currentStep.copyableUrl;
+                          navigator.clipboard.writeText(url).catch(() => {});
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 2000);
+                        }}
+                        className="shrink-0 flex items-center gap-1 text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
+                        aria-label="Copy station URL"
+                      >
+                        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copied ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
                   )}
 
                   {/* Navigation */}
