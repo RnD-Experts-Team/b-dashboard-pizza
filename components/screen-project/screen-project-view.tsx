@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,9 @@ import { useSelectedStoreStore } from "@/lib/store";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageGuide } from "@/components/shared/page-guide";
+import { SCREEN_PROJECT_GUIDE_STEPS } from "./screen-project-guide-config";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Per-screen A/V state                                                     */
@@ -164,6 +167,7 @@ export function ScreenProjectView() {
   const [myCamVisible, setMyCamVisible] = useState(false);
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = auth-gated entry screen */
   const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select">(() => {
@@ -608,7 +612,7 @@ export function ScreenProjectView() {
        * absolute position/size is animated by framer-motion `layout` (FLIP),
        * so no tile ever unmounts and LiveKit connections stay alive.
        */}
-      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef}>
+      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef} data-guide-id="sp-tile-area">
         {containerSize.width > 0 &&
           stationsMeta.map((s) => {
             const rect = computeTileRect(
@@ -744,11 +748,11 @@ export function ScreenProjectView() {
       </div>
 
       {/* Bottom control bar — modern floating dark toolbar */}
-      <div className="flex items-center rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30 max-[425px]:overflow-x-auto">
+      <div data-guide-id="sp-bottom-bar" className="flex items-center rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30 max-[425px]:overflow-x-auto">
       <div className="flex w-full min-w-full items-center justify-between gap-3 max-[425px]:w-max">
 
         {/* ── Left: status + station management ── */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div data-guide-id="sp-left-controls" className="flex items-center gap-2 shrink-0">
           <NetworkBadge status={networkStatus} />
           <div className="w-px h-5 bg-white/10" />
           <StationsDialog
@@ -759,7 +763,7 @@ export function ScreenProjectView() {
         </div>
 
         {/* ── Center: personal A/V controls ── */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div data-guide-id="sp-av-controls" className="flex items-center gap-1 shrink-0">
 
           {/* Mic toggle */}
           <button
@@ -821,6 +825,7 @@ export function ScreenProjectView() {
 
           {/* Talk to All — hold to broadcast */}
           <button
+            data-guide-id="sp-talk-all"
             disabled={myMicMuted}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
@@ -849,7 +854,7 @@ export function ScreenProjectView() {
         </div>
 
         {/* ── Right: broadcast to screens ── */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div data-guide-id="sp-broadcast-controls" className="flex items-center gap-1 shrink-0">
           <div className="w-px h-5 bg-white/10 mr-1" />
 
           {/* Mute / unmute all screens */}
@@ -889,10 +894,34 @@ export function ScreenProjectView() {
           >
             {anyMyCamEnabled ? <Camera className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
           </button>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
+          {/* Guide button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-white/50 hover:text-white hover:bg-white/10 rounded-xl"
+                onClick={() => setGuideOpen(true)}
+                aria-label="Open page guide"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Page guide</TooltipContent>
+          </Tooltip>
         </div>
 
       </div>
       </div>
+
+      <PageGuide
+        steps={SCREEN_PROJECT_GUIDE_STEPS}
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
     </div>
   );
 }
