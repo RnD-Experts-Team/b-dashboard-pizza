@@ -10,8 +10,7 @@ const HIRING_BASE_URL =
   process.env.NEXT_PUBLIC_HIRING_API_URL ||
   "https://hiring.lcportal.cloud/api";
 
-const UPSTREAM_TIMEOUT_MS =
-  Number(process.env.HIRING_TIMEOUT_MS) || 15_000;
+const UPSTREAM_TIMEOUT_MS = 180_000; // 3 minutes
 
 /**
  * POST /api/v1/stores/[storeId]/separation-requests

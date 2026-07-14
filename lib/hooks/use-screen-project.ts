@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSelectedStoreStore } from "@/lib/store";
 import { screenProjectService } from "@/lib/api/services/screen-project.service";
 import type { Station } from "@/types/screen-project.types";
@@ -25,9 +25,15 @@ interface UseScreenProjectResult {
  */
 export function useScreenProject(
   tokenType: "supervisor" | "observer" | null,
+  supervisorStationIds?: number[],
 ): UseScreenProjectResult {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeId = selectedStore?.storeId ?? null;
+
+  // Keep a ref so the effect always reads the latest IDs without them being a dep trigger.
+  // This prevents every checkbox click from causing a re-fetch while the user is selecting.
+  const supervisorStationIdsRef = useRef(supervisorStationIds);
+  supervisorStationIdsRef.current = supervisorStationIds;
 
   const [stations, setStations] = useState<Station[]>([]);
   const [tokenData, setTokenData] = useState<{
@@ -57,7 +63,7 @@ export function useScreenProject(
     const stationsPromise = screenProjectService.getStations(storeId, signal);
     const tokensPromise =
       tokenType === "supervisor"
-        ? screenProjectService.getSupervisorTokens(storeId, signal)
+        ? screenProjectService.getSupervisorTokens(storeId, signal, supervisorStationIdsRef.current)
         : tokenType === "observer"
         ? screenProjectService.getObserverTokens(storeId, signal)
         : Promise.resolve(null);
@@ -100,7 +106,7 @@ export function useScreenProject(
       });
 
     return () => controller.abort();
-  // tokenType in deps: re-fetches tokens when user picks supervisor vs observer
+  // supervisorStationIds intentionally omitted — read via ref so checkbox clicks don't re-fetch
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, fetchKey, tokenType]);
 

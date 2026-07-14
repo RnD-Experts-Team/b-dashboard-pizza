@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut, Check } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -151,13 +151,14 @@ export function ScreenProjectView() {
    * null = user is on the select screen (no tokens needed yet).
    */
   const [activeTokenType, setActiveTokenType] = useState<"supervisor" | "observer" | null>(() => {
-    if (canSupervisor && canObserver) return null; // select screen — wait for user choice
-    if (!canSupervisor && canObserver) return "observer";
-    return "supervisor";
+    if (!canSupervisor && canObserver) return "observer"; // observer-only: fetch tokens immediately
+    return null; // supervisor or both: wait until station selection is committed
   });
 
+  const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
-    useScreenProject(activeTokenType);
+    useScreenProject(activeTokenType, selectedStationIds.length ? selectedStationIds : undefined);
 
   const [mainId, setMainId] = useState<string>("");
   const [screenStates, setScreenStates] = useState<Record<string, ScreenState>>({});
@@ -171,11 +172,11 @@ export function ScreenProjectView() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [sessionExited, setSessionExited] = useState(false);
 
-  /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = auth-gated entry screen */
-  const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select">(() => {
+  /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = view selector, "station-select" = station checklist before connecting */
+  const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select" | "station-select">(() => {
     if (canSupervisor && canObserver) return "select";
     if (!canSupervisor && canObserver) return "observer";
-    return "supervisor";
+    return "station-select"; // supervisor-only: go to station selection before connecting
   });
   /** room_name of the station currently open in the ObserverDialog */
   const [observingRoom, setObservingRoom] = useState<string | null>(null);
@@ -283,15 +284,21 @@ export function ScreenProjectView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hasSidePanel = stations.length > 1;
-  const anyAudioEnabled = stations.some((s) => screenStates[s.room_name]?.audioEnabled);
-  const anyMyCamEnabled = stations.some((s) => screenStates[s.room_name]?.myCamEnabled);
+  // Filter to only the stations the user selected before connecting (supervisor view only)
+  const visibleStations =
+    viewMode === "supervisor" && selectedStationIds.length > 0
+      ? stations.filter((s) => selectedStationIds.includes(s.id))
+      : stations;
+
+  const hasSidePanel = visibleStations.length > 1;
+  const anyAudioEnabled = visibleStations.some((s) => screenStates[s.room_name]?.audioEnabled);
+  const anyMyCamEnabled = visibleStations.some((s) => screenStates[s.room_name]?.myCamEnabled);
 
   // Side-panel virtual scroll limits
   const isLg = containerSize.width >= LG_BREAKPOINT;
   // Reset scroll when layout mode flips (desktop ↔ mobile)
   useEffect(() => { setSideScroll(0); }, [isLg]);
-  const sideTileCount = Math.max(0, stations.length - 1);
+  const sideTileCount = Math.max(0, visibleStations.length - 1);
   const sideContentLen =
     sideTileCount > 0
       ? sideTileCount * (isLg ? DESK_SIDE_H : MOB_SIDE_W) +
@@ -448,7 +455,7 @@ export function ScreenProjectView() {
   }
 
   /* ── No store selected / no stations (supervisor mode only) ────────────── */
-  if ((stations.length === 0 || !mainId) && viewMode === "supervisor") {
+  if ((visibleStations.length === 0 || !mainId) && viewMode === "supervisor") {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -469,7 +476,7 @@ export function ScreenProjectView() {
   // Build a flat annotated list so we can render all tiles in one .map()
   // from a single container — key never changes = no remount = no reconnect.
   let sideCounter = 0;
-  const stationsMeta = stations.map((s) => {
+  const stationsMeta = visibleStations.map((s) => {
     const isMain = s.room_name === mainId;
     return { ...s, isMain, sideIdx: isMain ? -1 : sideCounter++ };
   });
@@ -523,7 +530,7 @@ export function ScreenProjectView() {
 
             {/* Store Manager card */}
             <button
-              onClick={() => { setViewMode("supervisor"); setActiveTokenType("supervisor"); }}
+              onClick={() => { setViewMode("station-select"); }}
               className={cn(
                 "group relative flex flex-col items-start gap-4 rounded-2xl border p-6 text-left",
                 "transition-all duration-200",
@@ -566,6 +573,119 @@ export function ScreenProjectView() {
     );
   }
 
+  /* ── Station selection (before connecting as supervisor) ─────────── */
+  if (viewMode === "station-select") {
+    const allSelected =
+      stations.length > 0 && stations.every((s) => selectedStationIds.includes(s.id));
+
+    function toggleStation(id: number) {
+      setSelectedStationIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      );
+    }
+
+    function handleSelectAll() {
+      setSelectedStationIds(allSelected ? [] : stations.map((s) => s.id));
+    }
+
+    function handleConnect() {
+      if (selectedStationIds.length === 0) return;
+      const firstSelected = stations.find((s) => selectedStationIds.includes(s.id));
+      if (firstSelected) setMainId(firstSelected.room_name);
+      setActiveTokenType("supervisor");
+      setViewMode("supervisor");
+    }
+
+    return (
+      <div className="flex h-full flex-col gap-3">
+        {/* Header bar */}
+        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-2.5 shrink-0">
+          {canSupervisor && canObserver && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSelectedStationIds([]); setViewMode("select"); }}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </Button>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">Select Stations</p>
+            <p className="text-xs text-muted-foreground">Choose which stations to connect to</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 text-xs"
+            onClick={handleSelectAll}
+            disabled={stations.length === 0}
+          >
+            {allSelected ? "Deselect All" : "Select All"}
+          </Button>
+        </div>
+
+        {/* Station grid */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {stations.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">No stations found for this store.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {stations.map((s) => {
+                const checked = selectedStationIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => toggleStation(s.id)}
+                    className={cn(
+                      "flex items-center gap-4 rounded-xl border p-4 text-left transition-all duration-150",
+                      checked
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                        : "hover:border-muted-foreground/30 hover:bg-muted/30",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
+                        checked ? "border-primary bg-primary" : "border-muted-foreground/30",
+                      )}
+                    >
+                      {checked && <Check className="h-3 w-3 text-primary-foreground" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{s.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{s.room_name}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 shrink-0 rounded-xl border bg-card px-4 py-2.5">
+          <p className="text-sm text-muted-foreground">
+            {selectedStationIds.length} of {stations.length} selected
+          </p>
+          <Button
+            onClick={handleConnect}
+            disabled={selectedStationIds.length === 0}
+            className="gap-2"
+          >
+            <Monitor className="h-4 w-4" />
+            {selectedStationIds.length > 0
+              ? `Connect (${selectedStationIds.length})`
+              : "Connect"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   /* ── Observer mode — station picker grid ────────────────────────── */
   if (viewMode === "observer") {
     const observingStation = observingRoom
@@ -591,8 +711,7 @@ export function ScreenProjectView() {
                 if (canSupervisor && canObserver) {
                   setViewMode("select");
                 } else {
-                  setViewMode("supervisor");
-                  setActiveTokenType("supervisor");
+                  setViewMode("station-select");
                 }
               }}
               className="gap-1.5 text-muted-foreground hover:text-foreground"
@@ -1010,7 +1129,9 @@ export function ScreenProjectView() {
               onClick={() => {
                 setSessionExited(false);
                 setBroadcastToAll(false);
-                refetch();
+                setSelectedStationIds([]);
+                setActiveTokenType(null);
+                setViewMode("station-select");
               }}
               className="gap-2 bg-white text-black hover:bg-white/90 rounded-xl px-6"
             >
