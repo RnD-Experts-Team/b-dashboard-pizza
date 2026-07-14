@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { AlertCircle, Copy, Loader2, Users } from "lucide-react";
 import {
@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
@@ -79,8 +78,8 @@ export function CreateLinkDialog({
   // today's date as the default (YYYY-MM-DD).
   const [date, setDate] = useState("");
   const [type, setType] = useState<InventoryType>("daily");
+  const [lang, setLang] = useState<"en" | "ar" | "es">("en");
   const [selectedEmployees, setSelectedEmployees] = useState<number[]>([]);
-  const [manualIds, setManualIds] = useState("");
 
   // Employees are looked up by store number; re-fetched whenever the picked store changes.
   const { options, isLoading, error: empError } = useInventoryEmployees(
@@ -93,8 +92,8 @@ export function CreateLinkDialog({
       // pinned to their own store regardless of the caller's initialStoreId.
       setStoreId(isLocked && lockedStoreId ? lockedStoreId : initialStoreId);
       setSelectedEmployees([]);
-      setManualIds("");
       setType("daily");
+      setLang("en");
       setDate(new Date().toISOString().slice(0, 10));
       clearCreated();
       clearErrors();
@@ -105,19 +104,9 @@ export function CreateLinkDialog({
   const handleStoreChange = (next: string) => {
     setStoreId(next);
     setSelectedEmployees([]);
-    setManualIds("");
   };
 
-  // Merge multi-select picks with any manually typed IDs (comma/space separated).
-  const employeeIds = useMemo(() => {
-    const manual = manualIds
-      .split(/[\s,]+/)
-      .map((s) => Number(s.trim()))
-      .filter((n) => Number.isInteger(n) && n > 0);
-    return Array.from(new Set([...selectedEmployees, ...manual]));
-  }, [selectedEmployees, manualIds]);
-
-  const canSubmit = Boolean(storeId) && Boolean(date) && employeeIds.length > 0;
+  const canSubmit = Boolean(storeId) && Boolean(date) && selectedEmployees.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +116,8 @@ export function CreateLinkDialog({
         store_id: storeId,
         date,
         type,
-        employee_ids: employeeIds,
+        lang,
+        employee_ids: selectedEmployees,
       });
       toast.success(`Created ${links.length} link(s).`);
       onLinksCreated?.(storeId);
@@ -267,6 +257,25 @@ export function CreateLinkDialog({
 
             <div className="space-y-2">
               <Label>
+                Language <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={lang}
+                onValueChange={(v) => setLang(v as "en" | "ar" | "es")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="ar">Arabic</SelectItem>
+                  <SelectItem value="es">Spanish</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>
                 Employees <span className="text-destructive">*</span>
               </Label>
               <MultiSelect
@@ -287,21 +296,8 @@ export function CreateLinkDialog({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="manual-ids">Or enter employee IDs manually</Label>
-              <Input
-                id="manual-ids"
-                value={manualIds}
-                onChange={(e) => setManualIds(e.target.value)}
-                placeholder="e.g. 6, 7, 12"
-              />
-              <p className="text-xs text-muted-foreground">
-                Comma or space separated. Useful if an employee isn’t in the list.
-              </p>
-            </div>
-
             <p className="text-xs text-muted-foreground">
-              {employeeIds.length} employee(s) selected.
+              {selectedEmployees.length} employee(s) selected.
             </p>
 
             <DialogFooter>

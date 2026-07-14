@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 /* eslint-disable @next/next/no-img-element -- images come from the same-origin
    /inventory-storage proxy, so next/image remote config isn't needed. */
 import { useParams, useRouter } from "next/navigation";
-import { ImageOff, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ImageOff, MoreHorizontal, Pencil, Plus, Power, PowerOff } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -23,7 +31,6 @@ import {
   getInventoryErrorMessage,
   isDisplayableErrorMessage,
 } from "@/lib/api/inventory-errors";
-import { DeleteConfirmDialog } from "@/components/inventory/delete-confirm-dialog";
 import { ItemDetailSheet } from "@/components/inventory/item-detail-sheet";
 import type { Item } from "@/types/inventory.types";
 
@@ -43,37 +50,26 @@ export default function ItemsPage() {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeNumber = selectedStore?.storeId ?? overviewStores?.[0]?.storeId;
 
-  const { items, pagination, isLoading, isDeleting, error, deleteItem, handlePageChange } =
-    useItems(undefined, storeNumber);
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const itemParams = useMemo(
+    () => (activeFilter === "all" ? {} : { active: activeFilter === "active" }),
+    [activeFilter]
+  );
+
+  const { items, pagination, isLoading, isToggling, error, toggleActive, handlePageChange } =
+    useItems(itemParams, storeNumber);
 
   // Rule-based UI gating. GET (list) is scoped; POST/PUT/DELETE remain non-scoped.
   const { canAccessRoute } = useAuthStore();
   const canCreateItem = canAccessRoute({ service: "Inventory", method: "POST", path: "/inventory/items" });
   const canEditItem = canAccessRoute({ service: "Inventory", method: "PUT", path: "/inventory/items/*" });
-  const canDeleteItem = canAccessRoute({ service: "Inventory", method: "DELETE", path: "/inventory/items/*" });
+  const canToggleItem = canAccessRoute({ service: "Inventory", method: "PATCH", path: "/inventory/items/*/active" });
 
-  const [deleting, setDeleting] = useState<Item | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isDisplayableErrorMessage(error)) toast.error(error);
   }, [error]);
-
-  const confirmDelete = async () => {
-    if (!deleting) return;
-    try {
-      await deleteItem(deleting.id);
-      toast.success("Item deleted.");
-      setDeleting(null);
-      // Also close the detail sheet if the deleted item was open in it.
-      if (selectedItemId === deleting.id) setSelectedItemId(null);
-    } catch (err) {
-      // Map the thrown error directly — reading `deleteError` from the render
-      // closure is stale on the first press (it only updates next render).
-      const message = getInventoryErrorMessage(err);
-      if (isDisplayableErrorMessage(message)) toast.error(message);
-    }
-  };
 
   const columns = [
     {
@@ -125,6 +121,18 @@ export default function ItemsPage() {
       ),
     },
     {
+      key: "is_active",
+      header: "Status",
+      cell: (item: Item) =>
+        item.is_active ? (
+          <Badge className="bg-green-500 hover:bg-green-500/80">Active</Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">
+            Inactive
+          </Badge>
+        ),
+    },
+    {
       key: "all_stores",
       header: "Stores",
       cell: (item: Item) =>
@@ -139,7 +147,7 @@ export default function ItemsPage() {
       header: "",
       className: "w-12 text-right",
       cell: (item: Item) =>
-        canEditItem || canDeleteItem ? (
+        canEditItem || canToggleItem ? (
           <div data-no-row-click="true" className="text-right">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -158,13 +166,39 @@ export default function ItemsPage() {
                     Edit
                   </DropdownMenuItem>
                 )}
-                {canDeleteItem && (
+                {canToggleItem && canEditItem && <DropdownMenuSeparator />}
+                {canToggleItem && item.is_active && (
                   <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => setDeleting(item)}
+                    onClick={async () => {
+                      try {
+                        await toggleActive(item.id, false);
+                        toast.success("Item deactivated.");
+                      } catch (err) {
+                        const message = getInventoryErrorMessage(err);
+                        if (isDisplayableErrorMessage(message)) toast.error(message);
+                      }
+                    }}
+                    disabled={isToggling}
                   >
-                    <Trash2 className="me-2 h-4 w-4" />
-                    Delete
+                    <PowerOff className="me-2 h-4 w-4" />
+                    Deactivate
+                  </DropdownMenuItem>
+                )}
+                {canToggleItem && !item.is_active && (
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        await toggleActive(item.id, true);
+                        toast.success("Item activated.");
+                      } catch (err) {
+                        const message = getInventoryErrorMessage(err);
+                        if (isDisplayableErrorMessage(message)) toast.error(message);
+                      }
+                    }}
+                    disabled={isToggling}
+                  >
+                    <Power className="me-2 h-4 w-4" />
+                    Activate
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
@@ -185,6 +219,19 @@ export default function ItemsPage() {
         )}
       </PageHeader>
 
+      <div className="flex items-center gap-2">
+        <Select value={activeFilter} onValueChange={(v) => setActiveFilter(v as typeof activeFilter)}>
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All items</SelectItem>
+            <SelectItem value="active">Active only</SelectItem>
+            <SelectItem value="inactive">Inactive only</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <DataTable
         data={items}
         columns={columns}
@@ -193,16 +240,7 @@ export default function ItemsPage() {
         pagination={pagination}
         onPageChange={handlePageChange}
         getRowKey={(i) => i.id}
-          onRowClick={(i) => setSelectedItemId(i.id)}
-      />
-
-      <DeleteConfirmDialog
-        open={deleting !== null}
-        onOpenChange={(o) => !o && setDeleting(null)}
-        title="Delete item"
-        description={`Delete "${deleting?.name_en}"? This also removes its stored image.`}
-        isDeleting={isDeleting}
-        onConfirm={confirmDelete}
+        onRowClick={(i) => setSelectedItemId(i.id)}
       />
 
       <ItemDetailSheet
@@ -214,8 +252,17 @@ export default function ItemsPage() {
         onEdit={(item) =>
           router.push(`/${locale}/dashboard/inventory/items/${item.id}/edit`)
         }
-        canDelete={canDeleteItem}
-        onDelete={(item) => setDeleting(item)}
+        canToggle={canToggleItem}
+        onToggle={async (item, targetIsActive) => {
+          try {
+            await toggleActive(item.id, targetIsActive);
+            toast.success(targetIsActive ? "Item activated." : "Item deactivated.");
+          } catch (err) {
+            const message = getInventoryErrorMessage(err);
+            if (isDisplayableErrorMessage(message)) toast.error(message);
+            throw err;
+          }
+        }}
       />
     </div>
   );

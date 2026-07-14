@@ -23,11 +23,79 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { usePublicInventoryLink } from "@/lib/hooks/use-public-inventory";
 import type { PublicLinkItem, PublicSubmitItem } from "@/types/inventory.types";
 
 type Counts = Record<number, { u1: string; u2: string; u3: string }>;
+type Lang = "en" | "ar" | "es";
+
+const T: Record<
+  Lang,
+  {
+    inventoryCount: string;
+    itemsEntered: (entered: number, total: number) => string;
+    noItems: string;
+    submitBtn: string;
+    confirmTitle: string;
+    confirmDescription: (entered: number, total: number) => string;
+    reviewAgain: string;
+    countSubmitted: string;
+    thankYouPrefix: string;
+    thankYouSuffix: string;
+  }
+> = {
+  en: {
+    inventoryCount: "Inventory Count",
+    itemsEntered: (e, t) => `${e} of ${t} item${t === 1 ? "" : "s"} entered`,
+    noItems: "No items are configured for this link.",
+    submitBtn: "Submit count",
+    confirmTitle: "Submit this count?",
+    confirmDescription: (e, t) =>
+      `You have entered ${e} of ${t} item${t === 1 ? "" : "s"}. This link can only be submitted once and can't be changed afterwards.`,
+    reviewAgain: "Review again",
+    countSubmitted: "Count submitted",
+    thankYouPrefix: "Thank you! Your count was recorded as ",
+    thankYouSuffix: ". You can close this page.",
+  },
+  ar: {
+    inventoryCount: "جرد المخزون",
+    itemsEntered: (e, t) => `تم إدخال ${e} من ${t} ${t === 1 ? "عنصر" : "عناصر"}`,
+    noItems: "لا توجد عناصر مضافة لهذا الرابط.",
+    submitBtn: "إرسال الجرد",
+    confirmTitle: "إرسال هذا الجرد؟",
+    confirmDescription: (e, t) =>
+      `لقد أدخلت ${e} من ${t} ${t === 1 ? "عنصر" : "عناصر"}. لا يمكن إرسال هذا الرابط إلا مرة واحدة ولا يمكن تعديله بعد الإرسال.`,
+    reviewAgain: "مراجعة مرة أخرى",
+    countSubmitted: "تم إرسال الجرد",
+    thankYouPrefix: "شكراً لك! تم تسجيل الجرد بالرقم ",
+    thankYouSuffix: ". يمكنك إغلاق هذه الصفحة.",
+  },
+  es: {
+    inventoryCount: "Conteo de Inventario",
+    itemsEntered: (e, t) =>
+      `${e} de ${t} artículo${t === 1 ? "" : "s"} ingresado${t === 1 ? "" : "s"}`,
+    noItems: "No hay artículos configurados para este enlace.",
+    submitBtn: "Enviar conteo",
+    confirmTitle: "¿Enviar este conteo?",
+    confirmDescription: (e, t) =>
+      `Ha ingresado ${e} de ${t} artículo${t === 1 ? "" : "s"}. Este enlace solo se puede enviar una vez y no se puede modificar después.`,
+    reviewAgain: "Revisar de nuevo",
+    countSubmitted: "Conteo enviado",
+    thankYouPrefix: "¡Gracias! Tu conteo fue registrado como ",
+    thankYouSuffix: ". Puedes cerrar esta página.",
+  },
+};
 
 /** Full-page states share this centered card shell. */
 function CenteredMessage({
@@ -200,31 +268,16 @@ function UnitField({
 }
 
 /**
- * The item's Details text for the current URL locale, falling back to English.
- * Returns null when no details are set so the caller can render nothing.
- */
-function detailsFor(item: PublicLinkItem, locale: string): string | null {
-  const localized =
-    locale === "ar" ? item.details_ar : locale === "es" ? item.details_es : item.details_en;
-  return localized?.trim() || item.details_en?.trim() || null;
-}
-
-/**
  * The public, no-auth inventory count form an employee opens via their link.
  * Loads the token's items, collects counts, and submits once (single-use link).
  */
-export function PublicCountForm({
-  token,
-  locale,
-}: {
-  token: string;
-  locale: string;
-}) {
+export function PublicCountForm({ token }: { token: string }) {
   const { link, status, error, submit, isSubmitting, submitError, result } =
     usePublicInventoryLink(token);
 
   const [counts, setCounts] = useState<Counts>({});
   const [lightboxItem, setLightboxItem] = useState<PublicLinkItem | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const setCount = (
     itemId: number,
@@ -263,15 +316,22 @@ export function PublicCountForm({
       const base: PublicSubmitItem = {
         item_id: item.id,
         count_unit_1: toNum(c?.u1),
-        count_unit_2: toNum(c?.u2),
       };
+      if (item.unit_2) base.count_unit_2 = toNum(c?.u2);
       if (item.unit_3) base.count_unit_3 = toNum(c?.u3);
       return base;
     });
   }, [link, counts]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // The form's submit button only opens a confirmation dialog — the actual
+  // network submit happens on confirm, since a link is single-use.
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setConfirmOpen(true);
+  };
+
+  const confirmSubmit = async () => {
+    setConfirmOpen(false);
     try {
       await submit(payload);
     } catch {
@@ -320,15 +380,19 @@ export function PublicCountForm({
 
   // ── Success screen (after submit) ──
   if (result) {
+    const lang = link?.lang ?? "en";
+    const t = T[lang];
     return (
-      <CenteredMessage
-        icon={<PackageCheck className="h-12 w-12 text-green-600" />}
-        title="Count submitted"
-      >
-        Thank you! Your count was recorded as{" "}
-        <span className="font-medium text-foreground">{result.reference}</span>.
-        You can close this page.
-      </CenteredMessage>
+      <div dir={lang === "ar" ? "rtl" : undefined}>
+        <CenteredMessage
+          icon={<PackageCheck className="h-12 w-12 text-green-600" />}
+          title={t.countSubmitted}
+        >
+          {t.thankYouPrefix}
+          <span className="font-medium text-foreground">{result.reference}</span>
+          {t.thankYouSuffix}
+        </CenteredMessage>
+      </div>
     );
   }
 
@@ -346,7 +410,7 @@ export function PublicCountForm({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary">
             <ClipboardList className="h-3.5 w-3.5" />
-            Inventory Count
+            {T[link.lang].inventoryCount}
           </div>
           <Badge variant="outline" className="capitalize">
             {link.type}
@@ -375,7 +439,7 @@ export function PublicCountForm({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              {enteredCount} of {total} item{total === 1 ? "" : "s"} entered
+              {T[link.lang].itemsEntered(enteredCount, total)}
             </p>
           </div>
         )}
@@ -393,12 +457,13 @@ export function PublicCountForm({
 
           {total === 0 ? (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              No items are configured for this link.
+              {T[link.lang].noItems}
             </p>
           ) : (
-            link.items.map((item) => {
+            <div dir={link.lang === "ar" ? "rtl" : undefined}>
+            {link.items.map((item) => {
               const entered = itemEntered(item.id);
-              const details = detailsFor(item, locale);
+              const details = item.details?.trim() || null;
               return (
                 <div
                   key={item.id}
@@ -416,11 +481,11 @@ export function PublicCountForm({
                           type="button"
                           className="group relative overflow-hidden rounded-xl border"
                           onClick={() => setLightboxItem(item)}
-                          aria-label={`View image for ${item.name_en}`}
+                          aria-label={`View image for ${item.name}`}
                         >
                           <img
                             src={item.image}
-                            alt={item.name_en}
+                            alt={item.name}
                             className="h-[72px] w-[72px] object-cover transition-transform duration-200 group-hover:scale-105"
                           />
                           {/* Zoom indicator — subtle on mobile, prominent on hover */}
@@ -443,7 +508,7 @@ export function PublicCountForm({
 
                     {/* Item name, ID, details */}
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-tight">{item.name_en}</p>
+                      <p className="font-semibold leading-tight">{item.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {item.ultimatrix_id}
                       </p>
@@ -463,12 +528,14 @@ export function PublicCountForm({
                       value={counts[item.id]?.u1 ?? ""}
                       onChange={(v) => setCount(item.id, "u1", v)}
                     />
-                    <UnitField
-                      id={`u2-${item.id}`}
-                      label={item.unit_2.name ?? "Unit 2"}
-                      value={counts[item.id]?.u2 ?? ""}
-                      onChange={(v) => setCount(item.id, "u2", v)}
-                    />
+                    {item.unit_2 && (
+                      <UnitField
+                        id={`u2-${item.id}`}
+                        label={item.unit_2.name ?? "Unit 2"}
+                        value={counts[item.id]?.u2 ?? ""}
+                        onChange={(v) => setCount(item.id, "u2", v)}
+                      />
+                    )}
                     {item.unit_3 && (
                       <UnitField
                         id={`u3-${item.id}`}
@@ -480,7 +547,8 @@ export function PublicCountForm({
                   </div>
                 </div>
               );
-            })
+            })}
+            </div>
           )}
         </div>
 
@@ -488,7 +556,7 @@ export function PublicCountForm({
         {total > 0 && (
           <div className="shrink-0 border-t bg-background/90 px-4 py-3">
             <p className="mb-2 text-center text-xs text-muted-foreground">
-              {enteredCount} of {total} item{total === 1 ? "" : "s"} entered
+              {T[link.lang].itemsEntered(enteredCount, total)}
             </p>
             <Button
               type="submit"
@@ -497,7 +565,7 @@ export function PublicCountForm({
               size="lg"
             >
               {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-              Submit count
+              {T[link.lang].submitBtn}
             </Button>
           </div>
         )}
@@ -507,11 +575,32 @@ export function PublicCountForm({
       {lightboxItem?.image && (
         <ImageLightbox
           src={lightboxItem.image}
-          alt={lightboxItem.name_en}
+          alt={lightboxItem.name}
           open={lightboxItem !== null}
           onOpenChange={(o) => !o && setLightboxItem(null)}
         />
       )}
+
+      {/* Submit confirmation — the link is single-use, so make the user confirm. */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent dir={link.lang === "ar" ? "rtl" : undefined}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{T[link.lang].confirmTitle}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {T[link.lang].confirmDescription(enteredCount, total)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>
+              {T[link.lang].reviewAgain}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSubmit} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {T[link.lang].submitBtn}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -103,23 +103,22 @@ export function ItemForm({
         : [...prev.types, type],
     }));
 
-  /** Client-side validation mirroring the API rules; returns an error or null. */
   const validate = (): string | null => {
-    if (!values.ultimatrix_id.trim()) return "Altametrics ID is required.";
+    if (!values.ultimatrix_id.trim()) return 'Altametrics ID is required.';
     if (!values.name_en.trim() || !values.name_ar.trim() || !values.name_es.trim())
-      return "Name (EN, AR, ES) are all required.";
-    if (!values.unit_1_id || !values.unit_2_id)
-      return "Unit 1 and Unit 2 are required.";
-    if (values.unit_1_id === values.unit_2_id)
-      return "Unit 2 must be different from Unit 1.";
-    if (Number(values.unit_2_per_unit_1) < 0.0001)
-      return "Unit 2 per Unit 1 must be at least 0.0001.";
+      return 'Name (EN, AR, ES) are all required.';
+    if (!values.unit_1_id)
+      return 'Unit 1 is required.';
+    if (values.unit_2_id && values.unit_1_id === values.unit_2_id)
+      return 'Unit 2 must be different from Unit 1.';
+    if (values.unit_2_id && Number(values.unit_2_per_unit_1) < 0.0001)
+      return 'Unit 2 per Unit 1 must be at least 0.0001.';
     if (values.unit_3_id && Number(values.unit_3_per_unit_2) < 0.0001)
-      return "Unit 3 per Unit 2 is required when Unit 3 is set.";
+      return 'Unit 3 per Unit 2 is required when Unit 3 is set.';
     if (values.types.length === 0)
-      return "Select at least one type (daily / weekly / period).";
+      return 'Select at least one type (daily / weekly / period).';
     if (!values.all_stores && values.store_ids.length === 0)
-      return "Select at least one store, or enable “All stores”.";
+      return 'Select at least one store, or enable “All stores”.';
     return null;
   };
 
@@ -267,68 +266,79 @@ export function ItemForm({
               />
             </div>
             <div className="space-y-2">
-              <Label>
-                Unit 2 <span className="text-destructive">*</span>
-              </Label>
-              <SearchableSelect
-                options={units.map((u) => ({ value: String(u.id), label: u.name }))}
-                value={values.unit_2_id}
-                onChange={(v) => set("unit_2_id", v)}
-                placeholder="Select unit…"
-                searchPlaceholder="Search units…"
-                emptyText="No units found."
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="u2pu1">
-              Unit 2 per Unit 1 <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="u2pu1"
-              type="number"
-              step="0.0001"
-              min="0.0001"
-              value={values.unit_2_per_unit_1}
-              onChange={(e) => set("unit_2_per_unit_1", e.target.value)}
-              placeholder="6"
-              required
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Unit 3 (optional)</Label>
+              <Label>Unit 2 (optional)</Label>
               <SearchableSelect
                 options={[
                   { value: NONE, label: "None" },
                   ...units.map((u) => ({ value: String(u.id), label: u.name })),
                 ]}
-                value={values.unit_3_id || NONE}
-                onChange={(v) => set("unit_3_id", v === NONE ? "" : v)}
+                value={values.unit_2_id || NONE}
+                onChange={(v) => {
+                  const next = v === NONE ? "" : v;
+                  setValues((prev) => ({
+                    ...prev,
+                    unit_2_id: next,
+                    ...(next ? {} : { unit_3_id: "", unit_3_per_unit_2: "" }),
+                  }));
+                }}
                 placeholder="None"
                 searchPlaceholder="Search units…"
                 emptyText="No units found."
               />
             </div>
+          </div>
+
+          {values.unit_2_id && (
             <div className="space-y-2">
-              <Label htmlFor="u3pu2">
-                Unit 3 per Unit 2
-                {values.unit_3_id && <span className="text-destructive"> *</span>}
+              <Label htmlFor="u2pu1">
+                Unit 2 per Unit 1 <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="u3pu2"
+                id="u2pu1"
                 type="number"
                 step="0.0001"
                 min="0.0001"
-                value={values.unit_3_per_unit_2}
-                onChange={(e) => set("unit_3_per_unit_2", e.target.value)}
-                disabled={!values.unit_3_id}
-                placeholder="—"
+                value={values.unit_2_per_unit_1}
+                onChange={(e) => set("unit_2_per_unit_1", e.target.value)}
+                placeholder="6"
               />
             </div>
-          </div>
+          )}
+
+          {values.unit_2_id && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Unit 3 (optional)</Label>
+                <SearchableSelect
+                  options={[
+                    { value: NONE, label: "None" },
+                    ...units.map((u) => ({ value: String(u.id), label: u.name })),
+                  ]}
+                  value={values.unit_3_id || NONE}
+                  onChange={(v) => set("unit_3_id", v === NONE ? "" : v)}
+                  placeholder="None"
+                  searchPlaceholder="Search units…"
+                  emptyText="No units found."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="u3pu2">
+                  Unit 3 per Unit 2
+                  {values.unit_3_id && <span className="text-destructive"> *</span>}
+                </Label>
+                <Input
+                  id="u3pu2"
+                  type="number"
+                  step="0.0001"
+                  min="0.0001"
+                  value={values.unit_3_per_unit_2}
+                  onChange={(e) => set("unit_3_per_unit_2", e.target.value)}
+                  disabled={!values.unit_3_id}
+                  placeholder="—"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

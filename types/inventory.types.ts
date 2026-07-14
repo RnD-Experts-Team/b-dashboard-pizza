@@ -52,6 +52,7 @@ export interface Item {
   unit_3_per_unit_2: string | null;
   types: InventoryType[];
   all_stores: boolean;
+  is_active: boolean;
   /** Present only when all_stores is false. */
   stores?: ItemStoreRef[];
 }
@@ -100,6 +101,7 @@ export interface Link {
   store: ItemStoreRef;
   date: string;
   type: InventoryType;
+  lang: "en" | "ar" | "es";
   status: LinkStatus;
   items_count: number;
   created_by: LinkCreatorRef;
@@ -110,6 +112,7 @@ export interface CreateLinkPayload {
   store_id: string;
   date: string;
   type: InventoryType;
+  lang: "en" | "ar" | "es";
   employee_ids: number[];
 }
 
@@ -211,15 +214,14 @@ export interface UpdateEntryItemPayload {
 export interface PublicLinkItem {
   id: number;
   ultimatrix_id: string;
-  name_en: string;
-  name_ar: string;
-  name_es: string;
-  details_en: string | null;
-  details_ar: string | null;
-  details_es: string | null;
+  /** Single localised name — language chosen by the link's `lang`. */
+  name: string;
+  /** Single localised detail text, or null when not set. */
+  details: string | null;
   image: string | null;
   unit_1: { name: string | null };
-  unit_2: { name: string | null };
+  /** Null for single-unit items. */
+  unit_2: { name: string | null } | null;
   unit_2_per_unit_1: string | null;
   unit_3: { name: string | null } | null;
   unit_3_per_unit_2: string | null;
@@ -228,6 +230,7 @@ export interface PublicLinkItem {
 /** The public form payload returned by GET /public/inventory/{token}. */
 export interface PublicLink {
   user_name: string;
+  lang: "en" | "ar" | "es";
   store: { name: string };
   date: string;
   type: InventoryType;
@@ -238,7 +241,7 @@ export interface PublicLink {
 export interface PublicSubmitItem {
   item_id: number;
   count_unit_1: number;
-  count_unit_2: number;
+  count_unit_2?: number;
   count_unit_3?: number;
 }
 
@@ -252,4 +255,9 @@ export interface PublicSubmitResponse {
 export interface ListParams {
   page?: number;
   perPage?: number;
+}
+
+export interface ItemListParams extends ListParams {
+  /** true = only active items; false = only inactive; omit = all. */
+  active?: boolean;
 }

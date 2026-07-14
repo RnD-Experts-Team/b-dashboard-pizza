@@ -92,6 +92,16 @@ export default function LinksPage() {
       ),
     },
     {
+      key: "lang",
+      header: "Lang",
+      cell: (l: InventoryLink) =>
+        l.lang ? (
+          <Badge variant="secondary" className="uppercase">
+            {l.lang}
+          </Badge>
+        ) : null,
+    },
+    {
       key: "status",
       header: "Status",
       cell: (l: InventoryLink) => (
