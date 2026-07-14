@@ -28,6 +28,8 @@ interface ObserverDialogProps {
   serverUrl: string;
   /** Called when the dialog should close */
   onClose: () => void;
+  /** Called when the user retries after a connection failure — typically wired to a token refetch */
+  onRetry?: () => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -40,6 +42,7 @@ export function ObserverDialog({
   token,
   serverUrl,
   onClose,
+  onRetry,
 }: ObserverDialogProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -51,7 +54,7 @@ export function ObserverDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="!max-w-[72vw] w-full h-[90vh] flex flex-col gap-0 p-0 bg-neutral-950 border-neutral-800 [&>button]:hidden">
+      <DialogContent className="!max-w-[calc(100%-2rem)] sm:!max-w-[72vw] w-full h-[90vh] flex flex-col gap-0 p-0 bg-neutral-950 border-neutral-800 [&>button]:hidden">
         {/* ── Header ── */}
         <DialogHeader className="flex-row items-center gap-3 px-4 py-3 border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -92,12 +95,13 @@ export function ObserverDialog({
             videoQuality={VideoQuality.HIGH}
             viewerOnly
             observerMode
+            onRetry={onRetry}
             className="h-full w-full"
           />
         </div>
 
         {/* ── Bottom controls ── */}
-        <div className="flex items-center justify-center gap-4 px-4 py-3 border-t border-neutral-800 shrink-0">
+        <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-3 border-t border-neutral-800 shrink-0">
           <Button
             variant={isMuted ? "destructive" : "secondary"}
             size="sm"

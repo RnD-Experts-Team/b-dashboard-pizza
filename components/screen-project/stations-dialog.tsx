@@ -138,157 +138,160 @@ export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogP
           </Button>
         </DialogTrigger>
 
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6 pb-4">
             <DialogTitle>Stations</DialogTitle>
           </DialogHeader>
+          <Separator />
 
-          {/* ── Station list ─────────────────────────────────────────── */}
-          <ScrollArea className="max-h-60 pr-1">
-            {stations.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No stations yet.
-              </p>
-            ) : (
-              <ul className="divide-y">
-                {stations.map((s) => (
-                  <li
-                    key={s.id}
-                    className="flex items-center justify-between gap-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{s.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {s.room_name}
-                      </p>
-                    </div>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      disabled={deletingId === s.id}
-                      onClick={() => setConfirmStation(s)}
-                      aria-label={`Delete station ${s.name}`}
+          <ScrollArea className="h-[min(65vh,32rem)]">
+            <div className="space-y-4 px-6 py-4">
+              {/* ── Station list ─────────────────────────────────────── */}
+              {stations.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No stations yet.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {stations.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 py-2.5"
                     >
-                      {deletingId === s.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{s.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {s.room_name}
+                        </p>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={deletingId === s.id}
+                        onClick={() => setConfirmStation(s)}
+                        aria-label={`Delete station ${s.name}`}
+                      >
+                        {deletingId === s.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {deleteError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{deleteError}</AlertDescription>
+                </Alert>
+              )}
+
+              <Separator />
+
+              {/* ── Create form ──────────────────────────────────────── */}
+              <form onSubmit={handleCreate} className="space-y-3">
+                <p className="text-sm font-semibold">Create Station</p>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="sp-station-name">Name</Label>
+                  <Input
+                    id="sp-station-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Drive-Through"
+                    required
+                    disabled={creating}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="sp-station-room">Room Name</Label>
+                  <Input
+                    id="sp-station-room"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    placeholder="e.g. 03795-00001-drive-through"
+                    required
+                    disabled={creating}
+                  />
+                </div>
+
+                {createError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{createError}</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={creating}
+                  className="w-full gap-1.5"
+                >
+                  {creating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {creating ? "Creating…" : "Create Station"}
+                </Button>
+              </form>
+
+              <Separator />
+
+              {/* ── Set shared password ────────────────────────────────── */}
+              <form onSubmit={handleSetPassword} className="space-y-3">
+                <p className="text-sm font-semibold">Set Shared Station Password</p>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="sp-station-password">Password</Label>
+                  <Input
+                    id="sp-station-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setPasswordSuccess(false); }}
+                    placeholder="Enter shared password"
+                    required
+                    disabled={settingPassword}
+                  />
+                </div>
+
+                {passwordError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{passwordError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {passwordSuccess && (
+                  <Alert>
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <AlertDescription>Password updated successfully.</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={settingPassword}
+                  className="w-full gap-1.5"
+                >
+                  {settingPassword ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-4 w-4" />
+                  )}
+                  {settingPassword ? "Saving…" : "Set Password"}
+                </Button>
+              </form>
+            </div>
           </ScrollArea>
-
-          {deleteError && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{deleteError}</AlertDescription>
-            </Alert>
-          )}
-
-          <Separator />
-
-          {/* ── Create form ──────────────────────────────────────────── */}
-          <form onSubmit={handleCreate} className="space-y-3">
-            <p className="text-sm font-semibold">Create Station</p>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="sp-station-name">Name</Label>
-              <Input
-                id="sp-station-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Drive-Through"
-                required
-                disabled={creating}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="sp-station-room">Room Name</Label>
-              <Input
-                id="sp-station-room"
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                placeholder="e.g. 03795-00001-drive-through"
-                required
-                disabled={creating}
-              />
-            </div>
-
-            {createError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{createError}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button
-              type="submit"
-              size="sm"
-              disabled={creating}
-              className="w-full gap-1.5"
-            >
-              {creating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              {creating ? "Creating…" : "Create Station"}
-            </Button>
-          </form>
-
-          <Separator />
-
-          {/* ── Set shared password ──────────────────────────────────── */}
-          <form onSubmit={handleSetPassword} className="space-y-3">
-            <p className="text-sm font-semibold">Set Shared Station Password</p>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="sp-station-password">Password</Label>
-              <Input
-                id="sp-station-password"
-                type="password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setPasswordSuccess(false); }}
-                placeholder="Enter shared password"
-                required
-                disabled={settingPassword}
-              />
-            </div>
-
-            {passwordError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{passwordError}</AlertDescription>
-              </Alert>
-            )}
-
-            {passwordSuccess && (
-              <Alert>
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <AlertDescription>Password updated successfully.</AlertDescription>
-              </Alert>
-            )}
-
-            <Button
-              type="submit"
-              size="sm"
-              disabled={settingPassword}
-              className="w-full gap-1.5"
-            >
-              {settingPassword ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <KeyRound className="h-4 w-4" />
-              )}
-              {settingPassword ? "Saving…" : "Set Password"}
-            </Button>
-          </form>
         </DialogContent>
       </Dialog>
 

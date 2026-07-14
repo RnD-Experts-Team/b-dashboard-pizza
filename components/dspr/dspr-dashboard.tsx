@@ -43,6 +43,7 @@ import {
   WbrOrdersVsSalesCard,
   WbrTransferInOutCard,
   WbrCleaningReviewCard,
+  WbrCustomerServiceCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1045,7 +1046,7 @@ export function DsprDashboard() {
           <WbrFeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} />
         </div>
 
-        <div className="md:col-span-2 lg:col-span-2" data-screenshot-ignore="true">
+        <div className="md:col-span-2 lg:col-span-1" data-screenshot-ignore="true">
           <WbrMoneyOwedCard data={hooksWbr.data?.money_owed} isLoading={hooksWbr.isLoading} />
         </div>
 
@@ -1053,6 +1054,10 @@ export function DsprDashboard() {
           <WbrAveragePayCard data={managerDashboard.averageHourlyPay} isLoading={managerDashboard.isLoading} />
         </div>
 
+        <div>
+          <WbrCustomerServiceCard data={wbrData?.["customer-service"]} isLoading={isLoading} />
+        </div>
+        
         <div>
           <WbrCleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} />
         </div>

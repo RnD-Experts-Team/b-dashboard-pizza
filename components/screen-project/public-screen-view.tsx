@@ -149,6 +149,12 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
 
       const data = await res.json() as StationTokenResponse;
 
+      if (!data.token || !data.server_url) {
+        setAuthError("Received an invalid response from the server. Please try again.");
+        setPhase("auth");
+        return;
+      }
+
       setStreaming({
         station: selectedStation,
         token: data.token,
@@ -335,6 +341,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             stationNumber={streaming.station.id}
             storeId={storeId}
             initialMedia={streaming.media}
+            onRetry={handleChangeStation}
             className="h-full w-full"
           />
         </div>
@@ -454,5 +461,18 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     );
   }
 
-  return null;
+  // Defensive fallback — should not normally be reached since we validate the
+  // token response before ever setting phase to "streaming".
+  return (
+    <div className="flex h-full items-center justify-center p-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <AlertCircle className="h-8 w-8 text-destructive" />
+        <p className="text-sm text-muted-foreground">Something went wrong loading this station.</p>
+        <Button variant="outline" size="sm" onClick={handleChangeStation} className="gap-1.5">
+          <ArrowLeft className="h-4 w-4" />
+          Back to stations
+        </Button>
+      </div>
+    </div>
+  );
 }

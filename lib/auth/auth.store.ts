@@ -11,6 +11,7 @@ import type { AxiosError } from "axios";
 import { authService } from "@/lib/api/services/auth.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDsprStore } from "@/lib/store/dspr.store";
+import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { AuthUser, LoginCredentials, AuthUserStore } from "@/types/auth.types";
 import type { AuthRule } from "@/types/auth-rule.types";
@@ -50,10 +51,22 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
-  
+
+  // ── Impersonation state ──────────────────────────────────────────────────
+  /** The impersonator's own token, stashed while impersonating someone else. */
+  impersonatorToken: string | null;
+  /** True whenever `impersonatorToken` is set — independent of the currently
+   * active user's own roles, so the "exit impersonation" control stays
+   * available even if the impersonated user isn't a super admin. */
+  isImpersonating: boolean;
+  isImpersonationLoading: boolean;
+  // ────────────────────────────────────────────────────────────────────────
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => void;
+  impersonateUser: (userId: string) => Promise<void>;
+  stopImpersonating: () => void;
   setUser: (user: AuthUser) => void;
   /**
    * Merge a partial set of basic profile fields (name, email, avatar) into
@@ -134,6 +147,25 @@ function getLoginErrorMessage(error: unknown): string {
   return "Login failed. Please check your credentials and try again.";
 }
 
+/**
+ * Clear persisted, identity-scoped caches when switching identities
+ * (logout, impersonate, or exit-impersonation). Non-persisted zustand
+ * stores are left alone here — they're flushed by the full page reload
+ * that follows an impersonation switch.
+ */
+function resetIdentityScopedCaches() {
+  try {
+    useDsprStore.getState().reset();
+    useSelectedStoreStore.getState().clearSelectedStore();
+    useSelectedStoreStore.persist.clearStorage();
+    if (useScreenProjectPiPStore.getState().activeStation) {
+      useScreenProjectPiPStore.getState().closePiP();
+    }
+  } catch {
+    // ignore client-side cache cleanup failures
+  }
+}
+
 function persistUserData(user: AuthUser | null) {
   if (typeof window === "undefined") return;
 
@@ -159,6 +191,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       isInitialized: false,
+      impersonatorToken: null,
+      isImpersonating: false,
+      isImpersonationLoading: false,
 
       login: async (credentials: LoginCredentials) => {
         set({ isLoading: true });
@@ -231,13 +266,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         authService.logout().catch(() => {});
-        try {
-          useDsprStore.getState().reset();
-          useSelectedStoreStore.getState().clearSelectedStore();
-          useSelectedStoreStore.persist.clearStorage();
-        } catch {
-          // ignore client-side cache cleanup failures during logout
-        }
+        resetIdentityScopedCaches();
         set({
           user: null,
           token: null,
@@ -248,8 +277,47 @@ export const useAuthStore = create<AuthState>()(
           authRules: [],
           overviewStores: [],
           isAuthenticated: false,
+          impersonatorToken: null,
+          isImpersonating: false,
         });
         persistUserData(null);
+      },
+
+      impersonateUser: async (userId: string) => {
+        if (get().isImpersonationLoading) return;
+        set({ isImpersonationLoading: true });
+        try {
+          const { token: newToken } = await authService.impersonate(userId);
+          const state = get();
+          const impersonatorToken = state.isImpersonating
+            ? state.impersonatorToken
+            : state.token;
+
+          resetIdentityScopedCaches();
+
+          set({
+            token: newToken,
+            impersonatorToken,
+            isImpersonating: true,
+            isImpersonationLoading: false,
+          });
+        } catch (error) {
+          set({ isImpersonationLoading: false });
+          throw error;
+        }
+      },
+
+      stopImpersonating: () => {
+        const { impersonatorToken, isImpersonationLoading } = get();
+        if (!impersonatorToken || isImpersonationLoading) return;
+
+        resetIdentityScopedCaches();
+
+        set({
+          token: impersonatorToken,
+          impersonatorToken: null,
+          isImpersonating: false,
+        });
       },
 
       setUser: (user: AuthUser) => {
@@ -338,6 +406,8 @@ export const useAuthStore = create<AuthState>()(
               overviewStores: [],
               isAuthenticated: false,
               isLoading: false,
+              impersonatorToken: null,
+              isImpersonating: false,
             });
             persistUserData(null);
           }
@@ -352,6 +422,8 @@ export const useAuthStore = create<AuthState>()(
             overviewStores: [],
             isAuthenticated: false,
             isLoading: false,
+            impersonatorToken: null,
+            isImpersonating: false,
           });
           persistUserData(null);
         }
@@ -467,6 +539,8 @@ export const useAuthStore = create<AuthState>()(
       ),
       partialize: (state) => ({
         token: state.token,
+        impersonatorToken: state.impersonatorToken,
+        isImpersonating: state.isImpersonating,
       }),
       onRehydrateStorage: () => (state) => {
         if (typeof window !== "undefined") {

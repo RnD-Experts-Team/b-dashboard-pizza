@@ -23,6 +23,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Store,
   Calendar as CalendarIcon,
   Clock,
@@ -30,12 +36,15 @@ import {
   CheckCircle2,
   AlertTriangle,
   Camera,
+  ImageDown,
+  MoreVertical,
   RefreshCw,
   ShieldAlert,
   Pizza,
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildDsprReportHtml } from "@/components/dspr/dspr-report-template";
 import { V1Section } from "./v1-section";
 import {
   V1SalesTrendCard,
@@ -69,6 +78,7 @@ import {
   V1QaRatingsCard,
   V1MaintenanceCard,
   V1CleaningReviewCard,
+  V1CustomerServiceCard,
 } from "./cards";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
@@ -175,6 +185,7 @@ export function DashboardV1() {
   // ── Screenshot ────────────────────────────────────────────────────────
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isCapturingReport, setIsCapturingReport] = useState(false);
 
   const handleScreenshot = useCallback(async () => {
     if (!dashboardRef.current || isCapturing) return;
@@ -213,6 +224,68 @@ export function DashboardV1() {
       setIsCapturing(false);
     }
   }, [isCapturing, selectedStore, selectedDate]);
+
+  // ── Screenshot the printable "Focus on the Five" HTML report as a PNG ───
+  // Renders the report off-screen in a hidden iframe (so its own fonts/CSS
+  // apply), waits for it to finish loading, then captures it with the same
+  // html2canvas approach as the live dashboard screenshot.
+  const handleScreenshotReport = useCallback(async () => {
+    if (!data || isCapturingReport) return;
+    setIsCapturingReport(true);
+
+    const html = buildDsprReportHtml(data, selectedDate);
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.top = "0";
+    iframe.style.left = "-99999px";
+    iframe.style.width = "1180px";
+    iframe.style.height = "2000px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("Failed to render report"));
+        iframe.srcdoc = html;
+      });
+
+      const doc = iframe.contentDocument;
+      const dashboardEl = doc?.querySelector<HTMLElement>(".dashboard");
+      if (!doc || !dashboardEl) throw new Error("Report content did not render");
+
+      try {
+        await doc.fonts?.ready;
+      } catch {
+        // ignore — fall through to the fixed delay below
+      }
+      await new Promise((r) => setTimeout(r, 600));
+
+      iframe.style.height = `${dashboardEl.scrollHeight}px`;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const canvas = await html2canvas(dashboardEl, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#efefef",
+        logging: false,
+        imageTimeout: 8000,
+      });
+
+      const storeName = selectedStore?.storeId ?? selectedStore?.id ?? "store";
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const link = document.createElement("a");
+      link.download = `DashboardV1-Report-${storeName}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Report screenshot failed:", err);
+    } finally {
+      document.body.removeChild(iframe);
+      setIsCapturingReport(false);
+    }
+  }, [data, isCapturingReport, selectedDate, selectedStore]);
 
   // ── Loading / empty / error states ──────────────────────────────────────
   if (isLoading && !data) {
@@ -388,25 +461,33 @@ export function DashboardV1() {
             <TooltipContent>{isRefreshing ? "Refreshing…" : "Refresh report"}</TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 data-screenshot-btn
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={handleScreenshot}
-                disabled={isCapturing}
+                title="Export options"
               >
-                {isCapturing ? (
+                {isCapturing || isCapturingReport ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
-                  <Camera className="h-3 w-3" />
+                  <MoreVertical className="h-3 w-3" />
                 )}
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>{isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}</TooltipContent>
-          </Tooltip>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={handleScreenshot} disabled={isCapturing}>
+                <Camera className="h-3.5 w-3.5 me-2" />
+                {isCapturing ? "Capturing…" : "Screenshot (Ultra HD)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={handleScreenshotReport} disabled={!data || isCapturingReport}>
+                <ImageDown className="h-3.5 w-3.5 me-2" />
+                {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -527,6 +608,7 @@ export function DashboardV1() {
         <V1ComplaintsCard data={hooksWbr.data?.complaints} isLoading={hooksWbr.isLoading} span={2} />
         <V1FeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} span={2} />
         <V1CleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} span={2} />
+        <V1CustomerServiceCard data={wbrData?.["customer-service"]} isLoading={isLoading} span={2} />
       </V1Section>
     </div>
   );

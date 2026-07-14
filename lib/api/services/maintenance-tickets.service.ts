@@ -859,12 +859,12 @@ export const maintenanceTicketsService = {
     }
   },
 
-  /** Load catalog technicians (for dropdowns) */
+  /** Load catalog technicians (for dropdowns). Requests a large page so all technicians come back in one shot. */
   async getCatalogTechnicians(signal?: AbortSignal): Promise<CatalogTechnician[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogTechnician[] }>(
-        "/api/maintenance-tickets/catalog/technicians",
+        "/api/maintenance-tickets/catalog/technicians?per_page=1000",
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           timeout: 15_000,

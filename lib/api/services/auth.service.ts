@@ -276,6 +276,27 @@ export const authService = {
     return data;
   },
 
+  /**
+   * Start impersonating another user. The upstream response envelope is
+   * unconfirmed until tested against the real backend, so both a nested
+   * `data.token` (matches login/getGeneralOverview) and a flat `token`
+   * are handled here.
+   */
+  impersonate: async (userId: string): Promise<{ token: string }> => {
+    const { data } = await axiosClient.post<{
+      success?: boolean;
+      message?: string;
+      data?: { token?: string };
+      token?: string;
+    }>(`/auth/impersonate/${userId}`);
+
+    const token = data?.data?.token ?? data?.token;
+    if (!token) {
+      throw new Error("Impersonation response did not include a token.");
+    }
+    return { token };
+  },
+
   updateMe: async (payload: {
     name: string;
     email: string;
