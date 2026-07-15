@@ -5,9 +5,8 @@ import { format, parseISO } from "date-fns";
 import { SpeedometerGauge, type SpeedZone } from "@/components/dspr/speedometer-gauge";
 import {
   WtdComparisonDialog,
-  ComparisonTable,
+  ComparisonGrid,
 } from "@/components/dspr/wtd-comparison-dialog";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CalendarDays, Gauge } from "lucide-react";
 import { V1Card } from "../v1-card";
@@ -70,11 +69,13 @@ export function V1LaborCard({
 }) {
   const hasWeekly = weeklyValue !== undefined;
   const hasWeeklyLabor = weeklyLaborEntries && weeklyLaborEntries.length > 0;
+  const hasLaborByDay = laborWeekToDateByDay && Object.keys(laborWeekToDateByDay).length > 0;
   const canExpand = hasWeekly || !!hasWeeklyLabor;
 
   const [view, setView] = useState<"day" | "wtd">("day");
   const [activeTab, setActiveTab] = useState<"labor" | "final">("labor");
   const [open, setOpen] = useState(false);
+  const [dialogTab, setDialogTab] = useState<"by-day" | "final">("by-day");
 
   const isWtd = view === "wtd" && hasWeekly;
   const activeGaugeValue = isWtd ? weeklyValue! : value;
@@ -180,33 +181,64 @@ export function V1LaborCard({
           title="Labor"
           badgeText="Daily · WTD · Final Labor"
         >
+        <div className="h-[560px] overflow-y-auto pr-1">
           {hasWeekly && (
-            <ComparisonTable
-              rows={[
-                {
-                  label: "Labor %",
-                  daily: `${value.toFixed(1)}%`,
-                  wtd: `${weeklyValue!.toFixed(1)}%`,
-                  dailyNum: value,
-                  wtdNum: weeklyValue!,
-                  higherIsBetter: false,
-                },
-                ...(weeklyAvgValue !== undefined
-                  ? [
-                      {
-                        label: "WTD Daily Avg",
-                        daily: "—",
-                        wtd: `${weeklyAvgValue.toFixed(1)}%`,
-                        higherIsBetter: false,
-                      },
-                    ]
-                  : []),
-              ]}
+            <ComparisonGrid
+              daily={
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+                    {value.toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Labor % Today</p>
+                  <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                    Target: 19–24%
+                  </p>
+                </div>
+              }
+              wtd={
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-primary tabular-nums">
+                    {(weeklyAvgValue ?? weeklyValue!).toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Labor % (WTD Avg)</p>
+                  <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                    Target: 19–24%
+                  </p>
+                </div>
+              }
             />
           )}
 
+          {/* Labor by Day / Final Labor — tabs when both are available */}
+          {hasLaborByDay && hasWeeklyLabor && (
+            <div className="mt-5 flex gap-1 rounded-md bg-muted/60 p-0.5 w-fit">
+              <button
+                className={cn(
+                  "text-[10px] font-medium rounded px-2.5 py-1 transition-colors",
+                  dialogTab === "by-day"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => setDialogTab("by-day")}
+              >
+                Labor by Day
+              </button>
+              <button
+                className={cn(
+                  "text-[10px] font-medium rounded px-2.5 py-1 transition-colors",
+                  dialogTab === "final"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => setDialogTab("final")}
+              >
+                Final Labor
+              </button>
+            </div>
+          )}
+
           {/* Labor by Day — WTD breakdown */}
-          {laborWeekToDateByDay && Object.keys(laborWeekToDateByDay).length > 0 && (
+          {laborWeekToDateByDay && Object.keys(laborWeekToDateByDay).length > 0 && (!hasWeeklyLabor || dialogTab === "by-day") && (
             <div className="mt-5">
               <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
                 <CalendarDays className="h-3 w-3" />
@@ -262,7 +294,7 @@ export function V1LaborCard({
           )}
 
           {/* Final Labor — 6-week history */}
-          {hasWeeklyLabor && (
+          {hasWeeklyLabor && (!hasLaborByDay || dialogTab === "final") && (
             <div className="mt-5">
               <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
                 <Gauge className="h-3 w-3" />
@@ -308,7 +340,7 @@ export function V1LaborCard({
                         {entry.labor != null ? `${entry.labor.toFixed(1)}%` : "—"}
                       </span>
                       {entry.total_hours > 0 && (
-                        <span className="text-[9px] text-muted-foreground w-16 text-right tabular-nums hidden sm:block">
+                        <span className="text-[12px] font-semibold text-foreground w-16 text-right tabular-nums hidden sm:block">
                           {entry.total_hours.toFixed(1)} hrs
                         </span>
                       )}
@@ -317,20 +349,13 @@ export function V1LaborCard({
                           {label}
                         </span>
                       )}
-                      {isCurrentWeek && (
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] py-0 h-4 px-1.5 shrink-0"
-                        >
-                          Current
-                        </Badge>
-                      )}
                     </div>
                   );
                 })}
               </div>
             </div>
           )}
+        </div>
         </WtdComparisonDialog>
       )}
     </V1Card>

@@ -7,6 +7,7 @@ import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
+import type { StationStateMsg } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
 import { ObserverDialog } from "./observer-dialog";
 import { useScreenProject } from "@/lib/hooks/use-screen-project";
@@ -29,6 +30,14 @@ interface ScreenState {
   volume: number;
   /** Whether the supervisor's own camera is published into this room */
   myCamEnabled: boolean;
+  /** Station remote control */
+  stationMicEnabled:  boolean;
+  stationCamEnabled:  boolean;
+  stationAudioInput:  string;
+  stationVideoInput:  string;
+  stationAudioOutput: string;
+  stationFullscreen:  boolean;
+  stationDevices:     StationStateMsg | null;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -222,6 +231,13 @@ export function ScreenProjectView() {
           videoEnabled: true,
           volume: 1,
           myCamEnabled: false,
+          stationMicEnabled:  true,
+          stationCamEnabled:  true,
+          stationAudioInput:  "",
+          stationVideoInput:  "",
+          stationAudioOutput: "",
+          stationFullscreen:  false,
+          stationDevices:     null,
         };
       });
       return next;
@@ -392,6 +408,47 @@ export function ScreenProjectView() {
       return next;
     });
   }, [anyMyCamEnabled]);
+
+  // ── Station remote control handlers ──────────────────────────────────────
+  const handleToggleStationMic = useCallback((roomName: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationMicEnabled: !prev[roomName].stationMicEnabled },
+    }));
+  }, []);
+
+  const handleToggleStationCam = useCallback((roomName: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationCamEnabled: !prev[roomName].stationCamEnabled },
+    }));
+  }, []);
+
+  const handleToggleStationFullscreen = useCallback((roomName: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationFullscreen: !prev[roomName].stationFullscreen },
+    }));
+  }, []);
+
+  const handleStationDeviceChange = useCallback((roomName: string, kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: {
+        ...prev[roomName],
+        stationAudioInput:  kind === "audioinput"  ? deviceId : prev[roomName].stationAudioInput,
+        stationVideoInput:  kind === "videoinput"  ? deviceId : prev[roomName].stationVideoInput,
+        stationAudioOutput: kind === "audiooutput" ? deviceId : prev[roomName].stationAudioOutput,
+      },
+    }));
+  }, []);
+
+  const handleStationStateReceived = useCallback((roomName: string, state: StationStateMsg) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationDevices: state },
+    }));
+  }, []);
 
   const handleSidePanelWheel = useCallback(
     (e: WheelEvent) => {
@@ -826,6 +883,17 @@ export function ScreenProjectView() {
                   storeId={storeId}
                   onRetry={refetch}
                   className="h-full w-full"
+                  stationMicEnabled={screenStates[s.room_name]?.stationMicEnabled ?? true}
+                  stationCamEnabled={screenStates[s.room_name]?.stationCamEnabled ?? true}
+                  stationAudioInput={screenStates[s.room_name]?.stationAudioInput ?? ""}
+                  stationVideoInput={screenStates[s.room_name]?.stationVideoInput ?? ""}
+                  stationAudioOutput={screenStates[s.room_name]?.stationAudioOutput ?? ""}
+                  stationFullscreen={screenStates[s.room_name]?.stationFullscreen ?? false}
+                  onToggleStationMic={() => handleToggleStationMic(s.room_name)}
+                  onToggleStationCam={() => handleToggleStationCam(s.room_name)}
+                  onToggleStationFullscreen={() => handleToggleStationFullscreen(s.room_name)}
+                  onStationDeviceChange={(kind, deviceId) => handleStationDeviceChange(s.room_name, kind, deviceId)}
+                  onStationStateReceived={(state) => handleStationStateReceived(s.room_name, state)}
                 />
               </motion.div>
             );
