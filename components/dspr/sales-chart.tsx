@@ -11,6 +11,16 @@ import { cn } from "@/lib/utils";
 import { WtdComparisonDialog } from "./wtd-comparison-dialog";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
+function laborColor(v: number): string {
+  if (v <= 10) return "#EF4444";
+  if (v <= 15) return "#EAB308";
+  if (v <= 19) return "#F97316";
+  if (v <= 24) return "#22C55E";
+  if (v <= 29) return "#F97316";
+  if (v <= 39) return "#EAB308";
+  return "#EF4444";
+}
+
 const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
   loading: () => <Skeleton className="h-50 w-full" />,
@@ -53,6 +63,8 @@ interface SalesChartProps {
   currencyPrefix?: string;
   /** Grid show/hide */
   grid?: boolean;
+  /** Daily labor % keyed by date string, from labor_week_to_date_by_day */
+  laborWeekToDateByDay?: Record<string, { value: number; percent: number }>;
   className?: string;
 }
 
@@ -75,6 +87,7 @@ export function SalesChart({
   tooltip = true,
   currencyPrefix = "$",
   grid = true,
+  laborWeekToDateByDay,
   className,
 }: SalesChartProps) {
   const { resolvedTheme } = useTheme();
@@ -112,6 +125,7 @@ export function SalesChart({
       const lyDate = lyDates[i];
       return {
         dayName: DAY_NAMES[i] ?? `Day ${i + 1}`,
+        twDate: twDate ?? null,
         twDateLabel: fmtDate(twDate),
         pwDateLabel: fmtDate(pwDate),
         lyDateLabel: fmtDate(lyDate),
@@ -372,6 +386,7 @@ export function SalesChart({
                   <th className="px-3 py-2 text-right font-semibold text-zinc-500">vs Prev</th>
                   <th className="px-3 py-2 text-right font-semibold" style={{ color: "#FEB019" }}>Same Week LY</th>
                   <th className="px-3 py-2 text-right font-semibold text-zinc-500">vs LY</th>
+                  {laborWeekToDateByDay && <th className="px-3 py-2 text-right font-semibold text-zinc-500">Labor %</th>}
                 </tr>
               </thead>
               <tbody>
@@ -408,6 +423,18 @@ export function SalesChart({
                         {row.lyVal > 0 ? fmt(row.lyVal) : <span className="text-zinc-300 dark:text-zinc-600">—</span>}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">{renderPct(vsLY)}</td>
+                      {laborWeekToDateByDay && (() => {
+                        const entry = row.twDate ? laborWeekToDateByDay[row.twDate] : undefined;
+                        if (!entry || entry.percent === 0) {
+                          return <td className="px-3 py-2 text-right tabular-nums text-zinc-300 dark:text-zinc-600">—</td>;
+                        }
+                        const color = laborColor(entry.percent);
+                        return (
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color }}>
+                            {entry.percent.toFixed(1)}%
+                          </td>
+                        );
+                      })()}
                     </tr>
                   );
                 })}
@@ -446,6 +473,17 @@ export function SalesChart({
                       );
                     })()}
                   </td>
+                  {laborWeekToDateByDay && (() => {
+                    const entries = Object.values(laborWeekToDateByDay).filter(e => e.percent > 0);
+                    if (entries.length === 0) return <td className="px-3 py-2 text-right tabular-nums text-zinc-400">—</td>;
+                    const avg = entries.reduce((s, e) => s + e.percent, 0) / entries.length;
+                    const color = laborColor(avg);
+                    return (
+                      <td className="px-3 py-2 text-right tabular-nums font-bold" style={{ color }}>
+                        {avg.toFixed(1)}%
+                      </td>
+                    );
+                  })()}
                 </tr>
               </tfoot>
             </table>

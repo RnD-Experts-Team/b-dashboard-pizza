@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   Sheet,
   SheetContent,
@@ -10,10 +12,12 @@ import {
 } from "@/components/ui/sheet";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertCircle,
+  BarChart2,
   MapPin,
   Phone,
   Wallet,
@@ -128,6 +132,7 @@ export function EmployeeDetailsSheet({
   open,
   onOpenChange,
 }: EmployeeDetailsSheetProps) {
+  const locale = (useParams()?.locale as string) || "en";
   const { idTypes, attachmentTypes } = useReferenceCatalogStore();
   const [data, setData] = useState<EmployeeV1DetailRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -239,6 +244,20 @@ export function EmployeeDetailsSheet({
                       </div>
                     )}
                   </CardContent>
+
+                  {/* Operational History navigation */}
+                  {storeId && employeeId !== null && (
+                    <div className="border-t border-border/50 px-6 py-3">
+                      <Link
+                        href={`/${locale}/dashboard/employee-profile?storeId=${encodeURIComponent(storeId)}&employeeId=${employeeId}`}
+                      >
+                        <Button variant="outline" size="sm" className="w-full gap-2">
+                          <BarChart2 className="h-4 w-4" />
+                          Operational History
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Personal Markers Strip */}
                   {(data.obsession?.t_shirt || data.obsession?.birth_date) && (

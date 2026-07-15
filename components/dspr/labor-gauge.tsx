@@ -15,6 +15,7 @@ interface WeeklyLaborEntry {
   week_start: string;
   week_end: string;
   labor: number | null;
+  total_hours: number;
 }
 
 // ============================================================================
@@ -55,11 +56,17 @@ function getLaborLabel(value: number): string {
 // Component
 // ============================================================================
 
+interface LaborByDayEntry {
+  value: number;
+  percent: number;
+}
+
 interface LaborGaugeProps {
   value: number;
   weeklyValue?: number;
   weeklyAvgValue?: number;
   weeklyLaborEntries?: WeeklyLaborEntry[];
+  laborWeekToDateByDay?: Record<string, LaborByDayEntry>;
   target?: number;
   title?: string;
   className?: string;
@@ -70,6 +77,7 @@ export function LaborGauge({
   weeklyValue,
   weeklyAvgValue,
   weeklyLaborEntries,
+  laborWeekToDateByDay,
   target,
   title = "Labor",
   className,
@@ -280,6 +288,62 @@ export function LaborGauge({
             </>
           )}
 
+          {/* Labor by Day — WTD breakdown */}
+          {laborWeekToDateByDay && Object.keys(laborWeekToDateByDay).length > 0 && (
+            <div className="mt-5">
+              <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <CalendarDays className="h-3 w-3" />
+                Labor by Day — Week to Date
+              </h4>
+              <div className="space-y-1.5">
+                {Object.entries(laborWeekToDateByDay)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([dateStr, entry]) => {
+                    const barPct = Math.min(100, (entry.percent / 50) * 100);
+                    const color = getLaborColor(entry.percent);
+                    const label = getLaborLabel(entry.percent);
+                    const dayLabel = (() => {
+                      try {
+                        return format(parseISO(dateStr), "EEE, MMM d");
+                      } catch {
+                        return dateStr;
+                      }
+                    })();
+                    return (
+                      <div
+                        key={dateStr}
+                        className="flex items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-muted/40"
+                      >
+                        <span className="text-[10px] text-muted-foreground w-28 shrink-0">
+                          {dayLabel}
+                        </span>
+                        <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${barPct}%`, backgroundColor: color }}
+                          />
+                        </div>
+                        <span
+                          className="text-[11px] font-semibold tabular-nums w-12 text-right"
+                          style={{ color }}
+                        >
+                          {entry.percent.toFixed(1)}%
+                        </span>
+                        {entry.value !== 0 && (
+                          <span className="text-[9px] text-muted-foreground w-16 text-right tabular-nums hidden sm:block">
+                            {new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(entry.value)}
+                          </span>
+                        )}
+                        <span className="text-[9px] text-muted-foreground w-20 text-right hidden sm:block">
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* Final Labor — 6-week history */}
           {hasWeeklyLabor && (
             <div className="mt-5">
@@ -326,6 +390,11 @@ export function LaborGauge({
                       >
                         {entry.labor != null ? `${entry.labor.toFixed(1)}%` : "—"}
                       </span>
+                      {entry.total_hours > 0 && (
+                        <span className="text-[9px] text-muted-foreground w-16 text-right tabular-nums hidden sm:block">
+                          {entry.total_hours.toFixed(1)} hrs
+                        </span>
+                      )}
                       {label && entry.labor != null && (
                         <span className="text-[9px] text-muted-foreground w-20 text-right hidden sm:block">
                           {label}

@@ -499,7 +499,7 @@ export function DashboardV1() {
 
       {/* ── Sales & Trends ───────────────────────────────────────────────── */}
       <V1Section category="sales" weekLabel={weekLabel} gridClassName="gap-[7px]">
-        <V1SalesTrendCard sales={sales} span={2} />
+        <V1SalesTrendCard sales={sales} laborWeekToDateByDay={day.labor_week_to_date_by_day} span={2} />
         <V1StoreScoreCard
           upsellingDay={day.upselling?.total_upselling_day}
           upsellingWeek={day.upselling?.total_upselling_week_to_date}
@@ -534,6 +534,7 @@ export function DashboardV1() {
           weeklyValue={day.labor_week_to_date}
           weeklyAvgValue={day.labor_week_to_date_avg}
           weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
+          laborWeekToDateByDay={day.labor_week_to_date_by_day}
           span={1}
         />
         <V1GoToCard data={wbrData?.["go-to"]} isLoading={isLoading} span={1} />

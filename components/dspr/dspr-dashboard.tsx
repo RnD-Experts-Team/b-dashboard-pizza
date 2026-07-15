@@ -846,6 +846,7 @@ export function DsprDashboard() {
           sales={sales}
           height={190}
           toolbar={false}
+          laborWeekToDateByDay={day.labor_week_to_date_by_day}
           className="md:col-span-2 lg:col-span-2"
         />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
@@ -889,6 +890,7 @@ export function DsprDashboard() {
           weeklyValue={day.labor_week_to_date}
           weeklyAvgValue={day.labor_week_to_date_avg}
           weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
+          laborWeekToDateByDay={day.labor_week_to_date_by_day}
         />
       </div>
 

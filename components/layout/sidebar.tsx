@@ -45,6 +45,7 @@ import {
   Ruler,
   Link2,
   LogOut,
+  UserSearch,
 } from "lucide-react";
 import {
   Dialog,
@@ -460,6 +461,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
         ],
       },
+      // {
+      //   title: t("employeeDebriefHistory"),
+      //   href: `/${locale}/dashboard/employee-debrief-history`,
+      //   icon: UserSearch,
+      //   requirements: [
+      //     { service: "Data", method: "GET", path: "/stores/*/employee-debriefs/employee/*", storeId: effectiveStoreId },
+      //   ],
+      // },
     ],
   };
 
