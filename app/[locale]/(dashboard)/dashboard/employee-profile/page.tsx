@@ -29,6 +29,8 @@ import {
   User,
   Heart,
   Shirt,
+  TrendingUp,
+  ScrollText,
 } from "lucide-react";
 import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
 import type { OpStatusHistory, OpEmployeeStore, OpObsession } from "@/types/employee-operational.types";
@@ -100,54 +102,42 @@ function ProfileSkeleton() {
 
 function OperationalTableSkeleton() {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-36">Date</TableHead>
-            <TableHead>Metric</TableHead>
-            <TableHead className="w-32 text-right">Value</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <TableRow key={i}>
-              <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-              <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-16" /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <div className="grid grid-cols-[10rem_1fr_9rem] border-b bg-muted/40 px-5 py-3">
+        <Skeleton className="h-3 w-10" />
+        <Skeleton className="h-3 w-14" />
+        <Skeleton className="ml-auto h-3 w-10" />
+      </div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="grid grid-cols-[10rem_1fr_9rem] items-center border-b px-5 py-3.5 last:border-0">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="ml-auto h-6 w-16 rounded-md" />
+        </div>
+      ))}
     </div>
   );
 }
 
 function DebriefTableSkeleton() {
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-16">ID</TableHead>
-            <TableHead className="w-32">Date</TableHead>
-            <TableHead className="hidden sm:table-cell">Author</TableHead>
-            <TableHead className="hidden lg:table-cell">Notes</TableHead>
-            <TableHead className="w-24 text-right">Attachments</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <TableRow key={i}>
-              <TableCell><Skeleton className="h-4 w-8" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-              <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-28" /></TableCell>
-              <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-48" /></TableCell>
-              <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-8" /></TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div className="overflow-hidden rounded-lg border border-border/60">
+      <div className="grid grid-cols-[4rem_8rem_1fr_2fr_6rem] border-b bg-muted/40 px-5 py-3">
+        <Skeleton className="h-3 w-6" />
+        <Skeleton className="h-3 w-10" />
+        <Skeleton className="h-3 w-12" />
+        <Skeleton className="h-3 w-10" />
+        <Skeleton className="ml-auto h-3 w-14" />
+      </div>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="grid grid-cols-[4rem_8rem_1fr_2fr_6rem] items-center border-b px-5 py-3.5 last:border-0">
+          <Skeleton className="h-5 w-10 rounded-md" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="ml-auto h-5 w-8 rounded-full" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -438,31 +428,41 @@ function EmployeeProfileContent() {
           {opLoading && !entries.length ? (
             <OperationalTableSkeleton />
           ) : (
-            <div className="rounded-md border">
+            <div className="overflow-hidden rounded-lg border border-border/60">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-36">Date</TableHead>
-                    <TableHead>Metric</TableHead>
-                    <TableHead className="w-32 text-right">Value</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-44 pl-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Date</TableHead>
+                    <TableHead className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Metric</TableHead>
+                    <TableHead className="w-36 pr-5 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Value</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {entries.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
-                        No operational records found for this employee.
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={3} className="py-16 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted/60 ring-1 ring-border">
+                            <TrendingUp className="h-6 w-6 text-muted-foreground/40" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">No operational records</p>
+                            <p className="text-xs text-muted-foreground/60">Performance data will appear here once recorded.</p>
+                          </div>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
                     entries.map((entry, i) => (
-                      <TableRow key={`${entry.metric_date}-${entry.column_key}-${i}`}>
-                        <TableCell className="text-sm">{formatDate(entry.metric_date)}</TableCell>
-                        <TableCell className="text-sm">{entry.column_name}</TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {entry.value_numeric != null
-                            ? entry.value_numeric
-                            : entry.value || <span className="text-muted-foreground">—</span>}
+                      <TableRow key={`${entry.metric_date}-${entry.column_key}-${i}`} className="border-l-2 border-l-transparent transition-colors hover:border-l-primary/60 hover:bg-muted/20">
+                        <TableCell className="w-44 pl-5 text-sm text-muted-foreground">{formatDate(entry.metric_date)}</TableCell>
+                        <TableCell className="text-sm font-medium">{entry.column_name}</TableCell>
+                        <TableCell className="w-36 pr-5 text-right">
+                          <span className="inline-flex items-center rounded-md bg-muted px-2.5 py-1 font-mono text-xs font-semibold tabular-nums">
+                            {entry.value_numeric != null
+                              ? entry.value_numeric
+                              : entry.value || <span className="text-muted-foreground/60">—</span>}
+                          </span>
                         </TableCell>
                       </TableRow>
                     ))
@@ -492,22 +492,30 @@ function EmployeeProfileContent() {
           {debriefLoading && !items.length ? (
             <DebriefTableSkeleton />
           ) : (
-            <div className="rounded-md border">
+            <div className="overflow-hidden rounded-lg border border-border/60">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">ID</TableHead>
-                    <TableHead className="w-32">Date</TableHead>
-                    <TableHead className="hidden sm:table-cell">Author</TableHead>
-                    <TableHead className="hidden lg:table-cell">Notes</TableHead>
-                    <TableHead className="w-24 text-right">Attachments</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-16 pl-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">ID</TableHead>
+                    <TableHead className="w-36 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Date</TableHead>
+                    <TableHead className="hidden w-40 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70 sm:table-cell">Author</TableHead>
+                    <TableHead className="hidden text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70 lg:table-cell">Notes</TableHead>
+                    <TableHead className="w-28 pr-5 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Attachments</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                        No debrief notes found for this employee.
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={5} className="py-16 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted/60 ring-1 ring-border">
+                            <ScrollText className="h-6 w-6 text-muted-foreground/40" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">No debrief notes</p>
+                            <p className="text-xs text-muted-foreground/60">Notes added during debriefs will appear here.</p>
+                          </div>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -521,23 +529,29 @@ function EmployeeProfileContent() {
                       return (
                         <TableRow
                           key={item.id}
-                          className="cursor-pointer"
+                          className="cursor-pointer border-l-2 border-l-transparent transition-colors hover:border-l-primary/60 hover:bg-muted/20"
                           onClick={() => { setSelectedItem(item); setSheetOpen(true); }}
                         >
-                          <TableCell className="font-mono text-sm">{item.id}</TableCell>
-                          <TableCell className="text-sm">{formatDate(item.date ?? item.createdAt)}</TableCell>
+                          <TableCell className="pl-5">
+                            <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-semibold tabular-nums">
+                              #{item.id}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{formatDate(item.date ?? item.createdAt)}</TableCell>
                           <TableCell className="hidden sm:table-cell">
                             {item.authorName
-                              ? <span className="text-sm">{item.authorName}</span>
-                              : <span className="text-muted-foreground">—</span>}
+                              ? <span className="text-sm font-medium">{item.authorName}</span>
+                              : <span className="text-muted-foreground/50">—</span>}
                           </TableCell>
-                          <TableCell className="hidden max-w-xs truncate lg:table-cell" title={item.notes ?? undefined}>
-                            {notesPreview ?? <span className="text-muted-foreground">—</span>}
+                          <TableCell className="hidden max-w-xs lg:table-cell" title={item.notes ?? undefined}>
+                            {notesPreview
+                              ? <span className="truncate text-sm text-muted-foreground">{notesPreview}</span>
+                              : <span className="text-muted-foreground/50">—</span>}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="pr-5 text-right">
                             {attachmentCount > 0
-                              ? <Badge variant="secondary">{attachmentCount}</Badge>
-                              : <span className="text-muted-foreground">—</span>}
+                              ? <Badge variant="secondary" className="font-mono tabular-nums">{attachmentCount}</Badge>
+                              : <span className="text-muted-foreground/50">—</span>}
                           </TableCell>
                         </TableRow>
                       );
