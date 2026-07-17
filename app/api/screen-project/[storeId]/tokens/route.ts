@@ -30,18 +30,19 @@ export async function POST(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
-    const upstream = await fetch(
-      `${SCREEN_PROJECT_BASE_URL}/${storeId}/tokens/supervisor`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: authorization,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
+    const stationsParam = request.nextUrl.searchParams.getAll("stations[]");
+    const upstreamUrl = new URL(`${SCREEN_PROJECT_BASE_URL}/${storeId}/tokens/supervisor`);
+    stationsParam.forEach(id => upstreamUrl.searchParams.append("stations[]", id));
+
+    const upstream = await fetch(upstreamUrl.toString(), {
+      method: "POST",
+      headers: {
+        Authorization: authorization,
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
-    );
+      signal: controller.signal,
+    });
 
     clearTimeout(timer);
 

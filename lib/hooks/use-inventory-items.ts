@@ -8,7 +8,7 @@ import {
   getInventoryErrorMessage,
   isCanceledError,
 } from "@/lib/api/inventory-errors";
-import type { Item, ListParams } from "@/types/inventory.types";
+import type { Item, ItemListParams } from "@/types/inventory.types";
 
 /**
  * Items list + mutations.
@@ -22,16 +22,18 @@ import type { Item, ListParams } from "@/types/inventory.types";
  * and 403s. Super-admins bypass backend authz and may have no assigned store,
  * so they fetch regardless.
  */
-export function useItems(initialParams?: ListParams, storeId?: string) {
+export function useItems(initialParams?: ItemListParams, storeId?: string) {
   const {
     items,
     pagination,
     isLoading,
     isDeleting,
+    isToggling,
     error,
     deleteError,
     fetchItems,
     deleteItem,
+    toggleActive,
     clearErrors,
   } = useItemsStore();
 
@@ -43,7 +45,7 @@ export function useItems(initialParams?: ListParams, storeId?: string) {
   }, [canFetch, fetchItems, initialParams, storeId]);
 
   const refetch = useCallback(
-    (params?: ListParams) => fetchItems({ ...initialParams, ...params }, storeId),
+    (params?: ItemListParams) => fetchItems({ ...initialParams, ...params }, storeId),
     [fetchItems, initialParams, storeId]
   );
 
@@ -57,11 +59,13 @@ export function useItems(initialParams?: ListParams, storeId?: string) {
     pagination,
     isLoading,
     isDeleting,
+    isToggling,
     error,
     deleteError,
     refetch,
     handlePageChange,
     deleteItem,
+    toggleActive,
     clearErrors,
   };
 }

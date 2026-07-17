@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { OperationalEntry, OperationalResult } from "@/types/employee-operational.types";
 import type {
   CreateHiringRequestPayload,
   CreateHiringRequestPayloadV1,
@@ -382,5 +383,59 @@ export const hiringService = {
       ),
     );
     return [...firstData, ...rest.flatMap((r) => r.data.data)];
+  },
+
+  async getEmployeeOperational(
+    storeId: string,
+    employeeId: string | number,
+    opts: {
+      page?: number;
+      perPage?: number;
+      dateFrom?: string;
+      dateTo?: string;
+      sortDir?: "asc" | "desc";
+    } = {},
+    signal?: AbortSignal,
+  ): Promise<OperationalResult> {
+    const { page = 1, perPage = 25, dateFrom, dateTo, sortDir = "desc" } = opts;
+
+    const params: Record<string, string | number> = {
+      paginated: 1,
+      page,
+      per_page: perPage,
+      sort_dir: sortDir,
+    };
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+
+    const { data: body } = await axios.get(
+      `/api/v1/stores/${encodeURIComponent(storeId)}/employees/${encodeURIComponent(String(employeeId))}/operational`,
+      { headers: buildHeaders(), params, timeout: 15_000, signal },
+    );
+
+    const opData = body?.data ?? body;
+    const employee = opData?.employee ?? {};
+    const paginator = opData?.operational ?? {};
+    const rawEntries: unknown[] = Array.isArray(paginator?.data) ? paginator.data : [];
+
+    const entries: OperationalEntry[] = rawEntries.map((e: unknown) => {
+      const row = e as Record<string, unknown>;
+      return {
+        metric_date: String(row.metric_date ?? ""),
+        store_number: String(row.store_number ?? ""),
+        column_name: String(row.column_name ?? ""),
+        column_key: String(row.column_key ?? ""),
+        value: String(row.value ?? ""),
+        value_numeric: row.value_numeric != null ? Number(row.value_numeric) : null,
+      };
+    });
+
+    return {
+      employee,
+      entries,
+      currentPage: paginator?.current_page ?? null,
+      lastPage: paginator?.last_page ?? null,
+      total: paginator?.total ?? null,
+    };
   },
 };

@@ -777,6 +777,7 @@ export interface WeeklyLaborEntry {
   week_start: string;
   week_end: string;
   labor: number | null;
+  total_hours: number;
 }
 
 export interface WeeklyLabor {

@@ -112,7 +112,9 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
         payload,
         get().currentStoreId ?? undefined
       );
-      // Merge the updated counts/edits back into the loaded entry detail.
+      // Merge the updated counts back immediately for instant row feedback.
+      const entryId = get().currentEntry?.id;
+      const storeId = get().currentStoreId ?? undefined;
       set((state) => {
         if (!state.currentEntry) return { isSaving: false };
         return {
@@ -125,6 +127,22 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
           },
         };
       });
+      // Re-fetch the full entry silently (no loading state) so the summary
+      // metrics (edited_items_count) and the per-item edits history update
+      // without requiring the user to reopen the sheet.
+      if (entryId) {
+        try {
+          const fresh = await entryService.getHistory(entryId, storeId);
+          set({ currentEntry: fresh, hasHistoryAccess: true });
+        } catch {
+          try {
+            const fresh = await entryService.get(entryId, storeId);
+            set({ currentEntry: fresh });
+          } catch {
+            // Silent — the already-merged counts are still correct.
+          }
+        }
+      }
       return updated;
     } catch (error) {
       set({ saveError: getInventoryErrorMessage(error), isSaving: false });

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { itemService } from "@/lib/api/services/inventory.service";
 import { getInventoryErrorMessage, isCanceledError } from "@/lib/api/inventory-errors";
-import type { Item, ItemFormValues, ListParams } from "@/types/inventory.types";
+import type { Item, ItemFormValues, ItemListParams } from "@/types/inventory.types";
 import type { PaginatedResponse } from "@/types/api.types";
 
 /**
@@ -16,17 +16,19 @@ interface ItemsState {
   isLoadingItem: boolean;
   isSaving: boolean;
   isDeleting: boolean;
+  isToggling: boolean;
 
   error: string | null;
   itemError: string | null;
   saveError: string | null;
   deleteError: string | null;
 
-  fetchItems: (params?: ListParams, storeId?: string) => Promise<void>;
+  fetchItems: (params?: ItemListParams, storeId?: string) => Promise<void>;
   fetchItem: (id: number, storeId?: string) => Promise<Item | null>;
   createItem: (values: ItemFormValues) => Promise<Item>;
   updateItem: (id: number, values: ItemFormValues) => Promise<Item>;
   deleteItem: (id: number) => Promise<void>;
+  toggleActive: (id: number, isActive: boolean) => Promise<void>;
   clearErrors: () => void;
 }
 
@@ -38,6 +40,7 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
   isLoadingItem: false,
   isSaving: false,
   isDeleting: false,
+  isToggling: false,
   error: null,
   itemError: null,
   saveError: null,
@@ -105,6 +108,20 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
       }));
     } catch (error) {
       set({ deleteError: getInventoryErrorMessage(error), isDeleting: false });
+      throw error;
+    }
+  },
+
+  toggleActive: async (id, isActive) => {
+    set({ isToggling: true });
+    try {
+      const item = await itemService.patchActive(id, isActive);
+      set((state) => ({
+        items: state.items.map((i) => (i.id === id ? item : i)),
+        isToggling: false,
+      }));
+    } catch (error) {
+      set({ saveError: getInventoryErrorMessage(error), isToggling: false });
       throw error;
     }
   },

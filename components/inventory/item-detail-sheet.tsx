@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- images are served via the
    same-origin /inventory-storage proxy; next/image remote config is unnecessary. */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, ImageOff, Pencil, Store, Trash2, ZoomIn } from "lucide-react";
+import { AlertCircle, ImageOff, Loader2, Pencil, Power, PowerOff, Store, ZoomIn } from "lucide-react";
 
 import { useItemDetail } from "@/lib/hooks/use-inventory-items";
 import type { Item } from "@/types/inventory.types";
@@ -98,9 +98,9 @@ interface ItemDetailSheetProps {
   /** Show the Edit action; invoked with the loaded item. */
   canEdit?: boolean;
   onEdit?: (item: Item) => void;
-  /** Show the Delete action; invoked with the loaded item. */
-  canDelete?: boolean;
-  onDelete?: (item: Item) => void;
+  /** Show the Activate/Deactivate toggle; invoked with the item and the desired new state. */
+  canToggle?: boolean;
+  onToggle?: (item: Item, targetIsActive: boolean) => Promise<void>;
 }
 
 export function ItemDetailSheet({
@@ -110,11 +110,31 @@ export function ItemDetailSheet({
   onOpenChange,
   canEdit,
   onEdit,
-  canDelete,
-  onDelete,
+  canToggle,
+  onToggle,
 }: ItemDetailSheetProps) {
   const { item, isLoading, error } = useItemDetail(open ? itemId : null, storeId);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Reset optimistic state whenever the sheet opens a different item.
+  useEffect(() => { setLocalIsActive(null); }, [itemId]);
+  const [isToggling, setIsToggling] = useState(false);
+  // Optimistic local override so the badge/button flip instantly after toggle.
+  const [localIsActive, setLocalIsActive] = useState<boolean | null>(null);
+
+  const displayIsActive = localIsActive ?? item?.is_active ?? true;
+
+  const handleToggle = async () => {
+    if (!item || !onToggle) return;
+    const target = !displayIsActive;
+    setIsToggling(true);
+    try {
+      await onToggle(item, target);
+      setLocalIsActive(target);
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   return (
     <Sheet
@@ -134,7 +154,7 @@ export function ItemDetailSheet({
                 {item ? item.ultimatrix_id : "Catalog item detail."}
               </SheetDescription>
             </div>
-            {item && (canEdit || canDelete) && (
+            {item && (canEdit || canToggle) && (
               <div className="flex shrink-0 gap-2">
                 {canEdit && onEdit && (
                   <Button
@@ -146,14 +166,21 @@ export function ItemDetailSheet({
                     Edit
                   </Button>
                 )}
-                {canDelete && onDelete && (
+                {canToggle && onToggle && (
                   <Button
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
-                    onClick={() => onDelete(item)}
+                    onClick={handleToggle}
+                    disabled={isToggling}
                   >
-                    <Trash2 className="me-1.5 h-3.5 w-3.5" />
-                    Delete
+                    {isToggling ? (
+                      <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : displayIsActive ? (
+                      <PowerOff className="me-1.5 h-3.5 w-3.5" />
+                    ) : (
+                      <Power className="me-1.5 h-3.5 w-3.5" />
+                    )}
+                    {displayIsActive ? "Deactivate" : "Activate"}
                   </Button>
                 )}
               </div>
@@ -220,17 +247,28 @@ export function ItemDetailSheet({
                     </div>
                   </div>
 
-                  <Badge
-                    variant="outline"
-                    className="flex shrink-0 items-center gap-1.5 px-3 py-1 text-xs"
-                  >
-                    <Store className="h-3 w-3" />
-                    {item.all_stores
-                      ? "All stores"
-                      : `${item.stores?.length ?? 0} store${
-                          item.stores?.length === 1 ? "" : "s"
-                        }`}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {displayIsActive ? (
+                      <Badge className="bg-green-500 hover:bg-green-500/80 text-xs">
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground text-xs">
+                        Inactive
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className="flex items-center gap-1.5 px-3 py-1 text-xs"
+                    >
+                      <Store className="h-3 w-3" />
+                      {item.all_stores
+                        ? "All stores"
+                        : `${item.stores?.length ?? 0} store${
+                            item.stores?.length === 1 ? "" : "s"
+                          }`}
+                    </Badge>
+                  </div>
                 </div>
 
                 {/* Unit conversions strip */}

@@ -10,7 +10,7 @@ interface Props {
  * or dashboard chrome.
  */
 export default async function PublicInventoryCountPage({ params }: Props) {
-  const { locale, token } = await params;
+  const { token } = await params;
 
   // The app locks html/body to a fixed viewport height (overflow: hidden) —
   // every screen manages its own internal scroll region rather than relying
@@ -18,7 +18,7 @@ export default async function PublicInventoryCountPage({ params }: Props) {
   // PublicCountForm owns the scrollable middle section internally.
   return (
     <main className="h-dvh overflow-hidden bg-background">
-      <PublicCountForm token={token} locale={locale} />
+      <PublicCountForm token={token} />
     </main>
   );
 }

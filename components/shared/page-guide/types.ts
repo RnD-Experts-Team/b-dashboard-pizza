@@ -19,4 +19,6 @@ export interface GuideStep {
   noHighlight?: boolean;
   /** Optional bullet points rendered below the description */
   bullets?: string[];
+  /** If set, renders a copyable URL chip below bullets. Provide a path (e.g. /en/store/03795/stations); full URL is constructed at copy time using window.location.origin. */
+  copyableUrl?: string;
 }

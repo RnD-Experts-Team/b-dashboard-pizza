@@ -21,14 +21,26 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
 
 const DAY_NAMES = ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Mon"];
 
+function laborColor(v: number): string {
+  if (v <= 10) return "#EF4444";
+  if (v <= 15) return "#EAB308";
+  if (v <= 19) return "#F97316";
+  if (v <= 24) return "#22C55E";
+  if (v <= 29) return "#F97316";
+  if (v <= 39) return "#EAB308";
+  return "#EF4444";
+}
+
 /* Fresh weekly-sales chart: this week vs previous week (columns) with last
  * year as a smooth line, in the Sales (emerald) category palette. */
 export function V1SalesTrendCard({
   sales,
+  laborWeekToDateByDay,
   span = 2,
   className,
 }: {
   sales: DsprSales;
+  laborWeekToDateByDay?: Record<string, { value: number; percent: number }>;
   span?: 1 | 2 | 3;
   className?: string;
 }) {
@@ -38,6 +50,7 @@ export function V1SalesTrendCard({
   const prevWeekColor = "#0ea5e9"; // sky-500 — matches Phone blue in hourly channels
   const lineColor = "#f59e0b";
 
+  const twDates = useMemo(() => Object.keys(sales.this_week_by_day), [sales]);
   const thisWeek = useMemo(() => Object.values(sales.this_week_by_day), [sales]);
   const prevWeek = useMemo(() => Object.values(sales.previous_week_by_day), [sales]);
   const lastYear = useMemo(() => Object.values(sales.same_week_last_year_by_day), [sales]);
@@ -145,17 +158,26 @@ export function V1SalesTrendCard({
                 <th className="px-3 py-2 text-right">This Week</th>
                 <th className="px-3 py-2 text-right">Prev Week</th>
                 <th className="px-3 py-2 text-right">Last Year</th>
+                {laborWeekToDateByDay && <th className="px-3 py-2 text-right">Labor %</th>}
               </tr>
             </thead>
             <tbody>
-              {thisWeek.map((tw, i) => (
-                <tr key={i} className="border-b last:border-0">
-                  <td className="px-3 py-2 font-medium">{DAY_NAMES[i] ?? `Day ${i + 1}`}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{tw > 0 ? fmt$(tw) : "—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{prevWeek[i] > 0 ? fmt$(prevWeek[i]) : "—"}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{lastYear[i] > 0 ? fmt$(lastYear[i]) : "—"}</td>
-                </tr>
-              ))}
+              {thisWeek.map((tw, i) => {
+                const laborEntry = laborWeekToDateByDay && twDates[i] ? laborWeekToDateByDay[twDates[i]] : undefined;
+                return (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-3 py-2 font-medium">{DAY_NAMES[i] ?? `Day ${i + 1}`}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{tw > 0 ? fmt$(tw) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{prevWeek[i] > 0 ? fmt$(prevWeek[i]) : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{lastYear[i] > 0 ? fmt$(lastYear[i]) : "—"}</td>
+                    {laborWeekToDateByDay && (
+                      laborEntry && laborEntry.percent > 0
+                        ? <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: laborColor(laborEntry.percent) }}>{laborEntry.percent.toFixed(1)}%</td>
+                        : <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">—</td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

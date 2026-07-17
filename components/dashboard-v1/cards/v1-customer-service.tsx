@@ -1,10 +1,11 @@
 "use client";
 
-import { Users } from "lucide-react";
+import { Users, Smile, DoorOpen, Car } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { fmtNumD, fmtPct, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import type { CustomerService, CustomerServiceEntry } from "@/types/dashboard-report.types";
 import { V1Card } from "../v1-card";
-import { V1Empty, V1MetricGrid, V1Metric } from "../v1-ui";
+import { V1Empty } from "../v1-ui";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1CustomerServiceCard — Dashboard V1, category "quality", period "W".
@@ -18,6 +19,44 @@ function average(
   const values = entries.map((e) => e[field]).filter((v): v is number => v != null);
   if (values.length === 0) return null;
   return values.reduce((s, v) => s + v, 0) / values.length;
+}
+
+function StatBlock({
+  icon: Icon,
+  label,
+  value,
+  direction,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  /** "up" = higher is better (green), "down" = higher is worse (red). */
+  direction: "up" | "down";
+}) {
+  const good = direction === "up";
+  return (
+    <div className="flex flex-1 items-center gap-3 rounded-lg bg-background/55 px-3">
+      <div
+        className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+          good ? "bg-emerald-500/15 dark:bg-emerald-500/20" : "bg-red-500/15 dark:bg-red-500/20",
+        )}
+      >
+        <Icon className={cn("h-4 w-4", good ? "text-emerald-500" : "text-red-500")} />
+      </div>
+      <p className="flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={cn(
+          "shrink-0 text-xl font-bold tabular-nums leading-none",
+          good ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
 }
 
 export function V1CustomerServiceCard({
@@ -44,24 +83,26 @@ export function V1CustomerServiceCard({
       {entries.length === 0 ? (
         <V1Empty icon={Users}>No customer service data this period.</V1Empty>
       ) : (
-        <V1MetricGrid cols={3}>
-          <V1Metric
-            size="sm"
+        <div className="flex h-full flex-col gap-1.5">
+          <StatBlock
+            icon={Smile}
             label="Guest Service"
             value={guestService != null ? fmtPct(guestService) : "—"}
-            accent="text-cyan-600 dark:text-cyan-400"
+            direction="up"
           />
-          <V1Metric
-            size="sm"
+          <StatBlock
+            icon={DoorOpen}
             label="Lobby Points"
             value={lobbyPoints != null ? fmtNumD(lobbyPoints) : "—"}
+            direction="down"
           />
-          <V1Metric
-            size="sm"
-            label="Drive-Thru"
+          <StatBlock
+            icon={Car}
+            label="Drive-Thru Points"
             value={driveThruPoints != null ? fmtNumD(driveThruPoints) : "—"}
+            direction="down"
           />
-        </V1MetricGrid>
+        </div>
       )}
     </V1Card>
   );

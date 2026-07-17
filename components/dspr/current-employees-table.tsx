@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import { useAuth } from "@/lib/auth/use-auth";
@@ -135,6 +135,7 @@ export function CurrentEmployeesTable({
 }: CurrentEmployeesTableProps) {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
+  const router = useRouter();
   const { canAccessRoute } = useAuth();
   const { selectedStore } = useSelectedStoreStore();
   const [week, setWeek] = useState<"current" | "past">("current");
@@ -273,7 +274,12 @@ export function CurrentEmployeesTable({
                   rows.map((employee) => (
                     <TableRow
                       key={employee.employee_id}
-                      className={cn(isLoading && "opacity-60")}
+                      className={cn("cursor-pointer hover:bg-primary/5", isLoading && "opacity-60")}
+                      onClick={() =>
+                        router.push(
+                          `/${locale}/dashboard/employee-profile?storeId=${encodeURIComponent(selectedStore.storeId)}&employeeId=${employee.employee_id}`,
+                        )
+                      }
                     >
                       <TableCell className="text-[10px] py-2">
                         {formatEmployeeName(employee)}
@@ -308,9 +314,14 @@ export function CurrentEmployeesTable({
                 <div
                   key={employee.employee_id}
                   className={cn(
-                    "rounded-md border p-2 space-y-1.5",
+                    "rounded-md border p-2 space-y-1.5 cursor-pointer hover:bg-primary/5 transition-colors",
                     isLoading && "opacity-60",
                   )}
+                  onClick={() =>
+                    router.push(
+                      `/${locale}/dashboard/employee-profile?storeId=${encodeURIComponent(selectedStore.storeId)}&employeeId=${employee.employee_id}`,
+                    )
+                  }
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-medium">{formatEmployeeName(employee)}</p>

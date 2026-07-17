@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ExternalLink } from "lucide-react";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { cn } from "@/lib/utils";
 import type { ManagerDashboardEmployee, ManagerDashboardStoreData } from "@/types/employee.types";
 import { WbrCardSkeleton } from "@/components/dspr/wbr-format";
@@ -93,6 +94,8 @@ export function V1CurrentEmployeesCard({
 }) {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
+  const router = useRouter();
+  const { selectedStore } = useSelectedStoreStore();
   const { data, isLoading } = managerDashboard;
   const [week, setWeek] = useState<"current" | "past">("current");
 
@@ -159,7 +162,19 @@ export function V1CurrentEmployeesCard({
           </thead>
           <tbody>
             {rows.map((employee) => (
-              <tr key={employee.employee_id} className={cn(isLoading && "opacity-60")}>
+              <tr
+                key={employee.employee_id}
+                className={cn(
+                  "cursor-pointer hover:bg-primary/5 transition-colors",
+                  isLoading && "opacity-60",
+                )}
+                onClick={() =>
+                  selectedStore &&
+                  router.push(
+                    `/${locale}/dashboard/employee-profile?storeId=${encodeURIComponent(selectedStore.storeId)}&employeeId=${employee.employee_id}`,
+                  )
+                }
+              >
                 <td className={cn(V1_TD, "font-medium")}>
                   {formatEmployeeName(employee)}
                 </td>

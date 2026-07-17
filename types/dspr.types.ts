@@ -174,6 +174,7 @@ export interface DsprDay {
   labor: number;
   labor_week_to_date?: number;
   labor_week_to_date_avg?: number;
+  labor_week_to_date_by_day?: Record<string, { value: number; percent: number }>;
   portal: DsprPortal;
   upselling?: {
     total_upselling_day?: number;

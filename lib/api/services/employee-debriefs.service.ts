@@ -5,9 +5,11 @@ import type {
   ApiEmployeeDebriefDetail,
   ApiDebriefAttachment,
   ApiEmployeeDebriefListResponse,
+  ApiPaginatedDebriefResponse,
   EmployeeDebriefItem,
   EmployeeDebriefDetail,
   DebriefAttachment,
+  PaginatedDebriefResult,
 } from "@/types/employee-debrief.types";
 
 export type EmployeeDebriefErrorCode =
@@ -292,6 +294,45 @@ export const employeeDebriefService = {
         { headers, timeout: 15_000 }
       );
       return transformItem(response.data);
+    } catch (err) {
+      throw handleAxiosError(err);
+    }
+  },
+
+  async listByEmployee(
+    storeId: string,
+    employeeId: number,
+    opts: { page?: number; perPage?: number } = {},
+    signal?: AbortSignal
+  ): Promise<PaginatedDebriefResult> {
+    const token = getToken();
+    if (!token) {
+      throw new EmployeeDebriefError(
+        "You must be logged in to view employee debriefs.",
+        "NOT_AUTHENTICATED"
+      );
+    }
+
+    const { page = 1, perPage = 50 } = opts;
+
+    try {
+      const response = await axios.get<ApiPaginatedDebriefResponse>(
+        `/api/data/stores/${encodeURIComponent(storeId)}/employee-debriefs/employee/${encodeURIComponent(String(employeeId))}`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          params: { page, per_page: perPage },
+          timeout: 15_000,
+          signal,
+        }
+      );
+      const raw = response.data;
+      return {
+        currentPage: raw.current_page,
+        perPage: raw.per_page,
+        total: raw.total,
+        lastPage: raw.last_page,
+        items: (raw.data ?? []).map(transformItem),
+      };
     } catch (err) {
       throw handleAxiosError(err);
     }

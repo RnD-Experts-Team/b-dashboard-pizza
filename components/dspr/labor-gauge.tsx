@@ -3,18 +3,18 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SpeedometerGauge, type SpeedZone } from "./speedometer-gauge";
 import { cn } from "@/lib/utils";
 import { Gauge, CalendarDays } from "lucide-react";
-import { WtdComparisonDialog, ComparisonGrid, ComparisonTable } from "./wtd-comparison-dialog";
+import { WtdComparisonDialog, ComparisonGrid } from "./wtd-comparison-dialog";
 
 interface WeeklyLaborEntry {
   week_start: string;
   week_end: string;
   labor: number | null;
+  total_hours: number;
 }
 
 // ============================================================================
@@ -55,11 +55,17 @@ function getLaborLabel(value: number): string {
 // Component
 // ============================================================================
 
+interface LaborByDayEntry {
+  value: number;
+  percent: number;
+}
+
 interface LaborGaugeProps {
   value: number;
   weeklyValue?: number;
   weeklyAvgValue?: number;
   weeklyLaborEntries?: WeeklyLaborEntry[];
+  laborWeekToDateByDay?: Record<string, LaborByDayEntry>;
   target?: number;
   title?: string;
   className?: string;
@@ -70,6 +76,7 @@ export function LaborGauge({
   weeklyValue,
   weeklyAvgValue,
   weeklyLaborEntries,
+  laborWeekToDateByDay,
   target,
   title = "Labor",
   className,
@@ -77,8 +84,10 @@ export function LaborGauge({
   const [isWeekly, setIsWeekly] = useState(false);
   const [activeTab, setActiveTab] = useState<"labor" | "final">("labor");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogTab, setDialogTab] = useState<"by-day" | "final">("by-day");
 
   const hasWeeklyLabor = weeklyLaborEntries && weeklyLaborEntries.length > 0;
+  const hasLaborByDay = laborWeekToDateByDay && Object.keys(laborWeekToDateByDay).length > 0;
   const canOpenDialog = weeklyValue !== undefined || hasWeeklyLabor;
   const activeGaugeValue = isWeekly && weeklyValue !== undefined ? weeklyValue : value;
 
@@ -219,69 +228,120 @@ export function LaborGauge({
           title="Labor"
           badgeText="Daily · WTD · Final Labor"
         >
+        <div className="h-[560px] overflow-y-auto pr-1">
           {weeklyValue !== undefined && (
-            <>
-              <ComparisonGrid
-                daily={
-                  <div className="space-y-2">
-                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                      {value.toFixed(1)}%
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">Labor % Today</p>
-                    <p className="text-[10px] text-emerald-600 font-medium mt-1">
-                      Target: 19–24%
-                    </p>
-                  </div>
-                }
-                wtd={
-                  <div className="space-y-2">
-                    <p className="text-2xl font-bold text-primary tabular-nums">
-                      {weeklyValue.toFixed(1)}%
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">Labor % WTD</p>
-                    {weeklyAvgValue !== undefined && (
-                      <p className="text-[10px] text-muted-foreground">
-                        WTD Daily Avg:{" "}
-                        <span className="font-semibold">
-                          {weeklyAvgValue.toFixed(1)}%
+            <ComparisonGrid
+              daily={
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+                    {value.toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Labor % Today</p>
+                  <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                    Target: 19–24%
+                  </p>
+                </div>
+              }
+              wtd={
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-primary tabular-nums">
+                    {(weeklyAvgValue ?? weeklyValue).toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Labor % (WTD Avg)</p>
+                  <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                    Target: 19–24%
+                  </p>
+                </div>
+              }
+            />
+          )}
+
+          {/* Labor by Day / Final Labor — tabs when both are available */}
+          {hasLaborByDay && hasWeeklyLabor && (
+            <div className="mt-5 flex gap-1 rounded-md bg-muted/60 p-0.5 w-fit">
+              <button
+                className={cn(
+                  "text-[10px] font-medium rounded px-2.5 py-1 transition-colors",
+                  dialogTab === "by-day"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => setDialogTab("by-day")}
+              >
+                Labor by Day
+              </button>
+              <button
+                className={cn(
+                  "text-[10px] font-medium rounded px-2.5 py-1 transition-colors",
+                  dialogTab === "final"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                onClick={() => setDialogTab("final")}
+              >
+                Final Labor
+              </button>
+            </div>
+          )}
+
+          {/* Labor by Day — WTD breakdown */}
+          {hasLaborByDay && (!hasWeeklyLabor || dialogTab === "by-day") && (
+            <div className="mt-5">
+              <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <CalendarDays className="h-3 w-3" />
+                Labor by Day — Week to Date
+              </h4>
+              <div className="space-y-1.5">
+                {Object.entries(laborWeekToDateByDay)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([dateStr, entry]) => {
+                    const barPct = Math.min(100, (entry.percent / 50) * 100);
+                    const color = getLaborColor(entry.percent);
+                    const label = getLaborLabel(entry.percent);
+                    const dayLabel = (() => {
+                      try {
+                        return format(parseISO(dateStr), "EEE, MMM d");
+                      } catch {
+                        return dateStr;
+                      }
+                    })();
+                    return (
+                      <div
+                        key={dateStr}
+                        className="flex items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-muted/40"
+                      >
+                        <span className="text-[10px] text-muted-foreground w-28 shrink-0">
+                          {dayLabel}
                         </span>
-                      </p>
-                    )}
-                    <p className="text-[10px] text-emerald-600 font-medium mt-1">
-                      Target: 19–24%
-                    </p>
-                  </div>
-                }
-              />
-              <ComparisonTable
-                rows={[
-                  {
-                    label: "Labor %",
-                    daily: `${value.toFixed(1)}%`,
-                    wtd: `${weeklyValue.toFixed(1)}%`,
-                    dailyNum: value,
-                    wtdNum: weeklyValue,
-                    higherIsBetter: false,
-                  },
-                  ...(weeklyAvgValue !== undefined
-                    ? [
-                        {
-                          label: "WTD Daily Avg",
-                          daily: "—",
-                          wtd: `${weeklyAvgValue.toFixed(1)}%`,
-                          dailyNum: 0,
-                          wtdNum: weeklyAvgValue,
-                          higherIsBetter: false,
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            </>
+                        <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${barPct}%`, backgroundColor: color }}
+                          />
+                        </div>
+                        <span
+                          className="text-[11px] font-semibold tabular-nums w-12 text-right"
+                          style={{ color }}
+                        >
+                          {entry.percent.toFixed(1)}%
+                        </span>
+                        {entry.value !== 0 && (
+                          <span className="text-[9px] text-muted-foreground w-16 text-right tabular-nums hidden sm:block">
+                            {new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(entry.value)}
+                          </span>
+                        )}
+                        <span className="text-[9px] text-muted-foreground w-20 text-right hidden sm:block">
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
           )}
 
           {/* Final Labor — 6-week history */}
-          {hasWeeklyLabor && (
+          {hasWeeklyLabor && (!hasLaborByDay || dialogTab === "final") && (
             <div className="mt-5">
               <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
                 <Gauge className="h-3 w-3" />
@@ -326,18 +386,15 @@ export function LaborGauge({
                       >
                         {entry.labor != null ? `${entry.labor.toFixed(1)}%` : "—"}
                       </span>
+                      {entry.total_hours > 0 && (
+                        <span className="text-[12px] font-semibold text-foreground w-16 text-right tabular-nums hidden sm:block">
+                          {entry.total_hours.toFixed(1)} hrs
+                        </span>
+                      )}
                       {label && entry.labor != null && (
                         <span className="text-[9px] text-muted-foreground w-20 text-right hidden sm:block">
                           {label}
                         </span>
-                      )}
-                      {isCurrentWeek && (
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] py-0 h-4 px-1.5 shrink-0"
-                        >
-                          Current
-                        </Badge>
                       )}
                     </div>
                   );
@@ -345,6 +402,7 @@ export function LaborGauge({
               </div>
             </div>
           )}
+        </div>
         </WtdComparisonDialog>
       )}
     </Card>

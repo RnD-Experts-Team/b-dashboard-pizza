@@ -6,6 +6,7 @@ import type {
   UnitPayload,
   Item,
   ItemFormValues,
+  ItemListParams,
   Link,
   CreateLinkPayload,
   Entry,
@@ -174,14 +175,19 @@ export const itemService = {
   // The list endpoint carries no store in its URL; pass the ambient store as an
   // X-Store-Id header so its now-scoped rule can authorize store-scoped permissions.
   list: async (
-    params?: ListParams,
+    params?: ItemListParams,
     storeId?: string,
     signal?: AbortSignal
   ): Promise<PaginatedResponse<Item>> => {
     const { data } = await inventoryClient.get<InventoryPaginated<Item>>(
       "/inventory/items",
       {
-        params: { page: params?.page, per_page: params?.perPage },
+        params: {
+          page: params?.page,
+          per_page: params?.perPage,
+          // active=true/false filters; omit when undefined to return all.
+          ...(params?.active !== undefined && { active: params.active ? 1 : 0 }),
+        },
         headers: storeId ? { "X-Store-Id": storeId } : undefined,
         signal,
       }
@@ -222,6 +228,14 @@ export const itemService = {
 
   remove: async (id: number): Promise<void> => {
     await inventoryClient.delete(`/inventory/items/${id}`);
+  },
+
+  patchActive: async (id: number, isActive: boolean): Promise<Item> => {
+    const { data } = await inventoryClient.patch<Wrapped<Item>>(
+      `/inventory/items/${id}/active`,
+      { is_active: isActive }
+    );
+    return normalizeItem(data.data);
   },
 };
 

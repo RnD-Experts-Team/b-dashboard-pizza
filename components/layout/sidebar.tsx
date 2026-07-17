@@ -45,6 +45,7 @@ import {
   Ruler,
   Link2,
   LogOut,
+  UserSearch,
 } from "lucide-react";
 import {
   Dialog,
@@ -460,6 +461,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Data", method: "GET", path: "/stores/*/goals", storeId: effectiveStoreId }
         ],
       },
+      // {
+      //   title: t("employeeDebriefHistory"),
+      //   href: `/${locale}/dashboard/employee-debrief-history`,
+      //   icon: UserSearch,
+      //   requirements: [
+      //     { service: "Data", method: "GET", path: "/stores/*/employee-debriefs/employee/*", storeId: effectiveStoreId },
+      //   ],
+      // },
     ],
   };
 
@@ -802,7 +811,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {renderNavLink(announcementsItem)}
 
           {/* 1b. Screen Project */}
-          {/* {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)} */}
+          {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (
@@ -870,7 +879,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           )}
 
           {/* 7b. Inventory Management */}
-          {/* {visibleInventoryManagementGroup && (
+          {visibleInventoryManagementGroup && (
             <SidebarNavGroup
               group={visibleInventoryManagementGroup}
               pathname={pathname}
@@ -878,7 +887,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               collapsed={collapsed}
               onNavigate={onNavigate}
             />
-          )} */}
+          )}
 
           {/* 8. High Level Management */}
           {visibleHighLevelMgmtGroup && (
@@ -926,13 +935,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       {/* Impersonate User — super admin only, or while impersonating (so
           the "exit" control stays available even after roles/menus have
           switched to the impersonated user's own permissions). */}
-      {/* {(isSuperAdmin() || isImpersonating) && (
+      {(isSuperAdmin() || isImpersonating) && (
         <div className={cn("px-2 sm:px-3 py-2", collapsed && "flex justify-center")}>
           <button
             type="button"
             disabled={isImpersonationLoading}
             onClick={() =>
               isImpersonating ? stopImpersonating() : setIsImpersonateDialogOpen(true)
+            }
+            title={
+              isImpersonating
+                ? `Exit Impersonation${user?.name ? ` (${user.name})` : ""}`
+                : "Impersonate User"
             }
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full",
@@ -957,7 +971,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             )}
           </button>
         </div>
-      )} */}
+      )}
 
       <ImpersonateDialog
         open={isImpersonateDialogOpen}

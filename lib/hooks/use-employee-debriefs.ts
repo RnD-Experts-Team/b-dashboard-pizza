@@ -6,7 +6,7 @@ import {
   EmployeeDebriefError,
   employeeDebriefService,
 } from "@/lib/api/services/employee-debriefs.service";
-import type { EmployeeDebriefDetail, EmployeeDebriefItem } from "@/types/employee-debrief.types";
+import type { EmployeeDebriefDetail, EmployeeDebriefItem, PaginatedDebriefResult } from "@/types/employee-debrief.types";
 
 function isCanceledError(err: unknown): boolean {
   if (axios.isCancel(err)) return true;
@@ -145,6 +145,101 @@ export function useEmployeeDebriefDetail(
   }, [storeId, debriefId]);
 
   return { detail, isLoading, error, clearError };
+}
+
+// ── Paginated history hook (by employee) ──────────────────────────────
+
+interface UseEmployeeDebriefHistoryReturn {
+  items: EmployeeDebriefItem[];
+  isLoading: boolean;
+  isRefreshing: boolean;
+  error: string | null;
+  currentPage: number;
+  lastPage: number;
+  total: number;
+  refetch: () => void;
+  clearError: () => void;
+}
+
+export function useEmployeeDebriefHistory(
+  storeId: string | null,
+  employeeId: number | null,
+  page: number,
+  perPage = 50
+): UseEmployeeDebriefHistoryReturn {
+  const [result, setResult] = useState<PaginatedDebriefResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  const fetchPage = useCallback(
+    async (signal?: AbortSignal, isRefresh = false) => {
+      if (!storeId || employeeId == null) {
+        setResult(null);
+        setError(null);
+        setIsLoading(false);
+        setIsRefreshing(false);
+        return;
+      }
+
+      if (isRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError(null);
+
+      try {
+        const data = await employeeDebriefService.listByEmployee(
+          storeId,
+          employeeId,
+          { page, perPage },
+          signal
+        );
+        if (signal?.aborted) return;
+        setResult(data);
+      } catch (err) {
+        if (isCanceledError(err) || signal?.aborted) return;
+        if (err instanceof EmployeeDebriefError) {
+          setError(err.message);
+        } else {
+          setError(
+            err instanceof Error ? err.message : "Failed to load debrief history."
+          );
+        }
+      } finally {
+        if (!signal?.aborted) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
+    },
+    [storeId, employeeId, page, perPage]
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPage(controller.signal);
+    return () => controller.abort();
+  }, [fetchPage]);
+
+  const refetch = useCallback(() => {
+    fetchPage(undefined, true);
+  }, [fetchPage]);
+
+  return {
+    items: result?.items ?? [],
+    isLoading,
+    isRefreshing,
+    error,
+    currentPage: result?.currentPage ?? page,
+    lastPage: result?.lastPage ?? 1,
+    total: result?.total ?? 0,
+    refetch,
+    clearError,
+  };
 }
 
 // ── Create hook ──────────────────────────────────────────────────────

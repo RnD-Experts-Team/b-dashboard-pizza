@@ -41,15 +41,19 @@ export const screenProjectService = {
   },
 
   /**
-   * Fetch supervisor tokens for all rooms in a store.
+   * Fetch supervisor tokens for a store, optionally scoped to specific station IDs.
    * Proxied through POST /api/screen-project/{storeId}/tokens
    */
   async getSupervisorTokens(
     storeId: string,
     signal?: AbortSignal,
+    stationIds?: number[],
   ): Promise<SupervisorTokensResponse> {
+    const params = new URLSearchParams();
+    stationIds?.forEach(id => params.append("stations[]", String(id)));
+    const qs = params.toString();
     const { data } = await axios.post<SupervisorTokensResponse>(
-      `/api/screen-project/${storeId}/tokens`,
+      `/api/screen-project/${storeId}/tokens${qs ? `?${qs}` : ""}`,
       undefined,
       { headers: buildHeaders(), timeout: 15_000, signal },
     );

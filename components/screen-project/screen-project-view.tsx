@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, Video, VideoOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut, Check } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
+import type { StationStateMsg } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
 import { ObserverDialog } from "./observer-dialog";
 import { useScreenProject } from "@/lib/hooks/use-screen-project";
@@ -15,6 +16,9 @@ import { useSelectedStoreStore } from "@/lib/store";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageGuide } from "@/components/shared/page-guide";
+import { createScreenProjectGuideSteps } from "./screen-project-guide-config";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Per-screen A/V state                                                     */
@@ -26,6 +30,14 @@ interface ScreenState {
   volume: number;
   /** Whether the supervisor's own camera is published into this room */
   myCamEnabled: boolean;
+  /** Station remote control */
+  stationMicEnabled:  boolean;
+  stationCamEnabled:  boolean;
+  stationAudioInput:  string;
+  stationVideoInput:  string;
+  stationAudioOutput: string;
+  stationFullscreen:  boolean;
+  stationDevices:     StationStateMsg | null;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -133,6 +145,7 @@ export function ScreenProjectView() {
 
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const storeId = selectedStore?.storeId ?? "";
+  const guideSteps = useMemo(() => createScreenProjectGuideSteps(storeId), [storeId]);
 
   const canSupervisor = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/supervisor` });
   const canObserver = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/observer` });
@@ -147,13 +160,14 @@ export function ScreenProjectView() {
    * null = user is on the select screen (no tokens needed yet).
    */
   const [activeTokenType, setActiveTokenType] = useState<"supervisor" | "observer" | null>(() => {
-    if (canSupervisor && canObserver) return null; // select screen — wait for user choice
-    if (!canSupervisor && canObserver) return "observer";
-    return "supervisor";
+    if (!canSupervisor && canObserver) return "observer"; // observer-only: fetch tokens immediately
+    return null; // supervisor or both: wait until station selection is committed
   });
 
+  const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
-    useScreenProject(activeTokenType);
+    useScreenProject(activeTokenType, selectedStationIds.length ? selectedStationIds : undefined);
 
   const [mainId, setMainId] = useState<string>("");
   const [screenStates, setScreenStates] = useState<Record<string, ScreenState>>({});
@@ -164,12 +178,14 @@ export function ScreenProjectView() {
   const [myCamVisible, setMyCamVisible] = useState(false);
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [sessionExited, setSessionExited] = useState(false);
 
-  /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = auth-gated entry screen */
-  const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select">(() => {
+  /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = view selector, "station-select" = station checklist before connecting */
+  const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select" | "station-select">(() => {
     if (canSupervisor && canObserver) return "select";
     if (!canSupervisor && canObserver) return "observer";
-    return "supervisor";
+    return "station-select"; // supervisor-only: go to station selection before connecting
   });
   /** room_name of the station currently open in the ObserverDialog */
   const [observingRoom, setObservingRoom] = useState<string | null>(null);
@@ -215,6 +231,13 @@ export function ScreenProjectView() {
           videoEnabled: true,
           volume: 1,
           myCamEnabled: false,
+          stationMicEnabled:  true,
+          stationCamEnabled:  true,
+          stationAudioInput:  "",
+          stationVideoInput:  "",
+          stationAudioOutput: "",
+          stationFullscreen:  false,
+          stationDevices:     null,
         };
       });
       return next;
@@ -277,15 +300,21 @@ export function ScreenProjectView() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const hasSidePanel = stations.length > 1;
-  const anyAudioEnabled = stations.some((s) => screenStates[s.room_name]?.audioEnabled);
-  const anyMyCamEnabled = stations.some((s) => screenStates[s.room_name]?.myCamEnabled);
+  // Filter to only the stations the user selected before connecting (supervisor view only)
+  const visibleStations =
+    viewMode === "supervisor" && selectedStationIds.length > 0
+      ? stations.filter((s) => selectedStationIds.includes(s.id))
+      : stations;
+
+  const hasSidePanel = visibleStations.length > 1;
+  const anyAudioEnabled = visibleStations.some((s) => screenStates[s.room_name]?.audioEnabled);
+  const anyMyCamEnabled = visibleStations.some((s) => screenStates[s.room_name]?.myCamEnabled);
 
   // Side-panel virtual scroll limits
   const isLg = containerSize.width >= LG_BREAKPOINT;
   // Reset scroll when layout mode flips (desktop ↔ mobile)
   useEffect(() => { setSideScroll(0); }, [isLg]);
-  const sideTileCount = Math.max(0, stations.length - 1);
+  const sideTileCount = Math.max(0, visibleStations.length - 1);
   const sideContentLen =
     sideTileCount > 0
       ? sideTileCount * (isLg ? DESK_SIDE_H : MOB_SIDE_W) +
@@ -380,6 +409,47 @@ export function ScreenProjectView() {
     });
   }, [anyMyCamEnabled]);
 
+  // ── Station remote control handlers ──────────────────────────────────────
+  const handleToggleStationMic = useCallback((roomName: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationMicEnabled: !prev[roomName].stationMicEnabled },
+    }));
+  }, []);
+
+  const handleToggleStationCam = useCallback((roomName: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationCamEnabled: !prev[roomName].stationCamEnabled },
+    }));
+  }, []);
+
+  const handleToggleStationFullscreen = useCallback((roomName: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationFullscreen: !prev[roomName].stationFullscreen },
+    }));
+  }, []);
+
+  const handleStationDeviceChange = useCallback((roomName: string, kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: {
+        ...prev[roomName],
+        stationAudioInput:  kind === "audioinput"  ? deviceId : prev[roomName].stationAudioInput,
+        stationVideoInput:  kind === "videoinput"  ? deviceId : prev[roomName].stationVideoInput,
+        stationAudioOutput: kind === "audiooutput" ? deviceId : prev[roomName].stationAudioOutput,
+      },
+    }));
+  }, []);
+
+  const handleStationStateReceived = useCallback((roomName: string, state: StationStateMsg) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: { ...prev[roomName], stationDevices: state },
+    }));
+  }, []);
+
   const handleSidePanelWheel = useCallback(
     (e: WheelEvent) => {
       if (!hasSidePanel || maxSideScroll <= 0) return;
@@ -442,7 +512,7 @@ export function ScreenProjectView() {
   }
 
   /* ── No store selected / no stations (supervisor mode only) ────────────── */
-  if ((stations.length === 0 || !mainId) && viewMode === "supervisor") {
+  if ((visibleStations.length === 0 || !mainId) && viewMode === "supervisor") {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
@@ -463,7 +533,7 @@ export function ScreenProjectView() {
   // Build a flat annotated list so we can render all tiles in one .map()
   // from a single container — key never changes = no remount = no reconnect.
   let sideCounter = 0;
-  const stationsMeta = stations.map((s) => {
+  const stationsMeta = visibleStations.map((s) => {
     const isMain = s.room_name === mainId;
     return { ...s, isMain, sideIdx: isMain ? -1 : sideCounter++ };
   });
@@ -471,43 +541,203 @@ export function ScreenProjectView() {
   /* ── View selection (both auth rules available) ──────────────────── */
   if (viewMode === "select") {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="flex flex-col items-center gap-6 text-center max-w-sm w-full px-4">
-          <div className="flex flex-col items-center gap-2">
-            <h2 className="text-lg font-semibold">Select View</h2>
+      <div className="flex h-full items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
+          <div className="flex flex-col items-center gap-1.5 text-center">
+            <h2 className="text-xl font-semibold tracking-tight">How do you want to connect?</h2>
             <p className="text-sm text-muted-foreground">
-              Choose how you want to access the screen project.
+              Choose a view based on what you need to do in this session.
             </p>
           </div>
-          <div className="flex flex-col gap-3 w-full">
-            <Button
-              variant="outline"
-              size="lg"
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+            {/* Observer card */}
+            <button
               onClick={() => { setViewMode("observer"); setActiveTokenType("observer"); }}
-              className="gap-2 w-full justify-start px-4"
+              className={cn(
+                "group relative flex flex-col items-start gap-4 rounded-2xl border p-6 text-left",
+                "transition-all duration-200",
+                "hover:border-amber-400/50 hover:bg-amber-400/5 hover:shadow-lg",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60",
+              )}
             >
-              <Eye className="h-5 w-5 text-amber-400" />
-              <span>Observer View</span>
-              <span className="ml-auto text-xs text-muted-foreground">Listen only</span>
-            </Button>
-            <div className="flex flex-col gap-1.5">
-              <Button
-                variant="default"
-                size="lg"
-                onClick={() => { setViewMode("supervisor"); setActiveTokenType("supervisor"); }}
-                className="gap-2 w-full justify-start px-4"
-              >
-                <Monitor className="h-5 w-5" />
-                <span>Supervisor View</span>
-              </Button>
-              <div className="flex items-center gap-1.5 px-1">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span className="text-xs text-amber-400">
-                  This view allows active interaction with stations. Use with caution.
+              <div className="flex items-center justify-between w-full">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400/10 ring-1 ring-amber-400/20 transition-colors group-hover:bg-amber-400/15">
+                  <Eye className="h-5 w-5 text-amber-400" />
+                </div>
+                <span className="rounded-full bg-amber-400/10 px-2.5 py-0.5 text-[0.65rem] font-medium text-amber-400 ring-1 ring-inset ring-amber-400/25">
+                  Passive
                 </span>
               </div>
-            </div>
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold text-foreground">Observer View</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Watch any station silently. Nothing is broadcast from your device — audio and camera stay off.
+                </p>
+              </div>
+              <ul className="flex flex-col gap-1.5 w-full">
+                {["View all station live feeds", "Open any station in fullscreen", "Listen with volume control"].map((item) => (
+                  <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="h-1 w-1 rounded-full bg-amber-400/60 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </button>
+
+            {/* Store Manager card */}
+            <button
+              onClick={() => { setViewMode("station-select"); }}
+              className={cn(
+                "group relative flex flex-col items-start gap-4 rounded-2xl border p-6 text-left",
+                "transition-all duration-200",
+                "hover:border-primary/50 hover:bg-primary/5 hover:shadow-lg",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+              )}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 transition-colors group-hover:bg-primary/15">
+                  <Monitor className="h-5 w-5 text-primary" />
+                </div>
+                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[0.65rem] font-medium text-primary ring-1 ring-inset ring-primary/25">
+                  Active
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold text-foreground">Store Manager View</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Full control over all stations. Broadcast audio, push your camera, and manage station rooms.
+                </p>
+              </div>
+              <ul className="flex flex-col gap-1.5 w-full">
+                {["Broadcast voice to all stations", "Push your camera to any screen", "Manage station rooms & passwords"].map((item) => (
+                  <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="h-1 w-1 rounded-full bg-primary/60 shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-start gap-2 rounded-lg bg-amber-400/8 border border-amber-400/15 px-3 py-2 w-full mt-auto">
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-400 leading-snug">
+                  Active interaction with stations. Use with caution.
+                </p>
+              </div>
+            </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Station selection (before connecting as supervisor) ─────────── */
+  if (viewMode === "station-select") {
+    const allSelected =
+      stations.length > 0 && stations.every((s) => selectedStationIds.includes(s.id));
+
+    function toggleStation(id: number) {
+      setSelectedStationIds((prev) =>
+        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      );
+    }
+
+    function handleSelectAll() {
+      setSelectedStationIds(allSelected ? [] : stations.map((s) => s.id));
+    }
+
+    function handleConnect() {
+      if (selectedStationIds.length === 0) return;
+      const firstSelected = stations.find((s) => selectedStationIds.includes(s.id));
+      if (firstSelected) setMainId(firstSelected.room_name);
+      setActiveTokenType("supervisor");
+      setViewMode("supervisor");
+    }
+
+    return (
+      <div className="flex h-full flex-col gap-3">
+        {/* Header bar */}
+        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-2.5 shrink-0">
+          {canSupervisor && canObserver && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setSelectedStationIds([]); setViewMode("select"); }}
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Back
+            </Button>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">Select Stations</p>
+            <p className="text-xs text-muted-foreground">Choose which stations to connect to</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 text-xs"
+            onClick={handleSelectAll}
+            disabled={stations.length === 0}
+          >
+            {allSelected ? "Deselect All" : "Select All"}
+          </Button>
+        </div>
+
+        {/* Station grid */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {stations.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">No stations found for this store.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {stations.map((s) => {
+                const checked = selectedStationIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => toggleStation(s.id)}
+                    className={cn(
+                      "flex items-center gap-4 rounded-xl border p-4 text-left transition-all duration-150",
+                      checked
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                        : "hover:border-muted-foreground/30 hover:bg-muted/30",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors",
+                        checked ? "border-primary bg-primary" : "border-muted-foreground/30",
+                      )}
+                    >
+                      {checked && <Check className="h-3 w-3 text-primary-foreground" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{s.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{s.room_name}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 shrink-0 rounded-xl border bg-card px-4 py-2.5">
+          <p className="text-sm text-muted-foreground">
+            {selectedStationIds.length} of {stations.length} selected
+          </p>
+          <Button
+            onClick={handleConnect}
+            disabled={selectedStationIds.length === 0}
+            className="gap-2"
+          >
+            <Monitor className="h-4 w-4" />
+            {selectedStationIds.length > 0
+              ? `Connect (${selectedStationIds.length})`
+              : "Connect"}
+          </Button>
         </div>
       </div>
     );
@@ -538,8 +768,7 @@ export function ScreenProjectView() {
                 if (canSupervisor && canObserver) {
                   setViewMode("select");
                 } else {
-                  setViewMode("supervisor");
-                  setActiveTokenType("supervisor");
+                  setViewMode("station-select");
                 }
               }}
               className="gap-1.5 text-muted-foreground hover:text-foreground"
@@ -593,6 +822,7 @@ export function ScreenProjectView() {
             token={tokenMap[observingStation.room_name] ?? ""}
             serverUrl={serverUrl}
             onClose={() => setObservingRoom(null)}
+            onRetry={refetch}
           />
         )}
       </div>
@@ -601,15 +831,15 @@ export function ScreenProjectView() {
 
   /* ── Main view ──────────────────────────────────────────────────── */
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="relative flex h-full flex-col gap-3">
       {/*
        * Single tile area — ALL ScreenTile instances live here permanently.
        * Clicking a side tile only changes `mainId` state. Each tile's
        * absolute position/size is animated by framer-motion `layout` (FLIP),
        * so no tile ever unmounts and LiveKit connections stay alive.
        */}
-      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef}>
-        {containerSize.width > 0 &&
+      <div className="relative flex-1 min-h-0 overflow-hidden" ref={tileAreaRef} data-guide-id="sp-tile-area">
+        {!sessionExited && containerSize.width > 0 &&
           stationsMeta.map((s) => {
             const rect = computeTileRect(
               s.isMain,
@@ -651,14 +881,26 @@ export function ScreenProjectView() {
                   }}
                   stationNumber={s.id}
                   storeId={storeId}
+                  onRetry={refetch}
                   className="h-full w-full"
+                  stationMicEnabled={screenStates[s.room_name]?.stationMicEnabled ?? true}
+                  stationCamEnabled={screenStates[s.room_name]?.stationCamEnabled ?? true}
+                  stationAudioInput={screenStates[s.room_name]?.stationAudioInput ?? ""}
+                  stationVideoInput={screenStates[s.room_name]?.stationVideoInput ?? ""}
+                  stationAudioOutput={screenStates[s.room_name]?.stationAudioOutput ?? ""}
+                  stationFullscreen={screenStates[s.room_name]?.stationFullscreen ?? false}
+                  onToggleStationMic={() => handleToggleStationMic(s.room_name)}
+                  onToggleStationCam={() => handleToggleStationCam(s.room_name)}
+                  onToggleStationFullscreen={() => handleToggleStationFullscreen(s.room_name)}
+                  onStationDeviceChange={(kind, deviceId) => handleStationDeviceChange(s.room_name, kind, deviceId)}
+                  onStationStateReceived={(state) => handleStationStateReceived(s.room_name, state)}
                 />
               </motion.div>
             );
           })}
 
         {/* Side-panel scroll arrows */}
-        {hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
+        {!sessionExited && hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
           isLg ? (
             <>
               {canScrollBack && (
@@ -705,7 +947,7 @@ export function ScreenProjectView() {
         )}
 
         {/* PiP self-view — draggable overlay constrained to the tile area */}
-        <motion.div
+        {!sessionExited && <motion.div
           drag
           dragConstraints={tileAreaDomRef}
           dragElastic={0.08}
@@ -740,14 +982,15 @@ export function ScreenProjectView() {
               </div>
             )}
           </div>
-        </motion.div>
+        </motion.div>}
       </div>
 
       {/* Bottom control bar — modern floating dark toolbar */}
-      <div className="flex items-center justify-between rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30">
+      <div data-guide-id="sp-bottom-bar" className="flex items-center rounded-2xl border border-white/6 bg-neutral-900/95 backdrop-blur-md px-3 py-2 shrink-0 shadow-xl shadow-black/30 max-[425px]:overflow-x-auto">
+      <div className="flex w-full min-w-full items-center justify-between gap-3 max-[425px]:w-max">
 
         {/* ── Left: status + station management ── */}
-        <div className="flex items-center gap-2">
+        <div data-guide-id="sp-left-controls" className="flex items-center gap-2 shrink-0">
           <NetworkBadge status={networkStatus} />
           <div className="w-px h-5 bg-white/10" />
           <StationsDialog
@@ -758,7 +1001,7 @@ export function ScreenProjectView() {
         </div>
 
         {/* ── Center: personal A/V controls ── */}
-        <div className="flex items-center gap-1">
+        <div data-guide-id="sp-av-controls" className="flex items-center gap-1 shrink-0">
 
           {/* Mic toggle */}
           <button
@@ -795,7 +1038,7 @@ export function ScreenProjectView() {
                 : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
             )}
           >
-            {myVideoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+            {myVideoOff ? <CameraOff className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
             {myVideoOff && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-neutral-900" />
             )}
@@ -820,6 +1063,7 @@ export function ScreenProjectView() {
 
           {/* Talk to All — hold to broadcast */}
           <button
+            data-guide-id="sp-talk-all"
             disabled={myMicMuted}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
@@ -848,7 +1092,7 @@ export function ScreenProjectView() {
         </div>
 
         {/* ── Right: broadcast to screens ── */}
-        <div className="flex items-center gap-1">
+        <div data-guide-id="sp-broadcast-controls" className="flex items-center gap-1 shrink-0">
           <div className="w-px h-5 bg-white/10 mr-1" />
 
           {/* Mute / unmute all screens */}
@@ -888,9 +1132,83 @@ export function ScreenProjectView() {
           >
             {anyMyCamEnabled ? <Camera className="h-4 w-4" /> : <CameraOff className="h-4 w-4" />}
           </button>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
+          {/* Guide button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-white/50 hover:text-white hover:bg-white/10 rounded-xl"
+                onClick={() => setGuideOpen(true)}
+                aria-label="Open page guide"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Page guide</TooltipContent>
+          </Tooltip>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
+          {/* Exit session button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                data-guide-id="sp-exit-session"
+                className="h-9 w-9 text-white/50 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
+                onClick={() => setSessionExited(true)}
+                aria-label="Exit session"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Exit session</TooltipContent>
+          </Tooltip>
         </div>
 
       </div>
+      </div>
+
+      <PageGuide
+        steps={guideSteps}
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
+
+      {/* Exit overlay — covers tile area + bottom bar; actual disconnect via tile suppression above */}
+      {sessionExited && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-2xl">
+          <div className="flex flex-col items-center gap-5 text-center px-8 max-w-sm">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10">
+              <LogOut className="h-7 w-7 text-white/60" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="text-lg font-semibold text-white">You have exited the session</p>
+              <p className="text-sm text-white/50 leading-relaxed">
+                All station connections have been disconnected.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                setSessionExited(false);
+                setBroadcastToAll(false);
+                setSelectedStationIds([]);
+                setActiveTokenType(null);
+                setViewMode("station-select");
+              }}
+              className="gap-2 bg-white text-black hover:bg-white/90 rounded-xl px-6"
+            >
+              <Radio className="h-4 w-4" />
+              Reconnect
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

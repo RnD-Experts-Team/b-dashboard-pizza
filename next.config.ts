@@ -48,6 +48,13 @@ const inventoryApiUrl =
 const inventoryOrigin =
   getApiDomain(inventoryApiUrl) || "https://inventorytesting.lcportal.cloud";
 
+// PNE LC AI (Lumina) bubble origin. Unset ⇒ production. Hosts the widget
+// iframe (frame-src). The dashboard's only bridge call (logout-disconnect) now
+// goes through the same-origin proxy at /api/lumina/cookies, so the bridge does
+// NOT need to be in connect-src.
+const luminaBase =
+  process.env.NEXT_PUBLIC_LUMINA_BASE || "https://ai.lcportal.cloud";
+
 const nextConfig: NextConfig = {
   // Security headers
   async headers() {
@@ -94,7 +101,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
               `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""} ${screenProjectDomain} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
-              "frame-src 'self'",
+              `frame-src 'self' ${luminaBase}`,
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

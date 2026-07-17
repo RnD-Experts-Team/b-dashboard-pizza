@@ -61,6 +61,11 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   const [selectedVideoId, setSelectedVideoId] = useState("");
   const [selectedAudioId, setSelectedAudioId] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Real hardware device names currently bound to the live tracks — ground truth
+   * readout so the switch can be verified on-page instead of via browser/OS chrome
+   * (which reflects permission grants, not per-tab WebRTC device selection). */
+  const [activeVideoLabel, setActiveVideoLabel] = useState("");
+  const [activeAudioLabel, setActiveAudioLabel] = useState("");
 
   const enumerateDevices = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -149,6 +154,12 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
 
       const data = await res.json() as StationTokenResponse;
 
+      if (!data.token || !data.server_url) {
+        setAuthError("Received an invalid response from the server. Please try again.");
+        setPhase("auth");
+        return;
+      }
+
       setStreaming({
         station: selectedStation,
         token: data.token,
@@ -162,6 +173,26 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
       setPhase("auth");
     }
   }
+
+  /**
+   * Fired when the supervisor remotely switches this station's camera/mic and the
+   * switch is verified against the real track's device settings. Keeps the local
+   * Settings gear Select in sync with whatever is actually active, instead of
+   * silently going stale after a remote change.
+   */
+  const handleActiveDeviceChange = useCallback(
+    (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string, label?: string) => {
+      if (kind === "videoinput") {
+        setSelectedVideoId(deviceId);
+        if (label) setActiveVideoLabel(label);
+      }
+      if (kind === "audioinput") {
+        setSelectedAudioId(deviceId);
+        if (label) setActiveAudioLabel(label);
+      }
+    },
+    [],
+  );
 
   function handleChangeStation() {
     setStreaming(null);
@@ -335,13 +366,27 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             stationNumber={streaming.station.id}
             storeId={storeId}
             initialMedia={streaming.media}
+            onRetry={handleChangeStation}
+            onActiveDeviceChange={handleActiveDeviceChange}
             className="h-full w-full"
           />
         </div>
 
         {/* Bottom bar — station name + device settings + change station */}
         <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
-          <p className="text-sm font-medium truncate">{streaming.station.name}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{streaming.station.name}</p>
+            {/* Ground-truth active device readout — read directly off the live track's
+                hardware label, so it can't be wrong the way a browser/OS device
+                indicator (which just reflects permission grants) can be. */}
+            {(activeAudioLabel || activeVideoLabel) && (
+              <p className="text-[0.7rem] text-muted-foreground truncate">
+                {activeAudioLabel && `🎤 ${activeAudioLabel}`}
+                {activeAudioLabel && activeVideoLabel && "  ·  "}
+                {activeVideoLabel && `📷 ${activeVideoLabel}`}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             {/* Network status badge */}
             <NetworkBadge status={networkStatus} />
@@ -385,18 +430,18 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
                     onValueChange={setSelectedVideoId}
                     disabled={videoDevices.length === 0}
                   >
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-8 w-full max-w-full text-xs">
                       <SelectValue placeholder="Select camera…" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-40 overflow-y-auto">
+                    <SelectContent className="max-h-40 max-w-[240px] overflow-y-auto">
                       {videoDevices.length === 0 ? (
                         <SelectItem value="__none" disabled>
                           No cameras found
                         </SelectItem>
                       ) : (
                         videoDevices.map((d) => (
-                          <SelectItem key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Camera ${d.deviceId.slice(0, 8)}`}
+                          <SelectItem key={d.deviceId} value={d.deviceId} title={d.label || `Camera ${d.deviceId.slice(0, 8)}`}>
+                            <span className="block truncate">{d.label || `Camera ${d.deviceId.slice(0, 8)}`}</span>
                           </SelectItem>
                         ))
                       )}
@@ -415,18 +460,18 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
                     onValueChange={setSelectedAudioId}
                     disabled={audioDevices.length === 0}
                   >
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-8 w-full max-w-full text-xs">
                       <SelectValue placeholder="Select microphone…" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-40 overflow-y-auto">
+                    <SelectContent className="max-h-40 max-w-[240px] overflow-y-auto">
                       {audioDevices.length === 0 ? (
                         <SelectItem value="__none" disabled>
                           No microphones found
                         </SelectItem>
                       ) : (
                         audioDevices.map((d) => (
-                          <SelectItem key={d.deviceId} value={d.deviceId}>
-                            {d.label || `Microphone ${d.deviceId.slice(0, 8)}`}
+                          <SelectItem key={d.deviceId} value={d.deviceId} title={d.label || `Microphone ${d.deviceId.slice(0, 8)}`}>
+                            <span className="block truncate">{d.label || `Microphone ${d.deviceId.slice(0, 8)}`}</span>
                           </SelectItem>
                         ))
                       )}
@@ -454,5 +499,18 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     );
   }
 
-  return null;
+  // Defensive fallback — should not normally be reached since we validate the
+  // token response before ever setting phase to "streaming".
+  return (
+    <div className="flex h-full items-center justify-center p-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <AlertCircle className="h-8 w-8 text-destructive" />
+        <p className="text-sm text-muted-foreground">Something went wrong loading this station.</p>
+        <Button variant="outline" size="sm" onClick={handleChangeStation} className="gap-1.5">
+          <ArrowLeft className="h-4 w-4" />
+          Back to stations
+        </Button>
+      </div>
+    </div>
+  );
 }

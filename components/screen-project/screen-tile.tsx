@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import {
   LiveKitRoom,
   useTracks,
@@ -11,9 +11,11 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor } from "lucide-react";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import type { NetworkStatus } from "@/lib/hooks/use-network-status";
@@ -22,6 +24,28 @@ import { useScreenProjectMedia } from "@/lib/hooks/use-screen-project-media";
 import { MediaLibraryTrigger } from "./media-library/media-library-trigger";
 import { MediaLibrarySheet } from "./media-library/media-library-sheet";
 import type { StationMedia } from "@/types/screen-project-media.types";
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Station control message types                                            */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+export interface StationStateMsg {
+  type: "station-state";
+  cameras:  { deviceId: string; label: string }[];
+  mics:     { deviceId: string; label: string }[];
+  speakers: { deviceId: string; label: string }[];
+  activeCameraId:  string;
+  activeMicId:     string;
+  activeSpeakerId: string;
+  micEnabled: boolean;
+  camEnabled: boolean;
+}
+
+type StationControlMsg =
+  | { type: "mic-control";   enabled: boolean }
+  | { type: "cam-control";   enabled: boolean }
+  | { type: "device-switch"; kind: "audioinput" | "videoinput" | "audiooutput"; deviceId: string }
+  | { type: "fullscreen";    enabled: boolean };
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Sound bars — animated indicator shown when remote audio is active       */
@@ -124,6 +148,32 @@ export interface ScreenTileProps {
   /** Pre-loaded media items (e.g. from the station token response). When
    * provided, skips the initial API fetch and shows the primary item immediately. */
   initialMedia?: StationMedia[];
+  /**
+   * Called when the user retries after a stuck "waiting for token" state or a
+   * failed LiveKit connection. Typically wired to the parent's `refetch()` so a
+   * fresh token is requested. If omitted, retry falls back to reloading the page.
+   */
+  onRetry?: () => void;
+
+  /* ── Remote station control (supervisor → station via data channel) ── */
+  stationMicEnabled?:       boolean;
+  stationCamEnabled?:       boolean;
+  stationAudioInput?:       string;
+  stationVideoInput?:       string;
+  stationAudioOutput?:      string;
+  stationFullscreen?:       boolean;
+  onToggleStationMic?:      () => void;
+  onToggleStationCam?:      () => void;
+  onToggleStationFullscreen?: () => void;
+  onStationDeviceChange?:   (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => void;
+  onStationStateReceived?:  (state: StationStateMsg) => void;
+  /**
+   * Station side only: fired after a remote device-switch command is applied AND
+   * verified against the real track's device settings (not just a resolved promise).
+   * Lets the station's own local device-picker UI (e.g. the Settings gear in
+   * public-screen-view.tsx) stay in sync with whatever the supervisor switched to.
+   */
+  onActiveDeviceChange?:    (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string, label?: string) => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -156,6 +206,18 @@ interface InnerProps {
   stationNumber?: number;
   storeId?: string;
   initialMedia?: StationMedia[];
+  stationMicEnabled?:       boolean;
+  stationCamEnabled?:       boolean;
+  stationAudioInput?:       string;
+  stationVideoInput?:       string;
+  stationAudioOutput?:      string;
+  stationFullscreen?:       boolean;
+  onToggleStationMic?:      () => void;
+  onToggleStationCam?:      () => void;
+  onToggleStationFullscreen?: () => void;
+  onStationDeviceChange?:   (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => void;
+  onStationStateReceived?:  (state: StationStateMsg) => void;
+  onActiveDeviceChange?:    (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string, label?: string) => void;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -169,34 +231,8 @@ function NetworkStatusPublisher() {
   const connectionState = useConnectionState();
   const networkStatus = useNetworkStatus();
 
-  // Log on mount/unmount so we can confirm the component is actually rendered
-  useEffect(() => {
-    console.debug("[NetworkStatusPublisher] 🟡 mounted");
-    return () => console.debug("[NetworkStatusPublisher] 🔴 unmounted");
-  }, []);
-
-  // Log every connection state change so we know when/if Connected is reached
-  useEffect(() => {
-    console.debug("[NetworkStatusPublisher] connectionState:", connectionState);
-  }, [connectionState]);
-
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected) return;
-
-    // Debug: confirm token permissions before attempting to publish
-    const perms = room.localParticipant.permissions;
-    console.debug(
-      "[NetworkStatusPublisher] localParticipant permissions:",
-      perms,
-    );
-    if (!perms?.canPublishData) {
-      console.warn(
-        "[NetworkStatusPublisher] ⚠️  can_publish_data is NOT granted on this token. " +
-          "The backend POST /api/public/screen-project/:store/tokens/station/:id must " +
-          "return a JWT with can_publish_data: true. " +
-          "Network status will NOT reach the supervisor until this is fixed.",
-      );
-    }
 
     const send = () => {
       const q = room.localParticipant.connectionQuality as string;
@@ -214,16 +250,7 @@ function NetworkStatusPublisher() {
           reliable: true,
           topic: "net-status",
         })
-        .then(() => {
-          console.debug("[NetworkStatusPublisher] ✅ published:", payload);
-        })
-        .catch((err: unknown) => {
-          console.error(
-            "[NetworkStatusPublisher] ❌ publishData() rejected — " +
-              "check that can_publish_data: true is set in the station token:",
-            err,
-          );
-        });
+        .catch(() => {});
     };
 
     send();
@@ -265,6 +292,18 @@ function ScreenTileInner({
   stationNumber,
   storeId,
   initialMedia,
+  stationMicEnabled,
+  stationCamEnabled,
+  stationAudioInput,
+  stationVideoInput,
+  stationAudioOutput,
+  stationFullscreen,
+  onToggleStationMic,
+  onToggleStationCam,
+  onToggleStationFullscreen,
+  onStationDeviceChange,
+  onStationStateReceived,
+  onActiveDeviceChange,
 }: InnerProps) {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
 
@@ -337,6 +376,18 @@ function ScreenTileInner({
   const speakingParticipants = useSpeakingParticipants();
   const isRemoteSpeaking = speakingParticipants.some((p) => !p.isLocal);
 
+  // Supervisor side: device list received from the station via "station-state" data channel
+  const [stationInfo, setStationInfo] = useState<StationStateMsg | null>(null);
+
+  // Station side: on-screen confirmation that a remote command arrived and was applied —
+  // this is a kiosk device with no DevTools access, so console logs alone aren't enough.
+  const [controlToast, setControlToast] = useState<{ text: string; ok: boolean } | null>(null);
+  useEffect(() => {
+    if (!controlToast) return;
+    const t = setTimeout(() => setControlToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [controlToast]);
+
   // Publish / unpublish supervisor's mic in this room when myMicEnabled changes
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [volOpen, setVolOpen] = useState(false);
@@ -370,20 +421,6 @@ function ScreenTileInner({
       .catch(() => {});
   }, [myScreenShareEnabled, connectionState, room]);
 
-  // Switch active microphone device when the selected audio device changes
-  useEffect(() => {
-    if (connectionState !== ConnectionState.Connected) return;
-    if (!selectedAudioDeviceId) return;
-    room.switchActiveDevice("audioinput", selectedAudioDeviceId).catch(() => {});
-  }, [selectedAudioDeviceId, connectionState, room]);
-
-  // Switch active camera device when the selected video device changes
-  useEffect(() => {
-    if (connectionState !== ConnectionState.Connected) return;
-    if (!selectedVideoDeviceId) return;
-    room.switchActiveDevice("videoinput", selectedVideoDeviceId).catch(() => {});
-  }, [selectedVideoDeviceId, connectionState, room]);
-
   // Request the appropriate simulcast layer from the server
   useEffect(() => {
     if (!videoTrack) return;
@@ -398,10 +435,8 @@ function ScreenTileInner({
 
   useEffect(() => {
     if (publishNetworkStatus) return; // publisher side — no need to listen
-    console.debug("[ScreenTileInner] 👂 attaching DataReceived listener, room:", room.name);
-    const handler = (payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) => {
+    const handler = (payload: Uint8Array) => {
       const raw = new TextDecoder().decode(payload);
-      console.debug("[ScreenTileInner] 📨 DataReceived topic:", topic, "raw:", raw);
       try {
         const msg = JSON.parse(raw) as {
           type: string;
@@ -412,7 +447,6 @@ function ScreenTileInner({
           connectionQuality?: NetworkStatus["connectionQuality"] | null;
         };
         if (msg.type === "net-status") {
-          console.debug("[ScreenTileInner] ✅ updating remoteNetworkStatus:", msg);
           setRemoteNetworkStatus({
             online: msg.online,
             effectiveType: msg.effectiveType ?? undefined,
@@ -421,13 +455,228 @@ function ScreenTileInner({
             connectionQuality: msg.connectionQuality ?? undefined,
           });
         }
-      } catch {
-        console.warn("[ScreenTileInner] ⚠️ could not parse DataReceived payload:", raw);
-      }
+      } catch { /* ignore malformed */ }
     };
     room.on(RoomEvent.DataReceived, handler);
     return () => { room.off(RoomEvent.DataReceived, handler); };
   }, [room, publishNetworkStatus]);
+
+  // ── Station-side: publish available devices + current state to supervisor ──
+  const publishStationState = useCallback(async () => {
+    if (!room.localParticipant.permissions?.canPublishData) return;
+    const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
+    const cameras  = devices.filter(d => d.kind === "videoinput"  && d.deviceId).map(d => ({ deviceId: d.deviceId, label: d.label || d.deviceId }));
+    const mics     = devices.filter(d => d.kind === "audioinput"  && d.deviceId).map(d => ({ deviceId: d.deviceId, label: d.label || d.deviceId }));
+    const speakers = devices.filter(d => d.kind === "audiooutput" && d.deviceId).map(d => ({ deviceId: d.deviceId, label: d.label || d.deviceId }));
+    // Report the device that is ACTUALLY active on each track, not just the first enumerated one
+    const camTrack = room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+    const micTrack = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+    const activeCameraId  = camTrack?.mediaStreamTrack.getSettings().deviceId  || cameras[0]?.deviceId  || "";
+    const activeMicId     = micTrack?.mediaStreamTrack.getSettings().deviceId || mics[0]?.deviceId     || "";
+    // Report the real hardware label too, so the station's own UI can show a
+    // ground-truth "Active mic: X" readout instead of relying on browser/OS chrome
+    // that doesn't reflect a page's internal WebRTC device selection.
+    if (camTrack) onActiveDeviceChange?.("videoinput", activeCameraId, camTrack.mediaStreamTrack.label);
+    if (micTrack) onActiveDeviceChange?.("audioinput", activeMicId, micTrack.mediaStreamTrack.label);
+    const msg: StationStateMsg = {
+      type: "station-state",
+      cameras, mics, speakers,
+      activeCameraId,
+      activeMicId,
+      activeSpeakerId: speakers[0]?.deviceId || "",
+      micEnabled: true,
+      camEnabled: true,
+    };
+    room.localParticipant.publishData(
+      new TextEncoder().encode(JSON.stringify(msg)),
+      { reliable: true, topic: "station-state" },
+    ).catch(() => {});
+  }, [room, onActiveDeviceChange]);
+
+  useEffect(() => {
+    if (!publishNetworkStatus || connectionState !== ConnectionState.Connected) return;
+    publishStationState();
+  }, [connectionState, publishNetworkStatus, publishStationState]);
+
+  useEffect(() => {
+    if (!publishNetworkStatus) return;
+    navigator.mediaDevices.addEventListener("devicechange", publishStationState);
+    return () => navigator.mediaDevices.removeEventListener("devicechange", publishStationState);
+  }, [publishNetworkStatus, publishStationState]);
+
+  // ── Station-side: local Settings-gear device change (not a remote command) —
+  // verify against the real track, then sync the confirmed device back to the
+  // supervisor's view exactly like a remote-triggered switch does.
+  useEffect(() => {
+    if (!publishNetworkStatus || connectionState !== ConnectionState.Connected || !selectedAudioDeviceId) return;
+    room.switchActiveDevice("audioinput", selectedAudioDeviceId)
+      .then(() => {
+        const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
+        if (track && track.mediaStreamTrack.getSettings().deviceId === selectedAudioDeviceId) {
+          onActiveDeviceChange?.("audioinput", selectedAudioDeviceId, track.mediaStreamTrack.label);
+          publishStationState();
+        }
+      })
+      .catch(() => {});
+  }, [selectedAudioDeviceId, connectionState, room, publishNetworkStatus, onActiveDeviceChange, publishStationState]);
+
+  useEffect(() => {
+    if (!publishNetworkStatus || connectionState !== ConnectionState.Connected || !selectedVideoDeviceId) return;
+    room.switchActiveDevice("videoinput", selectedVideoDeviceId)
+      .then(() => {
+        const track = room.localParticipant.getTrackPublication(Track.Source.Camera)?.track;
+        if (track && track.mediaStreamTrack.getSettings().deviceId === selectedVideoDeviceId) {
+          onActiveDeviceChange?.("videoinput", selectedVideoDeviceId, track.mediaStreamTrack.label);
+          publishStationState();
+        }
+      })
+      .catch(() => {});
+  }, [selectedVideoDeviceId, connectionState, room, publishNetworkStatus, onActiveDeviceChange, publishStationState]);
+
+  // ── Station-side: receive supervisor commands and execute them directly ────
+  // Checks msg.type instead of topic — topic can be undefined with some LiveKit server versions.
+  useEffect(() => {
+    if (!publishNetworkStatus) return;
+    const handler = (payload: Uint8Array) => {
+      const raw = new TextDecoder().decode(payload);
+      let msg: StationControlMsg;
+      try {
+        msg = JSON.parse(raw) as StationControlMsg;
+      } catch {
+        return; // not JSON — ignore
+      }
+      // Only react to our control message shapes
+      if (!msg || !("type" in msg)) return;
+      if (msg.type !== "mic-control" && msg.type !== "cam-control" && msg.type !== "device-switch" && msg.type !== "fullscreen") return;
+
+      switch (msg.type) {
+        case "mic-control":
+          room.localParticipant.setMicrophoneEnabled(msg.enabled)
+            .then(() => setControlToast({ text: msg.enabled ? "Mic turned on" : "Mic turned off", ok: true }))
+            .catch(() => setControlToast({ text: "Mic switch failed", ok: false }));
+          break;
+        case "cam-control":
+          room.localParticipant.setCameraEnabled(msg.enabled)
+            .then(() => setControlToast({ text: msg.enabled ? "Camera turned on" : "Camera turned off", ok: true }))
+            .catch(() => setControlToast({ text: "Camera switch failed", ok: false }));
+          break;
+        case "device-switch": {
+          const label = msg.kind === "videoinput" ? "Camera" : msg.kind === "audioinput" ? "Microphone" : "Speaker";
+          room.switchActiveDevice(msg.kind, msg.deviceId)
+            .then((switched) => {
+              // switchActiveDevice resolves `false` (does NOT throw) when the browser
+              // silently declines the switch — checking only .catch() would report a
+              // false "success". Verify against the real track's device settings instead
+              // of trusting the resolved boolean for anything we can directly inspect.
+              const track =
+                msg.kind === "videoinput"
+                  ? room.localParticipant.getTrackPublication(Track.Source.Camera)?.track
+                  : msg.kind === "audioinput"
+                    ? room.localParticipant.getTrackPublication(Track.Source.Microphone)?.track
+                    : undefined;
+              const actualDeviceId = track?.mediaStreamTrack.getSettings().deviceId;
+              const actualDeviceLabel = track?.mediaStreamTrack.label;
+              const confirmed = track ? actualDeviceId === msg.deviceId : switched;
+
+              setControlToast({
+                text: confirmed ? `${label} switched` : `${label} switch did not apply`,
+                ok: confirmed,
+              });
+              if (confirmed) {
+                onActiveDeviceChange?.(msg.kind, msg.deviceId, actualDeviceLabel);
+                publishStationState(); // re-sync confirmed active device back to supervisor
+              }
+            })
+            .catch(() => setControlToast({ text: `${label} switch failed`, ok: false }));
+          break;
+        }
+        case "fullscreen":
+          if (msg.enabled) document.documentElement.requestFullscreen().catch(() => {});
+          else document.exitFullscreen().catch(() => {});
+          break;
+      }
+    };
+    room.on(RoomEvent.DataReceived, handler);
+    return () => { room.off(RoomEvent.DataReceived, handler); };
+  }, [room, publishNetworkStatus, publishStationState, onActiveDeviceChange]);
+
+  // ── Supervisor-side: send commands to station when props change ───────────
+  // Refs keep latest prop values so the ParticipantConnected handler (below)
+  // can re-send all commands after a station reconnect without stale closures.
+  const stationMicEnabledRef  = useRef(stationMicEnabled);  stationMicEnabledRef.current  = stationMicEnabled;
+  const stationCamEnabledRef  = useRef(stationCamEnabled);  stationCamEnabledRef.current  = stationCamEnabled;
+  const stationAudioInputRef  = useRef(stationAudioInput);  stationAudioInputRef.current  = stationAudioInput;
+  const stationVideoInputRef  = useRef(stationVideoInput);  stationVideoInputRef.current  = stationVideoInput;
+  const stationAudioOutputRef = useRef(stationAudioOutput); stationAudioOutputRef.current = stationAudioOutput;
+  const stationFullscreenRef  = useRef(stationFullscreen);  stationFullscreenRef.current  = stationFullscreen;
+
+  const publishControl = useCallback((msg: StationControlMsg) => {
+    room.localParticipant.publishData(
+      new TextEncoder().encode(JSON.stringify(msg)),
+      { reliable: true, topic: "station-control" },
+    ).catch(() => {});
+  }, [room]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || stationMicEnabled === undefined) return;
+    publishControl({ type: "mic-control", enabled: stationMicEnabled });
+  }, [stationMicEnabled, connectionState, publishNetworkStatus, publishControl]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || stationCamEnabled === undefined) return;
+    publishControl({ type: "cam-control", enabled: stationCamEnabled });
+  }, [stationCamEnabled, connectionState, publishNetworkStatus, publishControl]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || !stationAudioInput) return;
+    publishControl({ type: "device-switch", kind: "audioinput", deviceId: stationAudioInput });
+  }, [stationAudioInput, connectionState, publishNetworkStatus, publishControl]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || !stationVideoInput) return;
+    publishControl({ type: "device-switch", kind: "videoinput", deviceId: stationVideoInput });
+  }, [stationVideoInput, connectionState, publishNetworkStatus, publishControl]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || !stationAudioOutput) return;
+    publishControl({ type: "device-switch", kind: "audiooutput", deviceId: stationAudioOutput });
+  }, [stationAudioOutput, connectionState, publishNetworkStatus, publishControl]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || stationFullscreen === undefined) return;
+    publishControl({ type: "fullscreen", enabled: stationFullscreen });
+  }, [stationFullscreen, connectionState, publishNetworkStatus, publishControl]);
+
+  // Re-send all commands when the station participant reconnects (e.g. page refresh)
+  useEffect(() => {
+    if (publishNetworkStatus) return;
+    const handler = () => {
+      if (stationMicEnabledRef.current !== undefined)  publishControl({ type: "mic-control",   enabled: stationMicEnabledRef.current! });
+      if (stationCamEnabledRef.current !== undefined)  publishControl({ type: "cam-control",   enabled: stationCamEnabledRef.current! });
+      if (stationAudioInputRef.current)  publishControl({ type: "device-switch", kind: "audioinput",  deviceId: stationAudioInputRef.current });
+      if (stationVideoInputRef.current)  publishControl({ type: "device-switch", kind: "videoinput",  deviceId: stationVideoInputRef.current });
+      if (stationAudioOutputRef.current) publishControl({ type: "device-switch", kind: "audiooutput", deviceId: stationAudioOutputRef.current });
+      if (stationFullscreenRef.current !== undefined)  publishControl({ type: "fullscreen",    enabled: stationFullscreenRef.current! });
+    };
+    room.on(RoomEvent.ParticipantConnected, handler);
+    return () => { room.off(RoomEvent.ParticipantConnected, handler); };
+  }, [room, publishNetworkStatus, publishControl]);
+
+  // Receive station-state messages — checks msg.type (not topic) for LiveKit compatibility
+  useEffect(() => {
+    if (publishNetworkStatus) return;
+    const handler = (payload: Uint8Array) => {
+      try {
+        const msg = JSON.parse(new TextDecoder().decode(payload));
+        if (msg.type !== "station-state") return;
+        const state = msg as StationStateMsg;
+        setStationInfo(state);
+        onStationStateReceived?.(state);
+      } catch { /* ignore malformed */ }
+    };
+    room.on(RoomEvent.DataReceived, handler);
+    return () => { room.off(RoomEvent.DataReceived, handler); };
+  }, [room, publishNetworkStatus, onStationStateReceived]);
 
   return (
     <div
@@ -444,6 +693,23 @@ function ScreenTileInner({
         className,
       )}
     >
+      {/* ── Remote-control confirmation toast (station side only) — visible proof a
+           supervisor command arrived and was applied, since this device has no DevTools ── */}
+      {publishNetworkStatus && controlToast && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 pointer-events-none select-none">
+          <div
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-medium backdrop-blur-sm shadow-lg",
+              controlToast.ok
+                ? "bg-green-500/90 text-white"
+                : "bg-red-500/90 text-white",
+            )}
+          >
+            {controlToast.text}
+          </div>
+        </div>
+      )}
+
       {/* ── Status badges — top-right stack (Live/Offline + remote viewer signal) ── */}
       <div className="absolute top-2 right-2 z-10 pointer-events-none select-none flex flex-col items-end gap-1">
         {isLive ? (
@@ -607,11 +873,11 @@ function ScreenTileInner({
           isMain ? "px-2 pb-2 pt-12" : "px-1.5 pb-1.5 pt-10",
         )}
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 overflow-x-auto flex-nowrap">
           {/* Sound button + volume popup */}
           {isMain ? (
             <div
-              className="relative flex items-center"
+              className="relative flex items-center shrink-0"
               onMouseEnter={openVol}
               onMouseLeave={scheduleClose}
             >
@@ -674,7 +940,7 @@ function ScreenTileInner({
                 onToggleAudio();
               }}
               className={cn(
-                "h-6 w-6 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                "h-6 w-6 shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
                 !isAudioEnabled && "text-red-400 hover:text-red-300",
               )}
             >
@@ -696,7 +962,7 @@ function ScreenTileInner({
               onToggleVideo();
             }}
             className={cn(
-              "text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+              "shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
               isMain ? "h-8 gap-1.5 px-2.5 text-xs" : "h-6 w-6",
               !isVideoEnabled && "text-red-400 hover:text-red-300",
             )}
@@ -722,7 +988,7 @@ function ScreenTileInner({
                 onToggleMyScreenShare();
               }}
               className={cn(
-                "h-8 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                "h-8 shrink-0 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
                 myScreenShareEnabled && "text-red-400 hover:text-red-300",
               )}
             >
@@ -742,7 +1008,7 @@ function ScreenTileInner({
                 onToggleMyCam();
               }}
               className={cn(
-                "ml-auto text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                "ml-auto shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
                 isMain ? "h-8 gap-1.5 px-2.5 text-xs" : "h-6 w-6",
                 !myCamEnabled && "text-red-400 hover:text-red-300",
               )}
@@ -756,6 +1022,87 @@ function ScreenTileInner({
                 <span>{myCamEnabled ? "My Cam" : "My Cam Off"}</span>
               )}
             </Button>
+          )}
+
+          {/* ── Station device picker (supervisor side only) — sliders button opens camera/mic/speaker selects ── */}
+          {!publishNetworkStatus && stationInfo && (
+            <>
+              {(isMain || !onToggleMyCam) && <div className="ml-auto" />}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Station devices"
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                      isMain ? "h-8 w-8" : "h-6 w-6",
+                    )}
+                  >
+                    <SlidersHorizontal className={cn(isMain ? "h-3.5 w-3.5" : "h-3 w-3")} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  side="top"
+                  align="end"
+                  className="w-64 p-3 space-y-3 bg-neutral-900 border-white/10 text-white"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {stationInfo.cameras.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[0.65rem] font-medium text-white/50 uppercase tracking-wide">Camera</p>
+                      <Select value={stationVideoInput || stationInfo.activeCameraId} onValueChange={(v) => onStationDeviceChange?.("videoinput", v)}>
+                        <SelectTrigger className="h-7 w-full max-w-full text-xs bg-white/5 border-white/15 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-900 border-white/10 max-w-[240px]">
+                          {stationInfo.cameras.map(c => (
+                            <SelectItem key={c.deviceId} value={c.deviceId} title={c.label} className="text-xs text-white focus:bg-white/10 focus:text-white">
+                              <span className="block truncate">{c.label}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {stationInfo.mics.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[0.65rem] font-medium text-white/50 uppercase tracking-wide">Microphone</p>
+                      <Select value={stationAudioInput || stationInfo.activeMicId} onValueChange={(v) => onStationDeviceChange?.("audioinput", v)}>
+                        <SelectTrigger className="h-7 w-full max-w-full text-xs bg-white/5 border-white/15 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-900 border-white/10 max-w-[240px]">
+                          {stationInfo.mics.map(m => (
+                            <SelectItem key={m.deviceId} value={m.deviceId} title={m.label} className="text-xs text-white focus:bg-white/10 focus:text-white">
+                              <span className="block truncate">{m.label}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {stationInfo.speakers.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[0.65rem] font-medium text-white/50 uppercase tracking-wide">Speaker</p>
+                      <Select value={stationAudioOutput || stationInfo.activeSpeakerId} onValueChange={(v) => onStationDeviceChange?.("audiooutput", v)}>
+                        <SelectTrigger className="h-7 w-full max-w-full text-xs bg-white/5 border-white/15 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-900 border-white/10 max-w-[240px]">
+                          {stationInfo.speakers.map(s => (
+                            <SelectItem key={s.deviceId} value={s.deviceId} title={s.label} className="text-xs text-white focus:bg-white/10 focus:text-white">
+                              <span className="block truncate">{s.label}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </>
           )}
         </div>
       </div>
@@ -779,6 +1126,80 @@ function ScreenTileInner({
           stationNumber={stationNumber}
           stationName={name}
         />
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  StatusCard — shared "waiting" / "error" placeholder shown in place of    */
+/*  the tile's video (no token yet, connection timed out, or LiveKit error). */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+interface StatusCardProps {
+  isMain: boolean;
+  variant: "loading" | "error";
+  title: string;
+  subtitle?: string;
+  onRetry?: () => void;
+  onClick?: () => void;
+  className?: string;
+}
+
+function StatusCard({ isMain, variant, title, subtitle, onRetry, onClick, className }: StatusCardProps) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-xl bg-neutral-900 flex flex-col items-center justify-center gap-2 p-3 text-center",
+        !isMain &&
+          "cursor-pointer ring-2 ring-transparent hover:ring-white/40 transition-shadow duration-200",
+        className,
+      )}
+      onClick={!isMain ? onClick : undefined}
+    >
+      <div
+        className={cn(
+          "rounded-full flex items-center justify-center",
+          variant === "error" ? "bg-red-500/10" : "bg-black/30",
+          isMain ? "h-20 w-20" : "h-10 w-10",
+        )}
+      >
+        {variant === "error" ? (
+          <AlertTriangle className={cn("text-red-400", isMain ? "h-9 w-9" : "h-5 w-5")} />
+        ) : (
+          <div
+            className={cn(
+              "animate-spin rounded-full border-2 border-white/20 border-t-white/70",
+              isMain ? "h-9 w-9" : "h-5 w-5",
+            )}
+          />
+        )}
+      </div>
+      <span
+        className={cn(
+          "font-medium truncate max-w-[92%]",
+          variant === "error" ? "text-red-400" : "text-white/50",
+          isMain ? "text-base" : "text-[0.65rem] leading-tight",
+        )}
+      >
+        {title}
+      </span>
+      {subtitle && isMain && (
+        <span className="text-xs text-white/40 max-w-[85%]">{subtitle}</span>
+      )}
+      {onRetry && isMain && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetry();
+          }}
+          className="mt-1 gap-1.5 h-7 text-xs bg-white/5 border-white/15 text-white hover:bg-white/10 hover:text-white"
+        >
+          <RefreshCw className="h-3 w-3" />
+          Retry
+        </Button>
       )}
     </div>
   );
@@ -817,42 +1238,24 @@ export function ScreenTile({
   stationNumber,
   storeId,
   initialMedia,
+  onRetry,
+  stationMicEnabled,
+  stationCamEnabled,
+  stationAudioInput,
+  stationVideoInput,
+  stationAudioOutput,
+  stationFullscreen,
+  onToggleStationMic,
+  onToggleStationCam,
+  onToggleStationFullscreen,
+  onStationDeviceChange,
+  onStationStateReceived,
+  onActiveDeviceChange,
 }: ScreenTileProps) {
-  if (!token || !serverUrl) {
-    return (
-      <div
-        className={cn(
-          "relative overflow-hidden rounded-xl bg-neutral-900 flex flex-col items-center justify-center gap-2",
-          !isMain &&
-            "cursor-pointer ring-2 ring-transparent hover:ring-white/40 transition-shadow duration-200",
-          className,
-        )}
-        onClick={!isMain ? onClick : undefined}
-      >
-        <div
-          className={cn(
-            "rounded-full bg-black/30 flex items-center justify-center",
-            isMain ? "h-20 w-20" : "h-10 w-10",
-          )}
-        >
-          <div
-            className={cn(
-              "animate-spin rounded-full border-2 border-white/20 border-t-white/70",
-              isMain ? "h-9 w-9" : "h-5 w-5",
-            )}
-          />
-        </div>
-        <span
-          className={cn(
-            "font-medium text-white/50 truncate max-w-[88%] text-center",
-            isMain ? "text-base" : "text-[0.65rem] leading-tight",
-          )}
-        >
-          {name}
-        </span>
-      </div>
-    );
-  }
+  // Hooks must run unconditionally on every render (rules of hooks) — the
+  // token/serverUrl guard below only affects what gets returned, not which
+  // hooks are called, so it can safely flip between renders without a
+  // "rendered fewer/more hooks than expected" crash.
 
   // Memoize options so the object reference stays stable between renders.
   // A new object on every render would cause LiveKitRoom to tear down and
@@ -862,15 +1265,74 @@ export function ScreenTile({
       audioCaptureDefaults: selectedAudioDeviceId ? { deviceId: selectedAudioDeviceId } : undefined,
       videoCaptureDefaults: selectedVideoDeviceId ? { deviceId: selectedVideoDeviceId } : undefined,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     // Only re-create when the initial device IDs change (not on every render).
     // Device switching after connect is handled via room.switchActiveDevice inside ScreenTileInner.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
+  // Waiting for a token/serverUrl to arrive from the parent — after a grace
+  // period, swap the spinner for an explicit "taking too long" error card
+  // instead of spinning forever.
+  const hasConnectionInfo = !!token && !!serverUrl;
+  const [waitTimedOut, setWaitTimedOut] = useState(false);
+  useEffect(() => {
+    if (hasConnectionInfo) {
+      setWaitTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setWaitTimedOut(true), 12000);
+    return () => clearTimeout(timer);
+  }, [hasConnectionInfo]);
+
+  // LiveKit connection failure (bad/expired token, unreachable server, etc.).
+  // `attempt` is bumped on retry and used as the LiveKitRoom `key` to force a
+  // full remount + fresh connection attempt.
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  const handleRetry = () => {
+    setWaitTimedOut(false);
+    setConnectError(null);
+    setAttempt((a) => a + 1);
+    if (onRetry) {
+      onRetry();
+    } else if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  };
+
+  if (!hasConnectionInfo) {
+    return (
+      <StatusCard
+        isMain={isMain}
+        variant={waitTimedOut ? "error" : "loading"}
+        title={waitTimedOut ? "Couldn't connect" : name}
+        subtitle={waitTimedOut ? "This station is taking too long to respond." : undefined}
+        onRetry={waitTimedOut ? handleRetry : undefined}
+        onClick={onClick}
+        className={className}
+      />
+    );
+  }
+
+  if (connectError) {
+    return (
+      <StatusCard
+        isMain={isMain}
+        variant="error"
+        title="Connection failed"
+        subtitle={connectError}
+        onRetry={handleRetry}
+        onClick={onClick}
+        className={className}
+      />
+    );
+  }
+
   return (
     <LiveKitRoom
+      key={attempt}
       serverUrl={serverUrl}
       token={token}
       connect
@@ -878,6 +1340,7 @@ export function ScreenTile({
       video={false}
       options={roomOptions}
       style={{ display: "contents" }}
+      onError={(err) => setConnectError(err.message || "Unable to connect to the station stream.")}
     >
       <ScreenTileInner
         name={name}
@@ -905,6 +1368,18 @@ export function ScreenTile({
         stationNumber={stationNumber}
         storeId={storeId}
         initialMedia={initialMedia}
+        stationMicEnabled={stationMicEnabled}
+        stationCamEnabled={stationCamEnabled}
+        stationAudioInput={stationAudioInput}
+        stationVideoInput={stationVideoInput}
+        stationAudioOutput={stationAudioOutput}
+        stationFullscreen={stationFullscreen}
+        onToggleStationMic={onToggleStationMic}
+        onToggleStationCam={onToggleStationCam}
+        onToggleStationFullscreen={onToggleStationFullscreen}
+        onStationDeviceChange={onStationDeviceChange}
+        onStationStateReceived={onStationStateReceived}
+        onActiveDeviceChange={onActiveDeviceChange}
       />
     </LiveKitRoom>
   );

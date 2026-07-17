@@ -86,8 +86,10 @@ export function getInventoryErrorMessage(
     if (data?.error?.message) return data.error.message;
 
     // Common status fallbacks with clearer wording.
+    // For 401, prefer the backend's message (e.g. "not synced yet") over the
+    // generic fallback so operators can act on it.
     if (status === 401)
-      return "Unauthorized. Set a valid inventory token and try again.";
+      return data?.message || "Unauthorized. Set a valid inventory token and try again.";
     if (status === 403) return "You are not allowed to perform this action.";
     if (status === 404) return "The requested resource was not found.";
 

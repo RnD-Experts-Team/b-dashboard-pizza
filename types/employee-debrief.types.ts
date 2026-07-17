@@ -80,6 +80,19 @@ export interface ApiEmployeeDebriefListResponse {
   total?: number;
 }
 
+export interface ApiPaginatedDebriefResponse {
+  current_page: number;
+  per_page: number;
+  total: number;
+  last_page: number;
+  data: ApiEmployeeDebriefItem[];
+  first_page_url?: string | null;
+  next_page_url?: string | null;
+  prev_page_url?: string | null;
+  from?: number | null;
+  to?: number | null;
+}
+
 // ── Frontend types (camelCase) ─────────────────────────────────────────
 
 export interface DebriefAttachment {
@@ -104,6 +117,14 @@ export interface EmployeeDebriefItem {
   updatedAt?: string | null;
   notes?: string | null;
   attachments?: DebriefAttachment[];
+}
+
+export interface PaginatedDebriefResult {
+  currentPage: number;
+  perPage: number;
+  total: number;
+  lastPage: number;
+  items: EmployeeDebriefItem[];
 }
 
 export interface EmployeeDebriefDetail {
