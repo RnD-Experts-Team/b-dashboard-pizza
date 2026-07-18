@@ -149,6 +149,34 @@ function canonicalKey(rawName: string): string {
   return SENSOR_ALIASES[key] ?? key;
 }
 
+/**
+ * Returns true when `temp` (already in the display unit) is outside the safe
+ * range for the given canonical sensor key.
+ * Freezer: band -10–10 °F / -23–-12 °C → alert if outside the band
+ * Coolers / making table / ingredients: upper-limit only → alert if at/above
+ * Hot water: lower-limit only → alert if at/below
+ */
+function checkTempAlert(temp: number, canonicalName: string, useCelsius: boolean): boolean {
+  if (useCelsius) {
+    switch (canonicalName) {
+      case "freezer":        return temp < -23 || temp > -12;
+      case "walk in cooler": return temp >= 5;
+      case "making table":   return temp >= 5;
+      case "ingredients":    return temp >= 5;
+      case "hot water":      return temp <= 38;
+      default:               return false;
+    }
+  }
+  switch (canonicalName) {
+    case "freezer":        return temp < -10 || temp > 10;
+    case "walk in cooler": return temp >= 41;
+    case "making table":   return temp >= 41;
+    case "ingredients":    return temp >= 41;
+    case "hot water":      return temp <= 100;
+    default:               return false;
+  }
+}
+
 /** Title-case a normalized sensor key for display. */
 function sensorLabel(key: string): string {
   return key.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -227,12 +255,14 @@ function SensorCard({
   useCelsius: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const state       = sensor.state;
-  const isAlert     = state?.state === "alert";
-  const isStale     = sensor.stale ?? false;
+  const state         = sensor.state;
+  const isStale       = sensor.stale ?? false;
   const isUnavailable = sensor.source === "unavailable" || (!sensor.success && sensor.temperature == null);
-  const temp        = sensor.temperature ?? (typeof state?.temperature === "number" ? state.temperature : undefined);
-  const displayTime = sensor.as_of ?? sensor.reported_at;
+  const temp          = sensor.temperature ?? (typeof state?.temperature === "number" ? state.temperature : undefined);
+  const displayTime   = sensor.as_of ?? sensor.reported_at;
+  const isAlert       = !isUnavailable && temp != null
+    ? checkTempAlert(temp, canonicalKey(sensor.device_name), useCelsius)
+    : false;
   // Use the same static, unit-aware ranges as the MOS view (not the backend tempLimit).
   const staticRange = getSensorRanges(useCelsius)[canonicalKey(sensor.device_name)];
 
@@ -759,7 +789,11 @@ export default function SensorsPage() {
   const sensorList   = sensors?.sensors ?? [];
   const onlineCount  = sensorList.filter((s: SensorDevice) => s.online).length;
   const offlineCount = sensorList.length - onlineCount;
-  const alertCount   = sensorList.filter((s: SensorDevice) => s.state?.state === "alert").length;
+  const alertCount   = sensorList.filter((s: SensorDevice) => {
+    const sTemp = s.temperature ?? (typeof s.state?.temperature === "number" ? s.state.temperature : undefined);
+    const sUnavailable = s.source === "unavailable" || (!s.success && s.temperature == null);
+    return sTemp != null && !sUnavailable && checkTempAlert(sTemp, canonicalKey(s.device_name), useCelsius);
+  }).length;
   const fetchedAt    = sensors?.fetched_at ? formatDate(sensors.fetched_at) : null;
 
   return (
