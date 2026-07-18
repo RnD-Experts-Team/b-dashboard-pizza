@@ -1,3 +1,4 @@
+import axios, { AxiosError } from "axios";
 import { axiosClient } from "../axios-client";
 import type { ApiResponse } from "@/types/api.types";
 import type { AuthRule } from "@/types/auth-rule.types";
@@ -10,6 +11,7 @@ import type {
   ApiAuthRole,
   ApiAuthPermission,
   ApiAuthUserStore,
+  AuthActionResponse,
 } from "@/types/auth.types";
 
 type RawAuthRule = Record<string, unknown>;
@@ -157,6 +159,21 @@ function transformUser(apiUser: ApiAuthUser): AuthUser {
       manageableUsersCount: apiUser.summary?.manageable_users_count || 0,
     },
   };
+}
+
+/**
+ * Extract a user-facing message from the `{success:false, error:{code,message}}`
+ * envelope returned by the app/api/auth/* proxy routes (see app/api/_lib/auth.ts).
+ */
+function getAuthApiErrorMessage(error: unknown, fallback: string): string {
+  const axiosError = error as AxiosError<{ error?: { message?: string } }>;
+  const message = axiosError?.response?.data?.error?.message;
+  if (message) return message;
+  if (axiosError?.code === "ECONNABORTED") {
+    return "Request timed out. Please try again.";
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 export const authService = {
@@ -328,5 +345,62 @@ export const authService = {
       message: data.message,
       data: transformUser(data.data.user),
     };
+  },
+
+  /**
+   * Requests a password-reset OTP. Always calls OUR server-side proxy
+   * (`/api/auth/forgot-password`) directly via `axios`, not `axiosClient` —
+   * `axiosClient`'s base URL is `NEXT_PUBLIC_API_URL`, which would send this
+   * straight to the external auth server from the browser. The proxy route
+   * masks its response so this always resolves with a generic message,
+   * whether or not the email is registered.
+   */
+  forgotPassword: async (email: string): Promise<AuthActionResponse> => {
+    try {
+      const { data } = await axios.post<AuthActionResponse>(
+        "/api/auth/forgot-password",
+        { email }
+      );
+      return data;
+    } catch (error) {
+      throw new Error(
+        getAuthApiErrorMessage(error, "Unable to send verification code. Please try again.")
+      );
+    }
+  },
+
+  /** Verifies a password-reset OTP against the email it was sent to. */
+  verifyResetOtp: async (email: string, otp: string): Promise<AuthActionResponse> => {
+    try {
+      const { data } = await axios.post<AuthActionResponse>(
+        "/api/auth/reset-otp-verify",
+        { email, otp }
+      );
+      return data;
+    } catch (error) {
+      throw new Error(
+        getAuthApiErrorMessage(error, "That code is invalid or has expired.")
+      );
+    }
+  },
+
+  /** Completes a password reset using a verified OTP. */
+  resetPassword: async (
+    email: string,
+    otp: string,
+    password: string,
+    password_confirmation: string
+  ): Promise<AuthActionResponse> => {
+    try {
+      const { data } = await axios.post<AuthActionResponse>(
+        "/api/auth/reset-password",
+        { email, otp, password, password_confirmation }
+      );
+      return data;
+    } catch (error) {
+      throw new Error(
+        getAuthApiErrorMessage(error, "Unable to reset password. Please try again.")
+      );
+    }
   },
 };

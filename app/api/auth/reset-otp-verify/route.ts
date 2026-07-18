@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import {
   AUTH_API_URL,
   AUTH_TIMEOUT_MS,
@@ -16,19 +17,13 @@ import { checkRateLimit, getClientIp } from "@/app/api/_lib/rate-limit";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_RE = /^\d{6}$/;
 
-interface ResetPasswordBody {
+interface VerifyOtpBody {
   email?: unknown;
-  password?: unknown;
-  password_confirmation?: unknown;
   otp?: unknown;
 }
 
-function validateBody(
-  body: ResetPasswordBody
-):
-  | { email: string; password: string; password_confirmation: string; otp: string }
-  | string {
-  const { email, password, password_confirmation, otp } = body;
+function validateBody(body: VerifyOtpBody): { email: string; otp: string } | string {
+  const { email, otp } = body;
 
   if (!email || typeof email !== "string") {
     return "Email is required.";
@@ -42,30 +37,16 @@ function validateBody(
   if (!OTP_RE.test(otp)) {
     return "Verification code must be 6 digits.";
   }
-  if (!password || typeof password !== "string") {
-    return "Password is required.";
-  }
-  if (!password_confirmation || typeof password_confirmation !== "string") {
-    return "Password confirmation is required.";
-  }
-  if (password !== password_confirmation) {
-    return "Passwords do not match.";
-  }
 
-  return {
-    email: email.trim().toLowerCase(),
-    password,
-    password_confirmation,
-    otp,
-  };
+  return { email: email.trim().toLowerCase(), otp };
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  POST /api/auth/reset-password                                          */
+/*  POST /api/auth/reset-otp-verify                                        */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export async function POST(request: NextRequest) {
-  let body: ResetPasswordBody;
+  let body: VerifyOtpBody;
   try {
     body = await request.json();
   } catch {
@@ -76,11 +57,11 @@ export async function POST(request: NextRequest) {
   if (typeof result === "string") {
     return errorResponse("VALIDATION_ERROR", result, 422);
   }
-  const { email, password, password_confirmation, otp } = result;
+  const { email, otp } = result;
 
   const ip = getClientIp(request);
-  const rateLimit = checkRateLimit(`reset-password:${ip}:${email}`, {
-    max: 10,
+  const rateLimit = checkRateLimit(`reset-otp-verify:${ip}:${email}`, {
+    max: 5,
     windowMs: 15 * 60 * 1000,
   });
   if (!rateLimit.allowed) {
@@ -103,7 +84,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const targetUrl = `${AUTH_API_URL}/auth/reset-password`;
+  const targetUrl = `${AUTH_API_URL}/auth/reset-otp-verify`;
   console.log(`🔑 Auth Proxy → POST ${targetUrl} (${email})`);
 
   try {
@@ -115,7 +96,7 @@ export async function POST(request: NextRequest) {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ email, password, password_confirmation, otp }),
+        body: JSON.stringify({ email, otp }),
       },
       AUTH_TIMEOUT_MS,
       request.signal
@@ -134,7 +115,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (response.status === 401) {
+    // Keep the error generic — don't distinguish "wrong code" from
+    // "expired code" to avoid giving an attacker a state oracle.
+    if (response.status === 401 || response.status === 422) {
       return errorResponse(
         "INVALID_CREDENTIALS",
         "That code is invalid or has expired. Please try again or request a new one.",
@@ -142,10 +125,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return await mapUpstreamError(response, "Password reset failed.");
+    return await mapUpstreamError(response, "Unable to verify code.");
   } catch (error) {
     console.error(
-      "❌ Auth Proxy reset-password error:",
+      "❌ Auth Proxy reset-otp-verify error:",
       error instanceof Error ? error.message : error
     );
     return mapFetchError(error);
