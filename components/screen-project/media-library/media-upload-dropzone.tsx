@@ -63,15 +63,15 @@ export function MediaUploadDropzone({
           "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 transition-colors",
           isDragging
             ? "border-primary/60 bg-primary/5"
-            : "border-neutral-700 hover:border-neutral-500 hover:bg-neutral-800/50",
+            : "border-border hover:border-muted-foreground/50 hover:bg-accent",
         )}
       >
-        <Upload className="h-6 w-6 text-neutral-500" />
-        <p className="text-center text-sm text-neutral-400">
-          <span className="font-medium text-neutral-200">Click to upload</span>{" "}
+        <Upload className="h-6 w-6 text-muted-foreground" />
+        <p className="text-center text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Click to upload</span>{" "}
           or drag and drop
         </p>
-        <p className="text-xs text-neutral-600">Images and videos accepted</p>
+        <p className="text-xs text-muted-foreground/70">Images and videos accepted</p>
         <input
           ref={inputRef}
           type="file"
@@ -95,10 +95,10 @@ export function MediaUploadDropzone({
             return (
               <div
                 key={job.uploadId}
-                className="flex flex-col gap-1 rounded-lg bg-neutral-800 px-3 py-2"
+                className="flex flex-col gap-1 rounded-lg bg-muted px-3 py-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex-1 truncate text-xs text-neutral-300">
+                  <span className="flex-1 truncate text-xs text-foreground">
                     {job.fileName}
                   </span>
                   {job.status === "error" ? (
@@ -106,7 +106,7 @@ export function MediaUploadDropzone({
                   ) : job.status === "done" ? (
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-400" />
                   ) : (
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-neutral-400" />
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
                   )}
                 </div>
 
@@ -115,13 +115,13 @@ export function MediaUploadDropzone({
                     {job.error ?? "Upload failed"}
                   </p>
                 ) : job.status === "finalizing" ? (
-                  <p className="text-[0.65rem] text-neutral-500">
+                  <p className="text-[0.65rem] text-muted-foreground">
                     Finalizing…
                   </p>
                 ) : job.status === "uploading" ? (
                   <>
                     <Progress value={pct} className="h-1" />
-                    <p className="text-[0.65rem] text-neutral-500">
+                    <p className="text-[0.65rem] text-muted-foreground">
                       {job.uploadedChunks}/{job.totalChunks} chunks
                     </p>
                   </>

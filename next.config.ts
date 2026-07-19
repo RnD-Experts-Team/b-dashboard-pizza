@@ -99,6 +99,10 @@ const nextConfig: NextConfig = {
               `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
+              // Station media plays from blob: object URLs (cached bytes) served
+              // via our same-origin proxy. Without this, <video> falls back to
+              // default-src 'self' and blob: playback is blocked.
+              "media-src 'self' blob:",
               "font-src 'self' data:",
               `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""} ${screenProjectDomain} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
               `frame-src 'self' ${luminaBase}`,
