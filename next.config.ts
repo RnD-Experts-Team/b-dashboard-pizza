@@ -17,18 +17,11 @@ const getApiDomain = (url: string): string => {
 };
 
 const apiDomain = getApiDomain(apiUrl);
-const dsprApiUrl = process.env.NEXT_PUBLIC_DSPR_API_URL || "";
-const dsprDomain = getApiDomain(dsprApiUrl);
-const maintenanceApiUrl = process.env.NEXT_PUBLIC_MAINTENANCE_API_URL || "https://attend.pnepizza.com/api";
-const maintenanceDomain = getApiDomain(maintenanceApiUrl);
-const newMaintenanceApiUrl = process.env.NEXT_PUBLIC_NEW_MAINTENANCE_API_URL || "https://maintenancetesting.lcportal.cloud";
-const newMaintenanceDomain = getApiDomain(newMaintenanceApiUrl);
-const qaApiUrl = process.env.NEXT_PUBLIC_QA_API_URL || "https://qa.lcportal.cloud/api";
-const qaDomain = getApiDomain(qaApiUrl);
-const sensorsApiUrl = process.env.NEXT_PUBLIC_SENSORS_API_URL || "https://sensors.pnefoods.com/api";
-const sensorsDomain = getApiDomain(sensorsApiUrl);
-const screenProjectApiUrl = process.env.NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL || "https://controltesting.screens.lcportal.cloud/api";
-const screenProjectDomain = getApiDomain(screenProjectApiUrl);
+// NOTE: DSPR, DATA, QA, SENSORS, MAINTENANCE and SCREEN_PROJECT are reached ONLY
+// through same-origin /api proxy routes — the browser never connects to them
+// directly, so they are intentionally NOT listed in connect-src below (they are
+// covered by 'self'). This keeps the CSP tight and keeps those internal
+// hostnames out of the response header.
 // LiveKit server — wss:// + https:// for the same host
 const livekitDomain = "https://screens.lcportal.cloud";
 const livekitWss = "wss://screens.lcportal.cloud";
@@ -104,7 +97,7 @@ const nextConfig: NextConfig = {
               // default-src 'self' and blob: playback is blocked.
               "media-src 'self' blob:",
               "font-src 'self' data:",
-              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""}${dsprDomain ? ` ${dsprDomain}` : ""}${maintenanceDomain ? ` ${maintenanceDomain}` : ""}${qaDomain ? ` ${qaDomain}` : ""}${sensorsDomain ? ` ${sensorsDomain}` : ""} ${screenProjectDomain} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
+              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
               `frame-src 'self' ${luminaBase}`,
               "object-src 'none'",
               "base-uri 'self'",

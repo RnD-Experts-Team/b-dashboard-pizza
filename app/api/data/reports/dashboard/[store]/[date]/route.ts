@@ -14,7 +14,7 @@ export const fetchCache = "force-no-store";
 
 const DASHBOARD_BASE_URL =
   process.env.DASHBOARD_REPORT_API_URL ||
-  process.env.DSPR_API_URL ||
+  process.env.DSPR_API_URL?.replace(/\/dspr$/, "/dashboard") ||
   process.env.NEXT_PUBLIC_DSPR_API_URL?.replace(/\/dspr$/, "/dashboard") ||
   "https://data.lcportal.cloud/api/reports/dashboard";
 
