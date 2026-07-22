@@ -344,6 +344,136 @@ function StoreMultiSelect({ value, options, onApply, disabled }: StoreMultiSelec
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
+/*  Multi-Check Select — plain checklist, no internal Apply                */
+/*  (used inside the advanced filters panel, which is already Apply-gated) */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+interface MultiCheckOption {
+  value: number;
+  label: string;
+}
+
+interface MultiCheckSelectProps {
+  value: number[];
+  options: MultiCheckOption[];
+  onChange: (value: number[]) => void;
+  placeholder?: string;
+  searchPlaceholder?: string;
+  disabled?: boolean;
+  loading?: boolean;
+}
+
+function MultiCheckSelect({
+  value,
+  options,
+  onChange,
+  placeholder = "All",
+  searchPlaceholder = "Search…",
+  disabled,
+  loading,
+}: MultiCheckSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const filtered = search.trim()
+    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  useEffect(() => {
+    if (open) {
+      setSearch("");
+      const t = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  function toggle(id: number) {
+    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
+  }
+
+  const label =
+    value.length === 0
+      ? placeholder
+      : value.length === 1
+      ? options.find((o) => o.value === value[0])?.label ?? `${value.length} selected`
+      : `${value.length} selected`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "flex h-9 w-full items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors",
+            "hover:bg-accent hover:text-accent-foreground",
+            "focus:outline-none focus:ring-1 focus:ring-ring",
+            "disabled:cursor-not-allowed disabled:opacity-50",
+            value.length > 0 && "border-primary/40 bg-primary/5"
+          )}
+        >
+          <span className={cn("flex-1 truncate text-start", value.length === 0 && "text-muted-foreground")}>
+            {loading ? "Loading…" : label}
+          </span>
+          <ChevronDown
+            className={cn(
+              "ms-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+              open && "rotate-180"
+            )}
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0 shadow-md"
+      >
+        <div className="border-b px-2 py-1.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full rounded-sm bg-transparent py-1 pl-7 pr-2 text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+        </div>
+        <div className="max-h-52 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+          {filtered.length === 0 ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">No results</p>
+          ) : (
+            filtered.map((o) => {
+              const checked = value.includes(o.value);
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => toggle(o.value)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  <span
+                    className={cn(
+                      "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border",
+                      checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
+                    )}
+                  >
+                    {checked && <Check className="h-3 w-3" />}
+                  </span>
+                  <span className="truncate">{o.label}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
 /*  Filters bar                                                             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -475,10 +605,7 @@ export function TicketsFiltersBar({
     { value: "low", label: "Low" },
   ];
 
-  const issueOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All issues" },
-    ...catalogIssues.map((i) => ({ value: String(i.id), label: i.title })),
-  ];
+  const issueOptions: MultiCheckOption[] = catalogIssues.map((i) => ({ value: i.id, label: i.title }));
 
   const issueStatusOptions: SearchableSelectOption[] = [
     { value: "all", label: "All statuses" },
@@ -670,13 +797,13 @@ export function TicketsFiltersBar({
                 <AlertCircle className="h-3 w-3" />
                 Issue
               </label>
-              <SearchableSelect
-                value={draftFilters.issue_ids?.[0] != null ? String(draftFilters.issue_ids[0]) : "all"}
-                options={catalogLoading ? [{ value: "all", label: "Loading…" }] : issueOptions}
-                onChange={(v) => updateField("issue_ids", v === "all" ? [] : [Number(v)])}
+              <MultiCheckSelect
+                value={draftFilters.issue_ids ?? []}
+                options={issueOptions}
+                onChange={(ids) => updateField("issue_ids", ids)}
                 disabled={disabled || catalogLoading}
-                active={!!draftFilters.issue_ids?.length}
-                placeholder={catalogLoading ? "Loading…" : "All issues"}
+                loading={catalogLoading}
+                placeholder="All issues"
                 searchPlaceholder="Search issues…"
               />
             </div>

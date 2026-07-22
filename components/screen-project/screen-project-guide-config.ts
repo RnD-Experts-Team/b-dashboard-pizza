@@ -34,6 +34,21 @@ export function createScreenProjectGuideSteps(storeId: string): GuideStep[] {
       placement: "bottom",
     },
 
+    // ── Step 1b: Media Library ────────────────────────────────────────────────
+    {
+      id: "sp-media-library",
+      title: "Media Library",
+      description:
+        "The small icon on a tile — just above the station device-settings button — opens that station's Media Library. Upload images or looping videos there to be shown on the physical station screen whenever there's no live camera feed, instead of a blank black tile.",
+      bullets: [
+        "Shown automatically when the camera is off, before the station connects, or if it disconnects",
+        "Click a thumbnail to make it the Primary media shown on the screen",
+        "Use the circle on a thumbnail to select items, then delete them with the toolbar that appears",
+        "Changes reach the station screen immediately — no reload needed on the kiosk",
+      ],
+      placement: "bottom",
+    },
+
     // ── Step 2: Bottom control bar ────────────────────────────────────────────
     {
       id: "sp-bottom-bar",

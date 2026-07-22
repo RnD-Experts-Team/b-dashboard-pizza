@@ -1228,6 +1228,9 @@ function ScreenTileInner({
           device-picker (sliders) button, supervisor-only. */}
       {!viewerOnly && storeId && stationNumber !== undefined && (
         <div
+          // Guide only targets the main tile's button — side tiles render the
+          // same trigger, but only one instance should ever match the selector.
+          data-guide-id={isMain ? "sp-media-library" : undefined}
           className={cn(
             "absolute right-2 z-30",
             isMain ? "bottom-12" : "bottom-10",
