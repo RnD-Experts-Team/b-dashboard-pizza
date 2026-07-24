@@ -317,9 +317,14 @@ export function LaborTab({ data, error }: Props) {
       : entries.filter(([id]) => id === effective);
 
   return (
-    <div className="space-y-4">
-      <StoreNav items={navItems} value={effective} onChange={setSel} />
-      <div className="grid gap-4 lg:grid-cols-2">
+    <div className="flex flex-col gap-4 lg:flex-row-reverse lg:items-start">
+      <StoreNav
+        items={navItems}
+        value={effective}
+        onChange={setSel}
+        className="lg:sticky lg:top-0"
+      />
+      <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-2">
         {shown.map(([storeNum, report]) => (
           <StoreLaborBlock key={storeNum} storeNum={storeNum} report={report} />
         ))}

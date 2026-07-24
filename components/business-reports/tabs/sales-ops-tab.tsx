@@ -58,7 +58,16 @@ function CellBreakdown({ row }: { row: Record<string, number> }) {
         <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
           Channel Mix
         </p>
+        <p className="mb-1.5 text-[9.5px] text-muted-foreground">
+          Bar length = sales vs. top channel
+        </p>
         <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="w-20 shrink-0">Channel</span>
+            <span className="flex-1">Share</span>
+            <span className="w-10 shrink-0 text-end">Orders</span>
+            <span className="w-16 shrink-0 text-end">Sales</span>
+          </div>
           {channels.map(([label, sales, orders]) => (
             <div key={label} className="flex items-center gap-2 text-[11.5px]">
               <span className="w-20 shrink-0 text-muted-foreground">{label}</span>
@@ -81,9 +90,9 @@ function CellBreakdown({ row }: { row: Record<string, number> }) {
         <table className={TBL}>
           <thead>
             <tr>
-              <th className={TH}>Category</th>
-              <th className={cn(TH, NUM)}>Total $</th>
-              <th className={cn(TH, NUM)}>Qty</th>
+              <th className={cn(TH, "static")}>Category</th>
+              <th className={cn(TH, NUM, "static")}>Total $</th>
+              <th className={cn(TH, NUM, "static")}>Qty</th>
             </tr>
           </thead>
           <tbody>
@@ -406,10 +415,16 @@ export function SalesOpsTab({ data, error }: Props) {
       {/* Channel mix */}
       <ReportCard
         title="Channel Mix"
-        hint="Sales by ordering channel"
+        hint="Bar length = sales vs. top channel"
         accent={REPORT_COLORS.sales}
       >
         <div className="space-y-2.5 p-4">
+          <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="w-24 shrink-0">Channel</span>
+            <span className="flex-1">Share of top channel</span>
+            <span className="w-14 shrink-0 text-end">Orders</span>
+            <span className="w-24 shrink-0 text-end">Sales</span>
+          </div>
           {channels.map(([label, sales, orders]) => (
             <div key={label} className="flex items-center gap-3 text-[12.5px]">
               <span className="w-24 shrink-0 text-muted-foreground">{label}</span>

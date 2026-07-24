@@ -802,7 +802,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
 
           {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
-          {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)} */}
+           {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}  */}
 
           {/* 1·V1. Dashboard V1 (optimized) */}
            {/* {isNavItemVisible(dashboardV1Item) && renderNavLink(dashboardV1Item)} */}

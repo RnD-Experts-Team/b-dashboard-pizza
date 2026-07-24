@@ -15,12 +15,14 @@ import {
 } from "@/components/wbr-reports/primitives";
 import { fmt$2 } from "@/lib/mock/business-reports.mock";
 import type {
+  WbrBulkComplaint,
   WbrBulkResponse,
   WbrBulkStore,
 } from "@/types/business-reports.types";
 import { TabEmpty, TabError } from "../states";
 import { ExpandChevronButton, useExpandedRows } from "../expandable-row";
 import { CATEGORIES as REPORT_COLORS } from "@/components/dashboard-v1/category";
+import { WbrDetailDialog, DetailField } from "@/components/dspr/wbr-detail-dialog";
 
 const QUALITY = REPORT_COLORS.quality;
 const FINANCE = REPORT_COLORS.finance;
@@ -42,22 +44,23 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
   const complaints = store.complaints ?? [];
   const money_owed = store.money_owed ?? [];
   const moneyOwedExpand = useExpandedRows();
+  const [openComplaint, setOpenComplaint] = useState<WbrBulkComplaint | null>(null);
 
   return (
     <ReportCard
       title={store.store_label}
       hint={`${feedbacks.length} feedback · ${complaints.length} complaints · ${money_owed.length} expenses`}
-      className="lg:col-span-2"
-      bodyClassName="grid gap-4 p-4"
+      className="min-w-0 lg:col-span-2"
+      bodyClassName="grid min-w-0 gap-4 p-4"
       accent={QUALITY}
     >
       {/* Employee feedback */}
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <p className={subLabel(QUALITY)}>Employee Feedback</p>
         {feedbacks.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No feedback.</p>
         ) : (
-          <TblWrap>
+          <TblWrap tall>
             <table className={TBL}>
               <thead>
                 <tr>
@@ -101,12 +104,12 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
       </div>
 
       {/* Complaints */}
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <p className={subLabel(QUALITY)}>Complaints</p>
         {complaints.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No complaints.</p>
         ) : (
-          <TblWrap>
+          <TblWrap tall>
             <table className={TBL}>
               <thead>
                 <tr>
@@ -125,7 +128,11 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
               </thead>
               <tbody>
                 {complaints.map((c) => (
-                  <tr key={c.id}>
+                  <tr
+                    key={c.id}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => setOpenComplaint(c)}
+                  >
                     <td className={TD}>{c.external_entry_number}</td>
                     <td className={TD}>
                       {c.first_name} {c.last_name}
@@ -137,10 +144,10 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
                         <span>{c.email}</span>
                       </span>
                     </td>
-                    <td className={cn(TD, "max-w-[240px] whitespace-normal")}>
+                    <td className={cn(TD, "max-w-[240px] truncate")}>
                       {c.issue}
                     </td>
-                    <td className={cn(TD, "max-w-[240px] whitespace-normal")}>
+                    <td className={cn(TD, "max-w-[240px] truncate")}>
                       {c.suggestion}
                     </td>
                     <td className={TD}>
@@ -148,7 +155,7 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
                         {c.manager_informed}
                       </Chip>
                     </td>
-                    <td className={TD}>{c.complaint_date}</td>
+                    <td className={TD}>{c.complaint_date.slice(0, 10)}</td>
                     <td className={TD}>{c.submitted_at.slice(0, 10)}</td>
                     <td className={TD}>{c.created_at.slice(0, 10)}</td>
                     <td className={TD}>{c.updated_at.slice(0, 10)}</td>
@@ -160,13 +167,36 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
         )}
       </div>
 
+      <WbrDetailDialog
+        open={!!openComplaint}
+        onOpenChange={(o) => !o && setOpenComplaint(null)}
+        title={
+          openComplaint
+            ? `${openComplaint.first_name} ${openComplaint.last_name}`
+            : ""
+        }
+        badgeText={openComplaint?.store_label}
+      >
+        {openComplaint && (
+          <div className="space-y-1.5">
+            <DetailField label="Entry #" value={openComplaint.external_entry_number} />
+            <DetailField label="Phone" value={openComplaint.phone} />
+            <DetailField label="Email" value={openComplaint.email} />
+            <DetailField label="Mgr Informed" value={openComplaint.manager_informed} />
+            <DetailField label="Complaint Date" value={openComplaint.complaint_date.slice(0, 10)} />
+            <DetailField label="Issue" value={openComplaint.issue} wrap />
+            <DetailField label="Suggestion" value={openComplaint.suggestion} wrap />
+          </div>
+        )}
+      </WbrDetailDialog>
+
       {/* Money owed */}
-      <div className="space-y-2">
+      <div className="min-w-0 space-y-2">
         <p className={subLabel(FINANCE)}>Money Owed</p>
         {money_owed.length === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">No expenses.</p>
         ) : (
-          <TblWrap>
+          <TblWrap tall>
             <table className={TBL}>
               <thead>
                 <tr>
@@ -200,7 +230,7 @@ function StoreFeedbackBlock({ store }: { store: WbrBulkStore }) {
                         <td className={cn(TD, NUM)}>
                           {fmt$2(Number(m.expenses_amount) || 0)}
                         </td>
-                        <td className={TD}>{m.expense_date}</td>
+                        <td className={TD}>{m.expense_date.slice(0, 10)}</td>
                         <td className={TD}>
                           <Chip tone={approvalTone(m.approve)}>
                             {m.approve ?? "Pending"}
@@ -306,9 +336,14 @@ export function FeedbackTab({ data, error }: Props) {
       : stores.filter((s) => String(s.store_number) === effective);
 
   return (
-    <div className="space-y-4">
-      <StoreNav items={navItems} value={effective} onChange={setSel} />
-      <div className="grid gap-4 lg:grid-cols-2">
+    <div className="flex flex-col gap-4 lg:flex-row-reverse lg:items-start">
+      <StoreNav
+        items={navItems}
+        value={effective}
+        onChange={setSel}
+        className="lg:sticky lg:top-0"
+      />
+      <div className="grid min-w-0 flex-1 gap-4 lg:grid-cols-2">
         {shown.map((store) => (
           <StoreFeedbackBlock key={store.store_number} store={store} />
         ))}
