@@ -8,6 +8,7 @@ export { PortalOnTimeDualGauge } from "./portal-ontime-dual-gauge";
 export { LaborGauge } from "./labor-gauge";
 export { DsprDashboardSkeleton } from "./dspr-skeleton";
 export { DsprDashboard } from "./dspr-dashboard";
+export { DashboardViewToggle } from "./dashboard-view-toggle";
 export { RecentMaintenanceTable } from "./recent-maintenance-table";
 export { CurrentEmployeesTable } from "./current-employees-table";
 export { TopQaRatingsCard } from "./top-qa-ratings-card";

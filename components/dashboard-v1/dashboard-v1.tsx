@@ -124,7 +124,16 @@ function ForbiddenWelcomeScreen() {
  * endpoints) and lays widgets out in labeled, color-coded category sections
  * built from a unified card system.
  */
-export function DashboardV1() {
+interface DashboardV1Props {
+  /** Controlled date — pass this + onSelectedDateChange to sync the date across multiple mounted dashboard UIs (e.g. the main/V1 toggle). Uncontrolled (defaults to yesterday) when omitted. */
+  selectedDate?: Date;
+  onSelectedDateChange?: (date: Date) => void;
+}
+
+export function DashboardV1({
+  selectedDate: controlledDate,
+  onSelectedDateChange,
+}: DashboardV1Props = {}) {
   const {
     data,
     wbrData,
@@ -141,7 +150,9 @@ export function DashboardV1() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
-  const [selectedDate, setSelectedDate] = useState<Date>(subDays(new Date(), 1));
+  const [internalDate, setInternalDate] = useState<Date>(subDays(new Date(), 1));
+  const selectedDate = controlledDate ?? internalDate;
+  const setSelectedDate = onSelectedDateChange ?? setInternalDate;
   const [dateOpen, setDateOpen] = useState(false);
 
   const handleDateSelect = useCallback(
@@ -151,7 +162,7 @@ export function DashboardV1() {
       setDateOpen(false);
       refetch(toApiDate(date));
     },
-    [refetch],
+    [refetch, setSelectedDate],
   );
 
   const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
@@ -575,6 +586,7 @@ export function DashboardV1() {
         <V1BirthdayCard managerDashboard={managerDashboard} span={2} />
         <V1AveragePayCard
           data={managerDashboard.averageHourlyPay}
+          weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
           isLoading={managerDashboard.isLoading}
           span={2}
         />

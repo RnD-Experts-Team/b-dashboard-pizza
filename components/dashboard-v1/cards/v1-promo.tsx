@@ -137,6 +137,13 @@ export function V1PromoCard({
             }
           />
 
+          <V1MetricGrid cols={4}>
+            <V1Metric size="sm" label="DoorDash" value={fmt$(totals.total_doordash)} />
+            <V1Metric size="sm" label="UberEats" value={fmt$(totals.total_ubereats)} />
+            <V1Metric size="sm" label="GrubHub" value={fmt$(totals.total_grubhub)} />
+            <V1Metric size="sm" label="LC" value={fmt$(totals.total_lc)} />
+          </V1MetricGrid>
+
           <div>
             <V1SubLabel className="mb-1">Top Promo Groups</V1SubLabel>
             <div className="space-y-1.5">

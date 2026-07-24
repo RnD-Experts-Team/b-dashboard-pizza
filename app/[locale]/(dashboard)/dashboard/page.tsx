@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { PageHeader } from "@/components/layout/page-header";
-import { DsprDashboard } from "@/components/dspr";
+import { DashboardViewToggle } from "@/components/dspr";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
@@ -16,7 +16,7 @@ export default function DashboardPage() {
       /> */}
 
       {/* DSPR Dashboard — real data from the API */}
-      <DsprDashboard />
+      <DashboardViewToggle />
       <p className="pb-2 text-center text-[10px] text-muted-foreground/50">
         LC PIZZA DASHBOARD V1.2 Beta
       </p>

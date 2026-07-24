@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SpeedometerGauge, type SpeedZone } from "@/components/dspr/speedometer-gauge";
 import {
   WtdComparisonDialog,
+  ComparisonGrid,
   ComparisonTable,
 } from "@/components/dspr/wtd-comparison-dialog";
 import type { DsprHnr } from "@/types/dspr.types";
@@ -114,7 +115,35 @@ export function V1HnrCard({
       {weeklyHnr && (() => {
         const avg = weeklyAvgHnr ?? weeklyHnr;
         return (
-          <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Hot-N-Ready — Day vs Week-to-Date">
+          <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Hot-N-Ready Comparison">
+            <ComparisonGrid
+              daily={
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+                    {hnr.hnr_promise_met_percent.toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Promise Met</p>
+                  <div className="flex gap-3 mt-2">
+                    <span className="text-[11px]">Trans: <b>{hnr.hnr_transactions}</b></span>
+                    <span className="text-[11px]">Kept: <b>{hnr.hnr_promise_met}</b></span>
+                    <span className="text-[11px]">Broken: <b>{hnr.hnr_broken_promises}</b></span>
+                  </div>
+                </div>
+              }
+              wtd={
+                <div className="space-y-2">
+                  <p className="text-2xl font-bold text-primary tabular-nums">
+                    {avg.hnr_promise_met_percent.toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Promise Met (Avg)</p>
+                  <div className="flex gap-3 mt-2">
+                    <span className="text-[11px]">Trans: <b>{avg.hnr_transactions}</b></span>
+                    <span className="text-[11px]">Kept: <b>{avg.hnr_promise_met}</b></span>
+                    <span className="text-[11px]">Broken: <b>{avg.hnr_broken_promises}</b></span>
+                  </div>
+                </div>
+              }
+            />
             <ComparisonTable
               rows={[
                 { label: "Promise Met %", daily: `${hnr.hnr_promise_met_percent.toFixed(1)}%`, wtd: `${avg.hnr_promise_met_percent.toFixed(1)}%`, dailyNum: hnr.hnr_promise_met_percent, wtdNum: avg.hnr_promise_met_percent, higherIsBetter: true },

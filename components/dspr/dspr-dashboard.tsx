@@ -299,7 +299,16 @@ function ForbiddenWelcomeScreen({ locale }: { locale: string }) {
  *  - Last-updated timestamp
  *  - Smooth loading transitions
  */
-export function DsprDashboard() {
+interface DsprDashboardProps {
+  /** Controlled date — pass this + onSelectedDateChange to sync the date across multiple mounted dashboard UIs (e.g. the main/V1 toggle). Uncontrolled (defaults to yesterday) when omitted. */
+  selectedDate?: Date;
+  onSelectedDateChange?: (date: Date) => void;
+}
+
+export function DsprDashboard({
+  selectedDate: controlledDate,
+  onSelectedDateChange,
+}: DsprDashboardProps = {}) {
   const {
     data,
     wbrData,
@@ -318,9 +327,11 @@ export function DsprDashboard() {
   const locale = (params?.locale as string) || "en";
 
   // Default date = yesterday
-  const [selectedDate, setSelectedDate] = useState<Date>(
+  const [internalDate, setInternalDate] = useState<Date>(
     subDays(new Date(), 1),
   );
+  const selectedDate = controlledDate ?? internalDate;
+  const setSelectedDate = onSelectedDateChange ?? setInternalDate;
   const [dateOpen, setDateOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
 
@@ -332,7 +343,7 @@ export function DsprDashboard() {
       setDateOpen(false);
       refetch(toApiDate(date));
     },
-    [refetch],
+    [refetch, setSelectedDate],
   );
 
   // Re-fetch when the selected store changes

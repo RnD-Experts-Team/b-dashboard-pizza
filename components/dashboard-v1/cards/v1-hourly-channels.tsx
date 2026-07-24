@@ -70,6 +70,16 @@ export function V1HourlyChannelsCard({
     });
   }, []);
 
+  // Ctrl/Cmd+click a legend item to isolate it (hide every other channel).
+  // Ctrl/Cmd+click the already-isolated item again to restore all channels.
+  const isolate = useCallback((label: string) => {
+    setHidden((prev) => {
+      const others = CHANNEL_KEYS.map((c) => c.label).filter((l) => l !== label);
+      const alreadyIsolated = !prev.has(label) && others.every((l) => prev.has(l));
+      return alreadyIsolated ? new Set() : new Set(others);
+    });
+  }, []);
+
   /* ── Data shaping — same logic as original ────────────────────────────── */
   const { series, categories, channelHasData } = useMemo(() => {
     const src = view === "wtd" && weekly ? weekly : hourly;
@@ -218,7 +228,7 @@ export function V1HourlyChannelsCard({
             <button
               key={ch.label}
               type="button"
-              onClick={() => toggle(ch.label)}
+              onClick={(e) => (e.ctrlKey || e.metaKey ? isolate(ch.label) : toggle(ch.label))}
               className={cn(
                 "flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[8.5px] font-medium transition-all",
                 isHidden ? "opacity-30 text-muted-foreground" : "opacity-100",
