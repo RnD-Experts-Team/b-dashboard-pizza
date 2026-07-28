@@ -191,7 +191,7 @@ const DAY_LABELS: Record<string, string> = {
 
 const SHIFT_TYPES = ["AM", "PM", "OP"] as const;
 
-const STATUS_OPTIONS = ["hired", "resigned", "terminated", "rehired", "OJE"] as const;
+const STATUS_OPTIONS = ["hired", "resigned", "terminated", "rehired"] as const;
 
 function formatSSN(digits: string): string {
   if (digits.length <= 3) return digits;

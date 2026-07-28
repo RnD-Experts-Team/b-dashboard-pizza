@@ -120,7 +120,7 @@ export function CreateMilestoneGiftDialog({
     employeeService
       .getEmployeesV1(selectedStoreId, {
           per_page: 99,
-          status_in: ["hired", "rehired", "OJE"],
+          status_in: ["hired", "rehired"],
         })
       .then((res) => {
         if (cancelled) return;

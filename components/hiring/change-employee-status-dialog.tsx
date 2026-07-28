@@ -24,14 +24,13 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
 
-type EmployeeStatus = "hired" | "resigned" | "terminated" | "rehired" | "OJE";
+type EmployeeStatus = "hired" | "resigned" | "terminated" | "rehired";
 
 const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
   { value: "hired", label: "Hired" },
   { value: "resigned", label: "Resigned" },
   { value: "terminated", label: "Terminated" },
   { value: "rehired", label: "Rehired" },
-  { value: "OJE", label: "OJE" },
 ];
 
 interface ChangeEmployeeStatusDialogProps {

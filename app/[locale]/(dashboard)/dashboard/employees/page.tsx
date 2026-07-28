@@ -108,7 +108,7 @@ const DEFAULT_FILTERS: EmployeeFilterOptions = {
   employee_id: "",
   gender: "all",
   employment_type: "all",
-  status_in: ["hired", "rehired", "OJE"],
+  status_in: ["hired", "rehired"],
   position_id: "",
   marital_id: "",
   id_type_id: "",
@@ -704,7 +704,7 @@ export default function EmployeesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-44 p-1">
-                        {(["hired", "resigned", "terminated", "rehired", "OJE"] as const).map((v) => {
+                        {(["hired", "resigned", "terminated", "rehired"] as const).map((v) => {
                           const isSelected = filters.status_in?.includes(v) ?? false;
                           return (
                             <DropdownMenuItem
