@@ -12,7 +12,10 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { DAYS_SHORT, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { actualForPlanned } from "@/lib/scheduling/utils";
 import { ShiftCard } from "./shift-card";
+import { ActualShiftCard } from "./actual-shift-card";
+import { ComparisonShiftCard } from "./comparison-shift-card";
 import { EmployeeProfileDialog } from "./employee-profile-dialog";
 import type {
   ScheduleEmployee,
@@ -20,6 +23,8 @@ import type {
   WeekInfo,
   AvailabilityRule,
   TimeOffEntry,
+  ActualShift,
+  ScheduleMode,
 } from "@/types/scheduling.types";
 
 interface ScheduleGridProps {
@@ -37,6 +42,18 @@ interface ScheduleGridProps {
   onEmployeeClick?: (employee: ScheduleEmployee) => void;
   /** When true, hides hours column, daily-totals row, time-off & availability blocks (employee-facing screenshot) */
   employeeView?: boolean;
+  /** Planned vs actual toggle state — defaults to "planned" when omitted */
+  scheduleMode?: ScheduleMode;
+  /** When true, renders the side-by-side planned/actual diff view instead of scheduleMode */
+  comparisonMode?: boolean;
+  /** This week's actual-schedule entries */
+  actualShifts?: ActualShift[];
+  /** Reviewed-only merged shifts, used for hours/totals when not in pure planned mode */
+  displayShifts?: Shift[];
+  onConfirmActual?: (plannedShift: Shift) => void;
+  onEditActual?: (plannedShift: Shift | undefined, actual: ActualShift | undefined) => void;
+  onDeleteActual?: (actual: ActualShift) => void;
+  onAddCoverage?: (employeeId: string, dayIndex: number) => void;
 }
 
 export function ScheduleGrid({
@@ -53,8 +70,19 @@ export function ScheduleGrid({
   onDeleteShift,
   onEmployeeClick,
   employeeView,
+  scheduleMode = "planned",
+  comparisonMode = false,
+  actualShifts = [],
+  displayShifts,
+  onConfirmActual,
+  onEditActual,
+  onDeleteActual,
+  onAddCoverage,
 }: ScheduleGridProps) {
   const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
+  const isActualMode = scheduleMode === "actual" && !comparisonMode;
+  const effectiveShifts = displayShifts ?? shifts;
+
   // Group shifts by employee + day for O(1) lookup
   const shiftMap = useMemo(() => {
     const map: Record<string, Shift[]> = {};
@@ -66,23 +94,35 @@ export function ScheduleGrid({
     return map;
   }, [shifts]);
 
+  // Group standalone "added" actual shifts (ad-hoc coverage) by employee + day
+  const addedActualMap = useMemo(() => {
+    const map: Record<string, ActualShift[]> = {};
+    for (const a of actualShifts) {
+      if (a.status !== "added" || a.plannedShiftId) continue;
+      const key = `${a.employeeId}-${a.dayIndex}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(a);
+    }
+    return map;
+  }, [actualShifts]);
+
   // Per-employee weekly hours
   const hoursMap = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const s of shifts) {
+    for (const s of effectiveShifts) {
       map[s.employeeId] = (map[s.employeeId] ?? 0) + calcHours(s.startTime, s.endTime);
     }
     return map;
-  }, [shifts]);
+  }, [effectiveShifts]);
 
   // Per-employee shift counts
   const shiftCountMap = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const s of shifts) {
+    for (const s of effectiveShifts) {
       map[s.employeeId] = (map[s.employeeId] ?? 0) + 1;
     }
     return map;
-  }, [shifts]);
+  }, [effectiveShifts]);
 
   // Today highlight: find which dayIndex (0=Tue..6=Mon) is today
   const todayIndex = useMemo(() => {
@@ -102,14 +142,14 @@ export function ScheduleGrid({
       hours: 0,
       shifts: 0,
     }));
-    for (const s of shifts) {
+    for (const s of effectiveShifts) {
       if (s.dayIndex >= 0 && s.dayIndex < 7) {
         totals[s.dayIndex].hours += calcHours(s.startTime, s.endTime);
         totals[s.dayIndex].shifts += 1;
       }
     }
     return totals;
-  }, [shifts]);
+  }, [effectiveShifts]);
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -131,7 +171,8 @@ export function ScheduleGrid({
                 <th
                   key={day}
                   className={cn(
-                    "min-w-32.5 border-r last:border-r-0 px-2 py-2.5 text-center",
+                    comparisonMode ? "min-w-40" : "min-w-32.5",
+                    "border-r last:border-r-0 px-2 py-2.5 text-center",
                     todayIndex === i && "bg-primary/5"
                   )}
                 >
@@ -232,6 +273,7 @@ export function ScheduleGrid({
                   {DAYS_SHORT.map((_, dayIdx) => {
                     const key = `${emp.id}-${dayIdx}`;
                     const cellShifts = shiftMap[key] ?? [];
+                    const cellAddedActuals = addedActualMap[key] ?? [];
                     const empTimeOff = timeOff.find(
                       (t) => t.employeeId === emp.id && t.dayIndex === dayIdx
                     );
@@ -296,43 +338,113 @@ export function ScheduleGrid({
                             </div>
                           )}
 
-                          {/* Existing shifts (only when not fully blocked) */}
-                          {(!isFullDayBlocked || employeeView) &&
-                            cellShifts.map((shift) => (
-                              <ShiftCard
-                                key={shift.id}
-                                shift={shift}
-                                color={emp.color}
-                                hasConflict={conflictIds.has(shift.id)}
-                                onEdit={onEditShift}
-                                onDelete={onDeleteShift}
-                              />
-                            ))}
+                          {/* Comparison mode — side-by-side planned/actual diff, ignores day-block gating */}
+                          {comparisonMode && (
+                            <>
+                              {cellShifts.map((shift) => (
+                                <ComparisonShiftCard
+                                  key={shift.id}
+                                  plannedShift={shift}
+                                  actual={actualForPlanned(shift.id, actualShifts)}
+                                  color={emp.color}
+                                />
+                              ))}
+                              {cellAddedActuals.map((a) => (
+                                <ComparisonShiftCard key={a.id} actual={a} color={emp.color} />
+                              ))}
+                            </>
+                          )}
 
-                          {/* Add shift button (hidden when fully blocked or employee view) */}
-                          {!isFullDayBlocked && !employeeView && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className={cn(
-                                    "h-6 w-full border border-dashed border-transparent text-muted-foreground/40",
-                                    "hover:border-primary/30 hover:text-primary hover:bg-primary/5",
-                                    "transition-all",
-                                    cellShifts.length === 0 &&
-                                      !empUnavailable.length &&
-                                      "mt-2"
-                                  )}
-                                  onClick={() => onAddShift(emp.id, dayIdx)}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                Add shift for {emp.name}
-                              </TooltipContent>
-                            </Tooltip>
+                          {/* Actual mode — ghost/confirmed/modified/absent cards + ad-hoc coverage */}
+                          {isActualMode && (
+                            <>
+                              {cellShifts.map((shift) => (
+                                <ActualShiftCard
+                                  key={shift.id}
+                                  plannedShift={shift}
+                                  actual={actualForPlanned(shift.id, actualShifts)}
+                                  color={emp.color}
+                                  onConfirm={(s) => onConfirmActual?.(s)}
+                                  onEdit={(s, a) => onEditActual?.(s, a)}
+                                  onDelete={(a) => onDeleteActual?.(a)}
+                                />
+                              ))}
+                              {cellAddedActuals.map((a) => (
+                                <ActualShiftCard
+                                  key={a.id}
+                                  actual={a}
+                                  color={emp.color}
+                                  onConfirm={() => {}}
+                                  onEdit={(s, act) => onEditActual?.(s, act)}
+                                  onDelete={(act) => onDeleteActual?.(act)}
+                                />
+                              ))}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={cn(
+                                      "h-6 w-full border border-dashed border-transparent text-muted-foreground/40",
+                                      "hover:border-sky-400/40 hover:text-sky-600 hover:bg-sky-500/5",
+                                      "transition-all",
+                                      cellShifts.length === 0 &&
+                                        cellAddedActuals.length === 0 &&
+                                        "mt-2"
+                                    )}
+                                    onClick={() => onAddCoverage?.(emp.id, dayIdx)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-xs">
+                                  Add coverage for {emp.name}
+                                </TooltipContent>
+                              </Tooltip>
+                            </>
+                          )}
+
+                          {/* Planned mode (default) — unchanged existing behavior */}
+                          {!comparisonMode && !isActualMode && (
+                            <>
+                              {(!isFullDayBlocked || employeeView) &&
+                                cellShifts.map((shift) => (
+                                  <ShiftCard
+                                    key={shift.id}
+                                    shift={shift}
+                                    color={emp.color}
+                                    hasConflict={conflictIds.has(shift.id)}
+                                    onEdit={onEditShift}
+                                    onDelete={onDeleteShift}
+                                  />
+                                ))}
+
+                              {/* Add shift button (hidden when fully blocked or employee view) */}
+                              {!isFullDayBlocked && !employeeView && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className={cn(
+                                        "h-6 w-full border border-dashed border-transparent text-muted-foreground/40",
+                                        "hover:border-primary/30 hover:text-primary hover:bg-primary/5",
+                                        "transition-all",
+                                        cellShifts.length === 0 &&
+                                          !empUnavailable.length &&
+                                          "mt-2"
+                                      )}
+                                      onClick={() => onAddShift(emp.id, dayIdx)}
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs">
+                                    Add shift for {emp.name}
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -397,8 +509,8 @@ export function ScheduleGrid({
               ))}
               <td className="px-2 py-2 text-center">
                 <p className="text-xs font-bold">
-                  {shifts.length > 0
-                    ? `${shifts.reduce((t, s) => t + calcHours(s.startTime, s.endTime), 0).toFixed(1)}h`
+                  {effectiveShifts.length > 0
+                    ? `${effectiveShifts.reduce((t, s) => t + calcHours(s.startTime, s.endTime), 0).toFixed(1)}h`
                     : "—"}
                 </p>
               </td>

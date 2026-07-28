@@ -3,6 +3,7 @@ import type {
   ShiftConflict,
   AvailabilityRule,
   TimeOffEntry,
+  ActualShift,
 } from "@/types/scheduling.types";
 import { calcHours } from "./data";
 
@@ -190,4 +191,60 @@ export function dailyCoverage(shifts: Shift[]): Record<
     };
   }
   return result;
+}
+
+/** Find the ActualShift linked to a given planned shift id, if reviewed */
+export function actualForPlanned(
+  shiftId: string,
+  actual: ActualShift[]
+): ActualShift | undefined {
+  return actual.find((a) => a.plannedShiftId === shiftId);
+}
+
+/**
+ * Merge planned + actual shifts into a single reviewed-only "what really happened" list.
+ * - Linked confirmed/modified actuals replace the planned shift's time/label/type.
+ * - Linked absent actuals drop the planned shift entirely (no-show).
+ * - Planned shifts with no linked actual yet (still pending review) are excluded —
+ *   totals only reflect shifts a manager has explicitly reviewed.
+ * - Standalone "added" actuals (ad-hoc coverage, no plannedShiftId) are appended as-is.
+ * Result is Shift-shaped so it drops straight into detectConflicts/weeklyHoursMap/overtimeEmployees.
+ */
+export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shift[] {
+  const merged: Shift[] = [];
+
+  for (const shift of planned) {
+    const linked = actualForPlanned(shift.id, actual);
+    if (!linked) continue; // pending review — excluded
+    if (linked.status === "absent") continue; // no-show — excluded
+    merged.push({
+      id: shift.id,
+      employeeId: linked.employeeId,
+      dayIndex: linked.dayIndex,
+      startTime: linked.startTime,
+      endTime: linked.endTime,
+      label: linked.label,
+      type: linked.type,
+      isRecurring: shift.isRecurring,
+      recurringGroupId: shift.recurringGroupId,
+      note: linked.note ?? shift.note,
+    });
+  }
+
+  for (const a of actual) {
+    if (a.status === "added" && !a.plannedShiftId) {
+      merged.push({
+        id: a.id,
+        employeeId: a.employeeId,
+        dayIndex: a.dayIndex,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        label: a.label,
+        type: a.type,
+        note: a.note,
+      });
+    }
+  }
+
+  return merged;
 }
