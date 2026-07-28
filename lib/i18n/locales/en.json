@@ -1195,6 +1195,7 @@
       "pending": "Pending",
       "assigned": "Assigned",
       "in_progress": "In Progress",
+      "waiting": "Waiting",
       "complete": "Complete"
     },
     "priority": {
@@ -1287,6 +1288,11 @@
       "deferReasonPlaceholder": "Why is this issue being deferred?",
       "deferReasonRequired": "Please provide a reason for deferring.",
       "defer": "Defer",
+      "waitIssue": "Mark as Waiting",
+      "waitReason": "Reason",
+      "waitReasonPlaceholder": "What is this issue waiting on?",
+      "waitReasonRequired": "Please provide a reason for waiting.",
+      "wait": "Wait",
       "statusHistory": "Status History",
       "setFinalNote": "Set Final Note",
       "setFinalNoteDesc": "Add or update the final note for this ticket.",

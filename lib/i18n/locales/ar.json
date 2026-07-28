@@ -1195,6 +1195,7 @@
       "pending": "قيد الانتظار",
       "assigned": "مُسندة",
       "in_progress": "جارية",
+      "waiting": "بانتظار",
       "complete": "مكتملة"
     },
     "priority": {
@@ -1287,6 +1288,11 @@
       "deferReasonPlaceholder": "لماذا يتم تأجيل هذه المشكلة؟",
       "deferReasonRequired": "يرجى تقديم سبب للتأجيل.",
       "defer": "تأجيل",
+      "waitIssue": "وضع المشكلة في الانتظار",
+      "waitReason": "السبب",
+      "waitReasonPlaceholder": "ما الذي تنتظره هذه المشكلة؟",
+      "waitReasonRequired": "يرجى تقديم سبب للانتظار.",
+      "wait": "انتظار",
       "statusHistory": "سجل الحالة",
       "setFinalNote": "تعيين الملاحظة الختامية",
       "setFinalNoteDesc": "أضف أو حدّث الملاحظة الختامية لهذه التذكرة.",

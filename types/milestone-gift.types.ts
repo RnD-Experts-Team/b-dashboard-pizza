@@ -7,6 +7,7 @@
 
 export type Milestone =
   | "8_days"
+  | "14_days"
   | "1_month"
   | "2_months"
   | "3_months"

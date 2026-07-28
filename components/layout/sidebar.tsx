@@ -347,36 +347,36 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     label: t("qaManagement"),
     icon: ClipboardCheck,
     items: [
-      {
-        title: t("cameraForms"),
-        href: `/${locale}/dashboard/quality-assurance`,
-        icon: ClipboardCheck,
-        requirements: [
-          { service: "QA", method: "GET", path: "/camera-forms", storeId: effectiveStoreId },
-        ],
-      },
-      {
-        title: t("cameraReport"),
-        href: `/${locale}/dashboard/camera-report`,
-        icon: Camera,
-        requirements: [
-          {
-            service: "QA",
-            method: "GET",
-            path: "/audits/ratings-summary/{store_id}",
-            storeId: effectiveStoreId,
-          },
-        ],
-      },
-      {
-        title: t("entitiesAndCategories"),
-        href: `/${locale}/dashboard/entities-and-categories`,
-        icon: List,
-        requirements: [
-          { service: "QA", method: "POST", path: "/entities", storeId: effectiveStoreId },
-          { service: "QA", method: "POST", path: "/categories", storeId: effectiveStoreId },
-        ],
-      },
+      // {
+      //   title: t("cameraForms"),
+      //   href: `/${locale}/dashboard/quality-assurance`,
+      //   icon: ClipboardCheck,
+      //   requirements: [
+      //     { service: "QA", method: "GET", path: "/camera-forms", storeId: effectiveStoreId },
+      //   ],
+      // },
+      // {
+      //   title: t("cameraReport"),
+      //   href: `/${locale}/dashboard/camera-report`,
+      //   icon: Camera,
+      //   requirements: [
+      //     {
+      //       service: "QA",
+      //       method: "GET",
+      //       path: "/audits/ratings-summary/{store_id}",
+      //       storeId: effectiveStoreId,
+      //     },
+      //   ],
+      // },
+      // {
+      //   title: t("entitiesAndCategories"),
+      //   href: `/${locale}/dashboard/entities-and-categories`,
+      //   icon: List,
+      //   requirements: [
+      //     { service: "QA", method: "POST", path: "/entities", storeId: effectiveStoreId },
+      //     { service: "QA", method: "POST", path: "/categories", storeId: effectiveStoreId },
+      //   ],
+      // },
       {
         title: t("customReports"),
         href: `/${locale}/dashboard/custom-reports`,

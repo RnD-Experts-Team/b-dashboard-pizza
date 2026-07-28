@@ -11,6 +11,7 @@ import type {
   StatusChangePayload,
   DeferPayload,
   CancelPayload,
+  WaitPayload,
   FinalNotePayload,
   CreateNotePayload,
   CreateDiagnosisPayload,
@@ -756,6 +757,32 @@ export const maintenanceTicketsService = {
     try {
       await axios.post(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/cancel`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Put an issue into waiting (reason required; resume via changeIssueStatus) */
+  async waitIssue(
+    storeId: string,
+    ticketId: number,
+    issueId: number,
+    payload: WaitPayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/wait`,
         payload,
         {
           headers: {

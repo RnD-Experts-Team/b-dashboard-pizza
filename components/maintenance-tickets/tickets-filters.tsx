@@ -593,6 +593,7 @@ export function TicketsFiltersBar({
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
+    { value: "waiting", label: "Waiting" },
     { value: "complete", label: "Complete" },
     { value: "cancelled", label: "Cancelled" },
   ];
@@ -612,6 +613,7 @@ export function TicketsFiltersBar({
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
+    { value: "waiting", label: "Waiting" },
     { value: "complete", label: "Complete" },
     { value: "deferred", label: "Deferred" },
     { value: "cancelled", label: "Cancelled" },

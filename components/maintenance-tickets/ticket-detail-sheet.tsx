@@ -280,6 +280,7 @@ function StatusChip({ value, label }: { value: string; label: string }) {
     pending:     "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
     assigned:    "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
     in_progress: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30 dark:text-indigo-400",
+    waiting:     "bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400",
     complete:    "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
     cancelled:   "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
     deferred:    "bg-orange-500/10 text-orange-700 border-orange-500/30 dark:text-orange-400",
@@ -460,6 +461,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="pending" className={itemCls}>{t("status.pending")}</SelectItem>
                       <SelectItem value="assigned" className={itemCls}>{t("status.assigned")}</SelectItem>
                       <SelectItem value="in_progress" className={itemCls}>{t("status.in_progress")}</SelectItem>
+                      <SelectItem value="waiting" className={itemCls}>{t("status.waiting")}</SelectItem>
                       <SelectItem value="complete" className={itemCls}>{t("status.complete")}</SelectItem>
                       <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
                     </SelectContent>
@@ -497,6 +499,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="pending" className={itemCls}>Pending</SelectItem>
                       <SelectItem value="assigned" className={itemCls}>Assigned</SelectItem>
                       <SelectItem value="in_progress" className={itemCls}>In Progress</SelectItem>
+                      <SelectItem value="waiting" className={itemCls}>Waiting</SelectItem>
                       <SelectItem value="complete" className={itemCls}>Complete</SelectItem>
                       <SelectItem value="deferred" className={itemCls}>Deferred</SelectItem>
                       <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
@@ -900,6 +903,54 @@ function DeferPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClos
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.deferReason.trim()}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("detailSheet.defer")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface WaitPanelProps {
+  issue: TicketIssue;
+  storeId: string;
+  ticketId: number;
+  issueDraft: IssueDraft;
+  onPatchDraft: (patch: Partial<IssueDraft>) => void;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function WaitPanel({ issue, storeId, ticketId, issueDraft, onPatchDraft, onClose, onSuccess }: WaitPanelProps) {
+  const t = useTranslations("maintenanceTickets");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    if (!issueDraft.waitReason.trim()) { setError(t("detailSheet.waitReasonRequired")); return; }
+    setIsSubmitting(true); setError(null);
+    try {
+      await maintenanceTicketsService.waitIssue(storeId, ticketId, issue.id, { reason: issueDraft.waitReason.trim() });
+      toast.success("Issue marked as waiting");
+      onSuccess(); onClose();
+    } catch (err) {
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
+    } finally { setIsSubmitting(false); }
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("detailSheet.waitIssue")}</p>
+      <div className="space-y-1">
+        <Label className="text-xs">{t("detailSheet.waitReason")} <span className="text-destructive">*</span></Label>
+        <Textarea className="text-sm resize-none min-h-20" placeholder={t("detailSheet.waitReasonPlaceholder")}
+          value={issueDraft.waitReason} onChange={(e) => onPatchDraft({ waitReason: e.target.value })} />
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>{t("common.cancel")}</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !issueDraft.waitReason.trim()}>
+          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+          {t("detailSheet.wait")}
         </Button>
       </div>
     </div>
@@ -2035,6 +2086,7 @@ type ActiveAction =
   | "assign"
   | "defer"
   | "cancel"
+  | "wait"
   | "diagnosis"
   | "attendance"
   | "part"
@@ -2217,6 +2269,7 @@ function IssueNode({
   const canAssign = ["pending", "assigned"].includes(issue.status.value);
   const canDefer = issue.status.value !== "complete";
   const canCancel = !["complete", "cancelled"].includes(issue.status.value);
+  const canWait = !["waiting", "complete", "cancelled"].includes(issue.status.value);
 
   // ── Make Action tabs ───────────────────────────────────────────────────────
   // Default to "Assign technician" when assignable, otherwise "Change status".
@@ -2233,6 +2286,7 @@ function IssueNode({
     { key: "status", label: "Change status", Icon: FileText, group: "Issue" },
     ...(canAssign ? [{ key: "assign" as const, label: "Assign technician", Icon: UserRoundPlus, group: "Issue" as const }] : []),
     ...(canDefer ? [{ key: "defer" as const, label: "Defer", Icon: TimerReset, group: "Issue" as const }] : []),
+    ...(canWait ? [{ key: "wait" as const, label: "Wait", Icon: ClockIcon, group: "Issue" as const }] : []),
     ...(canCancel ? [{ key: "cancel" as const, label: "Cancel", Icon: X, group: "Issue" as const, destructive: true }] : []),
     { key: "diagnosis", label: "Troubleshooting", Icon: FileText, group: "Add records" },
     { key: "attendance", label: "Attendance", Icon: Wrench, group: "Add records" },
@@ -3263,6 +3317,11 @@ function IssueNode({
                           )}
                           {activeTab === "defer" && (
                             <DeferPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              issueDraft={issueDraft} onPatchDraft={onPatchDraft}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "wait" && (
+                            <WaitPanel issue={issue} storeId={storeId} ticketId={ticketId}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
