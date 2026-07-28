@@ -35,3 +35,4 @@ export { WbrTransferInOutCard } from "./wbr-transfer-in-out-card";
 export { SalesHistoryCard } from "./sales-history-card";
 export { WbrCleaningReviewCard } from "./wbr-cleaning-review-card";
 export { WbrCustomerServiceCard } from "./wbr-customer-service-card";
+export { WbrPortioningCard } from "./wbr-portioning-card";

@@ -473,4 +473,27 @@ export interface DashboardReportExtras {
   "sales-history"?: SalesHistory;
   "cleaning-review"?: CleaningReview;
   "customer-service"?: CustomerService;
+  portioning?: Portioning;
+}
+
+// ============================================================================
+// portioning
+// ============================================================================
+
+export interface PortioningVarianceEntry {
+  ingredient_id: string;
+  ingredient_description: string;
+  variance_value: number;
+  percentage_of_theo_usage: number;
+}
+
+export interface Portioning {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+  };
+  theo_usage: number;
+  variance_breakdown: PortioningVarianceEntry[];
 }

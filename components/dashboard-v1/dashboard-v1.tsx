@@ -79,6 +79,7 @@ import {
   V1MaintenanceCard,
   V1CleaningReviewCard,
   V1CustomerServiceCard,
+  V1PortioningCard,
 } from "./cards";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
@@ -622,6 +623,7 @@ export function DashboardV1({
         <V1FeedbacksCard data={hooksWbr.data?.feedbacks} isLoading={hooksWbr.isLoading} span={2} />
         <V1CleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} span={2} />
         <V1CustomerServiceCard data={wbrData?.["customer-service"]} isLoading={isLoading} span={2} />
+        <V1PortioningCard data={wbrData?.portioning} isLoading={isLoading} span={4} />
       </V1Section>
     </div>
   );

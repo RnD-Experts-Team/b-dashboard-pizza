@@ -7,6 +7,7 @@ import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import { useHooksWbr } from "@/lib/hooks/use-hooks-wbr";
+import { useAuth } from "@/lib/auth/use-auth";
 import {
   SalesChart,
   TopItemsList,
@@ -44,6 +45,7 @@ import {
   WbrTransferInOutCard,
   WbrCleaningReviewCard,
   WbrCustomerServiceCard,
+  WbrPortioningCard,
 } from "@/components/dspr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -85,12 +87,14 @@ import {
   EyeOff,
   HelpCircle,
   ImageDown,
+  LayoutTemplate,
   MoreVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageGuide } from "@/components/shared/page-guide";
 import { DSPR_GUIDE_STEPS } from "./dspr-guide-config";
 import { buildDsprReportHtml } from "./dspr-report-template";
+import { buildStorePerformanceReportHtml } from "./dspr-store-performance-report-template";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
 function toApiDate(date: Date): string {
@@ -373,6 +377,9 @@ export function DsprDashboard({
   // Hooks WBR — complaints, feedbacks, money_owed for the week
   const hooksWbr = useHooksWbr(storeId, toApiDate(selectedDate));
 
+  // Current user — powers the manager photo/name on the Store Performance report
+  const { user } = useAuth();
+
   // Format "last updated" time
   const lastUpdatedLabel = useMemo(() => {
     if (!lastFetchedAt) return null;
@@ -396,6 +403,7 @@ export function DsprDashboard({
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCapturingReport, setIsCapturingReport] = useState(false);
+  const [isCapturingStorePerformance, setIsCapturingStorePerformance] = useState(false);
 
   // Toggle to remove section backgrounds (persisted in localStorage)
   const [hideSectionBackgrounds, setHideSectionBackgrounds] = useState(false);
@@ -532,6 +540,89 @@ export function DsprDashboard({
       setIsCapturingReport(false);
     }
   }, [data, isCapturingReport, selectedDate, selectedStore]);
+
+  // ── Screenshot the "Daily Store Performance" HTML report as a PNG ───────
+  // Same off-screen iframe + html2canvas flow as handleScreenshotReport, for
+  // the second report design (tips, guest service, feedback/complaints, HNR,
+  // portal, manager photo).
+  const handleScreenshotStorePerformance = useCallback(async () => {
+    if (!data || isCapturingStorePerformance) return;
+    setIsCapturingStorePerformance(true);
+
+    const html = buildStorePerformanceReportHtml(
+      {
+        data,
+        storeId: storeId ?? "store",
+        guestService: wbrData?.["customer-service"],
+        complaints: hooksWbr.data?.complaints,
+        feedbacks: hooksWbr.data?.feedbacks,
+        managerName: user?.name ?? "Store Manager",
+        managerAvatarUrl: user?.avatar,
+      },
+      selectedDate,
+    );
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.top = "0";
+    iframe.style.left = "-99999px";
+    iframe.style.width = "1180px";
+    iframe.style.height = "2000px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("Failed to render report"));
+        iframe.srcdoc = html;
+      });
+
+      const doc = iframe.contentDocument;
+      const dashboardEl = doc?.querySelector<HTMLElement>(".dashboard");
+      if (!doc || !dashboardEl) throw new Error("Report content did not render");
+
+      // Wait for web fonts + Font Awesome icons to finish loading.
+      try {
+        await doc.fonts?.ready;
+      } catch {
+        // ignore — fall through to the fixed delay below
+      }
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Resize the iframe to the report's actual rendered height before capture.
+      iframe.style.height = `${dashboardEl.scrollHeight}px`;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const canvas = await html2canvas(dashboardEl, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#efefef",
+        logging: false,
+        imageTimeout: 8000,
+      });
+
+      const storeName = storeId ?? "store";
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const link = document.createElement("a");
+      link.download = `DSPR-StorePerformance-${storeName}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Store performance report screenshot failed:", err);
+    } finally {
+      document.body.removeChild(iframe);
+      setIsCapturingStorePerformance(false);
+    }
+  }, [
+    data,
+    isCapturingStorePerformance,
+    selectedDate,
+    storeId,
+    wbrData,
+    hooksWbr.data,
+    user,
+  ]);
 
   const toggleHideBackgrounds = useCallback(() => {
     setHideSectionBackgrounds((prev) => {
@@ -793,7 +884,7 @@ export function DsprDashboard({
                 className="h-6 w-6"
                 title="Export & view options"
               >
-                {isCapturing || isCapturingReport ? (
+                {isCapturing || isCapturingReport || isCapturingStorePerformance ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <MoreVertical className="h-3 w-3" />
@@ -808,6 +899,13 @@ export function DsprDashboard({
               <DropdownMenuItem onSelect={handleScreenshotReport} disabled={!data || isCapturingReport}>
                 <ImageDown className="h-3.5 w-3.5 me-2" />
                 {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={handleScreenshotStorePerformance}
+                disabled={!data || isCapturingStorePerformance}
+              >
+                <LayoutTemplate className="h-3.5 w-3.5 me-2" />
+                {isCapturingStorePerformance ? "Capturing…" : "Store Performance report (PNG)"}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={toggleHideBackgrounds}>
                 {hideSectionBackgrounds ? (
@@ -1073,6 +1171,10 @@ export function DsprDashboard({
         
         <div>
           <WbrCleaningReviewCard data={wbrData?.["cleaning-review"]} isLoading={isLoading} />
+        </div>
+
+        <div className="md:col-span-2 lg:col-span-4">
+          <WbrPortioningCard data={wbrData?.portioning} isLoading={isLoading} />
         </div>
       </div>
       <PageGuide
