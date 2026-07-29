@@ -2,7 +2,6 @@ import axios from "axios";
 import type {
   StationMedia,
   FinalizeUploadItem,
-  BulkCompleteResponse,
 } from "@/types/screen-project-media.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -123,8 +122,10 @@ export const screenProjectMediaService = {
     storeId: string,
     station: number,
     uploads: FinalizeUploadItem[],
-  ): Promise<BulkCompleteResponse> {
-    const { data } = await axios.post<BulkCompleteResponse>(
+  ): Promise<unknown> {
+    // Return the raw body — the backend's success shape varies, so the caller
+    // normalizes it (see extractBulkResults in use-screen-project-media).
+    const { data } = await axios.post<unknown>(
       `${BASE(storeId, station)}/uploads/complete-bulk`,
       { uploads },
       { headers: buildHeaders(), timeout: 30_000 },

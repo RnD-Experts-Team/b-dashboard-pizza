@@ -1,39 +1,110 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  AUTH_API_URL,
+  AUTH_TIMEOUT_MS,
   errorResponse,
   fetchWithTimeout,
+  mapUpstreamError,
+  mapFetchError,
 } from "@/app/api/_lib/auth";
+import { checkRateLimit, getClientIp } from "@/app/api/_lib/rate-limit";
 
-const API_BASE_URL = "https://api.lcportal.cloud/api/v1";
-const TIMEOUT_MS = 15_000;
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Validation                                                              */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const OTP_RE = /^\d{6}$/;
+
+interface ResetPasswordBody {
+  email?: unknown;
+  password?: unknown;
+  password_confirmation?: unknown;
+  otp?: unknown;
+}
+
+function validateBody(
+  body: ResetPasswordBody
+):
+  | { email: string; password: string; password_confirmation: string; otp: string }
+  | string {
+  const { email, password, password_confirmation, otp } = body;
+
+  if (!email || typeof email !== "string") {
+    return "Email is required.";
+  }
+  if (!EMAIL_RE.test(email)) {
+    return "Please enter a valid email address.";
+  }
+  if (!otp || typeof otp !== "string") {
+    return "Verification code is required.";
+  }
+  if (!OTP_RE.test(otp)) {
+    return "Verification code must be 6 digits.";
+  }
+  if (!password || typeof password !== "string") {
+    return "Password is required.";
+  }
+  if (!password_confirmation || typeof password_confirmation !== "string") {
+    return "Password confirmation is required.";
+  }
+  if (password !== password_confirmation) {
+    return "Passwords do not match.";
+  }
+
+  return {
+    email: email.trim().toLowerCase(),
+    password,
+    password_confirmation,
+    otp,
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  POST /api/auth/reset-password                                          */
+/* ────────────────────────────────────────────────────────────────────────── */
 
 export async function POST(request: NextRequest) {
-  let body: { email?: string; password?: string; password_confirmation?: string; otp?: string };
+  let body: ResetPasswordBody;
   try {
     body = await request.json();
   } catch {
     return errorResponse("INVALID_REQUEST", "Request body must be valid JSON.", 400);
   }
 
-  const { email, password, password_confirmation, otp } = body;
+  const result = validateBody(body);
+  if (typeof result === "string") {
+    return errorResponse("VALIDATION_ERROR", result, 422);
+  }
+  const { email, password, password_confirmation, otp } = result;
 
-  if (!email || typeof email !== "string") {
-    return errorResponse("VALIDATION_ERROR", "Email is required.", 422);
-  }
-  if (!password || typeof password !== "string") {
-    return errorResponse("VALIDATION_ERROR", "Password is required.", 422);
-  }
-  if (!password_confirmation || typeof password_confirmation !== "string") {
-    return errorResponse("VALIDATION_ERROR", "Password confirmation is required.", 422);
-  }
-  if (password !== password_confirmation) {
-    return errorResponse("VALIDATION_ERROR", "Passwords do not match.", 422);
-  }
-  if (!otp || typeof otp !== "string") {
-    return errorResponse("VALIDATION_ERROR", "OTP is required.", 422);
+  const ip = getClientIp(request);
+  const rateLimit = checkRateLimit(`reset-password:${ip}:${email}`, {
+    max: 10,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many attempts. Please wait before trying again.",
+          retryAfter: rateLimit.retryAfterSeconds,
+        },
+      },
+      {
+        status: 429,
+        headers: {
+          "Cache-Control": "no-store",
+          "Retry-After": String(rateLimit.retryAfterSeconds),
+        },
+      }
+    );
   }
 
-  const targetUrl = `${API_BASE_URL}/auth/reset-password`;
+  const targetUrl = `${AUTH_API_URL}/auth/reset-password`;
+  console.log(`🔑 Auth Proxy → POST ${targetUrl} (${email})`);
 
   try {
     const response = await fetchWithTimeout(
@@ -46,13 +117,15 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({ email, password, password_confirmation, otp }),
       },
-      TIMEOUT_MS
+      AUTH_TIMEOUT_MS,
+      request.signal
     );
 
-    const responseBody = await response.text();
+    console.log(`🔑 Auth Proxy ← ${response.status}`);
 
     if (response.ok) {
-      return new NextResponse(responseBody, {
+      const data = await response.text();
+      return new Response(data, {
         status: 200,
         headers: {
           "Content-Type": "application/json",
@@ -61,35 +134,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (response.status === 422) {
-      let parsed;
-      try {
-        parsed = JSON.parse(responseBody);
-      } catch {
-        parsed = {};
-      }
+    if (response.status === 401) {
       return errorResponse(
-        "VALIDATION_ERROR",
-        parsed?.message || "Validation failed.",
-        422,
-        parsed?.errors ? { errors: parsed.errors } : undefined
+        "INVALID_CREDENTIALS",
+        "That code is invalid or has expired. Please try again or request a new one.",
+        401
       );
     }
 
-    if (response.status === 401) {
-      return errorResponse("INVALID_CREDENTIALS", "Invalid OTP or credentials.", 401);
-    }
-
-    return errorResponse(
-      "UPSTREAM_ERROR",
-      `Password reset failed (${response.status}).`,
-      response.status >= 500 ? 502 : response.status
-    );
+    return await mapUpstreamError(response, "Password reset failed.");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    if (message.includes("timed out") || message.includes("abort")) {
-      return errorResponse("TIMEOUT", "Request timed out. Please try again.", 504);
-    }
-    return errorResponse("NETWORK_ERROR", "Unable to reach the server.", 503);
+    console.error(
+      "❌ Auth Proxy reset-password error:",
+      error instanceof Error ? error.message : error
+    );
+    return mapFetchError(error);
   }
 }

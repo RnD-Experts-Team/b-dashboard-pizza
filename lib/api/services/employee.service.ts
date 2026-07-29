@@ -864,7 +864,7 @@ export const employeeService = {
     storeId: string,
     employeeId: number,
     payload: {
-      status: "hired" | "resigned" | "terminated" | "rehired" | "OJE";
+      status: "hired" | "resigned" | "terminated" | "rehired";
       effective_date?: string;
       notes?: string;
     },

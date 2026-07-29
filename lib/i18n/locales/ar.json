@@ -204,13 +204,27 @@
     },
     "forgotPassword": {
       "title": "إعادة تعيين كلمة المرور",
-      "description": "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين",
+      "description": "أدخل بريدك الإلكتروني وسنرسل لك رمز تحقق",
       "email": "البريد الإلكتروني",
       "emailPlaceholder": "you@example.com",
-      "submit": "إرسال رابط إعادة التعيين",
+      "submit": "إرسال الرمز",
       "backToLogin": "العودة لتسجيل الدخول",
       "checkEmail": "تحقق من بريدك الإلكتروني",
-      "checkEmailDescription": "لقد أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني."
+      "checkEmailDescription": "إذا كان هناك حساب مرتبط بـ {email}، فقد أرسلنا رمز تحقق إليه.",
+      "otpLabel": "رمز التحقق",
+      "verify": "تحقق من الرمز",
+      "resendCode": "إعادة إرسال الرمز",
+      "resendCodeIn": "إعادة الإرسال خلال {seconds} ثانية",
+      "changeEmail": "استخدام بريد إلكتروني مختلف",
+      "resetTitle": "تعيين كلمة مرور جديدة",
+      "resetDescription": "اختر كلمة مرور جديدة لحسابك",
+      "newPassword": "كلمة المرور الجديدة",
+      "confirmNewPassword": "تأكيد كلمة المرور الجديدة",
+      "resetSubmit": "إعادة تعيين كلمة المرور",
+      "passwordMismatch": "كلمتا المرور غير متطابقتين",
+      "passwordTooShort": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل",
+      "successTitle": "تمت إعادة تعيين كلمة المرور",
+      "successDescription": "تمت إعادة تعيين كلمة المرور بنجاح. يرجى تسجيل الدخول بكلمة المرور الجديدة."
     }
   },
   "dashboard": {
@@ -1181,6 +1195,7 @@
       "pending": "قيد الانتظار",
       "assigned": "مُسندة",
       "in_progress": "جارية",
+      "waiting": "بانتظار",
       "complete": "مكتملة"
     },
     "priority": {
@@ -1273,6 +1288,11 @@
       "deferReasonPlaceholder": "لماذا يتم تأجيل هذه المشكلة؟",
       "deferReasonRequired": "يرجى تقديم سبب للتأجيل.",
       "defer": "تأجيل",
+      "waitIssue": "وضع المشكلة في الانتظار",
+      "waitReason": "السبب",
+      "waitReasonPlaceholder": "ما الذي تنتظره هذه المشكلة؟",
+      "waitReasonRequired": "يرجى تقديم سبب للانتظار.",
+      "wait": "انتظار",
       "statusHistory": "سجل الحالة",
       "setFinalNote": "تعيين الملاحظة الختامية",
       "setFinalNoteDesc": "أضف أو حدّث الملاحظة الختامية لهذه التذكرة.",

@@ -36,6 +36,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending:     "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
   assigned:    "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
   in_progress: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30 dark:text-indigo-400",
+  waiting:     "bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400",
   complete:    "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
   cancelled:   "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
   deferred:    "bg-orange-500/10 text-orange-700 border-orange-500/30 dark:text-orange-400",

@@ -59,6 +59,7 @@ interface CreateMilestoneGiftDialogProps {
 
 const MILESTONES: { value: Milestone; label: string }[] = [
   { value: "8_days", label: "8 Days" },
+  { value: "14_days", label: "14 Days" },
   { value: "1_month", label: "1 Month" },
   { value: "2_months", label: "2 Months" },
   { value: "3_months", label: "3 Months" },
@@ -119,7 +120,7 @@ export function CreateMilestoneGiftDialog({
     employeeService
       .getEmployeesV1(selectedStoreId, {
           per_page: 99,
-          status_in: ["hired", "rehired", "OJE"],
+          status_in: ["hired", "rehired"],
         })
       .then((res) => {
         if (cancelled) return;

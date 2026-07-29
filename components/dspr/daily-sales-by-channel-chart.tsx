@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,85 +31,67 @@ const CHANNEL_KEYS: { key: keyof DsprChannelSales; label: string; color: string 
   { key: "drive_thru_sales", label: "Drive-Thru", color: "#D10CE8" },
 ];
 
-interface DailySalesByChannelChartProps {
-  totalSales: DsprChannelSales;
-  /** WTD totals — enables the Day/WTD toggle */
-  weeklyTotalSales?: DsprChannelSales;
-  height?: number;
-  title?: string;
-  toolbar?: boolean;
-  className?: string;
+interface ChannelDatum {
+  label: string;
+  color: string;
+  value: number;
 }
 
-export function DailySalesByChannelChart({
-  totalSales,
-  weeklyTotalSales,
-  height = 310,
-  title = "Daily Sales by Channel",
-  toolbar = true,
-  className,
-}: DailySalesByChannelChartProps) {
-  const [isWeekly, setIsWeekly] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const activeSales = isWeekly && weeklyTotalSales ? weeklyTotalSales : totalSales;
-  const mode = useDocumentColorMode();
-  const isDark = mode === "dark";
-const { labels, series, colors } = useMemo(() => {
-    const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
-      const value = Number(activeSales?.[key] ?? 0);
+interface ChannelDonutProps {
+  data: ChannelDatum[];
+  height: number;
+  isDark: boolean;
+  toolbar?: boolean;
+  totalFontSize?: string;
+}
 
-      return {
-        label,
-        color,
-        value: Number.isFinite(value) ? value : 0,
-      };
-    }).filter((entry) => entry.value > 0);
+/**
+ * Donut chart + clickable legend, shared by the card and both dialog panes.
+ * Click a legend item to hide/show it; Ctrl/Cmd+click to isolate it (hide every
+ * other channel — click it again to restore all). Legend percentages are fixed
+ * against the full dataset so they stay put (and stay visible) when a channel
+ * is toggled off.
+ */
+function ChannelDonut({ data, height, isDark, toolbar = false, totalFontSize = "12px" }: ChannelDonutProps) {
+  const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set());
 
-    return {
-      labels: mapped.map((entry) => entry.label),
-      colors: mapped.map((entry) => entry.color),
-      series: mapped.map((entry) => entry.value),
-    };
-  }, [activeSales]);
+  const toggleChannel = useCallback((label: string) => {
+    setHiddenChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
 
-  // Independent daily/wtd data for dialog (never depends on toggle state)
-  const dailyChartData = useMemo(() => {
-    const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
-      const value = Number(totalSales?.[key] ?? 0);
-      return { label, color, value: Number.isFinite(value) ? value : 0 };
-    }).filter((e) => e.value > 0);
-    return {
-      labels: mapped.map((e) => e.label),
-      colors: mapped.map((e) => e.color),
-      series: mapped.map((e) => e.value),
-    };
-  }, [totalSales]);
+  const isolateChannel = useCallback(
+    (label: string) => {
+      setHiddenChannels((prev) => {
+        const others = data.map((d) => d.label).filter((l) => l !== label);
+        const alreadyIsolated = !prev.has(label) && others.every((l) => prev.has(l));
+        return alreadyIsolated ? new Set() : new Set(others);
+      });
+    },
+    [data]
+  );
 
-  const wtdChartData = useMemo(() => {
-    if (!weeklyTotalSales) return null;
-    const mapped = CHANNEL_KEYS.map(({ key, label, color }) => {
-      const value = Number(weeklyTotalSales?.[key] ?? 0);
-      return { label, color, value: Number.isFinite(value) ? value : 0 };
-    }).filter((e) => e.value > 0);
-    return {
-      labels: mapped.map((e) => e.label),
-      colors: mapped.map((e) => e.color),
-      series: mapped.map((e) => e.value),
-    };
-  }, [weeklyTotalSales]);
+  // Fixed against the full dataset so a legend item's percentage never moves
+  // (or disappears) when other channels are toggled off.
+  const allTotal = useMemo(() => data.reduce((sum, entry) => sum + entry.value, 0), [data]);
+  const allPercentages = useMemo(
+    () => data.map((entry) => (allTotal > 0 ? (entry.value / allTotal) * 100 : 0)),
+    [data, allTotal]
+  );
 
-  const total = useMemo(() => {
-    return series.reduce((sum, value) => sum + value, 0);
-  }, [series]);
-
-  const percentages = useMemo(() => {
-    return series.map((value) => (total > 0 ? (value / total) * 100 : 0));
-  }, [series, total]);
+  const visible = useMemo(() => data.filter((entry) => !hiddenChannels.has(entry.label)), [data, hiddenChannels]);
+  const labels = useMemo(() => visible.map((entry) => entry.label), [visible]);
+  const colors = useMemo(() => visible.map((entry) => entry.color), [visible]);
+  const series = useMemo(() => visible.map((entry) => entry.value), [visible]);
+  const allHidden = data.length > 0 && visible.length === 0;
 
   const options: ApexOptions = useMemo(
     () => ({
       chart: {
-        type: "donut",
         height,
         toolbar: { show: toolbar },
         animations: { enabled: true },
@@ -120,12 +102,8 @@ const { labels, series, colors } = useMemo(() => {
       theme: { mode: isDark ? "dark" : "light" },
       labels,
       colors,
-      legend: {
-        show: false,
-      },
-      tooltip: {
-        enabled: false,
-      },
+      legend: { show: false },
+      tooltip: { enabled: false },
       stroke: {
         width: 1,
         colors: [isDark ? "#27272a" : "#fff"],
@@ -135,9 +113,6 @@ const { labels, series, colors } = useMemo(() => {
         formatter: (value: number) => {
           // Hide tiny slice labels to keep the chart clean
           if (value < 5) return "";
-
-          // Keep only percentage inside slices.
-          // The channel label appears in the center on hover and in the legend below.
           return `${value.toFixed(1)}%`;
         },
         style: {
@@ -185,7 +160,7 @@ const { labels, series, colors } = useMemo(() => {
               total: {
                 show: true,
                 label: "Total",
-                fontSize: "12px",
+                fontSize: totalFontSize,
                 fontWeight: 600,
                 color: isDark ? "#f4f4f5" : "#18181b",
                 formatter: () =>
@@ -203,8 +178,113 @@ const { labels, series, colors } = useMemo(() => {
         text: "No channel sales data",
       },
     }),
-    [height, toolbar, labels, colors, series, isDark]
+    [height, toolbar, labels, colors, series, isDark, totalFontSize]
   );
+
+  return (
+    <div>
+      <div className="relative">
+        {allHidden ? (
+          <div
+            className="flex items-center justify-center text-[11px] text-muted-foreground"
+            style={{ height }}
+          >
+            No channels selected
+          </div>
+        ) : (
+          <ReactApexChart
+            key={isDark ? "dark" : "light"}
+            options={options}
+            series={series}
+            type="donut"
+            height={height}
+            width="100%"
+          />
+        )}
+      </div>
+
+      {/* Clickable legend — click to toggle a channel, Ctrl/Cmd+click to isolate it */}
+      {data.length > 0 && (
+        <div
+          className="mt-1 flex flex-wrap justify-center gap-x-1 gap-y-1 px-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {data.map((entry, index) => {
+            const isHidden = hiddenChannels.has(entry.label);
+            const pct = allPercentages[index];
+            return (
+              <button
+                key={entry.label}
+                onClick={(e) =>
+                  e.ctrlKey || e.metaKey ? isolateChannel(entry.label) : toggleChannel(entry.label)
+                }
+                className={cn(
+                  "flex items-center gap-1 rounded px-1 py-0.5 text-[9px] transition-all",
+                  isHidden ? "text-muted-foreground/40 opacity-50" : "text-muted-foreground",
+                )}
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: isHidden ? "#71717a" : entry.color }}
+                />
+                <span>{entry.label}</span>
+                <span className="font-semibold text-foreground">{`${pct.toFixed(1)}%`}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface DailySalesByChannelChartProps {
+  totalSales: DsprChannelSales;
+  /** WTD totals — enables the Day/WTD toggle */
+  weeklyTotalSales?: DsprChannelSales;
+  height?: number;
+  title?: string;
+  toolbar?: boolean;
+  className?: string;
+}
+
+export function DailySalesByChannelChart({
+  totalSales,
+  weeklyTotalSales,
+  height = 310,
+  title = "Daily Sales by Channel",
+  toolbar = true,
+  className,
+}: DailySalesByChannelChartProps) {
+  const [isWeekly, setIsWeekly] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const activeSales = isWeekly && weeklyTotalSales ? weeklyTotalSales : totalSales;
+  const mode = useDocumentColorMode();
+  const isDark = mode === "dark";
+
+  // All channels with actual sales data (regardless of hidden state) — drives the card's donut + legend.
+  const channelsWithData = useMemo(() => {
+    return CHANNEL_KEYS.map(({ key, label, color }) => {
+      const value = Number(activeSales?.[key] ?? 0);
+      return { label, color, value: Number.isFinite(value) ? value : 0 };
+    }).filter((entry) => entry.value > 0);
+  }, [activeSales]);
+
+  // Independent daily/wtd data for the comparison dialog (never depends on the card's toggle state)
+  const dailyChannelData = useMemo(() => {
+    return CHANNEL_KEYS.map(({ key, label, color }) => {
+      const value = Number(totalSales?.[key] ?? 0);
+      return { label, color, value: Number.isFinite(value) ? value : 0 };
+    }).filter((entry) => entry.value > 0);
+  }, [totalSales]);
+
+  const wtdChannelData = useMemo(() => {
+    if (!weeklyTotalSales) return null;
+    return CHANNEL_KEYS.map(({ key, label, color }) => {
+      const value = Number(weeklyTotalSales?.[key] ?? 0);
+      return { label, color, value: Number.isFinite(value) ? value : 0 };
+    }).filter((entry) => entry.value > 0);
+  }, [weeklyTotalSales]);
 
   return (
     <Card
@@ -252,42 +332,11 @@ const { labels, series, colors } = useMemo(() => {
       </CardHeader>
 
       <CardContent className="px-3 pb-2">
-        <div className="relative">
-          <ReactApexChart
-            key={isDark ? "dark" : "light"}
-            options={options}
-            series={series}
-            type="donut"
-            height={height}
-          />
-
-
-        </div>
-
-        {/* Clean custom legend */}
-        {labels.length > 0 && (
-          <div className="mt-1 flex flex-wrap justify-center gap-x-3 gap-y-1 px-2">
-            {labels.map((label, index) => (
-              <div
-                key={label}
-                className="flex items-center gap-1 text-[9px] text-muted-foreground"
-              >
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: colors[index] }}
-                />
-                <span>{label}</span>
-                <span className="font-semibold text-foreground">
-                  {`${percentages[index].toFixed(1)}%`}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+        <ChannelDonut data={channelsWithData} height={height} isDark={isDark} toolbar={toolbar} />
       </CardContent>
 
       {/* WTD Comparison Dialog */}
-      {weeklyTotalSales && wtdChartData && (
+      {weeklyTotalSales && wtdChannelData && (
         <WtdComparisonDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
@@ -302,25 +351,8 @@ const { labels, series, colors } = useMemo(() => {
                 <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
                 <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest">Today</span>
               </div>
-              <div className="rounded-xl border bg-blue-50/40 dark:bg-blue-950/20 p-2 flex items-center justify-center">
-                <ReactApexChart
-                  key={isDark ? "dark" : "light"}
-                  options={{
-                    chart: { type: "donut", height: 290, toolbar: { show: false }, animations: { enabled: false }, fontFamily: "inherit", background: "transparent", foreColor: isDark ? "#a1a1aa" : "#71717a" },
-                    theme: { mode: isDark ? "dark" : "light" },
-                    labels: dailyChartData.labels,
-                    colors: dailyChartData.colors,
-                    legend: { show: true, position: "bottom", fontSize: "8px" },
-                    tooltip: { enabled: true },
-                    stroke: { width: 1, colors: [isDark ? "#27272a" : "#fff"] },
-                    dataLabels: { enabled: true, formatter: (v: number) => v < 5 ? "" : `${v.toFixed(1)}%`, style: { fontSize: "10px", fontWeight: 600, colors: ["#ffffff"] } },
-                    plotOptions: { pie: { expandOnClick: false, donut: { size: "60%", labels: { show: true, value: { show: true, fontSize: "12px", fontWeight: 700, formatter: (val: any) => `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}` }, total: { show: true, label: "Total", fontSize: "16px", formatter: () => `$${dailyChartData.series.reduce((s, v) => s + v, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` } } } } },
-                  }}
-                  series={dailyChartData.series}
-                  type="donut"
-                  height={290}
-                  width="100%"
-                />
+              <div className="rounded-xl border bg-blue-50/40 dark:bg-blue-950/20 p-2">
+                <ChannelDonut data={dailyChannelData} height={290} isDark={isDark} totalFontSize="16px" />
               </div>
             </div>
             {/* WTD column */}
@@ -329,25 +361,8 @@ const { labels, series, colors } = useMemo(() => {
                 <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
                 <span className="text-[11px] font-bold text-primary uppercase tracking-widest">Week-to-Date Avg</span>
               </div>
-              <div className="rounded-xl border bg-primary/5 dark:bg-primary/10 p-2 flex items-center justify-center">
-                <ReactApexChart
-                  key={isDark ? "dark" : "light"}
-                  options={{
-                    chart: { type: "donut", height: 290, toolbar: { show: false }, animations: { enabled: false }, fontFamily: "inherit", background: "transparent", foreColor: isDark ? "#a1a1aa" : "#71717a" },
-                    theme: { mode: isDark ? "dark" : "light" },
-                    labels: wtdChartData.labels,
-                    colors: wtdChartData.colors,
-                    legend: { show: true, position: "bottom", fontSize: "8px" },
-                    tooltip: { enabled: true },
-                    stroke: { width: 1, colors: [isDark ? "#27272a" : "#fff"] },
-                    dataLabels: { enabled: true, formatter: (v: number) => v < 5 ? "" : `${v.toFixed(1)}%`, style: { fontSize: "10px", fontWeight: 600, colors: ["#ffffff"] } },
-                    plotOptions: { pie: { expandOnClick: false, donut: { size: "60%", labels: { show: true, value: { show: true, fontSize: "12px", fontWeight: 700, formatter: (val: any) => `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}` }, total: { show: true, label: "Total", fontSize: "16px", formatter: () => `$${wtdChartData.series.reduce((s, v) => s + v, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` } } } } },
-                  }}
-                  series={wtdChartData.series}
-                  type="donut"
-                  height={290}
-                  width="100%"
-                />
+              <div className="rounded-xl border bg-primary/5 dark:bg-primary/10 p-2">
+                <ChannelDonut data={wtdChannelData} height={290} isDark={isDark} totalFontSize="16px" />
               </div>
             </div>
           </div>

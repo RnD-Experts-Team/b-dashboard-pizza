@@ -67,28 +67,38 @@ export function V1FeedbacksCard({
         ) : (
           <div className="space-y-1.5">
             <V1Metric label="Feedback" value={data.length} size="sm" />
-            {data.map((f) => (
-              <div key={f.id} className="rounded-md bg-background/40 px-2 py-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[11px] font-semibold">
-                    {f.first_name} {f.last_name}
-                  </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
-                    {fmtDate(f.submitted_at)}
-                  </span>
+            <div className="space-y-1.5">
+              {data.map((f) => (
+                <div
+                  key={f.id}
+                  className="border-b border-border/40 pb-1.5 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] font-semibold">
+                      {f.first_name} {f.last_name}
+                    </span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {fmtDate(f.submitted_at)}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <StarRating
+                      label="valued"
+                      value={f.valued_respected_appreciated_rating}
+                    />
+                    <StarRating
+                      label="schedule"
+                      value={f.work_schedule_satisfaction_rating}
+                    />
+                  </div>
+                  {f.improvement_feedback && (
+                    <p className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
+                      {f.improvement_feedback}
+                    </p>
+                  )}
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <StarRating
-                    label="valued"
-                    value={f.valued_respected_appreciated_rating}
-                  />
-                  <StarRating
-                    label="schedule"
-                    value={f.work_schedule_satisfaction_rating}
-                  />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       <WbrDetailDialog

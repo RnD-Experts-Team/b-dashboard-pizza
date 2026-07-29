@@ -236,10 +236,12 @@ export default function HiringRequestPage() {
       try {
         const res = await hiringService.getRequests(
           ids,
+          "hiring",
           targetPage,
+          undefined,
           controller.signal,
         );
-        setRows(res.data.filter((r) => r.request_type === "hiring"));
+        setRows(res.data);
         setTotalPages(res.last_page);
         setPage(res.current_page);
       } catch (err: unknown) {

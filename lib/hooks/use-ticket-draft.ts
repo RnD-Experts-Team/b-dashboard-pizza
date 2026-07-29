@@ -15,6 +15,8 @@ export interface IssueDraft {
   deferReason: string;
   /** For the "cancel" action inline form */
   cancelReason: string;
+  /** For the "wait" action inline form */
+  waitReason: string;
   /** For diagnosis and warranty actions */
   diagnosisBody: string;
   warrantyBody: string;
@@ -61,6 +63,7 @@ export const EMPTY_ISSUE_DRAFT: IssueDraft = {
   assignTechs: [],
   deferReason: "",
   cancelReason: "",
+  waitReason: "",
   diagnosisBody: "",
   warrantyBody: "",
   warrantyExpiry: "",

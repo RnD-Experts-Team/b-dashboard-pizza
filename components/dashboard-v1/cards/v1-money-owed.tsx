@@ -10,7 +10,6 @@ import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
   V1Metric,
   V1MetricGrid,
-  V1DataRow,
   V1Empty,
 } from "@/components/dashboard-v1/v1-ui";
 import { WbrDetailDialog, DetailField } from "@/components/dspr/wbr-detail-dialog";
@@ -101,14 +100,27 @@ export function V1MoneyOwedCard({
               />
             </V1MetricGrid>
 
-            <div>
+            <div className="space-y-1.5">
               {data.map((m) => (
-                <V1DataRow
+                <div
                   key={m.id}
-                  label={m.employee_full_name}
-                  value={money(m.expenses_amount)}
-                  trailing={<ApproveBadge value={m.approve} />}
-                />
+                  className="border-b border-border/40 pb-1.5 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] font-medium">
+                      {m.employee_full_name}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold tabular-nums">
+                      {money(m.expenses_amount)}
+                      <ApproveBadge value={m.approve} />
+                    </span>
+                  </div>
+                  {m.expense_description && (
+                    <p className="line-clamp-1 text-[10px] text-muted-foreground">
+                      {m.expense_description}
+                    </p>
+                  )}
+                </div>
               ))}
             </div>
           </div>

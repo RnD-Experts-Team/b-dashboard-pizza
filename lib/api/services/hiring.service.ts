@@ -18,7 +18,26 @@ import type {
   EmployeeIdTypeRecord,
   StoreRequestsResponse,
   StoreRequestEmployee,
+  StoreRequestType,
+  RequestsPaginator,
+  RequestsByTypeResponse,
 } from "@/types/hiring.types";
+
+const EMPTY_PAGINATOR: RequestsPaginator = {
+  current_page: 1,
+  data: [],
+  first_page_url: null,
+  from: null,
+  last_page: 1,
+  last_page_url: null,
+  links: [],
+  next_page_url: null,
+  path: "",
+  per_page: 25,
+  prev_page_url: null,
+  to: null,
+  total: 0,
+};
 
 export interface EmployeeMetricValue {
   label: string;
@@ -266,23 +285,40 @@ export const hiringService = {
   },
 
   /**
-   * Fetch all requests across one or more stores.
+   * Fetch one request type's page across one or more stores.
    * Proxied through GET /api/v1/requests
-   * → GET {HIRING_BASE_URL}/v1/requests?storeIds[]=X&storeIds[]=Y&page=N
+   * → GET {HIRING_BASE_URL}/v1/requests?storeIds[]=X&request_type=Y&{type}_page=N&{type}_per_page=M
+   *
+   * Pagination is per-type on the backend now (separation/hiring/milestone_gift
+   * each paginate independently). When multiple types are requested at once the
+   * response is keyed by type ({ separation: {...}, hiring: {...} }), but when
+   * filtering to a single `request_type` (which is what every caller here does)
+   * the backend collapses back to a plain flat paginator at the top level —
+   * confirmed against the live API, contrary to the written spec's example.
+   * Handle both shapes defensively.
    */
   async getRequests(
     storeIds: string[],
+    type: StoreRequestType,
     page = 1,
+    perPage?: number,
     signal?: AbortSignal,
-  ): Promise<StoreRequestsResponse> {
+  ): Promise<RequestsPaginator> {
     const params = new URLSearchParams();
     storeIds.forEach((id) => params.append("storeIds[]", id));
-    params.set("page", String(page));
-    const { data } = await axios.get<StoreRequestsResponse>(
+    params.set("request_type", type);
+    params.set(`${type}_page`, String(page));
+    if (perPage !== undefined) params.set(`${type}_per_page`, String(perPage));
+    const { data } = await axios.get<RequestsByTypeResponse | RequestsPaginator>(
       `/api/v1/requests?${params.toString()}`,
       { headers: buildHeaders(), timeout: 15_000, signal },
     );
-    return data;
+    // Flat shape: the paginator's own fields are directly on the response.
+    if (data && Array.isArray((data as RequestsPaginator).data)) {
+      return data as RequestsPaginator;
+    }
+    // Keyed shape: pull out this type's paginator.
+    return (data as RequestsByTypeResponse)[type] ?? EMPTY_PAGINATOR;
   },
 
   /**

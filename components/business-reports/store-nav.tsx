@@ -24,14 +24,15 @@ interface StoreNavProps {
   value: string;
   onChange: (value: string) => void;
   allowAll?: boolean;
-  /** Label for the "all" pill. */
+  /** Label for the "all" row. */
   allLabel?: string;
+  className?: string;
 }
 
 /**
- * Compact, horizontally-scrollable store picker so users can jump straight to
- * a store instead of scrolling a long vertical stack. Includes a search filter
- * and optional per-store count badges.
+ * Vertical, scrollable store picker sidebar so users can jump straight to a
+ * store from a master-detail layout. Includes a search filter and optional
+ * per-store count badges. "All Stores" stays pinned above the scroll region.
  */
 export function StoreNav({
   items,
@@ -39,6 +40,7 @@ export function StoreNav({
   onChange,
   allowAll = true,
   allLabel = "All Stores",
+  className,
 }: StoreNavProps) {
   const [query, setQuery] = React.useState("");
 
@@ -53,8 +55,13 @@ export function StoreNav({
   }, [items, query]);
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-card p-2 sm:flex-row sm:items-center">
-      <div className="relative w-full sm:w-52 shrink-0">
+    <div
+      className={cn(
+        "flex w-full flex-col gap-2 rounded-lg border bg-card p-2 lg:w-60 lg:shrink-0",
+        className,
+      )}
+    >
+      <div className="relative shrink-0">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={query}
@@ -64,70 +71,63 @@ export function StoreNav({
         />
       </div>
 
-      <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
-        <div className="flex w-max items-center gap-1">
-          {allowAll && (
-            <Pill
-              active={value === "all"}
-              onClick={() => onChange("all")}
-              label={allLabel}
-            />
-          )}
-          {filtered.map((it) => (
-            <Pill
-              key={it.key}
-              active={value === it.key}
-              muted={it.muted}
-              onClick={() => onChange(it.key)}
-              label={it.code}
-              title={it.label}
-              badge={it.badge}
-            />
-          ))}
-          {filtered.length === 0 && (
-            <span className="px-2 py-1 text-xs text-muted-foreground">
-              No matching store
-            </span>
-          )}
-        </div>
+      {allowAll && (
+        <Row
+          active={value === "all"}
+          onClick={() => onChange("all")}
+          label={allLabel}
+        />
+      )}
+
+      <div className="flex max-h-72 flex-col gap-0.5 overflow-y-auto pe-1 lg:max-h-[600px]">
+        {filtered.map((it) => (
+          <Row
+            key={it.key}
+            active={value === it.key}
+            muted={it.muted}
+            onClick={() => onChange(it.key)}
+            label={it.label}
+            badge={it.badge}
+          />
+        ))}
+        {filtered.length === 0 && (
+          <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+            No matching store
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function Pill({
+function Row({
   active,
   muted,
   onClick,
   label,
-  title,
   badge,
 }: {
   active: boolean;
   muted?: boolean;
   onClick: () => void;
   label: string;
-  title?: string;
   badge?: number;
 }) {
   return (
     <button
       type="button"
-      title={title}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "bg-card hover:bg-muted",
+        "flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-start text-sm font-medium transition-colors",
+        active ? "bg-primary text-primary-foreground" : "hover:bg-muted",
         muted && !active && "opacity-45",
       )}
     >
-      {label}
+      <span className="truncate">{label}</span>
       {typeof badge === "number" && badge > 0 && (
         <span
           className={cn(
-            "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+            "shrink-0 rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
             active ? "bg-primary-foreground/20" : "bg-muted-foreground/15",
           )}
         >

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   ChevronLeft,
   ChevronRight,
@@ -27,12 +28,20 @@ import {
   CalendarRange,
   Undo2,
   Send,
+  CalendarCheck,
+  ClipboardCheck,
+  GitCompare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +63,7 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { ScheduleGrid } from "./schedule-grid-new";
 import { AddShiftDialogNew } from "./add-shift-dialog-new";
+import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { DayView } from "./day-view";
 import { MonthOverview } from "./month-overview";
 import {
@@ -65,6 +75,7 @@ import {
   PREVIOUS_WEEK_SHIFTS,
   INITIAL_AVAILABILITY,
   INITIAL_TIME_OFF,
+  INITIAL_ACTUAL_SHIFTS,
   DEFAULT_OVERTIME_THRESHOLD,
   calcHours,
   formatTime,
@@ -73,6 +84,7 @@ import {
   detectConflicts,
   conflictedShiftIds,
   overtimeEmployees,
+  mergeActualShifts,
 } from "@/lib/scheduling/utils";
 import type {
   Shift,
@@ -81,6 +93,8 @@ import type {
   ScheduleViewMode,
   AvailabilityRule,
   TimeOffEntry,
+  ActualShift,
+  ScheduleMode,
 } from "@/types/scheduling.types";
 import {
   Dialog,
@@ -153,6 +167,37 @@ export function SchedulingManager() {
     [weekOffset]
   );
 
+  /**
+   * Actual-schedule storage, keyed by weekOffset just like allShifts.
+   * Each entry links back to a planned Shift via plannedShiftId (or stands
+   * alone as ad-hoc "added" coverage).
+   */
+  const [allActualShifts, setAllActualShifts] = useState<Record<number, ActualShift[]>>({
+    0: INITIAL_ACTUAL_SHIFTS,
+  });
+  const actualShifts = allActualShifts[weekOffset] ?? [];
+  const setCurrentActualShifts = useCallback(
+    (updater: (prev: ActualShift[]) => ActualShift[]) =>
+      setAllActualShifts((all) => ({
+        ...all,
+        [weekOffset]: updater(all[weekOffset] ?? []),
+      })),
+    [weekOffset]
+  );
+
+  // Planned vs Actual toggle + Comparison mode (week view only)
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("planned");
+  const [comparisonMode, setComparisonMode] = useState(false);
+
+  // Actual-shift edit dialog state
+  const [actualDialogOpen, setActualDialogOpen] = useState(false);
+  const [editingActualTarget, setEditingActualTarget] = useState<{
+    employeeId: string;
+    dayIndex: number;
+    plannedShift?: Shift;
+    actual?: ActualShift;
+  } | null>(null);
+
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
   const [isTakingScreenshot, setIsTakingScreenshot] = useState(false);
@@ -178,18 +223,24 @@ export function SchedulingManager() {
 
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Undo stack — stores previous allShifts snapshots (max 20)
-  const undoStackRef = useRef<{ allShifts: Record<number, Shift[]>; label: string }[]>([]);
+  // Undo stack — stores previous allShifts + allActualShifts snapshots (max 20)
+  const undoStackRef = useRef<
+    { allShifts: Record<number, Shift[]>; allActualShifts: Record<number, ActualShift[]>; label: string }[]
+  >([]);
   const [canUndo, setCanUndo] = useState(false);
 
-  /** Save current allShifts state before a mutation */
+  /** Save current allShifts/allActualShifts state before a mutation */
   const pushUndo = useCallback(
     (label: string) => {
-      undoStackRef.current.push({ allShifts: structuredClone(allShifts), label });
+      undoStackRef.current.push({
+        allShifts: structuredClone(allShifts),
+        allActualShifts: structuredClone(allActualShifts),
+        label,
+      });
       if (undoStackRef.current.length > 20) undoStackRef.current.shift();
       setCanUndo(true);
     },
-    [allShifts]
+    [allShifts, allActualShifts]
   );
 
   /** Restore the last saved state */
@@ -197,6 +248,7 @@ export function SchedulingManager() {
     const entry = undoStackRef.current.pop();
     if (!entry) return;
     setAllShifts(entry.allShifts);
+    setAllActualShifts(entry.allActualShifts);
     setCanUndo(undoStackRef.current.length > 0);
     toast.info(`Undone: ${entry.label}`);
   }, []);
@@ -223,28 +275,42 @@ export function SchedulingManager() {
     });
   }, [search, department]);
 
+  /**
+   * Reviewed-only "what really happened" list — planned shifts merged with their
+   * linked actual entries, un-reviewed ghosts and no-shows excluded, plus any
+   * ad-hoc coverage. Pure planned mode just shows the plan as-is; Actual and
+   * Comparison modes both need the merged reality to compute totals/conflicts.
+   */
+  const displayShifts = useMemo(
+    () =>
+      scheduleMode === "planned" && !comparisonMode
+        ? shifts
+        : mergeActualShifts(shifts, actualShifts),
+    [scheduleMode, comparisonMode, shifts, actualShifts]
+  );
+
   // Summary stats
   const stats = useMemo(() => {
-    const totalHours = shifts.reduce(
+    const totalHours = displayShifts.reduce(
       (acc, s) => acc + calcHours(s.startTime, s.endTime),
       0
     );
-    const uniqueEmployees = new Set(shifts.map((s) => s.employeeId)).size;
+    const uniqueEmployees = new Set(displayShifts.map((s) => s.employeeId)).size;
     const laborCost = totalHours * 15;
     return {
       totalHours,
-      totalShifts: shifts.length,
+      totalShifts: displayShifts.length,
       activeEmployees: uniqueEmployees,
       laborCost,
     };
-  }, [shifts]);
+  }, [displayShifts]);
 
   // Conflict detection
-  const conflicts = useMemo(() => detectConflicts(shifts), [shifts]);
+  const conflicts = useMemo(() => detectConflicts(displayShifts), [displayShifts]);
   const conflictIds = useMemo(() => conflictedShiftIds(conflicts), [conflicts]);
   const overtimeEmpIds = useMemo(
-    () => overtimeEmployees(shifts, overtimeThreshold),
-    [shifts, overtimeThreshold]
+    () => overtimeEmployees(displayShifts, overtimeThreshold),
+    [displayShifts, overtimeThreshold]
   );
 
   // Dialog target employee
@@ -252,6 +318,12 @@ export function SchedulingManager() {
     const id = editingShift?.employeeId ?? pendingAdd?.employeeId;
     return id ? DUMMY_EMPLOYEES.find((e) => e.id === id) ?? null : null;
   }, [editingShift, pendingAdd]);
+
+  // Actual-shift dialog target employee
+  const targetActualEmployee = useMemo(() => {
+    const id = editingActualTarget?.employeeId;
+    return id ? DUMMY_EMPLOYEES.find((e) => e.id === id) ?? null : null;
+  }, [editingActualTarget]);
 
   // --- Handlers ---
 
@@ -310,6 +382,138 @@ export function SchedulingManager() {
       toast.success("Shift added");
     },
     [pendingAdd, editingShift, setCurrentShifts, pushUndo]
+  );
+
+  /** Instantly confirm a ghost/pending planned shift as worked-as-scheduled — no dialog */
+  const handleConfirmActualShift = useCallback(
+    (plannedShift: Shift) => {
+      pushUndo("Confirm shift");
+      const newActual: ActualShift = {
+        id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        employeeId: plannedShift.employeeId,
+        dayIndex: plannedShift.dayIndex,
+        startTime: plannedShift.startTime,
+        endTime: plannedShift.endTime,
+        label: plannedShift.label,
+        type: plannedShift.type,
+        status: "confirmed",
+        plannedShiftId: plannedShift.id,
+      };
+      setCurrentActualShifts((prev) => [...prev, newActual]);
+      toast.success("Marked as worked as planned");
+    },
+    [setCurrentActualShifts, pushUndo]
+  );
+
+  /** Open the actual-shift dialog to edit a linked/ghost shift, or add ad-hoc coverage */
+  const handleOpenActualDialog = useCallback(
+    (plannedShift: Shift | undefined, actual: ActualShift | undefined) => {
+      if (plannedShift) {
+        setEditingActualTarget({
+          employeeId: plannedShift.employeeId,
+          dayIndex: plannedShift.dayIndex,
+          plannedShift,
+          actual,
+        });
+      } else if (actual) {
+        setEditingActualTarget({
+          employeeId: actual.employeeId,
+          dayIndex: actual.dayIndex,
+          actual,
+        });
+      }
+      setActualDialogOpen(true);
+    },
+    []
+  );
+
+  /** Open the actual-shift dialog blank, for logging ad-hoc coverage */
+  const handleAddCoverage = useCallback((employeeId: string, dayIndex: number) => {
+    setEditingActualTarget({ employeeId, dayIndex });
+    setActualDialogOpen(true);
+  }, []);
+
+  /** Save the actual-shift dialog — creates or updates an ActualShift */
+  const handleSaveActualShift = useCallback(
+    (startTime: string, endTime: string, label: string, type: Shift["type"], note: string) => {
+      if (!editingActualTarget) return;
+      const { employeeId, dayIndex, plannedShift, actual } = editingActualTarget;
+      pushUndo(actual ? "Edit actual shift" : "Add actual coverage");
+
+      const status: ActualShift["status"] = !plannedShift
+        ? "added"
+        : startTime === plannedShift.startTime && endTime === plannedShift.endTime
+          ? "confirmed"
+          : "modified";
+
+      if (actual) {
+        setCurrentActualShifts((prev) =>
+          prev.map((a) =>
+            a.id === actual.id
+              ? { ...a, startTime, endTime, label, type, status, note: note || undefined }
+              : a
+          )
+        );
+        toast.success("Actual shift updated");
+      } else {
+        const newActual: ActualShift = {
+          id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          employeeId,
+          dayIndex,
+          startTime,
+          endTime,
+          label,
+          type,
+          status,
+          plannedShiftId: plannedShift?.id,
+          note: note || undefined,
+        };
+        setCurrentActualShifts((prev) => [...prev, newActual]);
+        toast.success(plannedShift ? "Actual shift recorded" : "Coverage added");
+      }
+      setActualDialogOpen(false);
+      setEditingActualTarget(null);
+    },
+    [editingActualTarget, setCurrentActualShifts, pushUndo]
+  );
+
+  /** Mark the shift currently open in the actual-shift dialog as no attendance */
+  const handleMarkAbsent = useCallback(() => {
+    if (!editingActualTarget) return;
+    const { employeeId, dayIndex, plannedShift, actual } = editingActualTarget;
+    pushUndo("Mark no attendance");
+
+    if (actual) {
+      setCurrentActualShifts((prev) =>
+        prev.map((a) => (a.id === actual.id ? { ...a, status: "absent" as const } : a))
+      );
+    } else if (plannedShift) {
+      const newActual: ActualShift = {
+        id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        employeeId,
+        dayIndex,
+        startTime: plannedShift.startTime,
+        endTime: plannedShift.endTime,
+        label: plannedShift.label,
+        type: plannedShift.type,
+        status: "absent",
+        plannedShiftId: plannedShift.id,
+      };
+      setCurrentActualShifts((prev) => [...prev, newActual]);
+    }
+    toast.info("Marked as no attendance");
+    setActualDialogOpen(false);
+    setEditingActualTarget(null);
+  }, [editingActualTarget, setCurrentActualShifts, pushUndo]);
+
+  /** Delete an actual entry — reverts linked shifts back to ghost/pending, removes standalone coverage entirely */
+  const handleDeleteActualShift = useCallback(
+    (actual: ActualShift) => {
+      pushUndo(actual.plannedShiftId ? "Revert to planned" : "Remove coverage");
+      setCurrentActualShifts((prev) => prev.filter((a) => a.id !== actual.id));
+      toast.info(actual.plannedShiftId ? "Reverted to planned schedule" : "Coverage removed");
+    },
+    [setCurrentActualShifts, pushUndo]
   );
 
   const handleGoToToday = useCallback(() => {
@@ -616,6 +820,56 @@ export function SchedulingManager() {
                 Month
               </Button>
             </div>
+
+            {/* Planned / Actual toggle + Comparison — week view only */}
+            {viewMode === "week" && (
+              <>
+                <div
+                  className={cn(
+                    "flex items-center rounded-md border bg-muted/40 p-0.5 ml-2 transition-opacity",
+                    comparisonMode && "opacity-50 pointer-events-none"
+                  )}
+                >
+                  <Button
+                    variant={scheduleMode === "planned" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 gap-1 text-xs px-2.5"
+                    onClick={() => setScheduleMode("planned")}
+                    disabled={comparisonMode}
+                  >
+                    <CalendarCheck className="h-3.5 w-3.5" />
+                    Planned
+                  </Button>
+                  <Button
+                    variant={scheduleMode === "actual" ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 gap-1 text-xs px-2.5"
+                    onClick={() => setScheduleMode("actual")}
+                    disabled={comparisonMode}
+                  >
+                    <ClipboardCheck className="h-3.5 w-3.5" />
+                    Actual
+                  </Button>
+                </div>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={comparisonMode ? "default" : "outline"}
+                      size="sm"
+                      className="h-8 gap-1.5 text-xs ml-1"
+                      onClick={() => setComparisonMode((c) => !c)}
+                    >
+                      <GitCompare className="h-3.5 w-3.5" />
+                      Compare
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Comparison always shows both planned and actual times side by side
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
           </div>
 
           {/* Filters */}
@@ -907,6 +1161,14 @@ export function SchedulingManager() {
               onEditShift={handleEditShift}
               onDeleteShift={handleDeleteShift}
               employeeView={isEmployeeScreenshot}
+              scheduleMode={scheduleMode}
+              comparisonMode={comparisonMode}
+              actualShifts={actualShifts}
+              displayShifts={displayShifts}
+              onConfirmActual={handleConfirmActualShift}
+              onEditActual={handleOpenActualDialog}
+              onDeleteActual={handleDeleteActualShift}
+              onAddCoverage={handleAddCoverage}
             />
           )}
 
@@ -990,6 +1252,21 @@ export function SchedulingManager() {
           timeOff={timeOff}
           onConfirm={handleConfirmShift}
           editingShift={editingShift}
+        />
+
+        {/* Edit Actual Shift dialog */}
+        <EditActualShiftDialog
+          open={actualDialogOpen}
+          onOpenChange={(open) => {
+            setActualDialogOpen(open);
+            if (!open) setEditingActualTarget(null);
+          }}
+          employee={targetActualEmployee}
+          dayLabel={editingActualTarget ? DAYS_OF_WEEK[editingActualTarget.dayIndex] : ""}
+          plannedShift={editingActualTarget?.plannedShift}
+          editingActual={editingActualTarget?.actual}
+          onSave={handleSaveActualShift}
+          onMarkAbsent={handleMarkAbsent}
         />
 
         {/* Copy Previous Week — confirmation dialog */}

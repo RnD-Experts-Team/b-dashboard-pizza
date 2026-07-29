@@ -6,12 +6,14 @@ export type TicketStatus =
   | "pending"
   | "assigned"
   | "in_progress"
+  | "waiting"
   | "complete"
   | "cancelled";
 export type IssueStatus =
   | "pending"
   | "assigned"
   | "in_progress"
+  | "waiting"
   | "complete"
   | "deferred"
   | "cancelled";
@@ -354,6 +356,10 @@ export interface DeferPayload {
 }
 
 export interface CancelPayload {
+  reason: string;
+}
+
+export interface WaitPayload {
   reason: string;
 }
 

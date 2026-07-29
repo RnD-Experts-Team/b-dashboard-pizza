@@ -433,8 +433,8 @@ function EmployeeProfileContent() {
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-44 pl-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Date</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Metric</TableHead>
-                    <TableHead className="w-36 pr-5 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Value</TableHead>
+                    <TableHead className="w-64 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Metric</TableHead>
+                    <TableHead className="text-left text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Value</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -456,8 +456,8 @@ function EmployeeProfileContent() {
                     entries.map((entry, i) => (
                       <TableRow key={`${entry.metric_date}-${entry.column_key}-${i}`} className="border-l-2 border-l-transparent transition-colors hover:border-l-primary/60 hover:bg-muted/20">
                         <TableCell className="w-44 pl-5 text-sm text-muted-foreground">{formatDate(entry.metric_date)}</TableCell>
-                        <TableCell className="text-sm font-medium">{entry.column_name}</TableCell>
-                        <TableCell className="w-36 pr-5 text-right">
+                        <TableCell className="w-64 text-sm font-medium">{entry.column_name}</TableCell>
+                        <TableCell className="text-left">
                           <span className="inline-flex items-center rounded-md bg-muted px-2.5 py-1 font-mono text-xs font-semibold tabular-nums">
                             {entry.value_numeric != null
                               ? entry.value_numeric

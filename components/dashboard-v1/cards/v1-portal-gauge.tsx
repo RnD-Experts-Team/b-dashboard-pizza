@@ -8,6 +8,7 @@ import {
 } from "@/components/dspr/portal-meter-utils";
 import {
   WtdComparisonDialog,
+  ComparisonGrid,
   ComparisonTable,
 } from "@/components/dspr/wtd-comparison-dialog";
 import type { DsprPortal } from "@/types/dspr.types";
@@ -24,7 +25,7 @@ export function V1PortalGaugeCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
-  const weekly = portal.week_to_date;
+  const weekly = portal.week_to_date_avg;
   const hasWeekly = Boolean(weekly);
   const [view, setView] = useState<"day" | "wtd">("day");
   const [open, setOpen] = useState(false);
@@ -83,7 +84,41 @@ export function V1PortalGaugeCard({
           </V1MetricGrid>
         </div>
       {weekly && (
-        <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Portal Performance — Day vs Week-to-Date">
+        <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Portal Performance Comparison">
+          <ComparisonGrid
+            daily={
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+                    {portal.put_into_portal_percent.toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
+                  <p className="text-xl font-bold text-emerald-600 tabular-nums">
+                    {portal.in_portal_on_time_percent.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            }
+            wtd={
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
+                  <p className="text-2xl font-bold text-primary tabular-nums">
+                    {weekly.put_into_portal_percent.toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
+                  <p className="text-xl font-bold text-emerald-600 tabular-nums">
+                    {weekly.in_portal_on_time_percent.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            }
+          />
           <ComparisonTable
             rows={[
               { label: "Put Into Portal %", daily: `${portal.put_into_portal_percent.toFixed(1)}%`, wtd: `${weekly.put_into_portal_percent.toFixed(1)}%`, dailyNum: portal.put_into_portal_percent, wtdNum: weekly.put_into_portal_percent, higherIsBetter: true },

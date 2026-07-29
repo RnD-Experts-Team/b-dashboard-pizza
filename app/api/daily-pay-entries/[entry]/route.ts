@@ -5,6 +5,7 @@ import {
 } from "@/app/api/_lib/auth";
 
 const BASE_URL =
+  process.env.NEW_MAINTENANCE_API_URL ||
   process.env.NEXT_PUBLIC_NEW_MAINTENANCE_API_URL ||
   "https://maintenance.lcportal.cloud";
 

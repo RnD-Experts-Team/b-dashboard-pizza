@@ -214,10 +214,12 @@ export function SeparationRequestTab({
       try {
         const res = await hiringService.getRequests(
           selectedStoreIds,
+          "separation",
           targetPage,
+          undefined,
           controller.signal,
         );
-        setRows(res.data.filter((r) => r.request_type === "separation"));
+        setRows(res.data);
         setTotalPages(res.last_page);
         setPage(res.current_page);
       } catch (err: unknown) {

@@ -10,6 +10,32 @@ import type {
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
 
+/** Per-item result of a bulk finalize, as best we can read it. */
+interface BulkResultItem {
+  upload_id?: string;
+  success?: boolean;
+  error?: string;
+}
+
+/**
+ * The complete-bulk endpoint's success shape varies (bare array, `{ results }`,
+ * or wrapped in `{ data }`). Find the per-item results array wherever it lives.
+ * Returns [] when none is present — the caller then treats a 2xx response as a
+ * success for every item (a bug previously marked successful uploads as failed
+ * because it assumed `response.results` always existed).
+ */
+function extractBulkResults(resp: unknown): BulkResultItem[] {
+  if (Array.isArray(resp)) return resp as BulkResultItem[];
+  if (!resp || typeof resp !== "object") return [];
+  const r = resp as Record<string, unknown>;
+  const data = r.data as Record<string, unknown> | undefined;
+  const candidates = [r.results, data?.results, r.data, r.items];
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c as BulkResultItem[];
+  }
+  return [];
+}
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Helpers for client-side dimension / duration extraction                  */
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -232,16 +258,21 @@ export function useScreenProjectMedia(
           finalizeItems,
         );
 
-        // Mark jobs done or errored based on per-item results
+        // The request succeeded (2xx — axios throws otherwise), so every item
+        // is a success unless the response explicitly flags it as failed.
+        const results = extractBulkResults(response);
         setUploadJobs((prev) =>
           prev.map((j) => {
-            const result = response.results.find(
-              (r) => r.upload_id === j.uploadId,
-            );
-            if (!result) return j;
-            return result.success
-              ? { ...j, status: "done" as const }
-              : { ...j, status: "error" as const, error: result.error };
+            if (!validInits.some((v) => v.uploadId === j.uploadId)) return j;
+            const result = results.find((r) => r.upload_id === j.uploadId);
+            if (result && result.success === false) {
+              return {
+                ...j,
+                status: "error" as const,
+                error: result.error ?? "Upload failed",
+              };
+            }
+            return { ...j, status: "done" as const };
           }),
         );
 

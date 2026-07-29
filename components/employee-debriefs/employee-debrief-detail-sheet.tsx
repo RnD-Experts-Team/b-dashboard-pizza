@@ -11,7 +11,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useEmployeeDebriefDetail } from "@/lib/hooks/use-employee-debriefs";
-import { AlertCircle, CalendarDays, User } from "lucide-react";
+import type { DebriefAttachment } from "@/types/employee-debrief.types";
+import { AlertCircle, CalendarDays, Paperclip, User, UserCog } from "lucide-react";
 
 interface EmployeeDebriefDetailSheetProps {
   open: boolean;
@@ -42,6 +43,74 @@ function formatDateTime(raw: string | null | undefined): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatFileSize(bytes: number | null | undefined): string {
+  if (bytes == null) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageAttachment(a: DebriefAttachment): boolean {
+  const mime = (a.mimeType || "").toLowerCase();
+  const name = (a.originalName || a.filePath || "").toLowerCase();
+  return mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name);
+}
+
+function AttachmentCard({ attachment }: { attachment: DebriefAttachment }) {
+  const label = attachment.originalName || `Attachment #${attachment.id}`;
+  const sizeLabel = formatFileSize(attachment.size);
+
+  if (!attachment.attachmentUrl) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground/60">
+        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{label}</span>
+      </div>
+    );
+  }
+
+  if (isImageAttachment(attachment)) {
+    return (
+      <a
+        href={attachment.attachmentUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-muted/40"
+        title={`Open ${label}`}
+      >
+        <img
+          src={attachment.attachmentUrl}
+          alt={label}
+          className="h-14 w-14 shrink-0 rounded-md border object-cover"
+          loading="lazy"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium group-hover:underline">{label}</p>
+          {sizeLabel && <p className="text-xs text-muted-foreground">{sizeLabel}</p>}
+        </div>
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={attachment.attachmentUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex items-center gap-3 rounded-lg border p-2 transition-colors hover:bg-muted/40"
+      title={`Open ${label}`}
+    >
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border bg-muted">
+        <Paperclip className="h-5 w-5 text-muted-foreground" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium group-hover:underline">{label}</p>
+        {sizeLabel && <p className="text-xs text-muted-foreground">{sizeLabel}</p>}
+      </div>
+    </a>
+  );
 }
 
 function DetailRow({
@@ -126,6 +195,12 @@ export function EmployeeDebriefDetailSheet({
                   {formatDate(writtenDate)}
                 </Badge>
               )}
+              {detail.authorName && (
+                <Badge variant="outline" className="gap-1.5 px-3 py-1 text-sm">
+                  <UserCog className="h-3.5 w-3.5" />
+                  {detail.authorName}
+                </Badge>
+              )}
             </div>
 
             <Separator />
@@ -143,6 +218,9 @@ export function EmployeeDebriefDetailSheet({
                 label="Date Written"
                 value={formatDate(writtenDate)}
               />
+              {detail.authorName && (
+                <DetailRow label="Written By" value={detail.authorName} />
+              )}
               {detail.updatedAt && (
                 <DetailRow
                   label="Last Updated"
@@ -194,6 +272,24 @@ export function EmployeeDebriefDetailSheet({
                 </div>
               )}
             </div>
+
+            {/* Attachments */}
+            {detail.attachments && detail.attachments.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Attachments ({detail.attachments.length})
+                  </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {detail.attachments.map((attachment) => (
+                      <AttachmentCard key={attachment.id} attachment={attachment} />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </SheetContent>

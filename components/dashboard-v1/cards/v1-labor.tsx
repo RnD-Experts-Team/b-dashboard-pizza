@@ -12,7 +12,7 @@ import { CalendarDays, Gauge } from "lucide-react";
 import { V1Card } from "../v1-card";
 import { V1Toggle } from "../v1-ui";
 
-interface WeeklyLaborEntry {
+export interface WeeklyLaborEntry {
   week_start: string;
   week_end: string;
   labor: number | null;

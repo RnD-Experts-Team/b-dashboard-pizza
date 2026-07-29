@@ -1,4 +1,4 @@
-import type { ScheduleEmployee, Shift, AvailabilityRule, TimeOffEntry } from "@/types/scheduling.types";
+import type { ScheduleEmployee, Shift, AvailabilityRule, TimeOffEntry, ActualShift } from "@/types/scheduling.types";
 
 export const DUMMY_EMPLOYEES: ScheduleEmployee[] = [
   { id: "emp-1", name: "Marco Rossi", role: "Pizzaiolo", department: "Kitchen", avatar: "MR", color: "blue" },
@@ -211,4 +211,58 @@ export const INITIAL_TIME_OFF: TimeOffEntry[] = [
   { id: "to-1", employeeId: "emp-1", dayIndex: 3, type: "pto", label: "PTO" },
   { id: "to-2", employeeId: "emp-6", dayIndex: 4, type: "vacation", label: "Vacation" },
   { id: "to-3", employeeId: "emp-9", dayIndex: 5, type: "sick", label: "Sick Day" },
+];
+
+/**
+ * Pre-seeded actual-schedule entries for weekOffset 0, demoing the four review states:
+ * confirmed (worked as planned), modified (time changed), absent (no-show), and
+ * added (ad-hoc coverage with no planned counterpart).
+ */
+export const INITIAL_ACTUAL_SHIFTS: ActualShift[] = [
+  {
+    id: "actual-1",
+    employeeId: "emp-1",
+    dayIndex: 0,
+    startTime: "08:00",
+    endTime: "16:00",
+    label: "Morning",
+    type: "morning",
+    status: "confirmed",
+    plannedShiftId: "shift-1",
+  },
+  {
+    id: "actual-2",
+    employeeId: "emp-4",
+    dayIndex: 1,
+    startTime: "09:00",
+    endTime: "16:00",
+    label: "Morning",
+    type: "morning",
+    status: "modified",
+    plannedShiftId: "shift-6",
+    note: "Clocked in an hour late",
+  },
+  {
+    id: "actual-3",
+    employeeId: "emp-6",
+    dayIndex: 5,
+    startTime: "08:00",
+    endTime: "16:00",
+    label: "Morning",
+    type: "morning",
+    status: "absent",
+    plannedShiftId: "shift-11",
+    note: "No call, no show",
+  },
+  {
+    id: "actual-4",
+    employeeId: "emp-7",
+    dayIndex: 5,
+    startTime: "08:00",
+    endTime: "16:00",
+    label: "Morning",
+    type: "morning",
+    status: "added",
+    note: "Covered for Maria Rodriguez",
+  },
 ];

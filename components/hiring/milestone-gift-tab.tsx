@@ -56,6 +56,7 @@ import type {
 
 const MILESTONE_LABELS: Record<Milestone, string> = {
   "8_days": "8 Days",
+  "14_days": "14 Days",
   "1_month": "1 Month",
   "2_months": "2 Months",
   "3_months": "3 Months",
@@ -243,10 +244,12 @@ export function MilestoneGiftTab({
       try {
         const res = await hiringService.getRequests(
           selectedStoreIds,
+          "milestone_gift",
           targetPage,
+          undefined,
           controller.signal,
         );
-        setRows(res.data.filter((r) => r.request_type === "milestone_gift"));
+        setRows(res.data);
         setTotalPages(res.last_page);
         setPage(res.current_page);
       } catch (err: unknown) {
@@ -385,6 +388,7 @@ export function MilestoneGiftTab({
             <SelectContent>
               <SelectItem value="all">All Milestones</SelectItem>
               <SelectItem value="8_days">8 Days</SelectItem>
+              <SelectItem value="14_days">14 Days</SelectItem>
               <SelectItem value="1_month">1 Month</SelectItem>
               <SelectItem value="2_months">2 Months</SelectItem>
               <SelectItem value="3_months">3 Months</SelectItem>

@@ -21,6 +21,32 @@ export interface RegisterCredentials {
   confirmPassword: string;
 }
 
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Forgot-password / OTP reset flow                                       */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface VerifyResetOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  password: string;
+  password_confirmation: string;
+}
+
+/** Generic envelope shared by the forgot-password/verify-otp/reset-password proxy routes */
+export interface AuthActionResponse {
+  success: boolean;
+  message: string;
+}
+
 /**
  * User data returned from login and /me endpoints
  * This is the full user object with all permissions and roles

@@ -183,13 +183,27 @@
     },
     "forgotPassword": {
       "title": "Reset your password",
-      "description": "Enter your email and we'll send you a reset link",
+      "description": "Enter your email and we'll send you a verification code",
       "email": "Email",
       "emailPlaceholder": "you@example.com",
-      "submit": "Send reset link",
+      "submit": "Send code",
       "backToLogin": "Back to login",
       "checkEmail": "Check your email",
-      "checkEmailDescription": "We've sent a password reset link to your email address."
+      "checkEmailDescription": "If an account exists for {email}, we've sent a verification code to it.",
+      "otpLabel": "Verification code",
+      "verify": "Verify code",
+      "resendCode": "Resend code",
+      "resendCodeIn": "Resend in {seconds}s",
+      "changeEmail": "Use a different email",
+      "resetTitle": "Set a new password",
+      "resetDescription": "Choose a new password for your account",
+      "newPassword": "New password",
+      "confirmNewPassword": "Confirm new password",
+      "resetSubmit": "Reset password",
+      "passwordMismatch": "Passwords do not match",
+      "passwordTooShort": "Password must be at least 8 characters",
+      "successTitle": "Password reset",
+      "successDescription": "Your password has been reset successfully. Please sign in with your new password."
     }
   },
   "dashboard": {
@@ -1181,6 +1195,7 @@
       "pending": "Pending",
       "assigned": "Assigned",
       "in_progress": "In Progress",
+      "waiting": "Waiting",
       "complete": "Complete"
     },
     "priority": {
@@ -1273,6 +1288,11 @@
       "deferReasonPlaceholder": "Why is this issue being deferred?",
       "deferReasonRequired": "Please provide a reason for deferring.",
       "defer": "Defer",
+      "waitIssue": "Mark as Waiting",
+      "waitReason": "Reason",
+      "waitReasonPlaceholder": "What is this issue waiting on?",
+      "waitReasonRequired": "Please provide a reason for waiting.",
+      "wait": "Wait",
       "statusHistory": "Status History",
       "setFinalNote": "Set Final Note",
       "setFinalNoteDesc": "Add or update the final note for this ticket.",

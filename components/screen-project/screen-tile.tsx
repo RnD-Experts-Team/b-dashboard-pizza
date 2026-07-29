@@ -21,6 +21,7 @@ import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import type { NetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectMedia } from "@/lib/hooks/use-screen-project-media";
+import { useStationMediaAsset } from "@/lib/hooks/use-station-media-asset";
 import { MediaLibraryTrigger } from "./media-library/media-library-trigger";
 import { MediaLibrarySheet } from "./media-library/media-library-sheet";
 import type { StationMedia } from "@/types/screen-project-media.types";
@@ -309,11 +310,44 @@ function ScreenTileInner({
 
   // Media library — seeded from the token response (initialMedia) on the station
   // screen so no extra fetch is needed; falls back to lazy fetch for supervisors.
-  const { primaryMedia, hasFetched, fetchMedia } = useScreenProjectMedia(
+  const { primaryMedia } = useScreenProjectMedia(
     storeId ?? null,
     stationNumber ?? null,
     { isPublic: viewerOnly, initialMedia },
   );
+
+  const room = useRoomContext();
+  const connectionState = useConnectionState();
+
+  // Live media pushed from the supervisor over the data channel (see below). Once
+  // an update arrives it is authoritative, so the station reflects primary
+  // changes / uploads / deletes without a reload. `null` until the first push.
+  const [liveMedia, setLiveMedia] = useState<StationMedia[] | null>(null);
+
+  // The primary the station should display: live push wins over the token seed.
+  const effectivePrimary = liveMedia
+    ? (liveMedia.find((m) => m.is_primary) ?? null)
+    : primaryMedia;
+
+  // Downloads + caches the asset and reports progress; keeps the current asset
+  // on screen until a *different* primary is fully ready, then swaps.
+  const {
+    media: displayedMedia,
+    src: displayedSrc,
+    progress: mediaProgress,
+    isDownloading: mediaDownloading,
+  } = useStationMediaAsset(effectivePrimary, {
+    // Don't start the (potentially large) media download until the room is
+    // connected, so it doesn't compete with the LiveKit connection handshake.
+    enabled: connectionState === ConnectionState.Connected,
+  });
+
+  // Falls back to the always-present logo if the media asset fails to load.
+  // Reset whenever the displayed media changes so a new asset gets a fresh try.
+  const [mediaError, setMediaError] = useState(false);
+  useEffect(() => {
+    setMediaError(false);
+  }, [displayedMedia?.id]);
 
   const allTracks = useTracks([
     Track.Source.ScreenShare,
@@ -349,8 +383,6 @@ function ScreenTileInner({
       )
     : [];
 
-  const room = useRoomContext();
-  const connectionState = useConnectionState();
   const isConnecting =
     connectionState === ConnectionState.Connecting ||
     connectionState === ConnectionState.Reconnecting;
@@ -363,14 +395,13 @@ function ScreenTileInner({
     onLiveChange?.(isLive);
   }, [isLive, onLiveChange]);
 
-  // When the station is not live, lazily fetch media so the primary fallback is
-  // ready. On the station screen the hook is pre-seeded from the token response
-  // (hasFetched = true), so this effect is effectively a no-op there.
-  useEffect(() => {
-    if (!isLive && !hasFetched) {
-      fetchMedia();
-    }
-  }, [isLive, hasFetched, fetchMedia]);
+  // Media comes entirely from the station token response (initialMedia), which
+  // already embeds the media list with the correct `is_primary`. We deliberately
+  // do NOT fetch /media from the station screen — the token seed is the single
+  // source, so there's no extra request here and no risk of overwriting the
+  // seed. The newest primary is picked up when a fresh token is issued (i.e. on
+  // (re)auth / reload). Supervisor tiles never render the fallback and never
+  // fetch media either; the media library sheet fetches on its own when opened.
 
   // Detect if any remote participant is speaking (audio activity)
   const speakingParticipants = useSpeakingParticipants();
@@ -600,6 +631,42 @@ function ScreenTileInner({
     return () => { room.off(RoomEvent.DataReceived, handler); };
   }, [room, publishNetworkStatus, publishStationState, onActiveDeviceChange]);
 
+  // ── Station-side: receive media-library updates pushed by the supervisor ───
+  // Lets a primary change / upload / delete reach the station screen live, with
+  // no reload. The pushed list becomes authoritative (see effectivePrimary).
+  useEffect(() => {
+    if (!publishNetworkStatus) return;
+    const handler = (payload: Uint8Array) => {
+      let msg: { type?: string; media?: StationMedia[] };
+      try {
+        msg = JSON.parse(new TextDecoder().decode(payload));
+      } catch {
+        return; // not JSON — ignore
+      }
+      if (msg?.type === "media-update" && Array.isArray(msg.media)) {
+        setLiveMedia(msg.media);
+      }
+    };
+    room.on(RoomEvent.DataReceived, handler);
+    return () => { room.off(RoomEvent.DataReceived, handler); };
+  }, [room, publishNetworkStatus]);
+
+  // ── Supervisor-side: push the current media list to the station ────────────
+  // Wired to the media library sheet, which calls this whenever its media
+  // changes (primary set, upload, delete).
+  const publishMediaUpdate = useCallback(
+    (media: StationMedia[]) => {
+      if (connectionState !== ConnectionState.Connected) return;
+      room.localParticipant
+        .publishData(
+          new TextEncoder().encode(JSON.stringify({ type: "media-update", media })),
+          { reliable: true, topic: "station-media" },
+        )
+        .catch(() => {});
+    },
+    [room, connectionState],
+  );
+
   // ── Supervisor-side: send commands to station when props change ───────────
   // Refs keep latest prop values so the ParticipantConnected handler (below)
   // can re-send all commands after a station reconnect without stale closures.
@@ -779,24 +846,71 @@ function ScreenTileInner({
           trackRef={videoTrack}
           className="absolute inset-0 h-full w-full object-cover"
         />
-      ) : viewerOnly && primaryMedia && !isConnecting ? (
-        /* Primary media fallback — shown on the station screen when supervisor's camera is off */
-        primaryMedia.type === "image" ? (
-          <img
-            src={primaryMedia.url}
-            alt={primaryMedia.file_name}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <video
-            src={primaryMedia.url}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        )
+      ) : viewerOnly ? (
+        /* Station screen. When media is ready it is shown on its own (no logo).
+           The white + logo base only appears while loading or when there is no
+           media to show / it failed to load. */
+        <div className="absolute inset-0">
+          {displayedSrc && displayedMedia && !mediaError ? (
+            /* Media ready — shown alone. Images use object-contain so the whole
+               image is visible (no zoom/crop); the letterbox is black. */
+            <div className="absolute inset-0 bg-black">
+              {displayedMedia.type === "image" ? (
+                <img
+                  src={displayedSrc}
+                  alt={displayedMedia.file_name}
+                  onError={() => setMediaError(true)}
+                  className="absolute inset-0 h-full w-full object-contain"
+                />
+              ) : (
+                <video
+                  src={displayedSrc}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  preload="auto"
+                  onError={() => setMediaError(true)}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+            </div>
+          ) : (
+            /* Loading / no media / failed — white + logo base. */
+            <div className="absolute inset-0 bg-white">
+              <img
+                src="/report-logo.png"
+                alt=""
+                aria-hidden
+                className="absolute inset-0 m-auto max-h-[55%] max-w-[70%] object-contain p-6"
+              />
+            </div>
+          )}
+
+          {/* Soft download indicator — only while a new asset is being fetched.
+              Small, low-contrast pill so it never dominates the screen. */}
+          {mediaDownloading && (
+            <div className="absolute inset-x-0 bottom-3 flex justify-center">
+              <div className="flex items-center gap-2 rounded-full bg-white/70 px-3 py-1.5 shadow-sm backdrop-blur">
+                <div className="h-1 w-28 overflow-hidden rounded-full bg-black/10">
+                  {mediaProgress === null ? (
+                    <div className="h-full w-full animate-pulse rounded-full bg-black/25" />
+                  ) : (
+                    <div
+                      className="h-full rounded-full bg-black/50 transition-[width] duration-200"
+                      style={{ width: `${Math.round(mediaProgress * 100)}%` }}
+                    />
+                  )}
+                </div>
+                <span className="text-[0.65rem] font-medium tabular-nums text-black/50">
+                  {mediaProgress === null
+                    ? "Loading…"
+                    : `${Math.round(mediaProgress * 100)}%`}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 select-none pointer-events-none bg-neutral-900">
           <div
@@ -1110,12 +1224,21 @@ function ScreenTileInner({
       {/* Network status publisher — renders null, sends data-channel heartbeats */}
       {publishNetworkStatus && <NetworkStatusPublisher />}
 
-      {/* Media library trigger — top-left overlay, always visible for supervisors */}
-      {/* {!viewerOnly && storeId && stationNumber !== undefined && (
-        <div className="absolute top-2 left-2 z-20">
+      {/* Media library trigger — bottom-right, sitting just above the station
+          device-picker (sliders) button, supervisor-only. */}
+      {!viewerOnly && storeId && stationNumber !== undefined && (
+        <div
+          // Guide only targets the main tile's button — side tiles render the
+          // same trigger, but only one instance should ever match the selector.
+          data-guide-id={isMain ? "sp-media-library" : undefined}
+          className={cn(
+            "absolute right-2 z-30",
+            isMain ? "bottom-12" : "bottom-10",
+          )}
+        >
           <MediaLibraryTrigger onClick={() => setIsLibraryOpen(true)} />
         </div>
-      )} */}
+      )}
 
       {/* Media library sheet */}
       {storeId && stationNumber !== undefined && (
@@ -1125,6 +1248,7 @@ function ScreenTileInner({
           storeId={storeId}
           stationNumber={stationNumber}
           stationName={name}
+          onMediaChange={!viewerOnly ? publishMediaUpdate : undefined}
         />
       )}
     </div>

@@ -125,26 +125,42 @@ export function Kpi({
   value,
   delta,
   accent,
+  size = "default",
 }: {
   label: string;
   value: React.ReactNode;
   delta?: number;
   /** Optional category color token — tints the label and left border. Omit for the neutral tile. */
   accent?: CategoryToken;
+  /** "sm" renders a more compact tile (smaller font, less padding) for dense KPI strips. */
+  size?: "sm" | "default";
 }) {
   return (
-    <Card className={cn("gap-1 py-3", accent && "border-l-2", accent?.border)}>
-      <CardContent className="px-3.5">
+    <Card
+      className={cn(
+        "gap-1",
+        size === "sm" ? "py-2" : "py-3",
+        accent && "border-l-2",
+        accent?.border,
+      )}
+    >
+      <CardContent className={size === "sm" ? "px-3" : "px-3.5"}>
         <p
           className={cn(
-            "text-[11px] font-semibold uppercase tracking-wide",
+            size === "sm" ? "text-[10px]" : "text-[11px]",
+            "font-semibold uppercase tracking-wide",
             accent?.headerText ?? "text-muted-foreground",
           )}
         >
           {label}
         </p>
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          <span className="font-heading text-2xl font-semibold leading-tight tabular-nums">
+        <div className={cn("flex flex-wrap items-center gap-2", size === "sm" ? "mt-0.5" : "mt-1")}>
+          <span
+            className={cn(
+              "font-heading font-semibold leading-tight tabular-nums",
+              size === "sm" ? "text-lg" : "text-2xl",
+            )}
+          >
             {value}
           </span>
           {delta !== undefined && <DeltaBadge value={delta} />}
