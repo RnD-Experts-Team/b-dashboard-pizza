@@ -58,6 +58,13 @@ export interface CustomerCountAndSales {
 // portal-weekly
 // ============================================================================
 
+export interface PortalWeeklyHnr {
+  hnr_transactions: number;
+  hnr_broken_promises: number;
+  hnr_promise_met: number;
+  hnr_promise_met_percent: number;
+}
+
 export interface PortalWeeklyRow {
   week_start: string;
   week_end: string;
@@ -70,6 +77,7 @@ export interface PortalWeeklyRow {
   hnr_broken_promises: number;
   hnr_promise_met: number;
   hnr_promise_met_percent: number;
+  important_items_hnr?: PortalWeeklyHnr;
 }
 
 export interface PortalWeekly {

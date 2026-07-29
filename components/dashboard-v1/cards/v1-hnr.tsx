@@ -35,41 +35,76 @@ export function V1HnrCard({
   hnr,
   weeklyHnr,
   weeklyAvgHnr,
+  importantItemsHnr,
+  weeklyImportantItemsHnr,
+  weeklyAvgImportantItemsHnr,
   span,
   className,
 }: {
   hnr: DsprHnr;
   weeklyHnr?: DsprHnr;
   weeklyAvgHnr?: DsprHnr;
+  importantItemsHnr?: DsprHnr;
+  weeklyImportantItemsHnr?: DsprHnr;
+  weeklyAvgImportantItemsHnr?: DsprHnr;
   span?: 1 | 2 | 3;
   className?: string;
 }) {
   const hasWeekly = Boolean(weeklyHnr);
+  const hasSpecialItems = Boolean(importantItemsHnr);
   const [view, setView] = useState<"day" | "wtd">("day");
+  const [itemsMode, setItemsMode] = useState<"all" | "special">("all");
   const [open, setOpen] = useState(false);
-  const active = view === "wtd" && weeklyHnr ? weeklyAvgHnr ?? weeklyHnr : hnr;
+  // Independent from the card's own All/Special toggle — switching one does not affect the other.
+  const [dialogItemsMode, setDialogItemsMode] = useState<"all" | "special">("all");
+
+  const source =
+    itemsMode === "special"
+      ? {
+          day: importantItemsHnr ?? hnr,
+          wtd: weeklyImportantItemsHnr,
+          wtdAvg: weeklyAvgImportantItemsHnr,
+        }
+      : { day: hnr, wtd: weeklyHnr, wtdAvg: weeklyAvgHnr };
+  const active = view === "wtd" && source.wtd ? source.wtdAvg ?? source.wtd : source.day;
   const pct = active.hnr_promise_met_percent;
 
   return (
       <V1Card
-        title={view === "wtd" ? "Hot-N-Ready (WTD)" : "Hot-N-Ready"}
+        title="Hot-N-Ready"
         category="operations"
         period={hasWeekly ? "D·WTD" : "D"}
+        showPeriodBadge={false}
         span={span}
         className={className}
         bodyClassName="overflow-hidden"
         onExpand={hasWeekly ? () => setOpen(true) : undefined}
         headerControl={
-          hasWeekly ? (
-            <V1Toggle
-              className="ms-1"
-              options={[
-                { value: "day", label: "Day" },
-                { value: "wtd", label: "WTD" },
-              ]}
-              value={view}
-              onChange={setView}
-            />
+          hasSpecialItems || hasWeekly ? (
+            <div className="flex items-center gap-1">
+              {hasSpecialItems && (
+                <V1Toggle
+                  className="ms-1"
+                  options={[
+                    { value: "all", label: "All" },
+                    { value: "special", label: "Special" },
+                  ]}
+                  value={itemsMode}
+                  onChange={setItemsMode}
+                />
+              )}
+              {hasWeekly && (
+                <V1Toggle
+                  className="ms-1"
+                  options={[
+                    { value: "day", label: "Day" },
+                    { value: "wtd", label: "WTD" },
+                  ]}
+                  value={view}
+                  onChange={setView}
+                />
+              )}
+            </div>
           ) : undefined
         }
       >
@@ -113,20 +148,41 @@ export function V1HnrCard({
           </V1MetricGrid>
         </div>
       {weeklyHnr && (() => {
-        const avg = weeklyAvgHnr ?? weeklyHnr;
+        const dailyHnr = dialogItemsMode === "special" ? importantItemsHnr ?? hnr : hnr;
+        const avg =
+          dialogItemsMode === "special"
+            ? weeklyAvgImportantItemsHnr ?? weeklyImportantItemsHnr ?? weeklyAvgHnr ?? weeklyHnr
+            : weeklyAvgHnr ?? weeklyHnr;
         return (
-          <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Hot-N-Ready Comparison">
+          <WtdComparisonDialog
+            open={open}
+            onClose={() => setOpen(false)}
+            title="Hot-N-Ready Comparison"
+            badgeText={dialogItemsMode === "special" ? "Special Items · Daily vs WTD Avg" : "All Items · Daily vs WTD Avg"}
+          >
+            {hasSpecialItems && (
+              <div className="mb-3 flex justify-end">
+                <V1Toggle
+                  options={[
+                    { value: "all", label: "All Items" },
+                    { value: "special", label: "Special Items" },
+                  ]}
+                  value={dialogItemsMode}
+                  onChange={setDialogItemsMode}
+                />
+              </div>
+            )}
             <ComparisonGrid
               daily={
                 <div className="space-y-2">
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                    {hnr.hnr_promise_met_percent.toFixed(1)}%
+                    {dailyHnr.hnr_promise_met_percent.toFixed(1)}%
                   </p>
                   <p className="text-[10px] text-muted-foreground">Promise Met</p>
                   <div className="flex gap-3 mt-2">
-                    <span className="text-[11px]">Trans: <b>{hnr.hnr_transactions}</b></span>
-                    <span className="text-[11px]">Kept: <b>{hnr.hnr_promise_met}</b></span>
-                    <span className="text-[11px]">Broken: <b>{hnr.hnr_broken_promises}</b></span>
+                    <span className="text-[11px]">Trans: <b>{dailyHnr.hnr_transactions}</b></span>
+                    <span className="text-[11px]">Kept: <b>{dailyHnr.hnr_promise_met}</b></span>
+                    <span className="text-[11px]">Broken: <b>{dailyHnr.hnr_broken_promises}</b></span>
                   </div>
                 </div>
               }
@@ -146,10 +202,10 @@ export function V1HnrCard({
             />
             <ComparisonTable
               rows={[
-                { label: "Promise Met %", daily: `${hnr.hnr_promise_met_percent.toFixed(1)}%`, wtd: `${avg.hnr_promise_met_percent.toFixed(1)}%`, dailyNum: hnr.hnr_promise_met_percent, wtdNum: avg.hnr_promise_met_percent, higherIsBetter: true },
-                { label: "Transactions", daily: `${hnr.hnr_transactions}`, wtd: `${avg.hnr_transactions}`, dailyNum: hnr.hnr_transactions, wtdNum: avg.hnr_transactions, higherIsBetter: true },
-                { label: "Promises Kept", daily: `${hnr.hnr_promise_met}`, wtd: `${avg.hnr_promise_met}`, dailyNum: hnr.hnr_promise_met, wtdNum: avg.hnr_promise_met, higherIsBetter: true },
-                { label: "Broken Promises", daily: `${hnr.hnr_broken_promises}`, wtd: `${avg.hnr_broken_promises}`, dailyNum: hnr.hnr_broken_promises, wtdNum: avg.hnr_broken_promises, higherIsBetter: false },
+                { label: "Promise Met %", daily: `${dailyHnr.hnr_promise_met_percent.toFixed(1)}%`, wtd: `${avg.hnr_promise_met_percent.toFixed(1)}%`, dailyNum: dailyHnr.hnr_promise_met_percent, wtdNum: avg.hnr_promise_met_percent, higherIsBetter: true },
+                { label: "Transactions", daily: `${dailyHnr.hnr_transactions}`, wtd: `${avg.hnr_transactions}`, dailyNum: dailyHnr.hnr_transactions, wtdNum: avg.hnr_transactions, higherIsBetter: true },
+                { label: "Promises Kept", daily: `${dailyHnr.hnr_promise_met}`, wtd: `${avg.hnr_promise_met}`, dailyNum: dailyHnr.hnr_promise_met, wtdNum: avg.hnr_promise_met, higherIsBetter: true },
+                { label: "Broken Promises", daily: `${dailyHnr.hnr_broken_promises}`, wtd: `${avg.hnr_broken_promises}`, dailyNum: dailyHnr.hnr_broken_promises, wtdNum: avg.hnr_broken_promises, higherIsBetter: false },
               ]}
             />
           </WtdComparisonDialog>

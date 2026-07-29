@@ -51,6 +51,9 @@ export function WbrPortalWeeklyCard({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [showSpecialHnr, setShowSpecialHnr] = useState(false);
+  // Independent from the card's own toggle — switching one does not affect the other.
+  const [dialogShowSpecialHnr, setDialogShowSpecialHnr] = useState(false);
   if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data) return null;
 
@@ -75,9 +78,40 @@ export function WbrPortalWeeklyCard({
               <Clock className="h-3 w-3 text-emerald-500" />
             </div>
             Portal &amp; HNR Weekly
-            <span className="ml-auto font-normal text-muted-foreground">
-              {weeks.length} wks
-            </span>
+            <div
+              className="ml-auto flex items-center gap-1.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+                <button
+                  type="button"
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    !showSpecialHnr
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setShowSpecialHnr(false)}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    showSpecialHnr
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setShowSpecialHnr(true)}
+                >
+                  Special
+                </button>
+              </div>
+              <span className="font-normal text-muted-foreground">
+                {weeks.length} wks
+              </span>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 overflow-y-auto px-0 pb-1">
@@ -93,6 +127,8 @@ export function WbrPortalWeeklyCard({
               {weeks.map((w, i) => {
                 const prev = weeks[i + 1];
                 const isCurrent = w.week_start === currentWeekStart;
+                const hnrSource = showSpecialHnr ? w.important_items_hnr : w;
+                const prevHnrSource = showSpecialHnr ? prev?.important_items_hnr : prev;
                 return (
                   <tr key={w.week_start} className={cn(isCurrent && "font-semibold")}>
                     <td className={TD}>{shortRange(w)}</td>
@@ -106,13 +142,19 @@ export function WbrPortalWeeklyCard({
                       </span>
                     </td>
                     <td className={cn(TD, NUM)}>
-                      {fmtPct(w.hnr_promise_met_percent)}{" "}
-                      <span className="text-[10px]">
-                        <PpDelta
-                          curr={w.hnr_promise_met_percent}
-                          prev={prev?.hnr_promise_met_percent}
-                        />
-                      </span>
+                      {hnrSource ? (
+                        <>
+                          {fmtPct(hnrSource.hnr_promise_met_percent)}{" "}
+                          <span className="text-[10px]">
+                            <PpDelta
+                              curr={hnrSource.hnr_promise_met_percent}
+                              prev={prevHnrSource?.hnr_promise_met_percent}
+                            />
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -128,6 +170,34 @@ export function WbrPortalWeeklyCard({
         title="Portal & HNR — Weekly History"
         badgeText={`${weeks.length} weeks`}
       >
+        <div className="mb-3 flex justify-end">
+          <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+            <button
+              type="button"
+              className={cn(
+                "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                !dialogShowSpecialHnr
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setDialogShowSpecialHnr(false)}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                dialogShowSpecialHnr
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setDialogShowSpecialHnr(true)}
+            >
+              Special
+            </button>
+          </div>
+        </div>
         <table className={cn(TBL, "[&_th]:!bg-muted/60")}>
           <thead>
             <tr>
@@ -148,6 +218,8 @@ export function WbrPortalWeeklyCard({
             {weeks.map((w, i) => {
               const prev = weeks[i + 1];
               const isCurrent = w.week_start === currentWeekStart;
+              const hnr = dialogShowSpecialHnr ? w.important_items_hnr : w;
+              const prevHnr = dialogShowSpecialHnr ? prev?.important_items_hnr : prev;
               return (
                 <tr key={w.week_start} className={cn(isCurrent && "font-semibold")}>
                   <td className={cn(TD, "whitespace-nowrap")}>{shortRange(w)}</td>
@@ -161,16 +233,38 @@ export function WbrPortalWeeklyCard({
                       prev={prev?.in_portal_on_time_percent}
                     />
                   </td>
-                  <td className={cn(TD, NUM)}>{w.hnr_transactions}</td>
-                  <td className={cn(TD, NUM)}>{w.hnr_broken_promises}</td>
-                  <td className={cn(TD, NUM)}>{w.hnr_promise_met}</td>
-                  <td className={cn(TD, NUM)}>{fmtPct(w.hnr_promise_met_percent)}</td>
-                  <td className={cn(TD, NUM)}>
-                    <PpDelta
-                      curr={w.hnr_promise_met_percent}
-                      prev={prev?.hnr_promise_met_percent}
-                    />
-                  </td>
+                  {hnr ? (
+                    <>
+                      <td className={cn(TD, NUM)}>{hnr.hnr_transactions}</td>
+                      <td className={cn(TD, NUM)}>{hnr.hnr_broken_promises}</td>
+                      <td className={cn(TD, NUM)}>{hnr.hnr_promise_met}</td>
+                      <td className={cn(TD, NUM)}>{fmtPct(hnr.hnr_promise_met_percent)}</td>
+                      <td className={cn(TD, NUM)}>
+                        <PpDelta
+                          curr={hnr.hnr_promise_met_percent}
+                          prev={prevHnr?.hnr_promise_met_percent}
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className={cn(TD, NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(TD, NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(TD, NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(TD, NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(TD, NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -178,7 +272,7 @@ export function WbrPortalWeeklyCard({
         </table>
         <p className="mt-3 text-[11px] text-muted-foreground">
           Δ compares each week to the prior week. Portal % = in-portal on-time;
-          HNR % = promise met.
+          HNR % = promise met{dialogShowSpecialHnr ? " (Special Items)" : ""}.
         </p>
       </WbrDetailDialog>
     </>

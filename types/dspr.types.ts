@@ -171,6 +171,9 @@ export interface DsprDay {
   hnr: DsprHnr;
   hnr_week_to_date?: DsprHnr;
   hnr_week_to_date_avg?: DsprHnr;
+  important_items_hnr?: DsprHnr;
+  important_items_hnr_week_to_date?: DsprHnr;
+  important_items_hnr_week_to_date_avg?: DsprHnr;
   labor: number;
   labor_week_to_date?: number;
   labor_week_to_date_avg?: number;

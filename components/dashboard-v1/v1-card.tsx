@@ -33,6 +33,8 @@ export interface V1CardProps {
   headerNote?: ReactNode;
   /** Inline control rendered after the period badge (e.g. a Day/WTD toggle). */
   headerControl?: ReactNode;
+  /** Hide the static period badge (e.g. "Day · WTD") — use when the header already has its own interactive toggle making it redundant. Defaults to shown. */
+  showPeriodBadge?: boolean;
   /** When provided, renders an expand button and makes the card clickable. */
   onExpand?: () => void;
   /** Override the default fixed height (e.g. for chart cards). */
@@ -50,6 +52,7 @@ export function V1Card({
   span = 1,
   headerNote,
   headerControl,
+  showPeriodBadge = true,
   onExpand,
   bodyClassName,
   height,
@@ -81,12 +84,14 @@ export function V1Card({
             <Icon className={cn("h-3 w-3", cat.text)} />
           </div>
           <span className="truncate">{title}</span>
-          <Badge
-            variant="outline"
-            className="ms-1 h-4 shrink-0 border-current/30 px-1.5 py-0 text-[8px] font-medium uppercase tracking-wide text-muted-foreground"
-          >
-            {PERIOD_LABEL[period]}
-          </Badge>
+          {showPeriodBadge && (
+            <Badge
+              variant="outline"
+              className="ms-1 h-4 shrink-0 border-current/30 px-1.5 py-0 text-[8px] font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              {PERIOD_LABEL[period]}
+            </Badge>
+          )}
           {headerControl}
           <div className="ms-auto flex items-center gap-1.5">
             {headerNote && (
