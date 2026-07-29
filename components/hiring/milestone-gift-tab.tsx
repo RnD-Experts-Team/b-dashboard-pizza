@@ -244,10 +244,12 @@ export function MilestoneGiftTab({
       try {
         const res = await hiringService.getRequests(
           selectedStoreIds,
+          "milestone_gift",
           targetPage,
+          undefined,
           controller.signal,
         );
-        setRows(res.data.filter((r) => r.request_type === "milestone_gift"));
+        setRows(res.data);
         setTotalPages(res.last_page);
         setPage(res.current_page);
       } catch (err: unknown) {

@@ -458,3 +458,32 @@ export interface StoreRequestsResponse {
   to: number;
   total: number;
 }
+
+/* ------------------------------------------------------------------ */
+/*  Per-type paginated requests — GET /v1/requests, /v1/stores/{n}/requests */
+/*  Each request type (separation/hiring/milestone_gift) now paginates    */
+/*  independently: the response is keyed by type instead of one flat list. */
+/* ------------------------------------------------------------------ */
+
+export type StoreRequestType = "hiring" | "separation" | "milestone_gift";
+
+export interface RequestsPaginator {
+  current_page: number;
+  data: StoreRequest[];
+  first_page_url: string | null;
+  from: number | null;
+  last_page: number;
+  last_page_url: string | null;
+  links: unknown[];
+  next_page_url: string | null;
+  path: string;
+  per_page: number;
+  prev_page_url: string | null;
+  to: number | null;
+  total: number;
+}
+
+/** Only the keys that were requested (via request_type/request_types[]) are present. */
+export type RequestsByTypeResponse = Partial<
+  Record<StoreRequestType, RequestsPaginator>
+>;

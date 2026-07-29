@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Paperclip,
   ExternalLink,
+  Download,
   ClipboardList,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -237,27 +238,35 @@ export function SeparationRequestSheet({
                     label={`Attachments (${sep.attachments.length})`}
                   />
                   <div className="space-y-2">
-                    {sep.attachments.map((att) => (
-                      <div key={att.id} className="rounded-lg border p-3 space-y-2">
-                        <div className="flex items-start gap-3">
-                          <AttachmentThumb url={att.attachment_url ?? att.file_path} />
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <a
-                              href={att.attachment_url ?? att.file_path}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
-                            >
-                              {att.original_name || `Attachment #${att.id}`}
-                              <ExternalLink className="h-3 w-3 shrink-0" />
-                            </a>
-                            <p className="text-xs text-muted-foreground">
-                              {(att.file_size / 1024).toFixed(1)} KB
-                            </p>
+                    {sep.attachments.map((att) => {
+                      const rawUrl = att.attachment_url ?? att.file_path;
+                      const isImg = IMAGE_EXTS.test(rawUrl.split("?")[0]);
+                      return (
+                        <div key={att.id} className="rounded-lg border p-3 space-y-2">
+                          <div className="flex items-start gap-3">
+                            <AttachmentThumb url={rawUrl} />
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <a
+                                href={rawUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline truncate"
+                              >
+                                {att.original_name || `Attachment #${att.id}`}
+                                {isImg ? (
+                                  <ExternalLink className="h-3 w-3 shrink-0" />
+                                ) : (
+                                  <Download className="h-3 w-3 shrink-0" />
+                                )}
+                              </a>
+                              <p className="text-xs text-muted-foreground">
+                                {(att.file_size / 1024).toFixed(1)} KB
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </section>
               </>
