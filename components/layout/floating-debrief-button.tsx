@@ -431,6 +431,7 @@ export function FloatingDebriefButton() {
             submitError={createError}
             onClearError={clearCreateError}
             employees={dueKeysData?.employees ?? []}
+            debriefTypes={dueKeysData?.employeeDebriefTypes ?? []}
             onSubmit={async (payload) => {
               if (!selectedStoreId) return false;
               const result = await createDebrief(selectedStoreId, payload);

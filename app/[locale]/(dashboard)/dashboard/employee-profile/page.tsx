@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
+import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,17 +123,19 @@ function OperationalTableSkeleton() {
 function DebriefTableSkeleton() {
   return (
     <div className="overflow-hidden rounded-lg border border-border/60">
-      <div className="grid grid-cols-[4rem_8rem_1fr_2fr_6rem] border-b bg-muted/40 px-5 py-3">
+      <div className="grid grid-cols-[4rem_8rem_6rem_1fr_2fr_6rem] border-b bg-muted/40 px-5 py-3">
         <Skeleton className="h-3 w-6" />
+        <Skeleton className="h-3 w-10" />
         <Skeleton className="h-3 w-10" />
         <Skeleton className="h-3 w-12" />
         <Skeleton className="h-3 w-10" />
         <Skeleton className="ml-auto h-3 w-14" />
       </div>
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="grid grid-cols-[4rem_8rem_1fr_2fr_6rem] items-center border-b px-5 py-3.5 last:border-0">
+        <div key={i} className="grid grid-cols-[4rem_8rem_6rem_1fr_2fr_6rem] items-center border-b px-5 py-3.5 last:border-0">
           <Skeleton className="h-5 w-10 rounded-md" />
           <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-16 rounded-full" />
           <Skeleton className="h-4 w-28" />
           <Skeleton className="h-4 w-48" />
           <Skeleton className="ml-auto h-5 w-8 rounded-full" />
@@ -498,6 +501,7 @@ function EmployeeProfileContent() {
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="w-16 pl-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">ID</TableHead>
                     <TableHead className="w-36 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Date</TableHead>
+                    <TableHead className="hidden w-32 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70 md:table-cell">Type</TableHead>
                     <TableHead className="hidden w-40 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70 sm:table-cell">Author</TableHead>
                     <TableHead className="hidden text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70 lg:table-cell">Notes</TableHead>
                     <TableHead className="w-28 pr-5 text-right text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/70">Attachments</TableHead>
@@ -506,7 +510,7 @@ function EmployeeProfileContent() {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={5} className="py-16 text-center">
+                      <TableCell colSpan={6} className="py-16 text-center">
                         <div className="flex flex-col items-center gap-3">
                           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted/60 ring-1 ring-border">
                             <ScrollText className="h-6 w-6 text-muted-foreground/40" />
@@ -538,6 +542,11 @@ function EmployeeProfileContent() {
                             </span>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{formatDate(item.date ?? item.createdAt)}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {item.type
+                              ? <DebriefTypeBadge type={item.type} />
+                              : <span className="text-muted-foreground/50">—</span>}
+                          </TableCell>
                           <TableCell className="hidden sm:table-cell">
                             {item.authorName
                               ? <span className="text-sm font-medium">{item.authorName}</span>

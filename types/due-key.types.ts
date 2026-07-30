@@ -2,6 +2,8 @@
 /*  Data Management – Due Keys API Types                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+import type { ApiEmployeeDebriefType, EmployeeDebriefType } from "./employee-debrief.types";
+
 export type DueKeyDataType = "text" | "number" | "decimal" | "boolean" | "json";
 
 // ── Raw API types (snake_case) ─────────────────────────────────────────
@@ -91,6 +93,7 @@ export interface ApiDueKeysResponse {
   date: string;
   items: ApiDueKeyItem[];
   employees?: ApiEmployee[];
+  employee_debrief_types?: ApiEmployeeDebriefType[];
 }
 
 // ── Frontend types (camelCase) ─────────────────────────────────────────
@@ -167,6 +170,7 @@ export interface DueKeysResponse {
   date: string;
   items: DueKeyItem[];
   employees: Employee[];
+  employeeDebriefTypes: EmployeeDebriefType[];
 }
 
 // ── Payloads (snake_case — sent to API) ────────────────────────────────

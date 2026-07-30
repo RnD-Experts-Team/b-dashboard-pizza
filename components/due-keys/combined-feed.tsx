@@ -29,6 +29,7 @@ import {
 import { useDueKeysFeed } from "@/lib/hooks/use-due-keys-feed";
 import { useDebriefsFeed } from "@/lib/hooks/use-debriefs-feed";
 import { DueKeyHistoryDialog } from "@/components/due-keys/due-key-history-dialog";
+import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
 import type { DueKeyItem, DueKeyValue, Employee, DueKeyAttachment } from "@/types/due-key.types";
 import type { DebriefAttachment, EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
@@ -478,6 +479,7 @@ function DebriefCard({ item }: { item: EmployeeDebriefItem }) {
               <ClipboardList className="h-2.5 w-2.5" />
               Employee Debrief
             </span>
+            <DebriefTypeBadge type={item.type} />
           </div>
 
           <div className="rounded-2xl rounded-tl-sm border border-border/50 bg-card/80 p-3 shadow-sm backdrop-blur-sm">

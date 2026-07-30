@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, ChevronDown, Clock, Eraser, FileImage, Loader2, Paperclip, Send, Trash2, X } from "lucide-react";
 import type { CreateDebriefPayload } from "@/lib/hooks/use-employee-debriefs";
 import type { Employee } from "@/types/due-key.types";
+import type { EmployeeDebriefType } from "@/types/employee-debrief.types";
 
 const MAX_NOTE = 5000;
 
@@ -78,6 +80,7 @@ interface CreateEmployeeDebriefFormProps {
   onSubmit: (payload: CreateDebriefPayload) => Promise<boolean>;
   onClearError: () => void;
   employees?: Employee[];
+  debriefTypes?: EmployeeDebriefType[];
 }
 
 export function CreateEmployeeDebriefForm({
@@ -87,10 +90,14 @@ export function CreateEmployeeDebriefForm({
   onSubmit,
   onClearError,
   employees = [],
+  debriefTypes = [],
 }: CreateEmployeeDebriefFormProps) {
   // Employee selection (id-based; not persisted to draft)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [selectedDisplayName, setSelectedDisplayName] = useState("");
+
+  // Debrief type (optional; not persisted to draft)
+  const [selectedType, setSelectedType] = useState<string>("none");
 
   const [note, setNote] = useState("");
   const [date, setDate] = useState(formatTodayDate());
@@ -124,6 +131,7 @@ export function CreateEmployeeDebriefForm({
     setSelectedDisplayName("");
     setEmpSearch("");
     setEmpOpen(false);
+    setSelectedType("none");
   }, [storeId]);
 
   // Auto-save draft 600ms after last keystroke
@@ -180,6 +188,7 @@ export function CreateEmployeeDebriefForm({
     setNote("");
     setDate(formatTodayDate());
     setAttachments([]);
+    setSelectedType("none");
     clearDraft(storeId);
     onClearError();
   };
@@ -192,6 +201,7 @@ export function CreateEmployeeDebriefForm({
       date: date.trim(),
       employee_id: selectedEmployeeId,
       note: note.trim(),
+      type: selectedType === "none" ? undefined : selectedType,
       attachments: attachments.length > 0 ? attachments : null,
     });
 
@@ -202,6 +212,7 @@ export function CreateEmployeeDebriefForm({
       setNote("");
       setDate(formatTodayDate());
       setAttachments([]);
+      setSelectedType("none");
       clearDraft(storeId);
       setSuccessFlash(true);
       if (flashTimer.current) clearTimeout(flashTimer.current);
@@ -345,6 +356,28 @@ export function CreateEmployeeDebriefForm({
               </PopoverContent>
             </Popover>
           </div>
+
+          {/* Debrief type (optional) */}
+          {debriefTypes.length > 0 && (
+            <div className="space-y-1">
+              <Label htmlFor="debrief-type" className="text-[11px] font-medium">
+                Type (optional)
+              </Label>
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger id="debrief-type" size="sm" className="h-8 w-full text-xs">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {debriefTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.slug}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Note */}
           <div className="space-y-1">

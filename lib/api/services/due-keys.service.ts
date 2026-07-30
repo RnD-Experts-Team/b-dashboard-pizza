@@ -150,6 +150,7 @@ function transformDueKeysResponse(raw: ApiDueKeysResponse): DueKeysResponse {
     date: raw.date,
     items: (raw.items ?? []).map(transformDueKeyItem),
     employees: (raw.employees ?? []).map(transformEmployee),
+    employeeDebriefTypes: raw.employee_debrief_types ?? [],
   };
 }
 

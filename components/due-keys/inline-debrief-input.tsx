@@ -19,13 +19,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useCreateEmployeeDebrief,
   type CreateDebriefPayload,
 } from "@/lib/hooks/use-employee-debriefs";
 import { cn } from "@/lib/utils";
 import type { Employee } from "@/types/due-key.types";
-import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
+import type { EmployeeDebriefItem, EmployeeDebriefType } from "@/types/employee-debrief.types";
 
 // ── date helpers ─────────────────────────────────────────────────────────────
 function strToDate(s: string): Date {
@@ -45,10 +46,11 @@ const MAX_NOTE = 5000;
 interface InlineDebriefInputProps {
   storeId: string | null;
   employees: Employee[];
+  debriefTypes?: EmployeeDebriefType[];
   onSuccess?: (item: EmployeeDebriefItem) => void;
 }
 
-export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebriefInputProps) {
+export function InlineDebriefInput({ storeId, employees, debriefTypes = [], onSuccess }: InlineDebriefInputProps) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
   const [selectedDisplayName, setSelectedDisplayName] = useState("");
   const [empOpen, setEmpOpen] = useState(false);
@@ -58,6 +60,7 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
   const [isHoveringAttach, setIsHoveringAttach] = useState(false);
   const [submissionDate, setSubmissionDate] = useState<string>(() => todayDateStr());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState<string>("none");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +72,7 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
     setSelectedDisplayName("");
     setEmpSearch("");
     setEmpOpen(false);
+    setSelectedType("none");
     clearError();
   }, [storeId, clearError]);
 
@@ -115,6 +119,7 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
       date: submissionDate,
       employee_id: selectedEmployeeId,
       note: note.trim(),
+      type: selectedType === "none" ? undefined : selectedType,
       attachments: attachments.length > 0 ? attachments : null,
     };
     const ok = await createDebrief(storeId, payload);
@@ -124,6 +129,7 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
       setNote("");
       setAttachments([]);
       setSubmissionDate(todayDateStr());
+      setSelectedType("none");
     }
   }
 
@@ -264,6 +270,26 @@ export function InlineDebriefInput({ storeId, employees, onSuccess }: InlineDebr
             )}
           </PopoverContent>
         </Popover>
+
+        {/* Debrief type (optional) */}
+        {debriefTypes.length > 0 && (
+          <Select value={selectedType} onValueChange={setSelectedType}>
+            <SelectTrigger
+              size="sm"
+              className="h-8 w-auto shrink-0 gap-1.5 rounded-md border-border/60 bg-background/60 px-2 py-1 text-[11px] font-medium data-[state=open]:bg-muted"
+            >
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No type</SelectItem>
+              {debriefTypes.map((t) => (
+                <SelectItem key={t.id} value={t.slug}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Note textarea + action buttons */}

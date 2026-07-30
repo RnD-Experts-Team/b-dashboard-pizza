@@ -36,6 +36,14 @@ export interface ApiDebriefAttachment {
   updated_at?: string | null;
 }
 
+export interface ApiEmployeeDebriefType {
+  id: number;
+  slug: string;
+  label: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface ApiEmployeeDebriefItem {
   id: number;
   user_id?: number | null;
@@ -50,6 +58,8 @@ export interface ApiEmployeeDebriefItem {
   updated_at?: string | null;
   note?: string | null;
   notes?: string | null;
+  type_id?: number | null;
+  type?: ApiEmployeeDebriefType | null;
   [key: string]: unknown;
 }
 
@@ -69,6 +79,8 @@ export interface ApiEmployeeDebriefDetail {
   notes?: string | null;
   content?: string | null;
   summary?: string | null;
+  type_id?: number | null;
+  type?: ApiEmployeeDebriefType | null;
   [key: string]: unknown;
 }
 
@@ -95,6 +107,12 @@ export interface ApiPaginatedDebriefResponse {
 
 // ── Frontend types (camelCase) ─────────────────────────────────────────
 
+export interface EmployeeDebriefType {
+  id: number;
+  slug: string;
+  label: string;
+}
+
 export interface DebriefAttachment {
   id: number;
   filePath?: string | null;
@@ -116,6 +134,8 @@ export interface EmployeeDebriefItem {
   createdAt?: string | null;
   updatedAt?: string | null;
   notes?: string | null;
+  typeId?: number | null;
+  type?: EmployeeDebriefType | null;
   attachments?: DebriefAttachment[];
 }
 
@@ -141,5 +161,7 @@ export interface EmployeeDebriefDetail {
   notes?: string | null;
   content?: string | null;
   summary?: string | null;
+  typeId?: number | null;
+  type?: EmployeeDebriefType | null;
   attachments?: DebriefAttachment[];
 }

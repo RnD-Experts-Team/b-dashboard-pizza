@@ -248,6 +248,7 @@ export interface CreateDebriefPayload {
   date: string;
   employee_id: number;
   note: string;
+  type?: string | null;
   attachments?: File[] | null;
 }
 

@@ -440,6 +440,7 @@ export default function DueKeysPage() {
               <InlineDebriefInput
                 storeId={storeId}
                 employees={dueKeysData?.employees ?? []}
+                debriefTypes={dueKeysData?.employeeDebriefTypes ?? []}
                 onSuccess={(item) => debriefInjectRef.current?.(item)}
               />
             )}
