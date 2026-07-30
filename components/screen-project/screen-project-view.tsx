@@ -672,6 +672,11 @@ export function ScreenProjectView() {
             <p className="text-sm font-semibold">Select Stations</p>
             <p className="text-xs text-muted-foreground">Choose which stations to connect to</p>
           </div>
+          <StationsDialog
+            storeId={storeId}
+            stations={stations}
+            onRefetch={refetch}
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -686,8 +691,13 @@ export function ScreenProjectView() {
         {/* Station grid */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           {stations.length === 0 ? (
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <p className="text-sm text-muted-foreground">No stations found for this store.</p>
+              <StationsDialog
+                storeId={storeId}
+                stations={stations}
+                onRefetch={refetch}
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

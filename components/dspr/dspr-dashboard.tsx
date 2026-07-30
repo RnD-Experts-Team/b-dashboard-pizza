@@ -7,7 +7,6 @@ import html2canvas from "html2canvas-pro";
 import { useWbrCard } from "@/lib/hooks/use-wbr-card";
 import { useManagerDashboard } from "@/lib/hooks/use-manager-dashboard";
 import { useHooksWbr } from "@/lib/hooks/use-hooks-wbr";
-import { useAuth } from "@/lib/auth/use-auth";
 import {
   SalesChart,
   TopItemsList,
@@ -95,6 +94,10 @@ import { PageGuide } from "@/components/shared/page-guide";
 import { DSPR_GUIDE_STEPS } from "./dspr-guide-config";
 import { buildDsprReportHtml } from "./dspr-report-template";
 import { buildStorePerformanceReportHtml } from "./dspr-store-performance-report-template";
+import {
+  StorePerformanceReportDialog,
+  type StorePerformanceReportValues,
+} from "./store-performance-report-dialog";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
 function toApiDate(date: Date): string {
@@ -377,9 +380,6 @@ export function DsprDashboard({
   // Hooks WBR — complaints, feedbacks, money_owed for the week
   const hooksWbr = useHooksWbr(storeId, toApiDate(selectedDate));
 
-  // Current user — powers the manager photo/name on the Store Performance report
-  const { user } = useAuth();
-
   // Format "last updated" time
   const lastUpdatedLabel = useMemo(() => {
     if (!lastFetchedAt) return null;
@@ -404,6 +404,7 @@ export function DsprDashboard({
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCapturingReport, setIsCapturingReport] = useState(false);
   const [isCapturingStorePerformance, setIsCapturingStorePerformance] = useState(false);
+  const [storePerfDialogOpen, setStorePerfDialogOpen] = useState(false);
 
   // Toggle to remove section backgrounds (persisted in localStorage)
   const [hideSectionBackgrounds, setHideSectionBackgrounds] = useState(false);
@@ -544,8 +545,10 @@ export function DsprDashboard({
   // ── Screenshot the "Daily Store Performance" HTML report as a PNG ───────
   // Same off-screen iframe + html2canvas flow as handleScreenshotReport, for
   // the second report design (tips, guest service, feedback/complaints, HNR,
-  // portal, manager photo).
-  const handleScreenshotStorePerformance = useCallback(async () => {
+  // portal, "Yesterday Hero" employee photo). The employee name/photo and the
+  // footer message are collected by StorePerformanceReportDialog just before
+  // this runs — nothing here is derived from the logged-in user.
+  const handleScreenshotStorePerformance = useCallback(async (values: StorePerformanceReportValues) => {
     if (!data || isCapturingStorePerformance) return;
     setIsCapturingStorePerformance(true);
 
@@ -556,8 +559,9 @@ export function DsprDashboard({
         guestService: wbrData?.["customer-service"],
         complaints: hooksWbr.data?.complaints,
         feedbacks: hooksWbr.data?.feedbacks,
-        managerName: user?.name ?? "Store Manager",
-        managerAvatarUrl: user?.avatar,
+        employeeName: values.employeeName,
+        employeeImageDataUrl: values.employeeImageDataUrl,
+        footerMessage: values.footerMessage,
       },
       selectedDate,
     );
@@ -621,7 +625,6 @@ export function DsprDashboard({
     storeId,
     wbrData,
     hooksWbr.data,
-    user,
   ]);
 
   const toggleHideBackgrounds = useCallback(() => {
@@ -901,7 +904,7 @@ export function DsprDashboard({
                 {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onSelect={handleScreenshotStorePerformance}
+                onSelect={() => setStorePerfDialogOpen(true)}
                 disabled={!data || isCapturingStorePerformance}
               >
                 <LayoutTemplate className="h-3.5 w-3.5 me-2" />
@@ -917,6 +920,13 @@ export function DsprDashboard({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <StorePerformanceReportDialog
+            open={storePerfDialogOpen}
+            onOpenChange={setStorePerfDialogOpen}
+            onGenerate={handleScreenshotStorePerformance}
+            isGenerating={isCapturingStorePerformance}
+          />
 
           {/* Page guide button */}
           <Tooltip>
