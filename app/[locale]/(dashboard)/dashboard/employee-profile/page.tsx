@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
 import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
+import { DebriefTypeSummary } from "@/components/employee-debriefs/debrief-type-summary";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -237,6 +238,7 @@ function EmployeeProfileContent() {
     currentPage: debriefCurrentPage,
     lastPage: debriefLastPage,
     total: debriefTotal,
+    typeSummary: debriefTypeSummary,
     refetch: debriefRefetch,
     clearError: debriefClearError,
   } = useEmployeeDebriefHistory(
@@ -490,6 +492,10 @@ function EmployeeProfileContent() {
         <TabsContent value="debriefs" className="mt-4" tabIndex={-1}>
           {debriefError && (
             <ErrorBanner message={debriefError} onRetry={debriefRefetch} onDismiss={debriefClearError} />
+          )}
+
+          {!debriefLoading && !debriefError && debriefTypeSummary.length > 0 && (
+            <DebriefTypeSummary items={debriefTypeSummary} />
           )}
 
           {debriefLoading && !items.length ? (

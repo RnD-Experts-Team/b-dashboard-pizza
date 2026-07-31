@@ -348,22 +348,22 @@ function StoreMultiSelect({ value, options, onApply, disabled }: StoreMultiSelec
 /*  (used inside the advanced filters panel, which is already Apply-gated) */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-interface MultiCheckOption {
-  value: number;
+interface MultiCheckOption<T extends string | number = number> {
+  value: T;
   label: string;
 }
 
-interface MultiCheckSelectProps {
-  value: number[];
-  options: MultiCheckOption[];
-  onChange: (value: number[]) => void;
+interface MultiCheckSelectProps<T extends string | number = number> {
+  value: T[];
+  options: MultiCheckOption<T>[];
+  onChange: (value: T[]) => void;
   placeholder?: string;
   searchPlaceholder?: string;
   disabled?: boolean;
   loading?: boolean;
 }
 
-function MultiCheckSelect({
+function MultiCheckSelect<T extends string | number = number>({
   value,
   options,
   onChange,
@@ -371,7 +371,7 @@ function MultiCheckSelect({
   searchPlaceholder = "Search…",
   disabled,
   loading,
-}: MultiCheckSelectProps) {
+}: MultiCheckSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -388,7 +388,7 @@ function MultiCheckSelect({
     }
   }, [open]);
 
-  function toggle(id: number) {
+  function toggle(id: T) {
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   }
 
@@ -552,7 +552,7 @@ export function TicketsFiltersBar({
   const FILTER_KEYS: (keyof TicketsFilters)[] = [
     "statuses", "priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
     "part_cost_total_gt", "part_cost_single_gt", "created_from", "created_to",
-    "assigned_from", "assigned_to", "trashed", "sort", "dir", "page", "per_page",
+    "changed_statuses", "changed_from", "changed_to", "trashed", "sort", "dir", "page", "per_page",
   ];
 
   function fieldEqual(a: unknown, b: unknown): boolean {
@@ -578,8 +578,9 @@ export function TicketsFiltersBar({
     filters.per_page,
     filters.created_from,
     filters.created_to,
-    filters.assigned_from,
-    filters.assigned_to,
+    filters.changed_statuses?.length,
+    filters.changed_from,
+    filters.changed_to,
   ].filter((v) => v != null && v !== 0 && v !== "").length;
 
   const hasAnyFilter = activeFilterCount > 0;
@@ -610,6 +611,16 @@ export function TicketsFiltersBar({
 
   const issueStatusOptions: SearchableSelectOption[] = [
     { value: "all", label: "All statuses" },
+    { value: "pending", label: "Pending" },
+    { value: "assigned", label: "Assigned" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "waiting", label: "Waiting" },
+    { value: "complete", label: "Complete" },
+    { value: "deferred", label: "Deferred" },
+    { value: "cancelled", label: "Cancelled" },
+  ];
+
+  const changedStatusOptions: MultiCheckOption<IssueStatus>[] = [
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
@@ -859,6 +870,22 @@ export function TicketsFiltersBar({
               />
             </div>
 
+            {/* Changed Status */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CircleDot className="h-3 w-3" />
+                Changed Status
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.changed_statuses ?? []}
+                options={changedStatusOptions}
+                onChange={(v) => updateField("changed_statuses", v.length ? v : undefined)}
+                disabled={disabled}
+                placeholder="Any status"
+                searchPlaceholder="Search statuses…"
+              />
+            </div>
+
             {/* Created from */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -913,54 +940,54 @@ export function TicketsFiltersBar({
               </div>
             </div>
 
-            {/* Assigned from */}
+            {/* Changed from */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <CalendarDays className="h-3 w-3" />
-                Assigned from
+                Changed from
               </label>
               <div className="flex items-center gap-1">
                 <DatePicker
-                  value={draftFilters.assigned_from ?? ""}
-                  onChange={(v) => updateField("assigned_from", v || undefined)}
+                  value={draftFilters.changed_from ?? ""}
+                  onChange={(v) => updateField("changed_from", v || undefined)}
                   disabled={disabled}
-                  className={cn("flex-1", draftFilters.assigned_from && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                  className={cn("flex-1", draftFilters.changed_from && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                  onClick={() => updateField("assigned_from", undefined)}
-                  disabled={disabled || !draftFilters.assigned_from}
-                  aria-label="Clear assigned from date"
+                  onClick={() => updateField("changed_from", undefined)}
+                  disabled={disabled || !draftFilters.changed_from}
+                  aria-label="Clear changed from date"
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
 
-            {/* Assigned to */}
+            {/* Changed to */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <CalendarDays className="h-3 w-3" />
-                Assigned to
+                Changed to
               </label>
               <div className="flex items-center gap-1">
                 <DatePicker
-                  value={draftFilters.assigned_to ?? ""}
-                  onChange={(v) => updateField("assigned_to", v || undefined)}
+                  value={draftFilters.changed_to ?? ""}
+                  onChange={(v) => updateField("changed_to", v || undefined)}
                   disabled={disabled}
-                  className={cn("flex-1", draftFilters.assigned_to && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                  className={cn("flex-1", draftFilters.changed_to && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                  onClick={() => updateField("assigned_to", undefined)}
-                  disabled={disabled || !draftFilters.assigned_to}
-                  aria-label="Clear assigned to date"
+                  onClick={() => updateField("changed_to", undefined)}
+                  disabled={disabled || !draftFilters.changed_to}
+                  aria-label="Clear changed to date"
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>

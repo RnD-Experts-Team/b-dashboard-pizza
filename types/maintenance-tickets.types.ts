@@ -313,6 +313,37 @@ export interface TicketIssuesResponse {
   data: TicketIssue[];
 }
 
+export interface TicketsAnalyticsStatusBreakdown {
+  status: IssueStatus;
+  label: string;
+  count: number;
+}
+
+export interface TicketsAnalyticsDuration {
+  avgSeconds: number | null;
+  avgHours: number | null;
+  sampleSize: number;
+}
+
+export interface TicketsAnalytics {
+  issues: {
+    total: number;
+    statusBreakdown: TicketsAnalyticsStatusBreakdown[];
+  };
+  durations: {
+    pendingToNextStatus: TicketsAnalyticsDuration;
+    timeToCompleteOrCancelled: TicketsAnalyticsDuration;
+  };
+  avgTicketsPerWeek: {
+    value: number;
+    totalTickets: number;
+    weeksSpanned: number;
+    spanStart: string;
+    spanEnd: string;
+    weekStartsOn: string;
+  };
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Payloads (what the UI sends to the service)                            */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -448,8 +479,10 @@ export interface TicketsFilters {
   part_cost_single_gt?: number;
   created_from?: string;
   created_to?: string;
-  assigned_from?: string;
-  assigned_to?: string;
+  /** Matches tickets with an issue that changed to any of these statuses within the changed_from/to range. */
+  changed_statuses?: IssueStatus[];
+  changed_from?: string;
+  changed_to?: string;
   /** Include soft-deleted tickets: "with" = all, "only" = only deleted */
   trashed?: "with" | "only";
   sort?: string;
@@ -725,4 +758,40 @@ export interface ApiTicketsListResponse {
 
 export interface ApiTicketIssuesResponse {
   data: ApiTicketIssue[];
+}
+
+export interface ApiTicketsAnalyticsStatusBreakdown {
+  status: IssueStatus;
+  label: string;
+  count: number;
+}
+
+export interface ApiTicketsAnalyticsDuration {
+  avg_seconds: number | null;
+  avg_hours: number | null;
+  sample_size: number;
+}
+
+export interface ApiTicketsAnalytics {
+  issues: {
+    total: number;
+    status_breakdown: ApiTicketsAnalyticsStatusBreakdown[];
+  };
+  durations: {
+    pending_to_next_status: ApiTicketsAnalyticsDuration;
+    time_to_complete_or_cancelled: ApiTicketsAnalyticsDuration;
+  };
+  avg_tickets_per_week: {
+    value: number;
+    total_tickets: number;
+    weeks_spanned: number;
+    span_start: string;
+    span_end: string;
+    week_starts_on: string;
+  };
+}
+
+/** Envelope returned by the dedicated GET /tickets/analytics and GET /stores/{store}/tickets/analytics endpoints */
+export interface ApiTicketsAnalyticsResponse {
+  data: ApiTicketsAnalytics;
 }

@@ -565,6 +565,7 @@ export interface CombinedFeedProps {
   dateTo?: string | null;
   selectedTags?: number[] | null;
   employeeId?: number | null;
+  debriefTypeSlugs?: string[] | null;
   showDueKeys: boolean;
   showDebrief: boolean;
   updateKeyRef?: React.MutableRefObject<
@@ -579,6 +580,7 @@ export function CombinedFeed({
   dateTo,
   selectedTags,
   employeeId,
+  debriefTypeSlugs,
   showDueKeys,
   showDebrief,
   updateKeyRef,
@@ -667,9 +669,11 @@ export function CombinedFeed({
     }
 
     if (showDebrief) {
+      const typeFilter = debriefTypeSlugs && debriefTypeSlugs.length > 0 ? debriefTypeSlugs : null;
       for (const page of debriefs.pages) {
         for (const [day, items] of Object.entries(page.days)) {
           for (const item of items) {
+            if (typeFilter && !typeFilter.includes(item.type?.slug ?? "")) continue;
             const unified: UnifiedItem = {
               type: "debrief",
               date: day,
@@ -691,7 +695,7 @@ export function CombinedFeed({
 
     // Return sorted dates ascending so newest date is last (we'll scroll to bottom)
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [dueKeys.pages, debriefs.pages, employeeMap, showDueKeys, showDebrief, storeId]);
+  }, [dueKeys.pages, debriefs.pages, employeeMap, showDueKeys, showDebrief, storeId, debriefTypeSlugs]);
 
   const totalItems = groupedByDate.reduce((acc, [, items]) => acc + items.length, 0);
 

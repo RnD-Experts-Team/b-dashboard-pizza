@@ -63,6 +63,7 @@ export default function DueKeysPage() {
 
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedDebriefTypeSlugs, setSelectedDebriefTypeSlugs] = useState<string[]>([]);
 
   // Feed injection refs — let inline inputs push new items into the feeds
   const debriefInjectRef = useRef<((item: EmployeeDebriefItem) => void) | null>(null);
@@ -77,11 +78,13 @@ export default function DueKeysPage() {
     today,
     selectedTagIds.length > 0 ? selectedTagIds : undefined
   );
+  const availableDebriefTypes = dueKeysData?.employeeDebriefTypes ?? [];
 
   // Badge count for mobile filter button
   const activeFilterCount =
     selectedTagIds.length +
     (selectedEmployeeId !== null ? 1 : 0) +
+    selectedDebriefTypeSlugs.length +
     (!showDueKeys ? 1 : 0) +
     (!showDebrief ? 1 : 0);
 
@@ -271,6 +274,63 @@ export default function DueKeysPage() {
         </div>
       )}
 
+      {/* ── Debrief type — only when Employee Debrief is active ── */}
+      {showDebrief && (
+        <div className="rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Type
+              </p>
+            </div>
+            {selectedDebriefTypeSlugs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedDebriefTypeSlugs([])}
+                className="text-[10px] text-muted-foreground/70 underline-offset-2 hover:text-muted-foreground hover:underline"
+              >
+                Clear ({selectedDebriefTypeSlugs.length})
+              </button>
+            )}
+          </div>
+
+          {isDueKeysLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-4 w-24 animate-pulse rounded bg-muted" />
+              ))}
+            </div>
+          ) : availableDebriefTypes.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No debrief types available.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {availableDebriefTypes.map((type) => (
+                <div key={type.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`debrief-type-${type.id}`}
+                    checked={selectedDebriefTypeSlugs.includes(type.slug)}
+                    onCheckedChange={(checked) => {
+                      setSelectedDebriefTypeSlugs((prev) =>
+                        checked
+                          ? [...prev, type.slug]
+                          : prev.filter((slug) => slug !== type.slug)
+                      );
+                    }}
+                  />
+                  <label
+                    htmlFor={`debrief-type-${type.id}`}
+                    className="cursor-pointer truncate text-xs text-foreground/80 hover:text-foreground"
+                  >
+                    {type.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Employees — only when Debrief is active ── */}
       {showDebrief && (
         <div className="rounded-xl border border-border/60 bg-card/60 p-2 backdrop-blur-sm">
@@ -391,6 +451,7 @@ export default function DueKeysPage() {
               dateTo={dateTo}
               selectedTags={selectedTagIds.length > 0 ? selectedTagIds : null}
               employeeId={selectedEmployeeId}
+              debriefTypeSlugs={selectedDebriefTypeSlugs.length > 0 ? selectedDebriefTypeSlugs : null}
               showDueKeys={showDueKeys}
               showDebrief={showDebrief}
               updateKeyRef={dueKeyUpdateRef}

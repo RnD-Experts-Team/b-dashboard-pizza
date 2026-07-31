@@ -41,13 +41,14 @@ export async function GET(
   const authorization = getAuthorizationHeader(request)!;
   const { searchParams } = new URL(request.url);
 
-  // Forward filter params to upstream
+  // Forward filter params to upstream — same filter set as the list endpoint,
+  // minus pagination (analytics is not paginated).
   const forwardParams = new URLSearchParams();
 
   const SCALAR_KEYS = [
     "created_from", "created_to", "changed_from", "changed_to",
     "part_cost_single_gt", "part_cost_total_gt",
-    "trashed", "sort", "dir", "page", "per_page",
+    "trashed", "sort", "dir",
   ];
   const ARRAY_KEYS = [
     "statuses[]", "priorities[]", "issue_ids[]",
@@ -62,7 +63,7 @@ export async function GET(
     searchParams.getAll(key).forEach((v) => forwardParams.append(key, v));
   }
 
-  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets${forwardParams.toString() ? `?${forwardParams}` : ""}`;
+  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/analytics${forwardParams.toString() ? `?${forwardParams}` : ""}`;
 
   try {
     const res = await fetchWithTimeout(upstreamUrl, {
@@ -71,48 +72,6 @@ export async function GET(
     });
     const body = await res.text();
     return new NextResponse(body, {
-      status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    if (msg.includes("abort") || msg.includes("timed out")) {
-      return errorJson("TIMEOUT", "Upstream request timed out", 504);
-    }
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
-  }
-}
-
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ store: string }> }
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const { store } = await params;
-  if (!store) return errorJson("MISSING_PARAM", "store is required", 400);
-
-  const authorization = getAuthorizationHeader(request)!;
-  // Forward the raw body and its Content-Type (including the multipart boundary)
-  // so the upstream can parse the multipart/form-data correctly.
-  const contentType = request.headers.get("content-type") ?? "application/octet-stream";
-  const body = await request.arrayBuffer();
-
-  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets`;
-
-  try {
-    const res = await fetchWithTimeout(upstreamUrl, {
-      method: "POST",
-      headers: {
-        Authorization: authorization,
-        Accept: "application/json",
-        "Content-Type": contentType,
-      },
-      body,
-    });
-    const text = await res.text();
-    return new NextResponse(text, {
       status: res.status,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     });

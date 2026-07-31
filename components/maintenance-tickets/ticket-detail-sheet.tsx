@@ -374,7 +374,10 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
     filters?.part_cost_total_gt,
     filters?.trashed,
     filters?.per_page,
-  ].filter((v) => v != null && v !== 0).length;
+    filters?.changed_statuses?.length,
+    filters?.changed_from,
+    filters?.changed_to,
+  ].filter((v) => v != null && v !== 0 && v !== "").length;
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -507,6 +510,27 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                   </Select>
                 </div>
 
+                {/* Changed status */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed status</p>
+                  <Select
+                    value={filters?.changed_statuses?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("changed_statuses", v === "all" ? undefined : [v as IssueStatus])}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="pending" className={itemCls}>Pending</SelectItem>
+                      <SelectItem value="assigned" className={itemCls}>Assigned</SelectItem>
+                      <SelectItem value="in_progress" className={itemCls}>In Progress</SelectItem>
+                      <SelectItem value="waiting" className={itemCls}>Waiting</SelectItem>
+                      <SelectItem value="complete" className={itemCls}>Complete</SelectItem>
+                      <SelectItem value="deferred" className={itemCls}>Deferred</SelectItem>
+                      <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Technician */}
                 <div className="min-w-0 space-y-0.5">
                   <p className={labelCls}>Technician</p>
@@ -560,6 +584,26 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="only" className={itemCls}>Deleted only</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Changed from */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed from</p>
+                  <DatePicker
+                    value={filters?.changed_from ?? ""}
+                    onChange={(v) => updateFilter("changed_from", v || undefined)}
+                    className="h-6 text-[10px] px-1.5"
+                  />
+                </div>
+
+                {/* Changed to */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed to</p>
+                  <DatePicker
+                    value={filters?.changed_to ?? ""}
+                    onChange={(v) => updateFilter("changed_to", v || undefined)}
+                    className="h-6 text-[10px] px-1.5"
+                  />
                 </div>
 
                 {/* Min total part cost — spans both columns */}

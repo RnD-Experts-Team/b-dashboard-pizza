@@ -92,12 +92,19 @@ export interface ApiEmployeeDebriefListResponse {
   total?: number;
 }
 
+export interface ApiDebriefTypeSummaryEntry {
+  type: ApiEmployeeDebriefType | null;
+  total_count: number;
+  weekly_average: number;
+}
+
 export interface ApiPaginatedDebriefResponse {
   current_page: number;
   per_page: number;
   total: number;
   last_page: number;
   data: ApiEmployeeDebriefItem[];
+  type_summary?: ApiDebriefTypeSummaryEntry[];
   first_page_url?: string | null;
   next_page_url?: string | null;
   prev_page_url?: string | null;
@@ -139,12 +146,19 @@ export interface EmployeeDebriefItem {
   attachments?: DebriefAttachment[];
 }
 
+export interface DebriefTypeSummaryEntry {
+  type: EmployeeDebriefType | null;
+  totalCount: number;
+  weeklyAverage: number;
+}
+
 export interface PaginatedDebriefResult {
   currentPage: number;
   perPage: number;
   total: number;
   lastPage: number;
   items: EmployeeDebriefItem[];
+  typeSummary: DebriefTypeSummaryEntry[];
 }
 
 export interface EmployeeDebriefDetail {

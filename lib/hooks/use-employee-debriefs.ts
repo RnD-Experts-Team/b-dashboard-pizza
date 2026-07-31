@@ -6,7 +6,7 @@ import {
   EmployeeDebriefError,
   employeeDebriefService,
 } from "@/lib/api/services/employee-debriefs.service";
-import type { EmployeeDebriefDetail, EmployeeDebriefItem, PaginatedDebriefResult } from "@/types/employee-debrief.types";
+import type { DebriefTypeSummaryEntry, EmployeeDebriefDetail, EmployeeDebriefItem, PaginatedDebriefResult } from "@/types/employee-debrief.types";
 
 function isCanceledError(err: unknown): boolean {
   if (axios.isCancel(err)) return true;
@@ -157,6 +157,7 @@ interface UseEmployeeDebriefHistoryReturn {
   currentPage: number;
   lastPage: number;
   total: number;
+  typeSummary: DebriefTypeSummaryEntry[];
   refetch: () => void;
   clearError: () => void;
 }
@@ -237,6 +238,7 @@ export function useEmployeeDebriefHistory(
     currentPage: result?.currentPage ?? page,
     lastPage: result?.lastPage ?? 1,
     total: result?.total ?? 0,
+    typeSummary: result?.typeSummary ?? [],
     refetch,
     clearError,
   };

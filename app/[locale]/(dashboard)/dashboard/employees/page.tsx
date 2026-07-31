@@ -241,21 +241,30 @@ export default function EmployeesPage() {
   const [changeStatusEmployeeId, setChangeStatusEmployeeId] = useState<number | null>(null);
   const [actionStoreNumber, setActionStoreNumber] = useState<string>("");
   const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
-  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>(() => {
-    const fallback = (overviewStores ?? []).flatMap((s) => s.storeId ? [s.storeId] : []);
-    try {
-      const raw = localStorage.getItem("store-filter:employees");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
-      }
-    } catch {}
-    return fallback;
-  });
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+
+  // Default to whichever store is selected in the sidebar, not "All Stores" —
+  // only fall back to every available store when the sidebar has no valid selection.
+  const storeInitRef = useRef(false);
+  useEffect(() => {
+    if (storeInitRef.current) return;
+    storeInitRef.current = true;
+
+    const stores = overviewStores ?? [];
+    const sidebarStoreId = selectedStore?.storeId;
+    const sidebarStoreIsAvailable =
+      sidebarStoreId != null && stores.some((s) => s.storeId === sidebarStoreId);
+
+    setSelectedStoreIds(
+      sidebarStoreIsAvailable
+        ? [sidebarStoreId as string]
+        : stores.flatMap((s) => (s.storeId ? [s.storeId] : [])),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleStoreApply(ids: string[]) {
     setSelectedStoreIds(ids);
-    try { localStorage.setItem("store-filter:employees", JSON.stringify(ids)); } catch {}
   }
 
   const [rows, setRows] = useState<EmployeeV1Record[]>([]);

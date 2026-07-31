@@ -4,11 +4,13 @@ import type {
   ApiEmployeeDebriefItem,
   ApiEmployeeDebriefDetail,
   ApiDebriefAttachment,
+  ApiDebriefTypeSummaryEntry,
   ApiEmployeeDebriefListResponse,
   ApiPaginatedDebriefResponse,
   EmployeeDebriefItem,
   EmployeeDebriefDetail,
   DebriefAttachment,
+  DebriefTypeSummaryEntry,
   PaginatedDebriefResult,
 } from "@/types/employee-debrief.types";
 
@@ -105,6 +107,14 @@ function transformDetail(raw: ApiEmployeeDebriefDetail): EmployeeDebriefDetail {
     typeId: raw.type_id ?? null,
     type: raw.type ?? null,
     attachments: (raw.attachments ?? []).map(transformDebriefAttachment),
+  };
+}
+
+function transformTypeSummaryEntry(raw: ApiDebriefTypeSummaryEntry): DebriefTypeSummaryEntry {
+  return {
+    type: raw.type ?? null,
+    totalCount: raw.total_count,
+    weeklyAverage: raw.weekly_average,
   };
 }
 
@@ -342,6 +352,7 @@ export const employeeDebriefService = {
         total: raw.total,
         lastPage: raw.last_page,
         items: (raw.data ?? []).map(transformItem),
+        typeSummary: (raw.type_summary ?? []).map(transformTypeSummaryEntry),
       };
     } catch (err) {
       throw handleAxiosError(err);

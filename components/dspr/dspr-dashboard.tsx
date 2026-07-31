@@ -557,8 +557,6 @@ export function DsprDashboard({
         data,
         storeId: storeId ?? "store",
         guestService: wbrData?.["customer-service"],
-        complaints: hooksWbr.data?.complaints,
-        feedbacks: hooksWbr.data?.feedbacks,
         employeeName: values.employeeName,
         employeeImageDataUrl: values.employeeImageDataUrl,
         footerMessage: values.footerMessage,
@@ -624,7 +622,6 @@ export function DsprDashboard({
     selectedDate,
     storeId,
     wbrData,
-    hooksWbr.data,
   ]);
 
   const toggleHideBackgrounds = useCallback(() => {

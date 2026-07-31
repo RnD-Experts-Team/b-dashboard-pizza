@@ -56,6 +56,9 @@ import type {
   TicketIssueStatusChange,
   LaravelPaginationMeta,
   LaravelPaginationLinks,
+  ApiTicketsAnalytics,
+  ApiTicketsAnalyticsResponse,
+  TicketsAnalytics,
 } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -270,6 +273,39 @@ function transformTicket(raw: ApiTicket): Ticket {
   };
 }
 
+function transformTicketsAnalytics(raw: ApiTicketsAnalytics): TicketsAnalytics {
+  return {
+    issues: {
+      total: raw.issues.total,
+      statusBreakdown: raw.issues.status_breakdown.map((b) => ({
+        status: b.status,
+        label: b.label,
+        count: b.count,
+      })),
+    },
+    durations: {
+      pendingToNextStatus: {
+        avgSeconds: raw.durations.pending_to_next_status.avg_seconds,
+        avgHours: raw.durations.pending_to_next_status.avg_hours,
+        sampleSize: raw.durations.pending_to_next_status.sample_size,
+      },
+      timeToCompleteOrCancelled: {
+        avgSeconds: raw.durations.time_to_complete_or_cancelled.avg_seconds,
+        avgHours: raw.durations.time_to_complete_or_cancelled.avg_hours,
+        sampleSize: raw.durations.time_to_complete_or_cancelled.sample_size,
+      },
+    },
+    avgTicketsPerWeek: {
+      value: raw.avg_tickets_per_week.value,
+      totalTickets: raw.avg_tickets_per_week.total_tickets,
+      weeksSpanned: raw.avg_tickets_per_week.weeks_spanned,
+      spanStart: raw.avg_tickets_per_week.span_start,
+      spanEnd: raw.avg_tickets_per_week.span_end,
+      weekStartsOn: raw.avg_tickets_per_week.week_starts_on,
+    },
+  };
+}
+
 /** Reads meta from the flat (simple) pagination root */
 function transformMeta(raw: ApiTicketsListResponse): LaravelPaginationMeta {
   return {
@@ -402,8 +438,9 @@ function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   if (filters.part_cost_single_gt != null) p.set("part_cost_single_gt", String(filters.part_cost_single_gt));
   if (filters.created_from)  p.set("created_from",  filters.created_from);
   if (filters.created_to)    p.set("created_to",    filters.created_to);
-  if (filters.assigned_from) p.set("assigned_from", filters.assigned_from);
-  if (filters.assigned_to)   p.set("assigned_to",   filters.assigned_to);
+  (filters.changed_statuses ?? []).forEach((v) => v && p.append("changed_statuses[]", v));
+  if (filters.changed_from)  p.set("changed_from",  filters.changed_from);
+  if (filters.changed_to)    p.set("changed_to",    filters.changed_to);
   if (filters.trashed)       p.set("trashed",       filters.trashed);
   if (filters.sort)          p.set("sort",          filters.sort);
   if (filters.dir)           p.set("dir",           filters.dir);
@@ -596,6 +633,28 @@ export const maintenanceTicketsService = {
         links: transformLinks(res.data),
         meta: transformMeta(res.data),
       };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Aggregate analytics for a store's tickets, scoped by the same filters as the list */
+  async getTicketsAnalytics(
+    storeId: string,
+    filters?: TicketsFilters,
+    signal?: AbortSignal
+  ): Promise<TicketsAnalytics> {
+    const token = requireToken();
+    const qs = filters ? buildFilterParams(filters).toString() : "";
+    const url = `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/analytics${qs ? `?${qs}` : ""}`;
+
+    try {
+      const res = await axios.get<ApiTicketsAnalyticsResponse>(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeout: 15_000,
+        signal,
+      });
+      return transformTicketsAnalytics(res.data.data);
     } catch (err) {
       return handleAxiosError(err);
     }
@@ -1113,6 +1172,20 @@ export const maintenanceTicketsService = {
         links: transformLinks(res.data),
         meta: transformMeta(res.data),
       };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Aggregate analytics across all stores, scoped by the same filters as the global list */
+  async getGlobalTicketsAnalytics(filters?: TicketsFilters, signal?: AbortSignal): Promise<TicketsAnalytics> {
+    const token = requireToken();
+    const qs = filters ? buildFilterParams(filters).toString() : "";
+    const url = `/api/maintenance-tickets/tickets/analytics${qs ? `?${qs}` : ""}`;
+    try {
+      const res = await axios.get<ApiTicketsAnalyticsResponse>(
+        url,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+      );
+      return transformTicketsAnalytics(res.data.data);
     } catch (err) { return handleAxiosError(err); }
   },
 

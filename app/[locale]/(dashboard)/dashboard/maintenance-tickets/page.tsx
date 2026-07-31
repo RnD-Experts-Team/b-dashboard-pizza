@@ -12,6 +12,7 @@ import {
   TicketsErrorCard,
   TicketsTable,
   TicketsFiltersBar,
+  TicketsAnalyticsPanel,
   CreateTicketDialog,
   TicketDetailSheet,
   CatalogManagementDialog,
@@ -19,12 +20,14 @@ import {
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
 import { useAuth } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { Ticket } from "@/types/maintenance-tickets.types";
 
 export default function MaintenanceTicketsPage() {
   const t = useTranslations("maintenanceTickets");
   const { canAccessRoute } = useAuth();
   const { overviewStores } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
 
   // ─── Auth checks ──────────────────────────────────────────────────────────
   const canAccessCatalog = canAccessRoute({
@@ -70,7 +73,19 @@ export default function MaintenanceTicketsPage() {
     if (initRef.current) return;
     initRef.current = true;
 
-    if (canAccessAllStores) {
+    // Default to whichever store is selected in the sidebar, not "All Stores" —
+    // only fall back to all-stores / first-active-store when the sidebar has no
+    // (valid) selection.
+    const sidebarStoreId = selectedStore?.storeId;
+    const sidebarStoreIsActive =
+      sidebarStoreId != null &&
+      activeStores.some((s) => (s.storeId ?? s.id) === sidebarStoreId);
+
+    if (sidebarStoreIsActive) {
+      setPageStoreSelection([sidebarStoreId as string]);
+      setScopedStoreIds(null);
+      setMode("store");
+    } else if (canAccessAllStores) {
       setPageStoreSelection(activeStores.map((s) => s.storeId ?? s.id));
       setScopedStoreIds(null);
       setMode("global");
@@ -108,6 +123,9 @@ export default function MaintenanceTicketsPage() {
     catalogIssues,
     catalogTechnicians,
     reloadCatalog,
+    analytics,
+    analyticsLoading,
+    analyticsError,
   } = useMaintenanceTickets({ storeId: hookStoreId });
 
   // ─── Dialog / sheet state ─────────────────────────────────────────────────
@@ -196,6 +214,15 @@ export default function MaintenanceTicketsPage() {
           stores={activeStores}
           selectedStoreIds={pageStoreSelection ?? []}
           onStoreApply={handleStoreApply}
+        />
+      )}
+
+      {/* Analytics — reflects whatever filters/store are currently applied */}
+      {hasSelection && (
+        <TicketsAnalyticsPanel
+          analytics={analytics}
+          isLoading={analyticsLoading}
+          error={analyticsError}
         />
       )}
 

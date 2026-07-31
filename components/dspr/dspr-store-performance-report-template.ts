@@ -1,7 +1,6 @@
 import { format } from "date-fns";
 import type { DsprResponse } from "@/types/dspr.types";
 import type { CustomerService } from "@/types/dashboard-report.types";
-import type { WbrComplaint, WbrFeedback } from "@/types/hooks.types";
 import {
   STORE_ICON_SVG,
   TIPS_ICON_SVG,
@@ -21,9 +20,12 @@ import {
  *  contained HTML document string, in the same iframe + html2canvas capture
  *  flow as buildDsprReportHtml.
  *
- *  Tips/HNR/portal/guest-service/feedback/complaint values all come from data
- *  already loaded for the live dashboard — nothing is fabricated. The
- *  employee name/photo and the footer sentence are manager-entered per
+ *  Tips/HNR/portal/guest-service values come from data already loaded for the
+ *  live dashboard — nothing is fabricated. Customer Feedback and Customer
+ *  Complaint have no real per-store data source in this app (the closest
+ *  fields are Employee Feedback and a generic complaint log, neither of which
+ *  is genuinely "customer" data) — those two rows always render "No data".
+ *  The employee name/photo and the footer sentence are manager-entered per
  *  generation (collected by StorePerformanceReportDialog) rather than pulled
  *  from any stored field.
  *
@@ -37,10 +39,6 @@ export interface StorePerformanceReportInput {
   storeId: string;
   /** wbrData?.["customer-service"] */
   guestService?: CustomerService;
-  /** hooksWbr.data?.complaints */
-  complaints?: WbrComplaint[];
-  /** hooksWbr.data?.feedbacks */
-  feedbacks?: WbrFeedback[];
   /** "Yesterday Hero" — employee of the day, entered fresh per report. */
   employeeName: string;
   /** Data URL from the dialog's client-side file read, or null for the initial-letter fallback. */
@@ -85,13 +83,6 @@ function averageGuestService(cs: CustomerService | undefined): number | null {
   return values.reduce((s, v) => s + v, 0) / values.length;
 }
 
-/** "3 logged this week" / "No complaints this week" / null (→ No data) when the count itself is missing. */
-function weeklyCountLabel(count: number | undefined, noun: string, verb: string): string | null {
-  if (count == null) return null;
-  if (count === 0) return `No ${noun} this week`;
-  return `${count} ${noun} ${verb} this week`;
-}
-
 export function buildStorePerformanceReportHtml(
   input: StorePerformanceReportInput,
   selectedDate: Date,
@@ -100,8 +91,6 @@ export function buildStorePerformanceReportHtml(
     data,
     storeId,
     guestService,
-    complaints,
-    feedbacks,
     employeeName,
     employeeImageDataUrl,
     footerMessage,
@@ -110,8 +99,6 @@ export function buildStorePerformanceReportHtml(
 
   const tips = day?.total_tips ?? null;
   const guestServicePct = averageGuestService(guestService);
-  const feedbackLabel = weeklyCountLabel(feedbacks?.length, "feedback entries", "submitted");
-  const complaintLabel = weeklyCountLabel(complaints?.length, "complaints", "logged");
 
   const hnrToday = day?.hnr?.hnr_promise_met_percent ?? null;
   const hnrWtdAvg = day?.hnr_week_to_date_avg?.hnr_promise_met_percent ?? null;
@@ -386,12 +373,12 @@ export function buildStorePerformanceReportHtml(
 
       <div class="row">
         <div class="row-label"><span class="row-icon">${CUSTOMER_FEEDBACK_ICON_SVG}</span>Customer Feedback</div>
-        <div class="row-value">${feedbackLabel != null ? esc(feedbackLabel) : NO_DATA}</div>
+        <div class="row-value">${NO_DATA}</div>
       </div>
 
       <div class="row">
         <div class="row-label"><span class="row-icon">${CUSTOMER_COMPLAINT_ICON_SVG}</span>Customer Complaint</div>
-        <div class="row-value">${complaintLabel != null ? esc(complaintLabel) : NO_DATA}</div>
+        <div class="row-value">${NO_DATA}</div>
       </div>
 
       <div class="black-bar">
