@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useUIStore } from "@/lib/store/ui.store";
 import { FloatingDebriefButton } from "./floating-debrief-button";
 import { ScreenProjectPiPOverlay } from "@/components/screen-project/screen-project-pip-overlay";
+import { DriveThruOverlay } from "@/components/screen-project/drive-thru/drive-thru-overlay";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -45,6 +46,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
         <FloatingDebriefButton />
         <ScreenProjectPiPOverlay />
+        <DriveThruOverlay />
       </div>
     );
   }
@@ -71,6 +73,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
         <FloatingDebriefButton />
         <ScreenProjectPiPOverlay />
+        <DriveThruOverlay />
       </div>
     );
   }
@@ -97,6 +100,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
         <FloatingDebriefButton />
         <ScreenProjectPiPOverlay />
+        <DriveThruOverlay />
       </div>
     );
   }
@@ -123,6 +127,7 @@ export function AppShell({ children }: AppShellProps) {
       </main>
       <FloatingDebriefButton />
       <ScreenProjectPiPOverlay />
+      <DriveThruOverlay />
     </div>
   );
 }

@@ -137,6 +137,13 @@ export interface ScreenTileProps {
    * present). Used by the parent to know which stations are safe to put in PiP.
    */
   onLiveChange?: (isLive: boolean) => void;
+  /**
+   * Called whenever the raw LiveKit connection state changes to/from Connected,
+   * independent of whether a video track is present. Use this instead of
+   * onLiveChange when a caller only cares about audio (e.g. an audio-only or
+   * camera-not-yet-publishing room), where onLiveChange would wrongly stay false.
+   */
+  onConnectionStateChange?: (connected: boolean) => void;
   /** MediaDeviceInfo.deviceId for the microphone to use (audioinput) */
   selectedAudioDeviceId?: string;
   /** MediaDeviceInfo.deviceId for the camera to use (videoinput) */
@@ -201,6 +208,7 @@ interface InnerProps {
   observerMode?: boolean;
   publishNetworkStatus?: boolean;
   onLiveChange?: (isLive: boolean) => void;
+  onConnectionStateChange?: (connected: boolean) => void;
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
   className?: string;
@@ -287,6 +295,7 @@ function ScreenTileInner({
   observerMode = false,
   publishNetworkStatus = false,
   onLiveChange,
+  onConnectionStateChange,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -394,6 +403,12 @@ function ScreenTileInner({
   useEffect(() => {
     onLiveChange?.(isLive);
   }, [isLive, onLiveChange]);
+
+  // Notify parent of raw connection state alone (no video-track requirement) —
+  // for audio-only callers where onLiveChange would wrongly stay false.
+  useEffect(() => {
+    onConnectionStateChange?.(connectionState === ConnectionState.Connected);
+  }, [connectionState, onConnectionStateChange]);
 
   // Media comes entirely from the station token response (initialMedia), which
   // already embeds the media list with the correct `is_primary`. We deliberately
@@ -1356,6 +1371,7 @@ export function ScreenTile({
   observerMode = false,
   publishNetworkStatus = false,
   onLiveChange,
+  onConnectionStateChange,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -1486,6 +1502,7 @@ export function ScreenTile({
         observerMode={observerMode}
         publishNetworkStatus={publishNetworkStatus}
         onLiveChange={onLiveChange}
+        onConnectionStateChange={onConnectionStateChange}
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}
         className={className}

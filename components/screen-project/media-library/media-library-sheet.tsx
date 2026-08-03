@@ -14,6 +14,7 @@ import { useScreenProjectMedia } from "@/lib/hooks/use-screen-project-media";
 import type { StationMedia } from "@/types/screen-project-media.types";
 import { MediaGrid } from "./media-grid";
 import { MediaUploadDropzone } from "./media-upload-dropzone";
+import { cn } from "@/lib/utils";
 
 interface MediaLibrarySheetProps {
   open: boolean;
@@ -24,6 +25,11 @@ interface MediaLibrarySheetProps {
   /** Called whenever the media list changes (fetch, set-primary, upload,
    * delete) so the parent can push it live to the station screen. */
   onMediaChange?: (media: StationMedia[]) => void;
+  /** Override the sheet content's className — needed when this must render
+   * above another very-high-z overlay (e.g. the Drive Thru sheet). */
+  contentClassName?: string;
+  /** Override the backdrop's className — see contentClassName. */
+  overlayClassName?: string;
 }
 
 export function MediaLibrarySheet({
@@ -33,6 +39,8 @@ export function MediaLibrarySheet({
   stationNumber,
   stationName,
   onMediaChange,
+  contentClassName,
+  overlayClassName,
 }: MediaLibrarySheetProps) {
   const {
     mediaItems,
@@ -64,7 +72,8 @@ export function MediaLibrarySheet({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="flex w-120 flex-col gap-0 p-0 sm:max-w-120"
+        overlayClassName={overlayClassName}
+        className={cn("flex w-120 flex-col gap-0 p-0 sm:max-w-120", contentClassName)}
       >
         <SheetHeader className="shrink-0 border-b px-4 py-3">
           <div className="flex items-center justify-between">

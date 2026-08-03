@@ -169,6 +169,13 @@ export function ScreenProjectView() {
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
     useScreenProject(activeTokenType, selectedStationIds.length ? selectedStationIds : undefined);
 
+  // Drive-through stations get their own dedicated UI elsewhere — exclude them
+  // from the supervisor tile view, station selection, and observer view.
+  const nonDriveThruStations = useMemo(
+    () => stations.filter((s) => s.type !== "drive_through"),
+    [stations],
+  );
+
   const [mainId, setMainId] = useState<string>("");
   const [screenStates, setScreenStates] = useState<Record<string, ScreenState>>({});
 
@@ -214,18 +221,18 @@ export function ScreenProjectView() {
 
   // Initialise per-screen state when stations load (or store changes)
   useEffect(() => {
-    if (stations.length === 0) {
+    if (nonDriveThruStations.length === 0) {
       setMainId("");
       setScreenStates({});
       return;
     }
     setMainId((prev) => {
-      const stillExists = stations.some((s) => s.room_name === prev);
-      return stillExists ? prev : stations[0].room_name;
+      const stillExists = nonDriveThruStations.some((s) => s.room_name === prev);
+      return stillExists ? prev : nonDriveThruStations[0].room_name;
     });
     setScreenStates((prev) => {
       const next: Record<string, ScreenState> = {};
-      stations.forEach((s, i) => {
+      nonDriveThruStations.forEach((s, i) => {
         next[s.room_name] = prev[s.room_name] ?? {
           audioEnabled: i === 0,
           videoEnabled: true,
@@ -242,10 +249,10 @@ export function ScreenProjectView() {
       });
       return next;
     });
-  }, [stations]);
+  }, [nonDriveThruStations]);
 
   // Reset side-panel scroll when the stations list changes
-  useEffect(() => { setSideScroll(0); }, [stations]);
+  useEffect(() => { setSideScroll(0); }, [nonDriveThruStations]);
 
   /**
    * PiP activation on route leave.
@@ -256,7 +263,7 @@ export function ScreenProjectView() {
    */
   const pipHandoffRef = useRef<{
     mainId: string;
-    stations: typeof stations;
+    stations: typeof nonDriveThruStations;
     tokenMap: Record<string, string>;
     serverUrl: string;
     storeId: string;
@@ -266,7 +273,7 @@ export function ScreenProjectView() {
   const liveRoomsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    pipHandoffRef.current = { mainId, stations, tokenMap, serverUrl, storeId };
+    pipHandoffRef.current = { mainId, stations: nonDriveThruStations, tokenMap, serverUrl, storeId };
   });
 
   useEffect(() => {
@@ -303,8 +310,8 @@ export function ScreenProjectView() {
   // Filter to only the stations the user selected before connecting (supervisor view only)
   const visibleStations =
     viewMode === "supervisor" && selectedStationIds.length > 0
-      ? stations.filter((s) => selectedStationIds.includes(s.id))
-      : stations;
+      ? nonDriveThruStations.filter((s) => selectedStationIds.includes(s.id))
+      : nonDriveThruStations;
 
   const hasSidePanel = visibleStations.length > 1;
   const anyAudioEnabled = visibleStations.some((s) => screenStates[s.room_name]?.audioEnabled);
@@ -633,7 +640,7 @@ export function ScreenProjectView() {
   /* ── Station selection (before connecting as supervisor) ─────────── */
   if (viewMode === "station-select") {
     const allSelected =
-      stations.length > 0 && stations.every((s) => selectedStationIds.includes(s.id));
+      nonDriveThruStations.length > 0 && nonDriveThruStations.every((s) => selectedStationIds.includes(s.id));
 
     function toggleStation(id: number) {
       setSelectedStationIds((prev) =>
@@ -642,12 +649,12 @@ export function ScreenProjectView() {
     }
 
     function handleSelectAll() {
-      setSelectedStationIds(allSelected ? [] : stations.map((s) => s.id));
+      setSelectedStationIds(allSelected ? [] : nonDriveThruStations.map((s) => s.id));
     }
 
     function handleConnect() {
       if (selectedStationIds.length === 0) return;
-      const firstSelected = stations.find((s) => selectedStationIds.includes(s.id));
+      const firstSelected = nonDriveThruStations.find((s) => selectedStationIds.includes(s.id));
       if (firstSelected) setMainId(firstSelected.room_name);
       setActiveTokenType("supervisor");
       setViewMode("supervisor");
@@ -682,7 +689,7 @@ export function ScreenProjectView() {
             size="sm"
             className="shrink-0 text-xs"
             onClick={handleSelectAll}
-            disabled={stations.length === 0}
+            disabled={nonDriveThruStations.length === 0}
           >
             {allSelected ? "Deselect All" : "Select All"}
           </Button>
@@ -690,7 +697,7 @@ export function ScreenProjectView() {
 
         {/* Station grid */}
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {stations.length === 0 ? (
+          {nonDriveThruStations.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
               <p className="text-sm text-muted-foreground">No stations found for this store.</p>
               <StationsDialog
@@ -701,7 +708,7 @@ export function ScreenProjectView() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {stations.map((s) => {
+              {nonDriveThruStations.map((s) => {
                 const checked = selectedStationIds.includes(s.id);
                 return (
                   <button
@@ -736,7 +743,7 @@ export function ScreenProjectView() {
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 shrink-0 rounded-xl border bg-card px-4 py-2.5">
           <p className="text-sm text-muted-foreground">
-            {selectedStationIds.length} of {stations.length} selected
+            {selectedStationIds.length} of {nonDriveThruStations.length} selected
           </p>
           <Button
             onClick={handleConnect}
@@ -756,7 +763,7 @@ export function ScreenProjectView() {
   /* ── Observer mode — station picker grid ────────────────────────── */
   if (viewMode === "observer") {
     const observingStation = observingRoom
-      ? stations.find((s) => s.room_name === observingRoom) ?? null
+      ? nonDriveThruStations.find((s) => s.room_name === observingRoom) ?? null
       : null;
 
     return (
@@ -790,14 +797,14 @@ export function ScreenProjectView() {
         </div>
 
         {/* Station cards grid */}
-        {stations.length === 0 ? (
+        {nonDriveThruStations.length === 0 ? (
           <div className="flex flex-1 items-center justify-center">
             <p className="text-sm text-muted-foreground">No stations to observe.</p>
           </div>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {stations.map((s) => (
+              {nonDriveThruStations.map((s) => (
                 <button
                   key={s.room_name}
                   onClick={() => setObservingRoom(s.room_name)}
