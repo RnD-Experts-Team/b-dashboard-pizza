@@ -93,6 +93,12 @@ interface NavItem {
    * e.g. "manage users", "manage roles"
    */
   requiredPermission?: string;
+  /**
+   * Match the pathname exactly instead of by prefix.
+   * Needed for hrefs that are a prefix of sibling routes — e.g. the dashboard
+   * root `/{locale}/dashboard`, which prefixes every other dashboard page.
+   */
+  exact?: boolean;
 }
 
 interface NavGroup {
@@ -122,9 +128,11 @@ function SidebarNavGroup({
   collapsed: boolean;
   onNavigate?: () => void;
 }) {
-  const hasActiveChild = group.items.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href)
-  );
+  const isItemActive = (item: NavItem) =>
+    item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href);
+  const hasActiveChild = group.items.some(isItemActive);
   const [open, setOpen] = useState(hasActiveChild);
   const { setSidebarCollapsed } = useUIStore();
 
@@ -174,8 +182,7 @@ function SidebarNavGroup({
         <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
           <div className="ms-4 border-s ps-2 mt-1 space-y-0.5">
             {group.items.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href);
+              const isActive = isItemActive(item);
               return (
                 <Link
                   key={item.href}
@@ -285,6 +292,23 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   /* ---- Collapsible groups ---- */
+  // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
+  // entry is marked `exact` (that href prefixes every other dashboard route).
+  const dashboardsGroup: NavGroup = {
+    label: "Dashboards",
+    icon: LayoutDashboard,
+    items: [
+      { ...dashboardItem, title: "DSPR Dashboard", exact: true },
+      {
+        title: "Labor Dashboard",
+        href: `/${locale}/dashboard/labor`,
+        icon: Users,
+        // No auth rule defined upstream yet — visible for any store the user
+        // can access, same as the Business Reports item.
+      },
+    ],
+  };
+
   const storeManagementGroup: NavGroup = {
     label: t("storeManagement"),
     icon: Building2,
@@ -662,6 +686,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   // Pre-filter all groups and flat items
+  const visibleDashboardsGroup = filterGroup(dashboardsGroup);
   const visibleStoreManagementGroup = filterGroup(storeManagementGroup);
   const visibleUserManagementGroup = filterGroup(userManagementGroup);
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
@@ -797,9 +822,16 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       {/* Navigation — scrollable when content overflows */}
       <ScrollArea className="flex-1 overflow-y-auto">
         <nav className="font-heading space-y-1 px-2 sm:px-3 py-2 sm:py-3">
-          {/* 1. Dashboard */}
-          {/* {renderNavLink(dashboardItem)} */}
-          {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+          {/* 1. Dashboards (DSPR Dashboard + Labor Dashboard) */}
+          {visibleDashboardsGroup && (
+            <SidebarNavGroup
+              group={visibleDashboardsGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
+          )}
 
           {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
            {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}  */}
