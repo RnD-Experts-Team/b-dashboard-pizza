@@ -95,6 +95,7 @@ These areas are designed for customization:
 | `components/dspr/**` | DSPR dashboard components (data source for the classic dashboard and Dashboard V1) |
 | `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay) |
 | `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
+| `lib/notifications/**` | Notification → page-segment routing helper, shared by notification click-routing and the sidebar unread-dot indicator |
 | `types/**` | Your custom TypeScript types |
 
 ---

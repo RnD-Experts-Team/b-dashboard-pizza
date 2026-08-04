@@ -6,6 +6,12 @@ import { notificationService } from "@/lib/api/services/notification.service";
 interface NotificationStoreState {
   notifications: Notification[];
   unreadCount: number;
+  /**
+   * Full unread notification objects, kept in sync independently of
+   * `notifications` (which only populates once the panel fetches page 1).
+   * Powers sidebar-dot mapping via getNotificationPageSegment.
+   */
+  unreadNotifications: Notification[];
   isLoading: boolean;
   error: string | null;
 }
@@ -24,6 +30,7 @@ type NotificationStore = NotificationStoreState & NotificationStoreActions;
 export const useNotificationStore = create<NotificationStore>()((set) => ({
   notifications: [],
   unreadCount: 0,
+  unreadNotifications: [],
   isLoading: false,
   error: null,
 
@@ -48,7 +55,7 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
   fetchUnreadNotifications: async (signal?: AbortSignal) => {
     try {
       const data = await notificationService.getUnreadNotifications(signal);
-      set({ unreadCount: data.length });
+      set({ unreadCount: data.length, unreadNotifications: data });
     } catch (err) {
       if (axios.isCancel(err)) return;
     }
@@ -63,6 +70,7 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
       return {
         notifications,
         unreadCount: notifications.filter((n) => n.read_at === null).length,
+        unreadNotifications: state.unreadNotifications.filter((n) => n.id !== id),
       };
     });
     try {
@@ -86,6 +94,7 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
         read_at: n.read_at ?? new Date().toISOString(),
       })),
       unreadCount: 0,
+      unreadNotifications: [],
     }));
     try {
       await notificationService.markAllAsRead();
@@ -107,9 +116,13 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
         return state;
       }
       const notifications = [notification, ...state.notifications];
+      const unreadNotifications = state.unreadNotifications.some((n) => n.id === notification.id)
+        ? state.unreadNotifications
+        : [notification, ...state.unreadNotifications];
       return {
         notifications,
         unreadCount: notifications.filter((n) => n.read_at === null).length,
+        unreadNotifications,
       };
     });
   },

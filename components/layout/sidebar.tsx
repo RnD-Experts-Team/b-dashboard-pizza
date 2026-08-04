@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -73,6 +73,8 @@ import { useAuth } from "@/lib/auth/use-auth";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
+import { useNotificationStore } from "@/lib/store/notification.store";
+import { getNotificationPageSegment } from "@/lib/notifications/notification-routing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -121,18 +123,21 @@ function SidebarNavGroup({
   locale,
   collapsed,
   onNavigate,
+  hasUnreadDot,
 }: {
   group: NavGroup;
   pathname: string;
   locale: string;
   collapsed: boolean;
   onNavigate?: () => void;
+  hasUnreadDot: (item: NavItem) => boolean;
 }) {
   const isItemActive = (item: NavItem) =>
     item.exact
       ? pathname === item.href
       : pathname === item.href || pathname.startsWith(item.href);
   const hasActiveChild = group.items.some(isItemActive);
+  const groupHasUnread = group.items.some(hasUnreadDot);
   const [open, setOpen] = useState(hasActiveChild);
   const { setSidebarCollapsed } = useUIStore();
 
@@ -163,10 +168,20 @@ function SidebarNavGroup({
             collapsed && "justify-center px-2"
           )}
         >
-          <group.icon className="h-5 w-5 shrink-0" />
+          <div className="relative shrink-0">
+            <group.icon className="h-5 w-5" />
+            {collapsed && groupHasUnread && (
+              <span className="absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full bg-destructive" />
+            )}
+          </div>
           {!collapsed && (
             <>
-              <span className="truncate">{group.label}</span>
+              <span className="truncate inline-flex items-center gap-1.5">
+                {group.label}
+                {groupHasUnread && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                )}
+              </span>
               <ChevronDown
                 className={cn(
                   "ms-auto h-4 w-4 shrink-0 transition-transform duration-200",
@@ -196,7 +211,12 @@ function SidebarNavGroup({
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{item.title}</span>
+                  <span className="truncate inline-flex items-center gap-1.5">
+                    {item.title}
+                    {hasUnreadDot(item) && (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                    )}
+                  </span>
                 </Link>
               );
             })}
@@ -235,6 +255,25 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const devToolsEnabled = useFeature("devTools");
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
+
+  /* ---- Unread-notification → sidebar dot mapping ---- */
+  const unreadNotifications = useNotificationStore((s) => s.unreadNotifications);
+  const unreadPageSegments = useMemo(() => {
+    const segments = new Set<string>();
+    for (const notification of unreadNotifications) {
+      const segment = getNotificationPageSegment(notification);
+      if (segment) segments.add(segment);
+    }
+    return segments;
+  }, [unreadNotifications]);
+
+  /** First path segment after `/dashboard/` in a nav item's href, e.g.
+   * `/${locale}/dashboard/hiring-request` → "hiring-request". */
+  const getHrefPageSegment = (href: string): string =>
+    href.split("/dashboard/")[1]?.split("/")[0] ?? "";
+
+  const hasUnreadDot = (item: NavItem): boolean =>
+    unreadPageSegments.has(getHrefPageSegment(item.href));
 
   /* ---- Flat nav items ---- */
   const screenProjectItem: NavItem = {
@@ -702,6 +741,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     const isActive =
       pathname === item.href ||
       (item.href !== basePath && pathname.startsWith(item.href));
+    const showDot = hasUnreadDot(item);
 
     return (
       <Link
@@ -716,8 +756,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           collapsed && "justify-center px-2"
         )}
       >
-        <item.icon className="h-5 w-5 shrink-0" />
-        {!collapsed && <span className="truncate">{item.title}</span>}
+        <div className="relative shrink-0">
+          <item.icon className="h-5 w-5" />
+          {collapsed && showDot && (
+            <span className="absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full bg-destructive" />
+          )}
+        </div>
+        {!collapsed && (
+          <span className="truncate inline-flex items-center gap-1.5">
+            {item.title}
+            {showDot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
+          </span>
+        )}
       </Link>
     );
   };
@@ -830,6 +880,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -853,6 +904,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -864,6 +916,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -875,6 +928,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -886,6 +940,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -897,6 +952,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
           {/* 7. Hiring Management */}
@@ -907,6 +963,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -918,6 +975,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -929,6 +987,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
