@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useSelectedStoreStore } from "@/lib/store";
 import { useDriveThruStore } from "@/lib/store/drive-thru.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { screenProjectService } from "@/lib/api/services/screen-project.service";
 import type { Station } from "@/types/screen-project.types";
 
@@ -29,11 +30,17 @@ import type { Station } from "@/types/screen-project.types";
  */
 export function DriveThruButton() {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
-  const storeId = selectedStore?.storeId ?? "";
+  const storeId = selectedStore?.storeId ?? ""; // human-readable code, used for API calls below
+  const overviewStores = useAuthStore((s) => s.overviewStores);
+  // Same rule as the "Screen Project" sidebar nav item: wildcard path +
+  // the numeric id that actually keys storePermissions (not the human-readable
+  // storeId code used elsewhere for API calls).
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canAccess = useCanAccessRoute({
     service: "Screens",
     method: "POST",
-    path: `/${storeId || "store"}/tokens/supervisor`,
+    path: `/*/tokens/supervisor`,
+    storeId: effectiveStoreId,
   });
 
   const connection = useDriveThruStore((s) => s.connection);
