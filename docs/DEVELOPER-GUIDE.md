@@ -1,5 +1,7 @@
 # B-Dashboard Developer Guide
 
+_Last updated: 2026-08-04 (bump this whenever you substantively edit this file)_
+
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
 ## Table of Contents
@@ -56,9 +58,9 @@ These files form the foundation and MUST NOT be modified to maintain GitHub sync
 | `lib/dashboard/registry/widget-registry.ts` | Base widget registry (only ADD, don't modify existing) |
 | `lib/dashboard/registry/skeleton-registry.ts` | Skeleton component mapping |
 | `components/ui/**` | shadcn/ui base components |
-| `components/layout/app-shell.tsx` | Main shell structure |
+| `components/layout/app-shell.tsx` | Main shell structure — ⚠️ global overlay mounts only, see carve-out below |
 | `components/layout/sidebar.tsx` | Sidebar navigation (structure only) |
-| `components/layout/topbar.tsx` | Top navigation bar |
+| `components/layout/topbar.tsx` | Top navigation bar — ⚠️ indicator mounts only, see carve-out below |
 | `components/providers/**` | Context providers |
 | `components/dashboard/draggable-widget.tsx` | Drag-drop wrapper |
 | `components/dashboard/widget-grid.tsx` | Widget grid with DnD context |
@@ -89,6 +91,10 @@ These areas are designed for customization:
 | `lib/i18n/locales/en.json` | ADD new translation keys |
 | `lib/i18n/locales/ar.json` | ADD new translation keys |
 | `lib/api/services/**` | Your API service files |
+| `components/dashboard-v1/**` | Dashboard V1 re-skin components — reuses DSPR's hooks/services, no new data layer |
+| `components/dspr/**` | DSPR dashboard components (data source for the classic dashboard and Dashboard V1) |
+| `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay) |
+| `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
 | `types/**` | Your custom TypeScript types |
 
 ---
@@ -142,14 +148,16 @@ lib/dashboard/
 
 ```
 components/layout/
-├── app-shell.tsx      ❌ DO NOT MODIFY
+├── app-shell.tsx      ⚠️ ADD global overlay mounts only
 ├── sidebar.tsx        ⚠️ ADD nav items only
-├── topbar.tsx         ❌ DO NOT MODIFY
+├── topbar.tsx         ⚠️ ADD topbar indicator mounts only
 ├── page-header.tsx    ❌ DO NOT MODIFY
 └── breadcrumbs.tsx    ❌ DO NOT MODIFY
 ```
 
 **Why:** These form the responsive shell that all pages inherit. Modifications break the consistent UX.
+
+**Exception — adding a global overlay or topbar indicator:** a one-line `<NewOverlay />` render in `app-shell.tsx` (or a one-line indicator mount in `topbar.tsx`'s icon cluster) is the one sanctioned edit — everything else in those files (shell structure, layout-variant logic, sidebar/topbar wiring itself) stays off-limits, same spirit as the sidebar's "ADD nav items only" rule above. Precedent already in the codebase: `ScreenProjectPiPOverlay`, `DriveThruOverlay`, `FloatingDebriefButton`, and `AnnouncementOnLoadPopup` are all mounted this way in `app-shell.tsx`; `DriveThruButton` is mounted this way in `topbar.tsx`.
 
 ### ❌ UI Component Library
 
@@ -565,6 +573,8 @@ To pull updates from upstream without conflicts:
 | Add dev tool | ✅ Safe | `app/[locale]/(dashboard)/dashboard/dev-tools/*/page.tsx` |
 | Add detection rule | ✅ Safe | `lib/i18n-intelligence/detectors/*.ts` |
 | Add export format | ✅ Safe | `lib/i18n-intelligence/utils/export.ts` |
+| Add global overlay | ⚠️ Carve-out | One-line `<NewOverlay />` mount in `app-shell.tsx` only |
+| Add topbar indicator | ⚠️ Carve-out | One-line mount in `topbar.tsx`'s icon cluster only |
 | Modify theme engine | ❌ Core | Use themes via API instead |
 | Modify dashboard store | ❌ Core | Use store actions instead |
 | Edit UI components | ❌ Core | Create wrapper components |

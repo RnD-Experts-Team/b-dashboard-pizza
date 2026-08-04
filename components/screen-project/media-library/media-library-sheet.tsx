@@ -30,6 +30,11 @@ interface MediaLibrarySheetProps {
   contentClassName?: string;
   /** Override the backdrop's className — see contentClassName. */
   overlayClassName?: string;
+  /** Override the nested delete-confirmation dialog's className — same reason
+   * as contentClassName, needed one level deeper for the delete AlertDialog. */
+  alertContentClassName?: string;
+  /** Override the delete-confirmation dialog's backdrop className. */
+  alertOverlayClassName?: string;
 }
 
 export function MediaLibrarySheet({
@@ -41,6 +46,8 @@ export function MediaLibrarySheet({
   onMediaChange,
   contentClassName,
   overlayClassName,
+  alertContentClassName,
+  alertOverlayClassName,
 }: MediaLibrarySheetProps) {
   const {
     mediaItems,
@@ -109,6 +116,8 @@ export function MediaLibrarySheet({
               isDeleting={isDeleting}
               onSetPrimary={setPrimary}
               onDelete={deleteMedia}
+              alertContentClassName={alertContentClassName}
+              alertOverlayClassName={alertOverlayClassName}
             />
           </div>
         </ScrollArea>

@@ -224,6 +224,8 @@ export function DriveThruOverlay() {
         stationName={connection.name}
         overlayClassName="z-[10010]"
         contentClassName="z-[10011]"
+        alertOverlayClassName="z-[10020]"
+        alertContentClassName="z-[10021]"
       />
     </>
   );
