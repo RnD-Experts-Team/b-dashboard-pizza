@@ -115,6 +115,32 @@ interface SidebarProps {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Small numbered badge for unread-notification counts               */
+/* ------------------------------------------------------------------ */
+function NotificationCountBadge({
+  count,
+  variant = "inline",
+}: {
+  count: number;
+  variant?: "inline" | "corner";
+}) {
+  if (count <= 0) return null;
+  const label = count > 9 ? "9+" : String(count);
+  if (variant === "corner") {
+    return (
+      <span className="absolute -top-1 -end-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold leading-none text-destructive-foreground">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground">
+      {label}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Collapsible nav‑group rendered inside the sidebar                 */
 /* ------------------------------------------------------------------ */
 function SidebarNavGroup({
@@ -123,21 +149,21 @@ function SidebarNavGroup({
   locale,
   collapsed,
   onNavigate,
-  hasUnreadDot,
+  getUnreadCount,
 }: {
   group: NavGroup;
   pathname: string;
   locale: string;
   collapsed: boolean;
   onNavigate?: () => void;
-  hasUnreadDot: (item: NavItem) => boolean;
+  getUnreadCount: (item: NavItem) => number;
 }) {
   const isItemActive = (item: NavItem) =>
     item.exact
       ? pathname === item.href
       : pathname === item.href || pathname.startsWith(item.href);
   const hasActiveChild = group.items.some(isItemActive);
-  const groupHasUnread = group.items.some(hasUnreadDot);
+  const groupUnreadCount = group.items.reduce((sum, item) => sum + getUnreadCount(item), 0);
   const [open, setOpen] = useState(hasActiveChild);
   const { setSidebarCollapsed } = useUIStore();
 
@@ -170,17 +196,13 @@ function SidebarNavGroup({
         >
           <div className="relative shrink-0">
             <group.icon className="h-5 w-5" />
-            {collapsed && groupHasUnread && (
-              <span className="absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full bg-destructive" />
-            )}
+            {collapsed && <NotificationCountBadge count={groupUnreadCount} variant="corner" />}
           </div>
           {!collapsed && (
             <>
-              <span className="truncate inline-flex items-center gap-1.5">
+              <span className="truncate inline-flex items-center gap-2.5">
                 {group.label}
-                {groupHasUnread && (
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
-                )}
+                <NotificationCountBadge count={groupUnreadCount} />
               </span>
               <ChevronDown
                 className={cn(
@@ -211,11 +233,9 @@ function SidebarNavGroup({
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate inline-flex items-center gap-1.5">
+                  <span className="truncate inline-flex items-center gap-2.5">
                     {item.title}
-                    {hasUnreadDot(item) && (
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
-                    )}
+                    <NotificationCountBadge count={getUnreadCount(item)} />
                   </span>
                 </Link>
               );
@@ -256,18 +276,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
 
-  /* ---- Unread-notification → sidebar dot mapping ----
+  /* ---- Unread-notification → sidebar count mapping ----
    * Derived from the same `notifications` array the bell's badge count and
-   * popover list render, so the sidebar dot can never disagree with the bell. */
+   * popover list render, so the sidebar badge can never disagree with the bell. */
   const notifications = useNotificationStore((s) => s.notifications);
-  const unreadPageSegments = useMemo(() => {
-    const segments = new Set<string>();
+  const unreadPageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const notification of notifications) {
       if (notification.read_at !== null) continue;
       const segment = getNotificationPageSegment(notification);
-      if (segment) segments.add(segment);
+      if (segment) counts.set(segment, (counts.get(segment) ?? 0) + 1);
     }
-    return segments;
+    return counts;
   }, [notifications]);
 
   /** First path segment after `/dashboard/` in a nav item's href, e.g.
@@ -275,8 +295,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const getHrefPageSegment = (href: string): string =>
     href.split("/dashboard/")[1]?.split("/")[0] ?? "";
 
-  const hasUnreadDot = (item: NavItem): boolean =>
-    unreadPageSegments.has(getHrefPageSegment(item.href));
+  const getUnreadCount = (item: NavItem): number =>
+    unreadPageCounts.get(getHrefPageSegment(item.href)) ?? 0;
 
   /* ---- Flat nav items ---- */
   const screenProjectItem: NavItem = {
@@ -744,7 +764,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     const isActive =
       pathname === item.href ||
       (item.href !== basePath && pathname.startsWith(item.href));
-    const showDot = hasUnreadDot(item);
+    const unreadCount = getUnreadCount(item);
 
     return (
       <Link
@@ -761,14 +781,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       >
         <div className="relative shrink-0">
           <item.icon className="h-5 w-5" />
-          {collapsed && showDot && (
-            <span className="absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full bg-destructive" />
-          )}
+          {collapsed && <NotificationCountBadge count={unreadCount} variant="corner" />}
         </div>
         {!collapsed && (
-          <span className="truncate inline-flex items-center gap-1.5">
+          <span className="truncate inline-flex items-center gap-2.5">
             {item.title}
-            {showDot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
+            <NotificationCountBadge count={unreadCount} />
           </span>
         )}
       </Link>
@@ -883,7 +901,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -907,7 +925,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -919,7 +937,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -931,7 +949,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -943,7 +961,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -955,7 +973,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
           {/* 7. Hiring Management */}
@@ -966,7 +984,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -978,7 +996,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -990,7 +1008,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
-              hasUnreadDot={hasUnreadDot}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
