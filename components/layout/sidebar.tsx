@@ -46,6 +46,7 @@ import {
   Link2,
   LogOut,
   UserSearch,
+  Sparkles,
 } from "lucide-react";
 import {
   Dialog,
@@ -378,12 +379,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       //   ],
       // },
       {
-        title: t("customReports"),
-        href: `/${locale}/dashboard/custom-reports`,
-        icon: BarChart3,
-        requirements: [
-          { service: "QA", method: "GET", path: "/custom-reports/*", storeId: effectiveStoreId },
-        ],
+        title: t("cleaningChart"),
+        href: `/${locale}/dashboard/cleaning-chart`,
+        icon: Sparkles,
+        // Role/permission gating deferred — visible to all for now.
       },
     ],
   };

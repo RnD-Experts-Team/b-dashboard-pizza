@@ -62,17 +62,23 @@ function applyRadius(radius: string) {
  */
 export function getCurrentMode(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
-  
-  // Check for class on documentElement (next-themes uses this)
-  if (document.documentElement.classList.contains("dark")) {
+
+  // Explicit mode class on documentElement (next-themes sets "light" or "dark"
+  // when attribute="class"). An explicit class always wins — the OS preference
+  // must not override a theme the user (or the app) has deliberately chosen.
+  const root = document.documentElement;
+  if (root.classList.contains("dark")) {
     return "dark";
   }
-  
-  // Check media query as fallback
+  if (root.classList.contains("light")) {
+    return "light";
+  }
+
+  // No explicit class yet — fall back to the OS preference.
   if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
     return "dark";
   }
-  
+
   return "light";
 }
 
