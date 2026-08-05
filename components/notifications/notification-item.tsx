@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
+import { getPageSegment } from "@/lib/notifications/notification-routing";
 
 /**
  * Parse a debrief action URL and extract keyId, date, and storeId.
@@ -130,18 +131,6 @@ function stripHtml(html: string): string {
     return el.textContent || el.innerText || "";
   }
   return html.replace(/<[^>]*>/g, "");
-}
-
-/**
- * Extract the first path segment from action_url (ignores trailing ID segments).
- * "/announcements/8" → "announcements"
- * "/announcements"   → "announcements"
- * null / ""          → null
- */
-function getPageSegment(actionUrl: string | null | undefined): string | null {
-  if (!actionUrl) return null;
-  const segment = actionUrl.split("/").filter(Boolean)[0];
-  return segment ?? null;
 }
 
 /** Capitalize the page segment for display. "announcements" → "Announcements" */

@@ -24,6 +24,7 @@ This document explains the end-to-end architecture of the Screen Project feature
 11. [State Management](#11-state-management)
 12. [Known Issues & Fixes Applied](#12-known-issues--fixes-applied)
 13. [File Map](#13-file-map)
+14. [Addendum: Media Library & Drive Thru (2026-08-04)](#14-addendum-media-library--drive-thru-2026-08-04)
 
 ---
 
@@ -789,3 +790,19 @@ components/layout/
 next.config.ts                                   CSP connect-src includes LiveKit domains; Permissions-Policy
 .env.local                                       NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL
 ```
+
+---
+
+## 14. Addendum: Media Library & Drive Thru (2026-08-04)
+
+Two additions since this doc's last substantive update (2026-05-13). Both extend the architecture above without changing it.
+
+### Media Library (per-station image/video playlists)
+New components under `components/screen-project/media-library/`: `media-grid.tsx`, `media-upload-dropzone.tsx`, `media-library-sheet.tsx`, `media-library-trigger.tsx`. Lets a supervisor manage the image/video playlist shown on a physical station's screen. Uses the existing `screen-project.service.ts` / `use-screen-project.ts` layer — no new hook or route files.
+
+### Drive Thru (global hotline overlay)
+`components/screen-project/drive-thru/**` is a global "hotline" overlay to one specific drive-thru-type station. Built entirely on Screen Project's existing service layer — it has **no dedicated hook, service, or route files of its own**. The only new artifact is `lib/store/drive-thru.store.ts` (Zustand + `persist`, partialized to `{ isMuted }` since LiveKit JWTs shouldn't persist, same convention as `screen-project-pip.store.ts`).
+
+`DriveThruOverlay` is mounted globally in `components/layout/app-shell.tsx`; `DriveThruButton` (topbar indicator) is mounted in `components/layout/topbar.tsx`. See `CLAUDE.md`'s Core-zone carve-out note and `docs/DEVELOPER-GUIDE.md`'s Base Layout Components section for why that's a sanctioned exception rather than a Core-file violation.
+
+No new ADR was written for either addition — both are conformant applications of the existing hook → service → route → external-API pattern, not new architectural decisions.

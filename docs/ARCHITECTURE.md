@@ -1,5 +1,7 @@
 # Architecture Documentation
 
+_Last updated: 2026-08-04_
+
 ## Overview
 
 This document describes the architectural boundaries, conventions, and patterns used in the B-Dashboard project.
@@ -442,6 +444,16 @@ const buttonVariants = cva(
 - Sanitize user-generated content
 - Implement CSRF protection
 - Rate limit API endpoints
+
+---
+
+## 11. Recent Feature Areas (Added Since Last Review)
+
+These are fully pattern-conformant with the layers and conventions in sections 1–4 above — no new architectural exceptions were introduced. Listed here so they aren't missed when scanning this document for feature coverage.
+
+- **Dashboard V1** (`components/dashboard-v1/**`, `app/[locale]/(dashboard)/dashboard/v1/page.tsx`) — a presentation-layer re-skin of the existing DSPR dashboard. Reuses the same hooks (`useWbrCard`/`useDspr`, `useManagerDashboard`, `useHooksWbr`) and services (`dsprService`, `employeeService`, `hooksService`, `qaService`) — no new data layer. See `docs/ADR/0007-dashboard-v1-category-taxonomy.md` for the category-color taxonomy and dual-mount toggle pattern it introduces.
+- **Screen Project** (`components/screen-project/**`) — in-store live-video monitoring over LiveKit, following the standard hook → service → route → external-API layering (`lib/hooks/use-screen-project.ts` → `lib/api/services/screen-project.service.ts` → `app/api/screen-project/[storeId]/**`). Full write-up: `docs/SCREEN-PROJECT.md`.
+- **Drive Thru** (`components/screen-project/drive-thru/**`) — a global hotline overlay built entirely on Screen Project's existing service layer; its only new artifact is `lib/store/drive-thru.store.ts` (Zustand + `persist`, partialized to `{ isMuted }`). See the addendum in `docs/SCREEN-PROJECT.md`.
 
 ---
 

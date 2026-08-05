@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { DriveThruButton } from "@/components/screen-project/drive-thru/drive-thru-button";
 import { LuminaEmbed } from "@/components/shared/lumina-embed";
 import { Breadcrumbs } from "./breadcrumbs";
 import { Feature } from "@/lib/config";
@@ -98,6 +99,7 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
       {/* AI assistant + Notifications */}
       <div className="flex items-center gap-1">
         {/* <LuminaEmbed /> */}
+        <DriveThruButton />
         <NotificationBell />
       </div>
 

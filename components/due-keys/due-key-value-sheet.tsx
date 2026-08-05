@@ -263,7 +263,7 @@ export function DueKeyValueSheet({
         {item ? (
           !showEditForm ? (
             /* ── Read-only detail view for filled keys ── */
-            <div className="space-y-4 p-4">
+            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
@@ -436,7 +436,7 @@ export function DueKeyValueSheet({
             </div>
           ) : (
             /* ── Edit form (unfilled keys, or edit mode for filled keys) ── */
-            <div className="space-y-4 p-4">
+            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">

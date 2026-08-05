@@ -854,6 +854,76 @@ export function TicketsFiltersBar({
               />
             </div>
 
+            {/* Changed Status To */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CircleDot className="h-3 w-3" />
+                Changed Status To
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.changed_statuses ?? []}
+                options={changedStatusOptions}
+                onChange={(v) => updateField("changed_statuses", v.length ? v : undefined)}
+                disabled={disabled}
+                placeholder="Any status"
+                searchPlaceholder="Search statuses…"
+              />
+            </div>
+
+            {/* Changed from */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Changed from
+              </label>
+              <div className="flex items-center gap-1">
+                <DatePicker
+                  value={draftFilters.changed_from ?? ""}
+                  onChange={(v) => updateField("changed_from", v || undefined)}
+                  disabled={disabled}
+                  className={cn("flex-1", draftFilters.changed_from && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  onClick={() => updateField("changed_from", undefined)}
+                  disabled={disabled || !draftFilters.changed_from}
+                  aria-label="Clear changed from date"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Changed to */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Changed to
+              </label>
+              <div className="flex items-center gap-1">
+                <DatePicker
+                  value={draftFilters.changed_to ?? ""}
+                  onChange={(v) => updateField("changed_to", v || undefined)}
+                  disabled={disabled}
+                  className={cn("flex-1", draftFilters.changed_to && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                  onClick={() => updateField("changed_to", undefined)}
+                  disabled={disabled || !draftFilters.changed_to}
+                  aria-label="Clear changed to date"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
             {/* Ticket Type */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -867,22 +937,6 @@ export function TicketsFiltersBar({
                 disabled={disabled}
                 active={!!draftFilters.types?.length}
                 searchPlaceholder="Search types…"
-              />
-            </div>
-
-            {/* Changed Status */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <CircleDot className="h-3 w-3" />
-                Changed Status
-              </label>
-              <MultiCheckSelect
-                value={draftFilters.changed_statuses ?? []}
-                options={changedStatusOptions}
-                onChange={(v) => updateField("changed_statuses", v.length ? v : undefined)}
-                disabled={disabled}
-                placeholder="Any status"
-                searchPlaceholder="Search statuses…"
               />
             </div>
 
@@ -934,60 +988,6 @@ export function TicketsFiltersBar({
                   onClick={() => updateField("created_to", undefined)}
                   disabled={disabled || !draftFilters.created_to}
                   aria-label="Clear created to date"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Changed from */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <CalendarDays className="h-3 w-3" />
-                Changed from
-              </label>
-              <div className="flex items-center gap-1">
-                <DatePicker
-                  value={draftFilters.changed_from ?? ""}
-                  onChange={(v) => updateField("changed_from", v || undefined)}
-                  disabled={disabled}
-                  className={cn("flex-1", draftFilters.changed_from && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                  onClick={() => updateField("changed_from", undefined)}
-                  disabled={disabled || !draftFilters.changed_from}
-                  aria-label="Clear changed from date"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Changed to */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <CalendarDays className="h-3 w-3" />
-                Changed to
-              </label>
-              <div className="flex items-center gap-1">
-                <DatePicker
-                  value={draftFilters.changed_to ?? ""}
-                  onChange={(v) => updateField("changed_to", v || undefined)}
-                  disabled={disabled}
-                  className={cn("flex-1", draftFilters.changed_to && "[&_input]:border-primary/40 [&_input]:bg-primary/5")}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-8 shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                  onClick={() => updateField("changed_to", undefined)}
-                  disabled={disabled || !draftFilters.changed_to}
-                  aria-label="Clear changed to date"
                 >
                   <X className="h-3.5 w-3.5" />
                 </Button>

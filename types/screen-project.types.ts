@@ -7,6 +7,9 @@ export interface Station {
   store_id: number;
   name: string;
   room_name: string;
+  /** Station category — "drive_through" stations are excluded from the
+   * supervisor and observer views; they get their own dedicated UI elsewhere. */
+  type?: string;
   created_at: string;
   updated_at: string;
 }

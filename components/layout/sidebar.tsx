@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -74,6 +74,8 @@ import { useAuth } from "@/lib/auth/use-auth";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
+import { useNotificationStore } from "@/lib/store/notification.store";
+import { getNotificationPageSegment } from "@/lib/notifications/notification-routing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -94,6 +96,12 @@ interface NavItem {
    * e.g. "manage users", "manage roles"
    */
   requiredPermission?: string;
+  /**
+   * Match the pathname exactly instead of by prefix.
+   * Needed for hrefs that are a prefix of sibling routes — e.g. the dashboard
+   * root `/{locale}/dashboard`, which prefixes every other dashboard page.
+   */
+  exact?: boolean;
 }
 
 interface NavGroup {
@@ -116,16 +124,21 @@ function SidebarNavGroup({
   locale,
   collapsed,
   onNavigate,
+  hasUnreadDot,
 }: {
   group: NavGroup;
   pathname: string;
   locale: string;
   collapsed: boolean;
   onNavigate?: () => void;
+  hasUnreadDot: (item: NavItem) => boolean;
 }) {
-  const hasActiveChild = group.items.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href)
-  );
+  const isItemActive = (item: NavItem) =>
+    item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href);
+  const hasActiveChild = group.items.some(isItemActive);
+  const groupHasUnread = group.items.some(hasUnreadDot);
   const [open, setOpen] = useState(hasActiveChild);
   const { setSidebarCollapsed } = useUIStore();
 
@@ -156,10 +169,20 @@ function SidebarNavGroup({
             collapsed && "justify-center px-2"
           )}
         >
-          <group.icon className="h-5 w-5 shrink-0" />
+          <div className="relative shrink-0">
+            <group.icon className="h-5 w-5" />
+            {collapsed && groupHasUnread && (
+              <span className="absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full bg-destructive" />
+            )}
+          </div>
           {!collapsed && (
             <>
-              <span className="truncate">{group.label}</span>
+              <span className="truncate inline-flex items-center gap-1.5">
+                {group.label}
+                {groupHasUnread && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                )}
+              </span>
               <ChevronDown
                 className={cn(
                   "ms-auto h-4 w-4 shrink-0 transition-transform duration-200",
@@ -175,8 +198,7 @@ function SidebarNavGroup({
         <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
           <div className="ms-4 border-s ps-2 mt-1 space-y-0.5">
             {group.items.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href);
+              const isActive = isItemActive(item);
               return (
                 <Link
                   key={item.href}
@@ -190,7 +212,12 @@ function SidebarNavGroup({
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{item.title}</span>
+                  <span className="truncate inline-flex items-center gap-1.5">
+                    {item.title}
+                    {hasUnreadDot(item) && (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                    )}
+                  </span>
                 </Link>
               );
             })}
@@ -229,6 +256,28 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const devToolsEnabled = useFeature("devTools");
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
+
+  /* ---- Unread-notification → sidebar dot mapping ----
+   * Derived from the same `notifications` array the bell's badge count and
+   * popover list render, so the sidebar dot can never disagree with the bell. */
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadPageSegments = useMemo(() => {
+    const segments = new Set<string>();
+    for (const notification of notifications) {
+      if (notification.read_at !== null) continue;
+      const segment = getNotificationPageSegment(notification);
+      if (segment) segments.add(segment);
+    }
+    return segments;
+  }, [notifications]);
+
+  /** First path segment after `/dashboard/` in a nav item's href, e.g.
+   * `/${locale}/dashboard/hiring-request` → "hiring-request". */
+  const getHrefPageSegment = (href: string): string =>
+    href.split("/dashboard/")[1]?.split("/")[0] ?? "";
+
+  const hasUnreadDot = (item: NavItem): boolean =>
+    unreadPageSegments.has(getHrefPageSegment(item.href));
 
   /* ---- Flat nav items ---- */
   const screenProjectItem: NavItem = {
@@ -286,6 +335,23 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   /* ---- Collapsible groups ---- */
+  // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
+  // entry is marked `exact` (that href prefixes every other dashboard route).
+  const dashboardsGroup: NavGroup = {
+    label: "Dashboards",
+    icon: LayoutDashboard,
+    items: [
+      { ...dashboardItem, title: "DSPR Dashboard", exact: true },
+      {
+        title: "Labor Dashboard",
+        href: `/${locale}/dashboard/labor`,
+        icon: Users,
+        // No auth rule defined upstream yet — visible for any store the user
+        // can access, same as the Business Reports item.
+      },
+    ],
+  };
+
   const storeManagementGroup: NavGroup = {
     label: t("storeManagement"),
     icon: Building2,
@@ -661,6 +727,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   // Pre-filter all groups and flat items
+  const visibleDashboardsGroup = filterGroup(dashboardsGroup);
   const visibleStoreManagementGroup = filterGroup(storeManagementGroup);
   const visibleUserManagementGroup = filterGroup(userManagementGroup);
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
@@ -676,6 +743,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     const isActive =
       pathname === item.href ||
       (item.href !== basePath && pathname.startsWith(item.href));
+    const showDot = hasUnreadDot(item);
 
     return (
       <Link
@@ -690,8 +758,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           collapsed && "justify-center px-2"
         )}
       >
-        <item.icon className="h-5 w-5 shrink-0" />
-        {!collapsed && <span className="truncate">{item.title}</span>}
+        <div className="relative shrink-0">
+          <item.icon className="h-5 w-5" />
+          {collapsed && showDot && (
+            <span className="absolute -top-0.5 -end-0.5 h-2 w-2 rounded-full bg-destructive" />
+          )}
+        </div>
+        {!collapsed && (
+          <span className="truncate inline-flex items-center gap-1.5">
+            {item.title}
+            {showDot && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />}
+          </span>
+        )}
       </Link>
     );
   };
@@ -796,9 +874,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       {/* Navigation — scrollable when content overflows */}
       <ScrollArea className="flex-1 overflow-y-auto">
         <nav className="font-heading space-y-1 px-2 sm:px-3 py-2 sm:py-3">
-          {/* 1. Dashboard */}
-          {/* {renderNavLink(dashboardItem)} */}
-          {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+          {/* 1. Dashboards (DSPR Dashboard + Labor Dashboard) */}
+          {visibleDashboardsGroup && (
+            <SidebarNavGroup
+              group={visibleDashboardsGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
+            />
+          )}
 
           {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
            {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}  */}
@@ -820,6 +906,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -831,6 +918,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -842,6 +930,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -853,6 +942,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -864,6 +954,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
           {/* 7. Hiring Management */}
@@ -874,6 +965,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -885,6 +977,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
@@ -896,6 +989,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              hasUnreadDot={hasUnreadDot}
             />
           )}
 
