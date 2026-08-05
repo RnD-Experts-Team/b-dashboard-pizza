@@ -150,7 +150,7 @@ export function LaborTrend({ trend }: { trend: LaborTrendData }) {
         {weeks.length === 0 ? (
           <V1Empty icon={TrendingUp}>No trailing week data</V1Empty>
         ) : (
-          <div className="labor-trend-chart">
+          <div className="labor-trend-chart h-[220px]">
             <ReactApexChart
               options={options}
               series={series}

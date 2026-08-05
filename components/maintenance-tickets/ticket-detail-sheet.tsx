@@ -506,9 +506,9 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                   </Select>
                 </div>
 
-                {/* Changed status */}
+                {/* Changed Status To */}
                 <div className="min-w-0 space-y-0.5">
-                  <p className={labelCls}>Changed status</p>
+                  <p className={labelCls}>Changed Status To</p>
                   <Select
                     value={filters?.changed_statuses?.[0] || "all"}
                     onValueChange={(v) => updateFilter("changed_statuses", v === "all" ? undefined : [v as IssueStatus])}
@@ -525,6 +525,26 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Changed from */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed from</p>
+                  <DatePicker
+                    value={filters?.changed_from ?? ""}
+                    onChange={(v) => updateFilter("changed_from", v || undefined)}
+                    className="h-6 text-[10px] px-1.5"
+                  />
+                </div>
+
+                {/* Changed to */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed to</p>
+                  <DatePicker
+                    value={filters?.changed_to ?? ""}
+                    onChange={(v) => updateFilter("changed_to", v || undefined)}
+                    className="h-6 text-[10px] px-1.5"
+                  />
                 </div>
 
                 {/* Technician */}
@@ -580,26 +600,6 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="only" className={itemCls}>Deleted only</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-
-                {/* Changed from */}
-                <div className="min-w-0 space-y-0.5">
-                  <p className={labelCls}>Changed from</p>
-                  <DatePicker
-                    value={filters?.changed_from ?? ""}
-                    onChange={(v) => updateFilter("changed_from", v || undefined)}
-                    className="h-6 text-[10px] px-1.5"
-                  />
-                </div>
-
-                {/* Changed to */}
-                <div className="min-w-0 space-y-0.5">
-                  <p className={labelCls}>Changed to</p>
-                  <DatePicker
-                    value={filters?.changed_to ?? ""}
-                    onChange={(v) => updateFilter("changed_to", v || undefined)}
-                    className="h-6 text-[10px] px-1.5"
-                  />
                 </div>
 
                 {/* Min total part cost — spans both columns */}

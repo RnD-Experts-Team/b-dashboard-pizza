@@ -256,16 +256,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
 
-  /* ---- Unread-notification → sidebar dot mapping ---- */
-  const unreadNotifications = useNotificationStore((s) => s.unreadNotifications);
+  /* ---- Unread-notification → sidebar dot mapping ----
+   * Derived from the same `notifications` array the bell's badge count and
+   * popover list render, so the sidebar dot can never disagree with the bell. */
+  const notifications = useNotificationStore((s) => s.notifications);
   const unreadPageSegments = useMemo(() => {
     const segments = new Set<string>();
-    for (const notification of unreadNotifications) {
+    for (const notification of notifications) {
+      if (notification.read_at !== null) continue;
       const segment = getNotificationPageSegment(notification);
       if (segment) segments.add(segment);
     }
     return segments;
-  }, [unreadNotifications]);
+  }, [notifications]);
 
   /** First path segment after `/dashboard/` in a nav item's href, e.g.
    * `/${locale}/dashboard/hiring-request` → "hiring-request". */

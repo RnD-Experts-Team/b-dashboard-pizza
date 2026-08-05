@@ -1,7 +1,20 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { AlertTriangle } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
+import {
+  Banknote,
+  Clock,
+  Repeat,
+  Timer,
+  UserMinus,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { LaborSummary } from "@/types/labor.types";
 import { fmtCurrency, fmtHours, fmtNumber, fmtPercent } from "./labor-format";
@@ -10,44 +23,82 @@ import { fmtCurrency, fmtHours, fmtNumber, fmtPercent } from "./labor-format";
 const NO_DATA_YET = "No data yet";
 
 /**
- * A KPI tile for the header strip — two rows (label, value), never three.
- * The caption that used to sit on its own line under the value (e.g. "this
- * week", "trailing average") now sits inline right next to it instead.
+ * A KPI tile matching the V1 dashboard's header-strip style
+ * (components/dspr/day-summary-stats.tsx): icon box on the left, the value
+ * as the bold headline, and the label + a small secondary caption below it —
+ * a left accent border and tinted icon color carry each metric's meaning.
  */
 function SummaryTile({
   label,
   value,
   caption,
-  accent,
+  tooltip,
+  icon: Icon,
+  color,
+  iconBg,
+  borderColor,
+  isNegative,
+  onClick,
   className,
 }: {
   label: ReactNode;
   value: ReactNode;
   caption?: ReactNode;
-  accent?: string;
+  tooltip: string;
+  icon: ComponentType<{ className?: string }>;
+  /** Text color for the icon and (when negative) the value — e.g. "text-emerald-600 dark:text-emerald-400". */
+  color: string;
+  /** Tinted background behind the icon — e.g. "bg-emerald-500/15 dark:bg-emerald-500/20". */
+  iconBg: string;
+  /** Left accent border — e.g. "border-l-emerald-500". */
+  borderColor: string;
+  isNegative?: boolean;
+  onClick?: () => void;
   className?: string;
 }) {
+  const Wrapper = onClick ? "button" : "div";
+
   return (
-    <div
-      className={cn(
-        "flex flex-col justify-center rounded-lg border border-border/50 bg-background/55 px-2.5 py-1.5 backdrop-blur-sm",
-        className,
-      )}
-    >
-      <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="flex items-baseline gap-1 truncate">
-        <span className={cn("text-xl font-bold leading-tight tabular-nums", accent)}>
-          {value}
-        </span>
-        {caption && (
-          <span className="truncate text-[9.5px] font-medium leading-tight text-muted-foreground/80">
-            {caption}
-          </span>
-        )}
-      </p>
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Wrapper
+          type={onClick ? "button" : undefined}
+          onClick={onClick}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg border border-l-2 bg-card px-2 py-1.5 text-start",
+            "cursor-default transition-all hover:bg-accent/50 hover:shadow-sm",
+            onClick && "cursor-pointer",
+            borderColor,
+            className,
+          )}
+        >
+          <div className={cn("shrink-0 rounded p-0.5", iconBg)}>
+            <Icon className={cn("h-3 w-3", color)} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className={cn(
+                "truncate text-[11px] font-bold leading-tight tracking-tight tabular-nums",
+                isNegative && color,
+              )}
+            >
+              {value}
+            </p>
+            <div className="flex min-w-0 items-baseline gap-1">
+              <p className="shrink-0 truncate text-[8px] font-medium leading-tight text-muted-foreground">
+                {label}
+              </p>
+              {caption && (
+                <p className="min-w-0 truncate text-[8px] font-medium leading-tight text-muted-foreground/80">
+                  {caption}
+                </p>
+              )}
+            </div>
+          </div>
+        </Wrapper>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -70,88 +121,132 @@ export function LaborSummaryStrip({
       : `· avg ${fmtPercent(summary.avg_weekly_turnover_rate_trailing_percent)}`;
 
   return (
-    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-5">
-      <SummaryTile label="Headcount" value={fmtNumber(summary.headcount_current)} />
+    <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
+      {/* People currently on staff — the page's own "home" color. */}
+      <SummaryTile
+        label="Headcount"
+        value={fmtNumber(summary.headcount_current)}
+        icon={Users}
+        color="text-violet-600 dark:text-violet-400"
+        iconBg="bg-violet-500/15 dark:bg-violet-500/20"
+        borderColor="border-l-violet-500"
+        tooltip="Active headcount as of the end of this business week"
+      />
 
+      {/* Growth — green, same convention as "money coming in" elsewhere. */}
       <SummaryTile
         label="New Hires"
         value={fmtNumber(summary.new_hires_this_week)}
         caption="· this week"
-        accent={summary.new_hires_this_week > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined}
+        icon={UserPlus}
+        color="text-emerald-600 dark:text-emerald-400"
+        iconBg="bg-emerald-500/15 dark:bg-emerald-500/20"
+        borderColor="border-l-emerald-500"
+        tooltip="Employees hired or rehired at this store this week"
       />
 
+      {/* Loss of staff — red, the same "needs attention" tone as departures/60h+. */}
       <SummaryTile
         label="Separations"
         value={fmtNumber(summary.separations_this_week)}
         caption="· this week"
-        accent={summary.separations_this_week > 0 ? "text-rose-600 dark:text-rose-400" : undefined}
+        icon={UserMinus}
+        color="text-rose-600 dark:text-rose-400"
+        iconBg="bg-rose-500/15 dark:bg-rose-500/20"
+        borderColor="border-l-rose-500"
+        isNegative={summary.separations_this_week > 0}
+        tooltip="Employees who resigned or were terminated this week"
       />
 
-      {/* The one tile a manager most needs to notice. */}
+      {/* The one tile a manager most needs to notice — amber only lights up
+          when there's actually something to flag. */}
       <SummaryTile
-        label={
-          <span className="flex items-center gap-1">
-            {hasNotable && (
-              <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-            )}
-            Notable Departures
-          </span>
-        }
+        label="Notable Departures"
         value={fmtNumber(notable)}
-        caption={hasNotable ? "· above-average performers left" : "· none this week"}
-        accent={hasNotable ? "text-amber-600 dark:text-amber-400" : undefined}
-        className={cn(
-          hasNotable &&
-            "border-amber-500/50 bg-amber-500/10 dark:border-amber-400/40 dark:bg-amber-400/10",
-        )}
+        caption={hasNotable ? "· above avg" : "· none"}
+        icon={UserMinus}
+        color={
+          hasNotable
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-muted-foreground"
+        }
+        iconBg={hasNotable ? "bg-amber-500/15 dark:bg-amber-500/20" : "bg-muted"}
+        borderColor={hasNotable ? "border-l-amber-500" : "border-l-border"}
+        isNegative={hasNotable}
+        tooltip="Separations this week whose own trailing performance was above the store average — worth a second look"
       />
 
+      {/* A rate, not a good/bad signal by itself — orange keeps it distinct
+          from the harder "loss" red of Separations. */}
       <SummaryTile
         label="Turnover Rate"
         value={fmtPercent(summary.turnover_rate_this_week_percent)}
         caption={turnoverBaseline}
+        icon={Repeat}
+        color="text-orange-600 dark:text-orange-400"
+        iconBg="bg-orange-500/15 dark:bg-orange-500/20"
+        borderColor="border-l-orange-500"
+        tooltip="Separations ÷ average headcount this week, vs. the trailing average"
       />
 
+      {/* Money — blue, the same "informational financial" tone used for
+          deposits elsewhere in the app. */}
       <SummaryTile
-        label="Avg Weekly Gross Pay"
+        label="Avg Gross Pay"
         value={
           summary.avg_weekly_gross_pay_trailing === null
             ? NO_DATA_YET
             : fmtCurrency(summary.avg_weekly_gross_pay_trailing, 0)
         }
         caption={summary.avg_weekly_gross_pay_trailing === null ? undefined : "· trailing avg"}
+        icon={Banknote}
+        color="text-blue-600 dark:text-blue-400"
+        iconBg="bg-blue-500/15 dark:bg-blue-500/20"
+        borderColor="border-l-blue-500"
+        tooltip="Average total gross pay per week over the trailing window"
       />
+
+      {/* Time worked — teal, a distinct informational hue from pay. */}
       <SummaryTile
-        label="Avg Weekly Hours"
+        label="Avg Hours"
         value={
           summary.avg_weekly_hours_trailing === null
             ? NO_DATA_YET
             : fmtHours(summary.avg_weekly_hours_trailing)
         }
         caption={summary.avg_weekly_hours_trailing === null ? undefined : "· trailing avg"}
+        icon={Clock}
+        color="text-teal-600 dark:text-teal-400"
+        iconBg="bg-teal-500/15 dark:bg-teal-500/20"
+        borderColor="border-l-teal-500"
+        tooltip="Average total hours worked per week over the trailing window"
       />
 
-      <button type="button" onClick={onJumpToOvertime} className="text-left">
-        <SummaryTile
-          label="Over 40 Hours"
-          value={fmtNumber(summary.employees_over_40_hours)}
-          caption="· view →"
-          className="h-full transition-colors hover:border-border hover:bg-background"
-        />
-      </button>
-      <button type="button" onClick={onJumpToOvertime} className="text-left">
-        <SummaryTile
-          label="Over 60 Hours"
-          value={fmtNumber(summary.employees_over_60_hours)}
-          caption="· view →"
-          accent={
-            summary.employees_over_60_hours > 0
-              ? "text-rose-600 dark:text-rose-400"
-              : undefined
-          }
-          className="h-full transition-colors hover:border-border hover:bg-background"
-        />
-      </button>
+      {/* Kept neutral (no yellow) — 40h+ isn't itself a violation, just a
+          watch-list; only the 60h+ tile carries a warning color. */}
+      <SummaryTile
+        label="Over 40 Hrs"
+        value={fmtNumber(summary.employees_over_40_hours)}
+        caption="· view →"
+        icon={Timer}
+        color="text-muted-foreground"
+        iconBg="bg-muted"
+        borderColor="border-l-border"
+        onClick={onJumpToOvertime}
+        tooltip="Employees who worked more than 40 hours this week — tap to view"
+      />
+      <SummaryTile
+        label="Over 60 Hrs"
+        value={fmtNumber(summary.employees_over_60_hours)}
+        caption="· view →"
+        icon={Timer}
+        color="text-rose-600 dark:text-rose-400"
+        iconBg="bg-rose-500/15 dark:bg-rose-500/20"
+        borderColor="border-l-rose-500"
+        isNegative={summary.employees_over_60_hours > 0}
+        onClick={onJumpToOvertime}
+        tooltip="Employees at 60+ hours this week — tap to view"
+      />
     </div>
   );
 }

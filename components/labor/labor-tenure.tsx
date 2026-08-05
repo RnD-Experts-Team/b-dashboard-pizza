@@ -106,7 +106,7 @@ export function LaborTenure({ tenure }: { tenure: LaborTenureData }) {
         {distribution.length === 0 || !hasAnyTenure ? (
           <V1Empty icon={CalendarClock}>No tenure data</V1Empty>
         ) : (
-          <div className="labor-tenure-chart">
+          <div className="labor-tenure-chart h-[170px]">
             <ReactApexChart
               options={options}
               series={series}

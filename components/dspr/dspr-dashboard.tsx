@@ -884,7 +884,7 @@ export function DsprDashboard({
                 className="h-6 w-6"
                 title="Export & view options"
               >
-                {isCapturing || isCapturingReport || isCapturingStorePerformance ? (
+                {isCapturing || isCapturingReport /* || isCapturingStorePerformance — Store Performance report temporarily disabled */ ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <MoreVertical className="h-3 w-3" />
@@ -900,6 +900,7 @@ export function DsprDashboard({
                 <ImageDown className="h-3.5 w-3.5 me-2" />
                 {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
               </DropdownMenuItem>
+              {/* Store Performance report — temporarily disabled
               <DropdownMenuItem
                 onSelect={() => setStorePerfDialogOpen(true)}
                 disabled={!data || isCapturingStorePerformance}
@@ -907,6 +908,7 @@ export function DsprDashboard({
                 <LayoutTemplate className="h-3.5 w-3.5 me-2" />
                 {isCapturingStorePerformance ? "Capturing…" : "Store Performance report (PNG)"}
               </DropdownMenuItem>
+              */}
               <DropdownMenuItem onSelect={toggleHideBackgrounds}>
                 {hideSectionBackgrounds ? (
                   <Eye className="h-3.5 w-3.5 me-2" />
@@ -918,12 +920,14 @@ export function DsprDashboard({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Store Performance report — temporarily disabled
           <StorePerformanceReportDialog
             open={storePerfDialogOpen}
             onOpenChange={setStorePerfDialogOpen}
             onGenerate={handleScreenshotStorePerformance}
             isGenerating={isCapturingStorePerformance}
           />
+          */}
 
           {/* Page guide button */}
           <Tooltip>

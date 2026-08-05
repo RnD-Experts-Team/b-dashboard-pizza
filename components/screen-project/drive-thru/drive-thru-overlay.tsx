@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { VideoQuality } from "livekit-client";
 import { X, Volume2, VolumeX, Radio, PhoneOff } from "lucide-react";
@@ -11,6 +11,7 @@ import { ScreenTile } from "../screen-tile";
 import { MediaLibraryTrigger } from "../media-library/media-library-trigger";
 import { MediaLibrarySheet } from "../media-library/media-library-sheet";
 import { cn } from "@/lib/utils";
+import type { StationMedia } from "@/types/screen-project-media.types";
 
 /** Re-fetch the scoped supervisor token well before any realistic JWT TTL. */
 const TOKEN_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
@@ -45,6 +46,15 @@ export function DriveThruOverlay() {
 
   const [pushToTalkActive, setPushToTalkActive] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  // Handed to us by <ScreenTile> — broadcasts a media list to the station over
+  // the same "station-media" data-channel topic its built-in MediaLibrarySheet
+  // trigger uses, so our own separate MediaLibrarySheet below can push live
+  // updates too instead of requiring the station to reload.
+  const publishMediaRef = useRef<((media: StationMedia[]) => void) | null>(null);
+  const handleMediaPublisherReady = useCallback((publish: (media: StationMedia[]) => void) => {
+    publishMediaRef.current = publish;
+  }, []);
 
   // Disconnect if the globally-selected store changes — the token is store-scoped.
   useEffect(() => {
@@ -115,6 +125,7 @@ export function DriveThruOverlay() {
           videoQuality={VideoQuality.LOW}
           viewerOnly={true}
           onConnectionStateChange={setLive}
+          onMediaPublisherReady={handleMediaPublisherReady}
           className="absolute inset-0 h-full w-full"
         />
       </motion.div>
@@ -222,6 +233,7 @@ export function DriveThruOverlay() {
         storeId={connection.storeId}
         stationNumber={connection.stationId}
         stationName={connection.name}
+        onMediaChange={(media) => publishMediaRef.current?.(media)}
         overlayClassName="z-[10010]"
         contentClassName="z-[10011]"
         alertOverlayClassName="z-[10020]"

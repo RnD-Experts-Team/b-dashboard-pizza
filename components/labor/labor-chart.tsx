@@ -10,10 +10,18 @@ import { cn } from "@/lib/utils";
 import type { ApexOptions } from "apexcharts";
 import type { LucideIcon } from "lucide-react";
 
-/** Apex must not render on the server — same idiom as components/dspr/sales-chart.tsx. */
+/**
+ * Apex must not render on the server — same idiom as components/dspr/sales-chart.tsx.
+ *
+ * The loading fallback fills its container (`h-full`) rather than using a
+ * fixed height, so it always matches whatever size the real chart will
+ * render at once the module resolves — a fixed-height skeleton here caused a
+ * visible shrink-then-grow jump on first load, since each chart's actual
+ * height differs (some fill their container, some are a fixed pixel value).
+ */
 export const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   ssr: false,
-  loading: () => <Skeleton className="h-40 w-full" />,
+  loading: () => <Skeleton className="h-full min-h-[120px] w-full" />,
 });
 
 /** The Labor Dashboard lives entirely in the "People & Labor" category. */

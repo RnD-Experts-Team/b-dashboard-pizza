@@ -144,6 +144,14 @@ export interface ScreenTileProps {
    * camera-not-yet-publishing room), where onLiveChange would wrongly stay false.
    */
   onConnectionStateChange?: (connected: boolean) => void;
+  /**
+   * Supervisor side only: hands the caller a function that broadcasts a media
+   * list to the station over the same "station-media" data-channel topic the
+   * built-in MediaLibrarySheet trigger uses — for callers (like the Drive Thru
+   * overlay) that render their own separate MediaLibrarySheet outside this
+   * tile and need to publish its changes to this room themselves.
+   */
+  onMediaPublisherReady?: (publish: (media: StationMedia[]) => void) => void;
   /** MediaDeviceInfo.deviceId for the microphone to use (audioinput) */
   selectedAudioDeviceId?: string;
   /** MediaDeviceInfo.deviceId for the camera to use (videoinput) */
@@ -209,6 +217,7 @@ interface InnerProps {
   publishNetworkStatus?: boolean;
   onLiveChange?: (isLive: boolean) => void;
   onConnectionStateChange?: (connected: boolean) => void;
+  onMediaPublisherReady?: (publish: (media: StationMedia[]) => void) => void;
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
   className?: string;
@@ -296,6 +305,7 @@ function ScreenTileInner({
   publishNetworkStatus = false,
   onLiveChange,
   onConnectionStateChange,
+  onMediaPublisherReady,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -681,6 +691,13 @@ function ScreenTileInner({
     },
     [room, connectionState],
   );
+
+  // Hand publishMediaUpdate up to a caller that renders its own separate
+  // MediaLibrarySheet outside this tile (e.g. the Drive Thru overlay) instead
+  // of using this tile's built-in one, so it can still push updates to this room.
+  useEffect(() => {
+    onMediaPublisherReady?.(publishMediaUpdate);
+  }, [publishMediaUpdate, onMediaPublisherReady]);
 
   // ── Supervisor-side: send commands to station when props change ───────────
   // Refs keep latest prop values so the ParticipantConnected handler (below)
@@ -1372,6 +1389,7 @@ export function ScreenTile({
   publishNetworkStatus = false,
   onLiveChange,
   onConnectionStateChange,
+  onMediaPublisherReady,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -1503,6 +1521,7 @@ export function ScreenTile({
         publishNetworkStatus={publishNetworkStatus}
         onLiveChange={onLiveChange}
         onConnectionStateChange={onConnectionStateChange}
+        onMediaPublisherReady={onMediaPublisherReady}
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}
         className={className}
