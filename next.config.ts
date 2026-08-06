@@ -48,6 +48,14 @@ const inventoryOrigin =
 const luminaBase =
   process.env.NEXT_PUBLIC_LUMINA_BASE || "https://ai.lcportal.cloud";
 
+// Cleaning Chart backend (AuditApp/QA). Data/API calls are proxied through
+// app/api/cleaning/.../route.ts (server-side, auth-validated). Only the task
+// completion photos in /storage still go through a Next.js rewrite below so
+// they stay same-origin (covered by img-src 'self').
+const qaApiUrl =
+  process.env.NEXT_PUBLIC_QA_API_URL || "https://qa.lcportal.cloud/api";
+const qaOrigin = getApiDomain(qaApiUrl) || "https://qa.lcportal.cloud";
+
 const nextConfig: NextConfig = {
   // Security headers
   async headers() {
@@ -125,6 +133,12 @@ const nextConfig: NextConfig = {
         {
           source: "/inventory-storage/:path*",
           destination: `${inventoryOrigin}/storage/:path*`,
+        },
+        // Cleaning task photos: /cleaning-storage/cleaning/x.jpg → {qaOrigin}/storage/cleaning/x.jpg
+        // Keeps <img> same-origin so the existing CSP (img-src 'self') already allows it.
+        {
+          source: "/cleaning-storage/:path*",
+          destination: `${qaOrigin}/storage/:path*`,
         },
       ],
     };

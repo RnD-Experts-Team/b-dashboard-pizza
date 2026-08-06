@@ -7,3 +7,5 @@ export { assignmentService } from "./assignment.service";
 export { hierarchyService } from "./hierarchy.service";
 export { serviceClientService } from "./service-client.service";
 export { manualImportService } from "./manual-import.service";
+export { cleaningService, CleaningError } from "./cleaning.service";
+export type { CleaningErrorCode } from "./cleaning.service";
