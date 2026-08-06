@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Check, ChevronsUpDown, Search, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ interface Props {
 
 /** Searchable store selector (by name or number), matching the app's switcher. */
 export function StorePicker({ options, value, onChange, className, loading }: Props) {
+  const t = useTranslations("cleaningChart.storePicker");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -64,7 +66,7 @@ export function StorePicker({ options, value, onChange, className, loading }: Pr
               </span>
             ) : (
               <span className="text-muted-foreground">
-                {loading ? "Loading stores…" : "Select store…"}
+                {loading ? t("loading") : t("selectStore")}
               </span>
             )}
           </span>
@@ -78,7 +80,7 @@ export function StorePicker({ options, value, onChange, className, loading }: Pr
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or number…"
+            placeholder={t("searchPlaceholder")}
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
@@ -88,7 +90,7 @@ export function StorePicker({ options, value, onChange, className, loading }: Pr
         >
           {filtered.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-              No stores found.
+              {t("empty")}
             </p>
           ) : (
             filtered.map((o) => (
@@ -101,7 +103,7 @@ export function StorePicker({ options, value, onChange, className, loading }: Pr
                   setQuery("");
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent hover:text-accent-foreground",
+                  "flex w-full items-center gap-2 rounded-md px-2 py-2 text-start transition-colors hover:bg-accent hover:text-accent-foreground",
                   o.id === value && "bg-accent/60"
                 )}
               >

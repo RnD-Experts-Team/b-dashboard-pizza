@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Camera, History, Loader2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,13 +43,6 @@ interface Props {
   onUncomplete: (storeId: number, taskId: number, date: string) => Promise<void>;
 }
 
-const FREQ_LABEL: Record<string, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  hourly: "Hourly",
-};
-
 /**
  * Signals that THIS period was acted on — the only thing /due can tell us.
  * Past periods are checked separately (see `pastHistory` below), because a
@@ -71,6 +65,7 @@ export function DueList({
   onComplete,
   onUncomplete,
 }: Props) {
+  const t = useTranslations("cleaningChart");
   const [completeItem, setCompleteItem] = useState<DueItem | null>(null);
   const [historyItem, setHistoryItem] = useState<DueItem | null>(null);
   const [undoTarget, setUndoTarget] = useState<DueItem | null>(null);
@@ -143,10 +138,10 @@ export function DueList({
         delete next[cacheKey(item.taskId)];
         return next;
       });
-      toast.success(`"${item.label}" reverted to pending.`);
+      toast.success(t("due.toasts.reverted", { label: item.label }));
       setUndoTarget(null);
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : "Could not undo.");
+      toast.error(err instanceof CleaningError ? err.message : t("due.toasts.undoFailed"));
     } finally {
       setUndoing(null);
     }
@@ -158,20 +153,20 @@ export function DueList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Task</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden sm:table-cell">Frequency</TableHead>
-              <TableHead className="hidden md:table-cell">Period</TableHead>
-              <TableHead className="hidden lg:table-cell">Weight</TableHead>
-              <TableHead className="hidden lg:table-cell">Done by</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("due.table.task")}</TableHead>
+              <TableHead>{t("due.table.status")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("due.table.frequency")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("due.table.period")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t("due.table.weight")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t("due.table.doneBy")}</TableHead>
+              <TableHead className="text-end">{t("due.table.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
-                  Nothing due for this store on {date}.
+                  {t("due.table.empty", { date })}
                 </TableCell>
               </TableRow>
             ) : (
@@ -191,8 +186,11 @@ export function DueList({
                     )}
                     {/* compact meta on small screens where columns are hidden */}
                     <p className="mt-1 text-xs text-muted-foreground sm:hidden">
-                      {(FREQ_LABEL[item.frequency] ?? item.frequency)} · {item.period[0]} →{" "}
-                      {item.period[1]}
+                      {t("due.table.meta", {
+                        freq: t(`frequency.${item.frequency}`),
+                        from: item.period[0],
+                        to: item.period[1],
+                      })}
                     </p>
                   </TableCell>
                   <TableCell>
@@ -200,7 +198,7 @@ export function DueList({
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
                     <Badge variant="secondary" className="font-normal">
-                      {FREQ_LABEL[item.frequency] ?? item.frequency}
+                      {t(`frequency.${item.frequency}`)}
                     </Badge>
                   </TableCell>
                   <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground md:table-cell">
@@ -208,7 +206,7 @@ export function DueList({
                   </TableCell>
                   <TableCell className="hidden text-sm lg:table-cell">{item.weight}</TableCell>
                   <TableCell className="hidden max-w-[160px] truncate text-sm text-muted-foreground lg:table-cell">
-                    {item.doneBy.length > 0 ? item.doneBy.join(", ") : "—"}
+                    {item.doneBy.length > 0 ? item.doneBy.join(", ") : t("due.table.noDoneBy")}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-2">
@@ -218,7 +216,7 @@ export function DueList({
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => setHistoryItem(item)}
-                          title="View history"
+                          title={t("due.viewHistory")}
                         >
                           <History className="h-4 w-4" />
                         </Button>
@@ -231,11 +229,11 @@ export function DueList({
                           disabled={undoing === item.taskId}
                         >
                           <Undo2 className="me-1.5 h-4 w-4" />
-                          Undo
+                          {t("due.undo")}
                         </Button>
                       ) : (
                         <Button size="sm" onClick={() => setCompleteItem(item)}>
-                          Complete
+                          {t("due.complete")}
                         </Button>
                       )}
                     </div>
@@ -273,14 +271,13 @@ export function DueList({
       <AlertDialog open={undoTarget != null} onOpenChange={(o) => !o && setUndoTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Undo completion?</AlertDialogTitle>
+            <AlertDialogTitle>{t("due.undoDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This reverts “{undoTarget?.label}” back to pending for {date}. Any
-              recorded photo, note, and employees will be removed.
+              {t("due.undoDialog.description", { label: undoTarget?.label ?? "", date })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={undoing != null}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={undoing != null}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
               disabled={undoing != null}
@@ -290,7 +287,7 @@ export function DueList({
               }}
             >
               {undoing != null && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-              Undo
+              {t("due.undo")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, ClipboardList, Grid3x3, FileBarChart, Plus, RefreshCw, type LucideIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
+import {
+  CalendarDays,
+  ClipboardList,
+  Grid3x3,
+  FileBarChart,
+  Lock,
+  Plus,
+  RefreshCw,
+  Store,
+  type LucideIcon,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -29,30 +40,23 @@ import {
   type StoreOption,
 } from "@/components/cleaning";
 
-const TAB_DEFS: { id: CleaningTabId; label: string; icon: LucideIcon; render: () => React.ReactNode }[] = [
-  { id: "due", label: "Due Today", icon: CalendarDays, render: () => <DueTab /> },
-  { id: "tasks", label: "Tasks", icon: ClipboardList, render: () => <TasksTab /> },
-  { id: "evaluation", label: "Evaluation", icon: Grid3x3, render: () => <EvaluationTab /> },
-  { id: "reports", label: "Reports", icon: FileBarChart, render: () => <ReportsTab /> },
+const TAB_DEFS: { id: CleaningTabId; labelKey: string; icon: LucideIcon; render: () => React.ReactNode }[] = [
+  { id: "due", labelKey: "due", icon: CalendarDays, render: () => <DueTab /> },
+  { id: "tasks", labelKey: "tasks", icon: ClipboardList, render: () => <TasksTab /> },
+  { id: "evaluation", labelKey: "evaluation", icon: Grid3x3, render: () => <EvaluationTab /> },
+  { id: "reports", labelKey: "reports", icon: FileBarChart, render: () => <ReportsTab /> },
 ];
 
-/** Static class per column count — Tailwind can't resolve a templated grid-cols-N. */
-const GRID_COLS: Record<number, string> = {
-  1: "grid-cols-1",
-  2: "grid-cols-2",
-  3: "grid-cols-3",
-  4: "grid-cols-4",
-};
-
 export default function CleaningChartPage() {
+  const t = useTranslations("cleaningChart");
   const { selectedStore } = useSelectedStoreStore();
   const { overviewStores, canAccessRoute, hasAnyRole } = useAuthStore();
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
 
   const visibleTabs = useMemo(
     () =>
-      TAB_DEFS.filter((t) =>
-        canAccessCleaningTab(t.id, { canAccessRoute, hasAnyRole }, effectiveStoreId)
+      TAB_DEFS.filter((tab) =>
+        canAccessCleaningTab(tab.id, { canAccessRoute, hasAnyRole }, effectiveStoreId)
       ),
     [canAccessRoute, hasAnyRole, effectiveStoreId]
   );
@@ -63,21 +67,24 @@ export default function CleaningChartPage() {
   // selected store changes what's scoped-accessible), fall back to the first
   // tab the user can actually see.
   useEffect(() => {
-    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeTab)) {
+    if (visibleTabs.length > 0 && !visibleTabs.some((tab) => tab.id === activeTab)) {
       setActiveTab(visibleTabs[0].id);
     }
   }, [visibleTabs, activeTab]);
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Cleaning Chart"
-        description="Track recurring cleaning tasks, grade store evaluations, and export reports."
-      />
+      <PageHeader title={t("page.title")} description={t("page.description")} />
 
       {visibleTabs.length === 0 ? (
-        <div className="rounded-lg border p-10 text-center text-sm text-muted-foreground">
-          You don&apos;t have permission to access the Cleaning Chart.
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
+          <Lock className="h-8 w-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t("page.noAccessTitle")}</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              {t("page.noAccessDescription")}
+            </p>
+          </div>
         </div>
       ) : (
         <Tabs
@@ -85,23 +92,20 @@ export default function CleaningChartPage() {
           onValueChange={(v) => setActiveTab(v as CleaningTabId)}
           className="w-full"
         >
-          <TabsList
-            className={cn(
-              "grid w-full sm:inline-grid sm:w-auto",
-              GRID_COLS[visibleTabs.length] ?? "grid-cols-4"
-            )}
-          >
-            {visibleTabs.map((t) => (
-              <TabsTrigger key={t.id} value={t.id} className="gap-2">
-                <t.icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{t.label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="-mx-1 overflow-x-auto px-1">
+            <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
+              {visibleTabs.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="gap-2 whitespace-nowrap">
+                  <tab.icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t(`tabs.${tab.labelKey}`)}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
-          {visibleTabs.map((t) => (
-            <TabsContent key={t.id} value={t.id} className="mt-4">
-              {t.render()}
+          {visibleTabs.map((tab) => (
+            <TabsContent key={tab.id} value={tab.id} className="mt-4">
+              {tab.render()}
             </TabsContent>
           ))}
         </Tabs>
@@ -112,6 +116,7 @@ export default function CleaningChartPage() {
 
 /* ── Due Today ── */
 function DueTab() {
+  const t = useTranslations("cleaningChart");
   // Same store list the sidebar's own switcher uses (overviewStores, loaded once
   // at login from /auth/general-overview) — already scoped to whatever stores
   // THIS user can access (e.g. a store manager's 2 assigned stores), unlike
@@ -174,11 +179,11 @@ function DueTab() {
     if (store) fetchDue(store.id, date);
   }, [store, date, fetchDue]);
 
-  const STATUS_TABS: { key: "all" | DueStatus; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "pending", label: "Pending" },
-    { key: "done", label: "Done" },
-    { key: "overdue", label: "Overdue" },
+  const STATUS_TABS: { key: "all" | DueStatus; labelKey: string }[] = [
+    { key: "all", labelKey: "statusAll" },
+    { key: "pending", labelKey: "statusPending" },
+    { key: "done", labelKey: "statusDone" },
+    { key: "overdue", labelKey: "statusOverdue" },
   ];
 
   return (
@@ -199,7 +204,7 @@ function DueTab() {
           size="icon"
           onClick={refetch}
           disabled={dueLoading || !store}
-          aria-label="Refresh"
+          aria-label={t("due.refreshLabel")}
         >
           <RefreshCw className={cn("h-4 w-4", dueLoading && "animate-spin")} />
         </Button>
@@ -207,34 +212,40 @@ function DueTab() {
 
       {/* Status segmented filter with counts */}
       <div className="flex w-full gap-1 rounded-lg border bg-muted/40 p-1 sm:w-auto sm:self-start">
-        {STATUS_TABS.map((t) => (
+        {STATUS_TABS.map((statusTab) => (
           <button
-            key={t.key}
+            key={statusTab.key}
             type="button"
-            onClick={() => setStatus(t.key)}
+            onClick={() => setStatus(statusTab.key)}
             className={cn(
               "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none",
-              status === t.key
+              status === statusTab.key
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t.label}
+            {t(`due.${statusTab.labelKey}`)}
             <span
               className={cn(
                 "rounded-full px-1.5 text-xs tabular-nums",
-                status === t.key ? "bg-muted" : "bg-muted/60"
+                status === statusTab.key ? "bg-muted" : "bg-muted/60"
               )}
             >
-              {counts[t.key]}
+              {counts[statusTab.key]}
             </span>
           </button>
         ))}
       </div>
 
       {!store ? (
-        <div className="rounded-lg border p-10 text-center text-sm text-muted-foreground">
-          Select a store to see what&apos;s due.
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
+          <Store className="h-8 w-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t("page.noStoreTitle")}</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              {t("page.noStoreDescription")}
+            </p>
+          </div>
         </div>
       ) : (
         <>
@@ -258,6 +269,7 @@ function DueTab() {
 
 /* ── Tasks ── */
 function TasksTab() {
+  const t = useTranslations("cleaningChart");
   const { tasks, tasksLoading, tasksError, refetch, createTask, updateTask, deleteTask } =
     useCleaningTasks();
   const [createOpen, setCreateOpen] = useState(false);
@@ -267,11 +279,11 @@ function TasksTab() {
       <div className="flex items-center justify-between">
         <Button variant="outline" size="sm" onClick={refetch} disabled={tasksLoading}>
           <RefreshCw className={cn("me-2 h-4 w-4", tasksLoading && "animate-spin")} />
-          Refresh
+          {t("common.refresh")}
         </Button>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="me-2 h-4 w-4" />
-          Create Task
+          {t("tasks.createTask")}
         </Button>
       </div>
 
@@ -290,6 +302,7 @@ function TasksTab() {
 
 /* ── Evaluation ── */
 function EvaluationTab() {
+  const t = useTranslations("cleaningChart");
   const {
     grid,
     gridLoading,
@@ -311,8 +324,14 @@ function EvaluationTab() {
     );
   if (!grid)
     return (
-      <div className="rounded-lg border p-10 text-center text-sm text-muted-foreground">
-        No evaluation data.
+      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
+        <Grid3x3 className="h-8 w-8 text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{t("page.noEvaluationTitle")}</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            {t("page.noEvaluationDescription")}
+          </p>
+        </div>
       </div>
     );
 

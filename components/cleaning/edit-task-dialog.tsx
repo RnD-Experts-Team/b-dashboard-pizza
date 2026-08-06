@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -104,6 +105,7 @@ function buildUpdatePayload(
 }
 
 export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) {
+  const t = useTranslations("cleaningChart.editTaskDialog");
   const { options: storeOptions, isLoading: storesLoading } = useTaskStoreOptions();
 
   const [task, setTask] = useState<CleaningTask | null>(null);
@@ -156,9 +158,7 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
       })
       .catch((err) => {
         if (!cancelled) {
-          setLoadError(
-            err instanceof CleaningError ? err.message : "Failed to load task."
-          );
+          setLoadError(err instanceof CleaningError ? err.message : t("loadFailed"));
         }
       })
       .finally(() => {
@@ -175,10 +175,10 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
 
   const onSubmit = async (values: TaskFormValues) => {
     if (!task) return;
-    if (!startsAt) return toast.error("Start date is required.");
-    if (storeIds.length === 0) return toast.error("Select at least one store.");
+    if (!startsAt) return toast.error(t("toasts.startRequired"));
+    if (storeIds.length === 0) return toast.error(t("toasts.storeRequired"));
     if (frequency === "hourly" && !num(values.intervalHours)) {
-      return toast.error("Hourly tasks need an interval (1–24 hours).");
+      return toast.error(t("toasts.hourlyIntervalRequired"));
     }
 
     const payload = buildUpdatePayload(task, {
@@ -191,7 +191,7 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
     });
 
     if (Object.keys(payload).length === 0) {
-      toast.info("Nothing changed.");
+      toast.info(t("toasts.nothingChanged"));
       onOpenChange(false);
       return;
     }
@@ -199,10 +199,10 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
     setSubmitting(true);
     try {
       await onUpdate(task.id, payload);
-      toast.success(`Task "${values.name}" updated.`);
+      toast.success(t("toasts.updated", { name: values.name }));
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : "Could not update task.");
+      toast.error(err instanceof CleaningError ? err.message : t("toasts.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -212,10 +212,8 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b px-6 py-4">
-          <DialogTitle className="text-lg">Edit cleaning task</DialogTitle>
-          <DialogDescription>
-            Update the schedule or assigned stores for this task.
-          </DialogDescription>
+          <DialogTitle className="text-lg">{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
@@ -253,11 +251,11 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={submitting || loading || !task}>
               {submitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-              Save changes
+              {t("submit")}
             </Button>
           </DialogFooter>
         </form>

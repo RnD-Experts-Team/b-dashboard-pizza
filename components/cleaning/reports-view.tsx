@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Download, ImageDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -80,7 +81,7 @@ function buildRows(grid: EvaluationGrid): ReportRow[] {
 
 /** Green only when passing (≥80%) — nothing is coloured red; low scores stay neutral. */
 function scoreTone(pct: number) {
-  return pct >= 80 ? "#22c55e" : "#a1a1aa";
+  return pct >= 80 ? "bg-emerald-500 dark:bg-emerald-400" : "bg-zinc-400 dark:bg-zinc-500";
 }
 
 function ScoreBar({ pct, unevaluated }: { pct: number; unevaluated?: boolean }) {
@@ -91,12 +92,9 @@ function ScoreBar({ pct, unevaluated }: { pct: number; unevaluated?: boolean }) 
   return (
     <div className="flex items-center gap-2">
       <div className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${p}%`, background: scoreTone(p) }}
-        />
+        <div className={cn("h-full rounded-full", scoreTone(p))} style={{ width: `${p}%` }} />
       </div>
-      <span className="w-9 shrink-0 text-right text-xs font-bold tabular-nums">{p}%</span>
+      <span className="w-9 shrink-0 text-end text-xs font-bold tabular-nums">{p}%</span>
     </div>
   );
 }
@@ -130,6 +128,7 @@ function ReportTable({
   items: InspectionItem[];
   rows: ReportRow[];
 }) {
+  const t = useTranslations("cleaningChart.reports");
   const evaluatedRows = rows.filter((r) => !r.unevaluated);
   const avg = evaluatedRows.length
     ? Math.round(evaluatedRows.reduce((a, r) => a + r.scorePct, 0) / evaluatedRows.length)
@@ -142,29 +141,27 @@ function ReportTable({
           <thead>
             <tr className="bg-muted/70 text-muted-foreground">
               <th rowSpan={2} className={cn("text-center", headerCell, cellBorder)}>
-                #
+                {t("table.rank")}
               </th>
-              <th rowSpan={2} className={cn("text-left", headerCell, cellBorder)}>
-                Store
+              <th rowSpan={2} className={cn("text-start", headerCell, cellBorder)}>
+                {t("table.store")}
               </th>
               {items.length > 0 && (
                 <th colSpan={items.length} className={cn("text-center", headerCell, cellBorder)}>
-                  Inspection Items
+                  {t("table.inspectionItems")}
                 </th>
               )}
               <th
                 rowSpan={2}
                 className={cn("text-center leading-tight", headerCell, cellBorder)}
               >
-                Item
-                <br />
-                Score
+                {t("table.itemScore")}
               </th>
               <th rowSpan={2} className={cn("text-center", headerCell, cellBorder)}>
-                Chart
+                {t("table.chart")}
               </th>
-              <th rowSpan={2} className={cn("text-left", headerCell)}>
-                Score
+              <th rowSpan={2} className={cn("text-start", headerCell)}>
+                {t("table.score")}
               </th>
             </tr>
             {items.length > 0 && (
@@ -192,7 +189,7 @@ function ReportTable({
                   colSpan={4 + items.length}
                   className="px-3 py-8 text-center text-muted-foreground"
                 >
-                  No stores to report for this period.
+                  {t("table.empty")}
                 </td>
               </tr>
             ) : (
@@ -228,7 +225,7 @@ function ReportTable({
                     ) : (
                       <AccentBadge
                         accent={r.chartCommitment ? VALUE_ACCENT.pass : VALUE_ACCENT.fail}
-                        label={r.chartCommitment ? "Pass" : "Fail"}
+                        label={r.chartCommitment ? t("table.pass") : t("table.fail")}
                       />
                     )}
                   </td>
@@ -241,7 +238,7 @@ function ReportTable({
             {rows.length > 0 && (
               <tr className="border-t-2 bg-muted/50 font-semibold">
                 <td className={cellBorder} />
-                <td className={cn("px-3 py-2", cellBorder)}>Average</td>
+                <td className={cn("px-3 py-2", cellBorder)}>{t("table.average")}</td>
                 {items.length > 0 && <td colSpan={items.length} className={cellBorder} />}
                 <td className={cellBorder} />
                 <td className={cellBorder} />
@@ -266,6 +263,7 @@ export function ReportsView({
   periodType: PeriodType;
   periodKey: string;
 }) {
+  const t = useTranslations("cleaningChart.reports");
   const items = grid.items;
   const rows = useMemo(() => buildRows(grid), [grid]);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -288,11 +286,11 @@ export function ReportsView({
       link.download = `cleaning-report-${periodKey}.png`;
       link.href = dataUrl;
       link.click();
-      toast.success("Report image downloaded.");
+      toast.success(t("toasts.imageDownloaded"));
       setReviewOpen(false);
     } catch (err) {
       console.error("PNG export failed:", err);
-      toast.error("Could not export the image.");
+      toast.error(t("toasts.imageFailed"));
     } finally {
       setExporting(false);
     }
@@ -309,7 +307,7 @@ export function ReportsView({
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : "CSV download failed.");
+      toast.error(err instanceof CleaningError ? err.message : t("toasts.csvFailed"));
     } finally {
       setDownloadingCsv(false);
     }
@@ -321,9 +319,9 @@ export function ReportsView({
         {/* Actions row — flat toolbar, matches the app pattern */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-heading text-lg font-semibold">Cleaning Report</h2>
+            <h2 className="font-heading text-lg font-semibold">{t("title")}</h2>
             <p className="text-sm text-muted-foreground">
-              Period {periodKey} · ranked by score
+              {t("periodLabel", { period: periodKey })}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -333,11 +331,11 @@ export function ReportsView({
               ) : (
                 <Download className="me-2 h-4 w-4" />
               )}
-              CSV
+              {t("csv")}
             </Button>
             <Button onClick={() => setReviewOpen(true)}>
               <ImageDown className="me-2 h-4 w-4" />
-              Export PNG
+              {t("exportPng")}
             </Button>
           </div>
         </div>
@@ -349,19 +347,16 @@ export function ReportsView({
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
         <DialogContent className="max-h-[92vh] max-w-[95vw] gap-0 overflow-hidden p-0 sm:max-w-4xl">
           <DialogHeader className="border-b px-6 py-4">
-            <DialogTitle>Review report before export</DialogTitle>
-            <DialogDescription>
-              One table, ranked by score. This is exactly how the PNG will look —
-              review, then download.
-            </DialogDescription>
+            <DialogTitle>{t("reviewDialog.title")}</DialogTitle>
+            <DialogDescription>{t("reviewDialog.description")}</DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[72vh] overflow-auto bg-muted/20 p-4">
             <div ref={boardRef} className="w-max min-w-full bg-card p-5">
               <div className="mb-4">
-                <h3 className="font-heading text-lg font-semibold">Cleaning Report</h3>
+                <h3 className="font-heading text-lg font-semibold">{t("title")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Period {periodKey} · ranked by score
+                  {t("periodLabel", { period: periodKey })}
                 </p>
               </div>
               <ReportTable items={items} rows={rows} />
@@ -375,7 +370,7 @@ export function ReportsView({
               onClick={() => setReviewOpen(false)}
               disabled={exporting}
             >
-              Cancel
+              {t("reviewDialog.cancel")}
             </Button>
             <Button className="w-full sm:w-auto" onClick={downloadPng} disabled={exporting}>
               {exporting ? (
@@ -383,7 +378,7 @@ export function ReportsView({
               ) : (
                 <ImageDown className="me-2 h-4 w-4" />
               )}
-              Download PNG
+              {t("downloadPng")}
             </Button>
           </DialogFooter>
         </DialogContent>

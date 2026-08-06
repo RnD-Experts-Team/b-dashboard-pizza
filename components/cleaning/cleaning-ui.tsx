@@ -4,6 +4,7 @@
    same-origin /cleaning-storage proxy; next/image remote config is unnecessary. */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { ZoomIn } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -65,12 +66,6 @@ const DUE_STATUS_ACCENT: Record<DueStatus, CleaningAccent> = {
   done: { bar: "bg-green-500", text: "text-green-700 dark:text-green-400" },
   overdue: { bar: "bg-red-500", text: "text-red-700 dark:text-red-400" },
 };
-const STATUS_LABEL: Record<DueStatus, string> = {
-  pending: "Pending",
-  done: "Done",
-  overdue: "Overdue",
-};
-
 /** Small accent-bar + text badge, matching the Maintenance Tickets status pill. */
 export function AccentBadge({
   accent,
@@ -97,7 +92,8 @@ export function AccentBadge({
 }
 
 export function StatusPill({ status }: { status: DueStatus }) {
-  return <AccentBadge accent={DUE_STATUS_ACCENT[status]} label={STATUS_LABEL[status]} />;
+  const t = useTranslations("cleaningChart.status");
+  return <AccentBadge accent={DUE_STATUS_ACCENT[status]} label={t(status)} />;
 }
 
 /* ── Evaluation / report value accents (Pass · Fail · Auto · Empty) ── */
@@ -107,13 +103,6 @@ export const VALUE_ACCENT: Record<ItemValue, CleaningAccent> = {
   auto_fail: { bar: "bg-foreground/70", text: "text-foreground" },
   empty: { bar: "bg-muted-foreground/40", text: "text-muted-foreground" },
 };
-export const ITEM_VALUE_LABEL: Record<ItemValue, string> = {
-  pass: "Pass",
-  fail: "Fail",
-  auto_fail: "Auto",
-  empty: "—",
-};
-
 /** Chart verdicts reuse the same three accents (no "empty" state). */
 export const VERDICT_ACCENT: Record<ChartVerdict, CleaningAccent> = {
   pass: VALUE_ACCENT.pass,
@@ -140,6 +129,7 @@ export function ValueBadge({
   disabled?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("cleaningChart.itemValue");
   if (value === "empty") {
     if (!onClick) {
       return (
@@ -173,7 +163,7 @@ export function ValueBadge({
     <>
       <span className={cn("h-3 w-1 shrink-0 rounded-full", accent.bar)} />
       <span className={cn("text-[11px] font-semibold uppercase tracking-wide", accent.text)}>
-        {ITEM_VALUE_LABEL[value]}
+        {t(value)}
       </span>
     </>
   );

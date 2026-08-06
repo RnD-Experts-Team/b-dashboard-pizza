@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function CreateTaskDialog({ open, onOpenChange, onCreate }: Props) {
+  const t = useTranslations("cleaningChart.createTaskDialog");
   const { options: storeOptions, isLoading: storesLoading } = useTaskStoreOptions();
   const [frequency, setFrequency] = useState<CleaningFrequency>("weekly");
   const [weekDays, setWeekDays] = useState<number[]>([]);
@@ -62,11 +64,11 @@ export function CreateTaskDialog({ open, onOpenChange, onCreate }: Props) {
   };
 
   const onSubmit = async (values: TaskFormValues) => {
-    if (!startsAt) return toast.error("Start date is required.");
-    if (storeIds.length === 0) return toast.error("Select at least one store.");
+    if (!startsAt) return toast.error(t("toasts.startRequired"));
+    if (storeIds.length === 0) return toast.error(t("toasts.storeRequired"));
     const intervalHours = num(values.intervalHours);
     if (frequency === "hourly" && !intervalHours) {
-      return toast.error("Hourly tasks need an interval (1–24 hours).");
+      return toast.error(t("toasts.hourlyIntervalRequired"));
     }
 
     const payload: CreateTaskPayload = {
@@ -86,11 +88,11 @@ export function CreateTaskDialog({ open, onOpenChange, onCreate }: Props) {
     setSubmitting(true);
     try {
       await onCreate(payload);
-      toast.success(`Task "${values.name}" created.`);
+      toast.success(t("toasts.created", { name: values.name }));
       resetAll();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : "Could not create task.");
+      toast.error(err instanceof CleaningError ? err.message : t("toasts.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -106,10 +108,8 @@ export function CreateTaskDialog({ open, onOpenChange, onCreate }: Props) {
     >
       <DialogContent className="max-h-[92vh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b px-6 py-4">
-          <DialogTitle className="text-lg">Create cleaning task</DialogTitle>
-          <DialogDescription>
-            Set up a recurring cleaning job and assign it to one or more stores.
-          </DialogDescription>
+          <DialogTitle className="text-lg">{t("title")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
@@ -139,11 +139,11 @@ export function CreateTaskDialog({ open, onOpenChange, onCreate }: Props) {
               onClick={() => onOpenChange(false)}
               disabled={submitting}
             >
-              Cancel
+              {t("cancel")}
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-              Create task
+              {t("submit")}
             </Button>
           </DialogFooter>
         </form>

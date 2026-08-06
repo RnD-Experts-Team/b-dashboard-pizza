@@ -1,6 +1,7 @@
 "use client";
 
 import type { UseFormRegister, FieldErrors } from "react-hook-form";
+import { useTranslations } from "next-intl";
 import { z } from "zod";
 import { Store } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -18,27 +19,8 @@ import type { CleaningFrequency } from "@/types/cleaning.types";
  */
 export const STORE_PARAMS = { perPage: 500 } as const;
 
-export const FREQUENCIES: { value: CleaningFrequency; label: string; hint: string }[] = [
-  { value: "daily", label: "Daily", hint: "Photo required" },
-  { value: "weekly", label: "Weekly", hint: "Photo required" },
-  { value: "monthly", label: "Monthly", hint: "Photo required" },
-  { value: "hourly", label: "Hourly", hint: "Photo optional" },
-];
-export const INTERVAL_UNIT: Record<CleaningFrequency, string> = {
-  daily: "day(s)",
-  weekly: "week(s)",
-  monthly: "month(s)",
-  hourly: "cycle(s)",
-};
-export const WEEKDAYS = [
-  { n: 1, label: "Mon" },
-  { n: 2, label: "Tue" },
-  { n: 3, label: "Wed" },
-  { n: 4, label: "Thu" },
-  { n: 5, label: "Fri" },
-  { n: 6, label: "Sat" },
-  { n: 7, label: "Sun" },
-];
+export const FREQUENCIES: CleaningFrequency[] = ["daily", "weekly", "monthly", "hourly"];
+export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 
 export const taskFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -105,43 +87,46 @@ export function TaskFormFields({
   storeIds,
   setStoreIds,
 }: TaskFormFieldsProps) {
+  const t = useTranslations("cleaningChart.taskForm");
+  const tFreq = useTranslations("cleaningChart.frequency");
+  const tWeekday = useTranslations("cleaningChart.weekday");
   return (
     <div className="space-y-6">
       {/* ── Basics ── */}
       <section className="space-y-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Task details
+        <h3 className="font-heading text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("sections.details")}
         </h3>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="ct-name">
-              Task name <span className="text-destructive">*</span>
+              {t("name")} <span className="text-destructive">*</span>
             </Label>
-            <Input id="ct-name" {...register("name")} placeholder="e.g. Clean the oven" />
+            <Input id="ct-name" {...register("name")} placeholder={t("namePlaceholder")} />
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label htmlFor="ct-desc">Description</Label>
+            <Label htmlFor="ct-desc">{t("description")}</Label>
             <Textarea
               id="ct-desc"
               {...register("description")}
               rows={2}
-              placeholder="What exactly needs to be done?"
+              placeholder={t("descriptionPlaceholder")}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="ct-weight">Weight (0–100)</Label>
+            <Label htmlFor="ct-weight">{t("weight")}</Label>
             <Input
               id="ct-weight"
               type="number"
               min={0}
               max={100}
-              placeholder="Optional"
+              placeholder={t("weightPlaceholder")}
               {...register("weight")}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="ct-due-time">Due time</Label>
+            <Label htmlFor="ct-due-time">{t("dueTime")}</Label>
             <Input id="ct-due-time" type="time" {...register("dueTime")} />
           </div>
         </div>
@@ -149,27 +134,29 @@ export function TaskFormFields({
 
       {/* ── Schedule ── */}
       <section className="space-y-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Schedule
+        <h3 className="font-heading text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("sections.schedule")}
         </h3>
 
         <div className="space-y-1.5">
-          <Label>Frequency</Label>
+          <Label>{t("frequency")}</Label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {FREQUENCIES.map((f) => (
               <button
-                key={f.value}
+                key={f}
                 type="button"
-                onClick={() => setFrequency(f.value)}
+                onClick={() => setFrequency(f)}
                 className={cn(
                   "flex flex-col items-start rounded-lg border px-3 py-2 text-start transition-colors",
-                  frequency === f.value
+                  frequency === f
                     ? "border-primary bg-primary/5 ring-1 ring-primary/30"
                     : "hover:bg-muted"
                 )}
               >
-                <span className="text-sm font-medium">{f.label}</span>
-                <span className="text-[11px] text-muted-foreground">{f.hint}</span>
+                <span className="text-sm font-medium">{tFreq(f)}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {t(`frequencyHint.${f}`)}
+                </span>
               </button>
             ))}
           </div>
@@ -177,7 +164,7 @@ export function TaskFormFields({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="ct-interval">Repeat every</Label>
+            <Label htmlFor="ct-interval">{t("repeatEvery")}</Label>
             <div className="flex items-center gap-2">
               <Input
                 id="ct-interval"
@@ -186,14 +173,16 @@ export function TaskFormFields({
                 className="w-20"
                 {...register("interval")}
               />
-              <span className="text-sm text-muted-foreground">{INTERVAL_UNIT[frequency]}</span>
+              <span className="text-sm text-muted-foreground">
+                {t(`intervalUnit.${frequency}`)}
+              </span>
             </div>
           </div>
 
           {frequency === "hourly" && (
             <div className="space-y-1.5">
               <Label htmlFor="ct-hours">
-                Every X hours (1–24) <span className="text-destructive">*</span>
+                {t("everyXHours")} <span className="text-destructive">*</span>
               </Label>
               <Input id="ct-hours" type="number" min={1} max={24} {...register("intervalHours")} />
             </div>
@@ -202,21 +191,21 @@ export function TaskFormFields({
 
         {frequency === "weekly" && (
           <div className="space-y-1.5">
-            <Label>Weekdays (optional)</Label>
+            <Label>{t("weekdaysLabel")}</Label>
             <div className="flex flex-wrap gap-1.5">
               {WEEKDAYS.map((d) => (
                 <button
-                  key={d.n}
+                  key={d}
                   type="button"
-                  onClick={() => toggleWeekday(d.n)}
+                  onClick={() => toggleWeekday(d)}
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
-                    weekDays.includes(d.n)
+                    weekDays.includes(d)
                       ? "border-primary bg-primary text-primary-foreground"
                       : "hover:bg-muted"
                   )}
                 >
-                  {d.label}
+                  {tWeekday(String(d))}
                 </button>
               ))}
             </div>
@@ -226,15 +215,15 @@ export function TaskFormFields({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>
-              Starts on <span className="text-destructive">*</span>
+              {t("startsOn")} <span className="text-destructive">*</span>
             </Label>
             <DatePicker value={startsAt} onChange={setStartsAt} />
           </div>
           <div className="space-y-1.5">
             <Label>
-              Ends on{" "}
+              {t("endsOn")}{" "}
               <span className="text-xs font-normal text-muted-foreground">
-                (blank = repeats forever)
+                {t("endsOnHint")}
               </span>
             </Label>
             <DatePicker value={endsAt} onChange={setEndsAt} />
@@ -244,26 +233,28 @@ export function TaskFormFields({
 
       {/* ── Stores ── */}
       <section className="space-y-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Assign to stores
+        <h3 className="font-heading text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("sections.stores")}
         </h3>
         <div className="space-y-1.5">
           <Label>
-            Stores <span className="text-destructive">*</span>
+            {t("storesLabel")} <span className="text-destructive">*</span>
           </Label>
           <MultiSelect<number>
             options={storeOptions}
             selected={storeIds}
             onChange={setStoreIds}
             icon={<Store className="h-4 w-4 text-muted-foreground" />}
-            placeholder={storesLoading ? "Loading stores…" : "Select stores"}
-            searchPlaceholder="Search stores…"
-            emptyText={storesLoading ? "Loading…" : "No stores found."}
+            placeholder={storesLoading ? t("storesLoading") : t("storesPlaceholder")}
+            searchPlaceholder={t("storesSearchPlaceholder")}
+            emptyText={storesLoading ? t("storesLoadingShort") : t("storesEmpty")}
             disabled={storesLoading}
           />
           {storeIds.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              {storeIds.length} store{storeIds.length > 1 ? "s" : ""} selected
+              {storeIds.length === 1
+                ? t("storesSelectedCount", { count: storeIds.length })
+                : t("storesSelectedCountPlural", { count: storeIds.length })}
             </p>
           )}
         </div>

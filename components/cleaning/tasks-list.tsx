@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, ClipboardList, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +30,6 @@ import { formatDate } from "./cleaning-ui";
 import { TaskDetailSheet } from "./task-detail-sheet";
 import { EditTaskDialog } from "./edit-task-dialog";
 
-const FREQ_LABEL: Record<string, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  hourly: "Hourly",
-};
-
 interface Props {
   tasks: CleaningTask[];
   onUpdateTask: (taskId: number, payload: UpdateTaskPayload) => Promise<unknown>;
@@ -43,6 +37,7 @@ interface Props {
 }
 
 export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
+  const t = useTranslations("cleaningChart");
   const [activeId, setActiveId] = useState<number | null>(null);
   const [editTaskId, setEditTaskId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CleaningTask | null>(null);
@@ -53,11 +48,11 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
     setDeleting(true);
     try {
       await onDeleteTask(deleteTarget.id);
-      toast.success(`"${deleteTarget.name}" deleted.`);
+      toast.success(t("tasks.toasts.deleted", { name: deleteTarget.name }));
       setDeleteTarget(null);
       if (activeId === deleteTarget.id) setActiveId(null);
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : "Could not delete task.");
+      toast.error(err instanceof CleaningError ? err.message : t("tasks.toasts.deleteFailed"));
     } finally {
       setDeleting(false);
     }
@@ -65,8 +60,14 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-lg border p-10 text-center text-sm text-muted-foreground">
-        No cleaning tasks yet. Create one to get started.
+      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
+        <ClipboardList className="h-8 w-8 text-muted-foreground" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{t("tasks.empty.title")}</p>
+          <p className="max-w-sm text-xs text-muted-foreground">
+            {t("tasks.empty.description")}
+          </p>
+        </div>
       </div>
     );
   }
@@ -77,56 +78,64 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Task</TableHead>
-              <TableHead className="hidden sm:table-cell">Frequency</TableHead>
-              <TableHead className="hidden lg:table-cell">Weight</TableHead>
-              <TableHead className="hidden md:table-cell">Photo</TableHead>
-              <TableHead className="hidden md:table-cell">Starts</TableHead>
-              <TableHead className="hidden lg:table-cell">Stores</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>{t("tasks.table.task")}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t("tasks.table.frequency")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t("tasks.table.weight")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("tasks.table.photo")}</TableHead>
+              <TableHead className="hidden md:table-cell">{t("tasks.table.starts")}</TableHead>
+              <TableHead className="hidden lg:table-cell">{t("tasks.table.stores")}</TableHead>
+              <TableHead className="text-end">{t("tasks.table.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tasks.map((t) => (
-              <TableRow key={t.id} className="cursor-pointer" onClick={() => setActiveId(t.id)}>
+            {tasks.map((task) => (
+              <TableRow
+                key={task.id}
+                className="cursor-pointer"
+                onClick={() => setActiveId(task.id)}
+              >
                 <TableCell className="font-medium">
-                  {t.name}
-                  {t.description && (
+                  {task.name}
+                  {task.description && (
                     <p className="max-w-xs truncate text-xs text-muted-foreground">
-                      {t.description}
+                      {task.description}
                     </p>
                   )}
                   <p className="mt-1 text-xs text-muted-foreground sm:hidden">
-                    {(FREQ_LABEL[t.frequency] ?? t.frequency)} · {t.stores.length} store
-                    {t.stores.length === 1 ? "" : "s"}
+                    {t(`frequency.${task.frequency}`)} ·{" "}
+                    {task.stores.length === 1
+                      ? t("tasks.storeCount", { count: task.stores.length })
+                      : t("tasks.storeCountPlural", { count: task.stores.length })}
                   </p>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
-                  {FREQ_LABEL[t.frequency] ?? t.frequency}
-                  {t.frequency === "hourly" && t.intervalHours
-                    ? ` · every ${t.intervalHours}h`
+                  {t(`frequency.${task.frequency}`)}
+                  {task.frequency === "hourly" && task.intervalHours
+                    ? ` ${t("tasks.everyHoursSuffix", { hours: task.intervalHours })}`
                     : ""}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">{t.weight ?? "—"}</TableCell>
+                <TableCell className="hidden lg:table-cell">{task.weight ?? "—"}</TableCell>
                 <TableCell className="hidden md:table-cell">
-                  <Badge variant={t.photoRequired ? "secondary" : "outline"}>
-                    {t.photoRequired ? "Required" : "Optional"}
+                  <Badge variant={task.photoRequired ? "secondary" : "outline"}>
+                    {task.photoRequired
+                      ? t("tasks.photoRequiredShort")
+                      : t("tasks.photoOptionalShort")}
                   </Badge>
                 </TableCell>
                 <TableCell className="hidden whitespace-nowrap md:table-cell">
-                  {formatDate(t.startsAt)}
+                  {formatDate(task.startsAt)}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">{t.stores.length}</TableCell>
+                <TableCell className="hidden lg:table-cell">{task.stores.length}</TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      title="Edit task"
+                      title={t("tasks.editTitle")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setEditTaskId(t.id);
+                        setEditTaskId(task.id);
                       }}
                     >
                       <Pencil className="h-4 w-4" />
@@ -135,10 +144,10 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      title="Delete task"
+                      title={t("tasks.deleteTitle")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDeleteTarget(t);
+                        setDeleteTarget(task);
                       }}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -167,8 +176,8 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
         onDelete={
           activeId != null
             ? () => {
-                const t = tasks.find((x) => x.id === activeId);
-                if (t) setDeleteTarget(t);
+                const task = tasks.find((x) => x.id === activeId);
+                if (task) setDeleteTarget(task);
               }
             : undefined
         }
@@ -188,14 +197,13 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete task?</AlertDialogTitle>
+            <AlertDialogTitle>{t("tasks.deleteDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes “{deleteTarget?.name}” from Due lists for every assigned
-              store. Its history and completions are kept. This cannot be undone.
+              {t("tasks.deleteDialog.description", { name: deleteTarget?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
               disabled={deleting}
@@ -205,7 +213,7 @@ export function TasksList({ tasks, onUpdateTask, onDeleteTask }: Props) {
               }}
             >
               {deleting && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-              Delete
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

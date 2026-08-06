@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-08-04 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-08-06 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -94,7 +94,8 @@ These areas are designed for customization:
 | `components/dashboard-v1/**` | Dashboard V1 re-skin components — reuses DSPR's hooks/services, no new data layer |
 | `components/dspr/**` | DSPR dashboard components (data source for the classic dashboard and Dashboard V1) |
 | `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay) |
-| `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
+| `components/cleaning/**` | Cleaning Chart feature (task scheduling/completion, evaluation grid, reports) — tab visibility gated by `lib/auth/cleaning-access.ts`, not a feature flag |
+| `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`, `cleaning.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
 | `lib/notifications/**` | Notification → page-segment routing helper, shared by notification click-routing and the sidebar unread-dot indicator |
 | `types/**` | Your custom TypeScript types |
 

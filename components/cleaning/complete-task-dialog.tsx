@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { ImagePlus, Loader2, Users, X } from "lucide-react";
 import {
@@ -46,6 +47,7 @@ export function CompleteTaskDialog({
   item,
   onComplete,
 }: Props) {
+  const t = useTranslations("cleaningChart.completeDialog");
   const [employees, setEmployees] = useState<MultiSelectOption<number>[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
@@ -81,7 +83,7 @@ export function CompleteTaskDialog({
             label:
               [emp.first_name, emp.middle_name, emp.last_name]
                 .filter(Boolean)
-                .join(" ") || `Employee ${emp.id}`,
+                .join(" ") || t("employeeFallback", { id: emp.id }),
             hint: emp.employment_type ?? undefined,
           }))
         );
@@ -123,7 +125,7 @@ export function CompleteTaskDialog({
       if (file) {
         e.preventDefault();
         applyPhoto(file);
-        toast.success("Image pasted.");
+        toast.success(t("toasts.pasted"));
       }
     },
     [applyPhoto]
@@ -146,13 +148,11 @@ export function CompleteTaskDialog({
         note: note.trim() || undefined,
         photo,
       });
-      toast.success(`"${item.label}" marked as done.`);
+      toast.success(t("toasts.done", { label: item.label }));
       reset();
       onOpenChange(false);
     } catch (err) {
-      toast.error(
-        err instanceof CleaningError ? err.message : "Could not complete the task."
-      );
+      toast.error(err instanceof CleaningError ? err.message : t("toasts.failed"));
     } finally {
       setSubmitting(false);
     }
@@ -168,9 +168,9 @@ export function CompleteTaskDialog({
     >
       <DialogContent className="sm:max-w-md" onPaste={handlePaste}>
         <DialogHeader>
-          <DialogTitle>Complete: {item.label}</DialogTitle>
+          <DialogTitle>{t("title", { label: item.label })}</DialogTitle>
           <DialogDescription>
-            Record who did this task{photoRequired ? " and attach a photo" : ""}.
+            {photoRequired ? t("descriptionWithPhoto") : t("description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -178,28 +178,28 @@ export function CompleteTaskDialog({
           {/* Employees */}
           <div className="space-y-2">
             <Label>
-              Who did it? <span className="text-destructive">*</span>
+              {t("who")} <span className="text-destructive">*</span>
             </Label>
             <MultiSelect<number>
               options={employees}
               selected={selected}
               onChange={setSelected}
               icon={<Users className="h-4 w-4 text-muted-foreground" />}
-              placeholder={empLoading ? "Loading employees…" : "Select employees"}
-              searchPlaceholder="Search employees…"
-              emptyText={empLoading ? "Loading…" : "No employees found for this store."}
+              placeholder={empLoading ? t("loadingEmployees") : t("selectEmployees")}
+              searchPlaceholder={t("searchEmployees")}
+              emptyText={empLoading ? t("loadingShort") : t("noEmployees")}
               disabled={empLoading}
             />
           </div>
 
           {/* Note */}
           <div className="space-y-2">
-            <Label htmlFor="cleaning-note">Note (optional)</Label>
+            <Label htmlFor="cleaning-note">{t("note")}</Label>
             <Textarea
               id="cleaning-note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. done during opening"
+              placeholder={t("notePlaceholder")}
               rows={2}
             />
           </div>
@@ -207,9 +207,9 @@ export function CompleteTaskDialog({
           {/* Photo */}
           <div className="space-y-2">
             <Label>
-              Photo {photoRequired && <span className="text-destructive">*</span>}
+              {t("photo")} {photoRequired && <span className="text-destructive">*</span>}
               <span className="ms-1 text-xs font-normal text-muted-foreground">
-                (paste with Ctrl+V too)
+                {t("photoHint")}
               </span>
             </Label>
             <input
@@ -238,7 +238,7 @@ export function CompleteTaskDialog({
                     className="h-7"
                     onClick={() => fileRef.current?.click()}
                   >
-                    Replace
+                    {t("replace")}
                   </Button>
                   <Button
                     type="button"
@@ -262,7 +262,7 @@ export function CompleteTaskDialog({
                 onClick={() => fileRef.current?.click()}
               >
                 <ImagePlus className="me-2 h-4 w-4" />
-                Choose photo
+                {t("choosePhoto")}
               </Button>
             )}
           </div>
@@ -274,11 +274,11 @@ export function CompleteTaskDialog({
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit}>
             {submitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-            Complete
+            {t("submit")}
           </Button>
         </DialogFooter>
       </DialogContent>

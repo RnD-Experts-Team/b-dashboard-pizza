@@ -1892,5 +1892,316 @@
     "unmute": "Unmute",
     "noStreams": "No active streams",
     "participant": "Participant"
+  },
+  "cleaningChart": {
+    "page": {
+      "title": "Cleaning Chart",
+      "description": "Track recurring cleaning tasks, grade store evaluations, and export reports.",
+      "noAccessTitle": "No access",
+      "noAccessDescription": "You don't have permission to access the Cleaning Chart.",
+      "noStoreTitle": "No store selected",
+      "noStoreDescription": "Select a store to see what's due.",
+      "noEvaluationTitle": "No evaluation data",
+      "noEvaluationDescription": "Nothing to grade for this period yet."
+    },
+    "tabs": {
+      "due": "Due Today",
+      "tasks": "Tasks",
+      "evaluation": "Evaluation",
+      "reports": "Reports"
+    },
+    "common": {
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "refresh": "Refresh",
+      "loading": "Loading…"
+    },
+    "frequency": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "hourly": "Hourly"
+    },
+    "weekday": {
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat",
+      "7": "Sun"
+    },
+    "status": {
+      "pending": "Pending",
+      "done": "Done",
+      "overdue": "Overdue"
+    },
+    "itemValue": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "auto_fail": "Auto",
+      "empty": "Empty"
+    },
+    "storePicker": {
+      "loading": "Loading stores…",
+      "selectStore": "Select store…",
+      "searchPlaceholder": "Search by name or number…",
+      "empty": "No stores found."
+    },
+    "due": {
+      "refreshLabel": "Refresh",
+      "statusAll": "All",
+      "statusPending": "Pending",
+      "statusDone": "Done",
+      "statusOverdue": "Overdue",
+      "table": {
+        "task": "Task",
+        "status": "Status",
+        "frequency": "Frequency",
+        "period": "Period",
+        "weight": "Weight",
+        "doneBy": "Done by",
+        "actions": "Actions",
+        "empty": "Nothing due for this store on {date}.",
+        "meta": "{freq} · {from} → {to}",
+        "noDoneBy": "—"
+      },
+      "viewHistory": "View history",
+      "undo": "Undo",
+      "complete": "Complete",
+      "undoDialog": {
+        "title": "Undo completion?",
+        "description": "This reverts “{label}” back to pending for {date}. Any recorded photo, note, and employees will be removed."
+      },
+      "toasts": {
+        "reverted": "“{label}” reverted to pending.",
+        "undoFailed": "Could not undo."
+      }
+    },
+    "tasks": {
+      "createTask": "Create Task",
+      "table": {
+        "task": "Task",
+        "frequency": "Frequency",
+        "weight": "Weight",
+        "photo": "Photo",
+        "starts": "Starts",
+        "stores": "Stores",
+        "actions": "Actions"
+      },
+      "storeCount": "{count} store",
+      "storeCountPlural": "{count} stores",
+      "everyHoursSuffix": "· every {hours}h",
+      "photoRequiredShort": "Required",
+      "photoOptionalShort": "Optional",
+      "editTitle": "Edit task",
+      "deleteTitle": "Delete task",
+      "empty": {
+        "title": "No cleaning tasks yet",
+        "description": "Create one to get started."
+      },
+      "deleteDialog": {
+        "title": "Delete task?",
+        "description": "This removes “{name}” from Due lists for every assigned store. Its history and completions are kept. This cannot be undone."
+      },
+      "toasts": {
+        "deleted": "“{name}” deleted.",
+        "deleteFailed": "Could not delete task."
+      }
+    },
+    "taskForm": {
+      "sections": {
+        "details": "Task details",
+        "schedule": "Schedule",
+        "stores": "Assign to stores"
+      },
+      "name": "Task name",
+      "namePlaceholder": "e.g. Clean the oven",
+      "description": "Description",
+      "descriptionPlaceholder": "What exactly needs to be done?",
+      "weight": "Weight (0–100)",
+      "weightPlaceholder": "Optional",
+      "dueTime": "Due time",
+      "frequency": "Frequency",
+      "frequencyHint": {
+        "daily": "Photo required",
+        "weekly": "Photo required",
+        "monthly": "Photo required",
+        "hourly": "Photo optional"
+      },
+      "repeatEvery": "Repeat every",
+      "intervalUnit": {
+        "daily": "day(s)",
+        "weekly": "week(s)",
+        "monthly": "month(s)",
+        "hourly": "cycle(s)"
+      },
+      "everyXHours": "Every X hours (1–24)",
+      "weekdaysLabel": "Weekdays (optional)",
+      "startsOn": "Starts on",
+      "endsOn": "Ends on",
+      "endsOnHint": "(blank = repeats forever)",
+      "storesLabel": "Stores",
+      "storesPlaceholder": "Select stores",
+      "storesSearchPlaceholder": "Search stores…",
+      "storesEmpty": "No stores found.",
+      "storesLoading": "Loading stores…",
+      "storesLoadingShort": "Loading…",
+      "storesSelectedCount": "{count} store selected",
+      "storesSelectedCountPlural": "{count} stores selected"
+    },
+    "createTaskDialog": {
+      "title": "Create cleaning task",
+      "description": "Set up a recurring cleaning job and assign it to one or more stores.",
+      "cancel": "Cancel",
+      "submit": "Create task",
+      "toasts": {
+        "startRequired": "Start date is required.",
+        "storeRequired": "Select at least one store.",
+        "hourlyIntervalRequired": "Hourly tasks need an interval (1–24 hours).",
+        "created": "Task “{name}” created.",
+        "failed": "Could not create task."
+      }
+    },
+    "editTaskDialog": {
+      "title": "Edit cleaning task",
+      "description": "Update the schedule or assigned stores for this task.",
+      "cancel": "Cancel",
+      "submit": "Save changes",
+      "loadFailed": "Failed to load task.",
+      "toasts": {
+        "startRequired": "Start date is required.",
+        "storeRequired": "Select at least one store.",
+        "hourlyIntervalRequired": "Hourly tasks need an interval (1–24 hours).",
+        "nothingChanged": "Nothing changed.",
+        "updated": "Task “{name}” updated.",
+        "failed": "Could not update task."
+      }
+    },
+    "taskDetail": {
+      "fallbackTitle": "Task details",
+      "photoRequired": "Photo required",
+      "photoOptional": "Photo optional",
+      "edit": "Edit",
+      "deleteTitle": "Delete task",
+      "loading": "Loading…",
+      "loadFailed": "Failed to load task.",
+      "frequency": "Frequency",
+      "every": "· every {interval}",
+      "interval": "Interval",
+      "everyHours": "Every {hours}h",
+      "weight": "Weight",
+      "startsOn": "Starts on",
+      "endsOn": "Ends on",
+      "repeatsForever": "Repeats forever",
+      "dueTime": "Due time",
+      "weekdays": "Weekdays",
+      "assignedStores": "Assigned stores ({count})",
+      "noStoresAssigned": "No stores assigned."
+    },
+    "completeDialog": {
+      "title": "Complete: {label}",
+      "employeeFallback": "Employee {id}",
+      "description": "Record who did this task.",
+      "descriptionWithPhoto": "Record who did this task and attach a photo.",
+      "who": "Who did it?",
+      "loadingEmployees": "Loading employees…",
+      "selectEmployees": "Select employees",
+      "searchEmployees": "Search employees…",
+      "loadingShort": "Loading…",
+      "noEmployees": "No employees found for this store.",
+      "note": "Note (optional)",
+      "notePlaceholder": "e.g. done during opening",
+      "photo": "Photo",
+      "photoHint": "(paste with Ctrl+V too)",
+      "choosePhoto": "Choose photo",
+      "replace": "Replace",
+      "cancel": "Cancel",
+      "submit": "Complete",
+      "toasts": {
+        "pasted": "Image pasted.",
+        "done": "“{label}” marked as done.",
+        "failed": "Could not complete the task."
+      }
+    },
+    "historyDrawer": {
+      "description": "Completion history for this task at this store.",
+      "empty": "No history yet for this task.",
+      "completedAt": "Completed {date}",
+      "photoEvidence": "Photo evidence",
+      "notCompleted": "This period was not completed in time.",
+      "loadFailed": "Failed to load history."
+    },
+    "evaluation": {
+      "weekTab": "Week",
+      "dateTab": "Date",
+      "weekPlaceholder": "2026-W30",
+      "datePlaceholder": "2026-07-21",
+      "load": "Load",
+      "addItemPlaceholder": "Add inspection item…",
+      "add": "Add",
+      "legendLabel": "Legend",
+      "legendHint": "Click a cell to cycle · click a chart chip to toggle Pass/Fail",
+      "noStores": {
+        "title": "No stores to evaluate",
+        "description": "Nothing to grade for this period yet."
+      },
+      "columns": {
+        "store": "Store",
+        "inspectionItems": "Inspection Items",
+        "itemScore": "Item Score",
+        "cleaningChart": "Cleaning Chart",
+        "chartScore": "Chart Score",
+        "notify": "Notify"
+      },
+      "removeItemTitle": "Remove item",
+      "cellWeightTitle": "{name} (weight {weight})",
+      "finalize": "Finalize",
+      "noItems": "No inspection items yet — add one above to start grading.",
+      "removeDialog": {
+        "title": "Remove inspection item?",
+        "description": "This removes the “{name}” column and its recorded values for all stores in this period. This cannot be undone.",
+        "confirm": "Remove"
+      },
+      "toasts": {
+        "saveFailed": "Save failed.",
+        "notified": "{store} notified."
+      }
+    },
+    "reports": {
+      "title": "Cleaning Report",
+      "periodLabel": "Period {period} · ranked by score",
+      "csv": "CSV",
+      "exportPng": "Export PNG",
+      "downloadPng": "Download PNG",
+      "reviewDialog": {
+        "title": "Review report before export",
+        "description": "One table, ranked by score. This is exactly how the PNG will look — review, then download.",
+        "cancel": "Cancel"
+      },
+      "table": {
+        "rank": "#",
+        "store": "Store",
+        "inspectionItems": "Inspection Items",
+        "itemScore": "Item Score",
+        "chart": "Chart",
+        "score": "Score",
+        "average": "Average",
+        "empty": "No stores to report for this period.",
+        "pass": "Pass",
+        "fail": "Fail"
+      },
+      "toasts": {
+        "imageDownloaded": "Report image downloaded.",
+        "imageFailed": "Could not export the image.",
+        "csvFailed": "CSV download failed."
+      }
+    },
+    "errorState": {
+      "notAvailable": "Not available yet",
+      "noPermission": "No permission",
+      "somethingWrong": "Something went wrong",
+      "retry": "Try again"
+    }
   }
 }

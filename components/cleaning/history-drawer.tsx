@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { CalendarRange, Camera, Loader2, User } from "lucide-react";
 import {
   Sheet,
@@ -36,6 +37,7 @@ function HistorySkeleton() {
 }
 
 export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }: Props) {
+  const t = useTranslations("cleaningChart.historyDrawer");
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof CleaningError ? err.message : "Failed to load history.");
+        setError(err instanceof CleaningError ? err.message : t("loadFailed"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -70,7 +72,7 @@ export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }
       <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
         <SheetHeader className="border-b px-6 py-5">
           <SheetTitle className="text-lg">{taskLabel}</SheetTitle>
-          <SheetDescription>Completion history for this task at this store.</SheetDescription>
+          <SheetDescription>{t("description")}</SheetDescription>
         </SheetHeader>
 
         <div className="px-6 py-5">
@@ -78,12 +80,12 @@ export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }
           {error && <p className="text-sm text-destructive">{error}</p>}
           {entries && entries.length === 0 && (
             <div className="rounded-lg border p-10 text-center text-sm text-muted-foreground">
-              No history yet for this task.
+              {t("empty")}
             </div>
           )}
 
           {entries && entries.length > 0 && (
-            <ol className="relative space-y-5 border-s pl-6">
+            <ol className="relative space-y-5 border-s ps-6">
               {entries.map((e, i) => (
                 <li key={i} className="relative">
                   {/* timeline dot */}
@@ -115,7 +117,7 @@ export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }
                         )}
                         {e.doneAt && (
                           <p className="text-xs text-muted-foreground">
-                            Completed {new Date(e.doneAt).toLocaleString()}
+                            {t("completedAt", { date: new Date(e.doneAt).toLocaleString() })}
                           </p>
                         )}
                         {e.note && (
@@ -126,7 +128,7 @@ export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }
                         {e.photos.length > 0 && (
                           <div className="space-y-1.5">
                             <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                              <Camera className="h-3.5 w-3.5" /> Photo evidence
+                              <Camera className="h-3.5 w-3.5" /> {t("photoEvidence")}
                             </p>
                             <PhotoThumbs photos={e.photos} />
                           </div>
@@ -134,7 +136,7 @@ export function HistoryDrawer({ open, onOpenChange, storeId, taskId, taskLabel }
                       </div>
                     ) : (
                       <p className="mt-2 text-sm text-muted-foreground">
-                        This period was not completed in time.
+                        {t("notCompleted")}
                       </p>
                     )}
                   </div>

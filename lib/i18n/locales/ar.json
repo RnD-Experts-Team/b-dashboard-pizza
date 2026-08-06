@@ -1891,5 +1891,316 @@
     "unmute": "إلغاء الكتم",
     "noStreams": "لا توجد بثوث نشطة",
     "participant": "مشارك"
+  },
+  "cleaningChart": {
+    "page": {
+      "title": "جدول التنظيف",
+      "description": "تتبع مهام التنظيف الدورية، وتقييم الفروع، وتصدير التقارير.",
+      "noAccessTitle": "لا يوجد صلاحية",
+      "noAccessDescription": "لا تملك صلاحية الوصول إلى جدول التنظيف.",
+      "noStoreTitle": "لم يتم اختيار فرع",
+      "noStoreDescription": "اختر فرعًا لعرض المهام المستحقة.",
+      "noEvaluationTitle": "لا توجد بيانات تقييم",
+      "noEvaluationDescription": "لا يوجد شيء لتقييمه في هذه الفترة بعد."
+    },
+    "tabs": {
+      "due": "المستحق اليوم",
+      "tasks": "المهام",
+      "evaluation": "التقييم",
+      "reports": "التقارير"
+    },
+    "common": {
+      "cancel": "إلغاء",
+      "delete": "حذف",
+      "refresh": "تحديث",
+      "loading": "جارٍ التحميل…"
+    },
+    "frequency": {
+      "daily": "يومي",
+      "weekly": "أسبوعي",
+      "monthly": "شهري",
+      "hourly": "بالساعة"
+    },
+    "weekday": {
+      "1": "الإثنين",
+      "2": "الثلاثاء",
+      "3": "الأربعاء",
+      "4": "الخميس",
+      "5": "الجمعة",
+      "6": "السبت",
+      "7": "الأحد"
+    },
+    "status": {
+      "pending": "معلّق",
+      "done": "منجز",
+      "overdue": "متأخر"
+    },
+    "itemValue": {
+      "pass": "ناجح",
+      "fail": "فاشل",
+      "auto_fail": "تلقائي",
+      "empty": "خالي"
+    },
+    "storePicker": {
+      "loading": "جارٍ تحميل الفروع…",
+      "selectStore": "اختر فرعًا…",
+      "searchPlaceholder": "بحث بالاسم أو الرقم…",
+      "empty": "لم يتم العثور على فروع."
+    },
+    "due": {
+      "refreshLabel": "تحديث",
+      "statusAll": "الكل",
+      "statusPending": "معلّق",
+      "statusDone": "منجز",
+      "statusOverdue": "متأخر",
+      "table": {
+        "task": "المهمة",
+        "status": "الحالة",
+        "frequency": "التكرار",
+        "period": "الفترة",
+        "weight": "الوزن",
+        "doneBy": "أُنجز بواسطة",
+        "actions": "الإجراءات",
+        "empty": "لا توجد مهام مستحقة لهذا الفرع في {date}.",
+        "meta": "{freq} · {from} → {to}",
+        "noDoneBy": "—"
+      },
+      "viewHistory": "عرض السجل",
+      "undo": "تراجع",
+      "complete": "إنجاز",
+      "undoDialog": {
+        "title": "التراجع عن الإنجاز؟",
+        "description": "سيعيد هذا “{label}” إلى حالة معلّق لتاريخ {date}. ستتم إزالة أي صورة أو ملاحظة أو موظفين مسجلين."
+      },
+      "toasts": {
+        "reverted": "تم إعادة “{label}” إلى معلّق.",
+        "undoFailed": "تعذّر التراجع."
+      }
+    },
+    "tasks": {
+      "createTask": "إنشاء مهمة",
+      "table": {
+        "task": "المهمة",
+        "frequency": "التكرار",
+        "weight": "الوزن",
+        "photo": "الصورة",
+        "starts": "البدء",
+        "stores": "الفروع",
+        "actions": "الإجراءات"
+      },
+      "storeCount": "{count} فرع",
+      "storeCountPlural": "{count} فروع",
+      "everyHoursSuffix": "· كل {hours} ساعة",
+      "photoRequiredShort": "مطلوبة",
+      "photoOptionalShort": "اختيارية",
+      "editTitle": "تعديل المهمة",
+      "deleteTitle": "حذف المهمة",
+      "empty": {
+        "title": "لا توجد مهام تنظيف بعد",
+        "description": "أنشئ مهمة للبدء."
+      },
+      "deleteDialog": {
+        "title": "حذف المهمة؟",
+        "description": "سيزيل هذا “{name}” من قوائم المستحق لكل فرع معيّن له. سيتم الاحتفاظ بسجلّه وإنجازاته. لا يمكن التراجع عن هذا."
+      },
+      "toasts": {
+        "deleted": "تم حذف “{name}”.",
+        "deleteFailed": "تعذّر حذف المهمة."
+      }
+    },
+    "taskForm": {
+      "sections": {
+        "details": "تفاصيل المهمة",
+        "schedule": "الجدولة",
+        "stores": "تعيين الفروع"
+      },
+      "name": "اسم المهمة",
+      "namePlaceholder": "مثال: تنظيف الفرن",
+      "description": "الوصف",
+      "descriptionPlaceholder": "ما الذي يجب إنجازه بالتحديد؟",
+      "weight": "الوزن (0–100)",
+      "weightPlaceholder": "اختياري",
+      "dueTime": "وقت الاستحقاق",
+      "frequency": "التكرار",
+      "frequencyHint": {
+        "daily": "الصورة مطلوبة",
+        "weekly": "الصورة مطلوبة",
+        "monthly": "الصورة مطلوبة",
+        "hourly": "الصورة اختيارية"
+      },
+      "repeatEvery": "التكرار كل",
+      "intervalUnit": {
+        "daily": "يوم/أيام",
+        "weekly": "أسبوع/أسابيع",
+        "monthly": "شهر/أشهر",
+        "hourly": "دورة/دورات"
+      },
+      "everyXHours": "كل X ساعة (1–24)",
+      "weekdaysLabel": "أيام الأسبوع (اختياري)",
+      "startsOn": "يبدأ في",
+      "endsOn": "ينتهي في",
+      "endsOnHint": "(فراغ = يتكرر دائمًا)",
+      "storesLabel": "الفروع",
+      "storesPlaceholder": "اختر الفروع",
+      "storesSearchPlaceholder": "بحث في الفروع…",
+      "storesEmpty": "لم يتم العثور على فروع.",
+      "storesLoading": "جارٍ تحميل الفروع…",
+      "storesLoadingShort": "جارٍ التحميل…",
+      "storesSelectedCount": "تم اختيار {count} فرع",
+      "storesSelectedCountPlural": "تم اختيار {count} فروع"
+    },
+    "createTaskDialog": {
+      "title": "إنشاء مهمة تنظيف",
+      "description": "أنشئ مهمة تنظيف دورية وعيّنها لفرع واحد أو أكثر.",
+      "cancel": "إلغاء",
+      "submit": "إنشاء المهمة",
+      "toasts": {
+        "startRequired": "تاريخ البدء مطلوب.",
+        "storeRequired": "اختر فرعًا واحدًا على الأقل.",
+        "hourlyIntervalRequired": "المهام بالساعة تحتاج إلى فاصل زمني (1–24 ساعة).",
+        "created": "تم إنشاء المهمة “{name}”.",
+        "failed": "تعذّر إنشاء المهمة."
+      }
+    },
+    "editTaskDialog": {
+      "title": "تعديل مهمة التنظيف",
+      "description": "تحديث الجدولة أو الفروع المعيّنة لهذه المهمة.",
+      "cancel": "إلغاء",
+      "submit": "حفظ التغييرات",
+      "loadFailed": "فشل تحميل المهمة.",
+      "toasts": {
+        "startRequired": "تاريخ البدء مطلوب.",
+        "storeRequired": "اختر فرعًا واحدًا على الأقل.",
+        "hourlyIntervalRequired": "المهام بالساعة تحتاج إلى فاصل زمني (1–24 ساعة).",
+        "nothingChanged": "لم يتغيّر شيء.",
+        "updated": "تم تحديث المهمة “{name}”.",
+        "failed": "تعذّر تحديث المهمة."
+      }
+    },
+    "taskDetail": {
+      "fallbackTitle": "تفاصيل المهمة",
+      "photoRequired": "الصورة مطلوبة",
+      "photoOptional": "الصورة اختيارية",
+      "edit": "تعديل",
+      "deleteTitle": "حذف المهمة",
+      "loading": "جارٍ التحميل…",
+      "loadFailed": "فشل تحميل المهمة.",
+      "frequency": "التكرار",
+      "every": "· كل {interval}",
+      "interval": "الفاصل الزمني",
+      "everyHours": "كل {hours} ساعة",
+      "weight": "الوزن",
+      "startsOn": "يبدأ في",
+      "endsOn": "ينتهي في",
+      "repeatsForever": "يتكرر دائمًا",
+      "dueTime": "وقت الاستحقاق",
+      "weekdays": "أيام الأسبوع",
+      "assignedStores": "الفروع المعيّنة ({count})",
+      "noStoresAssigned": "لا توجد فروع معيّنة."
+    },
+    "completeDialog": {
+      "title": "إنجاز: {label}",
+      "employeeFallback": "الموظف {id}",
+      "description": "سجّل من قام بهذه المهمة.",
+      "descriptionWithPhoto": "سجّل من قام بهذه المهمة وأرفق صورة.",
+      "who": "من قام بها؟",
+      "loadingEmployees": "جارٍ تحميل الموظفين…",
+      "selectEmployees": "اختر الموظفين",
+      "searchEmployees": "بحث عن الموظفين…",
+      "loadingShort": "جارٍ التحميل…",
+      "noEmployees": "لم يتم العثور على موظفين لهذا الفرع.",
+      "note": "ملاحظة (اختياري)",
+      "notePlaceholder": "مثال: تم التنظيف أثناء الافتتاح",
+      "photo": "الصورة",
+      "photoHint": "(يمكن أيضًا اللصق بـ Ctrl+V)",
+      "choosePhoto": "اختر صورة",
+      "replace": "استبدال",
+      "cancel": "إلغاء",
+      "submit": "إنجاز",
+      "toasts": {
+        "pasted": "تم لصق الصورة.",
+        "done": "تم إنجاز “{label}”.",
+        "failed": "تعذّر إنجاز المهمة."
+      }
+    },
+    "historyDrawer": {
+      "description": "سجل إنجاز هذه المهمة في هذا الفرع.",
+      "empty": "لا يوجد سجل لهذه المهمة بعد.",
+      "completedAt": "تم الإنجاز في {date}",
+      "photoEvidence": "دليل الصورة",
+      "notCompleted": "لم تُنجز هذه الفترة في الوقت المحدد.",
+      "loadFailed": "فشل تحميل السجل."
+    },
+    "evaluation": {
+      "weekTab": "أسبوع",
+      "dateTab": "تاريخ",
+      "weekPlaceholder": "2026-W30",
+      "datePlaceholder": "2026-07-21",
+      "load": "تحميل",
+      "addItemPlaceholder": "إضافة عنصر تفتيش…",
+      "add": "إضافة",
+      "legendLabel": "المفتاح",
+      "legendHint": "انقر على الخلية للتبديل · انقر على شريحة الجدول لتبديل ناجح/فاشل",
+      "noStores": {
+        "title": "لا توجد فروع للتقييم",
+        "description": "لا يوجد شيء لتقييمه في هذه الفترة بعد."
+      },
+      "columns": {
+        "store": "الفرع",
+        "inspectionItems": "عناصر التفتيش",
+        "itemScore": "نتيجة العناصر",
+        "cleaningChart": "جدول التنظيف",
+        "chartScore": "نتيجة الجدول",
+        "notify": "إشعار"
+      },
+      "removeItemTitle": "إزالة العنصر",
+      "cellWeightTitle": "{name} (الوزن {weight})",
+      "finalize": "إنهاء",
+      "noItems": "لا توجد عناصر تفتيش بعد — أضف عنصرًا أعلاه للبدء بالتقييم.",
+      "removeDialog": {
+        "title": "إزالة عنصر التفتيش؟",
+        "description": "سيؤدي هذا إلى إزالة عمود “{name}” والقيم المسجلة له لجميع الفروع في هذه الفترة. لا يمكن التراجع عن هذا.",
+        "confirm": "إزالة"
+      },
+      "toasts": {
+        "saveFailed": "فشل الحفظ.",
+        "notified": "تم إشعار {store}."
+      }
+    },
+    "reports": {
+      "title": "تقرير التنظيف",
+      "periodLabel": "الفترة {period} · مرتّب حسب النتيجة",
+      "csv": "CSV",
+      "exportPng": "تصدير PNG",
+      "downloadPng": "تنزيل PNG",
+      "reviewDialog": {
+        "title": "مراجعة التقرير قبل التصدير",
+        "description": "جدول واحد، مرتّب حسب النتيجة. هذا هو الشكل الدقيق لصورة PNG — راجع، ثم نزّل.",
+        "cancel": "إلغاء"
+      },
+      "table": {
+        "rank": "#",
+        "store": "الفرع",
+        "inspectionItems": "عناصر التفتيش",
+        "itemScore": "نتيجة العناصر",
+        "chart": "الجدول",
+        "score": "النتيجة",
+        "average": "المتوسط",
+        "empty": "لا توجد فروع لتقريرها في هذه الفترة.",
+        "pass": "ناجح",
+        "fail": "فاشل"
+      },
+      "toasts": {
+        "imageDownloaded": "تم تنزيل صورة التقرير.",
+        "imageFailed": "تعذّر تصدير الصورة.",
+        "csvFailed": "فشل تنزيل CSV."
+      }
+    },
+    "errorState": {
+      "notAvailable": "غير متاح بعد",
+      "noPermission": "لا يوجد صلاحية",
+      "somethingWrong": "حدث خطأ ما",
+      "retry": "أعد المحاولة"
+    }
   }
 }

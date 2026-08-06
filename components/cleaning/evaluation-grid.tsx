@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   BellRing,
@@ -46,20 +47,9 @@ import {
 const ITEM_CYCLE: ItemValue[] = ["pass", "fail", "auto_fail", "empty"];
 const CHART_GROUPS: {
   key: keyof Grid["rows"][number]["chart"];
-  label: string;
-}[] = [
-  { key: "daily", label: "Daily" },
-  { key: "weekly", label: "Weekly" },
-  { key: "monthly", label: "Monthly" },
-  { key: "hourly", label: "Hourly" },
-];
+}[] = [{ key: "daily" }, { key: "weekly" }, { key: "monthly" }, { key: "hourly" }];
 
-const LEGEND: { value: ItemValue; label: string }[] = [
-  { value: "pass", label: "Pass" },
-  { value: "fail", label: "Fail" },
-  { value: "auto_fail", label: "Auto" },
-  { value: "empty", label: "Empty" },
-];
+const LEGEND: ItemValue[] = ["pass", "fail", "auto_fail", "empty"];
 
 const VERDICT_SHORT: Record<ChartVerdict, string> = {
   pass: "P",
@@ -115,6 +105,7 @@ export function EvaluationGrid({
   onRemoveItem,
   onFinalize,
 }: Props) {
+  const t = useTranslations("cleaningChart");
   const [type, setType] = useState<PeriodType>(periodType);
   const [keyInput, setKeyInput] = useState(periodKey);
   const [newItem, setNewItem] = useState("");
@@ -130,7 +121,7 @@ export function EvaluationGrid({
     try {
       await fn();
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : "Save failed.");
+      toast.error(err instanceof CleaningError ? err.message : t("evaluation.toasts.saveFailed"));
     } finally {
       setBusy(null);
     }
@@ -152,19 +143,19 @@ export function EvaluationGrid({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border bg-muted/40 p-1">
-            {(["week", "date"] as PeriodType[]).map((t) => (
+            {(["week", "date"] as PeriodType[]).map((periodT) => (
               <button
-                key={t}
+                key={periodT}
                 type="button"
-                onClick={() => setType(t)}
+                onClick={() => setType(periodT)}
                 className={cn(
-                  "rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors",
-                  type === t
+                  "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                  type === periodT
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {t}
+                {periodT === "week" ? t("evaluation.weekTab") : t("evaluation.dateTab")}
               </button>
             ))}
           </div>
@@ -178,12 +169,14 @@ export function EvaluationGrid({
                   onLoadPeriod(type, keyInput.trim());
                 }
               }}
-              placeholder={type === "week" ? "2026-W30" : "2026-07-21"}
+              placeholder={
+                type === "week" ? t("evaluation.weekPlaceholder") : t("evaluation.datePlaceholder")
+              }
               className="h-9 w-40 ps-9"
             />
           </div>
           <Button variant="outline" onClick={() => onLoadPeriod(type, keyInput.trim())}>
-            Load
+            {t("evaluation.load")}
           </Button>
         </div>
 
@@ -199,7 +192,7 @@ export function EvaluationGrid({
                 });
               }
             }}
-            placeholder="Add inspection item…"
+            placeholder={t("evaluation.addItemPlaceholder")}
             className="h-9 w-48"
           />
           <Button
@@ -216,7 +209,7 @@ export function EvaluationGrid({
             ) : (
               <Plus className="me-1.5 h-4 w-4" />
             )}
-            Add
+            {t("evaluation.add")}
           </Button>
         </div>
       </div>
@@ -224,23 +217,29 @@ export function EvaluationGrid({
       {/* Legend + hint */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
         <span className="font-semibold uppercase tracking-wide text-muted-foreground">
-          Legend
+          {t("evaluation.legendLabel")}
         </span>
-        {LEGEND.map((l) => (
-          <span key={l.value} className="flex items-center gap-1.5 text-muted-foreground">
-            <span className={cn("h-3 w-1 rounded-full", VALUE_ACCENT[l.value].bar)} />
-            {l.label}
+        {LEGEND.map((value) => (
+          <span key={value} className="flex items-center gap-1.5 text-muted-foreground">
+            <span className={cn("h-3 w-1 rounded-full", VALUE_ACCENT[value].bar)} />
+            {t(`itemValue.${value}`)}
           </span>
         ))}
         <span className="ms-auto hidden text-muted-foreground/80 md:block">
-          Click a cell to cycle · click a chart chip to toggle Pass/Fail
+          {t("evaluation.legendHint")}
         </span>
       </div>
 
       {/* ── The grid ── */}
       {grid.rows.length === 0 ? (
-        <div className="rounded-lg border p-10 text-center text-sm text-muted-foreground">
-          No stores to evaluate for this period.
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
+          <ClipboardList className="h-8 w-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t("evaluation.noStores.title")}</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              {t("evaluation.noStores.description")}
+            </p>
+          </div>
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border">
@@ -252,14 +251,14 @@ export function EvaluationGrid({
                 <tr className="bg-muted/70 text-muted-foreground">
                   <th
                     rowSpan={2}
-                    className={cn("sticky left-0 z-30 bg-muted text-left", th, groupBorder)}
+                    className={cn("sticky start-0 z-30 bg-muted text-start", th, groupBorder)}
                   >
-                    Store
+                    {t("evaluation.columns.store")}
                   </th>
                   {items.length > 0 && (
                     <th colSpan={items.length} className={cn("text-center", th, groupBorder)}>
                       <span className="inline-flex items-center gap-1.5">
-                        <ClipboardList className="h-3.5 w-3.5" /> Inspection Items
+                        <ClipboardList className="h-3.5 w-3.5" /> {t("evaluation.columns.inspectionItems")}
                       </span>
                     </th>
                   )}
@@ -267,25 +266,21 @@ export function EvaluationGrid({
                     rowSpan={2}
                     className={cn("text-center leading-tight", th, groupBorder)}
                   >
-                    Item
-                    <br />
-                    Score
+                    {t("evaluation.columns.itemScore")}
                   </th>
                   <th colSpan={4} className={cn("text-center", th, groupBorder)}>
                     <span className="inline-flex items-center gap-1.5">
-                      <SprayCan className="h-3.5 w-3.5" /> Cleaning Chart
+                      <SprayCan className="h-3.5 w-3.5" /> {t("evaluation.columns.cleaningChart")}
                     </span>
                   </th>
                   <th
                     rowSpan={2}
                     className={cn("text-center leading-tight", th, groupBorder)}
                   >
-                    Chart
-                    <br />
-                    Score
+                    {t("evaluation.columns.chartScore")}
                   </th>
                   <th rowSpan={2} className={cn("text-center", th)}>
-                    Notify
+                    {t("evaluation.columns.notify")}
                   </th>
                 </tr>
                 {/* Sub-header row */}
@@ -306,7 +301,7 @@ export function EvaluationGrid({
                           type="button"
                           onClick={() => setRemoveTarget({ id: it.id, name: it.name })}
                           className="text-muted-foreground/50 transition-colors hover:text-destructive"
-                          title="Remove item"
+                          title={t("evaluation.removeItemTitle")}
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -321,7 +316,7 @@ export function EvaluationGrid({
                         idx === CHART_GROUPS.length - 1 && groupBorder
                       )}
                     >
-                      {g.label}
+                      {t(`frequency.${g.key}`)}
                     </th>
                   ))}
                 </tr>
@@ -340,7 +335,7 @@ export function EvaluationGrid({
                       {/* Store (sticky) — opaque bg that tracks the row hover */}
                       <td
                         className={cn(
-                          "sticky left-0 z-10 whitespace-nowrap bg-card px-3 py-2 font-semibold transition-colors group-hover:bg-[color-mix(in_srgb,var(--muted)_40%,var(--card))]",
+                          "sticky start-0 z-10 whitespace-nowrap bg-card px-3 py-2 font-semibold transition-colors group-hover:bg-[color-mix(in_srgb,var(--muted)_40%,var(--card))]",
                           groupBorder
                         )}
                       >
@@ -395,9 +390,12 @@ export function EvaluationGrid({
                                     type="button"
                                     disabled={busy === savingKey}
                                     onClick={() => toggleChart(row.storeId, cell)}
-                                    title={`${cell.name} (weight ${cell.weight})`}
+                                    title={t("evaluation.cellWeightTitle", {
+                                      name: cell.name,
+                                      weight: cell.weight,
+                                    })}
                                     className={cn(
-                                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors",
+                                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-start transition-colors",
                                       accent
                                         ? "border bg-card hover:bg-muted/60"
                                         : "hover:bg-muted/40",
@@ -451,7 +449,7 @@ export function EvaluationGrid({
                           onClick={() =>
                             guard(`f-${row.storeId}`, async () => {
                               await onFinalize(row.storeId);
-                              toast.success(`${row.store} notified.`);
+                              toast.success(t("evaluation.toasts.notified", { store: row.store }));
                             })
                           }
                         >
@@ -460,7 +458,7 @@ export function EvaluationGrid({
                           ) : (
                             <BellRing className="me-1.5 h-4 w-4" />
                           )}
-                          Finalize
+                          {t("evaluation.finalize")}
                         </Button>
                       </td>
                     </tr>
@@ -474,7 +472,7 @@ export function EvaluationGrid({
 
       {items.length === 0 && grid.rows.length > 0 && (
         <p className="text-center text-sm text-muted-foreground">
-          No inspection items yet — add one above to start grading.
+          {t("evaluation.noItems")}
         </p>
       )}
 
@@ -485,15 +483,14 @@ export function EvaluationGrid({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove inspection item?</AlertDialogTitle>
+            <AlertDialogTitle>{t("evaluation.removeDialog.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the “{removeTarget?.name}” column and its recorded values
-              for all stores in this period. This cannot be undone.
+              {t("evaluation.removeDialog.description", { name: removeTarget?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy?.startsWith("rm-")}>
-              Cancel
+              {t("common.cancel")}
             </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-white hover:bg-destructive/90"
@@ -510,7 +507,7 @@ export function EvaluationGrid({
               {busy?.startsWith("rm-") ? (
                 <Loader2 className="me-1.5 h-4 w-4 animate-spin" />
               ) : null}
-              Remove
+              {t("evaluation.removeDialog.confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

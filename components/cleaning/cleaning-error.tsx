@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +11,7 @@ export function CleaningErrorState({
   error: CleaningError;
   onRetry?: () => void;
 }) {
+  const t = useTranslations("cleaningChart.errorState");
   const isSync = error.code === "NOT_SYNCED";
   const isForbidden = error.code === "FORBIDDEN";
 
@@ -20,17 +22,17 @@ export function CleaningErrorState({
         <div className="space-y-1">
           <p className="font-medium">
             {isSync
-              ? "Not available yet"
+              ? t("notAvailable")
               : isForbidden
-                ? "No permission"
-                : "Something went wrong"}
+                ? t("noPermission")
+                : t("somethingWrong")}
           </p>
           <p className="text-sm text-muted-foreground">{error.message}</p>
         </div>
         {onRetry && error.code !== "FORBIDDEN" && (
           <Button variant="outline" size="sm" onClick={onRetry}>
             <RefreshCw className="me-2 h-4 w-4" />
-            Try again
+            {t("retry")}
           </Button>
         )}
       </CardContent>
