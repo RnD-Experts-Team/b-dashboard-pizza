@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -21,10 +20,9 @@ import { employeeService } from "@/lib/api/services/employee.service";
 import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
 import type { DueItem } from "@/types/cleaning.types";
 
-interface Props {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  storeId: number;
+const ACTIVE_STATUSES = ["hired", "rehired"];
+
+interface CompleteTaskFormProps {
   /** Human-readable store code (e.g. "03795-00003") for the employee lookup. */
   storeCode: string | null;
   date: string;
@@ -35,18 +33,17 @@ interface Props {
     note?: string;
     photo?: File | null;
   }) => Promise<void>;
+  /** Called after a successful submit, or when the user cancels. */
+  onClose: () => void;
 }
 
-const ACTIVE_STATUSES = ["hired", "rehired"];
-
-export function CompleteTaskDialog({
-  open,
-  onOpenChange,
-  storeCode,
-  date,
-  item,
-  onComplete,
-}: Props) {
+/**
+ * The Complete-task form body — no Dialog wrapper, so the same fields can be
+ * hosted either in a modal (CompleteTaskDialog, below) or embedded inline
+ * (the floating Debrief widget's Cleaning Chart tab), matching the
+ * "shared fields, host owns the chrome" pattern already used by TaskFormFields.
+ */
+export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }: CompleteTaskFormProps) {
   const t = useTranslations("cleaningChart.completeDialog");
   const [employees, setEmployees] = useState<MultiSelectOption<number>[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
@@ -63,9 +60,9 @@ export function CompleteTaskDialog({
     [selected, photoRequired, photo, submitting]
   );
 
-  /* ── Fetch the store's active employees when the dialog opens ── */
+  /* ── Fetch the store's active employees on mount ── */
   useEffect(() => {
-    if (!open || !storeCode) return;
+    if (!storeCode) return;
     let cancelled = false;
     const controller = new AbortController();
     setEmpLoading(true);
@@ -98,7 +95,7 @@ export function CompleteTaskDialog({
       cancelled = true;
       controller.abort();
     };
-  }, [open, storeCode]);
+  }, [storeCode]);
 
   /* ── Photo preview object URL lifecycle ── */
   const applyPhoto = useCallback((file: File | null) => {
@@ -116,7 +113,7 @@ export function CompleteTaskDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Ctrl+V paste an image while the dialog is open ── */
+  /* ── Ctrl+V paste an image while the form is open ── */
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
       const file = Array.from(e.clipboardData?.items ?? [])
@@ -131,13 +128,6 @@ export function CompleteTaskDialog({
     [applyPhoto]
   );
 
-  const reset = () => {
-    setSelected([]);
-    setNote("");
-    applyPhoto(null);
-    if (fileRef.current) fileRef.current.value = "";
-  };
-
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -149,8 +139,7 @@ export function CompleteTaskDialog({
         photo,
       });
       toast.success(t("toasts.done", { label: item.label }));
-      reset();
-      onOpenChange(false);
+      onClose();
     } catch (err) {
       toast.error(err instanceof CleaningError ? err.message : t("toasts.failed"));
     } finally {
@@ -159,14 +148,142 @@ export function CompleteTaskDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) reset();
-        onOpenChange(o);
-      }}
-    >
-      <DialogContent className="sm:max-w-md" onPaste={handlePaste}>
+    <div onPaste={handlePaste} className="space-y-4">
+      {/* Employees */}
+      <div className="space-y-2">
+        <Label>
+          {t("who")} <span className="text-destructive">*</span>
+        </Label>
+        <MultiSelect<number>
+          options={employees}
+          selected={selected}
+          onChange={setSelected}
+          icon={<Users className="h-4 w-4 text-muted-foreground" />}
+          placeholder={empLoading ? t("loadingEmployees") : t("selectEmployees")}
+          searchPlaceholder={t("searchEmployees")}
+          emptyText={empLoading ? t("loadingShort") : t("noEmployees")}
+          disabled={empLoading}
+        />
+      </div>
+
+      {/* Note */}
+      <div className="space-y-2">
+        <Label htmlFor="cleaning-note">{t("note")}</Label>
+        <Textarea
+          id="cleaning-note"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t("notePlaceholder")}
+          rows={2}
+        />
+      </div>
+
+      {/* Photo */}
+      <div className="space-y-2">
+        <Label>
+          {t("photo")} {photoRequired && <span className="text-destructive">*</span>}
+          <span className="ms-1 text-xs font-normal text-muted-foreground">
+            {t("photoHint")}
+          </span>
+        </Label>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => applyPhoto(e.target.files?.[0] ?? null)}
+        />
+        {photo && photoUrl ? (
+          <div className="relative overflow-hidden rounded-md border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoUrl}
+              alt="Selected"
+              className="max-h-48 w-full bg-muted object-contain"
+            />
+            <div className="flex items-center justify-between gap-2 border-t bg-background/80 px-2 py-1.5">
+              <span className="flex-1 truncate text-xs text-muted-foreground">
+                {photo.name}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={() => fileRef.current?.click()}
+              >
+                {t("replace")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => {
+                  applyPhoto(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className={cn("w-full", photoRequired && "border-dashed")}
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImagePlus className="me-2 h-4 w-4" />
+            {t("choosePhoto")}
+          </Button>
+        )}
+      </div>
+
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="outline" onClick={onClose} disabled={submitting}>
+          {t("cancel")}
+        </Button>
+        <Button onClick={handleSubmit} disabled={!canSubmit}>
+          {submitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+          {t("submit")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  storeId: number;
+  /** Human-readable store code (e.g. "03795-00003") for the employee lookup. */
+  storeCode: string | null;
+  date: string;
+  item: DueItem;
+  onComplete: (payload: {
+    date: string;
+    employeeIds: number[];
+    note?: string;
+    photo?: File | null;
+  }) => Promise<void>;
+}
+
+export function CompleteTaskDialog({
+  open,
+  onOpenChange,
+  storeCode,
+  date,
+  item,
+  onComplete,
+}: Props) {
+  const t = useTranslations("cleaningChart.completeDialog");
+  const photoRequired = item.photoRequired;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("title", { label: item.label })}</DialogTitle>
           <DialogDescription>
@@ -174,113 +291,13 @@ export function CompleteTaskDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Employees */}
-          <div className="space-y-2">
-            <Label>
-              {t("who")} <span className="text-destructive">*</span>
-            </Label>
-            <MultiSelect<number>
-              options={employees}
-              selected={selected}
-              onChange={setSelected}
-              icon={<Users className="h-4 w-4 text-muted-foreground" />}
-              placeholder={empLoading ? t("loadingEmployees") : t("selectEmployees")}
-              searchPlaceholder={t("searchEmployees")}
-              emptyText={empLoading ? t("loadingShort") : t("noEmployees")}
-              disabled={empLoading}
-            />
-          </div>
-
-          {/* Note */}
-          <div className="space-y-2">
-            <Label htmlFor="cleaning-note">{t("note")}</Label>
-            <Textarea
-              id="cleaning-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t("notePlaceholder")}
-              rows={2}
-            />
-          </div>
-
-          {/* Photo */}
-          <div className="space-y-2">
-            <Label>
-              {t("photo")} {photoRequired && <span className="text-destructive">*</span>}
-              <span className="ms-1 text-xs font-normal text-muted-foreground">
-                {t("photoHint")}
-              </span>
-            </Label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => applyPhoto(e.target.files?.[0] ?? null)}
-            />
-            {photo && photoUrl ? (
-              <div className="relative overflow-hidden rounded-md border">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photoUrl}
-                  alt="Selected"
-                  className="max-h-48 w-full bg-muted object-contain"
-                />
-                <div className="flex items-center justify-between gap-2 border-t bg-background/80 px-2 py-1.5">
-                  <span className="flex-1 truncate text-xs text-muted-foreground">
-                    {photo.name}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7"
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    {t("replace")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => {
-                      applyPhoto(null);
-                      if (fileRef.current) fileRef.current.value = "";
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className={cn("w-full", photoRequired && "border-dashed")}
-                onClick={() => fileRef.current?.click()}
-              >
-                <ImagePlus className="me-2 h-4 w-4" />
-                {t("choosePhoto")}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={submitting}
-          >
-            {t("cancel")}
-          </Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit}>
-            {submitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-            {t("submit")}
-          </Button>
-        </DialogFooter>
+        <CompleteTaskForm
+          storeCode={storeCode}
+          date={date}
+          item={item}
+          onComplete={onComplete}
+          onClose={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   );

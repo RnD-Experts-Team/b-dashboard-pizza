@@ -1,5 +1,5 @@
 export { DueList } from "./due-list";
-export { CompleteTaskDialog } from "./complete-task-dialog";
+export { CompleteTaskDialog, CompleteTaskForm } from "./complete-task-dialog";
 export { HistoryDrawer } from "./history-drawer";
 export { CreateTaskDialog } from "./create-task-dialog";
 export { EditTaskDialog } from "./edit-task-dialog";
@@ -15,5 +15,5 @@ export {
   ReportsSkeleton,
 } from "./cleaning-skeletons";
 export { CleaningErrorState } from "./cleaning-error";
-export { StatusPill, PhotoThumbs, resolvePhotoUrl } from "./cleaning-ui";
+export { StatusPill, PhotoThumbs, resolvePhotoUrl, formatDate } from "./cleaning-ui";
 export { StorePicker, type StoreOption } from "./store-picker";

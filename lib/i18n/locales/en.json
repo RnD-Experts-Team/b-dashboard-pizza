@@ -1902,7 +1902,9 @@
       "noStoreTitle": "No store selected",
       "noStoreDescription": "Select a store to see what's due.",
       "noEvaluationTitle": "No evaluation data",
-      "noEvaluationDescription": "Nothing to grade for this period yet."
+      "noEvaluationDescription": "Nothing to grade for this period yet.",
+      "openFull": "Open in Cleaning Chart",
+      "pendingTotal": "{pending} pending · {total} total"
     },
     "tabs": {
       "due": "Due Today",
@@ -1914,7 +1916,8 @@
       "cancel": "Cancel",
       "delete": "Delete",
       "refresh": "Refresh",
-      "loading": "Loading…"
+      "loading": "Loading…",
+      "date": "Date"
     },
     "frequency": {
       "daily": "Daily",

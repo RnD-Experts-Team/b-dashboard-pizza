@@ -1,9 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { CalendarDays, KeyRound, PenLine, RefreshCw, X } from "lucide-react";
+import {
+  Camera,
+  CalendarDays,
+  Database,
+  ExternalLink,
+  Loader2,
+  PenLine,
+  RefreshCw,
+  Sparkles,
+  Undo2,
+  User,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -16,16 +29,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
 import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
 import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
+import { CompleteTaskForm, StatusPill, formatDate } from "@/components/cleaning";
 import { useCreateEmployeeDebrief } from "@/lib/hooks/use-employee-debriefs";
 import { useDueKeys, useSetDueKeyValue, useSetDueKeysBulk } from "@/lib/hooks/use-due-keys";
+import { todayIso } from "@/lib/hooks/use-cleaning";
+import { useCleaningStore } from "@/lib/store/cleaning.store";
+import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
+import { canAccessCleaningTab } from "@/lib/auth/cleaning-access";
 import { cn } from "@/lib/utils";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
+import type { DueItem } from "@/types/cleaning.types";
 
 interface StoreOption {
   id: string;
@@ -89,12 +118,23 @@ const EDGE = 8;      // minimum gap from each screen edge
 
 export function FloatingDebriefButton() {
   const pathname = usePathname();
+  const router = useRouter();
+  const locale = useLocale();
   const [isOpen, setIsOpen] = useState(false);
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [activeNav, setActiveNav] = useState<"debrief" | "due-keys">("debrief");
+  const [activeNav, setActiveNav] = useState<"debrief" | "due-keys" | "cleaning-chart">(
+    "debrief"
+  );
   const [isMobile, setIsMobile] = useState(false);
+
+  // ── Cleaning Chart state ───────────────────────────────────────────────
+  const t = useTranslations("cleaningChart");
+  const [cleaningDate, setCleaningDate] = useState<string>(todayIso());
+  const [cleaningCompleteItem, setCleaningCompleteItem] = useState<DueItem | null>(null);
+  const [cleaningUndoTarget, setCleaningUndoTarget] = useState<DueItem | null>(null);
+  const [cleaningUndoing, setCleaningUndoing] = useState<number | null>(null);
 
   // ── Due Keys state ─────────────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState<string>(formatTodayDate());
@@ -107,7 +147,7 @@ export function FloatingDebriefButton() {
   const hasDragged = useRef(false);
   const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
 
-  const { canAccessRoute, overviewStores } = useAuthStore();
+  const { canAccessRoute, hasAnyRole, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
   const pendingDebriefKey = useDebriefActionStore((s) => s.pendingDebriefKey);
   const clearPendingDebriefKey = useDebriefActionStore((s) => s.clearPendingDebriefKey);
@@ -119,6 +159,21 @@ export function FloatingDebriefButton() {
     path: "/engine/stores/debrief",
     storeId: effectiveStoreId,
   });
+  const canSeeCleaningChart = canAccessCleaningTab(
+    "due",
+    { canAccessRoute, hasAnyRole },
+    effectiveStoreId
+  );
+
+  // ── Cleaning Chart hooks ───────────────────────────────────────────────
+  const { dueData, dueLoading, dueError, fetchDue, completeTask, uncompleteTask } =
+    useCleaningStore();
+  const cleaningStore = useMemo(() => {
+    const match = overviewStores?.find(
+      (o) => String(o.id) === selectedStoreId || o.storeId === selectedStoreId
+    );
+    return match ? { id: Number(match.id), code: match.storeId ?? String(match.id) } : null;
+  }, [overviewStores, selectedStoreId]);
 
   const {
     createDebrief,
@@ -155,6 +210,12 @@ export function FloatingDebriefButton() {
   const selectedStoreName = useMemo(
     () => stores.find((s) => s.id === selectedStoreId)?.name ?? null,
     [stores, selectedStoreId]
+  );
+
+  const cleaningItems = useMemo(() => dueData?.items ?? [], [dueData]);
+  const cleaningPendingCount = useMemo(
+    () => cleaningItems.filter((i) => i.status !== "done").length,
+    [cleaningItems]
   );
 
   const activeItems = useMemo(() => dueKeysData?.items ?? [], [dueKeysData]);
@@ -223,6 +284,11 @@ export function FloatingDebriefButton() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dueKeysData, pendingKeyId, isDueKeysLoading]);
+
+  // ── Effect C: fetch due cleaning tasks for the panel's selected store+date ──
+  useEffect(() => {
+    if (cleaningStore) fetchDue(cleaningStore.id, cleaningDate);
+  }, [cleaningStore, cleaningDate, fetchDue]);
 
   // Clamp FAB position when the viewport is resized
   useEffect(() => {
@@ -314,6 +380,21 @@ export function FloatingDebriefButton() {
     );
   };
 
+  const confirmCleaningUndo = async () => {
+    const item = cleaningUndoTarget;
+    if (!item || !cleaningStore) return;
+    setCleaningUndoing(item.taskId);
+    try {
+      await uncompleteTask(cleaningStore.id, item.taskId, cleaningDate);
+      toast.success(t("due.toasts.reverted", { label: item.label }));
+      setCleaningUndoTarget(null);
+    } catch (err) {
+      toast.error(err instanceof CleaningError ? err.message : t("due.toasts.undoFailed"));
+    } finally {
+      setCleaningUndoing(null);
+    }
+  };
+
   // Compute floating panel screen position for desktop only
   function getPanelStyle() {
     if (!pos) return {};
@@ -400,7 +481,7 @@ export function FloatingDebriefButton() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          <KeyRound className="h-3.5 w-3.5" />
+          <Database className="h-3.5 w-3.5" />
           Debrief
           {unfilledItems.length > 0 && (
             <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
@@ -408,6 +489,21 @@ export function FloatingDebriefButton() {
             </span>
           )}
         </button>
+        {canSeeCleaningChart && (
+          <button
+            type="button"
+            onClick={() => setActiveNav("cleaning-chart")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px",
+              activeNav === "cleaning-chart"
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {t("page.title")}
+          </button>
+        )}
       </div>
 
       {/* Tab content */}
@@ -449,7 +545,7 @@ export function FloatingDebriefButton() {
         {activeNav === "due-keys" && (
         <div className="py-4">
           <div className="flex items-center gap-2 mb-3 px-4">
-            <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+            <Database className="h-3.5 w-3.5 text-muted-foreground" />
             <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
               Debrief
               {selectedStoreName && (
@@ -605,6 +701,188 @@ export function FloatingDebriefButton() {
           </div>
         </div>
         )}
+
+        {/* ── Cleaning Chart Section ───────────────────────────────── */}
+        {activeNav === "cleaning-chart" && (
+        <div className="py-4">
+          <div className="flex items-center gap-2 mb-3 px-4">
+            <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+              {t("page.title")}
+              {selectedStoreName && (
+                <span className="normal-case tracking-normal font-normal text-muted-foreground ml-1">({selectedStoreName})</span>
+              )}
+            </h4>
+          </div>
+
+          {cleaningCompleteItem && cleaningStore ? (
+            /* ── Complete task — inline, same panel, no separate modal ── */
+            <div className="px-4">
+              <p className="mb-3 truncate text-sm font-medium text-foreground">
+                {t("completeDialog.title", { label: cleaningCompleteItem.label })}
+              </p>
+              <CompleteTaskForm
+                storeCode={cleaningStore.code}
+                date={cleaningDate}
+                item={cleaningCompleteItem}
+                onComplete={(payload) =>
+                  completeTask(cleaningStore.id, cleaningCompleteItem.taskId, payload)
+                }
+                onClose={() => setCleaningCompleteItem(null)}
+              />
+            </div>
+          ) : (
+          <>
+          {/* Date picker */}
+          <div className="px-4 pb-3 border-b border-gray-100/40 dark:border-gray-800/40">
+            <div className="flex items-center gap-2 mb-1.5">
+              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                {t("common.date")}
+              </Label>
+            </div>
+            <Input
+              type="date"
+              value={cleaningDate}
+              onChange={(e) => setCleaningDate(e.target.value)}
+              className="h-8 text-xs border-gray-200/60 dark:border-gray-700/60"
+            />
+          </div>
+
+          {/* Sub-header: stats + Refresh + Open in Cleaning Chart */}
+          <div className="px-4 py-2 border-b border-gray-100/40 dark:border-gray-800/40 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {dueLoading ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  {t("common.loading")}
+                </span>
+              ) : (
+                t("page.pendingTotal", {
+                  pending: cleaningPendingCount,
+                  total: cleaningItems.length,
+                })
+              )}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => cleaningStore && fetchDue(cleaningStore.id, cleaningDate)}
+                disabled={!cleaningStore || dueLoading}
+                title={t("common.refresh")}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", dueLoading && "animate-spin")} />
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 text-xs px-2.5 gap-1.5"
+                onClick={() => router.push(`/${locale}/dashboard/cleaning-chart`)}
+              >
+                {t("page.openFull")}
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Due tasks list */}
+          <div>
+            {!cleaningStore ? (
+              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                {t("page.noStoreDescription")}
+              </div>
+            ) : dueLoading && !dueData ? (
+              <div className="px-4 py-3 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <Skeleton className="h-4 flex-1 max-w-40" />
+                      <Skeleton className="h-4 w-14" />
+                    </div>
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                ))}
+              </div>
+            ) : dueError && !dueData ? (
+              <div className="px-4 py-8 text-center text-xs text-destructive">
+                {dueError.message}
+              </div>
+            ) : cleaningItems.length === 0 ? (
+              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                {t("due.table.empty", { date: cleaningDate })}
+              </div>
+            ) : (
+              <div className="divide-y divide-border/50">
+                {cleaningItems.map((item) => (
+                  <div
+                    key={item.taskId}
+                    className="flex items-start justify-between gap-3 px-4 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {item.label}
+                        </span>
+                        {item.hasPhoto && (
+                          <Camera className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                      </div>
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {t(`frequency.${item.frequency}`)} · {item.period[0]} → {item.period[1]}
+                      </p>
+                      {item.doneBy.length > 0 && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <User className="h-3 w-3 shrink-0" />
+                          <span className="truncate text-foreground">
+                            {item.doneBy.join(", ")}
+                          </span>
+                          {item.doneAt && (
+                            <span className="shrink-0">
+                              · {t("historyDrawer.completedAt", { date: formatDate(item.doneAt) })}
+                            </span>
+                          )}
+                        </p>
+                      )}
+                      {item.note && (
+                        <p className="mt-1 truncate text-[11px] italic text-muted-foreground">
+                          “{item.note}”
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <StatusPill status={item.status} />
+                      {item.status === "done" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setCleaningUndoTarget(item)}
+                          disabled={cleaningUndoing === item.taskId}
+                        >
+                          <Undo2 className="me-1 h-3 w-3" />
+                          {t("due.undo")}
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setCleaningCompleteItem(item)}
+                        >
+                          {t("due.complete")}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          </>
+          )}
+        </div>
+        )}
       </div>
     </>
   );
@@ -714,6 +992,40 @@ export function FloatingDebriefButton() {
           onSubmit={handleBulkSubmit}
         />
       )}
+
+      {/* Cleaning Chart: confirm undo */}
+      <AlertDialog
+        open={cleaningUndoTarget != null}
+        onOpenChange={(o) => !o && setCleaningUndoTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("due.undoDialog.title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("due.undoDialog.description", {
+                label: cleaningUndoTarget?.label ?? "",
+                date: cleaningDate,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cleaningUndoing != null}>
+              {t("common.cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={cleaningUndoing != null}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmCleaningUndo();
+              }}
+            >
+              {cleaningUndoing != null && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
+              {t("due.undo")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

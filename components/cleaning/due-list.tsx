@@ -30,6 +30,17 @@ import { StatusPill } from "./cleaning-ui";
 import { CompleteTaskDialog } from "./complete-task-dialog";
 import { HistoryDrawer } from "./history-drawer";
 
+/**
+ * A completion recorded for THIS period — the only history `/due` can prove on
+ * its own. Deliberately does NOT treat "overdue" or `hasPhoto` as proof: an
+ * overdue task may never have been completed at all, and photo metadata can
+ * outlive a reverted completion. Everything else is verified against the
+ * history endpoint (see the effect below).
+ */
+function hasCompletionThisPeriod(item: DueItem): boolean {
+  return item.status === "done" || item.completionId != null;
+}
+
 interface Props {
   storeId: number;
   storeCode: string | null;
@@ -41,20 +52,6 @@ interface Props {
     payload: { date: string; employeeIds: number[]; note?: string; photo?: File | null }
   ) => Promise<void>;
   onUncomplete: (storeId: number, taskId: number, date: string) => Promise<void>;
-}
-
-/**
- * Signals that THIS period was acted on — the only thing /due can tell us.
- * Past periods are checked separately (see `pastHistory` below), because a
- * task can be `pending` today and still have history from earlier periods.
- */
-function currentPeriodActivity(item: DueItem): boolean {
-  return (
-    item.status === "done" ||
-    item.status === "overdue" ||
-    item.completionId != null ||
-    item.hasPhoto
-  );
 }
 
 export function DueList({
@@ -72,27 +69,32 @@ export function DueList({
   const [undoing, setUndoing] = useState<number | null>(null);
 
   /**
-   * Whether a task has history in EARLIER periods. /due only describes today,
-   * so we ask the history endpoint once per store+task and cache the answer —
-   * otherwise an undone task would wrongly hide its History button.
+   * Whether a task has completion history in EARLIER periods. `/due` only
+   * describes the current period, so tasks with nothing recorded *now* are
+   * verified against the history endpoint — that's what keeps a brand-new
+   * task from showing an empty History drawer.
    */
   const [pastHistory, setPastHistory] = useState<Record<string, boolean>>({});
   /**
    * Cache the in-flight PROMISE (not a "checked" flag). If the effect re-runs —
-   * React StrictMode double-invokes it — the re-run re-subscribes to the same
-   * request instead of skipping it, so the result is never dropped.
+   * React StrictMode double-invokes it in dev — the re-run re-subscribes to the
+   * SAME request instead of skipping it, so the result is never silently
+   * dropped by the first invocation's `alive = false` cleanup. Caching a plain
+   * "checked" boolean instead loses that guarantee and makes the button's
+   * visibility flaky (each row's outcome then depends on whichever effect
+   * invocation happened to still be "alive" when the request resolved).
    */
   const cacheRef = useRef<Map<string, Promise<boolean>>>(new Map());
-  const cacheKey = (taskId: number) => `${storeId}:${taskId}`;
+  const historyKey = (taskId: number) => `${storeId}:${taskId}`;
 
   useEffect(() => {
-    const toCheck = items.filter((i) => !currentPeriodActivity(i));
+    // Tasks completed this period already prove history exists — skip those.
+    const toCheck = items.filter((i) => !hasCompletionThisPeriod(i));
     if (toCheck.length === 0) return;
 
     let alive = true;
-
     for (const item of toCheck) {
-      const key = cacheKey(item.taskId);
+      const key = historyKey(item.taskId);
       let request = cacheRef.current.get(key);
       if (!request) {
         request = cleaningService
@@ -100,10 +102,7 @@ export function DueList({
           .then((rows) => rows.length > 0)
           .catch((err) => {
             if (process.env.NODE_ENV === "development") {
-              console.warn(
-                `[cleaning] history check failed for task ${item.taskId}:`,
-                err
-              );
+              console.warn(`[cleaning] history check failed for task ${item.taskId}:`, err);
             }
             return false;
           });
@@ -120,9 +119,9 @@ export function DueList({
     };
   }, [items, storeId]);
 
-  /** Show the History action when this period was acted on, or past periods exist. */
+  /** History is offered only when we know a completion actually exists. */
   const showHistory = (item: DueItem) =>
-    currentPeriodActivity(item) || pastHistory[cacheKey(item.taskId)] === true;
+    hasCompletionThisPeriod(item) || pastHistory[historyKey(item.taskId)] === true;
 
   const confirmUndo = async () => {
     const item = undoTarget;
@@ -130,12 +129,13 @@ export function DueList({
     setUndoing(item.taskId);
     try {
       await onUncomplete(storeId, item.taskId, date);
-      // The task is pending again — drop the cached answer so the effect
-      // re-checks earlier periods and keeps the History button visible.
-      cacheRef.current.delete(cacheKey(item.taskId));
+      // That completion is gone — re-check whether any earlier history remains,
+      // so a task whose only record was just reverted stops offering History.
+      const key = historyKey(item.taskId);
+      cacheRef.current.delete(key);
       setPastHistory((prev) => {
         const next = { ...prev };
-        delete next[cacheKey(item.taskId)];
+        delete next[key];
         return next;
       });
       toast.success(t("due.toasts.reverted", { label: item.label }));

@@ -1901,7 +1901,9 @@
       "noStoreTitle": "لم يتم اختيار فرع",
       "noStoreDescription": "اختر فرعًا لعرض المهام المستحقة.",
       "noEvaluationTitle": "لا توجد بيانات تقييم",
-      "noEvaluationDescription": "لا يوجد شيء لتقييمه في هذه الفترة بعد."
+      "noEvaluationDescription": "لا يوجد شيء لتقييمه في هذه الفترة بعد.",
+      "openFull": "فتح في جدول التنظيف",
+      "pendingTotal": "{pending} معلّق · {total} إجمالي"
     },
     "tabs": {
       "due": "المستحق اليوم",
@@ -1913,7 +1915,8 @@
       "cancel": "إلغاء",
       "delete": "حذف",
       "refresh": "تحديث",
-      "loading": "جارٍ التحميل…"
+      "loading": "جارٍ التحميل…",
+      "date": "التاريخ"
     },
     "frequency": {
       "daily": "يومي",

@@ -53,8 +53,10 @@ const luminaBase =
 // completion photos in /storage still go through a Next.js rewrite below so
 // they stay same-origin (covered by img-src 'self').
 const qaApiUrl =
-  process.env.NEXT_PUBLIC_QA_API_URL || "https://qa.lcportal.cloud/api";
-const qaOrigin = getApiDomain(qaApiUrl) || "https://qa.lcportal.cloud";
+  process.env.QA_API_URL ||
+  process.env.NEXT_PUBLIC_QA_API_URL ||
+  "https://qatesting.lcportal.cloud/api";
+const qaOrigin = getApiDomain(qaApiUrl) || "https://qatesting.lcportal.cloud/api";
 
 const nextConfig: NextConfig = {
   // Security headers
