@@ -128,7 +128,7 @@ export function DriveThruButton() {
         <span
           className={cn(
             "absolute -top-0.5 -end-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background",
-            isLive ? "bg-green-500" : "bg-red-500",
+            isLive ? "bg-green-500" : "bg-destructive",
           )}
         />
       </Button>
