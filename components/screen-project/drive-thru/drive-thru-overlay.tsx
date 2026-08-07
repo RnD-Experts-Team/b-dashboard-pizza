@@ -3,18 +3,34 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { VideoQuality } from "livekit-client";
-import { X, Volume2, VolumeX, Radio, PhoneOff } from "lucide-react";
+import { X, Volume2, VolumeX, Radio, PhoneOff, AlertTriangle } from "lucide-react";
 import { useDriveThruStore } from "@/lib/store/drive-thru.store";
 import { useSelectedStoreStore } from "@/lib/store";
 import { screenProjectService } from "@/lib/api/services/screen-project.service";
+import { playSfx } from "@/lib/uisfx/play";
 import { ScreenTile } from "../screen-tile";
 import { MediaLibraryTrigger } from "../media-library/media-library-trigger";
 import { MediaLibrarySheet } from "../media-library/media-library-sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import type { StationMedia } from "@/types/screen-project-media.types";
 
 /** Re-fetch the scoped supervisor token well before any realistic JWT TTL. */
 const TOKEN_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+/** How long the mic can stay open before we warn the operator it'll auto-close. */
+const TALK_WARNING_AFTER_MS = 90_000; // 1:30
+/** Grace period shown as a countdown after the warning appears, before auto-close. */
+const TALK_GRACE_PERIOD_MS = 20_000;
 
 /**
  * Global drive-thru connection + sheet, mounted once in AppShell so it
@@ -44,8 +60,105 @@ export function DriveThruOverlay() {
 
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
 
-  const [pushToTalkActive, setPushToTalkActive] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  // ── Toggle-to-talk with an auto-timeout safety net ─────────────────────────
+  // Click starts talking (no need to hold the mouse down — the operator needs
+  // their hands free for a separate POS app). To guard against the mic being
+  // left open unattended, it auto-warns after TALK_WARNING_AFTER_MS with a
+  // countdown + sound, and auto-closes after TALK_GRACE_PERIOD_MS if not
+  // extended. These timers run regardless of whether the sheet is open — the
+  // warning sound is what reaches the operator while they're in another app;
+  // the visual countdown is just a bonus if the sheet happens to be open.
+  const [talkActive, setTalkActive] = useState(false);
+  const [warningSecondsLeft, setWarningSecondsLeft] = useState<number | null>(null);
+  const [justClosed, setJustClosed] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const talkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warningIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const justClosedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearTalkTimers = useCallback(() => {
+    if (talkTimeoutRef.current) {
+      clearTimeout(talkTimeoutRef.current);
+      talkTimeoutRef.current = null;
+    }
+    if (warningIntervalRef.current) {
+      clearInterval(warningIntervalRef.current);
+      warningIntervalRef.current = null;
+    }
+    setWarningSecondsLeft(null);
+  }, []);
+
+  const handleAutoClose = useCallback(() => {
+    clearTalkTimers();
+    setTalkActive(false);
+    setJustClosed(true);
+    if (justClosedTimeoutRef.current) clearTimeout(justClosedTimeoutRef.current);
+    justClosedTimeoutRef.current = setTimeout(() => setJustClosed(false), 3000);
+  }, [clearTalkTimers]);
+
+  const startWarningCountdown = useCallback(() => {
+    playSfx("warning");
+    setWarningSecondsLeft(TALK_GRACE_PERIOD_MS / 1000);
+    warningIntervalRef.current = setInterval(() => {
+      setWarningSecondsLeft((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          handleAutoClose();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [handleAutoClose]);
+
+  const startTalkTimer = useCallback(() => {
+    talkTimeoutRef.current = setTimeout(startWarningCountdown, TALK_WARNING_AFTER_MS);
+  }, [startWarningCountdown]);
+
+  const handleToggleTalk = useCallback(() => {
+    setJustClosed(false);
+    if (talkActive) {
+      clearTalkTimers();
+      setTalkActive(false);
+      return;
+    }
+    setTalkActive(true);
+    startTalkTimer();
+  }, [talkActive, clearTalkTimers, startTalkTimer]);
+
+  const handleExtend = useCallback(() => {
+    clearTalkTimers();
+    startTalkTimer();
+  }, [clearTalkTimers, startTalkTimer]);
+
+  // Closing the sheet while the mic is active is gated behind a confirmation —
+  // otherwise it's very easy to walk away thinking the mic closed with it.
+  const handleRequestCloseSheet = useCallback(() => {
+    if (talkActive) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    closeSheet();
+  }, [talkActive, closeSheet]);
+
+  const handleConfirmCloseAndStopMic = useCallback(() => {
+    clearTalkTimers();
+    setTalkActive(false);
+    setCloseConfirmOpen(false);
+    closeSheet();
+  }, [clearTalkTimers, closeSheet]);
+
+  // Reset all talk state whenever there's no active connection (disconnect,
+  // store switch, or initial mount) so nothing leaks into a future reconnect.
+  useEffect(() => {
+    if (connection) return;
+    clearTalkTimers();
+    setTalkActive(false);
+    setJustClosed(false);
+    setCloseConfirmOpen(false);
+  }, [connection, clearTalkTimers]);
 
   // Handed to us by <ScreenTile> — broadcasts a media list to the station over
   // the same "station-media" data-channel topic its built-in MediaLibrarySheet
@@ -117,7 +230,7 @@ export function DriveThruOverlay() {
           isMain={false}
           isVideoEnabled={true}
           isAudioEnabled={!isMuted}
-          myMicEnabled={pushToTalkActive}
+          myMicEnabled={talkActive}
           myCamEnabled={false}
           onToggleVideo={() => {}}
           onToggleAudio={toggleMute}
@@ -142,7 +255,7 @@ export function DriveThruOverlay() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
               className="fixed inset-0 z-[10000] bg-black/50"
-              onClick={closeSheet}
+              onClick={handleRequestCloseSheet}
             />
             <motion.div
               key="drive-thru-panel"
@@ -161,7 +274,7 @@ export function DriveThruOverlay() {
                 <div className="flex shrink-0 items-center gap-1">
                   <MediaLibraryTrigger onClick={() => setIsLibraryOpen(true)} />
                   <button
-                    onClick={closeSheet}
+                    onClick={handleRequestCloseSheet}
                     className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white transition-colors"
                     aria-label="Close"
                   >
@@ -187,30 +300,44 @@ export function DriveThruOverlay() {
                   {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                 </button>
 
-                {/* Push to talk — hold to broadcast, same interaction as "Talk to All" */}
+                {/* Talk toggle — click to start/stop, no holding required */}
                 <button
-                  onPointerDown={(e) => {
-                    e.currentTarget.setPointerCapture(e.pointerId);
-                    setPushToTalkActive(true);
-                  }}
-                  onPointerUp={() => setPushToTalkActive(false)}
-                  onPointerCancel={() => setPushToTalkActive(false)}
+                  onClick={handleToggleTalk}
                   onContextMenu={(e) => e.preventDefault()}
-                  aria-pressed={pushToTalkActive}
-                  aria-label="Hold to talk to the drive-thru"
+                  aria-pressed={talkActive}
+                  aria-label={talkActive ? "Stop talking to the drive-thru" : "Start talking to the drive-thru"}
                   className={cn(
                     "flex h-20 w-20 select-none items-center justify-center rounded-full transition-all duration-150",
-                    pushToTalkActive
+                    talkActive
                       ? "bg-red-600 text-white shadow-lg shadow-red-900/40 ring-4 ring-red-500/40"
                       : "bg-white/10 text-white/80 hover:bg-white/15",
                   )}
-                  title="Hold to talk"
+                  title={talkActive ? "Tap to stop talking" : "Tap to talk"}
                 >
-                  <Radio className={cn("h-7 w-7", pushToTalkActive && "animate-pulse")} />
+                  <Radio className={cn("h-7 w-7", talkActive && "animate-pulse")} />
                 </button>
-                <p className="text-xs text-white/50">
-                  {pushToTalkActive ? "Talking…" : "Hold to talk"}
-                </p>
+
+                {warningSecondsLeft !== null ? (
+                  <div className="w-full rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-center">
+                    <p className="flex items-center justify-center gap-1.5 text-sm font-medium text-amber-400">
+                      <AlertTriangle className="h-4 w-4" />
+                      Mic will close in {warningSecondsLeft}s
+                    </p>
+                    <p className="mt-1 text-xs text-amber-400/80">Still on the call? Do you want to extend?</p>
+                    <button
+                      onClick={handleExtend}
+                      className="mt-2 rounded-lg bg-amber-400/20 px-4 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/30 transition-colors"
+                    >
+                      Extend
+                    </button>
+                  </div>
+                ) : justClosed ? (
+                  <p className="text-xs text-white/50">Mic closed</p>
+                ) : (
+                  <p className="text-xs text-white/50">
+                    {talkActive ? "Talking — tap to stop" : "Tap to talk"}
+                  </p>
+                )}
 
                 <button
                   onClick={disconnect}
@@ -239,6 +366,26 @@ export function DriveThruOverlay() {
         alertOverlayClassName="z-[10020]"
         alertContentClassName="z-[10021]"
       />
+
+      {/* Close-while-talking confirmation — nested inside our own very-high-z
+          panel, so it needs the same z-index override as the media library's
+          delete confirmation, bumped clearly above that range too. */}
+      <AlertDialog open={closeConfirmOpen} onOpenChange={setCloseConfirmOpen}>
+        <AlertDialogContent overlayClassName="z-[10030]" className="z-[10031]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mic is still on</AlertDialogTitle>
+            <AlertDialogDescription>
+              Closing this will turn off your microphone. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmCloseAndStopMic}>
+              Close &amp; turn off mic
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
