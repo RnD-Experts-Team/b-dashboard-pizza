@@ -22,6 +22,7 @@ export default function SettingsLayout({
   const darkModeEnabled = useFeature("darkMode");
   const themeSystemEnabled = useFeature("themeSystem");
   const localizationEnabled = useFeature("localization");
+  const soundFxEnabled = useFeature("soundFx");
 
   // Build settings tabs based on enabled features
   const settingsTabs = [
@@ -30,6 +31,7 @@ export default function SettingsLayout({
     // { value: "appearance", label: t("tabs.appearance"), href: `/${locale}/dashboard/settings/appearance`, enabled: darkModeEnabled },
     // { value: "preferences", label: t("tabs.preferences"), href: `/${locale}/dashboard/settings/preferences`, enabled: localizationEnabled },
     { value: "themes", label: t("tabs.themes"), href: `/${locale}/dashboard/settings/themes`, enabled: themeSystemEnabled },
+    { value: "sound", label: t("tabs.sound"), href: `/${locale}/dashboard/settings/sound`, enabled: soundFxEnabled },
   ].filter(tab => tab.enabled);
 
   return (

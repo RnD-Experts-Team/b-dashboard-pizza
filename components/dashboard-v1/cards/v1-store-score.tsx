@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Star, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { playSfx } from "@/lib/uisfx/play";
 import type { DsprGoalMetric, StoreScoreData } from "@/types/dspr.types";
 import { V1Card } from "../v1-card";
 
@@ -335,7 +336,10 @@ export function V1StoreScoreCard({
     >
       <button
         type="button"
-        onClick={() => setTab("score")}
+        onClick={() => {
+          if (tab !== "score") playSfx("toggle-on");
+          setTab("score");
+        }}
         className={cn(
           "flex items-center gap-0.5 px-1.5 py-0.5 transition-colors",
           tab === "score" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
@@ -346,7 +350,10 @@ export function V1StoreScoreCard({
       </button>
       <button
         type="button"
-        onClick={() => setTab("upselling")}
+        onClick={() => {
+          if (tab !== "upselling") playSfx("toggle-on");
+          setTab("upselling");
+        }}
         className={cn(
           "flex items-center gap-0.5 px-1.5 py-0.5 transition-colors",
           tab === "upselling" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",

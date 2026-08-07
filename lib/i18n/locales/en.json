@@ -38,7 +38,11 @@
     "daysAgo": "{count}d ago",
     "totalIssues": "Total Issues",
     "filesScanned": "Files Scanned",
-    "withIssues": "With Issues"
+    "withIssues": "With Issues",
+    "soundFx": {
+      "mute": "Mute sound effects",
+      "unmute": "Unmute sound effects"
+    }
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -428,7 +432,8 @@
       "account": "Account",
       "appearance": "Appearance",
       "preferences": "Preferences",
-      "themes": "Themes"
+      "themes": "Themes",
+      "sound": "Sound"
     },
     "profile": {
       "title": "Profile",
@@ -493,6 +498,17 @@
       "exportTitle": "Export Theme",
       "exportDescription": "Download or copy the theme in JSON or CSS format.",
       "close": "Close"
+    },
+    "sound": {
+      "title": "Sound Effects",
+      "description": "Configure semantic UI sound cues for clicks, notifications, and key outcomes.",
+      "featureDisabled": "The sound effects feature is currently disabled. Contact your administrator to enable it.",
+      "enable": "Enable sound effects",
+      "enableDescription": "Play sound cues for clicks, notifications, and key outcomes across the dashboard.",
+      "volume": "Volume",
+      "pack": "Sound pack",
+      "packDescription": "Choose the sonic personality used for every cue.",
+      "testSound": "Test sound"
     }
   },
   "devTools": {

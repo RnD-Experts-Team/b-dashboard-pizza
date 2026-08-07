@@ -52,6 +52,7 @@ import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { canAccessCleaningTab } from "@/lib/auth/cleaning-access";
+import { playSfx } from "@/lib/uisfx/play";
 import { cn } from "@/lib/utils";
 import type { DueKeyItem, DueKeyValuePayload } from "@/types/due-key.types";
 import type { DueItem } from "@/types/cleaning.types";
@@ -533,6 +534,7 @@ export function FloatingDebriefButton() {
               const result = await createDebrief(selectedStoreId, payload);
               if (result) {
                 toast.success("Debrief submitted successfully.");
+                playSfx("success");
               }
               return !!result;
             }}

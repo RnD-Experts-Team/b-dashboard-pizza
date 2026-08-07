@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Maximize2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { playSfx } from "@/lib/uisfx/play";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, PERIOD_LABEL, type CategoryKey, type Period } from "./category";
 
@@ -62,10 +63,16 @@ export function V1Card({
   const cat = CATEGORIES[category];
   const Icon = cat.icon;
   const clickable = Boolean(onExpand);
+  const handleExpand = clickable
+    ? () => {
+        playSfx("press");
+        onExpand?.();
+      }
+    : undefined;
 
   return (
     <Card
-      onClick={onExpand}
+      onClick={handleExpand}
       style={height ? { height } : undefined}
       className={cn(
         "flex flex-col gap-0 overflow-hidden border-l-2 py-1.5 transition-shadow",

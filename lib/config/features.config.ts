@@ -316,6 +316,30 @@ export const featuresConfig: FeaturesConfig = {
     envOverride: "NEXT_PUBLIC_FEATURE_SCREEN_PROJECT_PIP",
     runtimeToggle: false,
   },
+
+  /**
+   * Sound Effects
+   *
+   * Enables semantic UI sound cues (click feedback, notification arrival,
+   * and select outcome sounds) via the uisfx library.
+   *
+   * Affects:
+   * - Global press/click sound on every interactive element
+   * - Notification arrival sound
+   * - Debrief submission success sound
+   * - Sound toggle in the topbar
+   * - Settings > Sound page
+   */
+  soundFx: {
+    id: "soundFx",
+    name: "Sound Effects",
+    description:
+      "Semantic UI sound cues for clicks, notifications, and key outcomes.",
+    category: "ui",
+    enabled: true,
+    envOverride: "NEXT_PUBLIC_FEATURE_SOUND_FX",
+    runtimeToggle: true,
+  },
 };
 
 /**

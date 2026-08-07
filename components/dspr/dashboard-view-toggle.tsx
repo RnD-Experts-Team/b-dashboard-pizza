@@ -16,7 +16,7 @@ import { DashboardV1 } from "@/components/dashboard-v1";
  * selected store is already global (Zustand) and stays in sync for free.
  */
 export function DashboardViewToggle() {
-  const [view, setView] = useState<"main" | "v1">("main");
+  const [view, setView] = useState<"main" | "v1">("v1");
   const [selectedDate, setSelectedDate] = useState<Date>(subDays(new Date(), 1));
 
   return (

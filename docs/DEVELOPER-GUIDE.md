@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-08-06 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-08-07 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -97,6 +97,8 @@ These areas are designed for customization:
 | `components/cleaning/**` | Cleaning Chart feature (task scheduling/completion, evaluation grid, reports) — tab visibility gated by `lib/auth/cleaning-access.ts`, not a feature flag |
 | `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`, `cleaning.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
 | `lib/notifications/**` | Notification → page-segment routing helper, shared by notification click-routing and the sidebar unread-dot indicator |
+| `components/uisfx/**` | Sound-fx UI: global click-sound + unlock singleton (`sound-fx-init.tsx`, mounted once in AppShell), topbar mute toggle (`sound-toggle.tsx`) |
+| `lib/uisfx/**` | Sound-fx logic: `sound.store.ts` (persisted Zustand preferences — pack/volume/enabled), `client.ts` (lazy `uisfx` singleton), `sync.ts` (store→library side effects), `play.ts` (`playSfx(cue)` call-site helper, gated on the `soundFx` feature flag + enabled + unlocked) |
 | `types/**` | Your custom TypeScript types |
 
 ---
