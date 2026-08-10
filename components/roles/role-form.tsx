@@ -208,7 +208,7 @@ export function RoleForm({ roleId, onSuccess }: RoleFormProps) {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>{t("form.permissions")}</CardTitle>
               <CardDescription>
@@ -221,6 +221,7 @@ export function RoleForm({ roleId, onSuccess }: RoleFormProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleSelectAll}
+                className="flex-1 sm:flex-none"
               >
                 {t("form.selectAll")}
               </Button>
@@ -229,6 +230,7 @@ export function RoleForm({ roleId, onSuccess }: RoleFormProps) {
                 variant="outline"
                 size="sm"
                 onClick={handleDeselectAll}
+                className="flex-1 sm:flex-none"
               >
                 {t("form.deselectAll")}
               </Button>
@@ -250,7 +252,7 @@ export function RoleForm({ roleId, onSuccess }: RoleFormProps) {
                         <Shield className="h-4 w-4" />
                         {category}
                       </h4>
-                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
                         {perms.map((permission) => (
                           <div
                             key={permission.id}
@@ -283,15 +285,16 @@ export function RoleForm({ roleId, onSuccess }: RoleFormProps) {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-4">
+      <div className="flex flex-wrap justify-end gap-4">
         <Button
           type="button"
           variant="outline"
           onClick={() => router.push(`/${locale}/dashboard/roles`)}
+          className="flex-1 sm:flex-none"
         >
           {tCommon("cancel")}
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
           {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
           {isEditMode ? tCommon("save") : t("form.create")}
         </Button>

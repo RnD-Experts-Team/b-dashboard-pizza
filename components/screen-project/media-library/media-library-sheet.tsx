@@ -80,7 +80,7 @@ export function MediaLibrarySheet({
         side="right"
         showCloseButton={false}
         overlayClassName={overlayClassName}
-        className={cn("flex w-120 flex-col gap-0 p-0 sm:max-w-120", contentClassName)}
+        className={cn("flex w-full flex-col gap-0 p-0 sm:max-w-120", contentClassName)}
       >
         <SheetHeader className="shrink-0 border-b px-4 py-3">
           <div className="flex items-center justify-between">

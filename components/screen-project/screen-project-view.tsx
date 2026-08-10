@@ -663,36 +663,40 @@ export function ScreenProjectView() {
     return (
       <div className="flex h-full flex-col gap-3">
         {/* Header bar */}
-        <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-2.5 shrink-0">
-          {canSupervisor && canObserver && (
+        <div className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-2.5 shrink-0 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3 min-w-0">
+            {canSupervisor && canObserver && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setSelectedStationIds([]); setViewMode("select"); }}
+                className="shrink-0 gap-1.5 text-muted-foreground hover:text-foreground"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Button>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Select Stations</p>
+              <p className="text-xs text-muted-foreground">Choose which stations to connect to</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+            <StationsDialog
+              storeId={storeId}
+              stations={stations}
+              onRefetch={refetch}
+            />
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => { setSelectedStationIds([]); setViewMode("select"); }}
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              className="shrink-0 text-xs"
+              onClick={handleSelectAll}
+              disabled={nonDriveThruStations.length === 0}
             >
-              <ChevronLeft className="h-4 w-4" />
-              Back
+              {allSelected ? "Deselect All" : "Select All"}
             </Button>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold">Select Stations</p>
-            <p className="text-xs text-muted-foreground">Choose which stations to connect to</p>
           </div>
-          <StationsDialog
-            storeId={storeId}
-            stations={stations}
-            onRefetch={refetch}
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-xs"
-            onClick={handleSelectAll}
-            disabled={nonDriveThruStations.length === 0}
-          >
-            {allSelected ? "Deselect All" : "Select All"}
-          </Button>
         </div>
 
         {/* Station grid */}
@@ -769,9 +773,9 @@ export function ScreenProjectView() {
     return (
       <div className="flex h-full flex-col gap-3">
         {/* Observer header bar */}
-        <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-2.5 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <Eye className="h-4 w-4 text-amber-400" />
+        <div className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-2.5 shrink-0 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+            <Eye className="h-4 w-4 shrink-0 text-amber-400" />
             <span className="text-sm font-semibold">Observer View</span>
             <span className="inline-flex items-center rounded-full bg-amber-400/10 px-2 py-0.5 text-[0.65rem] font-medium text-amber-400 ring-1 ring-inset ring-amber-400/30">
               Passive · listen only
@@ -788,7 +792,7 @@ export function ScreenProjectView() {
                   setViewMode("station-select");
                 }
               }}
-              className="gap-1.5 text-muted-foreground hover:text-foreground"
+              className="shrink-0 self-start gap-1.5 text-muted-foreground hover:text-foreground sm:self-auto"
             >
               <ChevronLeft className="h-4 w-4" />
               Supervisor View

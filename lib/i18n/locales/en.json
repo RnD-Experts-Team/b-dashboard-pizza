@@ -1050,6 +1050,10 @@
       "roles": "Roles",
       "storesAssigned": "Stores Assigned"
     },
+    "moreStores": "+{count} more",
+    "storesDialogTitle": "Stores Assigned to {name}",
+    "storesDialogDescription": "Every store assigned to this user ({count} total).",
+    "noStoresAssigned": "No stores assigned yet.",
     "assign": {
       "title": "Assign Store to User",
       "description": "Select a user, a role, and stores to assign.",
@@ -1064,6 +1068,8 @@
       "noStoresFound": "No stores found.",
       "currentAssignments": "Current Assignments",
       "noCurrentAssignments": "No current store assignments for this user.",
+      "moreStores": "+{count} more",
+      "assignmentsDialogDescription": "Every store currently assigned to this user ({count} total).",
       "storeName": "Store Name",
       "assignedRoles": "Assigned Roles",
       "selectedStores": "Selected Stores",
@@ -1104,6 +1110,8 @@
       "noStoresFound": "No stores found.",
       "currentAssignments": "Current Assignments",
       "noCurrentAssignments": "No current store assignments for this user.",
+      "moreStores": "+{count} more",
+      "assignmentsDialogDescription": "Every store currently assigned to this user ({count} total).",
       "selectedStores": "Selected Stores",
       "selectAllStores": "Select all shown",
       "deselectAllStores": "Clear all shown",

@@ -1072,11 +1072,13 @@ export default function ExportImportPage() {
       />
 
       <Tabs defaultValue="import" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:inline-grid">
-          <TabsTrigger value="export">Export</TabsTrigger>
-          <TabsTrigger value="import">Import</TabsTrigger>
-          <TabsTrigger value="employee-metrics">Employee Metrics</TabsTrigger>
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto px-1">
+          <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
+            <TabsTrigger value="export">Export</TabsTrigger>
+            <TabsTrigger value="import">Import</TabsTrigger>
+            <TabsTrigger value="employee-metrics">Employee Metrics</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="export" className="space-y-4">
           <Card>

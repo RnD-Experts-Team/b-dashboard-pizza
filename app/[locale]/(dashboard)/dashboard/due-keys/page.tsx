@@ -426,11 +426,13 @@ export default function DueKeysPage() {
               </span>
             )}
           </button>
-          <DialogContent className="min-h-[85vh] overflow-x-hidden overflow-y-auto sm:max-w-sm flex flex-col gap-4">
-            <DialogHeader>
+          <DialogContent className="flex max-h-[85vh] flex-col gap-4 overflow-hidden sm:max-w-sm">
+            <DialogHeader className="shrink-0">
               <DialogTitle>Filters</DialogTitle>
             </DialogHeader>
-          {filtersContent}
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pe-1">
+              {filtersContent}
+            </div>
           </DialogContent>
         </Dialog>
       </div>

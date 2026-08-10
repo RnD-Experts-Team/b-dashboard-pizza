@@ -837,7 +837,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
                 {currentStoreId ? ` – ${currentStoreId}` : ""}
               </p>
             </div>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            {/* Hidden below md: on mobile this sidebar renders inside the
+                Sheet drawer, where the fixed top-4 end-4 close button
+                overlaps this icon. */}
+            <ChevronsUpDown className="hidden h-4 w-4 shrink-0 text-muted-foreground md:block" />
           </button>
         )}
       </div>

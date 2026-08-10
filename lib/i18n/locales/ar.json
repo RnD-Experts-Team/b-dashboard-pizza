@@ -1050,6 +1050,10 @@
       "roles": "الأدوار",
       "storesAssigned": "الفروع المعينة"
     },
+    "moreStores": "+{count} أخرى",
+    "storesDialogTitle": "الفروع المعينة لـ {name}",
+    "storesDialogDescription": "جميع الفروع المعينة لهذا المستخدم (الإجمالي {count}).",
+    "noStoresAssigned": "لا توجد فروع معينة حتى الآن.",
     "assign": {
       "title": "تعيين فرع لمستخدم",
       "description": "اختر مستخدماً ودوراً وفروعاً للتعيين.",
@@ -1064,6 +1068,8 @@
       "noStoresFound": "لا توجد فروع.",
       "currentAssignments": "التعيينات الحالية",
       "noCurrentAssignments": "لا توجد تعيينات فروع حالية لهذا المستخدم.",
+      "moreStores": "+{count} أخرى",
+      "assignmentsDialogDescription": "جميع الفروع المعينة حاليًا لهذا المستخدم (الإجمالي {count}).",
       "storeName": "اسم الفرع",
       "assignedRoles": "الأدوار المعينة",
       "selectedStores": "الفروع المختارة",
@@ -1104,6 +1110,8 @@
       "noStoresFound": "لا توجد فروع.",
       "currentAssignments": "التعيينات الحالية",
       "noCurrentAssignments": "لا توجد تعيينات فروع حالية لهذا المستخدم.",
+      "moreStores": "+{count} أخرى",
+      "assignmentsDialogDescription": "جميع الفروع المعينة حاليًا لهذا المستخدم (الإجمالي {count}).",
       "selectedStores": "الفروع المختارة",
       "selectAllStores": "تحديد الكل المعروض",
       "deselectAllStores": "إلغاء تحديد الكل المعروض",

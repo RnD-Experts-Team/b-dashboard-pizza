@@ -38,8 +38,8 @@ export function WtdComparisonDialog({
       <Dialog open={open} onOpenChange={(o) => { onOpenChange?.(o); if (!o) onClose?.(); }}>
         <DialogContent
           className={cn(
-            "overflow-y-auto max-h-[92vh] p-6",
-            wide ? "!w-[95vw] !max-w-[50vw]" : "!max-w-5xl",
+            "overflow-y-auto max-h-[92vh] p-4 sm:p-6",
+            wide ? "sm:!w-[95vw] sm:!max-w-[50vw]" : "sm:!max-w-5xl",
           )}
         >
           <DialogHeader className="pb-3 border-b">

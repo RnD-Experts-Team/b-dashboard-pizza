@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { CheckCheck, Bell, Loader2 } from "lucide-react";
+import { CheckCheck, Bell, Loader2, X } from "lucide-react";
 
 interface NotificationPanelProps {
   onClose?: () => void;
@@ -29,17 +29,30 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3">
         <h3 className="text-sm font-semibold">Notifications</h3>
-        {unreadCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto py-1 px-2 text-xs text-muted-foreground"
-            onClick={markAllAsRead}
-          >
-            <CheckCheck className="h-3.5 w-3.5 me-1" />
-            Mark all as read
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {unreadCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto py-1 px-2 text-xs text-muted-foreground"
+              onClick={markAllAsRead}
+            >
+              <CheckCheck className="h-3.5 w-3.5 me-1" />
+              Mark all as read
+            </Button>
+          )}
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 sm:hidden"
+              onClick={onClose}
+              aria-label="Close notifications"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <Separator />
