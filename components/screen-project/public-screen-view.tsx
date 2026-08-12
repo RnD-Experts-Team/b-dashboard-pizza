@@ -368,6 +368,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             initialMedia={streaming.media}
             onRetry={handleChangeStation}
             onActiveDeviceChange={handleActiveDeviceChange}
+            showSelfView={streaming.station.type !== "drive_through"}
             className="h-full w-full"
           />
         </div>

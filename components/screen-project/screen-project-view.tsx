@@ -16,6 +16,7 @@ import { useSelectedStoreStore } from "@/lib/store";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PageGuide } from "@/components/shared/page-guide";
 import { createScreenProjectGuideSteps } from "./screen-project-guide-config";
@@ -149,6 +150,7 @@ export function ScreenProjectView() {
 
   const canSupervisor = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/supervisor` });
   const canObserver = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/observer` });
+  const { isSuperAdmin } = useAuthStore();
 
   const networkStatus = useNetworkStatus();
 
@@ -524,7 +526,7 @@ export function ScreenProjectView() {
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">
-            No stations found. Create one to get started.
+            {isSuperAdmin() ? "No stations found. Create one to get started." : "No stations found."}
           </p>
           <StationsDialog
             storeId={storeId}

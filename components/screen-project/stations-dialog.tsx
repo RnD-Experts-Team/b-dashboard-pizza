@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { screenProjectService } from "@/lib/api/services/screen-project.service";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { Station } from "@/types/screen-project.types";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -54,6 +55,7 @@ function extractErrorMessage(err: unknown): string {
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogProps) {
+  const { isSuperAdmin } = useAuthStore();
   const [open, setOpen] = useState(false);
 
   /* ── Delete state ──────────────────────────────────────────────── */
@@ -165,83 +167,89 @@ export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogP
                         </p>
                       </div>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={deletingId === s.id}
-                        onClick={() => setConfirmStation(s)}
-                        aria-label={`Delete station ${s.name}`}
-                      >
-                        {deletingId === s.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
+                      {isSuperAdmin() && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={deletingId === s.id}
+                          onClick={() => setConfirmStation(s)}
+                          aria-label={`Delete station ${s.name}`}
+                        >
+                          {deletingId === s.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
 
-              {deleteError && (
+              {isSuperAdmin() && deleteError && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{deleteError}</AlertDescription>
                 </Alert>
               )}
 
-              <Separator />
+              {isSuperAdmin() && (
+                <>
+                  <Separator />
 
-              {/* ── Create form ──────────────────────────────────────── */}
-              <form onSubmit={handleCreate} className="space-y-3">
-                <p className="text-sm font-semibold">Create Station</p>
+                  {/* ── Create form ──────────────────────────────────────── */}
+                  <form onSubmit={handleCreate} className="space-y-3">
+                    <p className="text-sm font-semibold">Create Station</p>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="sp-station-name">Name</Label>
-                  <Input
-                    id="sp-station-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Drive-Through"
-                    required
-                    disabled={creating}
-                  />
-                </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sp-station-name">Name</Label>
+                      <Input
+                        id="sp-station-name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Drive-Through"
+                        required
+                        disabled={creating}
+                      />
+                    </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="sp-station-room">Room Name</Label>
-                  <Input
-                    id="sp-station-room"
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    placeholder="e.g. 03795-00001-drive-through"
-                    required
-                    disabled={creating}
-                  />
-                </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="sp-station-room">Room Name</Label>
+                      <Input
+                        id="sp-station-room"
+                        value={roomName}
+                        onChange={(e) => setRoomName(e.target.value)}
+                        placeholder="e.g. 03795-00001-drive-through"
+                        required
+                        disabled={creating}
+                      />
+                    </div>
 
-                {createError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{createError}</AlertDescription>
-                  </Alert>
-                )}
+                    {createError && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{createError}</AlertDescription>
+                      </Alert>
+                    )}
 
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={creating}
-                  className="w-full gap-1.5"
-                >
-                  {creating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4" />
-                  )}
-                  {creating ? "Creating…" : "Create Station"}
-                </Button>
-              </form>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={creating}
+                      className="w-full gap-1.5"
+                    >
+                      {creating ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      {creating ? "Creating…" : "Create Station"}
+                    </Button>
+                  </form>
+                </>
+              )}
 
               <Separator />
 
@@ -296,32 +304,34 @@ export function StationsDialog({ storeId, stations, onRefetch }: StationsDialogP
       </Dialog>
 
       {/* ── Delete confirmation — rendered outside Dialog to avoid stacking issues */}
-      <AlertDialog
-        open={confirmStation !== null}
-        onOpenChange={(o) => { if (!o) setConfirmStation(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete station?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <span className="font-medium text-foreground">{confirmStation?.name}</span>
-              {" "}will be permanently deleted. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (confirmStation) handleDelete(confirmStation);
-                setConfirmStation(null);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {isSuperAdmin() && (
+        <AlertDialog
+          open={confirmStation !== null}
+          onOpenChange={(o) => { if (!o) setConfirmStation(null); }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete station?</AlertDialogTitle>
+              <AlertDialogDescription>
+                <span className="font-medium text-foreground">{confirmStation?.name}</span>
+                {" "}will be permanently deleted. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  if (confirmStation) handleDelete(confirmStation);
+                  setConfirmStation(null);
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </>
   );
 }
