@@ -20,9 +20,14 @@ import { useEntriesStore } from "@/lib/store/inventory-entries.store";
 import { formatUnitQty } from "@/lib/utils/number";
 import type { EntryItem } from "@/types/inventory.types";
 
-/** Block decimal separators / exponent / sign so only whole numbers are typed. */
-function blockNonInteger(e: React.KeyboardEvent<HTMLInputElement>) {
-  if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+/** Block exponent / sign so counts stay a plain non-negative decimal. */
+function blockInvalidNumberChars(e: React.KeyboardEvent<HTMLInputElement>) {
+  if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+}
+
+/** Round to 2 decimal places (avoids float artifacts like 1.2999999999). */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /**
@@ -77,9 +82,9 @@ export function RecountDialog({
 
     try {
       await recountItem(entryItem.id, {
-        count_unit_1: Number(count1),
-        count_unit_2: Number(count2),
-        count_unit_3: hasUnit3 ? Number(count3) : undefined,
+        count_unit_1: round2(Number(count1)),
+        count_unit_2: round2(Number(count2)),
+        count_unit_3: hasUnit3 ? round2(Number(count3)) : undefined,
         reason: reason.trim(),
       });
       toast.success("Recount saved.");
@@ -115,9 +120,10 @@ export function RecountDialog({
               <Input
                 id="c1"
                 type="number"
+                inputMode="decimal"
                 min="0"
-                step="1"
-                onKeyDown={blockNonInteger}
+                step="0.01"
+                onKeyDown={blockInvalidNumberChars}
                 value={count1}
                 onChange={(e) => setCount1(e.target.value)}
                 required
@@ -130,9 +136,10 @@ export function RecountDialog({
               <Input
                 id="c2"
                 type="number"
+                inputMode="decimal"
                 min="0"
-                step="1"
-                onKeyDown={blockNonInteger}
+                step="0.01"
+                onKeyDown={blockInvalidNumberChars}
                 value={count2}
                 onChange={(e) => setCount2(e.target.value)}
                 required
@@ -144,9 +151,10 @@ export function RecountDialog({
                 <Input
                   id="c3"
                   type="number"
+                  inputMode="decimal"
                   min="0"
-                  step="1"
-                  onKeyDown={blockNonInteger}
+                  step="0.01"
+                  onKeyDown={blockInvalidNumberChars}
                   value={count3}
                   onChange={(e) => setCount3(e.target.value)}
                 />

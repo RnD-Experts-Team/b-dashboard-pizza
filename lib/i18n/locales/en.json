@@ -2204,7 +2204,10 @@
       "reviewDialog": {
         "title": "Review report before export",
         "description": "One table, ranked by score. This is exactly how the PNG will look — review, then download.",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "styleLabel": "Export style",
+        "styleClassic": "Classic",
+        "styleColorful": "Colorful"
       },
       "table": {
         "rank": "#",

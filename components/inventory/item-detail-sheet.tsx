@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, ImageOff, Loader2, Pencil, Power, PowerOff, Store, ZoomIn } from "lucide-react";
+import { AlertCircle, ImageOff, Loader2, Pencil, Power, PowerOff, Store, Tag, ZoomIn } from "lucide-react";
 
 import { useItemDetail } from "@/lib/hooks/use-inventory-items";
 import type { Item } from "@/types/inventory.types";
@@ -244,6 +244,20 @@ export function ItemDetailSheet({
                           </Badge>
                         ))}
                       </div>
+                      {item.tags && item.tags.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <Tag className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          {item.tags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              variant="outline"
+                              className="border-primary/30 bg-primary/5 text-[10px] text-primary"
+                            >
+                              {tag.name_en}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

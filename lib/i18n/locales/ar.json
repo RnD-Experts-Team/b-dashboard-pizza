@@ -2203,7 +2203,10 @@
       "reviewDialog": {
         "title": "مراجعة التقرير قبل التصدير",
         "description": "جدول واحد، مرتّب حسب النتيجة. هذا هو الشكل الدقيق لصورة PNG — راجع، ثم نزّل.",
-        "cancel": "إلغاء"
+        "cancel": "إلغاء",
+        "styleLabel": "نمط التصدير",
+        "styleClassic": "كلاسيكي",
+        "styleColorful": "ملوّن"
       },
       "table": {
         "rank": "#",

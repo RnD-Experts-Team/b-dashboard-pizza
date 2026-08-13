@@ -24,6 +24,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -53,6 +60,9 @@ const T: Record<
     countSubmitted: string;
     thankYouPrefix: string;
     thankYouSuffix: string;
+    filterByCategory: string;
+    allCategories: string;
+    uncategorized: string;
   }
 > = {
   en: {
@@ -67,6 +77,9 @@ const T: Record<
     countSubmitted: "Count submitted",
     thankYouPrefix: "Thank you! Your count was recorded as ",
     thankYouSuffix: ". You can close this page.",
+    filterByCategory: "Filter by category",
+    allCategories: "All",
+    uncategorized: "Uncategorized",
   },
   ar: {
     inventoryCount: "جرد المخزون",
@@ -80,6 +93,9 @@ const T: Record<
     countSubmitted: "تم إرسال الجرد",
     thankYouPrefix: "شكراً لك! تم تسجيل الجرد بالرقم ",
     thankYouSuffix: ". يمكنك إغلاق هذه الصفحة.",
+    filterByCategory: "تصفية حسب الفئة",
+    allCategories: "الكل",
+    uncategorized: "غير مصنّف",
   },
   es: {
     inventoryCount: "Conteo de Inventario",
@@ -94,8 +110,14 @@ const T: Record<
     countSubmitted: "Conteo enviado",
     thankYouPrefix: "¡Gracias! Tu conteo fue registrado como ",
     thankYouSuffix: ". Puedes cerrar esta página.",
+    filterByCategory: "Filtrar por categoría",
+    allCategories: "Todos",
+    uncategorized: "Sin categoría",
   },
 };
+
+/** A category filter — "all" | "uncategorized" | a real tag id. */
+type CategoryFilter = "all" | "uncategorized" | number;
 
 /** Full-page states share this centered card shell. */
 function CenteredMessage({
@@ -214,10 +236,12 @@ function UnitField({
   value: string;
   onChange: (v: string) => void;
 }) {
-  // Whole-number count; custom steppers (native number arrows aren't shown on
-  // mobile, and we hide them anyway to avoid double arrows on desktop).
-  const current = Number.parseInt(value || "0", 10) || 0;
-  const step = (delta: number) => onChange(String(Math.max(0, current + delta)));
+  // Count supports up to 2 decimals; custom steppers (native number arrows
+  // aren't shown on mobile, and we hide them anyway to avoid double arrows on
+  // desktop) still step by whole units for quick entry.
+  const current = Number.parseFloat(value || "0") || 0;
+  const step = (delta: number) =>
+    onChange(String(Math.round(Math.max(0, current + delta) * 100) / 100));
 
   return (
     <div className="min-w-0 flex-1 space-y-1">
@@ -228,15 +252,15 @@ function UnitField({
         <Input
           id={id}
           type="number"
-          inputMode="numeric"
+          inputMode="decimal"
           min="0"
-          step="1"
-          placeholder="0"
+          step="0.01"
+          placeholder="0.00"
           className="h-11 w-full pe-7 text-center text-base [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           value={value}
           onKeyDown={(e) => {
-            // Whole numbers only — block decimal separators / exponent / sign.
-            if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            // Up to 2 decimals — block thousands separators / exponent / sign.
+            if ([",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
           }}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -278,6 +302,44 @@ export function PublicCountForm({ token }: { token: string }) {
   const [counts, setCounts] = useState<Counts>({});
   const [lightboxItem, setLightboxItem] = useState<PublicLinkItem | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+
+  // Unique categories across all items, plus an "uncategorized" bucket if any
+  // item has no tags. Built from whatever the link already returned — there's
+  // no separate categories endpoint.
+  const categories = useMemo(() => {
+    if (!link) return { tags: [] as { id: number; name: string }[], hasUncategorized: false };
+    const byId = new Map<number, { id: number; name: string }>();
+    let hasUncategorized = false;
+    for (const item of link.items) {
+      if (item.tags.length === 0) hasUncategorized = true;
+      for (const tag of item.tags) byId.set(tag.id, tag);
+    }
+    return {
+      tags: Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      hasUncategorized,
+    };
+  }, [link]);
+
+  // Items sliced into per-category sections (a tagged item can appear in more
+  // than one section) instead of one flat list — the dropdown then just picks
+  // which section(s) are visible; sections themselves never get unmounted.
+  const sections = useMemo(() => {
+    if (!link) return [];
+    const tagSections = categories.tags.map((tag) => ({
+      key: tag.id as CategoryFilter,
+      label: tag.name,
+      items: link.items.filter((i) => i.tags.some((t) => t.id === tag.id)),
+    }));
+    if (categories.hasUncategorized) {
+      tagSections.push({
+        key: "uncategorized" as CategoryFilter,
+        label: T[link.lang].uncategorized,
+        items: link.items.filter((i) => i.tags.length === 0),
+      });
+    }
+    return tagSections;
+  }, [link, categories]);
 
   const setCount = (
     itemId: number,
@@ -296,7 +358,7 @@ export function PublicCountForm({ token }: { token: string }) {
 
   const toNum = (v: string | undefined) => {
     const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
   };
 
   const itemEntered = (itemId: number) => {
@@ -337,6 +399,93 @@ export function PublicCountForm({ token }: { token: string }) {
     } catch {
       // submitError is rendered inline.
     }
+  };
+
+  /** One item card — shared between the flat (no-category) list and every category section. */
+  const renderItemCard = (item: PublicLinkItem) => {
+    const entered = itemEntered(item.id);
+    const details = item.details?.trim() || null;
+    return (
+      <div
+        key={item.id}
+        className={cn(
+          "rounded-xl border bg-card p-4 transition-colors duration-200",
+          entered && "border-primary/40 bg-primary/5"
+        )}
+      >
+        {/* Top row: image + item info */}
+        <div className="flex gap-3">
+          {/* Image thumbnail — clickable when present */}
+          <div className="relative shrink-0">
+            {item.image ? (
+              <button
+                type="button"
+                className="group relative overflow-hidden rounded-xl border"
+                onClick={() => setLightboxItem(item)}
+                aria-label={`View image for ${item.name}`}
+              >
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  className="h-[72px] w-[72px] object-cover transition-transform duration-200 group-hover:scale-105"
+                />
+                {/* Zoom indicator — subtle on mobile, prominent on hover */}
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-black/40 py-1 opacity-60 transition-opacity group-hover:opacity-100">
+                  <ZoomIn className="h-3 w-3 text-white" />
+                </div>
+              </button>
+            ) : (
+              <div className="flex h-[72px] w-[72px] items-center justify-center rounded-xl border bg-muted text-muted-foreground">
+                <ImageOff className="h-5 w-5" />
+              </div>
+            )}
+            {/* Entered badge on image corner */}
+            {entered && (
+              <div className="absolute -right-1.5 -top-1.5 rounded-full bg-background">
+                <CheckCircle2 className="h-5 w-5 text-green-500" />
+              </div>
+            )}
+          </div>
+
+          {/* Item name, ID, details */}
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold leading-tight">{item.name}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{item.ultimatrix_id}</p>
+            {details && (
+              <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+                {details}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom row: unit count inputs */}
+        <div className="mt-3 flex gap-2">
+          <UnitField
+            id={`u1-${item.id}`}
+            label={item.unit_1.name ?? "Unit 1"}
+            value={counts[item.id]?.u1 ?? ""}
+            onChange={(v) => setCount(item.id, "u1", v)}
+          />
+          {item.unit_2 && (
+            <UnitField
+              id={`u2-${item.id}`}
+              label={item.unit_2.name ?? "Unit 2"}
+              value={counts[item.id]?.u2 ?? ""}
+              onChange={(v) => setCount(item.id, "u2", v)}
+            />
+          )}
+          {item.unit_3 && (
+            <UnitField
+              id={`u3-${item.id}`}
+              label={item.unit_3.name ?? "Unit 3"}
+              value={counts[item.id]?.u3 ?? ""}
+              onChange={(v) => setCount(item.id, "u3", v)}
+            />
+          )}
+        </div>
+      </div>
+    );
   };
 
   // ── Non-form states ──
@@ -445,6 +594,41 @@ export function PublicCountForm({ token }: { token: string }) {
         )}
       </header>
 
+      {/* Category filter — a dropdown that picks which section(s) below are
+          visible; sections are never unmounted, so typed counts survive
+          switching the filter. */}
+      {sections.length > 0 && (
+        <div
+          className="shrink-0 border-b bg-background/95 px-4 py-2.5"
+          dir={link.lang === "ar" ? "rtl" : undefined}
+        >
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {T[link.lang].filterByCategory}
+          </p>
+          <Select
+            value={String(activeCategory)}
+            onValueChange={(v) =>
+              setActiveCategory(v === "all" || v === "uncategorized" ? v : Number(v))
+            }
+          >
+            <SelectTrigger className="h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{T[link.lang].allCategories}</SelectItem>
+              {categories.tags.map((tag) => (
+                <SelectItem key={tag.id} value={String(tag.id)}>
+                  {tag.name}
+                </SelectItem>
+              ))}
+              {categories.hasUncategorized && (
+                <SelectItem value="uncategorized">{T[link.lang].uncategorized}</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
         {/* Scrollable item list */}
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -460,94 +644,28 @@ export function PublicCountForm({ token }: { token: string }) {
               {T[link.lang].noItems}
             </p>
           ) : (
-            <div dir={link.lang === "ar" ? "rtl" : undefined}>
-            {link.items.map((item) => {
-              const entered = itemEntered(item.id);
-              const details = item.details?.trim() || null;
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "rounded-xl border bg-card p-4 transition-colors duration-200",
-                    entered && "border-primary/40 bg-primary/5"
-                  )}
-                >
-                  {/* Top row: image + item info */}
-                  <div className="flex gap-3">
-                    {/* Image thumbnail — clickable when present */}
-                    <div className="relative shrink-0">
-                      {item.image ? (
-                        <button
-                          type="button"
-                          className="group relative overflow-hidden rounded-xl border"
-                          onClick={() => setLightboxItem(item)}
-                          aria-label={`View image for ${item.name}`}
-                        >
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="h-[72px] w-[72px] object-cover transition-transform duration-200 group-hover:scale-105"
-                          />
-                          {/* Zoom indicator — subtle on mobile, prominent on hover */}
-                          <div className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-black/40 py-1 opacity-60 transition-opacity group-hover:opacity-100">
-                            <ZoomIn className="h-3 w-3 text-white" />
-                          </div>
-                        </button>
-                      ) : (
-                        <div className="flex h-[72px] w-[72px] items-center justify-center rounded-xl border bg-muted text-muted-foreground">
-                          <ImageOff className="h-5 w-5" />
-                        </div>
-                      )}
-                      {/* Entered badge on image corner */}
-                      {entered && (
-                        <div className="absolute -right-1.5 -top-1.5 rounded-full bg-background">
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        </div>
-                      )}
+            <div dir={link.lang === "ar" ? "rtl" : undefined} className="space-y-5">
+              {sections.length > 0 ? (
+                sections.map((section) => {
+                  const visible = activeCategory === "all" || activeCategory === section.key;
+                  return (
+                    <div
+                      key={String(section.key)}
+                      className={cn("space-y-3", !visible && "hidden")}
+                    >
+                      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {section.label}
+                        <span className="ms-1.5 text-muted-foreground/60">
+                          ({section.items.length})
+                        </span>
+                      </h2>
+                      {section.items.map((item) => renderItemCard(item))}
                     </div>
-
-                    {/* Item name, ID, details */}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold leading-tight">{item.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {item.ultimatrix_id}
-                      </p>
-                      {details && (
-                        <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
-                          {details}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bottom row: unit count inputs */}
-                  <div className="mt-3 flex gap-2">
-                    <UnitField
-                      id={`u1-${item.id}`}
-                      label={item.unit_1.name ?? "Unit 1"}
-                      value={counts[item.id]?.u1 ?? ""}
-                      onChange={(v) => setCount(item.id, "u1", v)}
-                    />
-                    {item.unit_2 && (
-                      <UnitField
-                        id={`u2-${item.id}`}
-                        label={item.unit_2.name ?? "Unit 2"}
-                        value={counts[item.id]?.u2 ?? ""}
-                        onChange={(v) => setCount(item.id, "u2", v)}
-                      />
-                    )}
-                    {item.unit_3 && (
-                      <UnitField
-                        id={`u3-${item.id}`}
-                        label={item.unit_3.name ?? "Unit 3"}
-                        value={counts[item.id]?.u3 ?? ""}
-                        onChange={(v) => setCount(item.id, "u3", v)}
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })
+              ) : (
+                <div className="space-y-3">{link.items.map((item) => renderItemCard(item))}</div>
+              )}
             </div>
           )}
         </div>
