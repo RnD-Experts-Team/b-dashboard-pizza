@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound, Settings2, Mic, Video as VideoIcon } from "lucide-react";
-import { VideoQuality } from "livekit-client";
+import { VideoQuality, DisconnectReason } from "livekit-client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,15 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [streaming, setStreaming] = useState<StreamingState | null>(null);
+  /** Remembered in memory (never persisted) so a dropped session can be
+   * silently re-authenticated without asking the employee to type it again —
+   * this is the only auth mechanism the station page has. */
+  const passwordRef = useRef("");
+  /** Bumped to force a fresh <ScreenTile> mount (fresh LiveKitRoom, fresh
+   * connection) with whatever token/serverUrl are currently in `streaming`. */
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  const reconnectingRef = useRef(false);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── Media device state ──────────────────────────────────────────── */
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
@@ -127,6 +136,34 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     setPhase("auth");
   }
 
+  /** Shared by the initial password submit and the silent auto-reconnect
+   * path below — throws with a user-facing message on any failure. */
+  const fetchStationToken = useCallback(
+    async (station: Station, pwd: string): Promise<StationTokenResponse> => {
+      const res = await fetch(
+        `/api/public/screen-project/${storeId}/tokens/station/${station.id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: pwd }),
+        },
+      );
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const msg = data?.error ?? data?.message ?? "Incorrect password. Please try again.";
+        throw new Error(typeof msg === "string" ? msg : "Incorrect password. Please try again.");
+      }
+
+      const data = await res.json() as StationTokenResponse;
+      if (!data.token || !data.server_url) {
+        throw new Error("Received an invalid response from the server. Please try again.");
+      }
+      return data;
+    },
+    [storeId],
+  );
+
   async function handleSubmitPassword(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedStation) return;
@@ -135,31 +172,8 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     setAuthError(null);
 
     try {
-      const res = await fetch(
-        `/api/public/screen-project/${storeId}/tokens/station/${selectedStation.id}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password }),
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as Record<string, unknown>;
-        const msg = data?.error ?? data?.message ?? "Incorrect password. Please try again.";
-        setAuthError(typeof msg === "string" ? msg : "Incorrect password. Please try again.");
-        setPhase("auth");
-        return;
-      }
-
-      const data = await res.json() as StationTokenResponse;
-
-      if (!data.token || !data.server_url) {
-        setAuthError("Received an invalid response from the server. Please try again.");
-        setPhase("auth");
-        return;
-      }
-
+      const data = await fetchStationToken(selectedStation, password);
+      passwordRef.current = password;
       setStreaming({
         station: selectedStation,
         token: data.token,
@@ -173,6 +187,42 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
       setPhase("auth");
     }
   }
+
+  /**
+   * Self-healing reconnect: fires when the station's LiveKit session drops
+   * for any reason other than an intentional/final end (see the reason
+   * filter below). Silently re-fetches a token using the password already
+   * remembered from login and forces a fresh <ScreenTile> mount — no manual
+   * action, no dependency on whether a supervisor/manager ever reconnects.
+   * Retries indefinitely on failure since this is an unattended kiosk device.
+   */
+  const handleStationDisconnected = useCallback(
+    (reason?: DisconnectReason) => {
+      const permanent = new Set([
+        DisconnectReason.CLIENT_INITIATED,
+        DisconnectReason.PARTICIPANT_REMOVED,
+        DisconnectReason.ROOM_DELETED,
+        DisconnectReason.ROOM_CLOSED,
+        DisconnectReason.DUPLICATE_IDENTITY,
+      ]);
+      if (reason !== undefined && permanent.has(reason)) return;
+      if (reconnectingRef.current || !selectedStation || !passwordRef.current) return;
+      reconnectingRef.current = true;
+
+      const attempt = async () => {
+        try {
+          const data = await fetchStationToken(selectedStation, passwordRef.current);
+          setStreaming((prev) => (prev ? { ...prev, token: data.token, serverUrl: data.server_url } : prev));
+          setConnectionEpoch((epoch) => epoch + 1);
+          reconnectingRef.current = false;
+        } catch {
+          reconnectTimeoutRef.current = setTimeout(attempt, 10_000);
+        }
+      };
+      attempt();
+    },
+    [selectedStation, fetchStationToken],
+  );
 
   /**
    * Fired when the supervisor remotely switches this station's camera/mic and the
@@ -195,6 +245,12 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   );
 
   function handleChangeStation() {
+    passwordRef.current = "";
+    reconnectingRef.current = false;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     setStreaming(null);
     setSelectedStation(null);
     setAuthError(null);
@@ -346,6 +402,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
         {/* Full-height tile area */}
         <div className="relative flex-1 min-h-0">
           <ScreenTile
+            key={connectionEpoch}
             name={streaming.station.name}
             roomName={streaming.station.room_name}
             token={streaming.token}
@@ -369,6 +426,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             onRetry={handleChangeStation}
             onActiveDeviceChange={handleActiveDeviceChange}
             showSelfView={streaming.station.type !== "drive_through"}
+            onUnrecoverableDisconnect={handleStationDisconnected}
             className="h-full w-full"
           />
         </div>

@@ -10,7 +10,7 @@ import {
   useConnectionState,
   useSpeakingParticipants,
 } from "@livekit/components-react";
-import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent } from "livekit-client";
+import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent, DisconnectReason } from "livekit-client";
 import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -157,6 +157,15 @@ export interface ScreenTileProps {
    * the bottom-left corner. Not draggable — purely a passive visual reference.
    */
   showSelfView?: boolean;
+  /**
+   * Fired when the room disconnects for a reason that isn't an intentional/
+   * final end (station removed, room deleted, etc.) — see the reason enum.
+   * Intended for a caller to silently re-authenticate and rejoin, since
+   * ScreenTile's own click-to-retry error card is unreachable on an
+   * unattended device. Fires regardless of whether the drop happened after
+   * a long successful session or shortly after connecting.
+   */
+  onUnrecoverableDisconnect?: (reason?: DisconnectReason) => void;
   /** MediaDeviceInfo.deviceId for the microphone to use (audioinput) */
   selectedAudioDeviceId?: string;
   /** MediaDeviceInfo.deviceId for the camera to use (videoinput) */
@@ -224,6 +233,7 @@ interface InnerProps {
   onConnectionStateChange?: (connected: boolean) => void;
   onMediaPublisherReady?: (publish: (media: StationMedia[]) => void) => void;
   showSelfView?: boolean;
+  onUnrecoverableDisconnect?: (reason?: DisconnectReason) => void;
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
   className?: string;
@@ -313,6 +323,7 @@ function ScreenTileInner({
   onConnectionStateChange,
   onMediaPublisherReady,
   showSelfView = false,
+  onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -433,6 +444,18 @@ function ScreenTileInner({
   useEffect(() => {
     onConnectionStateChange?.(connectionState === ConnectionState.Connected);
   }, [connectionState, onConnectionStateChange]);
+
+  // Fires only after LiveKit's own internal reconnect loop gives up (never on
+  // a transient blip it recovers from itself) — the caller decides whether to
+  // silently re-authenticate and rejoin based on the DisconnectReason.
+  useEffect(() => {
+    if (!onUnrecoverableDisconnect) return;
+    const handler = (reason?: DisconnectReason) => {
+      onUnrecoverableDisconnect(reason);
+    };
+    room.on(RoomEvent.Disconnected, handler);
+    return () => { room.off(RoomEvent.Disconnected, handler); };
+  }, [room, onUnrecoverableDisconnect]);
 
   // Media comes entirely from the station token response (initialMedia), which
   // already embeds the media list with the correct `is_primary`. We deliberately
@@ -1424,6 +1447,7 @@ export function ScreenTile({
   onConnectionStateChange,
   onMediaPublisherReady,
   showSelfView,
+  onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -1557,6 +1581,7 @@ export function ScreenTile({
         onConnectionStateChange={onConnectionStateChange}
         onMediaPublisherReady={onMediaPublisherReady}
         showSelfView={showSelfView}
+        onUnrecoverableDisconnect={onUnrecoverableDisconnect}
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}
         className={className}

@@ -373,20 +373,17 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold leading-tight">{fullName}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  {item.tags.length > 0 ? (
-                    item.tags.map((tag) => (
-                      <span
-                        key={tag.id}
-                        className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
-                      >
-                        #{tag.name}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
-                      {item.label}
+                  <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                    {item.label}
+                  </span>
+                  {item.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
+                    >
+                      #{tag.name}
                     </span>
-                  )}
+                  ))}
                   <span className="text-[11px] text-muted-foreground">Store {storeId}</span>
                 </div>
               </div>
