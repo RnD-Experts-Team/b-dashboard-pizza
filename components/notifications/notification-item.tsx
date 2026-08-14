@@ -17,10 +17,13 @@ import {
   Gift,
   TrendingUp,
   UserMinus,
+  SprayCan,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
-import { getPageSegment } from "@/lib/notifications/notification-routing";
+import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
+import { getNotificationPageSegment } from "@/lib/notifications/notification-routing";
+import type { PeriodType } from "@/types/cleaning.types";
 
 /**
  * Parse a debrief action URL and extract keyId, date, and storeId.
@@ -38,6 +41,25 @@ function parseDebriefActionUrl(
     const storeId = parsed.searchParams.get("store_id") ?? "";
     if (!keyId || !date || !storeId) return null;
     return { keyId, date, storeId };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse a cleaning-evaluation action URL and extract the store/period to
+ * deep-link into — e.g. /cleaning/evaluations?store_id=5&period_type=week&period_key=2026-W32
+ */
+function parseCleaningActionUrl(
+  url: string
+): { storeId: number; periodType: PeriodType; periodKey: string } | null {
+  try {
+    const parsed = new URL(url, "http://x");
+    const storeId = Number(parsed.searchParams.get("store_id"));
+    const periodType = parsed.searchParams.get("period_type");
+    const periodKey = parsed.searchParams.get("period_key");
+    if (!storeId || (periodType !== "week" && periodType !== "date") || !periodKey) return null;
+    return { storeId, periodType, periodKey };
   } catch {
     return null;
   }
@@ -106,6 +128,9 @@ function getTypeVisuals(type: string) {
   if (type.includes("info")) {
     return { Icon: Info, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
   }
+  if (type.startsWith("cleaning_")) {
+    return { Icon: SprayCan, bg: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" };
+  }
   return { Icon: Bell, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
 }
 
@@ -151,6 +176,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
   const locale = (params?.locale as string) || "en";
   const openDebriefKey = useDebriefActionStore((s) => s.openDebriefKey);
   const openHiringRequest = useHiringActionStore((s) => s.openHiringRequest);
+  const openCleaningEvaluation = useCleaningActionStore((s) => s.openCleaningEvaluation);
   const isOnDueKeysPage = pathname?.includes("/due-keys") ?? false;
 
   const { Icon, bg } = getTypeVisuals(notification.type);
@@ -162,11 +188,13 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
     notification.type.startsWith("milestone_gift_request") ||
     notification.type.startsWith("separation_request");
   const isEmployeeType = notification.type.startsWith("employee_promoted");
-  const pageSegment = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType
+  const isCleaningType = notification.type.startsWith("cleaning_");
+  const pageSegment = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType
     ? null
-    : getPageSegment(notification.action_url);
+    : getNotificationPageSegment(notification);
 
-  const isClickable = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || !!pageSegment;
+  const isClickable =
+    isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType || !!pageSegment;
 
   function handleClick() {
     if (!isClickable) return;
@@ -198,6 +226,15 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
 
     if (isEmployeeType) {
       router.push(`/${locale}/dashboard/employees`);
+      return;
+    }
+
+    if (isCleaningType) {
+      const parsed = parseCleaningActionUrl(notification.action_url ?? "");
+      if (parsed) {
+        openCleaningEvaluation(parsed.storeId, parsed.periodType, parsed.periodKey);
+      }
+      router.push(`/${locale}/dashboard/cleaning-chart`);
       return;
     }
 

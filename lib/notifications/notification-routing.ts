@@ -32,5 +32,8 @@ export function getNotificationPageSegment(notification: Notification): string |
     return "hiring-request";
   }
   if (type.startsWith("employee_promoted")) return "employees";
+  // cleaning_task_created / cleaning_task_completed / cleaning_evaluation_ready
+  // all deep-link into the Cleaning Chart tabs rather than a dedicated page.
+  if (type.startsWith("cleaning_")) return "cleaning-chart";
   return getPageSegment(action_url);
 }

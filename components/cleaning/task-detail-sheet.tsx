@@ -95,7 +95,7 @@ export function TaskDetailSheet({ taskId, open, onOpenChange, onEdit, onDelete }
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-xl">
         {/* Hero header */}
-        <SheetHeader className="space-y-0 border-b bg-muted/30 px-6 py-5">
+        <SheetHeader className="space-y-0 border-b bg-muted/30 px-6 py-5 pe-14">
           <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <SprayCan className="h-5 w-5" />

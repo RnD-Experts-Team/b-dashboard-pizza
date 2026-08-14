@@ -20,19 +20,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useCleaningTasks, useCleaningEvaluation, todayIso } from "@/lib/hooks/use-cleaning";
 import { useCleaningStore } from "@/lib/store/cleaning.store";
+import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
-import { canAccessCleaningTab, type CleaningTabId } from "@/lib/auth/cleaning-access";
+import { canAccessCleaningTab, canEvaluateCleaning, type CleaningTabId } from "@/lib/auth/cleaning-access";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import type { EvaluationGrid as Grid, DueStatus } from "@/types/cleaning.types";
+import { currentPeriodKey } from "@/lib/cleaning/period-options";
+import type { ChartVerdict, EvaluationGrid as Grid, DueStatus, PeriodType } from "@/types/cleaning.types";
 import {
   DueList,
   TasksList,
   CreateTaskDialog,
   EvaluationGrid,
   ReportsView,
+  MyStoreResults,
   CleaningErrorState,
   StorePicker,
+  PeriodPicker,
   DueSkeleton,
   TasksSkeleton,
   EvaluationSkeleton,
@@ -45,6 +49,7 @@ const TAB_DEFS: { id: CleaningTabId; labelKey: string; icon: LucideIcon; render:
   { id: "tasks", labelKey: "tasks", icon: ClipboardList, render: () => <TasksTab /> },
   { id: "evaluation", labelKey: "evaluation", icon: Grid3x3, render: () => <EvaluationTab /> },
   { id: "reports", labelKey: "reports", icon: FileBarChart, render: () => <ReportsTab /> },
+  { id: "my-store", labelKey: "myStore", icon: Store, render: () => <MyStoreResults /> },
 ];
 
 export default function CleaningChartPage() {
@@ -71,6 +76,21 @@ export default function CleaningChartPage() {
       setActiveTab(visibleTabs[0].id);
     }
   }, [visibleTabs, activeTab]);
+
+  // A "cleaning_evaluation_ready" notification click lands here — jump straight
+  // to My Store with the exact period the notification is about, instead of
+  // whatever period happens to be current.
+  const pendingCleaningAction = useCleaningActionStore((s) => s.pendingCleaningAction);
+  const clearPendingCleaningAction = useCleaningActionStore((s) => s.clearPendingCleaningAction);
+  const fetchGrid = useCleaningStore((s) => s.fetchGrid);
+  useEffect(() => {
+    if (!pendingCleaningAction) return;
+    if (visibleTabs.some((tab) => tab.id === "my-store")) {
+      setActiveTab("my-store");
+      void fetchGrid(pendingCleaningAction.periodType, pendingCleaningAction.periodKey);
+    }
+    clearPendingCleaningAction();
+  }, [pendingCleaningAction, visibleTabs, fetchGrid, clearPendingCleaningAction]);
 
   return (
     <div className="space-y-6">
@@ -121,7 +141,7 @@ function DueTab() {
   // at login from /auth/general-overview) — already scoped to whatever stores
   // THIS user can access (e.g. a store manager's 2 assigned stores), unlike
   // storeService.getStores() which lists every company store regardless of role.
-  const { overviewStores } = useAuthStore();
+  const { overviewStores, canAccessRoute } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
   const {
     dueData,
@@ -130,11 +150,36 @@ function DueTab() {
     fetchDue,
     completeTask,
     uncompleteTask,
+    setChartCell,
   } = useCleaningStore();
 
   const [store, setStore] = useState<StoreOption | null>(null);
   const [date, setDate] = useState<string>(todayIso());
   const [status, setStatus] = useState<"all" | DueStatus>("all");
+
+  // Cleaning-specialist only. setChartCell reads the current evaluation
+  // period from the same shared store the Evaluation tab uses, so a Due-page
+  // toggle lands in the same grid the specialist is already grading.
+  const canEvaluate = canEvaluateCleaning(
+    { canAccessRoute },
+    store ? String(store.id) : undefined
+  );
+
+  // Cross-reference the evaluation grid (same shared period as the Evaluation
+  // tab) so a task that's already been graded this period shows it — without
+  // this, evaluating from Due gave no lasting sign it had taken effect.
+  const { grid: evalGrid } = useCleaningEvaluation();
+  const evaluatedVerdicts = useMemo(() => {
+    const map: Record<number, ChartVerdict> = {};
+    const row = store ? evalGrid?.rows.find((r) => r.storeId === store.id) : null;
+    if (!row) return map;
+    for (const cells of Object.values(row.chart)) {
+      for (const cell of cells) {
+        if (cell.verdict) map[cell.taskId] = cell.verdict;
+      }
+    }
+    return map;
+  }, [evalGrid, store]);
 
   const options: StoreOption[] = useMemo(
     () =>
@@ -259,6 +304,9 @@ function DueTab() {
               items={visibleItems}
               onComplete={completeTask}
               onUncomplete={uncompleteTask}
+              canEvaluate={canEvaluate}
+              onEvaluate={setChartCell}
+              evaluatedVerdicts={evaluatedVerdicts}
             />
           )}
         </>
@@ -350,10 +398,10 @@ function EvaluationTab() {
   );
 }
 
-/* ── Reports (own fetch via /reports/data) ── */
+/* ── Reports (own fetch via /reports/data, own period — independent of Evaluation) ── */
 function ReportsTab() {
-  // Reuse the evaluation period selection from the shared store.
-  const { periodType, periodKey } = useCleaningEvaluation();
+  const [periodType, setPeriodType] = useState<PeriodType>("week");
+  const [periodKey, setPeriodKey] = useState<string>(() => currentPeriodKey("week"));
   const [grid, setGrid] = useState<Grid | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<CleaningError | null>(null);
@@ -386,9 +434,26 @@ function ReportsTab() {
 
   const retry = () => setReloadKey((k) => k + 1);
 
-  if (error && !grid) return <CleaningErrorState error={error} onRetry={retry} />;
-  // No grid yet → still loading; keep showing the skeleton (never a flash of empty).
-  if (!grid || loading) return <ReportsSkeleton />;
+  return (
+    <div className="flex flex-col gap-4">
+      <PeriodPicker
+        periodType={periodType}
+        periodKey={periodKey}
+        onChange={(type, key) => {
+          setPeriodType(type);
+          setPeriodKey(key);
+        }}
+        disabled={loading}
+      />
 
-  return <ReportsView grid={grid} periodType={periodType} periodKey={periodKey} />;
+      {error && !grid ? (
+        <CleaningErrorState error={error} onRetry={retry} />
+      ) : !grid || loading ? (
+        // No grid yet → still loading; keep showing the skeleton (never a flash of empty).
+        <ReportsSkeleton />
+      ) : (
+        <ReportsView grid={grid} periodType={periodType} periodKey={periodKey} />
+      )}
+    </div>
+  );
 }

@@ -14,6 +14,7 @@ import {
   Link2Off,
   Loader2,
   PackageCheck,
+  X,
   ZoomIn,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -212,8 +213,15 @@ function ImageLightbox({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-fit max-w-none border-0 bg-transparent p-0 shadow-none sm:max-w-none [&>button]:rounded-full [&>button]:bg-white/20 [&>button]:p-1.5 [&>button]:text-white [&>button]:hover:bg-white/30">
+      <DialogContent
+        showCloseButton={false}
+        className="w-fit max-w-none border-0 bg-transparent p-0 shadow-none sm:max-w-none"
+      >
         <DialogTitle className="sr-only">{alt}</DialogTitle>
+        <DialogClose className="absolute -top-11 end-0 rounded-full bg-white/20 p-1.5 text-white transition-colors hover:bg-white/30">
+          <X className="h-5 w-5" />
+          <span className="sr-only">Close</span>
+        </DialogClose>
         <img
           src={src}
           alt={alt}

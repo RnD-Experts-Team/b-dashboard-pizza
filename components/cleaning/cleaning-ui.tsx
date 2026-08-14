@@ -6,8 +6,8 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-import { ZoomIn } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { X, ZoomIn } from "lucide-react";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { DueStatus, ItemValue, ChartVerdict } from "@/types/cleaning.types";
 
@@ -135,7 +135,7 @@ export function ValueBadge({
       return (
         <span
           className={cn(
-            "inline-flex items-center justify-center rounded-lg border bg-card px-2 py-1 text-muted-foreground/40",
+            "inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border bg-card px-2 py-1 text-muted-foreground/40",
             className
           )}
         >
@@ -149,7 +149,7 @@ export function ValueBadge({
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          "inline-flex h-full w-full items-center justify-center rounded-lg border bg-card text-muted-foreground/40 transition-colors hover:bg-muted/60 hover:text-muted-foreground disabled:opacity-50",
+          "inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg border bg-card px-2 py-1 text-muted-foreground/40 transition-colors hover:bg-muted/60 hover:text-muted-foreground disabled:opacity-50",
           className
         )}
       >
@@ -268,8 +268,15 @@ export function ImageLightbox({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-fit max-w-none border-0 bg-transparent p-0 shadow-none sm:max-w-none [&>button]:rounded-full [&>button]:bg-white/20 [&>button]:p-1.5 [&>button]:text-white [&>button]:hover:bg-white/30">
+      <DialogContent
+        showCloseButton={false}
+        className="w-fit max-w-none border-0 bg-transparent p-0 shadow-none sm:max-w-none"
+      >
         <DialogTitle className="sr-only">{alt}</DialogTitle>
+        <DialogClose className="absolute -top-11 end-0 rounded-full bg-white/20 p-1.5 text-white transition-colors hover:bg-white/30">
+          <X className="h-5 w-5" />
+          <span className="sr-only">Close</span>
+        </DialogClose>
         <img
           src={src}
           alt={alt}

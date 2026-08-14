@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   BellRing,
-  CalendarRange,
   ClipboardList,
   Loader2,
   Plus,
@@ -43,8 +42,11 @@ import {
   cellBorder as groupBorder,
   headerCell as th,
 } from "./cleaning-ui";
+import { PeriodPicker } from "./period-picker";
+import { GradeItemDialog, type GradeTarget } from "./grade-item-dialog";
 
-const ITEM_CYCLE: ItemValue[] = ["pass", "fail", "auto_fail", "empty"];
+const EMPTY_CELL = { value: "empty" as ItemValue, note: null, photos: [] };
+
 const CHART_GROUPS: {
   key: keyof Grid["rows"][number]["chart"];
 }[] = [{ key: "daily" }, { key: "weekly" }, { key: "monthly" }, { key: "hourly" }];
@@ -59,7 +61,7 @@ const VERDICT_SHORT: Record<ChartVerdict, string> = {
 
 /** True once at least one inspection item on this row has been scored. */
 function hasAnyItemValue(row: EvalRow, items: InspectionItem[]): boolean {
-  return items.some((it) => (row.itemValues[it.name] ?? "empty") !== "empty");
+  return items.some((it) => (row.itemValues[it.name]?.value ?? "empty") !== "empty");
 }
 /** True once at least one chart task on this row has a verdict set. */
 function hasAnyChartVerdict(row: EvalRow): boolean {
@@ -82,7 +84,9 @@ interface Props {
     storeId: number,
     inspectionItemId: number,
     columnName: string,
-    value: ItemValue
+    value: ItemValue,
+    note?: string,
+    images?: File[]
   ) => Promise<void>;
   onSetChartCell: (
     storeId: number,
@@ -106,8 +110,7 @@ export function EvaluationGrid({
   onFinalize,
 }: Props) {
   const t = useTranslations("cleaningChart");
-  const [type, setType] = useState<PeriodType>(periodType);
-  const [keyInput, setKeyInput] = useState(periodKey);
+  const [gradeTarget, setGradeTarget] = useState<GradeTarget | null>(null);
   const [newItem, setNewItem] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<{ id: number; name: string } | null>(
@@ -127,11 +130,6 @@ export function EvaluationGrid({
     }
   };
 
-  const cycleItem = (storeId: number, itemId: number, name: string, current: ItemValue) => {
-    const next = ITEM_CYCLE[(ITEM_CYCLE.indexOf(current) + 1) % ITEM_CYCLE.length];
-    void guard(`i-${storeId}-${itemId}`, () => onSetItemCell(storeId, itemId, name, next));
-  };
-
   const toggleChart = (storeId: number, cell: ChartCell) => {
     const next: ChartVerdict = cell.verdict === "pass" ? "fail" : "pass";
     void guard(`c-${storeId}-${cell.taskId}`, () => onSetChartCell(storeId, cell.taskId, next));
@@ -141,44 +139,11 @@ export function EvaluationGrid({
     <div className="flex flex-col gap-4">
       {/* ── Actions row — flat toolbar, matches the app pattern ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border bg-muted/40 p-1">
-            {(["week", "date"] as PeriodType[]).map((periodT) => (
-              <button
-                key={periodT}
-                type="button"
-                onClick={() => setType(periodT)}
-                className={cn(
-                  "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
-                  type === periodT
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {periodT === "week" ? t("evaluation.weekTab") : t("evaluation.dateTab")}
-              </button>
-            ))}
-          </div>
-          <div className="relative">
-            <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={keyInput}
-              onChange={(e) => setKeyInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && keyInput.trim()) {
-                  onLoadPeriod(type, keyInput.trim());
-                }
-              }}
-              placeholder={
-                type === "week" ? t("evaluation.weekPlaceholder") : t("evaluation.datePlaceholder")
-              }
-              className="h-9 w-40 ps-9"
-            />
-          </div>
-          <Button variant="outline" onClick={() => onLoadPeriod(type, keyInput.trim())}>
-            {t("evaluation.load")}
-          </Button>
-        </div>
+        <PeriodPicker
+          periodType={periodType}
+          periodKey={periodKey}
+          onChange={onLoadPeriod}
+        />
 
         <div className="flex items-center gap-2">
           <Input
@@ -342,17 +307,35 @@ export function EvaluationGrid({
                         {row.store}
                       </td>
 
-                      {/* Inspection items */}
+                      {/* Inspection items — always open the Grade modal, never a quick toggle */}
                       {items.map((it) => {
-                        const value = (row.itemValues[it.name] ?? "empty") as ItemValue;
+                        const cell = row.itemValues[it.name] ?? EMPTY_CELL;
                         const savingKey = `i-${row.storeId}-${it.id}`;
+                        const annotated = Boolean(cell.note) || cell.photos.length > 0;
                         return (
                           <td key={it.id} className={cn("p-1.5 text-center", groupBorder)}>
-                            <ValueBadge
-                              value={value}
-                              disabled={busy === savingKey}
-                              onClick={() => cycleItem(row.storeId, it.id, it.name, value)}
-                            />
+                            <div className="relative inline-flex">
+                              <ValueBadge
+                                value={cell.value}
+                                disabled={busy === savingKey}
+                                onClick={() =>
+                                  setGradeTarget({
+                                    storeId: row.storeId,
+                                    store: row.store,
+                                    itemId: it.id,
+                                    itemName: it.name,
+                                    cell,
+                                  })
+                                }
+                              />
+                              {/* Dot marks a cell that carries a note and/or photos. */}
+                              {annotated && (
+                                <span
+                                  className="pointer-events-none absolute -end-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-primary"
+                                  title={cell.note ?? undefined}
+                                />
+                              )}
+                            </div>
                           </td>
                         );
                       })}
@@ -395,7 +378,7 @@ export function EvaluationGrid({
                                       weight: cell.weight,
                                     })}
                                     className={cn(
-                                      "flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-start transition-colors",
+                                      "flex w-full items-start gap-1.5 rounded-lg px-2 py-1 text-start transition-colors",
                                       accent
                                         ? "border bg-card hover:bg-muted/60"
                                         : "hover:bg-muted/40",
@@ -403,11 +386,11 @@ export function EvaluationGrid({
                                     )}
                                   >
                                     {accent && (
-                                      <span className={cn("h-3 w-1 shrink-0 rounded-full", accent.bar)} />
+                                      <span className={cn("mt-0.5 h-3 w-1 shrink-0 rounded-full", accent.bar)} />
                                     )}
                                     <span
                                       className={cn(
-                                        "min-w-0 flex-1 truncate text-[11px] font-medium",
+                                        "min-w-0 flex-1 break-words text-[11px] font-medium leading-snug",
                                         !accent && "text-muted-foreground"
                                       )}
                                     >
@@ -416,7 +399,7 @@ export function EvaluationGrid({
                                     {accent && (
                                       <span
                                         className={cn(
-                                          "shrink-0 text-[10px] font-bold uppercase",
+                                          "mt-0.5 shrink-0 text-[10px] font-bold uppercase",
                                           accent.text
                                         )}
                                       >
@@ -512,6 +495,15 @@ export function EvaluationGrid({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Grade an inspection-item cell (verdict + note + images) */}
+      <GradeItemDialog
+        target={gradeTarget}
+        onOpenChange={(o) => !o && setGradeTarget(null)}
+        onSubmit={({ storeId, itemId, itemName, value, note, images }) =>
+          onSetItemCell(storeId, itemId, itemName, value, note, images)
+        }
+      />
     </div>
   );
 }

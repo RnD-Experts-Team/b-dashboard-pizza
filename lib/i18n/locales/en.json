@@ -1934,7 +1934,8 @@
       "due": "Due Today",
       "tasks": "Tasks",
       "evaluation": "Evaluation",
-      "reports": "Reports"
+      "reports": "Reports",
+      "myStore": "My Store"
     },
     "common": {
       "cancel": "Cancel",
@@ -1996,13 +1997,18 @@
       "viewHistory": "View history",
       "undo": "Undo",
       "complete": "Complete",
+      "evaluateHint": "Set today's cleaning-chart verdict for this task",
+      "evaluatePass": "Pass",
+      "evaluateFail": "Fail",
       "undoDialog": {
         "title": "Undo completion?",
         "description": "This reverts “{label}” back to pending for {date}. Any recorded photo, note, and employees will be removed."
       },
       "toasts": {
         "reverted": "“{label}” reverted to pending.",
-        "undoFailed": "Could not undo."
+        "undoFailed": "Could not undo.",
+        "evaluated": "“{label}” evaluated.",
+        "evaluateFailed": "Could not save the evaluation."
       }
     },
     "tasks": {
@@ -2049,6 +2055,8 @@
       "weight": "Weight (0–100)",
       "weightPlaceholder": "Optional",
       "dueTime": "Due time",
+      "dueTime2": "Second due time",
+      "dueTime2Hint": "Optional — e.g. an opening and a closing pass",
       "frequency": "Frequency",
       "frequencyHint": {
         "daily": "Photo required",
@@ -2165,10 +2173,12 @@
       "weekPlaceholder": "2026-W30",
       "datePlaceholder": "2026-07-21",
       "load": "Load",
+      "periodSearchPlaceholder": "Search periods…",
+      "periodSearchEmpty": "No matching period.",
       "addItemPlaceholder": "Add inspection item…",
       "add": "Add",
       "legendLabel": "Legend",
-      "legendHint": "Click a cell to cycle · click a chart chip to toggle Pass/Fail",
+      "legendHint": "Click an inspection item to grade it · click a chart chip to toggle Pass/Fail",
       "noStores": {
         "title": "No stores to evaluate",
         "description": "Nothing to grade for this period yet."
@@ -2194,6 +2204,29 @@
         "saveFailed": "Save failed.",
         "notified": "{store} notified."
       }
+    },
+    "gradeDialog": {
+      "title": "Grade “{item}”",
+      "description": "{store} — set the verdict, a note, and any supporting photos.",
+      "verdict": "Verdict",
+      "verdictHint": "Pass or Fail for a normal check; Auto marks it auto-failed; Empty clears any verdict.",
+      "note": "Note",
+      "notePlaceholder": "What did you find?",
+      "noteHint": "Optional, but recommended for Fail/Auto so the store manager knows what to fix.",
+      "photos": "Photos",
+      "pasteHint": "Tip: press Ctrl+V (⌘V on Mac) anywhere in this dialog to paste a screenshot or copied image.",
+      "photoPasted": "Photo pasted from clipboard.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saved": "“{item}” graded.",
+      "failed": "Could not save the grade."
+    },
+    "photoPicker": {
+      "choose": "Add photos",
+      "addMore": "Add more",
+      "remove": "Remove {name}",
+      "savedAlt": "Saved photo {n}",
+      "pasted": "Photo pasted from clipboard."
     },
     "reports": {
       "title": "Cleaning Report",
@@ -2226,6 +2259,32 @@
         "imageFailed": "Could not export the image.",
         "csvFailed": "CSV download failed."
       }
+    },
+    "myStore": {
+      "loading": "Loading your store's results…",
+      "noRow": "No evaluation recorded for your store in this period yet.",
+      "itemScore": "Item Score",
+      "chartScoreLabel": "Chart Score",
+      "inspectionItems": "Inspection Items",
+      "itemColumn": "Item",
+      "resultColumn": "Result",
+      "noItems": "No inspection items yet.",
+      "cleaningChart": "Cleaning Chart",
+      "hasNote": "Note",
+      "hasPhoto": "{count} photo",
+      "hasPhotoPlural": "{count} photos",
+      "chartGroups": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "hourly": "Hourly"
+      },
+      "verdict": {
+        "pass": "Pass",
+        "fail": "Fail",
+        "auto_fail": "Auto"
+      },
+      "photoAlt": "Photo {n}"
     },
     "errorState": {
       "notAvailable": "Not available yet",

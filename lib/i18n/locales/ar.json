@@ -1933,7 +1933,8 @@
       "due": "المستحق اليوم",
       "tasks": "المهام",
       "evaluation": "التقييم",
-      "reports": "التقارير"
+      "reports": "التقارير",
+      "myStore": "فرعي"
     },
     "common": {
       "cancel": "إلغاء",
@@ -1995,13 +1996,18 @@
       "viewHistory": "عرض السجل",
       "undo": "تراجع",
       "complete": "إنجاز",
+      "evaluateHint": "تحديد نتيجة جدول التنظيف لهذه المهمة اليوم",
+      "evaluatePass": "ناجح",
+      "evaluateFail": "فاشل",
       "undoDialog": {
         "title": "التراجع عن الإنجاز؟",
         "description": "سيعيد هذا “{label}” إلى حالة معلّق لتاريخ {date}. ستتم إزالة أي صورة أو ملاحظة أو موظفين مسجلين."
       },
       "toasts": {
         "reverted": "تم إعادة “{label}” إلى معلّق.",
-        "undoFailed": "تعذّر التراجع."
+        "undoFailed": "تعذّر التراجع.",
+        "evaluated": "تم تقييم “{label}”.",
+        "evaluateFailed": "تعذّر حفظ التقييم."
       }
     },
     "tasks": {
@@ -2048,6 +2054,8 @@
       "weight": "الوزن (0–100)",
       "weightPlaceholder": "اختياري",
       "dueTime": "وقت الاستحقاق",
+      "dueTime2": "وقت الاستحقاق الثاني",
+      "dueTime2Hint": "اختياري — مثل جولة صباحية وجولة مسائية",
       "frequency": "التكرار",
       "frequencyHint": {
         "daily": "الصورة مطلوبة",
@@ -2164,10 +2172,12 @@
       "weekPlaceholder": "2026-W30",
       "datePlaceholder": "2026-07-21",
       "load": "تحميل",
+      "periodSearchPlaceholder": "بحث عن فترة…",
+      "periodSearchEmpty": "لا توجد فترة مطابقة.",
       "addItemPlaceholder": "إضافة عنصر تفتيش…",
       "add": "إضافة",
       "legendLabel": "المفتاح",
-      "legendHint": "انقر على الخلية للتبديل · انقر على شريحة الجدول لتبديل ناجح/فاشل",
+      "legendHint": "انقر على عنصر التفتيش لتقييمه · انقر على شريحة الجدول لتبديل ناجح/فاشل",
       "noStores": {
         "title": "لا توجد فروع للتقييم",
         "description": "لا يوجد شيء لتقييمه في هذه الفترة بعد."
@@ -2193,6 +2203,29 @@
         "saveFailed": "فشل الحفظ.",
         "notified": "تم إشعار {store}."
       }
+    },
+    "gradeDialog": {
+      "title": "تقييم “{item}”",
+      "description": "{store} — حدد النتيجة وملاحظة وأي صور داعمة.",
+      "verdict": "النتيجة",
+      "verdictHint": "ناجح أو فاشل لفحص عادي؛ \"تلقائي\" يحدده كفاشل تلقائيًا؛ \"فارغ\" يمسح أي نتيجة.",
+      "note": "ملاحظة",
+      "notePlaceholder": "ما الذي وجدته؟",
+      "noteHint": "اختياري، ولكنه يُنصح به عند الفشل أو التلقائي حتى يعرف مدير الفرع ما يجب إصلاحه.",
+      "photos": "الصور",
+      "pasteHint": "نصيحة: اضغط Ctrl+V (⌘V على ماك) في أي مكان بهذا الحوار للصق لقطة شاشة أو صورة منسوخة.",
+      "photoPasted": "تم لصق الصورة من الحافظة.",
+      "cancel": "إلغاء",
+      "save": "حفظ",
+      "saved": "تم تقييم “{item}”.",
+      "failed": "تعذّر حفظ التقييم."
+    },
+    "photoPicker": {
+      "choose": "إضافة صور",
+      "addMore": "إضافة المزيد",
+      "remove": "إزالة {name}",
+      "savedAlt": "صورة محفوظة {n}",
+      "pasted": "تم لصق الصورة من الحافظة."
     },
     "reports": {
       "title": "تقرير التنظيف",
@@ -2225,6 +2258,32 @@
         "imageFailed": "تعذّر تصدير الصورة.",
         "csvFailed": "فشل تنزيل CSV."
       }
+    },
+    "myStore": {
+      "loading": "جارٍ تحميل نتائج فرعك…",
+      "noRow": "لا يوجد تقييم مسجل لفرعك في هذه الفترة بعد.",
+      "itemScore": "نتيجة العناصر",
+      "chartScoreLabel": "نتيجة الجدول",
+      "inspectionItems": "عناصر التفتيش",
+      "itemColumn": "العنصر",
+      "resultColumn": "النتيجة",
+      "noItems": "لا توجد عناصر تفتيش بعد.",
+      "cleaningChart": "جدول التنظيف",
+      "hasNote": "ملاحظة",
+      "hasPhoto": "{count} صورة",
+      "hasPhotoPlural": "{count} صور",
+      "chartGroups": {
+        "daily": "يومي",
+        "weekly": "أسبوعي",
+        "monthly": "شهري",
+        "hourly": "كل ساعة"
+      },
+      "verdict": {
+        "pass": "ناجح",
+        "fail": "فاشل",
+        "auto_fail": "تلقائي"
+      },
+      "photoAlt": "صورة {n}"
     },
     "errorState": {
       "notAvailable": "غير متاح بعد",

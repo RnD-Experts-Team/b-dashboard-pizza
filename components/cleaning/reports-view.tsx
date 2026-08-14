@@ -33,6 +33,7 @@ import type {
 interface ReportRow {
   storeId: number;
   store: string;
+  /** Flattened to the bare verdict — reports don't render notes/photos. */
   itemValues: Record<string, ItemValue>;
   itemScore: number;
   passCount: number;
@@ -47,16 +48,19 @@ interface ReportRow {
 function buildRows(grid: EvaluationGrid): ReportRow[] {
   const itemCount = grid.items.length;
   const rows = grid.rows.map((row) => {
-    const hasAnyItemValue = grid.items.some(
-      (item) => (row.itemValues[item.name] ?? "empty") !== "empty"
-    );
+    // Flatten {value, note, photos} → the bare verdict this report scores on.
+    const values: Record<string, ItemValue> = {};
+    for (const item of grid.items) {
+      values[item.name] = row.itemValues[item.name]?.value ?? "empty";
+    }
+    const hasAnyItemValue = grid.items.some((item) => values[item.name] !== "empty");
     const hasAnyChartVerdict = (["daily", "weekly", "monthly", "hourly"] as const).some((g) =>
       row.chart[g].some((c) => c.verdict != null)
     );
-    const passCount = grid.items.reduce((acc, item) => {
-      const v = (row.itemValues[item.name] ?? "empty") as ItemValue;
-      return acc + (v === "pass" ? 1 : 0);
-    }, 0);
+    const passCount = grid.items.reduce(
+      (acc, item) => acc + (values[item.name] === "pass" ? 1 : 0),
+      0
+    );
     const chartCommitment = row.chartScore >= 100;
     const scorePct = Math.round(
       ((passCount + (chartCommitment ? 1 : 0)) / (itemCount + 1)) * 100
@@ -64,7 +68,7 @@ function buildRows(grid: EvaluationGrid): ReportRow[] {
     return {
       storeId: row.storeId,
       store: row.store,
-      itemValues: row.itemValues ?? {},
+      itemValues: values,
       itemScore: row.itemScore ?? 0,
       passCount,
       itemCount,

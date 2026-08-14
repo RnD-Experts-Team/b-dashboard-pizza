@@ -53,7 +53,9 @@ interface CleaningState {
     storeId: number,
     inspectionItemId: number,
     columnName: string,
-    value: ItemValue
+    value: ItemValue,
+    note?: string,
+    images?: File[]
   ) => Promise<void>;
   setChartCell: (
     storeId: number,
@@ -145,7 +147,7 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
     }
   },
 
-  setItemCell: async (storeId, inspectionItemId, columnName, value) => {
+  setItemCell: async (storeId, inspectionItemId, columnName, value, note, images) => {
     const { periodType, periodKey } = get();
     const row = await cleaningService.setCell({
       store_id: storeId,
@@ -154,6 +156,8 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
       kind: "item",
       inspection_item_id: inspectionItemId,
       value,
+      note,
+      images,
     });
     replaceRow(set, storeId, row);
   },
