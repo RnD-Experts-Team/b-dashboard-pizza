@@ -49,8 +49,9 @@ import { V1Section } from "./v1-section";
 import {
   V1SalesTrendCard,
   V1SalesHistoryCard,
-  V1ChannelMixCard,
+  // V1ChannelMixCard — merged into V1HourlyChannelsCard's "By Channel" tab.
   V1HourlyChannelsCard,
+  V1ManagerTasksCard,
   V1StoreScoreCard,
   V1CustomerSalesCard,
   V1PhoneSalesCard,
@@ -513,23 +514,27 @@ export function DashboardV1({
       <V1Section category="sales" weekLabel={weekLabel} gridClassName="gap-[7px]">
         <V1SalesTrendCard sales={sales} laborWeekToDateByDay={day.labor_week_to_date_by_day} span={2} />
         <V1StoreScoreCard
-          upsellingDay={day.upselling?.total_upselling_day}
-          upsellingWeek={day.upselling?.total_upselling_week_to_date}
+          upsellingScore={day.upselling_score}
           goalMetrics={goal_metrics}
           storeScore={store_score}
           date={selectedDate}
           span={1}
         />
+        {/* V1ChannelMixCard was here — now the "By Channel" tab of V1HourlyChannelsCard below.
         <V1ChannelMixCard
           today={day.total_sales}
           weekly={day.total_sales_week_to_date_avg}
           span={1}
         />
+        */}
+        <V1ManagerTasksCard span={1} />
         <V1CustomerSalesCard data={wbrData?.["customer-count-and-sales"]} isLoading={isLoading} span={1} />
         <V1PhoneSalesCard data={wbrData?.["phone-and-adjusted-sales"]} isLoading={isLoading} span={1} />
         <V1HourlyChannelsCard
           hourly={day.hourly_sales_and_channels}
           weekly={day.hourly_sales_and_channels_week_to_date_avg}
+          channelToday={day.total_sales}
+          channelWeekly={day.total_sales_week_to_date_avg}
           span={2}
         />
         <V1OrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} isLoading={isLoading} span={2} />

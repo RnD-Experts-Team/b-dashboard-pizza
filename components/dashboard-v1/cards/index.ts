@@ -1,13 +1,15 @@
 // Sales
 export { V1SalesTrendCard } from "./v1-sales-trend";
 export { V1SalesHistoryCard } from "./v1-sales-history";
-export { V1ChannelMixCard } from "./v1-channel-mix";
+// Merged into V1HourlyChannelsCard as its "By Channel" tab — kept for reference.
+// export { V1ChannelMixCard } from "./v1-channel-mix";
 export { V1HourlyChannelsCard } from "./v1-hourly-channels";
 export { V1StoreScoreCard } from "./v1-store-score";
 export { V1CustomerSalesCard } from "./v1-customer-sales";
 export { V1PhoneSalesCard } from "./v1-phone-sales";
 export { V1ChannelSalesWeeklyCard } from "./v1-channel-sales";
 export { V1OrdersVsSalesCard } from "./v1-orders-vs-sales";
+export { V1ManagerTasksCard } from "./v1-manager-tasks";
 
 // Operations
 export { V1PortalGaugeCard } from "./v1-portal-gauge";

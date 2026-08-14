@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Star, TrendingUp } from "lucide-react";
+import { Star, TrendingUp, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { playSfx } from "@/lib/uisfx/play";
-import type { DsprGoalMetric, StoreScoreData } from "@/types/dspr.types";
+import { fmt$ } from "@/components/dspr/wbr-format";
+import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
+import type { DsprGoalMetric, StoreScoreData, UpsellingScoreRecord } from "@/types/dspr.types";
 import { V1Card } from "../v1-card";
+import { V1SubLabel, V1Metric, V1MetricGrid, V1Empty, V1_TBL, V1_TH, V1_TD, V1_NUM } from "../v1-ui";
 
 /* ── Radial geometry (upselling ring) ────────────────────────────────────── */
 const RING = 96;
@@ -15,6 +18,27 @@ const R = (RING - STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
 
 type Tab = "score" | "upselling";
+
+/** +$10 per 25pts above 100%, capped at 300% (=$80). */
+const BONUS_TIERS = [125, 150, 175, 200, 225, 250, 275, 300].map((pct) => ({
+  pct,
+  dollars: ((pct - 100) / 25) * 10,
+}));
+
+const RANK_BADGE = [
+  "bg-amber-500 text-white", // #1 gold
+  "bg-slate-400 text-white", // #2 silver
+  "bg-amber-700 text-white", // #3 bronze
+  "bg-muted text-muted-foreground", // #4
+  "bg-muted text-muted-foreground", // #5+
+];
+
+interface UpsellingScoreProp {
+  total_upselling_score_day?: number;
+  total_upselling_score_week_to_date?: number;
+  day?: UpsellingScoreRecord;
+  week_to_date?: UpsellingScoreRecord;
+}
 
 /* ── Score colour helpers ─────────────────────────────────────────────────── */
 function scoreColor(score: number, max = 100) {
@@ -42,6 +66,20 @@ const SCORE_BG: Record<string, string> = {
   orange:  "bg-orange-500/10 dark:bg-orange-500/15",
   red:     "bg-red-500/10 dark:bg-red-500/15",
 };
+
+/* ── Upselling item helpers ───────────────────────────────────────────────── */
+function formatUpsellKey(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Trim to at most 2 decimals without a trailing ".00"/".0". */
+function fmtPts(n: number): string {
+  return (Math.round(n * 100) / 100).toString();
+}
 
 /* ── RAF helper ──────────────────────────────────────────────────────────── */
 function makeAnimator() {
@@ -190,32 +228,28 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
   );
 }
 
-/* ── Upselling view (animated ring + bars) ───────────────────────────────── */
-function UpsellingView({
-  upsellingDay,
-  upsellingWeek,
-  goalMetrics,
-  date,
+/* ── Upselling summary — ring, Total/Week Total bars, bonus banner (item detail lives in the dialog) ── */
+function UpsellingSummary({
+  goal,
+  noGoal,
+  dayTotal,
+  weekTotal,
+  dayPct,
+  weekPct,
+  bonusDollars,
 }: {
-  upsellingDay: number;
-  upsellingWeek: number;
-  goalMetrics?: DsprGoalMetric[];
-  date?: Date;
+  goal: number;
+  noGoal: boolean;
+  dayTotal: number;
+  weekTotal: number;
+  dayPct: number;
+  weekPct: number;
+  bonusDollars: number;
 }) {
-  const dayLabel = date ? format(date, "MMM d") : "Today";
-
-  const upsMetric  = goalMetrics?.find((m) => m.metric_name.toLowerCase().includes("upselling"));
-  const weeklyGoal = upsMetric ? parseFloat(upsMetric.goals[0]?.goal ?? "0") : null;
-  const goal   = weeklyGoal ?? 0;
-  const noGoal = goal === 0;
-
-  const weekPct    = noGoal ? 0 : (upsellingWeek / goal) * 100;
-  const dayPct     = noGoal ? 0 : (upsellingDay / goal) * 100;
-  const dayBarPct  = noGoal ? (upsellingWeek > 0 ? (upsellingDay / upsellingWeek) * 100 : 0) : Math.min(dayPct, 100);
-  const weekBarPct = noGoal ? (upsellingWeek > 0 ? 100 : 0) : Math.min(weekPct, 100);
-
-  const ringColor  = noGoal ? "#a1a1aa" : weekPct >= 90 ? "#34d399" : weekPct >= 60 ? "#fbbf24" : "#a78bfa";
+  const ringColor   = noGoal ? "#a1a1aa" : weekPct >= 90 ? "#34d399" : weekPct >= 60 ? "#fbbf24" : "#a78bfa";
   const statusLabel = noGoal ? "No Goal Set" : weekPct >= 100 ? "Goal Met!" : weekPct >= 80 ? "Almost There" : weekPct >= 50 ? "On Track" : "Keep Going";
+  const dayBarPct  = noGoal ? (weekTotal > 0 ? (dayTotal / weekTotal) * 100 : 0) : Math.min(dayPct, 100);
+  const weekBarPct = noGoal ? (weekTotal > 0 ? 100 : 0) : Math.min(weekPct, 100);
 
   const circleRef   = useRef<SVGCircleElement | null>(null);
   const centerRef   = useRef<HTMLDivElement | null>(null);
@@ -228,7 +262,7 @@ function UpsellingView({
   useEffect(() => {
     const { animateTo, cancelAll } = animator.current;
 
-    if (circleRef.current)  circleRef.current.style.strokeDashoffset = `${CIRC}`;
+    if (circleRef.current) circleRef.current.style.strokeDashoffset = `${CIRC}`;
     if (centerRef.current && !noGoal) centerRef.current.textContent = "0%";
     if (dayBarRef.current)   dayBarRef.current.style.width   = "0%";
     if (dayTextRef.current)  dayTextRef.current.textContent  = "0";
@@ -236,10 +270,8 @@ function UpsellingView({
     if (weekTextRef.current) weekTextRef.current.textContent = "0";
 
     const dur = 750;
-
-    animateTo("circle", 0, Math.min(weekBarPct, 100), dur, (val) => {
-      if (circleRef.current)
-        circleRef.current.style.strokeDashoffset = `${CIRC - (val / 100) * CIRC}`;
+    animateTo("circle", 0, noGoal ? 0 : Math.min(weekPct, 100), dur, (val) => {
+      if (circleRef.current) circleRef.current.style.strokeDashoffset = `${CIRC - (val / 100) * CIRC}`;
     });
     if (!noGoal) {
       setTimeout(() => animateTo("count", 0, weekPct, dur, (val) => {
@@ -247,21 +279,20 @@ function UpsellingView({
       }), 50);
     }
     setTimeout(() => {
-      animateTo("dayBar",  0, dayBarPct,    dur, (val) => { if (dayBarRef.current)   dayBarRef.current.style.width   = `${Math.min(100, val)}%`; });
-      animateTo("dayText", 0, upsellingDay, dur, (val) => { if (dayTextRef.current)  dayTextRef.current.textContent  = Math.round(val).toLocaleString(); });
+      animateTo("dayBar",  0, dayBarPct, dur, (val) => { if (dayBarRef.current)  dayBarRef.current.style.width  = `${Math.min(100, val)}%`; });
+      animateTo("dayText", 0, dayTotal,  dur, (val) => { if (dayTextRef.current) dayTextRef.current.textContent = fmtPts(val); });
     }, 100);
     setTimeout(() => {
-      animateTo("weekBar",  0, weekBarPct,    dur, (val) => { if (weekBarRef.current)  weekBarRef.current.style.width   = `${Math.min(100, val)}%`; });
-      animateTo("weekText", 0, upsellingWeek, dur, (val) => { if (weekTextRef.current) weekTextRef.current.textContent  = Math.round(val).toLocaleString(); });
+      animateTo("weekBar",  0, weekBarPct, dur, (val) => { if (weekBarRef.current)  weekBarRef.current.style.width  = `${Math.min(100, val)}%`; });
+      animateTo("weekText", 0, weekTotal,  dur, (val) => { if (weekTextRef.current) weekTextRef.current.textContent = fmtPts(val); });
     }, 150);
 
     return () => cancelAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [upsellingDay, upsellingWeek, weekPct, dayBarPct, weekBarPct, noGoal]);
+  }, [weekPct, dayBarPct, weekBarPct, dayTotal, weekTotal, noGoal]);
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      {/* Ring */}
+    <div className="flex h-full flex-col items-center justify-center gap-2.5">
       <div className="relative flex items-center justify-center" style={{ width: RING, height: RING }}>
         <svg width={RING} height={RING} className="-rotate-90">
           <circle cx={RING / 2} cy={RING / 2} r={R} strokeWidth={STROKE} stroke="currentColor"
@@ -288,39 +319,192 @@ function UpsellingView({
         </div>
       </div>
 
-      {/* Bars */}
       <div className="w-full space-y-1.5">
         <div className="flex items-center gap-2">
-          <span className="w-14 shrink-0 text-left text-[10px] text-muted-foreground truncate">{dayLabel}</span>
+          <span className="w-16 shrink-0 text-left text-[10px] text-muted-foreground truncate">Total</span>
           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
             <div ref={dayBarRef} className="h-full rounded-full" style={{ width: "0%", backgroundColor: "#a78bfa" }} />
           </div>
-          <div ref={dayTextRef} className="w-8 text-right text-[11px] font-semibold tabular-nums">0</div>
+          <div ref={dayTextRef} className="w-9 text-right text-[11px] font-semibold tabular-nums">0</div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-14 shrink-0 text-left text-[10px] text-muted-foreground truncate">This Week</span>
+          <span className="w-16 shrink-0 text-left text-[10px] text-muted-foreground truncate">Week Total</span>
           <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
             <div ref={weekBarRef} className="h-full rounded-full" style={{ width: "0%", backgroundColor: ringColor }} />
           </div>
-          <div ref={weekTextRef} className="w-8 text-right text-[11px] font-semibold tabular-nums">0</div>
+          <div ref={weekTextRef} className="w-9 text-right text-[11px] font-semibold tabular-nums">0</div>
         </div>
       </div>
+
+      {bonusDollars > 0 && (
+        <div className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 dark:bg-emerald-500/15">
+          <DollarSign className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-[9.5px] font-semibold text-emerald-700 dark:text-emerald-400">
+            Bonus unlocked: {fmt$(bonusDollars)}{" "}
+            <span className="font-normal text-emerald-600/80 dark:text-emerald-400/70">
+              ({Math.round(weekPct)}% of weekly goal)
+            </span>
+          </span>
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ── Item breakdown table — Day vs WTD side by side, ranked by WTD ───────── */
+function UpsellScoreTable({
+  day,
+  wtd,
+  dayLabel,
+}: {
+  day?: UpsellingScoreRecord;
+  wtd?: UpsellingScoreRecord;
+  dayLabel: string;
+}) {
+  const allKeys = Array.from(new Set([...Object.keys(day ?? {}), ...Object.keys(wtd ?? {})]))
+    .sort((a, b) => ((wtd?.[b] ?? 0) as number) - ((wtd?.[a] ?? 0) as number));
+
+  if (allKeys.length === 0) {
+    return <V1Empty icon={TrendingUp}>No upselling item data</V1Empty>;
+  }
+
+  return (
+    <table className={V1_TBL}>
+      <thead>
+        <tr>
+          <th className={cn(V1_TH, "w-8")}>#</th>
+          <th className={V1_TH}>Item</th>
+          <th className={cn(V1_TH, V1_NUM)}>{dayLabel}</th>
+          <th className={cn(V1_TH, V1_NUM)}>WTD</th>
+        </tr>
+      </thead>
+      <tbody>
+        {allKeys.map((key, idx) => (
+          <tr key={key}>
+            <td className={V1_TD}>
+              <span className={cn("flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold", RANK_BADGE[idx] ?? RANK_BADGE[3])}>
+                {idx + 1}
+              </span>
+            </td>
+            <td className={cn(V1_TD, "font-semibold")}>{formatUpsellKey(key)}</td>
+            <td className={cn(V1_TD, V1_NUM, "font-bold")}>
+              {day?.[key] != null ? fmtPts(day[key] as number) : <span className="text-muted-foreground/40">—</span>}
+            </td>
+            <td className={cn(V1_TD, V1_NUM, "font-bold")}>
+              {wtd?.[key] != null ? fmtPts(wtd[key] as number) : <span className="text-muted-foreground/40">—</span>}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/* ── Upselling detail dialog — everything about upselling, Day + WTD ─────── */
+function UpsellingDetailDialog({
+  open,
+  onOpenChange,
+  upsellingScore,
+  goal,
+  noGoal,
+  dayTotal,
+  weekTotal,
+  dayPct,
+  weekPct,
+  bonusDollars,
+  dayLabel,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  upsellingScore?: UpsellingScoreProp;
+  goal: number;
+  noGoal: boolean;
+  dayTotal: number;
+  weekTotal: number;
+  dayPct: number;
+  weekPct: number;
+  bonusDollars: number;
+  dayLabel: string;
+}) {
+  return (
+    <WbrDetailDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Upselling Detail"
+      badgeText={noGoal ? "No goal set" : `Goal: ${goal.toLocaleString()} pts/wk`}
+    >
+      <div className="space-y-6">
+        {/* Summary */}
+        <div>
+          <V1SubLabel className="mb-2 px-1">Summary</V1SubLabel>
+          <V1MetricGrid cols={4}>
+            <V1Metric
+              label={dayLabel}
+              value={`${fmtPts(dayTotal)} pts`}
+              sub={noGoal ? undefined : `${Math.round(dayPct)}% of goal`}
+            />
+            <V1Metric
+              label="Week to Date"
+              value={`${fmtPts(weekTotal)} pts`}
+              sub={noGoal ? undefined : `${Math.round(weekPct)}% of goal`}
+              accent="text-violet-600 dark:text-violet-400"
+            />
+            <V1Metric
+              label="Weekly Goal"
+              value={noGoal ? "Not set" : goal.toLocaleString()}
+            />
+            <V1Metric
+              label="Bonus Earned"
+              value={fmt$(bonusDollars)}
+              sub={bonusDollars > 0 ? `at ${Math.round(weekPct)}% of goal` : "reach 125% to start earning"}
+              accent="text-emerald-600 dark:text-emerald-400"
+            />
+          </V1MetricGrid>
+        </div>
+
+        {/* Bonus tiers */}
+        <div>
+          <V1SubLabel className="mb-2 px-1">Bonus Tiers (Week-to-Date)</V1SubLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {BONUS_TIERS.map((tier) => {
+              const reached = !noGoal && weekPct >= tier.pct;
+              return (
+                <span
+                  key={tier.pct}
+                  className={cn(
+                    "rounded-md border px-2 py-1 text-[10px] font-semibold",
+                    reached
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "border-border/50 text-muted-foreground",
+                  )}
+                >
+                  {tier.pct}% → {fmt$(tier.dollars)}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Item breakdown */}
+        <div>
+          <V1SubLabel className="mb-2 px-1">Item Breakdown</V1SubLabel>
+          <UpsellScoreTable day={upsellingScore?.day} wtd={upsellingScore?.week_to_date} dayLabel={dayLabel} />
+        </div>
+      </div>
+    </WbrDetailDialog>
   );
 }
 
 /* ── Main card ────────────────────────────────────────────────────────────── */
 export function V1StoreScoreCard({
-  upsellingDay = 0,
-  upsellingWeek = 0,
+  upsellingScore,
   goalMetrics,
   storeScore,
   date,
   span,
   className,
 }: {
-  upsellingDay?: number;
-  upsellingWeek?: number;
+  upsellingScore?: UpsellingScoreProp;
   goalMetrics?: DsprGoalMetric[];
   storeScore?: StoreScoreData;
   date?: Date;
@@ -328,6 +512,22 @@ export function V1StoreScoreCard({
   className?: string;
 }) {
   const [tab, setTab] = useState<Tab>("score");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const dayLabel = date ? format(date, "MMM d") : "Today";
+
+  const upsMetric  = goalMetrics?.find((m) => m.metric_name.toLowerCase().includes("upselling"));
+  const weeklyGoal = upsMetric ? parseFloat(upsMetric.goals[0]?.goal ?? "0") : null;
+  const goal   = weeklyGoal ?? 0;
+  const noGoal = goal === 0;
+
+  const dayTotal  = upsellingScore?.total_upselling_score_day ?? 0;
+  const weekTotal = upsellingScore?.total_upselling_score_week_to_date ?? 0;
+  const dayPct  = noGoal ? 0 : (dayTotal / goal) * 100;
+  const weekPct = noGoal ? 0 : (weekTotal / goal) * 100;
+
+  // Manager cash bonus — always week-to-date based, +$10 per 25pts above 100%, capped at 300% (=$80)
+  const bonusSteps = noGoal ? 0 : Math.min(8, Math.max(0, Math.floor((weekPct - 100) / 25)));
+  const bonusDollars = bonusSteps * 10;
 
   const toggle = (
     <div
@@ -373,17 +573,34 @@ export function V1StoreScoreCard({
       span={span}
       className={className}
       headerControl={toggle}
+      onExpand={tab === "upselling" ? () => setDialogOpen(true) : undefined}
     >
       {tab === "score" ? (
         <ScoreView storeScore={storeScore} />
       ) : (
-        <UpsellingView
-          upsellingDay={upsellingDay}
-          upsellingWeek={upsellingWeek}
-          goalMetrics={goalMetrics}
-          date={date}
+        <UpsellingSummary
+          goal={goal}
+          noGoal={noGoal}
+          dayTotal={dayTotal}
+          weekTotal={weekTotal}
+          dayPct={dayPct}
+          weekPct={weekPct}
+          bonusDollars={bonusDollars}
         />
       )}
+      <UpsellingDetailDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        upsellingScore={upsellingScore}
+        goal={goal}
+        noGoal={noGoal}
+        dayTotal={dayTotal}
+        weekTotal={weekTotal}
+        dayPct={dayPct}
+        weekPct={weekPct}
+        bonusDollars={bonusDollars}
+        dayLabel={dayLabel}
+      />
     </V1Card>
   );
 }
