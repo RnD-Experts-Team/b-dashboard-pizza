@@ -92,14 +92,16 @@ export function DueKeyValueSheet({
   const wasEdited = (currentValue?.correctedFromId ?? null) != null || history.length > 0;
   const showEditForm = !!item && (!effectiveFilled || isEditing);
 
-  // Reset per-key view state when a different key is opened.
+  // Reset per-key view state when a different key — or a different date for the
+  // same key — is opened. Keying only on `item?.keyId` left `savedValue` from a
+  // previous date's edit stuck in state when the same key was reopened on a new date.
   useEffect(() => {
     setSavedValue(null);
     setIsEditing(false);
     setHistoryOpen(false);
     setFullHistoryOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.keyId]);
+  }, [item?.keyId, date]);
 
   // Initialise the edit inputs from the current value (pre-fill when correcting a filled key).
   useEffect(() => {

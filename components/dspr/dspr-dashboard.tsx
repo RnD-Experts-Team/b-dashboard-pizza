@@ -971,8 +971,7 @@ export function DsprDashboard({
         />
         {/* <div className="flex flex-row lg:col-span-2 rounded-xl border shadow-sm gap-0 overflow-hidden "> */}
         <StoreScoreCard
-          upsellingDay={day.upselling?.total_upselling_day}
-          upsellingWeek={day.upselling?.total_upselling_week_to_date}
+          upsellingScore={day.upselling_score}
           goalMetrics={goal_metrics}
           storeScore={store_score}
           date={selectedDate}

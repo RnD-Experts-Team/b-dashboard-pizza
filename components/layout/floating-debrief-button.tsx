@@ -152,6 +152,9 @@ export function FloatingDebriefButton() {
   const { selectedStore } = useSelectedStoreStore();
   const pendingDebriefKey = useDebriefActionStore((s) => s.pendingDebriefKey);
   const clearPendingDebriefKey = useDebriefActionStore((s) => s.clearPendingDebriefKey);
+  const pendingPanelTab = useDebriefActionStore((s) => s.pendingPanelTab);
+  const clearPendingPanelTab = useDebriefActionStore((s) => s.clearPendingPanelTab);
+  const setTaskCounts = useDebriefActionStore((s) => s.setTaskCounts);
 
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateDebrief = canAccessRoute({
@@ -305,6 +308,52 @@ export function FloatingDebriefButton() {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  // ── Effect D: publish due-key counts for other surfaces (Manager Tasks card)
+  // Runs above the early-returns below so the counts stay published even when
+  // this panel itself is hidden.
+  useEffect(() => {
+    setTaskCounts({
+      dueKeysUnfilled: unfilledItems.length,
+      dueKeysTotal: activeItems.length,
+      dueKeysUnfilledLabels: unfilledItems.map((i) => i.label),
+      dueKeysDate: selectedDate,
+      dueKeysReady: !isDueKeysLoading && dueKeysData != null,
+    });
+  }, [unfilledItems, activeItems, selectedDate, isDueKeysLoading, dueKeysData, setTaskCounts]);
+
+  // ── Effect E: publish cleaning-task counts + panel availability ──────────
+  useEffect(() => {
+    setTaskCounts({
+      cleaningPending: cleaningPendingCount,
+      cleaningTotal: cleaningItems.length,
+      cleaningPendingLabels: cleaningItems
+        .filter((i) => i.status !== "done")
+        .map((i) => i.label),
+      cleaningDate: cleaningDate,
+      cleaningReady: !dueLoading && dueData != null,
+      canSeeCleaning: canSeeCleaningChart,
+      panelAvailable: canCreateDebrief && !pathname?.includes("/due-keys"),
+    });
+  }, [
+    cleaningPendingCount,
+    cleaningItems,
+    cleaningDate,
+    dueLoading,
+    dueData,
+    canSeeCleaningChart,
+    canCreateDebrief,
+    pathname,
+    setTaskCounts,
+  ]);
+
+  // ── Effect F: open the panel on a requested tab (Manager Tasks card rows) ─
+  useEffect(() => {
+    if (!pendingPanelTab) return;
+    setActiveNav(pendingPanelTab);
+    setIsOpen(true);
+    clearPendingPanelTab();
+  }, [pendingPanelTab, clearPendingPanelTab]);
 
   if (!canCreateDebrief) return null;
   if (pathname?.includes("/due-keys")) return null;

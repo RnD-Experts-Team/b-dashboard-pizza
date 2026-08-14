@@ -3,9 +3,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, Star } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { TrendingUp, Star, DollarSign, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DsprGoalMetric, StoreScoreData } from "@/types/dspr.types";
+import { fmt$ } from "@/components/dspr/wbr-format";
+import type { DsprGoalMetric, StoreScoreData, UpsellingScoreRecord } from "@/types/dspr.types";
 
 // ── Radial geometry constants (upselling ring) ────────────────────────────────
 const CIRCLE_SIZE = 120;
@@ -14,15 +17,43 @@ const RADIUS = (CIRCLE_SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 type Tab = "score" | "upselling";
+type Period = "day" | "week_to_date";
+
+interface UpsellingScoreProp {
+  total_upselling_score_day?: number;
+  total_upselling_score_week_to_date?: number;
+  day?: UpsellingScoreRecord;
+  week_to_date?: UpsellingScoreRecord;
+}
 
 interface StoreScoreCardProps {
-  upsellingDay?: number;
-  upsellingWeek?: number;
+  upsellingScore?: UpsellingScoreProp;
   goalMetrics?: DsprGoalMetric[];
   date?: Date;
   storeScore?: StoreScoreData;
   loading?: boolean;
   className?: string;
+}
+
+// ── Upselling item helpers ────────────────────────────────────────────────────
+function formatUpsellKey(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+function parseUpsellItems(record?: UpsellingScoreRecord): { name: string; value: number }[] {
+  return (Object.entries(record ?? {}) as [string, number | undefined][])
+    .filter(([, val]) => val != null)
+    .map(([key, val]) => ({ name: formatUpsellKey(key), value: val as number }))
+    .sort((a, b) => b.value - a.value);
+}
+
+/** Trim to at most 2 decimals without a trailing ".00"/".0". */
+function fmtPts(n: number): string {
+  return (Math.round(n * 100) / 100).toString();
 }
 
 // ── Score colour helpers ──────────────────────────────────────────────────────
@@ -215,8 +246,7 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
 
 // ── Main card ─────────────────────────────────────────────────────────────────
 export function StoreScoreCard({
-  upsellingDay = 0,
-  upsellingWeek = 0,
+  upsellingScore,
   goalMetrics,
   date,
   storeScore,
@@ -224,6 +254,7 @@ export function StoreScoreCard({
   className,
 }: StoreScoreCardProps) {
   const [tab, setTab] = useState<Tab>("score");
+  const [period, setPeriod] = useState<Period>("day");
   const dayLabel = date ? format(date, "MMM d") : "Today";
 
   // ── Upselling derived values ──────────────────────────────────────────────
@@ -233,19 +264,32 @@ export function StoreScoreCard({
   const weeklyGoal = upsMetric ? parseFloat(upsMetric.goals[0]?.goal ?? "0") : null;
   const goal   = weeklyGoal ?? 0;
   const noGoal = goal === 0;
-  const weekPct = noGoal ? 0 : (upsellingWeek / goal) * 100;
-  const dayPct  = noGoal ? 0 : (upsellingDay  / goal) * 100;
-  const dayBarPct  = noGoal ? (upsellingWeek > 0 ? (upsellingDay / upsellingWeek) * 100 : 0) : Math.min(dayPct, 100);
-  const weekBarPct = noGoal ? (upsellingWeek > 0 ? 100 : 0) : Math.min(weekPct, 100);
+
+  const dayTotal  = upsellingScore?.total_upselling_score_day ?? 0;
+  const weekTotal = upsellingScore?.total_upselling_score_week_to_date ?? 0;
+  const weekPct = noGoal ? 0 : (weekTotal / goal) * 100;
+  const dayPct  = noGoal ? 0 : (dayTotal  / goal) * 100;
+  const dayBarPct  = noGoal ? (weekTotal > 0 ? (dayTotal / weekTotal) * 100 : 0) : Math.min(dayPct, 100);
+  const weekBarPct = noGoal ? (weekTotal > 0 ? 100 : 0) : Math.min(weekPct, 100);
+
+  // Whichever period is toggled inside the Upselling tab
+  const activeTotal = period === "day" ? dayTotal : weekTotal;
+  const activePct   = period === "day" ? dayPct   : weekPct;
+  const activeItems = parseUpsellItems(period === "day" ? upsellingScore?.day : upsellingScore?.week_to_date);
+  const maxItemValue = Math.max(...activeItems.map((i) => i.value), 1);
+
+  // Manager cash bonus — always week-to-date based, +$10 per 25pts above 100%, capped at 300% (=$80)
+  const bonusSteps = noGoal ? 0 : Math.min(8, Math.max(0, Math.floor((weekPct - 100) / 25)));
+  const bonusDollars = bonusSteps * 10;
 
   const circleColorClass =
-    noGoal ? "text-muted-foreground/30" : weekPct >= 90 ? "text-emerald-400" : weekPct >= 60 ? "text-amber-400" : "text-violet-400";
+    noGoal ? "text-muted-foreground/30" : activePct >= 90 ? "text-emerald-400" : activePct >= 60 ? "text-amber-400" : "text-violet-400";
   const centerColorClass =
-    noGoal ? "text-muted-foreground" : weekPct >= 90 ? "text-emerald-500" : weekPct >= 60 ? "text-amber-500" : "text-violet-500";
+    noGoal ? "text-muted-foreground" : activePct >= 90 ? "text-emerald-500" : activePct >= 60 ? "text-amber-500" : "text-violet-500";
   const weekBarColorClass =
     noGoal ? "bg-violet-400/50" : weekPct >= 90 ? "bg-emerald-400" : weekPct >= 60 ? "bg-amber-400" : "bg-violet-400";
   const statusLabel =
-    noGoal ? "No Goal Set" : weekPct >= 100 ? "Goal Met!" : weekPct >= 80 ? "Almost There" : weekPct >= 50 ? "On Track" : "Keep Going";
+    noGoal ? "No Goal Set" : activePct >= 100 ? "Goal Met!" : activePct >= 80 ? "Almost There" : activePct >= 50 ? "On Track" : "Keep Going";
 
   // ── DOM refs for upselling animation ─────────────────────────────────────
   const centerCountRef = useRef<HTMLDivElement | null>(null);
@@ -279,30 +323,30 @@ export function StoreScoreCard({
     if (weekTextRef.current) weekTextRef.current.textContent = "0";
     if (loading) return;
     const dur = 750;
-    animateTo("circle", 0, noGoal ? 0 : Math.min(weekPct, 100), dur, (val) => {
+    animateTo("circle", 0, noGoal ? 0 : Math.min(activePct, 100), dur, (val) => {
       if (circleRef.current) circleRef.current.style.strokeDashoffset = `${CIRCUMFERENCE - (val / 100) * CIRCUMFERENCE}`;
     });
     if (!noGoal) {
-      setTimeout(() => animateTo("count", 0, weekPct, dur, (val) => {
+      setTimeout(() => animateTo("count", 0, activePct, dur, (val) => {
         if (centerCountRef.current) centerCountRef.current.textContent = Math.round(val) + "%";
       }), 50);
     }
     setTimeout(() => {
       animateTo("dayBar", 0, dayBarPct, dur, (val) => { if (dayBarRef.current) dayBarRef.current.style.width = `${Math.min(100, val)}%`; });
-      animateTo("dayText", 0, upsellingDay, dur, (val) => { if (dayTextRef.current) dayTextRef.current.textContent = Math.round(val).toLocaleString(); });
+      animateTo("dayText", 0, dayTotal, dur, (val) => { if (dayTextRef.current) dayTextRef.current.textContent = fmtPts(val); });
     }, 100);
     setTimeout(() => {
       animateTo("weekBar", 0, weekBarPct, dur, (val) => { if (weekBarRef.current) weekBarRef.current.style.width = `${Math.min(100, val)}%`; });
-      animateTo("weekText", 0, upsellingWeek, dur, (val) => { if (weekTextRef.current) weekTextRef.current.textContent = Math.round(val).toLocaleString(); });
+      animateTo("weekText", 0, weekTotal, dur, (val) => { if (weekTextRef.current) weekTextRef.current.textContent = fmtPts(val); });
     }, 150);
     return () => { Object.values(rafRefs.current).forEach((id) => id && cancelAnimationFrame(id)); rafRefs.current = {}; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, weekPct, dayPct, dayBarPct, weekBarPct, upsellingDay, upsellingWeek, noGoal, loading]);
+  }, [tab, period, activePct, dayBarPct, weekBarPct, dayTotal, weekTotal, noGoal, loading]);
 
   return (
     <Card
       className={cn(
-        "relative transition-shadow py-2 px-3",
+        "relative flex flex-col h-[280px] overflow-hidden transition-shadow py-2 px-3",
         tab === "score"
           ? "bg-linear-to-r from-slate-50 via-slate-100 to-slate-200 dark:from-slate-950/30 dark:via-slate-900/30 dark:to-slate-800/40"
           : "bg-linear-to-r from-violet-50 via-purple-50 to-violet-100 dark:from-violet-950/30 dark:via-purple-950/30 dark:to-violet-900/40",
@@ -310,7 +354,7 @@ export function StoreScoreCard({
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-1.5 mb-2">
+      <div className="flex items-center gap-1.5 mb-2 shrink-0">
         {tab === "score"
           ? <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />
           : <TrendingUp className="h-3.5 w-3.5 text-violet-500 shrink-0" />
@@ -318,76 +362,135 @@ export function StoreScoreCard({
         <span className="text-[11px] font-semibold">
           {tab === "score" ? "Store Score" : "Upselling"}
         </span>
-        {tab === "upselling" && (
-          <span className="text-[9px] text-muted-foreground font-normal">
-            {noGoal ? "no goal set" : `goal: ${goal.toLocaleString()}`}
-          </span>
-        )}
-        {/* Toggle */}
-        <div className="ml-auto inline-flex overflow-hidden rounded-md border border-border/60 bg-background/40 text-[9px] font-semibold shrink-0">
-          <button
-            type="button"
-            onClick={() => setTab("score")}
-            className={cn(
-              "px-1.5 py-0.5 transition-colors",
-              tab === "score" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
-            )}
-          >
-            Score
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("upselling")}
-            className={cn(
-              "px-1.5 py-0.5 transition-colors",
-              tab === "upselling" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
-            )}
-          >
-            Upselling
-          </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          {/* Score / Upselling tab toggle */}
+          <div className="inline-flex overflow-hidden rounded-md border border-border/60 bg-background/40 text-[9px] font-semibold shrink-0">
+            <button
+              type="button"
+              onClick={() => setTab("score")}
+              className={cn(
+                "px-1.5 py-0.5 transition-colors",
+                tab === "score" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
+              )}
+            >
+              Score
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("upselling")}
+              className={cn(
+                "px-1.5 py-0.5 transition-colors",
+                tab === "upselling" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/60",
+              )}
+            >
+              Upselling
+            </button>
+          </div>
+          {/* Day / Week-to-Date period switch — calendar icon button, same pattern as top-lists.tsx / portal-ontime-dual-gauge.tsx */}
+          {tab === "upselling" && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-5 w-5 rounded shrink-0",
+                    period === "week_to_date" ? "bg-primary/15 text-primary" : "text-muted-foreground/40",
+                  )}
+                  onClick={() => setPeriod((p) => (p === "day" ? "week_to_date" : "day"))}
+                >
+                  <CalendarDays className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{period === "week_to_date" ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </div>
 
-      <CardContent className="p-0">
+      <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
         {tab === "score" ? (
           <ScoreView storeScore={storeScore} />
         ) : (
-          /* ── Upselling view (existing ring + bars) ── */
-          <div className="flex flex-col gap-2 items-center justify-center text-center">
-            <div
-              className="relative flex items-center justify-center"
-              style={{ width: CIRCLE_SIZE, height: CIRCLE_SIZE }}
-            >
-              <svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} className="-rotate-90">
-                <circle cx={CIRCLE_SIZE / 2} cy={CIRCLE_SIZE / 2} r={RADIUS} strokeWidth={STROKE} stroke="currentColor" style={{ color: "var(--muted)" }} fill="transparent" strokeOpacity={0.15} />
-                <circle cx={CIRCLE_SIZE / 2} cy={CIRCLE_SIZE / 2} r={RADIUS} strokeWidth={STROKE} strokeLinecap="round" stroke="currentColor" className={circleColorClass} fill="transparent" strokeDasharray={`${CIRCUMFERENCE}`} ref={circleRef} strokeDashoffset={`${CIRCUMFERENCE}`} style={{ transition: "stroke-dashoffset 120ms linear" }} />
-              </svg>
-              <div className="absolute flex flex-col items-center gap-1">
-                {noGoal ? (
-                  <>
-                    <div className="text-[13px] font-semibold text-muted-foreground leading-tight">No Goal</div>
-                    <div className="text-[10px] text-muted-foreground/60 leading-none">not configured</div>
-                  </>
-                ) : (
-                  <>
-                    <div ref={centerCountRef} className={cn("text-2xl font-extrabold leading-none tabular-nums", centerColorClass)}>{loading ? "—" : "0%"}</div>
-                    <div className="text-[10px] text-muted-foreground leading-none tabular-nums">/ {goal.toLocaleString()}</div>
-                    <div className="text-[10px] text-muted-foreground leading-none mt-0.5">{statusLabel}</div>
-                  </>
-                )}
+          /* ── Upselling view ── */
+          <div className="flex flex-col gap-2">
+            {/* Manager cash bonus banner — always week-to-date based */}
+            {bonusDollars > 0 && (
+              <div className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 dark:bg-emerald-500/15">
+                <DollarSign className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  Bonus unlocked: {fmt$(bonusDollars)}{" "}
+                  <span className="font-normal text-emerald-600/80 dark:text-emerald-400/70">
+                    ({Math.round(weekPct)}% of weekly goal)
+                  </span>
+                </span>
+              </div>
+            )}
+
+            {/* Ring + at-a-glance day/week bars */}
+            <div className="flex flex-col gap-2 items-center justify-center text-center">
+              <div
+                className="relative flex items-center justify-center"
+                style={{ width: CIRCLE_SIZE, height: CIRCLE_SIZE }}
+              >
+                <svg width={CIRCLE_SIZE} height={CIRCLE_SIZE} className="-rotate-90">
+                  <circle cx={CIRCLE_SIZE / 2} cy={CIRCLE_SIZE / 2} r={RADIUS} strokeWidth={STROKE} stroke="currentColor" style={{ color: "var(--muted)" }} fill="transparent" strokeOpacity={0.15} />
+                  <circle cx={CIRCLE_SIZE / 2} cy={CIRCLE_SIZE / 2} r={RADIUS} strokeWidth={STROKE} strokeLinecap="round" stroke="currentColor" className={circleColorClass} fill="transparent" strokeDasharray={`${CIRCUMFERENCE}`} ref={circleRef} strokeDashoffset={`${CIRCUMFERENCE}`} style={{ transition: "stroke-dashoffset 120ms linear" }} />
+                </svg>
+                <div className="absolute flex flex-col items-center gap-1">
+                  {noGoal ? (
+                    <>
+                      <div className="text-[13px] font-semibold text-muted-foreground leading-tight">No Goal</div>
+                      <div className="text-[10px] text-muted-foreground/60 leading-none">not configured</div>
+                    </>
+                  ) : (
+                    <>
+                      <div ref={centerCountRef} className={cn("text-2xl font-extrabold leading-none tabular-nums", centerColorClass)}>{loading ? "—" : "0%"}</div>
+                      <div className="text-[10px] text-muted-foreground leading-none tabular-nums">/ {goal.toLocaleString()}</div>
+                      <div className="text-[10px] text-muted-foreground leading-none mt-0.5">{statusLabel}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] w-16 text-left text-muted-foreground shrink-0">{dayLabel}</span>
+                  <div className="flex-1"><div className="h-1.5 rounded-full bg-muted overflow-hidden"><div ref={dayBarRef} className="h-full rounded-full bg-violet-400/70" style={{ width: "0%" }} /></div></div>
+                  <div ref={dayTextRef} className="w-10 text-right text-[11px] font-semibold tabular-nums">0</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] w-16 text-left text-muted-foreground shrink-0">This Week</span>
+                  <div className="flex-1"><div className="h-1.5 rounded-full bg-muted overflow-hidden"><div ref={weekBarRef} className={cn("h-full rounded-full", weekBarColorClass)} style={{ width: "0%" }} /></div></div>
+                  <div ref={weekTextRef} className="w-10 text-right text-[11px] font-semibold tabular-nums">0</div>
+                </div>
               </div>
             </div>
 
-            <div className="w-full space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] w-16 text-left text-muted-foreground shrink-0">{dayLabel}</span>
-                <div className="flex-1"><div className="h-1.5 rounded-full bg-muted overflow-hidden"><div ref={dayBarRef} className="h-full rounded-full bg-violet-400/70" style={{ width: "0%" }} /></div></div>
-                <div ref={dayTextRef} className="w-8 text-right text-[11px] font-semibold tabular-nums">0</div>
+            {/* Per-item breakdown for the toggled period */}
+            <div className="w-full space-y-1">
+              <div className="px-0.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {period === "day" ? `${dayLabel} items` : "Week to date items"}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] w-16 text-left text-muted-foreground shrink-0">This Week</span>
-                <div className="flex-1"><div className="h-1.5 rounded-full bg-muted overflow-hidden"><div ref={weekBarRef} className={cn("h-full rounded-full", weekBarColorClass)} style={{ width: "0%" }} /></div></div>
-                <div ref={weekTextRef} className="w-8 text-right text-[11px] font-semibold tabular-nums">0</div>
+              {activeItems.length === 0 ? (
+                <div className="py-2 text-center text-[10px] text-muted-foreground">No item data</div>
+              ) : (
+                activeItems.map((item) => (
+                  <div key={item.name} className="flex items-center gap-1.5">
+                    <span className="w-[92px] shrink-0 truncate text-[9.5px] text-muted-foreground">{item.name}</span>
+                    <div className="h-1 flex-1 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-violet-400/70 transition-all duration-300"
+                        style={{ width: `${(item.value / maxItemValue) * 100}%` }}
+                      />
+                    </div>
+                    <span className="w-10 shrink-0 text-right text-[9px] font-semibold tabular-nums">{fmtPts(item.value)}</span>
+                  </div>
+                ))
+              )}
+              <div className="mt-1 flex items-center justify-between border-t border-border/40 pt-1">
+                <span className="text-[9.5px] font-semibold">Total</span>
+                <span className="text-[11px] font-bold tabular-nums">{fmtPts(activeTotal)} pts</span>
               </div>
             </div>
           </div>
