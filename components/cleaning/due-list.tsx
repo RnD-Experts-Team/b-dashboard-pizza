@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Camera, History, Loader2, Undo2 } from "lucide-react";
+import { Camera, Check, History, Loader2, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,8 +24,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import type { DueItem } from "@/types/cleaning.types";
+import type { ChartVerdict, DueItem } from "@/types/cleaning.types";
 import { StatusPill } from "./cleaning-ui";
 import { CompleteTaskDialog } from "./complete-task-dialog";
 import { HistoryDrawer } from "./history-drawer";
@@ -49,9 +50,15 @@ interface Props {
   onComplete: (
     storeId: number,
     taskId: number,
-    payload: { date: string; employeeIds: number[]; note?: string; photo?: File | null }
+    payload: { date: string; employeeIds: number[]; note?: string; photos?: File[] }
   ) => Promise<void>;
   onUncomplete: (storeId: number, taskId: number, date: string) => Promise<void>;
+  /** Cleaning-specialist only — shows the quick Pass/Fail evaluate shortcut. */
+  canEvaluate?: boolean;
+  /** Sets this task's cleaning-chart verdict for the current evaluation period. */
+  onEvaluate?: (storeId: number, taskId: number, verdict: ChartVerdict) => Promise<void>;
+  /** This task's existing chart verdict for the current period, if already graded. */
+  evaluatedVerdicts?: Record<number, ChartVerdict>;
 }
 
 export function DueList({
@@ -61,12 +68,36 @@ export function DueList({
   items,
   onComplete,
   onUncomplete,
+  canEvaluate,
+  onEvaluate,
+  evaluatedVerdicts,
 }: Props) {
   const t = useTranslations("cleaningChart");
   const [completeItem, setCompleteItem] = useState<DueItem | null>(null);
   const [historyItem, setHistoryItem] = useState<DueItem | null>(null);
   const [undoTarget, setUndoTarget] = useState<DueItem | null>(null);
   const [undoing, setUndoing] = useState<number | null>(null);
+  const [evaluating, setEvaluating] = useState<number | null>(null);
+  // Merged into `evaluatedVerdicts` so a just-clicked verdict shows instantly,
+  // without waiting on the evaluation grid to refetch.
+  const [localVerdicts, setLocalVerdicts] = useState<Record<number, ChartVerdict>>({});
+  const verdictFor = (taskId: number): ChartVerdict | undefined =>
+    localVerdicts[taskId] ?? evaluatedVerdicts?.[taskId];
+
+  /** Quick chart toggle — no dialog, matching the grid's chart chips. */
+  const evaluate = async (item: DueItem, verdict: ChartVerdict) => {
+    if (!onEvaluate) return;
+    setEvaluating(item.taskId);
+    try {
+      await onEvaluate(storeId, item.taskId, verdict);
+      setLocalVerdicts((prev) => ({ ...prev, [item.taskId]: verdict }));
+      toast.success(t("due.toasts.evaluated", { label: item.label }));
+    } catch (err) {
+      toast.error(err instanceof CleaningError ? err.message : t("due.toasts.evaluateFailed"));
+    } finally {
+      setEvaluating(null);
+    }
+  };
 
   /**
    * Whether a task has completion history in EARLIER periods. `/due` only
@@ -170,7 +201,9 @@ export function DueList({
                 </TableCell>
               </TableRow>
             ) : (
-              items.map((item) => (
+              items.map((item) => {
+                const verdict = verdictFor(item.taskId);
+                return (
                 <TableRow key={item.taskId}>
                   <TableCell className="max-w-[280px]">
                     <div className="flex items-center gap-2 font-medium">
@@ -209,7 +242,7 @@ export function DueList({
                     {item.doneBy.length > 0 ? item.doneBy.join(", ") : t("due.table.noDoneBy")}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {showHistory(item) && (
                         <Button
                           variant="ghost"
@@ -236,10 +269,48 @@ export function DueList({
                           {t("due.complete")}
                         </Button>
                       )}
+
+                      {/* Evaluate — cleaning-specialist only, always last so the
+                          row reads left-to-right as "handle it, then grade it". */}
+                      {canEvaluate && onEvaluate && (
+                        <div className="ms-1 flex items-center gap-1 border-s ps-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={evaluating === item.taskId}
+                            onClick={() => void evaluate(item, "pass")}
+                            title={t("due.evaluatePass")}
+                            className={cn(
+                              "h-8 w-8",
+                              verdict === "pass"
+                                ? "border-green-500/30 bg-green-500/15 text-green-600 dark:text-green-400"
+                                : "border-muted-foreground/20 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            )}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={evaluating === item.taskId}
+                            onClick={() => void evaluate(item, "fail")}
+                            title={t("due.evaluateFail")}
+                            className={cn(
+                              "h-8 w-8",
+                              verdict === "fail"
+                                ? "border-red-500/30 bg-red-500/15 text-red-600 dark:text-red-400"
+                                : "border-muted-foreground/20 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            )}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

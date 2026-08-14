@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Pencil,
   Tag,
+  Tags,
   User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useKnownItemTags } from "@/lib/store/inventory-tags.store";
 import type { EntryListParams, InventoryType } from "@/types/inventory.types";
 
 /** Text field that commits on blur/Enter (not per-keystroke). */
@@ -83,6 +85,8 @@ export function EntryFiltersBar({
   onFiltersChange,
   disabled,
 }: EntryFiltersBarProps) {
+  const knownTags = useKnownItemTags();
+
   function updateField<K extends keyof EntryListParams>(
     key: K,
     value: EntryListParams[K]
@@ -149,6 +153,37 @@ export function EntryFiltersBar({
 
         <div className="space-y-1.5">
           <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Tags className="h-3 w-3" />
+            Category
+          </label>
+          <Select
+            value={filters.tag_id !== undefined ? String(filters.tag_id) : "all"}
+            onValueChange={(v) =>
+              updateField("tag_id", v === "all" ? undefined : Number(v))
+            }
+            disabled={disabled || knownTags.length === 0}
+          >
+            <SelectTrigger
+              className={cn(
+                "h-9 text-sm",
+                filters.tag_id !== undefined && "border-primary/40 bg-primary/5"
+              )}
+            >
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {knownTags.map((tag) => (
+                <SelectItem key={tag.id} value={String(tag.id)}>
+                  {tag.name_en}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <User className="h-3 w-3" />
             Submitted by
           </label>
@@ -199,5 +234,6 @@ export function countEntryFilters(filters: EntryListParams): number {
     filters.type,
     filters.submitted_by,
     filters.edited,
+    filters.tag_id,
   ].filter((v) => v != null && v !== "").length;
 }

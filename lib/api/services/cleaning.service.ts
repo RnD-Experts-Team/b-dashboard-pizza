@@ -19,6 +19,8 @@ import type {
   EvalRow,
   ApiChartCell,
   ChartCell,
+  ApiItemCell,
+  ItemCell,
   ApiInspectionItem,
   InspectionItem,
   SetCellPayload,
@@ -241,6 +243,7 @@ function transformTask(raw: ApiCleaningTask): CleaningTask {
     startsAt: raw.starts_at ?? null,
     endsAt: raw.ends_at ?? null,
     dueTime: raw.due_time ?? null,
+    dueTime2: raw.due_time_2 ?? null,
     photoRequired: raw.photo_required,
     stores: (raw.stores ?? []).map((s) => ({
       id: s.id,
@@ -255,14 +258,35 @@ function transformChartCell(raw: ApiChartCell): ChartCell {
     name: raw.name,
     weight: raw.weight,
     verdict: raw.verdict ?? null,
+    note: raw.note ?? null,
+    photos: raw.photos ?? [],
+  };
+}
+
+/**
+ * `item_values[name]` is `{value, note, photos}` on current backends but was a
+ * bare value string on older ones — normalize both so a mid-deploy API can't
+ * blank (or crash) the grid.
+ */
+function transformItemCell(raw: ApiItemCell | undefined): ItemCell {
+  if (raw == null) return { value: "empty", note: null, photos: [] };
+  if (typeof raw === "string") return { value: raw, note: null, photos: [] };
+  return {
+    value: raw.value ?? "empty",
+    note: raw.note ?? null,
+    photos: raw.photos ?? [],
   };
 }
 
 function transformEvalRow(raw: ApiEvalRow): EvalRow {
+  const itemValues: Record<string, ItemCell> = {};
+  for (const [name, cell] of Object.entries(raw.item_values ?? {})) {
+    itemValues[name] = transformItemCell(cell);
+  }
   return {
     storeId: raw.store_id,
     store: raw.store,
-    itemValues: raw.item_values ?? {},
+    itemValues,
     itemScore: raw.item_score ?? 0,
     chart: {
       daily: (raw.chart?.daily ?? []).map(transformChartCell),
@@ -338,7 +362,7 @@ export const cleaningService = {
       fd.append("date", payload.date);
       payload.employeeIds.forEach((id) => fd.append("employee_ids[]", String(id)));
       if (payload.note?.trim()) fd.append("note", payload.note.trim());
-      if (payload.photo) fd.append("photo", payload.photo, payload.photo.name);
+      (payload.photos ?? []).forEach((file) => fd.append("photos[]", file, file.name));
 
       // NOTE: do not set Content-Type — the browser adds the multipart boundary.
       await axios.post(
@@ -467,8 +491,33 @@ export const cleaningService = {
     }
   },
 
+  /**
+   * Set one evaluation cell.
+   *
+   * Chart cells stay a plain-JSON quick toggle. Item cells go as multipart so
+   * they can carry the grader's note + images — do NOT set Content-Type there,
+   * the browser adds the multipart boundary itself.
+   */
   async setCell(payload: SetCellPayload): Promise<EvalRow> {
     try {
+      if (payload.kind === "item") {
+        const fd = new FormData();
+        fd.append("store_id", String(payload.store_id));
+        fd.append("period_type", payload.period_type);
+        fd.append("period_key", payload.period_key);
+        fd.append("kind", "item");
+        fd.append("inspection_item_id", String(payload.inspection_item_id));
+        fd.append("value", payload.value);
+        if (payload.note?.trim()) fd.append("note", payload.note.trim());
+        (payload.images ?? []).forEach((file) => fd.append("images[]", file, file.name));
+
+        const res = await axios.post(`/api/cleaning/evaluations`, fd, {
+          headers: authHeaders(),
+          timeout: 120_000,
+        });
+        return transformEvalRow(unwrap<ApiEvalRow>(res.data));
+      }
+
       const res = await axios.post(`/api/cleaning/evaluations`, payload, {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         timeout: 15_000,

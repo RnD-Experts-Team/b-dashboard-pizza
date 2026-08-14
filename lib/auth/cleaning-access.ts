@@ -6,7 +6,7 @@ import type { CanAccessParams } from "./can-access";
  * here is fail-open (visible to everyone) — matches the sidebar's default
  * behavior for pages that don't have rules configured yet.
  */
-export type CleaningTabId = "due" | "tasks" | "evaluation" | "reports";
+export type CleaningTabId = "due" | "tasks" | "evaluation" | "reports" | "my-store";
 
 interface CleaningTabRule {
   /** Any ONE of these route checks (via canAccessRoute) grants access. */
@@ -61,6 +61,19 @@ export const CLEANING_TAB_RULES: Partial<Record<CleaningTabId, CleaningTabRule>>
       { service: "QA", method: "GET", path: "/cleaning/reports/csv" },
     ],
   },
+
+  // My Store — Store Manager's own read-only evaluation results. Needs the
+  // backend to allow a store manager to call GET /cleaning/evaluations,
+  // store-scoped to their own store (see the handoff note in the plan) — this
+  // rolesAny entry makes the tab itself visible regardless of that permission,
+  // so the view can show its own "no access yet" state rather than the tab
+  // just disappearing.
+  "my-store": {
+    rolesAny: ["store_manager"],
+    requirements: (storeId) => [
+      { service: "QA", method: "GET", path: "/cleaning/evaluations", storeId },
+    ],
+  },
 };
 
 /**
@@ -79,4 +92,25 @@ export function canAccessCleaningTab(
   if (!rule) return true;
   if (rule.rolesAny && auth.hasAnyRole(rule.rolesAny)) return true;
   return rule.requirements(storeId).some((req) => auth.canAccessRoute(req));
+}
+
+/**
+ * Whether this user may set evaluation verdicts — used by the Due list's
+ * Evaluate shortcut, which writes a chart cell without leaving the page.
+ *
+ * Deliberately checks the POST /evaluations rule only, NOT the whole
+ * `evaluation` tab: the tab is reachable by anyone holding any one of its
+ * six requirements (including read-only ones), whereas this action writes.
+ * A store_manager reaching Due via `rolesAny` therefore does not get it.
+ */
+export function canEvaluateCleaning(
+  auth: { canAccessRoute: (params: CanAccessParams) => boolean },
+  storeId?: string
+): boolean {
+  return auth.canAccessRoute({
+    service: "QA",
+    method: "POST",
+    path: "/cleaning/evaluations",
+    storeId,
+  });
 }

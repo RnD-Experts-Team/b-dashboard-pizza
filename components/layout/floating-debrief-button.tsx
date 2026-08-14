@@ -552,6 +552,11 @@ export function FloatingDebriefButton() {
           >
             <Sparkles className="h-3.5 w-3.5" />
             {t("page.title")}
+            {cleaningPendingCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
+                {cleaningPendingCount}
+              </span>
+            )}
           </button>
         )}
       </div>

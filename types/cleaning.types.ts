@@ -116,7 +116,8 @@ export interface CompleteTaskPayload {
   date: string;
   employeeIds: number[];
   note?: string;
-  photo?: File | null;
+  /** Sent as `photos[]` — one or more files (required unless the task is hourly). */
+  photos?: File[];
 }
 
 /* ── Track 1: Task definitions ─────────────────────────────────────────── */
@@ -138,6 +139,9 @@ export interface ApiCleaningTask {
   starts_at: string | null;
   ends_at: string | null;
   due_time: string | null;
+  /** Optional second daily due time. Not yet persisted by the backend — see the
+   *  handoff note; reads fall back to null until they add the field. */
+  due_time_2?: string | null;
   photo_required: boolean;
   stores?: ApiTaskStore[];
   created_at?: string;
@@ -155,6 +159,7 @@ export interface CleaningTask {
   startsAt: string | null;
   endsAt: string | null;
   dueTime: string | null;
+  dueTime2: string | null;
   photoRequired: boolean;
   stores: { id: number; name: string }[];
 }
@@ -170,6 +175,7 @@ export interface CreateTaskPayload {
   starts_at: string;
   ends_at?: string | null;
   due_time?: string | null;
+  due_time_2?: string | null;
   store_ids: number[];
 }
 
@@ -192,18 +198,35 @@ export interface ApiChartCell {
   name: string;
   weight: number;
   verdict: ChartVerdict | null;
+  note?: string | null;
+  photos?: string[];
 }
 export interface ChartCell {
   taskId: number;
   name: string;
   weight: number;
   verdict: ChartVerdict | null;
+  note: string | null;
+  /** Relative `/storage/…` URLs — run through `resolvePhotoUrl` before rendering. */
+  photos: string[];
 }
+
+/** One graded inspection-item cell. */
+export interface ItemCell {
+  value: ItemValue;
+  note: string | null;
+  /** Relative `/storage/…` URLs — run through `resolvePhotoUrl` before rendering. */
+  photos: string[];
+}
+
+/** The API returns `{value, note, photos}` per item; older deploys returned a
+ *  bare value string, which `transformEvalRow` still normalizes. */
+export type ApiItemCell = ItemValue | { value: ItemValue; note?: string | null; photos?: string[] };
 
 export interface ApiEvalRow {
   store_id: number;
   store: string;
-  item_values: Record<string, ItemValue>;
+  item_values: Record<string, ApiItemCell>;
   item_score: number;
   chart: {
     daily: ApiChartCell[];
@@ -217,7 +240,7 @@ export interface ApiEvalRow {
 export interface EvalRow {
   storeId: number;
   store: string;
-  itemValues: Record<string, ItemValue>;
+  itemValues: Record<string, ItemCell>;
   itemScore: number;
   chart: {
     daily: ChartCell[];
@@ -249,6 +272,10 @@ export interface SetItemCellPayload {
   kind: "item";
   inspection_item_id: number;
   value: ItemValue;
+  /** Sent as multipart when present — item cells support a note + images. */
+  note?: string | null;
+  /** Sent as repeated `images[]` fields. */
+  images?: File[];
 }
 export interface SetChartCellPayload {
   store_id: number;

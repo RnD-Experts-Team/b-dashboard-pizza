@@ -119,6 +119,14 @@ function buildItemFormData(values: ItemFormValues, isUpdate: boolean): FormData 
     values.store_ids.forEach((id) => fd.append("store_ids[]", id));
   }
 
+  // tags[] — required, at least one. Matching is by name_en; ar/es are only
+  // used when name_en doesn't match an existing tag.
+  values.tags.forEach((tag, i) => {
+    fd.append(`tags[${i}][name_en]`, tag.name_en);
+    fd.append(`tags[${i}][name_ar]`, tag.name_ar);
+    fd.append(`tags[${i}][name_es]`, tag.name_es);
+  });
+
   // Only attach the image when a new file was chosen.
   if (values.image) fd.append("image", values.image);
 
@@ -187,6 +195,8 @@ export const itemService = {
           per_page: params?.perPage,
           // active=true/false filters; omit when undefined to return all.
           ...(params?.active !== undefined && { active: params.active ? 1 : 0 }),
+          search: params?.search || undefined,
+          type: params?.type,
         },
         headers: storeId ? { "X-Store-Id": storeId } : undefined,
         signal,
@@ -300,6 +310,7 @@ export const entryService = {
           type: params?.type,
           submitted_by: params?.submitted_by,
           edited: params?.edited !== undefined ? (params.edited ? 1 : 0) : undefined,
+          tag_id: params?.tag_id,
         },
         signal,
       }

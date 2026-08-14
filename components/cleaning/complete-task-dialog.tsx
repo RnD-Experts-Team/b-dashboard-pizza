@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { ImagePlus, Loader2, Users, X } from "lucide-react";
+import { Loader2, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,10 +14,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
+import { PhotoPicker } from "./photo-picker";
 import type { DueItem } from "@/types/cleaning.types";
 
 const ACTIVE_STATUSES = ["hired", "rehired"];
@@ -31,7 +31,7 @@ interface CompleteTaskFormProps {
     date: string;
     employeeIds: number[];
     note?: string;
-    photo?: File | null;
+    photos?: File[];
   }) => Promise<void>;
   /** Called after a successful submit, or when the user cancels. */
   onClose: () => void;
@@ -49,15 +49,13 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
   const [empLoading, setEmpLoading] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [note, setNote] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const photoRequired = item.photoRequired;
   const canSubmit = useMemo(
-    () => selected.length > 0 && (!photoRequired || !!photo) && !submitting,
-    [selected, photoRequired, photo, submitting]
+    () => selected.length > 0 && (!photoRequired || photos.length > 0) && !submitting,
+    [selected, photoRequired, photos, submitting]
   );
 
   /* ── Fetch the store's active employees on mount ── */
@@ -97,35 +95,20 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
     };
   }, [storeCode]);
 
-  /* ── Photo preview object URL lifecycle ── */
-  const applyPhoto = useCallback((file: File | null) => {
-    setPhoto(file);
-    setPhotoUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return file ? URL.createObjectURL(file) : null;
-    });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (photoUrl) URL.revokeObjectURL(photoUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   /* ── Ctrl+V paste an image while the form is open ── */
   const handlePaste = useCallback(
     (e: React.ClipboardEvent) => {
-      const file = Array.from(e.clipboardData?.items ?? [])
-        .find((it) => it.type.startsWith("image/"))
-        ?.getAsFile();
-      if (file) {
+      const pasted = Array.from(e.clipboardData?.items ?? [])
+        .filter((it) => it.type.startsWith("image/"))
+        .map((it) => it.getAsFile())
+        .filter((f): f is File => f != null);
+      if (pasted.length > 0) {
         e.preventDefault();
-        applyPhoto(file);
+        setPhotos((prev) => [...prev, ...pasted]);
         toast.success(t("toasts.pasted"));
       }
     },
-    [applyPhoto]
+    []
   );
 
   const handleSubmit = async () => {
@@ -136,7 +119,7 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
         date,
         employeeIds: selected,
         note: note.trim() || undefined,
-        photo,
+        photos,
       });
       toast.success(t("toasts.done", { label: item.label }));
       onClose();
@@ -178,7 +161,7 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
         />
       </div>
 
-      {/* Photo */}
+      {/* Photos */}
       <div className="space-y-2">
         <Label>
           {t("photo")} {photoRequired && <span className="text-destructive">*</span>}
@@ -186,59 +169,12 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
             {t("photoHint")}
           </span>
         </Label>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => applyPhoto(e.target.files?.[0] ?? null)}
+        <PhotoPicker
+          files={photos}
+          onChange={setPhotos}
+          required={photoRequired}
+          disabled={submitting}
         />
-        {photo && photoUrl ? (
-          <div className="relative overflow-hidden rounded-md border">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={photoUrl}
-              alt="Selected"
-              className="max-h-48 w-full bg-muted object-contain"
-            />
-            <div className="flex items-center justify-between gap-2 border-t bg-background/80 px-2 py-1.5">
-              <span className="flex-1 truncate text-xs text-muted-foreground">
-                {photo.name}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7"
-                onClick={() => fileRef.current?.click()}
-              >
-                {t("replace")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => {
-                  applyPhoto(null);
-                  if (fileRef.current) fileRef.current.value = "";
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className={cn("w-full", photoRequired && "border-dashed")}
-            onClick={() => fileRef.current?.click()}
-          >
-            <ImagePlus className="me-2 h-4 w-4" />
-            {t("choosePhoto")}
-          </Button>
-        )}
       </div>
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -266,7 +202,7 @@ interface Props {
     date: string;
     employeeIds: number[];
     note?: string;
-    photo?: File | null;
+    photos?: File[];
   }) => Promise<void>;
 }
 

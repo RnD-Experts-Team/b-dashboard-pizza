@@ -13,7 +13,7 @@ const ID_RE = /^\d+$/;
 
 /**
  * POST /api/cleaning/stores/{storeId}/tasks/{task}/complete
- * multipart/form-data: date, employee_ids[], note?, photo?
+ * multipart/form-data: date, employee_ids[], note?, photos[]?
  *
  * Rebuilds the upstream FormData and forwards WITHOUT setting Content-Type
  * so fetch generates the multipart boundary.
@@ -60,9 +60,13 @@ export async function POST(
   const note = incoming.get("note");
   if (typeof note === "string" && note.trim()) upstream.append("note", note);
 
-  const photo = incoming.get("photo");
-  if (photo instanceof File && photo.size > 0) {
-    upstream.append("photo", photo, photo.name || "photo.jpg");
+  // photos[] is an array now (was a single `photo`); accept the legacy single
+  // field too so an older client build can't silently drop its upload.
+  const photos = incoming.getAll("photos[]").concat(incoming.getAll("photo"));
+  for (const photo of photos) {
+    if (photo instanceof File && photo.size > 0) {
+      upstream.append("photos[]", photo, photo.name || "photo.jpg");
+    }
   }
 
   return forwardJson(

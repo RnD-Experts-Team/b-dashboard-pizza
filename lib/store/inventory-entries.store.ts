@@ -5,6 +5,7 @@ import {
   isCanceledError,
   isForbiddenError,
 } from "@/lib/api/inventory-errors";
+import { useInventoryTagsStore } from "@/lib/store/inventory-tags.store";
 import type {
   Entry,
   EntryDetail,
@@ -42,6 +43,14 @@ interface EntriesState {
     payload: UpdateEntryItemPayload
   ) => Promise<EntryItem>;
   clearErrors: () => void;
+}
+
+/** Feed the known-tags cache from an entry's items — the only place entry
+ *  data carries item tags (the plain entries list doesn't). */
+function registerEntryTags(entry: EntryDetail) {
+  useInventoryTagsStore
+    .getState()
+    .registerTags(entry.items.flatMap((it) => it.item.tags ?? []));
 }
 
 export const useEntriesStore = create<EntriesState>()((set, get) => ({
@@ -82,6 +91,7 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
     try {
       const entry = await entryService.getHistory(id, storeId);
       set({ currentEntry: entry, hasHistoryAccess: true, isLoadingDetail: false });
+      registerEntryTags(entry);
       return entry;
     } catch (error) {
       if (isCanceledError(error)) return null;
@@ -92,6 +102,7 @@ export const useEntriesStore = create<EntriesState>()((set, get) => ({
       try {
         const entry = await entryService.get(id, storeId);
         set({ currentEntry: entry, hasHistoryAccess: false, isLoadingDetail: false });
+        registerEntryTags(entry);
         return entry;
       } catch (fallbackError) {
         if (isCanceledError(fallbackError)) return null;

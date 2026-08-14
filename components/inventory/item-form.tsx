@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { MultiSelect } from "@/components/daily-pay/multi-select";
+import { TagPicker } from "@/components/inventory/tag-picker";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { useItemMutations } from "@/lib/hooks/use-inventory-items";
@@ -50,6 +51,12 @@ function initialValues(item?: Item | null): ItemFormValues {
         ?.map((s) => s.store_number)
         .filter((n): n is string => Boolean(n)) ?? [],
     image: null,
+    tags:
+      item?.tags?.map((t) => ({
+        name_en: t.name_en,
+        name_ar: t.name_ar,
+        name_es: t.name_es,
+      })) ?? [],
   };
 }
 
@@ -119,6 +126,8 @@ export function ItemForm({
       return 'Select at least one type (daily / weekly / period).';
     if (!values.all_stores && values.store_ids.length === 0)
       return 'Select at least one store, or enable “All stores”.';
+    if (values.tags.length === 0)
+      return 'At least one tag is required.';
     return null;
   };
 
@@ -465,6 +474,18 @@ export function ItemForm({
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Tags ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Tags <span className="text-destructive">*</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TagPicker tags={values.tags} onChange={(tags) => set("tags", tags)} />
         </CardContent>
       </Card>
 

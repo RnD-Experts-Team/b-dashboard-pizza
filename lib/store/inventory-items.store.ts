@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { itemService } from "@/lib/api/services/inventory.service";
 import { getInventoryErrorMessage, isCanceledError } from "@/lib/api/inventory-errors";
+import { useInventoryTagsStore } from "@/lib/store/inventory-tags.store";
 import type { Item, ItemFormValues, ItemListParams } from "@/types/inventory.types";
 import type { PaginatedResponse } from "@/types/api.types";
 
@@ -51,6 +52,7 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
     try {
       const res = await itemService.list(params, storeId);
       set({ items: res.data, pagination: res.meta, isLoading: false });
+      useInventoryTagsStore.getState().registerTags(res.data.flatMap((i) => i.tags));
     } catch (error) {
       if (isCanceledError(error)) return;
       set({ error: getInventoryErrorMessage(error), isLoading: false });
@@ -62,6 +64,7 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
     try {
       const item = await itemService.get(id, storeId);
       set({ currentItem: item, isLoadingItem: false });
+      useInventoryTagsStore.getState().registerTags(item.tags);
       return item;
     } catch (error) {
       if (isCanceledError(error)) return null;
@@ -75,6 +78,7 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
     try {
       const item = await itemService.create(values);
       set({ isSaving: false });
+      useInventoryTagsStore.getState().registerTags(item.tags);
       return item;
     } catch (error) {
       set({ saveError: getInventoryErrorMessage(error), isSaving: false });
@@ -91,6 +95,7 @@ export const useItemsStore = create<ItemsState>()((set, get) => ({
         currentItem: item,
         isSaving: false,
       }));
+      useInventoryTagsStore.getState().registerTags(item.tags);
       return item;
     } catch (error) {
       set({ saveError: getInventoryErrorMessage(error), isSaving: false });
