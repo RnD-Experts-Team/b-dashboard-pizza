@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -51,6 +52,7 @@ import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
+import { useFabPositionStore } from "@/lib/store/fab-position.store";
 import { canAccessCleaningTab } from "@/lib/auth/cleaning-access";
 import { playSfx } from "@/lib/uisfx/play";
 import { cn } from "@/lib/utils";
@@ -112,10 +114,10 @@ function renderValuePreview(item: DueKeyItem): string {
 }
 
 // Layout constants — keep in sync with the button / panel sizes
-const FAB_W = 108;   // approximate FAB button width in px
-const FAB_H = 44;    // FAB button height in px
-const PANEL_W = 480; // floating panel width (w-120 = 30 rem)
-const EDGE = 8;      // minimum gap from each screen edge
+const FAB_W = 108;    // approximate FAB button width in px
+const FAB_H = 44;     // FAB button height in px
+const EDGE = 8;       // minimum gap from each screen edge
+const PANEL_GAP = 10; // gap between the FAB and its popup panel (desktop)
 
 export function FloatingDebriefButton() {
   const pathname = usePathname();
@@ -152,6 +154,7 @@ export function FloatingDebriefButton() {
   const { selectedStore } = useSelectedStoreStore();
   const pendingDebriefKey = useDebriefActionStore((s) => s.pendingDebriefKey);
   const clearPendingDebriefKey = useDebriefActionStore((s) => s.clearPendingDebriefKey);
+  const setSharedDebriefPos = useFabPositionStore((s) => s.setDebriefPos);
 
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateDebrief = canAccessRoute({
@@ -306,6 +309,12 @@ export function FloatingDebriefButton() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Publish this FAB's live position so other floating bubbles (e.g. the
+  // break timer) can stay anchored beside it as it's dragged around.
+  useEffect(() => {
+    if (pos) setSharedDebriefPos(pos);
+  }, [pos, setSharedDebriefPos]);
+
   if (!canCreateDebrief) return null;
   if (pathname?.includes("/due-keys")) return null;
 
@@ -395,22 +404,6 @@ export function FloatingDebriefButton() {
       setCleaningUndoing(null);
     }
   };
-
-  // Compute floating panel screen position for desktop only
-  function getPanelStyle() {
-    if (!pos) return {};
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const leftOfFab = pos.x - EDGE - PANEL_W;
-    const rightOfFab = pos.x + FAB_W + EDGE;
-    const left =
-      leftOfFab >= EDGE
-        ? leftOfFab
-        : Math.max(EDGE, Math.min(vw - PANEL_W - EDGE, rightOfFab));
-    const maxH = vh * 0.8;
-    const top = Math.max(EDGE, Math.min(vh - maxH - EDGE, pos.y));
-    return { left, top };
-  }
 
   // ── Panel inner content — shared between mobile and desktop ───────────
   const panelContent = (
@@ -894,10 +887,37 @@ export function FloatingDebriefButton() {
     </>
   );
 
+  // FAB button contents — shared between the mobile and desktop wrappers below.
+  const fabButton = (
+    <>
+      <Button
+        className={cn(
+          "gap-2 rounded-full",
+          "h-11 px-4 sm:px-5 text-sm font-medium shadow-lg",
+          "transition-all duration-300 ease-in-out",
+          "cursor-grab active:cursor-grabbing select-none touch-none",
+          "border",
+          isOpen
+            ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
+            : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
+        )}
+        size="sm"
+      >
+        <PenLine className="h-4 w-4" />
+        <span className="hidden xs:inline sm:inline">Debrief</span>
+      </Button>
+      {!isOpen && unfilledItems.length > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
+          {unfilledItems.length}
+        </span>
+      )}
+    </>
+  );
+
   return (
     <>
-      {/* Backdrop — closes the panel on click */}
-      {isOpen && (
+      {/* ── Mobile: dim backdrop + full-width bottom sheet, unchanged ── */}
+      {isOpen && isMobile && (
         <div
           className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
           onClick={() => setIsOpen(false)}
@@ -905,7 +925,6 @@ export function FloatingDebriefButton() {
         />
       )}
 
-      {/* ── Mobile panel — full-width bottom sheet ────────────────── */}
       {isOpen && isMobile && (
         <div
           className={cn(
@@ -923,23 +942,7 @@ export function FloatingDebriefButton() {
         </div>
       )}
 
-      {/* ── Desktop panel — free-floating ─────────────────────────── */}
-      {isOpen && !isMobile && pos && (
-        <div
-          className={cn(
-            "fixed z-50 w-120 max-h-[80vh]",
-            "flex flex-col",
-            "rounded-2xl bg-background shadow-2xl",
-            "border border-gray-200/60 dark:border-gray-700/60",
-          )}
-          style={getPanelStyle()}
-        >
-          {panelContent}
-        </div>
-      )}
-
-      {/* FAB button — freely draggable anywhere on screen */}
-      {pos && (
+      {pos && isMobile && (
         <div
           className="fixed z-50"
           style={{ left: pos.x, top: pos.y, touchAction: "none" }}
@@ -948,28 +951,43 @@ export function FloatingDebriefButton() {
           onPointerUp={handlePointerUp}
           onClick={handleClick}
         >
-          <Button
-            className={cn(
-              "gap-2 rounded-full",
-              "h-11 px-4 sm:px-5 text-sm font-medium shadow-lg",
-              "transition-all duration-300 ease-in-out",
-              "cursor-grab active:cursor-grabbing select-none touch-none",
-              "border",
-              isOpen
-                ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
-                : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
-            )}
-            size="sm"
-          >
-            <PenLine className="h-4 w-4" />
-            <span className="hidden xs:inline sm:inline">Debrief</span>
-          </Button>
-          {!isOpen && unfilledItems.length > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
-              {unfilledItems.length}
-            </span>
-          )}
+          {fabButton}
         </div>
+      )}
+
+      {/* ── Desktop: real Radix Popover — same animation mechanism as the
+          break-timer bubble. Opens upward from the FAB with a 10px gap. ── */}
+      {pos && !isMobile && (
+        <Popover
+          open={isOpen}
+          onOpenChange={(next) => {
+            if (hasDragged.current) {
+              hasDragged.current = false;
+              return;
+            }
+            setIsOpen(next);
+          }}
+        >
+          <PopoverTrigger asChild>
+            <div
+              className="fixed z-50"
+              style={{ left: pos.x, top: pos.y, touchAction: "none" }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+            >
+              {fabButton}
+            </div>
+          </PopoverTrigger>
+          <PopoverContent
+            side="top"
+            align="start"
+            sideOffset={PANEL_GAP}
+            className="flex w-120 max-h-[80vh] flex-col rounded-2xl border-gray-200/60 bg-background p-0 shadow-2xl dark:border-gray-700/60"
+          >
+            {panelContent}
+          </PopoverContent>
+        </Popover>
       )}
 
       {/* Due Key single-item sheet */}

@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useUIStore } from "@/lib/store/ui.store";
 import { FloatingDebriefButton } from "./floating-debrief-button";
+import { FloatingBreakTimerButton } from "./floating-break-timer-button";
 import { ScreenProjectPiPOverlay } from "@/components/screen-project/screen-project-pip-overlay";
 import { DriveThruOverlay } from "@/components/screen-project/drive-thru/drive-thru-overlay";
 import { SoundFxInit } from "@/components/uisfx/sound-fx-init";
@@ -46,6 +47,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </div>
         <FloatingDebriefButton />
+        <FloatingBreakTimerButton />
         <ScreenProjectPiPOverlay />
         <DriveThruOverlay />
         <SoundFxInit />
@@ -74,6 +76,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
         <FloatingDebriefButton />
+        <FloatingBreakTimerButton />
         <ScreenProjectPiPOverlay />
         <DriveThruOverlay />
         <SoundFxInit />
@@ -102,6 +105,7 @@ export function AppShell({ children }: AppShellProps) {
           </main>
         </div>
         <FloatingDebriefButton />
+        <FloatingBreakTimerButton />
         <ScreenProjectPiPOverlay />
         <DriveThruOverlay />
         <SoundFxInit />
@@ -130,6 +134,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </main>
       <FloatingDebriefButton />
+      <FloatingBreakTimerButton />
       <ScreenProjectPiPOverlay />
       <DriveThruOverlay />
       <SoundFxInit />

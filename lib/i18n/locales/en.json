@@ -2292,5 +2292,18 @@
       "somethingWrong": "Something went wrong",
       "retry": "Try again"
     }
+  },
+  "breakTimer": {
+    "trigger": "Break timer",
+    "title": "Break Timer",
+    "start": "Start Break",
+    "end": "End Break",
+    "onBreak": "On break",
+    "todaySummaryZero": "No breaks yet today",
+    "todaySummary": "{breaks} · {duration} today",
+    "breaksCount": "{count} break",
+    "breaksCountPlural": "{count} breaks",
+    "sessionsHeading": "Today's breaks",
+    "sessionRange": "{start} – {end}"
   }
 }

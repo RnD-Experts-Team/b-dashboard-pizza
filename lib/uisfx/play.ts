@@ -4,12 +4,12 @@
  * sites don't have to duplicate it.
  */
 
-import type { CueName } from "uisfx";
+import type { CueName, PlayOptions } from "uisfx";
 import { isFeatureEnabled } from "@/lib/config";
 import { getUisfxClient } from "./client";
 import { useSoundFxStore } from "./sound.store";
 
-export function playSfx(cue: CueName) {
+export function playSfx(cue: CueName, options?: PlayOptions) {
   if (typeof window === "undefined") return;
   if (!isFeatureEnabled("soundFx")) return;
 
@@ -17,6 +17,6 @@ export function playSfx(cue: CueName) {
   if (!enabled || !unlocked) return;
 
   try {
-    getUisfxClient()?.play(cue);
+    getUisfxClient()?.play(cue, options);
   } catch {}
 }

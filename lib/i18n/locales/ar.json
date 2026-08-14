@@ -2291,5 +2291,18 @@
       "somethingWrong": "حدث خطأ ما",
       "retry": "أعد المحاولة"
     }
+  },
+  "breakTimer": {
+    "trigger": "مؤقت الاستراحة",
+    "title": "مؤقت الاستراحة",
+    "start": "بدء الاستراحة",
+    "end": "إنهاء الاستراحة",
+    "onBreak": "في استراحة",
+    "todaySummaryZero": "لا توجد استراحات اليوم",
+    "todaySummary": "{breaks} · {duration} اليوم",
+    "breaksCount": "استراحة واحدة",
+    "breaksCountPlural": "{count} استراحات",
+    "sessionsHeading": "استراحات اليوم",
+    "sessionRange": "{start} – {end}"
   }
 }
