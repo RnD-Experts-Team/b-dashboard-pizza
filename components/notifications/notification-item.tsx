@@ -22,7 +22,6 @@ import {
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
-import { getNotificationPageSegment } from "@/lib/notifications/notification-routing";
 import type { PeriodType } from "@/types/cleaning.types";
 
 /**
@@ -158,11 +157,6 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
 }
 
-/** Capitalize the page segment for display. "announcements" → "Announcements" */
-function formatPageLabel(segment: string): string {
-  return segment.charAt(0).toUpperCase() + segment.slice(1);
-}
-
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
@@ -189,12 +183,10 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
     notification.type.startsWith("separation_request");
   const isEmployeeType = notification.type.startsWith("employee_promoted");
   const isCleaningType = notification.type.startsWith("cleaning_");
-  const pageSegment = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType
-    ? null
-    : getNotificationPageSegment(notification);
-
+  // Only these explicitly-coded type families are clickable — an uncoded
+  // type must never guess a navigation target, it just displays safely.
   const isClickable =
-    isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType || !!pageSegment;
+    isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -237,8 +229,6 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
       router.push(`/${locale}/dashboard/cleaning-chart`);
       return;
     }
-
-    router.push(`/${locale}/dashboard/${pageSegment}`);
   }
 
   return (
@@ -290,7 +280,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
                   ? "Hiring Requests"
                   : isEmployeeType
                   ? "Employees"
-                  : formatPageLabel(pageSegment!)}
+                  : "Cleaning Chart"}
               </span>
             </>
           )}
