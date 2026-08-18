@@ -19,8 +19,9 @@ interface SearchCreateComboboxProps {
    * Called when the user triggers "Create X".
    * Should create the item server-side, add it to `items`, and return the new id.
    * Throw (or reject) to surface an error message.
+   * Omit to disable inline creation — the user can then only pick from `items`.
    */
-  onCreate: (label: string) => Promise<number>;
+  onCreate?: (label: string) => Promise<number>;
   placeholder?: string;
   disabled?: boolean;
   loading?: boolean;
@@ -54,7 +55,7 @@ export function SearchCreateCombobox({
   const hasExactMatch = items.some(
     (i) => i.label.toLowerCase() === query.trim().toLowerCase()
   );
-  const showCreate = open && query.trim().length > 0 && !hasExactMatch && !loading;
+  const showCreate = open && query.trim().length > 0 && !hasExactMatch && !loading && !!onCreate;
 
   function handleFocus() {
     // Pre-fill with selected label so user can refine from current selection
@@ -83,7 +84,7 @@ export function SearchCreateCombobox({
   }
 
   async function handleCreate() {
-    if (!query.trim() || isCreating) return;
+    if (!onCreate || !query.trim() || isCreating) return;
     setIsCreating(true);
     setCreateError(null);
     try {
@@ -150,7 +151,9 @@ export function SearchCreateCombobox({
           <div className="max-h-44 overflow-y-auto">
             {filtered.length === 0 && !showCreate && (
               <p className="px-3 py-2 text-xs text-muted-foreground">
-                {query.trim() ? "No results — type to create a new one" : "No items in catalog"}
+                {query.trim()
+                  ? (onCreate ? "No results — type to create a new one" : "No matching issues found")
+                  : "No items in catalog"}
               </p>
             )}
             {filtered.map((item) => (

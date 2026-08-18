@@ -149,7 +149,8 @@ export function CreateTicketDialog({
 }: CreateTicketDialogProps) {
   const t = useTranslations("maintenanceTickets");
   const { canAccessRoute } = useAuth();
-  const canChooseTicketType = canAccessRoute({
+  /** Same rule as the "Manage Catalog" button — also gates the Type selector and inline issue creation. */
+  const canManageCatalog = canAccessRoute({
     service: "Maintenance",
     method: "POST",
     path: "/technicians",
@@ -449,7 +450,7 @@ export function CreateTicketDialog({
           {/* Ticket type — only users with catalog-management access may choose it */}
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Type</Label>
-            {canChooseTicketType ? (
+            {canManageCatalog ? (
               <Select value={ticketType} onValueChange={(v) => setTicketType(v as TicketType)}>
                 <SelectTrigger className="text-sm">
                   <SelectValue />
@@ -503,8 +504,14 @@ export function CreateTicketDialog({
                     items={comboItems}
                     selectedId={row.issueId}
                     onSelect={(id) => updateRow(row.id, { issueId: id })}
-                    onCreate={createCatalogIssue}
-                    placeholder={catalogLoading ? "Loading issues…" : "Search issues or type to create a new one…"}
+                    onCreate={canManageCatalog ? createCatalogIssue : undefined}
+                    placeholder={
+                      catalogLoading
+                        ? "Loading issues…"
+                        : canManageCatalog
+                        ? "Search issues or type to create a new one…"
+                        : "Search issues…"
+                    }
                   />
                 )}
               </div>
