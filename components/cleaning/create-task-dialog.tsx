@@ -80,10 +80,9 @@ export function CreateTaskDialog({ open, onOpenChange, onCreate }: Props) {
       starts_at: startsAt,
       ends_at: endsAt || null,
       due_time: values.dueTime || null,
-      // Only daily/monthly tasks support a second due time — a stale value left
+      // Only monthly tasks support a second due time — a stale value left
       // over from switching frequency away and back must not be sent.
-      due_time_2:
-        frequency === "daily" || frequency === "monthly" ? values.dueTime2 || null : null,
+      due_time_2: frequency === "monthly" ? values.dueTime2 || null : null,
       store_ids: storeIds,
       ...(frequency === "weekly" && weekDays.length > 0 ? { week_days: weekDays } : {}),
       ...(frequency === "hourly" ? { interval_hours: intervalHours ?? null } : {}),

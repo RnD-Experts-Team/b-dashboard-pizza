@@ -98,10 +98,9 @@ function buildUpdatePayload(
   const dueTimeValue = values.dueTime || null;
   if (dueTimeValue !== (original.dueTime ?? null)) payload.due_time = dueTimeValue;
 
-  // Only daily/monthly tasks support a second due time — a stale value left
+  // Only monthly tasks support a second due time — a stale value left
   // over from switching frequency away and back must not be sent.
-  const dueTime2Value =
-    frequency === "daily" || frequency === "monthly" ? values.dueTime2 || null : null;
+  const dueTime2Value = frequency === "monthly" ? values.dueTime2 || null : null;
   if (dueTime2Value !== (original.dueTime2 ?? null)) payload.due_time_2 = dueTime2Value;
 
   const originalStoreIds = original.stores.map((s) => s.id);

@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-08-14 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-08-18 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -161,7 +161,7 @@ components/layout/
 
 **Why:** These form the responsive shell that all pages inherit. Modifications break the consistent UX.
 
-**Exception — adding a global overlay or topbar indicator:** a one-line `<NewOverlay />` render in `app-shell.tsx` (or a one-line indicator mount in `topbar.tsx`'s icon cluster) is the one sanctioned edit — everything else in those files (shell structure, layout-variant logic, sidebar/topbar wiring itself) stays off-limits, same spirit as the sidebar's "ADD nav items only" rule above. Precedent already in the codebase: `ScreenProjectPiPOverlay`, `DriveThruOverlay`, `FloatingDebriefButton`, `FloatingBreakTimerButton`, and `AnnouncementOnLoadPopup` are all mounted this way in `app-shell.tsx`; `DriveThruButton` is mounted this way in `topbar.tsx`.
+**Exception — adding a global overlay or topbar indicator:** a one-line `<NewOverlay />` render in `app-shell.tsx` (or a one-line indicator mount in `topbar.tsx`'s icon cluster) is the one sanctioned edit — everything else in those files (shell structure, layout-variant logic, sidebar/topbar wiring itself) stays off-limits, same spirit as the sidebar's "ADD nav items only" rule above. Precedent already in the codebase: `ScreenProjectPiPOverlay`, `DriveThruOverlay`, `FloatingDebriefButton`, and `AnnouncementOnLoadPopup` are all mounted this way in `app-shell.tsx`; `DriveThruButton` and `BreakTimerButton` are mounted this way in `topbar.tsx`'s icon cluster.
 
 ### ❌ UI Component Library
 

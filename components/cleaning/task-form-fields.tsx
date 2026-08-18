@@ -137,7 +137,7 @@ export function TaskFormFields({
               <p className="text-xs text-destructive">{errors.dueTime.message}</p>
             )}
           </div>
-          {(frequency === "daily" || frequency === "monthly") && (
+          {frequency === "monthly" && (
             <div className="space-y-1.5">
               <Label htmlFor="ct-due-time-2">{t("dueTime2")}</Label>
               <Input id="ct-due-time-2" type="time" {...register("dueTime2")} />

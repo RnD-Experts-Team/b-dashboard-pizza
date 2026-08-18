@@ -2303,6 +2303,13 @@
     "breaksCount": "استراحة واحدة",
     "breaksCountPlural": "{count} استراحات",
     "sessionsHeading": "استراحات اليوم",
-    "sessionRange": "{start} – {end}"
+    "sessionRange": "{start} – {end}",
+    "resetHistory": "إعادة تعيين",
+    "resetHistoryConfirmTitle": "إعادة تعيين سجل استراحات اليوم؟",
+    "resetHistoryConfirmDescription": "سيؤدي هذا إلى مسح جميع الاستراحات المسجلة اليوم. لا يمكن التراجع عن هذا الإجراء.",
+    "resetHistoryConfirmAction": "إعادة تعيين",
+    "resetHistoryConfirmCancel": "إلغاء",
+    "overtimeThresholdLabel": "التنبيه بعد (بالدقائق)",
+    "overtimeAlert": "استراحتك طالت — يرجى العودة."
   }
 }

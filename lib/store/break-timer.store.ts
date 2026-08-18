@@ -12,10 +12,16 @@ export interface BreakSession {
 interface BreakTimerState {
   date: string;
   sessions: BreakSession[];
+  /** Minutes a break can run before the overtime alert kicks in. User-configurable. */
+  overtimeMinutes: number;
   ensureToday: () => void;
   startBreak: () => void;
   endBreak: () => void;
+  reset: () => void;
+  setOvertimeMinutes: (minutes: number) => void;
 }
+
+const DEFAULT_OVERTIME_MINUTES = 20;
 
 // Bumped once to clear out early test sessions logged while building this
 // feature — no migration needed since it's purely local, throwaway state.
@@ -43,6 +49,7 @@ export const useBreakTimerStore = create<BreakTimerState>()(
     (set, get) => ({
       date: todayIso(),
       sessions: [],
+      overtimeMinutes: DEFAULT_OVERTIME_MINUTES,
 
       ensureToday: () => {
         const today = todayIso();
@@ -64,13 +71,24 @@ export const useBreakTimerStore = create<BreakTimerState>()(
         next[idx] = { ...next[idx], end: Date.now() };
         set({ sessions: next });
       },
+
+      reset: () => set({ date: todayIso(), sessions: [] }),
+
+      setOvertimeMinutes: (minutes) => {
+        const clamped = Math.max(1, Math.round(minutes) || DEFAULT_OVERTIME_MINUTES);
+        set({ overtimeMinutes: clamped });
+      },
     }),
     {
       name: STORAGE_KEY,
       storage: createJSONStorage(() =>
         typeof window !== "undefined" ? localStorage : noopStorage
       ),
-      partialize: (state) => ({ date: state.date, sessions: state.sessions }),
+      partialize: (state) => ({
+        date: state.date,
+        sessions: state.sessions,
+        overtimeMinutes: state.overtimeMinutes,
+      }),
     }
   )
 );

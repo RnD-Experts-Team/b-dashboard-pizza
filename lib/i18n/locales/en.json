@@ -2304,6 +2304,13 @@
     "breaksCount": "{count} break",
     "breaksCountPlural": "{count} breaks",
     "sessionsHeading": "Today's breaks",
-    "sessionRange": "{start} – {end}"
+    "sessionRange": "{start} – {end}",
+    "resetHistory": "Reset",
+    "resetHistoryConfirmTitle": "Reset today's break history?",
+    "resetHistoryConfirmDescription": "This clears all of today's recorded breaks. This can't be undone.",
+    "resetHistoryConfirmAction": "Reset",
+    "resetHistoryConfirmCancel": "Cancel",
+    "overtimeThresholdLabel": "Alert after (minutes)",
+    "overtimeAlert": "Your break has run long — please wrap up."
   }
 }
