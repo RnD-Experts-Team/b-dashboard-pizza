@@ -2054,8 +2054,6 @@
       "weight": "الوزن (0–100)",
       "weightPlaceholder": "اختياري",
       "dueTime": "وقت الاستحقاق",
-      "dueTime2": "وقت الاستحقاق الثاني",
-      "dueTime2Hint": "اختياري — مثل جولة صباحية وجولة مسائية",
       "frequency": "التكرار",
       "frequencyHint": {
         "daily": "الصورة مطلوبة",

@@ -98,11 +98,6 @@ function buildUpdatePayload(
   const dueTimeValue = values.dueTime || null;
   if (dueTimeValue !== (original.dueTime ?? null)) payload.due_time = dueTimeValue;
 
-  // Only monthly tasks support a second due time — a stale value left
-  // over from switching frequency away and back must not be sent.
-  const dueTime2Value = frequency === "monthly" ? values.dueTime2 || null : null;
-  if (dueTime2Value !== (original.dueTime2 ?? null)) payload.due_time_2 = dueTime2Value;
-
   const originalStoreIds = original.stores.map((s) => s.id);
   if (!sameNumberSet(storeIds, originalStoreIds)) payload.store_ids = storeIds;
 
@@ -154,7 +149,6 @@ export function EditTaskDialog({ taskId, open, onOpenChange, onUpdate }: Props) 
           interval: t.interval != null ? String(t.interval) : "1",
           intervalHours: t.intervalHours != null ? String(t.intervalHours) : "",
           dueTime: t.dueTime ?? "",
-          dueTime2: t.dueTime2 ?? "",
         });
         setFrequency(t.frequency);
         setWeekDays(t.weekDays ?? []);

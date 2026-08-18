@@ -30,8 +30,6 @@ export const taskFormSchema = z.object({
   intervalHours: z.string().optional(),
   /** First (required) daily due time. */
   dueTime: z.string().min(1, "Due time is required"),
-  /** Optional second daily due time — e.g. a morning and an evening pass. */
-  dueTime2: z.string().optional(),
 });
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
 
@@ -137,13 +135,6 @@ export function TaskFormFields({
               <p className="text-xs text-destructive">{errors.dueTime.message}</p>
             )}
           </div>
-          {frequency === "monthly" && (
-            <div className="space-y-1.5">
-              <Label htmlFor="ct-due-time-2">{t("dueTime2")}</Label>
-              <Input id="ct-due-time-2" type="time" {...register("dueTime2")} />
-              <p className="text-xs text-muted-foreground">{t("dueTime2Hint")}</p>
-            </div>
-          )}
         </div>
       </section>
 

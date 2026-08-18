@@ -2055,8 +2055,6 @@
       "weight": "Weight (0–100)",
       "weightPlaceholder": "Optional",
       "dueTime": "Due time",
-      "dueTime2": "Second due time",
-      "dueTime2Hint": "Optional — e.g. an opening and a closing pass",
       "frequency": "Frequency",
       "frequencyHint": {
         "daily": "Photo required",
