@@ -1,10 +1,15 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CATEGORIES } from "@/components/dashboard-v1/category";
 import { cn } from "@/lib/utils";
 import type { ApexOptions } from "apexcharts";
@@ -173,5 +178,90 @@ export function LaborCard({
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+/* ── Summary tile — the KPI-strip style shared across header sections ────── */
+
+/**
+ * A KPI tile matching the V1 dashboard's header-strip style
+ * (components/dspr/day-summary-stats.tsx): icon box on the left, the value
+ * as the bold headline, and the label + a small secondary caption below it —
+ * a left accent border and tinted icon color carry each metric's meaning.
+ *
+ * Shared by every KPI strip on the Labor Dashboard page (labor-summary-strip.tsx,
+ * employee-report-summary.tsx) so "the same style" is structural, not copied.
+ */
+export function SummaryTile({
+  label,
+  value,
+  caption,
+  tooltip,
+  icon: Icon,
+  color,
+  iconBg,
+  borderColor,
+  isNegative,
+  onClick,
+  className,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  caption?: ReactNode;
+  tooltip: string;
+  icon: ComponentType<{ className?: string }>;
+  /** Text color for the icon and (when negative) the value — e.g. "text-emerald-600 dark:text-emerald-400". */
+  color: string;
+  /** Tinted background behind the icon — e.g. "bg-emerald-500/15 dark:bg-emerald-500/20". */
+  iconBg: string;
+  /** Left accent border — e.g. "border-l-emerald-500". */
+  borderColor: string;
+  isNegative?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) {
+  const Wrapper = onClick ? "button" : "div";
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Wrapper
+          type={onClick ? "button" : undefined}
+          onClick={onClick}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg border border-l-2 bg-card px-2 py-1.5 text-start",
+            "cursor-default transition-all hover:bg-accent/50 hover:shadow-sm",
+            onClick && "cursor-pointer",
+            borderColor,
+            className,
+          )}
+        >
+          <div className={cn("shrink-0 rounded p-0.5", iconBg)}>
+            <Icon className={cn("h-3 w-3", color)} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className={cn(
+                "truncate text-[11px] font-bold leading-tight tracking-tight tabular-nums",
+                isNegative && color,
+              )}
+            >
+              {value}
+            </p>
+            <div className="flex min-w-0 items-baseline gap-1">
+              <p className="shrink-0 truncate text-[8px] font-medium leading-tight text-muted-foreground">
+                {label}
+              </p>
+              {caption && (
+                <p className="min-w-0 truncate text-[8px] font-medium leading-tight text-muted-foreground/80">
+                  {caption}
+                </p>
+              )}
+            </div>
+          </div>
+        </Wrapper>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{tooltip}</TooltipContent>
+    </Tooltip>
   );
 }

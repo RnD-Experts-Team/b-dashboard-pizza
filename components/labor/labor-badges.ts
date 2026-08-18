@@ -9,7 +9,7 @@ import type { LaborDashboardResponse } from "@/types/labor.types";
 export type EmployeeBadge = "New" | "Veteran" | "Overtime" | "60h+" | "Departed";
 
 /** Neutral badge — used for every marker except the 60h+ overtime flag. */
-const NEUTRAL_BADGE =
+export const NEUTRAL_BADGE =
   "border-border bg-muted text-muted-foreground hover:bg-muted/80";
 
 export const BADGE_STYLES: Record<EmployeeBadge, string> = {

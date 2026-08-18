@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useLaborDashboard } from "@/lib/hooks/use-labor-dashboard";
+import { useEmployeeReport } from "@/lib/hooks/use-employee-report";
 import { LaborHeader } from "./labor-header";
 import { LaborSummaryStrip } from "./labor-summary-strip";
 import { LaborHeadcount } from "./labor-headcount";
@@ -18,6 +19,12 @@ import { LaborTrend } from "./labor-trend";
 import { LaborRoster } from "./labor-roster";
 import { LaborSkeleton } from "./labor-skeleton";
 import { buildEmployeeBadges } from "./labor-badges";
+import { EmployeeReportSummaryStrip } from "./employee-report-summary";
+import { EmployeeReportBreakdown } from "./employee-report-breakdown";
+import { EmployeeReportEvents } from "./employee-report-events";
+import { EmployeeReportTrendChart } from "./employee-report-trend";
+import { EmployeeReportRoster } from "./employee-report-roster";
+import { EmployeeReportSkeleton } from "./employee-report-skeleton";
 
 const toApiDate = (date: Date) => format(date, "yyyy-MM-dd");
 
@@ -35,6 +42,15 @@ export function LaborDashboard() {
   const [trendWeeks, setTrendWeeks] = useState(6);
 
   const { data, isLoading, error, refetch } = useLaborDashboard(
+    storeId ? String(storeId) : null,
+    toApiDate(selectedDate),
+    trendWeeks,
+  );
+
+  // A separate upstream report (employee debrief activity) for the same
+  // store/week — fetched and rendered independently so a failure or slow
+  // response here never blocks the labor report above it, and vice versa.
+  const employeeReport = useEmployeeReport(
     storeId ? String(storeId) : null,
     toApiDate(selectedDate),
     trendWeeks,
@@ -140,6 +156,61 @@ export function LaborDashboard() {
               employees={data.employees}
               badgesByEmployee={badgesByEmployee}
             />
+
+            {employeeReport.error && (
+              <Card className="border-destructive/40 bg-destructive/5">
+                <CardContent className="flex flex-wrap items-center gap-2 py-3">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                  <p className="flex-1 text-sm text-destructive">
+                    {employeeReport.error}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={employeeReport.refetch}>
+                    Retry
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {employeeReport.isLoading && !employeeReport.data && (
+              <EmployeeReportSkeleton />
+            )}
+
+            {employeeReport.data &&
+              (employeeReport.data.headcount.total === 0 &&
+              employeeReport.data.employees.length === 0 ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+                    <Users className="h-6 w-6 text-muted-foreground" />
+                    <p className="text-sm font-medium">
+                      No employee report for this week
+                    </p>
+                    <p className="max-w-sm text-xs text-muted-foreground">
+                      Store {employeeReport.data.store} has no employees and no
+                      recorded debriefs for {employeeReport.data.week_start} –{" "}
+                      {employeeReport.data.week_end}.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <EmployeeReportSummaryStrip
+                    summary={employeeReport.data.summary}
+                    headcount={employeeReport.data.headcount}
+                  />
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <EmployeeReportBreakdown
+                      byType={employeeReport.data.debriefs.by_type}
+                      trailingAverages={employeeReport.data.trend.averages.by_type}
+                    />
+                    <EmployeeReportEvents events={employeeReport.data.debriefs.events} />
+                  </div>
+                  <EmployeeReportTrendChart
+                    trend={employeeReport.data.trend}
+                    debriefTypes={employeeReport.data.debrief_types}
+                  />
+                  <EmployeeReportRoster employees={employeeReport.data.employees} />
+                </>
+              ))}
           </>
         ))}
     </div>
