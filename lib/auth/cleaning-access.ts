@@ -102,15 +102,23 @@ export function canAccessCleaningTab(
  * `evaluation` tab: the tab is reachable by anyone holding any one of its
  * six requirements (including read-only ones), whereas this action writes.
  * A store_manager reaching Due via `rolesAny` therefore does not get it.
+ *
+ * Deliberately passes NO storeId. The backend rule for this route is
+ * `store_scope_mode: "none"`, so the server authorizes it against the user's
+ * GLOBAL permissions only and ignores store-level ones. `canAccess` (see
+ * can-access.ts) does not mirror that for unscoped rules: given a storeId it
+ * checks that store's permissions first and grants access on a match. Store
+ * managers are commonly assigned "cleaning specialist" at store level while
+ * holding nothing globally, so passing a storeId here showed the Evaluate
+ * buttons to users the backend then rejected with 403. Omitting it makes this
+ * check evaluate exactly what the server enforces.
  */
-export function canEvaluateCleaning(
-  auth: { canAccessRoute: (params: CanAccessParams) => boolean },
-  storeId?: string
-): boolean {
+export function canEvaluateCleaning(auth: {
+  canAccessRoute: (params: CanAccessParams) => boolean;
+}): boolean {
   return auth.canAccessRoute({
     service: "QA",
     method: "POST",
     path: "/cleaning/evaluations",
-    storeId,
   });
 }

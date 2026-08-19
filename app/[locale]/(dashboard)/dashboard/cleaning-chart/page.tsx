@@ -160,10 +160,7 @@ function DueTab() {
   // Cleaning-specialist only. setChartCell reads the current evaluation
   // period from the same shared store the Evaluation tab uses, so a Due-page
   // toggle lands in the same grid the specialist is already grading.
-  const canEvaluate = canEvaluateCleaning(
-    { canAccessRoute },
-    store ? String(store.id) : undefined
-  );
+  const canEvaluate = canEvaluateCleaning({ canAccessRoute });
 
   // Cross-reference the evaluation grid (same shared period as the Evaluation
   // tab) so a task that's already been graded this period shows it — without

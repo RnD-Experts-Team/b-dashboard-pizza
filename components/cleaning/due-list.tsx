@@ -83,6 +83,12 @@ export function DueList({
   const [localVerdicts, setLocalVerdicts] = useState<Record<number, ChartVerdict>>({});
   const verdictFor = (taskId: number): ChartVerdict | undefined =>
     localVerdicts[taskId] ?? evaluatedVerdicts?.[taskId];
+  // Safety net: `canEvaluate` is a client-side guess based on cached auth-rule
+  // data (see canEvaluateCleaning) and can be stale or wrong relative to the
+  // backend's actual authorization. If the server ever comes back 403 on this
+  // action, that's the authoritative answer — hide the control immediately
+  // instead of leaving a forbidden button clickable for the rest of the visit.
+  const [evaluateForbidden, setEvaluateForbidden] = useState(false);
 
   /** Quick chart toggle — no dialog, matching the grid's chart chips. */
   const evaluate = async (item: DueItem, verdict: ChartVerdict) => {
@@ -93,7 +99,12 @@ export function DueList({
       setLocalVerdicts((prev) => ({ ...prev, [item.taskId]: verdict }));
       toast.success(t("due.toasts.evaluated", { label: item.label }));
     } catch (err) {
-      toast.error(err instanceof CleaningError ? err.message : t("due.toasts.evaluateFailed"));
+      if (err instanceof CleaningError && err.code === "FORBIDDEN") {
+        setEvaluateForbidden(true);
+        toast.error(t("due.toasts.evaluateForbidden"));
+      } else {
+        toast.error(err instanceof CleaningError ? err.message : t("due.toasts.evaluateFailed"));
+      }
     } finally {
       setEvaluating(null);
     }
@@ -272,7 +283,7 @@ export function DueList({
 
                       {/* Evaluate — cleaning-specialist only, always last so the
                           row reads left-to-right as "handle it, then grade it". */}
-                      {canEvaluate && onEvaluate && (
+                      {canEvaluate && !evaluateForbidden && onEvaluate && (
                         <div className="ms-1 flex items-center gap-1 border-s ps-2">
                           <Button
                             variant="outline"

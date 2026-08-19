@@ -89,6 +89,43 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}`, Accept: "application/json" };
 }
 
+/**
+ * The dashboard's currently-selected store as its HUMAN code (e.g.
+ * "03795-00001") — read straight from the persisted store rather than passed
+ * in, so every call site gets it without threading a param through.
+ *
+ * Same helper/convention as qa.service.ts's getSelectedStoreId: cleaning talks
+ * to the same QA backend, whose store-scoped auth rules resolve the store from
+ * the `X-Store-Id` header, and they expect the human code, not the numeric id.
+ */
+function getSelectedStoreCode(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("selected-store-storage");
+  if (!raw) return null;
+  try {
+    const storeId = JSON.parse(raw)?.state?.selectedStore?.storeId;
+    return typeof storeId === "string" && storeId.trim() ? storeId.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Auth headers plus the store-scope hint.
+ *
+ * Endpoints whose URL carries no store (GET /cleaning/evaluations is
+ * company-wide by path) rely on this header so the backend can authorize a
+ * store_manager against their own store — without it, only the unscoped
+ * "cleaning specialist" permission passes and a manager gets a 403.
+ */
+function storeScopedHeaders(): Record<string, string> {
+  const storeCode = getSelectedStoreCode();
+  return {
+    ...authHeaders(),
+    ...(storeCode && { "X-Store-Id": storeCode }),
+  };
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Error normalization                                                       */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -481,7 +518,7 @@ export const cleaningService = {
     try {
       const res = await axios.get<ApiEvaluationGrid>(`/api/cleaning/evaluations`, {
         params: { period_type: periodType, period_key: periodKey },
-        headers: authHeaders(),
+        headers: storeScopedHeaders(),
         timeout: 15_000,
         signal,
       });

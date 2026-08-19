@@ -119,12 +119,32 @@ export async function fetchWithRetry(
 /*  Header builders                                                           */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/** Same shape the maintenance/QA proxies validate against. */
+const STORE_ID_HEADER_RE = /^[a-zA-Z0-9_-]{1,32}$/;
+
+/**
+ * Pass through the client's store-scope hint, when present and well-formed.
+ *
+ * Endpoints whose URL carries no store (e.g. GET /cleaning/evaluations) need
+ * this so the backend's store-scoped auth rule can resolve the store for a
+ * store_manager. Validated rather than forwarded blind — it reaches an
+ * authorization decision upstream, so a malformed value is dropped instead of
+ * being passed along.
+ */
+function storeIdHeader(request: NextRequest): Record<string, string> {
+  const raw = request.headers.get("x-store-id");
+  if (!raw) return {};
+  const value = raw.trim();
+  return STORE_ID_HEADER_RE.test(value) ? { "X-Store-Id": value } : {};
+}
+
 export function jsonHeaders(request: NextRequest): HeadersInit {
   const auth = upstreamAuth(request);
   return {
     "Content-Type": "application/json",
     Accept: "application/json",
     ...(auth && { Authorization: auth }),
+    ...storeIdHeader(request),
   };
 }
 
@@ -133,6 +153,7 @@ export function getHeaders(request: NextRequest): HeadersInit {
   return {
     Accept: "application/json",
     ...(auth && { Authorization: auth }),
+    ...storeIdHeader(request),
   };
 }
 

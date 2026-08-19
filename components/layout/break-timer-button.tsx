@@ -6,6 +6,7 @@ import { Coffee, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +21,6 @@ import { cn } from "@/lib/utils";
 import {
   useBreakTimerStore,
   isOnBreak,
-  totalBreakMs,
   type BreakSession,
 } from "@/lib/store/break-timer.store";
 import { playSfx } from "@/lib/uisfx/play";
@@ -37,9 +37,17 @@ function formatClock(ms: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-/** Summary format for totals — "1h 12m" or "42m". */
+/**
+ * Summary format for totals — "1h 12m", "42m", or "45s".
+ *
+ * Sub-minute totals render as seconds: rounding them to "0m" read as though
+ * nothing had been recorded, which is exactly wrong on a row that exists
+ * precisely because a break was taken.
+ */
 function formatDuration(ms: number): string {
-  const totalMin = Math.round(ms / 60000);
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  if (totalSec < 60) return `${totalSec}s`;
+  const totalMin = Math.round(totalSec / 60);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -93,10 +101,31 @@ export function BreakTimerButton() {
 
   const current = sessions.find((s) => s.end === null) ?? null;
   const liveMs = current && now != null ? now - current.start : 0;
-  const totalMs = now != null ? totalBreakMs(sessions, now) : 0;
+  /**
+   * The clock face to paint. While a break runs it tracks `liveMs`; once the
+   * break ends we keep painting its final value for the length of the collapse
+   * animation. `liveMs` drops to 0 on the very frame the break ends, so reading
+   * it directly would flip the text to "0:00" and then shrink it — the number
+   * visibly resetting mid-glide instead of just sliding away.
+   */
+  const clockFaceRef = useRef("0:00");
+  if (onBreak) clockFaceRef.current = formatClock(liveMs);
+  const clockFace = clockFaceRef.current;
   const completedSessions = useMemo(
     () => sessions.filter((s): s is BreakSession & { end: number } => s.end !== null),
     [sessions]
+  );
+  /**
+   * Total across COMPLETED breaks only — deliberately not the running one.
+   *
+   * The "N breaks · duration" summary counts `completedSessions`, so its
+   * duration has to describe that same set. Including the live break made the
+   * two halves disagree (3 breaks, but a duration covering four) and
+   * double-counted time already shown by the live clock beside it.
+   */
+  const completedMs = useMemo(
+    () => completedSessions.reduce((sum, s) => sum + (s.end - s.start), 0),
+    [completedSessions]
   );
   const isOvertime = onBreak && liveMs >= overtimeMinutes * 60 * 1000;
 
@@ -153,32 +182,94 @@ export function BreakTimerButton() {
       )}
 
       <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
-        <PopoverAnchor asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={t("trigger")}
-            title={t("trigger")}
-            onClick={handleTriggerClick}
-            className={cn(
-              "relative gap-1.5 px-2 transition-colors duration-300 ease-out",
-              isOvertime
-                ? "text-red-600 hover:bg-red-500/10 dark:text-red-400"
-                : onBreak
-                  ? "text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
-                  : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Coffee className="h-4 w-4" />
-            <span className="text-xs font-medium tabular-nums">{formatClock(liveMs)}</span>
-            {isOvertime && (
-              <span className="absolute -top-0.5 -end-0.5 flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background" />
-              </span>
-            )}
-          </Button>
-        </PopoverAnchor>
+        {/* The day's totals live in a hover tooltip rather than inline in the
+            topbar: the icon (plus the live clock while a break runs) is all
+            that occupies the icon cluster, and the wordy summary is one hover
+            away instead of permanently competing with the icons beside it.
+            No `title` attr on the button — it would double up with this tooltip.
+
+            Nesting order matters: Tooltip must sit OUTSIDE PopoverAnchor.
+            `PopoverAnchor asChild` needs a real DOM child to measure and anchor
+            against, and Radix's Tooltip root renders no element — so anchoring
+            the popover to it would silently break the popover's positioning.
+            Both `asChild` wrappers now collapse onto the Button itself. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverAnchor asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t("trigger")}
+                onClick={handleTriggerClick}
+                className={cn(
+                  // gap-0, not the size's default gap-1.5: the clock owns its
+                  // own leading margin so the space between icon and clock
+                  // collapses along with the clock instead of lingering as a
+                  // permanent 6px gap next to a zero-width element.
+                  "relative gap-0 px-2 transition-colors duration-300 ease-out",
+                  isOvertime
+                    ? "text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                    : onBreak
+                      ? "text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+                      : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Coffee className="h-4 w-4 shrink-0" />
+
+                {/*
+                  Live clock. Stays mounted and COLLAPSES when the break ends,
+                  rather than unmounting: an unmount resizes the button between
+                  two frames, which snapped the icon (and the whole topbar
+                  cluster after it) to its new spot. Collapsing it over 300ms
+                  lets the button shrink gradually, so the coffee icon glides
+                  back to its resting position.
+
+                  The collapse animates a grid column from 1fr to 0fr rather
+                  than a max-width. On an auto-width grid, 1fr resolves to the
+                  text's own max-content width, so the track interpolates
+                  between exactly the two real widths. A max-width instead needs
+                  a hardcoded ceiling, and any ceiling above the ~30px the clock
+                  actually occupies spends the first stretch of the animation
+                  shrinking through empty slack — the icon sitting still, then
+                  lurching. Widths here also change with the digit count
+                  ("0:02" vs "12:34"), which no single constant tracks.
+
+                  aria-hidden while collapsed — it is inert decoration then, and
+                  a stale clock face should not reach a screen reader.
+                */}
+                <span
+                  aria-hidden={!onBreak}
+                  className={cn(
+                    "grid transition-[grid-template-columns,margin,opacity] duration-300 ease-out",
+                    onBreak ? "ms-1.5 grid-cols-[1fr] opacity-100" : "ms-0 grid-cols-[0fr] opacity-0"
+                  )}
+                >
+                  <span className="overflow-hidden whitespace-nowrap text-xs font-semibold tabular-nums">
+                    {clockFace}
+                  </span>
+                </span>
+
+                {isOvertime && (
+                  <span className="absolute -top-0.5 -end-0.5 flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-background" />
+                  </span>
+                )}
+              </Button>
+            </PopoverAnchor>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="tabular-nums">
+            {completedSessions.length === 0 && !onBreak
+              ? t("todaySummaryZero")
+              : t("todaySummary", {
+                  breaks: t(
+                    completedSessions.length === 1 ? "breaksCount" : "breaksCountPlural",
+                    { count: completedSessions.length }
+                  ),
+                  duration: formatDuration(completedMs),
+                })}
+          </TooltipContent>
+        </Tooltip>
 
         <PopoverContent
           align="end"
@@ -225,7 +316,7 @@ export function BreakTimerButton() {
                   completedSessions.length === 1 ? "breaksCount" : "breaksCountPlural",
                   { count: completedSessions.length }
                 ),
-                duration: formatDuration(totalMs),
+                duration: formatDuration(completedMs),
               })
             )}
           </div>

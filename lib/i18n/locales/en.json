@@ -2008,7 +2008,8 @@
         "reverted": "“{label}” reverted to pending.",
         "undoFailed": "Could not undo.",
         "evaluated": "“{label}” evaluated.",
-        "evaluateFailed": "Could not save the evaluation."
+        "evaluateFailed": "Could not save the evaluation.",
+        "evaluateForbidden": "You don't have permission to evaluate tasks."
       }
     },
     "tasks": {

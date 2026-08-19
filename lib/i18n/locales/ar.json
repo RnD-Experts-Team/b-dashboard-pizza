@@ -2007,7 +2007,8 @@
         "reverted": "تم إعادة “{label}” إلى معلّق.",
         "undoFailed": "تعذّر التراجع.",
         "evaluated": "تم تقييم “{label}”.",
-        "evaluateFailed": "تعذّر حفظ التقييم."
+        "evaluateFailed": "تعذّر حفظ التقييم.",
+        "evaluateForbidden": "ليس لديك صلاحية لتقييم المهام."
       }
     },
     "tasks": {
