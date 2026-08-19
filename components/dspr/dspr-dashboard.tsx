@@ -98,6 +98,11 @@ import {
   StorePerformanceReportDialog,
   type StorePerformanceReportValues,
 } from "./store-performance-report-dialog";
+import { buildDsprDailyReportHtml } from "./dspr-daily-report-template";
+import {
+  DsprDailyReportDialog,
+  type DsprReportValues,
+} from "./dspr-daily-report-dialog";
 
 /** Format a Date to YYYY-MM-DD (API-compatible format) */
 function toApiDate(date: Date): string {
@@ -405,6 +410,8 @@ export function DsprDashboard({
   const [isCapturingReport, setIsCapturingReport] = useState(false);
   const [isCapturingStorePerformance, setIsCapturingStorePerformance] = useState(false);
   const [storePerfDialogOpen, setStorePerfDialogOpen] = useState(false);
+  const [isCapturingDsprDailyReport, setIsCapturingDsprDailyReport] = useState(false);
+  const [dsprDailyReportDialogOpen, setDsprDailyReportDialogOpen] = useState(false);
 
   // Toggle to remove section backgrounds (persisted in localStorage)
   const [hideSectionBackgrounds, setHideSectionBackgrounds] = useState(false);
@@ -623,6 +630,90 @@ export function DsprDashboard({
     storeId,
     wbrData,
   ]);
+
+  // ── Screenshot the "DSPR Report" HTML report as a PNG ───────────────────
+  // Same off-screen iframe + html2canvas flow as the other two reports, for
+  // the day-level HnR Special / Portal / Customer Service / Total Tips recap.
+  // The employee name/photo and the footer message are collected by
+  // DsprDailyReportDialog just before this runs.
+  const handleGenerateDsprDailyReport = useCallback(async (values: DsprReportValues) => {
+    if (!data || isCapturingDsprDailyReport) return;
+    setIsCapturingDsprDailyReport(true);
+
+    const html = buildDsprDailyReportHtml(
+      {
+        data,
+        storeId: storeId ?? "store",
+        employeeName: values.employeeName,
+        employeeImageDataUrl: values.employeeImageDataUrl,
+        footerMessage: values.footerMessage,
+      },
+      selectedDate,
+    );
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.top = "0";
+    iframe.style.left = "-99999px";
+    iframe.style.width = "1180px";
+    iframe.style.height = "2000px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("Failed to render report"));
+        iframe.srcdoc = html;
+      });
+
+      const doc = iframe.contentDocument;
+      const dashboardEl = doc?.querySelector<HTMLElement>(".dashboard");
+      if (!doc || !dashboardEl) throw new Error("Report content did not render");
+
+      // Wait for web fonts to finish loading. The explicit per-face loads
+      // matter: html2canvas measures text against whatever is resolved at
+      // capture time, so a face that is still pending gets measured with a
+      // wider fallback and painted with the real one — which shows up as odd
+      // gaps between characters.
+      try {
+        await Promise.all([
+          doc.fonts?.load("700 48px Oswald"),
+          doc.fonts?.load("600 22px Oswald"),
+          doc.fonts?.load("500 14px Inter"),
+          doc.fonts?.load("700 13px Inter"),
+        ]);
+        await doc.fonts?.ready;
+      } catch {
+        // ignore — fall through to the fixed delay below
+      }
+      await new Promise((r) => setTimeout(r, 600));
+
+      // Resize the iframe to the report's actual rendered height before capture.
+      iframe.style.height = `${dashboardEl.scrollHeight}px`;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const canvas = await html2canvas(dashboardEl, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#efefef",
+        logging: false,
+        imageTimeout: 8000,
+      });
+
+      const storeName = storeId ?? "store";
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const link = document.createElement("a");
+      link.download = `DSPR-Daily-Report-${storeName}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("DSPR report screenshot failed:", err);
+    } finally {
+      document.body.removeChild(iframe);
+      setIsCapturingDsprDailyReport(false);
+    }
+  }, [data, isCapturingDsprDailyReport, selectedDate, storeId]);
 
   const toggleHideBackgrounds = useCallback(() => {
     setHideSectionBackgrounds((prev) => {
@@ -884,7 +975,7 @@ export function DsprDashboard({
                 className="h-6 w-6"
                 title="Export & view options"
               >
-                {isCapturing || isCapturingReport /* || isCapturingStorePerformance — Store Performance report temporarily disabled */ ? (
+                {isCapturing || isCapturingReport || isCapturingDsprDailyReport /* || isCapturingStorePerformance — Store Performance report temporarily disabled */ ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <MoreVertical className="h-3 w-3" />
@@ -899,6 +990,13 @@ export function DsprDashboard({
               <DropdownMenuItem onSelect={handleScreenshotReport} disabled={!data || isCapturingReport}>
                 <ImageDown className="h-3.5 w-3.5 me-2" />
                 {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setDsprDailyReportDialogOpen(true)}
+                disabled={!data || isCapturingDsprDailyReport}
+              >
+                <LayoutTemplate className="h-3.5 w-3.5 me-2" />
+                {isCapturingDsprDailyReport ? "Capturing…" : "DSPR Report (PNG)"}
               </DropdownMenuItem>
               {/* Store Performance report — temporarily disabled
               <DropdownMenuItem
@@ -928,6 +1026,14 @@ export function DsprDashboard({
             isGenerating={isCapturingStorePerformance}
           />
           */}
+
+          <DsprDailyReportDialog
+            open={dsprDailyReportDialogOpen}
+            onOpenChange={setDsprDailyReportDialogOpen}
+            onGenerate={handleGenerateDsprDailyReport}
+            isGenerating={isCapturingDsprDailyReport}
+            employees={managerDashboard.data?.employees}
+          />
 
           {/* Page guide button */}
           <Tooltip>

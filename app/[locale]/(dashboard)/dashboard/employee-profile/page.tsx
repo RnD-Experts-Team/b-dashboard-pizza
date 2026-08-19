@@ -411,7 +411,7 @@ function EmployeeProfileContent() {
       <Tabs defaultValue="operational">
         <TabsList>
           <TabsTrigger value="operational">
-            Operational History
+            Score Card
             {!opLoading && !opError && opTotal !== null && opTotal > 0 && (
               <Badge variant="secondary" className="ms-2 text-xs">{opTotal}</Badge>
             )}

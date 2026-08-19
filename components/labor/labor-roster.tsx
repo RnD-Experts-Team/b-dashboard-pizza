@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Users, Search, ArrowUpDown, ChevronDown } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Users, Search, ArrowUpDown, ChevronDown, UserRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -72,10 +74,12 @@ function EmployeeRow({
   employee,
   badges,
   colSpan,
+  onViewProfile,
 }: {
   employee: LaborEmployee;
   badges: EmployeeBadge[];
   colSpan: number;
+  onViewProfile: (employeeId: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const metricEntries = Object.entries(employee.metrics);
@@ -121,6 +125,21 @@ function EmployeeRow({
         <td className={cn(V1_TD, V1_NUM)}>{fmtDecimalString(employee.base_pay)}</td>
         <td className={cn(V1_TD, V1_NUM)}>
           {fmtColumnValue("total_hours", hours)}
+        </td>
+        <td className={V1_TD}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            title="View profile"
+            onClick={(e) => {
+              e.stopPropagation();
+              onViewProfile(employee.employee_id);
+            }}
+          >
+            <UserRound className="h-3 w-3" />
+            <span className="sr-only">View profile</span>
+          </Button>
         </td>
       </tr>
 
@@ -186,13 +205,24 @@ function EmployeeRow({
 export function LaborRoster({
   employees,
   badgesByEmployee,
+  storeId,
 }: {
   employees: LaborEmployee[];
   badgesByEmployee: Map<number, EmployeeBadge[]>;
+  /** The store_number (e.g. "03795-00021") — required by the employee-profile page's own query-param contract. */
+  storeId: string;
 }) {
+  const router = useRouter();
+  const { locale } = useParams();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string>(ALL);
   const [position, setPosition] = useState<string>(ALL);
+
+  const handleViewProfile = (employeeId: number) => {
+    router.push(
+      `/${locale}/dashboard/employee-profile?storeId=${encodeURIComponent(storeId)}&employeeId=${employeeId}`,
+    );
+  };
 
   const positions = useMemo(() => {
     const set = new Set<string>();
@@ -226,7 +256,7 @@ export function LaborRoster({
     "asc",
   );
 
-  const COL_COUNT = 6;
+  const COL_COUNT = 7;
 
   return (
     <LaborCard
@@ -323,6 +353,9 @@ export function LaborRoster({
                   onSort={toggleSort}
                   numeric
                 />
+                <th className={V1_TH}>
+                  <span className="sr-only">Profile</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -332,6 +365,7 @@ export function LaborRoster({
                   employee={e}
                   badges={badgesByEmployee.get(e.employee_id) ?? []}
                   colSpan={COL_COUNT}
+                  onViewProfile={handleViewProfile}
                 />
               ))}
             </tbody>

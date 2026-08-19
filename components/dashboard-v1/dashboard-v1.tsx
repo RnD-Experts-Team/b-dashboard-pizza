@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   Camera,
   ImageDown,
+  LayoutTemplate,
   MoreVertical,
   RefreshCw,
   ShieldAlert,
@@ -45,6 +46,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildDsprReportHtml } from "@/components/dspr/dspr-report-template";
+import { buildDsprDailyReportHtml } from "@/components/dspr/dspr-daily-report-template";
+import {
+  DsprDailyReportDialog,
+  type DsprReportValues,
+} from "@/components/dspr/dspr-daily-report-dialog";
 import { V1Section } from "./v1-section";
 import {
   V1SalesTrendCard,
@@ -199,6 +205,8 @@ export function DashboardV1({
   const dashboardRef = useRef<HTMLDivElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isCapturingReport, setIsCapturingReport] = useState(false);
+  const [isCapturingDsprDailyReport, setIsCapturingDsprDailyReport] = useState(false);
+  const [dsprDailyReportDialogOpen, setDsprDailyReportDialogOpen] = useState(false);
 
   const handleScreenshot = useCallback(async () => {
     if (!dashboardRef.current || isCapturing) return;
@@ -299,6 +307,82 @@ export function DashboardV1({
       setIsCapturingReport(false);
     }
   }, [data, isCapturingReport, selectedDate, selectedStore]);
+
+  // ── Screenshot the "DSPR Report" HTML report as a PNG ───────────────────
+  // Same off-screen iframe + html2canvas flow as the other reports, for the
+  // day-level HnR Special / Portal / Customer Service / Total Tips recap.
+  const handleGenerateDsprDailyReport = useCallback(async (values: DsprReportValues) => {
+    if (!data || isCapturingDsprDailyReport) return;
+    setIsCapturingDsprDailyReport(true);
+
+    const html = buildDsprDailyReportHtml(
+      {
+        data,
+        storeId: storeId ?? "store",
+        employeeName: values.employeeName,
+        employeeImageDataUrl: values.employeeImageDataUrl,
+        footerMessage: values.footerMessage,
+      },
+      selectedDate,
+    );
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.top = "0";
+    iframe.style.left = "-99999px";
+    iframe.style.width = "1180px";
+    iframe.style.height = "2000px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("Failed to render report"));
+        iframe.srcdoc = html;
+      });
+
+      const doc = iframe.contentDocument;
+      const dashboardEl = doc?.querySelector<HTMLElement>(".dashboard");
+      if (!doc || !dashboardEl) throw new Error("Report content did not render");
+
+      try {
+        await Promise.all([
+          doc.fonts?.load("700 48px Oswald"),
+          doc.fonts?.load("600 22px Oswald"),
+          doc.fonts?.load("500 14px Inter"),
+          doc.fonts?.load("700 13px Inter"),
+        ]);
+        await doc.fonts?.ready;
+      } catch {
+        // ignore — fall through to the fixed delay below
+      }
+      await new Promise((r) => setTimeout(r, 600));
+
+      iframe.style.height = `${dashboardEl.scrollHeight}px`;
+      await new Promise((r) => setTimeout(r, 50));
+
+      const canvas = await html2canvas(dashboardEl, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#efefef",
+        logging: false,
+        imageTimeout: 8000,
+      });
+
+      const storeName = storeId ?? "store";
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+      const link = document.createElement("a");
+      link.download = `DSPR-Daily-Report-${storeName}-${dateStr}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("DSPR report screenshot failed:", err);
+    } finally {
+      document.body.removeChild(iframe);
+      setIsCapturingDsprDailyReport(false);
+    }
+  }, [data, isCapturingDsprDailyReport, selectedDate, storeId]);
 
   // ── Loading / empty / error states ──────────────────────────────────────
   if (isLoading && !data) {
@@ -483,7 +567,7 @@ export function DashboardV1({
                 className="h-6 w-6"
                 title="Export options"
               >
-                {isCapturing || isCapturingReport ? (
+                {isCapturing || isCapturingReport || isCapturingDsprDailyReport ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <MoreVertical className="h-3 w-3" />
@@ -499,10 +583,25 @@ export function DashboardV1({
                 <ImageDown className="h-3.5 w-3.5 me-2" />
                 {isCapturingReport ? "Capturing…" : "Report screenshot (PNG)"}
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setDsprDailyReportDialogOpen(true)}
+                disabled={!data || isCapturingDsprDailyReport}
+              >
+                <LayoutTemplate className="h-3.5 w-3.5 me-2" />
+                {isCapturingDsprDailyReport ? "Capturing…" : "DSPR Report (PNG)"}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+
+      <DsprDailyReportDialog
+        open={dsprDailyReportDialogOpen}
+        onOpenChange={setDsprDailyReportDialogOpen}
+        onGenerate={handleGenerateDsprDailyReport}
+        isGenerating={isCapturingDsprDailyReport}
+        employees={managerDashboard.data?.employees}
+      />
 
       {/* ── KPI hero ─────────────────────────────────────────────────────── */}
       <DaySummaryStats day={day} />
@@ -533,6 +632,7 @@ export function DashboardV1({
         <V1HourlyChannelsCard
           hourly={day.hourly_sales_and_channels}
           weekly={day.hourly_sales_and_channels_week_to_date_avg}
+          hourlyWeeklySum={day.hourly_sales_and_channels_week_to_date_sum}
           channelToday={day.total_sales}
           channelWeekly={day.total_sales_week_to_date_avg}
           span={2}

@@ -60,10 +60,15 @@ function formatHour(h: number): string {
  * shape and diff/arrow rendering. ─────────────────────────────────────────── */
 function CompTable({
   firstColLabel,
+  wtdColLabel = "WTD Avg",
+  showSumCol = false,
   rows,
 }: {
   firstColLabel: string;
-  rows: { key: string | number; label: string; dayTotal: number; wtdTotal: number }[];
+  wtdColLabel?: string;
+  /** Adds a second, informational "WTD Sum" column (hourly tab only — no data to sum for channel totals). */
+  showSumCol?: boolean;
+  rows: { key: string | number; label: string; dayTotal: number; wtdTotal: number; wtdSumTotal?: number }[];
 }) {
   return (
     <div className="mt-4 overflow-hidden rounded-xl border">
@@ -77,8 +82,13 @@ function CompTable({
               Today
             </th>
             <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              WTD Avg
+              {wtdColLabel}
             </th>
+            {showSumCol && (
+              <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                WTD Sum
+              </th>
+            )}
             <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Change
             </th>
@@ -107,6 +117,13 @@ function CompTable({
                 <td className="px-4 py-2 text-right tabular-nums font-mono">
                   ${row.wtdTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </td>
+                {showSumCol && (
+                  <td className="px-4 py-2 text-right tabular-nums font-mono text-muted-foreground">
+                    {row.wtdSumTotal != null
+                      ? `$${row.wtdSumTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                      : "–"}
+                  </td>
+                )}
                 <td className="px-4 py-2 text-right">
                   {direction !== "same" && pct ? (
                     <span
@@ -141,13 +158,17 @@ function CompTable({
 export function V1HourlyChannelsCard({
   hourly,
   weekly,
+  hourlyWeeklySum,
   channelToday,
   channelWeekly,
   span,
   className,
 }: {
   hourly: HourlySalesChannel[];
+  /** WTD-avg hourly buckets. */
   weekly?: HourlySalesChannel[];
+  /** WTD-sum hourly buckets — same shape as `weekly`, running totals instead of averages. */
+  hourlyWeeklySum?: HourlySalesChannel[];
   /** Whole-period channel totals for the "By Channel" tab. */
   channelToday?: DsprChannelSales;
   /** WTD-avg channel totals for the "By Channel" tab. */
@@ -158,10 +179,13 @@ export function V1HourlyChannelsCard({
   const isDark = useDocumentColorMode() === "dark";
   // Each tab has its own WTD source, so the Day/WTD toggle is offered per tab.
   const hasHourlyWeekly = Boolean(weekly?.length);
+  const hasHourlySum = Boolean(hourlyWeeklySum?.length);
   const hasChannelWeekly = Boolean(channelWeekly);
 
   const [chanTab, setChanTab]      = useState<ChannelTab>("hourly");
   const [view, setView]            = useState<"day" | "wtd">("day");
+  // Hourly WTD data comes two ways — an average per hour, or a running sum per hour.
+  const [hourlyWtdMode, setHourlyWtdMode] = useState<"avg" | "sum">("avg");
   const [hiddenSeries, setHidden]  = useState<Set<string>>(new Set());
   const [dialogOpen, setDialog]    = useState(false);
   // Independent from the card's own tab — which comparison the dialog shows.
@@ -171,6 +195,9 @@ export function V1HourlyChannelsCard({
   const hasWeekly = isChannelTab ? hasChannelWeekly : hasHourlyWeekly;
   // Guard against a stale "wtd" selection when switching to a tab that has no WTD data.
   const effectiveView = view === "wtd" && hasWeekly ? "wtd" : "day";
+  // Which hourly WTD dataset is currently active for the card's own chart.
+  const activeHourlyWeekly =
+    hourlyWtdMode === "sum" && hasHourlySum ? hourlyWeeklySum : weekly;
 
   const toggle = useCallback((label: string) => {
     setHidden((prev) => {
@@ -192,7 +219,7 @@ export function V1HourlyChannelsCard({
 
   /* ── Hourly tab shaping — same logic as original ──────────────────────── */
   const { series, categories, channelHasData } = useMemo(() => {
-    const src = effectiveView === "wtd" && weekly ? weekly : hourly;
+    const src = effectiveView === "wtd" && activeHourlyWeekly ? activeHourlyWeekly : hourly;
     const sorted = [...src].sort((a, b) => a.hour - b.hour);
 
     const cats = sorted.map((r) => formatHour(r.hour));
@@ -211,7 +238,7 @@ export function V1HourlyChannelsCard({
     }));
 
     return { series: s, categories: cats, channelHasData: hasDataByChannel };
-  }, [effectiveView, weekly, hourly]);
+  }, [effectiveView, activeHourlyWeekly, hourly]);
 
   /* ── Channel-totals tab shaping ───────────────────────────────────────── */
   const channelTotals = useMemo(() => {
@@ -232,22 +259,32 @@ export function V1HourlyChannelsCard({
     }, {});
   }, [isChannelTab, channelHasData, channelTotals]);
 
-  /* ── Hourly comparison rows for the dialog ────────────────────────────── */
+  /* ── Hourly comparison rows for the dialog — shows the WTD avg and, when
+   * available, the WTD sum side by side (no toggle; both are just displayed). */
   const compRows = useMemo(() => {
     if (!weekly) return [];
     const allHours = Array.from(
-      new Set([...hourly.map((h) => h.hour), ...weekly.map((h) => h.hour)]),
+      new Set([
+        ...hourly.map((h) => h.hour),
+        ...weekly.map((h) => h.hour),
+        ...(hourlyWeeklySum ?? []).map((h) => h.hour),
+      ]),
     ).sort((a, b) => a - b);
     const dayMap = new Map(hourly.map((h) => [h.hour, h]));
-    const wtdMap = new Map(weekly.map((h) => [h.hour, h]));
+    const avgMap = new Map(weekly.map((h) => [h.hour, h]));
+    const sumMap = new Map((hourlyWeeklySum ?? []).map((h) => [h.hour, h]));
     return allHours.map((hour) => {
       const d = dayMap.get(hour);
-      const w = wtdMap.get(hour);
+      const wAvg = avgMap.get(hour);
+      const wSum = sumMap.get(hour);
       const dayTotal = d ? CHANNEL_KEYS.reduce((s, { key }) => s + (Number(d[key]) || 0), 0) : 0;
-      const wtdTotal = w ? CHANNEL_KEYS.reduce((s, { key }) => s + (Number(w[key]) || 0), 0) : 0;
-      return { hour, label: formatHour(hour), dayTotal, wtdTotal };
+      const wtdTotal = wAvg ? CHANNEL_KEYS.reduce((s, { key }) => s + (Number(wAvg[key]) || 0), 0) : 0;
+      const wtdSumTotal = wSum
+        ? CHANNEL_KEYS.reduce((s, { key }) => s + (Number(wSum[key]) || 0), 0)
+        : undefined;
+      return { hour, label: formatHour(hour), dayTotal, wtdTotal, wtdSumTotal };
     });
-  }, [hourly, weekly]);
+  }, [hourly, weekly, hourlyWeeklySum]);
 
   /* ── Per-channel comparison rows for the dialog ───────────────────────── */
   const channelCompRows = useMemo(() => {
@@ -439,6 +476,16 @@ export function V1HourlyChannelsCard({
               onChange={(v) => setView(v as "day" | "wtd")}
             />
           )}
+          {!isChannelTab && effectiveView === "wtd" && hasHourlySum && (
+            <V1Toggle
+              options={[
+                { value: "avg", label: "Avg" },
+                { value: "sum", label: "Sum" },
+              ]}
+              value={hourlyWtdMode}
+              onChange={(v) => setHourlyWtdMode(v as "avg" | "sum")}
+            />
+          )}
         </div>
       }
     >
@@ -499,7 +546,7 @@ export function V1HourlyChannelsCard({
       ) : (
         <div className="flex-1 min-h-0">
           <ReactApexChart
-            key={`${isDark ? "dark" : "light"}-${effectiveView}`}
+            key={`${isDark ? "dark" : "light"}-${effectiveView}-${hourlyWtdMode}`}
             options={options}
             series={visibleSeries}
             type="bar"
@@ -515,7 +562,10 @@ export function V1HourlyChannelsCard({
           onClose={() => setDialog(false)}
           title={dialogTab === "hourly" ? "Hourly Sales by Channel" : "Sales by Channel"}
         >
-          <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex flex-wrap items-center justify-end gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
             <V1Toggle
               options={[
                 { value: "hourly", label: "Hourly" },
@@ -534,11 +584,13 @@ export function V1HourlyChannelsCard({
             ) : (
               <CompTable
                 firstColLabel="Hour"
+                showSumCol={hasHourlySum}
                 rows={compRows.map((r) => ({
                   key: r.hour,
                   label: r.label,
                   dayTotal: r.dayTotal,
                   wtdTotal: r.wtdTotal,
+                  wtdSumTotal: r.wtdSumTotal,
                 }))}
               />
             )

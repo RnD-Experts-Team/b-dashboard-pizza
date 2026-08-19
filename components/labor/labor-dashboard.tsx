@@ -155,6 +155,7 @@ export function LaborDashboard() {
             <LaborRoster
               employees={data.employees}
               badgesByEmployee={badgesByEmployee}
+              storeId={String(storeId)}
             />
 
             {employeeReport.error && (
