@@ -10,14 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
 import { cn } from "@/lib/utils";
-import { useStores } from "@/lib/hooks/use-stores";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type { CleaningFrequency } from "@/types/cleaning.types";
-
-/**
- * Stable reference — passed to useStores. A fresh object literal here would make
- * the hook's effect re-run every render (infinite fetch loop).
- */
-export const STORE_PARAMS = { perPage: 500 } as const;
 
 export const FREQUENCIES: CleaningFrequency[] = ["daily", "weekly", "monthly", "hourly"];
 export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
@@ -39,15 +33,24 @@ export function num(v: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Reusable store-options loader — shared by Create and Edit dialogs. */
+/**
+ * Reusable store-options loader — shared by Create and Edit dialogs.
+ *
+ * Sourced from the auth store's `overviewStores` (loaded once at login from
+ * /auth/general-overview) instead of `storeService.getStores()` — that endpoint
+ * lists every company store and requires an elevated permission most roles that
+ * can create cleaning tasks don't have, which 403s. `overviewStores` is already
+ * scoped to the stores the current user can access, same source the sidebar's
+ * own store switcher uses.
+ */
 export function useTaskStoreOptions() {
-  const { stores, isLoading } = useStores(STORE_PARAMS);
-  const options: MultiSelectOption<number>[] = stores.map((s) => ({
+  const overviewStores = useAuthStore((s) => s.overviewStores);
+  const options: MultiSelectOption<number>[] = overviewStores.map((s) => ({
     value: Number(s.id),
-    label: s.name || s.storeId,
+    label: s.name || s.storeId || s.id,
     hint: s.storeId,
   }));
-  return { options, isLoading };
+  return { options, isLoading: false };
 }
 
 interface TaskFormFieldsProps {
