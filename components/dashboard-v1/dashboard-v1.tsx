@@ -329,7 +329,7 @@ export function DashboardV1({
     iframe.style.position = "fixed";
     iframe.style.top = "0";
     iframe.style.left = "-99999px";
-    iframe.style.width = "1180px";
+    iframe.style.width = "900px";
     iframe.style.height = "2000px";
     iframe.style.border = "none";
     document.body.appendChild(iframe);
@@ -347,7 +347,7 @@ export function DashboardV1({
 
       try {
         await Promise.all([
-          doc.fonts?.load("700 48px Oswald"),
+          doc.fonts?.load("700 40px Oswald"),
           doc.fonts?.load("600 22px Oswald"),
           doc.fonts?.load("500 14px Inter"),
           doc.fonts?.load("700 13px Inter"),

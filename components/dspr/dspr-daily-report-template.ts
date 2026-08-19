@@ -145,7 +145,7 @@ export function buildDsprDailyReportHtml(
   }
 
   .dashboard {
-    width: 1180px;
+    width: 900px;
     margin: 20px auto;
     background: #ffffff;
     box-shadow: 0 4px 22px rgba(0,0,0,.08);
@@ -160,7 +160,7 @@ export function buildDsprDailyReportHtml(
     align-items: center;
     justify-content: space-between;
     gap: 24px;
-    padding: 26px 40px;
+    padding: 24px 32px;
   }
   .brand { display: flex; align-items: center; gap: 18px; }
   .logo-badge {
@@ -213,7 +213,7 @@ export function buildDsprDailyReportHtml(
   .hero {
     background: var(--orange-tint);
     border-bottom: 1px solid var(--hairline);
-    padding: 26px 40px;
+    padding: 24px 32px;
     display: flex;
     justify-content: center;
   }
@@ -274,8 +274,8 @@ export function buildDsprDailyReportHtml(
   /* ── KPI cards ──────────────────────────────────────────────────────── */
   .kpis {
     display: flex;
-    gap: 18px;
-    padding: 30px 40px 26px;
+    gap: 16px;
+    padding: 28px 32px 24px;
   }
   /* No Employee of the Day hero band — give the KPI row its own breathing
    * room below the header instead of sitting flush against the orange bar. */
@@ -285,9 +285,29 @@ export function buildDsprDailyReportHtml(
   }
   .kpi-card {
     flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
     border-radius: 20px;
-    padding: 20px 22px 18px;
+    padding: 18px 18px 16px;
     border: 1px solid transparent;
+  }
+  /* The value+sub block grows to fill whatever room the head/breakdown don't
+   * use, and centers within it — so a card with no breakdown (e.g. Total
+   * Tips) doesn't read as mostly empty space under a small number. */
+  .kpi-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  /* No breakdown row at all — give the number the full card to itself. */
+  .kpi-card--solo .kpi-value {
+    font-size: 56px;
+    text-align: center;
+  }
+  .kpi-card--solo .kpi-sub {
+    text-align: center;
   }
   .kpi-card.sky    { background: var(--sky-tint);    border-color: rgba(2,132,199,.18); }
   .kpi-card.violet { background: var(--violet-tint); border-color: rgba(124,58,237,.18); }
@@ -316,9 +336,9 @@ export function buildDsprDailyReportHtml(
   .kpi-value {
     font-family: 'Oswald', 'Arial Narrow', sans-serif;
     font-weight: 700;
-    font-size: 48px;
+    font-size: 40px;
     line-height: 1.05;
-    margin-top: 12px;
+    margin-top: 10px;
   }
   .kpi-sub {
     font-size: 13px;
@@ -328,16 +348,17 @@ export function buildDsprDailyReportHtml(
   }
   .kpi-breakdown {
     display: flex;
-    gap: 10px;
-    margin-top: 14px;
-    padding-top: 14px;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid rgba(23,24,26,.09);
   }
   .bd {
     flex: 1 1 0;
+    min-width: 0;
     background: rgba(255,255,255,.72);
     border-radius: 12px;
-    padding: 8px 10px;
+    padding: 7px 8px;
   }
   .bd-label {
     font-size: 10px;
@@ -361,9 +382,9 @@ export function buildDsprDailyReportHtml(
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 18px;
-    margin: 0 40px;
-    padding: 22px 0 30px;
+    gap: 16px;
+    margin: 0 32px;
+    padding: 20px 0 28px;
     border-top: 1px solid var(--hairline);
   }
   .footer-icon {
@@ -406,13 +427,15 @@ export function buildDsprDailyReportHtml(
   ${heroHtml}
 
   <div class="kpis${trimmedName ? "" : " kpis--no-hero"}">
-    <div class="kpi-card sky">
+    <div class="kpi-card sky${hnrSpecial != null ? "" : " kpi-card--solo"}">
       <div class="kpi-head">
         <div class="kpi-chip">${icon("flame", "#0284C7", 22)}</div>
         <div class="kpi-label">HNR Special</div>
       </div>
-      <div class="kpi-value">${hnrSpecial != null ? fmtPct1(hnrSpecial.hnr_promise_met_percent) : NO_DATA}</div>
-      <div class="kpi-sub">Promise met</div>
+      <div class="kpi-body">
+        <div class="kpi-value">${hnrSpecial != null ? fmtPct1(hnrSpecial.hnr_promise_met_percent) : NO_DATA}</div>
+        <div class="kpi-sub">Promise met</div>
+      </div>
       ${
         hnrSpecial != null
           ? `<div class="kpi-breakdown">
@@ -424,13 +447,15 @@ export function buildDsprDailyReportHtml(
       }
     </div>
 
-    <div class="kpi-card violet">
+    <div class="kpi-card violet${portal != null ? "" : " kpi-card--solo"}">
       <div class="kpi-head">
         <div class="kpi-chip">${icon("smile", "#7C3AED", 22)}</div>
         <div class="kpi-label">Customer Service</div>
       </div>
-      <div class="kpi-value">${customerServicePct != null ? fmtPct1(customerServicePct) : NO_DATA}</div>
-      <div class="kpi-sub">Average of Into Portal &amp; On Time</div>
+      <div class="kpi-body">
+        <div class="kpi-value">${customerServicePct != null ? fmtPct1(customerServicePct) : NO_DATA}</div>
+        <div class="kpi-sub">Average of Into Portal &amp; On Time</div>
+      </div>
       ${
         portal != null
           ? `<div class="kpi-breakdown">
@@ -441,13 +466,15 @@ export function buildDsprDailyReportHtml(
       }
     </div>
 
-    <div class="kpi-card rose">
+    <div class="kpi-card rose kpi-card--solo">
       <div class="kpi-head">
         <div class="kpi-chip">${icon("coins", "#E11D48", 22)}</div>
         <div class="kpi-label">Total Tips</div>
       </div>
-      <div class="kpi-value">${tips != null ? fmtMoney0(tips) : NO_DATA}</div>
-      <div class="kpi-sub">Collected today</div>
+      <div class="kpi-body">
+        <div class="kpi-value">${tips != null ? fmtMoney0(tips) : NO_DATA}</div>
+        <div class="kpi-sub">Collected today</div>
+      </div>
     </div>
   </div>
 
