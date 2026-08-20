@@ -672,8 +672,10 @@ export function DashboardV1({
         <V1TopItemsCard
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
+          weeklyAvgItems={top.top_5_items_sales_week_to_date_avg}
           countItems={top.top_5_items_count_for_day}
           weeklyCountItems={top.top_5_items_count_week_to_date}
+          weeklyAvgCountItems={top.top_5_items_count_week_to_date_avg}
           upselling={day.upselling}
           span={1}
         />
