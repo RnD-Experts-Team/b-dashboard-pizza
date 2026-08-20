@@ -635,6 +635,7 @@ export function DashboardV1({
           hourlyWeeklySum={day.hourly_sales_and_channels_week_to_date_sum}
           channelToday={day.total_sales}
           channelWeekly={day.total_sales_week_to_date_avg}
+          channelWeeklySum={day.total_sales_week_to_date}
           span={2}
         />
         <V1OrdersVsSalesCard data={wbrData?.["orders-vs-sales"]} isLoading={isLoading} span={2} />

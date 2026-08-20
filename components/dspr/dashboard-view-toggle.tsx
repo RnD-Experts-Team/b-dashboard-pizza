@@ -21,6 +21,7 @@ export function DashboardViewToggle() {
 
   return (
     <div>
+      {/* Main/V1 toggle — temporarily disabled; V1 is the only view shown for now.
       <div className="mb-2 flex justify-end">
         <V1Toggle
           options={[
@@ -31,6 +32,7 @@ export function DashboardViewToggle() {
           onChange={setView}
         />
       </div>
+      */}
 
       <div className={cn(view !== "main" && "hidden")}>
         <DsprDashboard selectedDate={selectedDate} onSelectedDateChange={setSelectedDate} />

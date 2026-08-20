@@ -112,6 +112,8 @@ export function HnrCard({
   const [dialogOpen, setDialogOpen] = useState(false);
   // Independent from the card's own All/Special toggle — switching one does not affect the other.
   const [dialogItemsMode, setDialogItemsMode] = useState<"all" | "special">("all");
+  // WTD rankings come two ways — a running sum, or averaged per day.
+  const [wtdMode, setWtdMode] = useState<"sum" | "avg">("sum");
   const hasSpecialItems = Boolean(importantItemsHnr);
 
   const source =
@@ -122,7 +124,13 @@ export function HnrCard({
           wtdAvg: weeklyAvgImportantItemsHnr,
         }
       : { day: hnr, wtd: weeklyHnr, wtdAvg: weeklyAvgHnr };
-  const activeHnr = isWeekly && source.wtd ? source.wtdAvg ?? source.wtd : source.day;
+  const useAvg = wtdMode === "avg";
+  const hasAvgData = Boolean(source.wtdAvg);
+  // True only when avg data actually exists for the current item scope — if the
+  // user picked "avg" then switched All/Special to a scope without avg data,
+  // this correctly falls back to sum without still claiming to show "Avg".
+  const showingAvg = useAvg && hasAvgData;
+  const activeHnr = isWeekly && source.wtd ? (showingAvg ? source.wtdAvg! : source.wtd) : source.day;
   const pct = activeHnr.hnr_promise_met_percent;
 
   return (
@@ -132,7 +140,7 @@ export function HnrCard({
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
             <Timer className="h-3 w-3 text-orange-500" />
           </div>
-          Hot-N-Ready{isWeekly ? " (WTD)" : ""}{itemsMode === "special" ? " · Special Items" : ""}
+          Hot-N-Ready{isWeekly ? (showingAvg ? " (WTD Avg)" : " (WTD)") : ""}{itemsMode === "special" ? " · Special Items" : ""}
           <div className="ms-auto flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             {hasSpecialItems && (
               <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
@@ -157,6 +165,32 @@ export function HnrCard({
                   onClick={() => setItemsMode("special")}
                 >
                   Special
+                </button>
+              </div>
+            )}
+            {isWeekly && hasAvgData && (
+              <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    wtdMode === "sum"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setWtdMode("sum")}
+                >
+                  Sum
+                </button>
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    wtdMode === "avg"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setWtdMode("avg")}
+                >
+                  Avg
                 </button>
               </div>
             )}
@@ -219,16 +253,21 @@ export function HnrCard({
       {/* WTD Comparison Dialog */}
       {weeklyHnr && (() => {
         const dailyHnr = dialogItemsMode === "special" ? importantItemsHnr ?? hnr : hnr;
+        const sumHnr =
+          dialogItemsMode === "special"
+            ? weeklyImportantItemsHnr ?? weeklyHnr
+            : weeklyHnr;
         const avgHnr =
           dialogItemsMode === "special"
             ? weeklyAvgImportantItemsHnr ?? weeklyImportantItemsHnr ?? weeklyAvgHnr ?? weeklyHnr
             : weeklyAvgHnr ?? weeklyHnr;
+        const showSum = avgHnr !== sumHnr;
         return (
         <WtdComparisonDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           title="Hot-N-Ready Comparison"
-          badgeText={dialogItemsMode === "special" ? "Special Items · Daily vs WTD Avg" : "All Items · Daily vs WTD Avg"}
+          badgeText={`${dialogItemsMode === "special" ? "Special Items" : "All Items"} · Daily vs WTD${showSum ? " Avg" : ""}`}
         >
           {hasSpecialItems && (
             <div
@@ -280,7 +319,7 @@ export function HnrCard({
                 <p className="text-2xl font-bold text-primary tabular-nums">
                   {avgHnr.hnr_promise_met_percent.toFixed(1)}%
                 </p>
-                <p className="text-[10px] text-muted-foreground">Promise Met (Avg)</p>
+                <p className="text-[10px] text-muted-foreground">Promise Met{showSum ? " (Avg)" : ""}</p>
                 <div className="flex gap-3 mt-2">
                   <span className="text-[11px]">Trans: <b>{avgHnr.hnr_transactions}</b></span>
                   <span className="text-[11px]">Kept: <b>{avgHnr.hnr_promise_met}</b></span>
@@ -298,6 +337,7 @@ export function HnrCard({
                 dailyNum: dailyHnr.hnr_promise_met_percent,
                 wtdNum: avgHnr.hnr_promise_met_percent,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${sumHnr.hnr_promise_met_percent.toFixed(1)}%` : undefined,
               },
               {
                 label: "Transactions",
@@ -306,6 +346,7 @@ export function HnrCard({
                 dailyNum: dailyHnr.hnr_transactions,
                 wtdNum: avgHnr.hnr_transactions,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${sumHnr.hnr_transactions}` : undefined,
               },
               {
                 label: "Promises Kept",
@@ -314,6 +355,7 @@ export function HnrCard({
                 dailyNum: dailyHnr.hnr_promise_met,
                 wtdNum: avgHnr.hnr_promise_met,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${sumHnr.hnr_promise_met}` : undefined,
               },
               {
                 label: "Broken Promises",
@@ -322,6 +364,7 @@ export function HnrCard({
                 dailyNum: dailyHnr.hnr_broken_promises,
                 wtdNum: avgHnr.hnr_broken_promises,
                 higherIsBetter: false,
+                wtdSum: showSum ? `${sumHnr.hnr_broken_promises}` : undefined,
               },
             ]}
           />

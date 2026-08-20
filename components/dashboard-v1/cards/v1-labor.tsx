@@ -67,18 +67,28 @@ export function V1LaborCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
-  const hasWeekly = weeklyValue !== undefined;
+  // "Has any weekly data at all" — checks both the sum and the avg field, so
+  // the Day/WTD toggle never goes dead just because one sibling is missing.
+  const hasWeekly = weeklyValue !== undefined || weeklyAvgValue !== undefined;
+  const hasAvgData = weeklyAvgValue !== undefined;
   const hasWeeklyLabor = weeklyLaborEntries && weeklyLaborEntries.length > 0;
   const hasLaborByDay = laborWeekToDateByDay && Object.keys(laborWeekToDateByDay).length > 0;
-  const canExpand = hasWeekly || !!hasWeeklyLabor;
 
   const [view, setView] = useState<"day" | "wtd">("day");
   const [activeTab, setActiveTab] = useState<"labor" | "final">("labor");
   const [open, setOpen] = useState(false);
   const [dialogTab, setDialogTab] = useState<"by-day" | "final">("by-day");
+  // WTD comes two ways — a running sum, or averaged per day.
+  const [wtdMode, setWtdMode] = useState<"sum" | "avg">("sum");
 
   const isWtd = view === "wtd" && hasWeekly;
-  const activeGaugeValue = isWtd ? weeklyValue! : value;
+  const useAvg = wtdMode === "avg";
+  // Selected mode's data if present, else fall back to the other — the
+  // toggle should never silently show nothing just because one side is
+  // missing. ?? (not ||) so a legitimate 0% value isn't mistaken for missing.
+  const activeGaugeValue = isWtd
+    ? (useAvg ? (weeklyAvgValue ?? weeklyValue!) : (weeklyValue ?? weeklyAvgValue!))
+    : value;
 
   // Final Labor — last weekly-labor entry
   const lastEntry = hasWeeklyLabor
@@ -91,61 +101,59 @@ export function V1LaborCard({
       title="Labor"
       category="operations"
       period={hasWeekly ? "D·WTD" : "D"}
+      showPeriodBadge={false}
       span={span}
       className={className}
       bodyClassName="overflow-hidden"
-      onExpand={canExpand ? () => setOpen(true) : undefined}
+      onExpand={() => setOpen(true)}
       headerControl={
-        hasWeekly ? (
-          <div
-            className="flex items-center gap-1 ms-1"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div
+          className="ms-1 flex flex-wrap items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Final Labor is its own independent view (6-week history), not
+           * a Day/WTD variant — so it stays available regardless of the
+           * Day/WTD selection, and selecting it hides the other two
+           * toggles (which have nothing to control while viewing it). */}
+          {hasWeeklyLabor && (
             <V1Toggle
               options={[
-                { value: "day", label: "Day" },
-                { value: "wtd", label: "WTD" },
+                { value: "labor", label: "Labor" },
+                { value: "final", label: "Final" },
               ]}
-              value={view}
-              onChange={(v) => {
-                setView(v as "day" | "wtd");
-                if (v === "day") setActiveTab("labor");
-              }}
+              value={activeTab}
+              onChange={(v) => setActiveTab(v as "labor" | "final")}
             />
-            {isWtd && hasWeeklyLabor && (
-              <div className="flex gap-0.5 bg-muted/60 rounded-md p-0.5">
-                <button
-                  className={cn(
-                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
-                    activeTab === "labor"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setActiveTab("labor")}
-                >
-                  Labor
-                </button>
-                <button
-                  className={cn(
-                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
-                    activeTab === "final"
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setActiveTab("final")}
-                >
-                  Final
-                </button>
-              </div>
-            )}
-          </div>
-        ) : undefined
+          )}
+          {activeTab === "labor" && (
+            <>
+              <V1Toggle
+                options={[
+                  { value: "day", label: "Day" },
+                  { value: "wtd", label: "WTD" },
+                ]}
+                value={view}
+                onChange={(v) => setView(v as "day" | "wtd")}
+              />
+              {isWtd && (
+                <V1Toggle
+                  options={[
+                    { value: "sum", label: "Sum" },
+                    { value: "avg", label: "Avg" },
+                  ]}
+                  value={wtdMode}
+                  onChange={(v) => setWtdMode(v as "sum" | "avg")}
+                />
+              )}
+            </>
+          )}
+        </div>
       }
     >
       <div className="flex flex-col">
         <div className="mx-auto w-full max-w-[260px]">
           {/* Daily or WTD Labor */}
-          {(!isWtd || activeTab === "labor") && (
+          {activeTab === "labor" && (
             <SpeedometerGauge
               value={activeGaugeValue}
               max={50}
@@ -156,7 +164,7 @@ export function V1LaborCard({
             />
           )}
           {/* Final Labor — last weekly-labor entry */}
-          {isWtd && activeTab === "final" && lastEntry && (
+          {activeTab === "final" && lastEntry && (
             <SpeedometerGauge
               value={finalValue}
               max={50}
@@ -173,16 +181,16 @@ export function V1LaborCard({
         </p>
       </div>
 
-      {/* Dialog */}
-      {canExpand && (
-        <WtdComparisonDialog
+      {/* Dialog — always available; sections below individually show a "no
+       * data" fallback rather than the whole dialog disappearing. */}
+      <WtdComparisonDialog
           open={open}
           onClose={() => setOpen(false)}
           title="Labor"
           badgeText="Daily · WTD · Final Labor"
         >
         <div className="h-[560px] overflow-y-auto pr-1">
-          {hasWeekly && (
+          {hasWeekly ? (
             <ComparisonGrid
               daily={
                 <div className="space-y-2">
@@ -200,13 +208,22 @@ export function V1LaborCard({
                   <p className="text-2xl font-bold text-primary tabular-nums">
                     {(weeklyAvgValue ?? weeklyValue!).toFixed(1)}%
                   </p>
-                  <p className="text-[10px] text-muted-foreground">Labor % (WTD Avg)</p>
+                  <p className="text-[10px] text-muted-foreground">Labor %{hasAvgData ? " (WTD Avg)" : " (WTD)"}</p>
+                  {hasAvgData && weeklyValue !== undefined && (
+                    <p className="text-[11px] text-muted-foreground">
+                      WTD Sum: <b className="text-foreground">{weeklyValue.toFixed(1)}%</b>
+                    </p>
+                  )}
                   <p className="text-[10px] text-emerald-600 font-medium mt-1">
                     Target: 19–24%
                   </p>
                 </div>
               }
             />
+          ) : (
+            <p className="py-6 text-center text-[11px] text-muted-foreground">
+              No WTD comparison data available.
+            </p>
           )}
 
           {/* Labor by Day / Final Labor — tabs when both are available */}
@@ -357,7 +374,6 @@ export function V1LaborCard({
           )}
         </div>
         </WtdComparisonDialog>
-      )}
     </V1Card>
   );
 }

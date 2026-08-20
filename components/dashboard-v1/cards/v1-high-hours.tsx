@@ -3,7 +3,7 @@
 import { Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { HighHoursEmployees } from "@/types/employee.types";
-import { fmt$, fmt$2, fmtNumD, WbrCardSkeleton } from "@/components/dspr/wbr-format";
+import { fmt$2, fmtNumD, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
   V1Metric,
@@ -95,7 +95,7 @@ export function V1HighHoursCard({
                     {fmtNumD(e.total_hours, 1)}
                   </td>
                   <td className={cn(V1_TD, V1_NUM)}>{fmt$2(e.hourly_pay)}</td>
-                  <td className={cn(V1_TD, V1_NUM)}>{fmt$(e.gross_pay)}</td>
+                  <td className={cn(V1_TD, V1_NUM)}>{fmt$2(e.gross_pay)}</td>
                 </tr>
               ))}
             </tbody>
