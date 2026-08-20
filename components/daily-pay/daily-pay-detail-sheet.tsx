@@ -33,9 +33,16 @@ import type { DailyPayEntry, DailyPayLine } from "@/types/daily-pay.types";
 /*  Helpers                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/** Formats a plain "YYYY-MM-DD" workday date without shifting to a UTC day boundary. */
 function formatDate(value: string): string {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
+  }
+  const [, y, m, d] = match;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
 }
 
 function formatDateTime(value: string): string {

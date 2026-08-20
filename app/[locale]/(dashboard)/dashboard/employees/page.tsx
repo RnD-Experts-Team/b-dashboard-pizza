@@ -1159,6 +1159,10 @@ export default function EmployeesPage() {
       {/* Table */}
       {!shouldShowSkeleton && !error && rows.length > 0 && (
         <>
+          <p className="text-sm text-muted-foreground">
+            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalItems)} of {totalItems} employees
+          </p>
+
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
