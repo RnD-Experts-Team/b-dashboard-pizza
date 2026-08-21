@@ -25,25 +25,37 @@ export function V1PortalGaugeCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
-  const weekly = portal.week_to_date_avg;
-  const hasWeekly = Boolean(weekly);
+  const wtdSum = portal.week_to_date;
+  const wtdAvg = portal.week_to_date_avg;
+  const hasAvgData = Boolean(wtdAvg);
   const [view, setView] = useState<"day" | "wtd">("day");
   const [open, setOpen] = useState(false);
+  // WTD comes two ways — a running sum, or averaged per day.
+  const [wtdMode, setWtdMode] = useState<"sum" | "avg">("sum");
+  const useAvg = wtdMode === "avg";
+  // Selected mode's data if present, else fall back to the other — the
+  // toggle should never silently do nothing just because one side is missing.
+  const weekly = useAvg ? (wtdAvg ?? wtdSum) : (wtdSum ?? wtdAvg);
+  // True only when avg data actually exists — if the user picked "avg" with
+  // no avg data available, this falls back to sum without still claiming to
+  // show "Avg" in the title.
+  const showingAvg = useAvg && hasAvgData;
   const active = view === "wtd" && weekly ? weekly : portal;
   const primary = active.put_into_portal_percent;
   const secondary = active.in_portal_on_time_percent;
 
   return (
       <V1Card
-        title="Portal Performance"
+        title={view === "wtd" ? (showingAvg ? "Portal (WTD Avg)" : "Portal (WTD)") : "Portal Performance"}
         category="operations"
-        period={hasWeekly ? "D·WTD" : "D"}
+        period="D·WTD"
+        showPeriodBadge={false}
         span={span}
         className={className}
         bodyClassName="overflow-hidden"
-        onExpand={hasWeekly ? () => setOpen(true) : undefined}
+        onExpand={() => setOpen(true)}
         headerControl={
-          hasWeekly ? (
+          <div className="flex items-center gap-1">
             <V1Toggle
               className="ms-1"
               options={[
@@ -53,7 +65,18 @@ export function V1PortalGaugeCard({
               value={view}
               onChange={setView}
             />
-          ) : undefined
+            {view === "wtd" && (
+              <V1Toggle
+                className="ms-1"
+                options={[
+                  { value: "sum", label: "Sum" },
+                  { value: "avg", label: "Avg" },
+                ]}
+                value={wtdMode}
+                onChange={setWtdMode}
+              />
+            )}
+          </div>
         }
       >
         <div className="flex flex-col gap-1">
@@ -83,7 +106,26 @@ export function V1PortalGaugeCard({
             <V1Metric size="sm" label="On Time" value={fmtNum(active.portal_on_time_orders)} />
           </V1MetricGrid>
         </div>
-      {weekly && (
+      {(() => {
+        // Dialog is always available — it just shows a "no data" message
+        // when there's genuinely nothing to compare, instead of the whole
+        // dialog disappearing.
+        if (!wtdAvg && !wtdSum) {
+          return (
+            <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Portal Performance Comparison">
+              <p className="py-8 text-center text-[11px] text-muted-foreground">
+                No WTD comparison data available.
+              </p>
+            </WtdComparisonDialog>
+          );
+        }
+        // Avg is the primary WTD column, with an extra WTD Sum column when
+        // the running-total data is also available — independent of the
+        // card's own Sum/Avg toggle.
+        const dialogWtdAvg = wtdAvg ?? wtdSum!;
+        const dialogWtdSum = wtdSum ?? wtdAvg!;
+        const showSum = Boolean(wtdAvg && wtdSum);
+        return (
         <WtdComparisonDialog open={open} onClose={() => setOpen(false)} title="Portal Performance Comparison">
           <ComparisonGrid
             daily={
@@ -107,13 +149,13 @@ export function V1PortalGaugeCard({
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {weekly.put_into_portal_percent.toFixed(1)}%
+                    {dialogWtdAvg.put_into_portal_percent.toFixed(1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
                   <p className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {weekly.in_portal_on_time_percent.toFixed(1)}%
+                    {dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%
                   </p>
                 </div>
               </div>
@@ -121,15 +163,16 @@ export function V1PortalGaugeCard({
           />
           <ComparisonTable
             rows={[
-              { label: "Put Into Portal %", daily: `${portal.put_into_portal_percent.toFixed(1)}%`, wtd: `${weekly.put_into_portal_percent.toFixed(1)}%`, dailyNum: portal.put_into_portal_percent, wtdNum: weekly.put_into_portal_percent, higherIsBetter: true },
-              { label: "On-Time %", daily: `${portal.in_portal_on_time_percent.toFixed(1)}%`, wtd: `${weekly.in_portal_on_time_percent.toFixed(1)}%`, dailyNum: portal.in_portal_on_time_percent, wtdNum: weekly.in_portal_on_time_percent, higherIsBetter: true },
-              { label: "Eligible Orders", daily: `${portal.portal_eligible_orders}`, wtd: `${weekly.portal_eligible_orders}`, dailyNum: portal.portal_eligible_orders, wtdNum: weekly.portal_eligible_orders, higherIsBetter: true },
-              { label: "Used Orders", daily: `${portal.portal_used_orders}`, wtd: `${weekly.portal_used_orders}`, dailyNum: portal.portal_used_orders, wtdNum: weekly.portal_used_orders, higherIsBetter: true },
-              { label: "On-Time Orders", daily: `${portal.portal_on_time_orders}`, wtd: `${weekly.portal_on_time_orders}`, dailyNum: portal.portal_on_time_orders, wtdNum: weekly.portal_on_time_orders, higherIsBetter: true },
+              { label: "Put Into Portal %", daily: `${portal.put_into_portal_percent.toFixed(1)}%`, wtd: `${dialogWtdAvg.put_into_portal_percent.toFixed(1)}%`, dailyNum: portal.put_into_portal_percent, wtdNum: dialogWtdAvg.put_into_portal_percent, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.put_into_portal_percent.toFixed(1)}%` : undefined },
+              { label: "On-Time %", daily: `${portal.in_portal_on_time_percent.toFixed(1)}%`, wtd: `${dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%`, dailyNum: portal.in_portal_on_time_percent, wtdNum: dialogWtdAvg.in_portal_on_time_percent, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.in_portal_on_time_percent.toFixed(1)}%` : undefined },
+              { label: "Eligible Orders", daily: `${portal.portal_eligible_orders}`, wtd: `${dialogWtdAvg.portal_eligible_orders}`, dailyNum: portal.portal_eligible_orders, wtdNum: dialogWtdAvg.portal_eligible_orders, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.portal_eligible_orders}` : undefined },
+              { label: "Used Orders", daily: `${portal.portal_used_orders}`, wtd: `${dialogWtdAvg.portal_used_orders}`, dailyNum: portal.portal_used_orders, wtdNum: dialogWtdAvg.portal_used_orders, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.portal_used_orders}` : undefined },
+              { label: "On-Time Orders", daily: `${portal.portal_on_time_orders}`, wtd: `${dialogWtdAvg.portal_on_time_orders}`, dailyNum: portal.portal_on_time_orders, wtdNum: dialogWtdAvg.portal_on_time_orders, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.portal_on_time_orders}` : undefined },
             ]}
           />
         </WtdComparisonDialog>
-      )}
+        );
+      })()}
     </V1Card>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   useGoalsList,
@@ -76,6 +77,11 @@ import type {
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Skeletons                                                               */
 /* ────────────────────────────────────────────────────────────────────────── */
+
+function formatGoalDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? dateStr : format(d, "MMM d, yyyy");
+}
 
 function TableSkeleton({ cols }: { cols: number }) {
   return (
@@ -581,8 +587,8 @@ export default function GoalsPage() {
                       <TableCell className="font-mono text-xs text-muted-foreground">{goal.id}</TableCell>
                       <TableCell className="font-medium">{goal.metric.name}</TableCell>
                       <TableCell>{goal.goal}</TableCell>
-                      <TableCell>{goal.weekStartDate}</TableCell>
-                      <TableCell>{goal.weekEndDate}</TableCell>
+                      <TableCell>{formatGoalDate(goal.weekStartDate)}</TableCell>
+                      <TableCell>{formatGoalDate(goal.weekEndDate)}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setEditingGoal(goal)} disabled={isDeleting}>
@@ -612,7 +618,7 @@ export default function GoalsPage() {
       {/* ── Goal Metrics Table ───────────────────────────────────────────── */}
       {canViewGoalMetrics && <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <ListChecks className="h-4 w-4" />
               Goal Metrics
@@ -621,11 +627,17 @@ export default function GoalsPage() {
               )}
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={refetchMetrics} disabled={metricsRefreshing || metricsLoading}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refetchMetrics}
+                disabled={metricsRefreshing || metricsLoading}
+                className="flex-1 sm:flex-none"
+              >
                 <RefreshCw className={`me-2 h-4 w-4 ${metricsRefreshing ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
-              <Button size="sm" onClick={() => setIsCreateMetricOpen(true)}>
+              <Button size="sm" onClick={() => setIsCreateMetricOpen(true)} className="flex-1 sm:flex-none">
                 <Plus className="me-2 h-4 w-4" />
                 Add Metric
               </Button>

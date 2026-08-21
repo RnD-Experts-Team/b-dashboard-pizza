@@ -17,18 +17,19 @@ import { cn } from "@/lib/utils";
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const unreadCount = useNotificationStore((state) => state.unreadCount);
-  const fetchUnreadNotifications = useNotificationStore((state) => state.fetchUnreadNotifications);
+  const fetchNotifications = useNotificationStore((state) => state.fetchNotifications);
 
   // Auth state — needed for the Reverb WebSocket connection
   const token = useAuthStore((state) => state.token);
   const userId = useAuthStore((state) => state.user?.id ?? null);
 
-  // ── Fetch unread count on mount ────────────────────────────────────────
+  // ── Fetch notifications on mount — single source of truth shared by the
+  // badge count, the popover list, and the sidebar unread-dot indicator. ──
   useEffect(() => {
     const ctrl = new AbortController();
-    fetchUnreadNotifications(ctrl.signal);
+    fetchNotifications(ctrl.signal);
     return () => ctrl.abort();
-  }, [fetchUnreadNotifications]);
+  }, [fetchNotifications]);
 
   // ── Start the WebSocket connection for real-time notifications ─────────
   useRealtimeNotifications({ token, userId });

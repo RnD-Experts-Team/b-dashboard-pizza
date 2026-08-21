@@ -20,7 +20,13 @@ interface Props {
 export function PortalOnTimeDualGauge({ portal, className }: Props) {
   const [isWeekly, setIsWeekly] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const weeklyPortal = portal.week_to_date_avg;
+  // WTD comes two ways — a running sum, or averaged per day.
+  const [wtdMode, setWtdMode] = useState<"sum" | "avg">("sum");
+  const wtdSumPortal = portal.week_to_date;
+  const wtdAvgPortal = portal.week_to_date_avg;
+  const hasAvgData = Boolean(wtdAvgPortal);
+  const useAvg = wtdMode === "avg";
+  const weeklyPortal = (useAvg && wtdAvgPortal) || wtdSumPortal;
   const activePortal = isWeekly && weeklyPortal ? weeklyPortal : portal;
   const primary = activePortal.put_into_portal_percent;
   const secondary = activePortal.in_portal_on_time_percent;
@@ -32,31 +38,59 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
           <div className="rounded p-0.5 bg-emerald-500/15 dark:bg-emerald-500/20">
             <ShieldCheck className="h-3 w-3 text-emerald-500" />
           </div>
-          {isWeekly ? "Portal (WTD)" : "Portal Performance"}
-          {weeklyPortal ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
-                  onClick={(e) => { e.stopPropagation(); setIsWeekly((v) => !v); }}
+          {isWeekly ? (useAvg ? "Portal (WTD Avg)" : "Portal (WTD)") : "Portal Performance"}
+          <div className="ms-auto flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            {isWeekly && hasAvgData && (
+              <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    wtdMode === "sum"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setWtdMode("sum")}
                 >
-                  <CalendarDays className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-50">
-                Portal Usage (Red) and on-time (Green)
-              </TooltipContent>
-            </Tooltip>
-          )}
+                  Sum
+                </button>
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    wtdMode === "avg"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setWtdMode("avg")}
+                >
+                  Avg
+                </button>
+              </div>
+            )}
+            {weeklyPortal ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn("h-5 w-5 rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                    onClick={() => setIsWeekly((v) => !v)}
+                  >
+                    <CalendarDays className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-50">
+                  Portal Usage (Red) and on-time (Green)
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-1 px-3">
@@ -91,8 +125,14 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
         </div>
       </CardContent>
 
-      {/* WTD Comparison Dialog */}
-      {weeklyPortal && (
+      {/* WTD Comparison Dialog — always shows Avg as the primary WTD column,
+       * with an extra WTD Sum column when the running-total data is also
+       * available, independent of the card's own Sum/Avg toggle. */}
+      {weeklyPortal && (() => {
+        const dialogWtdAvg = wtdAvgPortal ?? wtdSumPortal!;
+        const dialogWtdSum = wtdSumPortal ?? wtdAvgPortal!;
+        const showSum = Boolean(wtdAvgPortal && wtdSumPortal);
+        return (
         <WtdComparisonDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
@@ -120,13 +160,13 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {weeklyPortal.put_into_portal_percent.toFixed(1)}%
+                    {dialogWtdAvg.put_into_portal_percent.toFixed(1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
                   <p className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {weeklyPortal.in_portal_on_time_percent.toFixed(1)}%
+                    {dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%
                   </p>
                 </div>
               </div>
@@ -137,47 +177,53 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
               {
                 label: "Put Into Portal %",
                 daily: `${portal.put_into_portal_percent.toFixed(1)}%`,
-                wtd: `${weeklyPortal.put_into_portal_percent.toFixed(1)}%`,
+                wtd: `${dialogWtdAvg.put_into_portal_percent.toFixed(1)}%`,
                 dailyNum: portal.put_into_portal_percent,
-                wtdNum: weeklyPortal.put_into_portal_percent,
+                wtdNum: dialogWtdAvg.put_into_portal_percent,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${dialogWtdSum.put_into_portal_percent.toFixed(1)}%` : undefined,
               },
               {
                 label: "On-Time %",
                 daily: `${portal.in_portal_on_time_percent.toFixed(1)}%`,
-                wtd: `${weeklyPortal.in_portal_on_time_percent.toFixed(1)}%`,
+                wtd: `${dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%`,
                 dailyNum: portal.in_portal_on_time_percent,
-                wtdNum: weeklyPortal.in_portal_on_time_percent,
+                wtdNum: dialogWtdAvg.in_portal_on_time_percent,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${dialogWtdSum.in_portal_on_time_percent.toFixed(1)}%` : undefined,
               },
               {
                 label: "Eligible Orders",
                 daily: `${portal.portal_eligible_orders}`,
-                wtd: `${weeklyPortal.portal_eligible_orders}`,
+                wtd: `${dialogWtdAvg.portal_eligible_orders}`,
                 dailyNum: portal.portal_eligible_orders,
-                wtdNum: weeklyPortal.portal_eligible_orders,
+                wtdNum: dialogWtdAvg.portal_eligible_orders,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${dialogWtdSum.portal_eligible_orders}` : undefined,
               },
               {
                 label: "Used Orders",
                 daily: `${portal.portal_used_orders}`,
-                wtd: `${weeklyPortal.portal_used_orders}`,
+                wtd: `${dialogWtdAvg.portal_used_orders}`,
                 dailyNum: portal.portal_used_orders,
-                wtdNum: weeklyPortal.portal_used_orders,
+                wtdNum: dialogWtdAvg.portal_used_orders,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${dialogWtdSum.portal_used_orders}` : undefined,
               },
               {
                 label: "On-Time Orders",
                 daily: `${portal.portal_on_time_orders}`,
-                wtd: `${weeklyPortal.portal_on_time_orders}`,
+                wtd: `${dialogWtdAvg.portal_on_time_orders}`,
                 dailyNum: portal.portal_on_time_orders,
-                wtdNum: weeklyPortal.portal_on_time_orders,
+                wtdNum: dialogWtdAvg.portal_on_time_orders,
+                wtdSum: showSum ? `${dialogWtdSum.portal_on_time_orders}` : undefined,
                 higherIsBetter: true,
               },
             ]}
           />
         </WtdComparisonDialog>
-      )}
+        );
+      })()}
     </Card>
   );
 }

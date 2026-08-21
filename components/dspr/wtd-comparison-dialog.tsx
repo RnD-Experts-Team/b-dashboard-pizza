@@ -38,8 +38,8 @@ export function WtdComparisonDialog({
       <Dialog open={open} onOpenChange={(o) => { onOpenChange?.(o); if (!o) onClose?.(); }}>
         <DialogContent
           className={cn(
-            "overflow-y-auto max-h-[92vh] p-6",
-            wide ? "!w-[95vw] !max-w-[50vw]" : "!max-w-5xl",
+            "overflow-y-auto max-h-[92vh] p-4 sm:p-6",
+            wide ? "sm:!w-[95vw] sm:!max-w-[50vw]" : "sm:!max-w-5xl",
           )}
         >
           <DialogHeader className="pb-3 border-b">
@@ -109,6 +109,8 @@ export type ComparisonRow = {
   dailyNum?: number;
   wtdNum?: number;
   higherIsBetter?: boolean;
+  /** Running-total WTD value, shown in an extra column alongside the WTD avg — no toggle, both are just displayed. */
+  wtdSum?: string;
 };
 
 export function ComparisonTable({
@@ -118,6 +120,7 @@ export function ComparisonTable({
   rows: ComparisonRow[];
   className?: string;
 }) {
+  const showSumCol = rows.some((r) => r.wtdSum !== undefined);
   return (
     <div className={cn("mt-4 overflow-hidden rounded-xl border", className)}>
       <table className="w-full text-xs">
@@ -132,6 +135,11 @@ export function ComparisonTable({
             <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-primary uppercase tracking-wider">
               WTD Avg
             </th>
+            {showSumCol && (
+              <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                WTD Sum
+              </th>
+            )}
             <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Change
             </th>
@@ -175,6 +183,11 @@ export function ComparisonTable({
                 <td className="px-4 py-2.5 text-right tabular-nums font-mono text-foreground">
                   {row.wtd}
                 </td>
+                {showSumCol && (
+                  <td className="px-4 py-2.5 text-right tabular-nums font-mono text-muted-foreground">
+                    {row.wtdSum ?? "–"}
+                  </td>
+                )}
                 <td className="px-4 py-2.5 text-right">
                   {direction !== null && (
                     <span

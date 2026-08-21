@@ -64,6 +64,19 @@ export interface UpsellingRecord {
   [key: string]: number | undefined;
 }
 
+export interface UpsellingScoreRecord {
+  wings?: number;
+  crazy_bread?: number;
+  bev_2l?: number;
+  cookies?: number;
+  bev_20oz?: number;
+  italian_cheese_bread?: number;
+  "EMB Pepperoni"?: number;
+  "EMB Cheese"?: number;
+  sauce?: number;
+  [key: string]: number | undefined;
+}
+
 export interface DsprTop {
   top_5_items_sales_for_day: TopMenuItem[];
   top_5_items_sales_week_to_date?: TopMenuItem[];
@@ -171,6 +184,9 @@ export interface DsprDay {
   hnr: DsprHnr;
   hnr_week_to_date?: DsprHnr;
   hnr_week_to_date_avg?: DsprHnr;
+  important_items_hnr?: DsprHnr;
+  important_items_hnr_week_to_date?: DsprHnr;
+  important_items_hnr_week_to_date_avg?: DsprHnr;
   labor: number;
   labor_week_to_date?: number;
   labor_week_to_date_avg?: number;
@@ -181,6 +197,12 @@ export interface DsprDay {
     total_upselling_week_to_date?: number;
     day?: UpsellingRecord;
     week_to_date?: UpsellingRecord;
+  };
+  upselling_score?: {
+    total_upselling_score_day?: number;
+    total_upselling_score_week_to_date?: number;
+    day?: UpsellingScoreRecord;
+    week_to_date?: UpsellingScoreRecord;
   };
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
+import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +89,7 @@ function DebriefTableSkeleton() {
           <TableRow>
             <TableHead className="w-16">ID</TableHead>
             <TableHead className="w-32">Date</TableHead>
+            <TableHead className="hidden md:table-cell">Type</TableHead>
             <TableHead className="hidden sm:table-cell">Author</TableHead>
             <TableHead className="hidden lg:table-cell">Notes</TableHead>
             <TableHead className="w-24 text-right">Attachments</TableHead>
@@ -98,6 +100,7 @@ function DebriefTableSkeleton() {
             <TableRow key={i}>
               <TableCell><Skeleton className="h-4 w-8" /></TableCell>
               <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+              <TableCell className="hidden md:table-cell"><Skeleton className="h-4 w-20" /></TableCell>
               <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-28" /></TableCell>
               <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-48" /></TableCell>
               <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-8" /></TableCell>
@@ -413,6 +416,7 @@ export default function EmployeeDebriefHistoryPage() {
                   <TableRow>
                     <TableHead className="w-16">ID</TableHead>
                     <TableHead className="w-32">Date</TableHead>
+                    <TableHead className="hidden md:table-cell">Type</TableHead>
                     <TableHead className="hidden sm:table-cell">Author</TableHead>
                     <TableHead className="hidden lg:table-cell">Notes</TableHead>
                     <TableHead className="w-24 text-right">Attachments</TableHead>
@@ -421,7 +425,7 @@ export default function EmployeeDebriefHistoryPage() {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                         No debrief notes found for this employee.
                       </TableCell>
                     </TableRow>
@@ -435,6 +439,9 @@ export default function EmployeeDebriefHistoryPage() {
                         <TableRow key={item.id} className="cursor-pointer" onClick={() => { setSelectedItem(item); setSheetOpen(true); }}>
                           <TableCell className="font-mono text-sm">{item.id}</TableCell>
                           <TableCell className="text-sm">{formatDate(item.date ?? item.createdAt)}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {item.type ? <DebriefTypeBadge type={item.type} /> : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
                           <TableCell className="hidden sm:table-cell">
                             {item.authorName ? <span className="text-sm">{item.authorName}</span> : <span className="text-muted-foreground">—</span>}
                           </TableCell>

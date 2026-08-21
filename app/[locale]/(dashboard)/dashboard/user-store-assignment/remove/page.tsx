@@ -14,6 +14,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   ArrowLeft,
   ArrowRight,
   Search,
@@ -35,6 +43,7 @@ import type { Store } from "@/types/store.types";
 import type { RoleWithStats } from "@/types/role.types";
 
 const cancelErrorPattern = /cancel(?:ed|led)|abort(?:ed|error)?/i;
+const MAX_VISIBLE_ASSIGNED_STORES = 5;
 
 function isCanceledError(error: unknown): boolean {
   if (axios.isCancel(error)) return true;
@@ -94,6 +103,7 @@ export default function RemoveAssignmentPage() {
   const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(
     new Set()
   );
+  const [assignmentsDialogOpen, setAssignmentsDialogOpen] = useState(false);
 
   // Search state
   const [userSearch, setUserSearch] = useState("");
@@ -173,6 +183,7 @@ export default function RemoveAssignmentPage() {
       if (!selectedUser) {
         setUserDetails(null);
         setSelectedStoreIds(new Set());
+        setAssignmentsDialogOpen(false);
         return;
       }
 
@@ -363,7 +374,7 @@ export default function RemoveAssignmentPage() {
         </Button>
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Step 1: Select User */}
         <Card
           className={cn(
@@ -562,7 +573,7 @@ export default function RemoveAssignmentPage() {
               <p className="text-sm text-destructive">{errors.stores}</p>
             )}
 
-            <Label className="flex items-center justify-between rounded-md border p-2">
+            <Label className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2">
               <div className="flex items-center gap-2">
                 <Checkbox
                   checked={
@@ -635,7 +646,7 @@ export default function RemoveAssignmentPage() {
                       onCheckedChange={() => toggleStore(store.id)}
                       disabled={!canSelectStores}
                     />
-                    <div className="flex-1 overflow-hidden">
+                    <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">
                         {store.name}
                       </div>
@@ -646,7 +657,7 @@ export default function RemoveAssignmentPage() {
                       )}
                     </div>
                     {assignedStoreIdsForRole.has(store.id) && (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge variant="outline" className="shrink-0 text-[10px]">
                         {t("alreadyAssigned")}
                       </Badge>
                     )}
@@ -662,23 +673,77 @@ export default function RemoveAssignmentPage() {
       {selectedUser && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {t("currentAssignments")} - {selectedUser.name}
+            <CardTitle className="flex flex-wrap items-center gap-1.5 text-base">
+              <span>{t("currentAssignments")}</span>
+              <span className="text-muted-foreground">—</span>
+              <span className="min-w-0 truncate">{selectedUser.name}</span>
+              {!isLoadingUserDetails && userDetails?.stores && userDetails.stores.length > 0 && (
+                <Badge variant="secondary" className="ms-auto shrink-0 font-normal">
+                  {userDetails.stores.length}
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {isLoadingUserDetails ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <Skeleton key={index} className="h-28 w-full" />
-                ))}
-              </div>
+              <Skeleton className="h-10 w-full" />
             ) : !userDetails?.stores || userDetails.stores.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {t("noCurrentAssignments")}
-              </p>
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-muted-foreground">
+                <StoreIcon className="h-8 w-8 opacity-40" />
+                <p className="text-sm">{t("noCurrentAssignments")}</p>
+              </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+              <button
+                type="button"
+                onClick={() => setAssignmentsDialogOpen(true)}
+                className="flex w-full flex-wrap items-center gap-1.5 rounded-md border p-2.5 text-start transition-colors hover:bg-accent"
+              >
+                {userDetails.stores
+                  .slice(0, MAX_VISIBLE_ASSIGNED_STORES)
+                  .map((userStore: UserStore, index: number) => {
+                    const hasSelectedRole = selectedRole
+                      ? userStore.roles.some((role) => role.id === selectedRole.id)
+                      : false;
+                    return (
+                      <Badge
+                        key={`${userStore.store.id}-${index}`}
+                        variant={hasSelectedRole ? "destructive" : "secondary"}
+                        className="max-w-40"
+                      >
+                        <span className="truncate">{userStore.store.name}</span>
+                      </Badge>
+                    );
+                  })}
+                {userDetails.stores.length > MAX_VISIBLE_ASSIGNED_STORES && (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    {t("moreStores", {
+                      count: userDetails.stores.length - MAX_VISIBLE_ASSIGNED_STORES,
+                    })}
+                  </Badge>
+                )}
+              </button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* All-assignments dialog */}
+      <Dialog open={assignmentsDialogOpen} onOpenChange={setAssignmentsDialogOpen}>
+        <DialogContent className="flex max-h-[85vh] w-[95vw] flex-col gap-4 overflow-hidden sm:max-w-lg">
+          <DialogHeader className="shrink-0">
+            <DialogTitle>
+              {t("currentAssignments")} — {selectedUser?.name ?? ""}
+            </DialogTitle>
+            <DialogDescription>
+              {t("assignmentsDialogDescription", {
+                count: userDetails?.stores?.length ?? 0,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+
+          {userDetails?.stores && userDetails.stores.length > 0 && (
+            <ScrollArea className="flex min-h-0 flex-1 flex-col">
+              <div className="grid grid-cols-1 gap-2 pe-3 sm:grid-cols-2">
                 {userDetails.stores.map((userStore: UserStore, index: number) => {
                   const hasSelectedRole = selectedRole
                     ? userStore.roles.some((role) => role.id === selectedRole.id)
@@ -688,33 +753,57 @@ export default function RemoveAssignmentPage() {
                     <div
                       key={`${userStore.store.id}-${index}`}
                       className={cn(
-                        "rounded-lg border p-4",
+                        "relative flex items-start gap-2.5 rounded-lg border p-2.5",
                         hasSelectedRole && "border-destructive/50 bg-destructive/5"
                       )}
                     >
-                      <div className="mb-3 flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{userStore.store.name}</p>
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+                          hasSelectedRole
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        <StoreIcon className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <p
+                          className="truncate text-sm font-medium leading-tight"
+                          title={userStore.store.name}
+                        >
+                          {userStore.store.name}
+                        </p>
+                        {userStore.store.storeId && (
                           <p className="truncate text-xs text-muted-foreground">
                             {userStore.store.storeId}
                           </p>
+                        )}
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {userStore.roles.map((role) => (
+                            <Badge
+                              key={role.id}
+                              variant={
+                                selectedRole?.id === role.id ? "destructive" : "outline"
+                              }
+                              className="text-[10px] capitalize"
+                            >
+                              {role.name}
+                            </Badge>
+                          ))}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {userStore.roles.map((role) => (
-                          <Badge key={role.id} variant="outline" className="capitalize">
-                            {role.name}
-                          </Badge>
-                        ))}
-                      </div>
+                      {hasSelectedRole && (
+                        <Check className="h-4 w-4 shrink-0 text-destructive" />
+                      )}
                     </div>
                   );
                 })}
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Selected Stores Summary */}
       {selectedStoreObjects.length > 0 && (
@@ -726,23 +815,30 @@ export default function RemoveAssignmentPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {selectedStoreObjects.map((store) => (
-                <Badge
-                  key={store.id}
-                  variant="destructive"
-                  className="flex items-center gap-1 pe-1"
-                >
-                  {store.storeId ? `${store.storeId} - ${store.name}` : store.name}
-                  <button
-                    type="button"
-                    onClick={() => removeStore(store.id)}
-                    className="ms-1 rounded-full p-0.5 hover:bg-black/10"
-                    aria-label={`Remove ${store.name}`}
+              {selectedStoreObjects.map((store) => {
+                const label = store.storeId
+                  ? `${store.storeId} - ${store.name}`
+                  : store.name;
+                return (
+                  <Badge
+                    key={store.id}
+                    variant="destructive"
+                    className="flex max-w-60 items-center gap-1 pe-1"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
+                    <span className="truncate" title={label}>
+                      {label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeStore(store.id)}
+                      className="ms-1 shrink-0 rounded-full p-0.5 hover:bg-black/10"
+                      aria-label={`Remove ${store.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -755,7 +851,7 @@ export default function RemoveAssignmentPage() {
           variant="destructive"
           onClick={handleSubmit}
           disabled={isSubmitting}
-          className="min-w-40"
+          className="w-full min-w-40 sm:w-auto"
         >
           {isSubmitting ? (
             <>

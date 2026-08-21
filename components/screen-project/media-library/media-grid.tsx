@@ -25,6 +25,11 @@ interface MediaGridProps {
   isDeleting: boolean;
   onSetPrimary: (id: number) => void;
   onDelete: (ids: number[]) => void;
+  /** Override the delete-confirmation dialog's className — needed when this
+   * grid is nested inside another very-high-z overlay (e.g. the Drive Thru sheet). */
+  alertContentClassName?: string;
+  /** Override the delete-confirmation dialog's backdrop className — see alertContentClassName. */
+  alertOverlayClassName?: string;
 }
 
 function MediaThumbnail({ item }: { item: StationMedia }) {
@@ -54,6 +59,8 @@ export function MediaGrid({
   isDeleting,
   onSetPrimary,
   onDelete,
+  alertContentClassName,
+  alertOverlayClassName,
 }: MediaGridProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
@@ -133,7 +140,10 @@ export function MediaGrid({
                   Delete
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent
+                overlayClassName={alertOverlayClassName}
+                className={alertContentClassName}
+              >
                 <AlertDialogHeader>
                   <AlertDialogTitle>
                     Delete {selected.size}{" "}

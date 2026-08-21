@@ -149,7 +149,7 @@ export function V1SalesTrendCard({
         wide
       >
         {/* Weekly Totals Summary */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-3">
           {(
             [
               { label: "This Week", value: twTotal, color: "#008FFB", compare: pwTotal },

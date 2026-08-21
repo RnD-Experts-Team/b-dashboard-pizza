@@ -20,6 +20,7 @@ import type Echo from "laravel-echo";
 import { createEchoInstance } from "@/lib/realtime/echo";
 import { useNotificationStore } from "@/lib/store/notification.store";
 import { showNotificationToast } from "@/components/notifications/notification-toast";
+import { playSfx } from "@/lib/uisfx/play";
 import type { Notification } from "@/types/notification.types";
 
 interface UseRealtimeNotificationsParams {
@@ -88,6 +89,9 @@ export function useRealtimeNotifications({
 
           // Show a slide-in toast so the user notices immediately
           showNotificationToast(event);
+
+          // Play the notification cue alongside the toast
+          playSfx("notification");
         });
     }, 0);
 

@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 /* eslint-disable @next/next/no-img-element -- images come from the same-origin
    /inventory-storage proxy, so next/image remote config isn't needed. */
 import { useParams, useRouter } from "next/navigation";
-import { ImageOff, MoreHorizontal, Pencil, Plus, Power, PowerOff } from "lucide-react";
+import { ImageOff, MoreHorizontal, Pencil, Plus, Power, PowerOff, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { DataTable } from "@/components/shared/data-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +33,7 @@ import {
   isDisplayableErrorMessage,
 } from "@/lib/api/inventory-errors";
 import { ItemDetailSheet } from "@/components/inventory/item-detail-sheet";
-import type { Item } from "@/types/inventory.types";
+import type { Item, InventoryType } from "@/types/inventory.types";
 
 /**
  * Items list — thumbnail + names + units + types, with edit/delete row actions.
@@ -51,13 +52,47 @@ export default function ItemsPage() {
   const storeNumber = selectedStore?.storeId ?? overviewStores?.[0]?.storeId;
 
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | InventoryType>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+
+  // Debounce the search box so it doesn't refetch on every keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // With no confirmed backend `search` support, a search needs to look across
+  // the whole catalog rather than just the current (small default) page — so
+  // request a large batch instead of the normal page size while searching.
+  // Falls back to normal paginated browsing the moment the search is cleared.
+  const SEARCH_FETCH_SIZE = 1000;
+
   const itemParams = useMemo(
-    () => (activeFilter === "all" ? {} : { active: activeFilter === "active" }),
-    [activeFilter]
+    () => ({
+      ...(activeFilter !== "all" && { active: activeFilter === "active" }),
+      ...(typeFilter !== "all" && { type: typeFilter }),
+      ...(search && { search, page: 1, perPage: SEARCH_FETCH_SIZE }),
+    }),
+    [activeFilter, typeFilter, search]
   );
 
   const { items, pagination, isLoading, isToggling, error, toggleActive, handlePageChange } =
     useItems(itemParams, storeNumber);
+
+  // Client-side fallback filter over that larger batch — the backend's own
+  // item-type filter is confirmed (?type=), but there's no confirmed backend
+  // support for a `search` param yet, so filtering here guarantees the search
+  // box actually works regardless of that.
+  const visibleItems = useMemo(() => {
+    if (!search) return items;
+    const q = search.toLowerCase();
+    return items.filter((i) =>
+      [i.name_en, i.name_ar, i.name_es, i.ultimatrix_id].some((v) =>
+        v?.toLowerCase().includes(q)
+      )
+    );
+  }, [items, search]);
 
   // Rule-based UI gating. GET (list) is scoped; POST/PUT/DELETE remain non-scoped.
   const { canAccessRoute } = useAuthStore();
@@ -219,7 +254,32 @@ export default function ItemsPage() {
         )}
       </PageHeader>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full max-w-xs sm:w-56">
+          <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search items…"
+            className="h-9 ps-8"
+          />
+        </div>
+
+        <Select
+          value={typeFilter}
+          onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}
+        >
+          <SelectTrigger className="h-9 w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="daily">Daily</SelectItem>
+            <SelectItem value="weekly">Weekly</SelectItem>
+            <SelectItem value="period">Period</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={activeFilter} onValueChange={(v) => setActiveFilter(v as typeof activeFilter)}>
           <SelectTrigger className="h-9 w-36">
             <SelectValue />
@@ -233,10 +293,10 @@ export default function ItemsPage() {
       </div>
 
       <DataTable
-        data={items}
+        data={visibleItems}
         columns={columns}
         isLoading={isLoading}
-        emptyMessage="No items yet."
+        emptyMessage={search ? "No items match your search." : "No items yet."}
         pagination={pagination}
         onPageChange={handlePageChange}
         getRowKey={(i) => i.id}

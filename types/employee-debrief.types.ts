@@ -36,6 +36,14 @@ export interface ApiDebriefAttachment {
   updated_at?: string | null;
 }
 
+export interface ApiEmployeeDebriefType {
+  id: number;
+  slug: string;
+  label: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface ApiEmployeeDebriefItem {
   id: number;
   user_id?: number | null;
@@ -50,6 +58,8 @@ export interface ApiEmployeeDebriefItem {
   updated_at?: string | null;
   note?: string | null;
   notes?: string | null;
+  type_id?: number | null;
+  type?: ApiEmployeeDebriefType | null;
   [key: string]: unknown;
 }
 
@@ -69,6 +79,8 @@ export interface ApiEmployeeDebriefDetail {
   notes?: string | null;
   content?: string | null;
   summary?: string | null;
+  type_id?: number | null;
+  type?: ApiEmployeeDebriefType | null;
   [key: string]: unknown;
 }
 
@@ -80,12 +92,19 @@ export interface ApiEmployeeDebriefListResponse {
   total?: number;
 }
 
+export interface ApiDebriefTypeSummaryEntry {
+  type: ApiEmployeeDebriefType | null;
+  total_count: number;
+  weekly_average: number;
+}
+
 export interface ApiPaginatedDebriefResponse {
   current_page: number;
   per_page: number;
   total: number;
   last_page: number;
   data: ApiEmployeeDebriefItem[];
+  type_summary?: ApiDebriefTypeSummaryEntry[];
   first_page_url?: string | null;
   next_page_url?: string | null;
   prev_page_url?: string | null;
@@ -94,6 +113,12 @@ export interface ApiPaginatedDebriefResponse {
 }
 
 // ── Frontend types (camelCase) ─────────────────────────────────────────
+
+export interface EmployeeDebriefType {
+  id: number;
+  slug: string;
+  label: string;
+}
 
 export interface DebriefAttachment {
   id: number;
@@ -116,7 +141,15 @@ export interface EmployeeDebriefItem {
   createdAt?: string | null;
   updatedAt?: string | null;
   notes?: string | null;
+  typeId?: number | null;
+  type?: EmployeeDebriefType | null;
   attachments?: DebriefAttachment[];
+}
+
+export interface DebriefTypeSummaryEntry {
+  type: EmployeeDebriefType | null;
+  totalCount: number;
+  weeklyAverage: number;
 }
 
 export interface PaginatedDebriefResult {
@@ -125,6 +158,7 @@ export interface PaginatedDebriefResult {
   total: number;
   lastPage: number;
   items: EmployeeDebriefItem[];
+  typeSummary: DebriefTypeSummaryEntry[];
 }
 
 export interface EmployeeDebriefDetail {
@@ -141,5 +175,7 @@ export interface EmployeeDebriefDetail {
   notes?: string | null;
   content?: string | null;
   summary?: string | null;
+  typeId?: number | null;
+  type?: EmployeeDebriefType | null;
   attachments?: DebriefAttachment[];
 }

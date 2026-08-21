@@ -36,6 +36,7 @@ import {
   useEmployeeDebriefs,
   useDeleteEmployeeDebrief,
 } from "@/lib/hooks/use-employee-debriefs";
+import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
 import { cn } from "@/lib/utils";
 import { RefreshCw, Trash2 } from "lucide-react";
 import type { EmployeeDebriefItem } from "@/types/employee-debrief.types";
@@ -91,6 +92,7 @@ function DebriefTableSkeleton() {
           <TableRow>
             <TableHead className="w-16">ID</TableHead>
             <TableHead>Employee</TableHead>
+            <TableHead className="hidden md:table-cell">Type</TableHead>
             <TableHead className="hidden sm:table-cell">Date Written</TableHead>
             <TableHead className="hidden lg:table-cell">Notes</TableHead>
             <TableHead className="w-10" />
@@ -104,6 +106,9 @@ function DebriefTableSkeleton() {
               </TableCell>
               <TableCell>
                 <Skeleton className="h-4 w-32" />
+              </TableCell>
+              <TableCell className="hidden md:table-cell">
+                <Skeleton className="h-4 w-20" />
               </TableCell>
               <TableCell className="hidden sm:table-cell">
                 <Skeleton className="h-4 w-24" />
@@ -253,6 +258,7 @@ export default function EmployeeDebriefPage() {
               <TableRow>
                 <TableHead className="w-16">ID</TableHead>
                 <TableHead>Employee</TableHead>
+                <TableHead className="hidden md:table-cell">Type</TableHead>
                 <TableHead className="hidden sm:table-cell">Date Written</TableHead>
                 <TableHead className="hidden lg:table-cell">Notes</TableHead>
                 <TableHead className="w-10" />
@@ -262,7 +268,7 @@ export default function EmployeeDebriefPage() {
               {items.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="py-8 text-center text-sm text-muted-foreground"
                   >
                     No employee debrief notes found for this store.
@@ -293,6 +299,13 @@ export default function EmployeeDebriefPage() {
                           <Badge variant="secondary">
                             ID {item.employeeId}
                           </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {item.type ? (
+                          <DebriefTypeBadge type={item.type} />
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

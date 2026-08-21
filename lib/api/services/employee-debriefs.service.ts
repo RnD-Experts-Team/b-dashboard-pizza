@@ -4,11 +4,13 @@ import type {
   ApiEmployeeDebriefItem,
   ApiEmployeeDebriefDetail,
   ApiDebriefAttachment,
+  ApiDebriefTypeSummaryEntry,
   ApiEmployeeDebriefListResponse,
   ApiPaginatedDebriefResponse,
   EmployeeDebriefItem,
   EmployeeDebriefDetail,
   DebriefAttachment,
+  DebriefTypeSummaryEntry,
   PaginatedDebriefResult,
 } from "@/types/employee-debrief.types";
 
@@ -80,6 +82,8 @@ function transformItem(raw: ApiEmployeeDebriefItem): EmployeeDebriefItem {
     createdAt: raw.created_at ?? null,
     updatedAt: raw.updated_at ?? null,
     notes: raw.note ?? raw.notes ?? null,
+    typeId: raw.type_id ?? null,
+    type: raw.type ?? null,
     attachments: (raw.attachments ?? []).map(transformDebriefAttachment),
   };
 }
@@ -100,7 +104,17 @@ function transformDetail(raw: ApiEmployeeDebriefDetail): EmployeeDebriefDetail {
     notes: raw.note ?? raw.notes ?? null,
     content: raw.content ?? null,
     summary: raw.summary ?? null,
+    typeId: raw.type_id ?? null,
+    type: raw.type ?? null,
     attachments: (raw.attachments ?? []).map(transformDebriefAttachment),
+  };
+}
+
+function transformTypeSummaryEntry(raw: ApiDebriefTypeSummaryEntry): DebriefTypeSummaryEntry {
+  return {
+    type: raw.type ?? null,
+    totalCount: raw.total_count,
+    weeklyAverage: raw.weekly_average,
   };
 }
 
@@ -259,7 +273,7 @@ export const employeeDebriefService = {
 
   async create(
     storeId: string,
-    payload: { date: string; employee_id: number; note: string; attachments?: File[] | null }
+    payload: { date: string; employee_id: number; note: string; type?: string | null; attachments?: File[] | null }
   ): Promise<EmployeeDebriefItem> {
     const token = getToken();
     if (!token) {
@@ -278,13 +292,19 @@ export const employeeDebriefService = {
         fd.append("date", payload.date);
         fd.append("employee_id", String(payload.employee_id));
         fd.append("note", payload.note);
+        if (payload.type) fd.append("type", payload.type);
         for (const file of payload.attachments) {
           fd.append("attachments[]", file);
         }
         body = fd;
         headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
       } else {
-        body = JSON.stringify({ date: payload.date, employee_id: payload.employee_id, note: payload.note });
+        body = JSON.stringify({
+          date: payload.date,
+          employee_id: payload.employee_id,
+          note: payload.note,
+          ...(payload.type ? { type: payload.type } : {}),
+        });
         headers = { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" };
       }
 
@@ -332,6 +352,7 @@ export const employeeDebriefService = {
         total: raw.total,
         lastPage: raw.last_page,
         items: (raw.data ?? []).map(transformItem),
+        typeSummary: (raw.type_summary ?? []).map(transformTypeSummaryEntry),
       };
     } catch (err) {
       throw handleAxiosError(err);

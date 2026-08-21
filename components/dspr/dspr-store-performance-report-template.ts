@@ -1,21 +1,37 @@
 import { format } from "date-fns";
 import type { DsprResponse } from "@/types/dspr.types";
 import type { CustomerService } from "@/types/dashboard-report.types";
-import type { WbrComplaint, WbrFeedback } from "@/types/hooks.types";
-import { REPORT_LOGO_DATA_URI } from "./dspr-report-template";
+import {
+  STORE_ICON_SVG,
+  TIPS_ICON_SVG,
+  CUSTOMER_SERVICE_ICON_SVG,
+  CUSTOMER_FEEDBACK_ICON_SVG,
+  CUSTOMER_COMPLAINT_ICON_SVG,
+  HNR_ICON_SVG,
+  PORTAL_ICON_SVG,
+  HERO_MASCOT_SVG,
+  NEWS_ICON_SVG,
+} from "./store-performance-report-icons";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  buildStorePerformanceReportHtml — renders the "Daily Store Performance"
- *  one-pager (tips, guest service, feedback/complaints, HNR, portal, manager
- *  photo) as a self-contained HTML document string, in the same iframe +
- *  html2canvas capture flow as buildDsprReportHtml.
+ *  one-pager (tips, guest service, feedback/complaints, HNR, portal, and the
+ *  manager-entered "Yesterday Hero" employee-of-the-day photo) as a self-
+ *  contained HTML document string, in the same iframe + html2canvas capture
+ *  flow as buildDsprReportHtml.
  *
- *  Every value comes from data already loaded for the live dashboard —
- *  nothing is fabricated. Fields the mockup showed with no real backing data
- *  (a per-day manager message, a "positive/negative" sentiment word, a
- *  community-news blurb, a decorative food photo) were resolved with the
- *  user: the message and photo are dropped, feedback/complaints show their
- *  real weekly counts, and the footer is one static generic sentence.
+ *  Tips/HNR/portal/guest-service values come from data already loaded for the
+ *  live dashboard — nothing is fabricated. Customer Feedback and Customer
+ *  Complaint have no real per-store data source in this app (the closest
+ *  fields are Employee Feedback and a generic complaint log, neither of which
+ *  is genuinely "customer" data) — those two rows always render "No data".
+ *  The employee name/photo and the footer sentence are manager-entered per
+ *  generation (collected by StorePerformanceReportDialog) rather than pulled
+ *  from any stored field.
+ *
+ *  All icons are the real Figma SVGs (store-performance-report-icons.ts) —
+ *  inlined directly so they stay crisp under html2canvas and never depend on
+ *  an external asset load.
  * ────────────────────────────────────────────────────────────────────────── */
 
 export interface StorePerformanceReportInput {
@@ -23,13 +39,25 @@ export interface StorePerformanceReportInput {
   storeId: string;
   /** wbrData?.["customer-service"] */
   guestService?: CustomerService;
-  /** hooksWbr.data?.complaints */
-  complaints?: WbrComplaint[];
-  /** hooksWbr.data?.feedbacks */
-  feedbacks?: WbrFeedback[];
-  managerName: string;
-  managerAvatarUrl?: string | null;
+  /** "Yesterday Hero" — employee of the day, entered fresh per report. */
+  employeeName: string;
+  /** Data URL from the dialog's client-side file read, or null for the initial-letter fallback. */
+  employeeImageDataUrl?: string | null;
+  /** Manager-picked preset or custom sentence (already trimmed/capped by the dialog). */
+  footerMessage: string;
 }
+
+/** Hard cap on the footer sentence, shared with the dialog so its input and this render never disagree. */
+export const FOOTER_MESSAGE_MAX_LENGTH = 150;
+
+/** Preset footer sentences offered in the dialog — generic and positive, no per-store data needed. */
+export const FOOTER_MESSAGE_PRESETS: string[] = [
+  "Every great day starts with a great team — thank you for the hard work and hospitality!",
+  "Great things are happening here — keep up the amazing teamwork!",
+  "Proud of this crew — thank you for taking care of our guests today.",
+  "Small moments, big impact — thank you for showing up and showing out today.",
+  "Your hustle doesn't go unnoticed — thank you for another great day.",
+];
 
 const NO_DATA = `<span class="nodata">No data</span>`;
 
@@ -55,27 +83,22 @@ function averageGuestService(cs: CustomerService | undefined): number | null {
   return values.reduce((s, v) => s + v, 0) / values.length;
 }
 
-/** "3 logged this week" / "No complaints this week" / null (→ No data) when the count itself is missing. */
-function weeklyCountLabel(count: number | undefined, noun: string, verb: string): string | null {
-  if (count == null) return null;
-  if (count === 0) return `No ${noun} this week`;
-  return `${count} ${noun} ${verb} this week`;
-}
-
-const FOOTER_MESSAGE =
-  "Every great day starts with a great team — thank you for the hard work and hospitality you bring to this store!";
-
 export function buildStorePerformanceReportHtml(
   input: StorePerformanceReportInput,
   selectedDate: Date,
 ): string {
-  const { data, storeId, guestService, complaints, feedbacks, managerName, managerAvatarUrl } = input;
+  const {
+    data,
+    storeId,
+    guestService,
+    employeeName,
+    employeeImageDataUrl,
+    footerMessage,
+  } = input;
   const { day } = data;
 
   const tips = day?.total_tips ?? null;
   const guestServicePct = averageGuestService(guestService);
-  const feedbackLabel = weeklyCountLabel(feedbacks?.length, "feedback entries", "submitted");
-  const complaintLabel = weeklyCountLabel(complaints?.length, "complaints", "logged");
 
   const hnrToday = day?.hnr?.hnr_promise_met_percent ?? null;
   const hnrWtdAvg = day?.hnr_week_to_date_avg?.hnr_promise_met_percent ?? null;
@@ -83,11 +106,13 @@ export function buildStorePerformanceReportHtml(
   const portalToday = day?.portal?.put_into_portal_percent ?? null;
   const portalWtdAvg = day?.portal?.week_to_date_avg?.put_into_portal_percent ?? null;
 
-  const managerInitial = managerName.trim().charAt(0).toUpperCase() || "?";
+  const employeeInitial = employeeName.trim().charAt(0).toUpperCase() || "?";
 
-  const avatarHtml = managerAvatarUrl
-    ? `<img class="manager-avatar" src="${esc(managerAvatarUrl)}" alt="${esc(managerName)}" />`
-    : `<div class="manager-avatar manager-avatar--fallback">${esc(managerInitial)}</div>`;
+  const avatarHtml = employeeImageDataUrl
+    ? `<img class="hero-avatar" src="${esc(employeeImageDataUrl)}" alt="${esc(employeeName)}" />`
+    : `<div class="hero-avatar hero-avatar--fallback">${esc(employeeInitial)}</div>`;
+
+  const safeFooterMessage = footerMessage.slice(0, FOOTER_MESSAGE_MAX_LENGTH);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -99,7 +124,6 @@ export function buildStorePerformanceReportHtml(
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
   :root {
@@ -157,18 +181,12 @@ export function buildStorePerformanceReportHtml(
   .top-bar .meta b { font-weight: 700; margin-right: 6px; }
 
   .logo-badge {
-    width: 84px;
-    height: 84px;
-    background: #ffffff;
-    border-radius: 10px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px;
-    flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,.15);
   }
-  .logo-badge img { width: 100%; height: 100%; object-fit: contain; }
+  .logo-badge svg { display: block; width: 150px; height: auto; }
 
   .body {
     display: flex;
@@ -189,21 +207,14 @@ export function buildStorePerformanceReportHtml(
     border-radius: 20px;
     padding: 14px 28px;
   }
-  .tips-pill .icon {
-    width: 48px; height: 48px;
-    border-radius: 50%;
-    background: var(--orange);
-    color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-  }
+  .tips-icon { flex-shrink: 0; display: flex; align-items: center; }
+  .tips-icon svg { display: block; width: 64px; height: auto; }
   .tips-pill .label { font-family: 'Oswald', sans-serif; font-weight: 700; color: var(--orange); font-size: 20px; text-transform: uppercase; }
   .tips-pill .value { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 34px; color: var(--orange); }
 
   .row {
     display: flex;
     align-items: stretch;
-    gap: 0;
     background: var(--orange);
     border-radius: 20px;
     padding: 10px;
@@ -221,7 +232,8 @@ export function buildStorePerformanceReportHtml(
     font-size: 18px;
     text-transform: uppercase;
   }
-  .row .row-label i { font-size: 20px; }
+  .row-icon { flex-shrink: 0; display: flex; align-items: center; }
+  .row-icon svg { display: block; height: 32px; width: auto; }
   .row .row-value {
     flex: 1;
     display: flex;
@@ -256,19 +268,31 @@ export function buildStorePerformanceReportHtml(
     font-size: 22px;
     text-transform: uppercase;
   }
-  .black-bar .bar-title i { color: var(--orange); font-size: 24px; }
+  .bar-icon { flex-shrink: 0; display: flex; align-items: center; }
+  .bar-icon svg { display: block; height: 34px; width: auto; }
   .black-bar .stats { display: flex; gap: 32px; }
   .black-bar .stat { text-align: center; }
   .black-bar .stat .stat-label { color: var(--orange); font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 14px; text-transform: uppercase; }
   .black-bar .stat .stat-value { font-size: 22px; font-weight: 500; }
 
-  .manager-avatar {
+  .hero-mascot { display: flex; align-items: center; justify-content: center; }
+  .hero-mascot svg { display: block; width: 170px; height: auto; }
+  .hero-label {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: var(--orange);
+    text-align: center;
+  }
+  .hero-avatar {
     width: 220px; height: 220px;
     border-radius: 50%;
     object-fit: cover;
     box-shadow: 0 2px 10px rgba(0,0,0,.15);
   }
-  .manager-avatar--fallback {
+  .hero-avatar--fallback {
     display: flex; align-items: center; justify-content: center;
     background: var(--orange);
     color: #fff;
@@ -276,7 +300,7 @@ export function buildStorePerformanceReportHtml(
     font-weight: 700;
     font-size: 84px;
   }
-  .manager-name {
+  .hero-name {
     font-family: 'Oswald', sans-serif;
     font-weight: 700;
     font-size: 28px;
@@ -285,8 +309,17 @@ export function buildStorePerformanceReportHtml(
   }
 
   .footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
     padding: 26px 48px 40px;
-    text-align: center;
+  }
+  .footer-icon { flex-shrink: 0; display: flex; align-items: center; }
+  .footer-icon svg { display: block; width: 72px; height: auto; }
+  .footer-text {
+    flex: 0 1 700px;
+    text-align: left;
     font-family: 'Inter', sans-serif;
     font-size: 20px;
     font-weight: 500;
@@ -299,6 +332,8 @@ export function buildStorePerformanceReportHtml(
     .body { flex-direction: column; }
     .col-side { flex: 1 1 auto; align-self: center; }
     .row { flex-wrap: wrap; }
+    .footer { flex-direction: column; text-align: center; }
+    .footer-text { text-align: center; }
   }
 </style>
 </head>
@@ -313,13 +348,13 @@ export function buildStorePerformanceReportHtml(
         <div><b>Date</b>${esc(format(selectedDate, "EEEE, MMMM d"))}</div>
       </div>
     </div>
-    <div class="logo-badge"><img src="${REPORT_LOGO_DATA_URI}" alt="Store logo" /></div>
+    <div class="logo-badge">${STORE_ICON_SVG}</div>
   </div>
 
   <div class="body">
     <div class="col-main">
       <div class="tips-pill">
-        <div class="icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+        <div class="tips-icon">${TIPS_ICON_SVG}</div>
         <div>
           <div class="label">Total Tips</div>
           <div class="value">${tips != null ? fmtMoney0(tips) : NO_DATA}</div>
@@ -327,7 +362,7 @@ export function buildStorePerformanceReportHtml(
       </div>
 
       <div class="row">
-        <div class="row-label"><i class="fa-solid fa-headset"></i>Customer Service</div>
+        <div class="row-label"><span class="row-icon">${CUSTOMER_SERVICE_ICON_SVG}</span>Customer Service</div>
         <div class="row-value">
           <div>
             Guest Service
@@ -337,17 +372,17 @@ export function buildStorePerformanceReportHtml(
       </div>
 
       <div class="row">
-        <div class="row-label"><i class="fa-solid fa-comment-dots"></i>Customer Feedback</div>
-        <div class="row-value">${feedbackLabel != null ? esc(feedbackLabel) : NO_DATA}</div>
+        <div class="row-label"><span class="row-icon">${CUSTOMER_FEEDBACK_ICON_SVG}</span>Customer Feedback</div>
+        <div class="row-value">${NO_DATA}</div>
       </div>
 
       <div class="row">
-        <div class="row-label"><i class="fa-solid fa-triangle-exclamation"></i>Customer Complaint</div>
-        <div class="row-value">${complaintLabel != null ? esc(complaintLabel) : NO_DATA}</div>
+        <div class="row-label"><span class="row-icon">${CUSTOMER_COMPLAINT_ICON_SVG}</span>Customer Complaint</div>
+        <div class="row-value">${NO_DATA}</div>
       </div>
 
       <div class="black-bar">
-        <div class="bar-title"><i class="fa-solid fa-clock"></i>HNR</div>
+        <div class="bar-title"><span class="bar-icon">${HNR_ICON_SVG}</span>HNR</div>
         <div class="stats">
           <div class="stat">
             <div class="stat-label">Today</div>
@@ -361,7 +396,7 @@ export function buildStorePerformanceReportHtml(
       </div>
 
       <div class="black-bar">
-        <div class="bar-title"><i class="fa-solid fa-box"></i>Put Into Portal</div>
+        <div class="bar-title"><span class="bar-icon">${PORTAL_ICON_SVG}</span>Put Into Portal</div>
         <div class="stats">
           <div class="stat">
             <div class="stat-label">Today</div>
@@ -376,12 +411,17 @@ export function buildStorePerformanceReportHtml(
     </div>
 
     <div class="col-side">
+      <div class="hero-mascot">${HERO_MASCOT_SVG}</div>
+      <div class="hero-label">Yesterday Hero</div>
       ${avatarHtml}
-      <div class="manager-name">${esc(managerName)}</div>
+      <div class="hero-name">${esc(employeeName)}</div>
     </div>
   </div>
 
-  <div class="footer">${esc(FOOTER_MESSAGE)}</div>
+  <div class="footer">
+    <div class="footer-icon">${NEWS_ICON_SVG}</div>
+    <div class="footer-text">${esc(safeFooterMessage)}</div>
+  </div>
 
 </div>
 </body>

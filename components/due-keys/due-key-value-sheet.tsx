@@ -92,14 +92,16 @@ export function DueKeyValueSheet({
   const wasEdited = (currentValue?.correctedFromId ?? null) != null || history.length > 0;
   const showEditForm = !!item && (!effectiveFilled || isEditing);
 
-  // Reset per-key view state when a different key is opened.
+  // Reset per-key view state when a different key — or a different date for the
+  // same key — is opened. Keying only on `item?.keyId` left `savedValue` from a
+  // previous date's edit stuck in state when the same key was reopened on a new date.
   useEffect(() => {
     setSavedValue(null);
     setIsEditing(false);
     setHistoryOpen(false);
     setFullHistoryOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item?.keyId]);
+  }, [item?.keyId, date]);
 
   // Initialise the edit inputs from the current value (pre-fill when correcting a filled key).
   useEffect(() => {
@@ -263,7 +265,7 @@ export function DueKeyValueSheet({
         {item ? (
           !showEditForm ? (
             /* ── Read-only detail view for filled keys ── */
-            <div className="space-y-4 p-4">
+            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
@@ -436,7 +438,7 @@ export function DueKeyValueSheet({
             </div>
           ) : (
             /* ── Edit form (unfilled keys, or edit mode for filled keys) ── */
-            <div className="space-y-4 p-4">
+            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">

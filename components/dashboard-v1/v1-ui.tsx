@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { playSfx } from "@/lib/uisfx/play";
 import { CATEGORIES, type CategoryKey } from "./category";
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -238,7 +239,10 @@ export function V1Toggle<T extends string>({
         <button
           key={o.value}
           type="button"
-          onClick={() => onChange(o.value)}
+          onClick={() => {
+            if (o.value !== value) playSfx("toggle-on");
+            onChange(o.value);
+          }}
           className={cn(
             "px-1.5 py-0.5 transition-colors",
             value === o.value

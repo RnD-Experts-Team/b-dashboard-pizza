@@ -10,11 +10,11 @@ import {
   useConnectionState,
   useSpeakingParticipants,
 } from "@livekit/components-react";
-import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent, DisconnectReason } from "livekit-client";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
@@ -137,6 +137,35 @@ export interface ScreenTileProps {
    * present). Used by the parent to know which stations are safe to put in PiP.
    */
   onLiveChange?: (isLive: boolean) => void;
+  /**
+   * Called whenever the raw LiveKit connection state changes to/from Connected,
+   * independent of whether a video track is present. Use this instead of
+   * onLiveChange when a caller only cares about audio (e.g. an audio-only or
+   * camera-not-yet-publishing room), where onLiveChange would wrongly stay false.
+   */
+  onConnectionStateChange?: (connected: boolean) => void;
+  /**
+   * Supervisor side only: hands the caller a function that broadcasts a media
+   * list to the station over the same "station-media" data-channel topic the
+   * built-in MediaLibrarySheet trigger uses — for callers (like the Drive Thru
+   * overlay) that render their own separate MediaLibrarySheet outside this
+   * tile and need to publish its changes to this room themselves.
+   */
+  onMediaPublisherReady?: (publish: (media: StationMedia[]) => void) => void;
+  /**
+   * Station side only: shows a small fixed self-view of the local camera in
+   * the bottom-left corner. Not draggable — purely a passive visual reference.
+   */
+  showSelfView?: boolean;
+  /**
+   * Fired when the room disconnects for a reason that isn't an intentional/
+   * final end (station removed, room deleted, etc.) — see the reason enum.
+   * Intended for a caller to silently re-authenticate and rejoin, since
+   * ScreenTile's own click-to-retry error card is unreachable on an
+   * unattended device. Fires regardless of whether the drop happened after
+   * a long successful session or shortly after connecting.
+   */
+  onUnrecoverableDisconnect?: (reason?: DisconnectReason) => void;
   /** MediaDeviceInfo.deviceId for the microphone to use (audioinput) */
   selectedAudioDeviceId?: string;
   /** MediaDeviceInfo.deviceId for the camera to use (videoinput) */
@@ -201,6 +230,10 @@ interface InnerProps {
   observerMode?: boolean;
   publishNetworkStatus?: boolean;
   onLiveChange?: (isLive: boolean) => void;
+  onConnectionStateChange?: (connected: boolean) => void;
+  onMediaPublisherReady?: (publish: (media: StationMedia[]) => void) => void;
+  showSelfView?: boolean;
+  onUnrecoverableDisconnect?: (reason?: DisconnectReason) => void;
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
   className?: string;
@@ -287,6 +320,10 @@ function ScreenTileInner({
   observerMode = false,
   publishNetworkStatus = false,
   onLiveChange,
+  onConnectionStateChange,
+  onMediaPublisherReady,
+  showSelfView = false,
+  onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -372,6 +409,13 @@ function ScreenTileInner({
   );
   const videoTrack = screenShareTrack ?? cameraTrack;
 
+  // Station side: the local participant's own camera track, for the fixed
+  // self-view overlay — reuses the same LiveKit track already being
+  // published, rather than opening a second independent camera capture.
+  const localCameraTrack = allTracks.find(
+    (t) => t.participant.isLocal && t.publication.source === Track.Source.Camera,
+  );
+
   // Observer mode: all non-local, non-muted video tracks in a multi-camera grid
   const allVideoTracks = observerMode
     ? allTracks.filter(
@@ -394,6 +438,24 @@ function ScreenTileInner({
   useEffect(() => {
     onLiveChange?.(isLive);
   }, [isLive, onLiveChange]);
+
+  // Notify parent of raw connection state alone (no video-track requirement) —
+  // for audio-only callers where onLiveChange would wrongly stay false.
+  useEffect(() => {
+    onConnectionStateChange?.(connectionState === ConnectionState.Connected);
+  }, [connectionState, onConnectionStateChange]);
+
+  // Fires only after LiveKit's own internal reconnect loop gives up (never on
+  // a transient blip it recovers from itself) — the caller decides whether to
+  // silently re-authenticate and rejoin based on the DisconnectReason.
+  useEffect(() => {
+    if (!onUnrecoverableDisconnect) return;
+    const handler = (reason?: DisconnectReason) => {
+      onUnrecoverableDisconnect(reason);
+    };
+    room.on(RoomEvent.Disconnected, handler);
+    return () => { room.off(RoomEvent.Disconnected, handler); };
+  }, [room, onUnrecoverableDisconnect]);
 
   // Media comes entirely from the station token response (initialMedia), which
   // already embeds the media list with the correct `is_primary`. We deliberately
@@ -666,6 +728,13 @@ function ScreenTileInner({
     },
     [room, connectionState],
   );
+
+  // Hand publishMediaUpdate up to a caller that renders its own separate
+  // MediaLibrarySheet outside this tile (e.g. the Drive Thru overlay) instead
+  // of using this tile's built-in one, so it can still push updates to this room.
+  useEffect(() => {
+    onMediaPublisherReady?.(publishMediaUpdate);
+  }, [publishMediaUpdate, onMediaPublisherReady]);
 
   // ── Supervisor-side: send commands to station when props change ───────────
   // Refs keep latest prop values so the ParticipantConnected handler (below)
@@ -962,6 +1031,23 @@ function ScreenTileInner({
         </div>
       )}
 
+      {/* Station self-view — fixed (not draggable), bottom-left. Station side only. */}
+      {showSelfView && (
+        <div className="absolute bottom-2 left-2 z-20 h-48 w-72 rounded-lg overflow-hidden ring-2 ring-white/30 shadow-xl bg-neutral-800 pointer-events-none">
+          {localCameraTrack && myCamEnabled ? (
+            <VideoTrack
+              trackRef={localCameraTrack}
+              className="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-neutral-800">
+              <UserCircle2 className="h-12 w-12 text-white/40" />
+              <span className="text-xs text-white/40">Camera off</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Audio tracks — hidden, only for playback */}
       {allTracks
         .filter(
@@ -988,83 +1074,85 @@ function ScreenTileInner({
         )}
       >
         <div className="flex items-center gap-1 overflow-x-auto flex-nowrap">
-          {/* Sound button + volume popup */}
-          {isMain ? (
-            <div
-              className="relative flex items-center shrink-0"
-              onMouseEnter={openVol}
-              onMouseLeave={scheduleClose}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={isAudioEnabled ? "Mute audio" : "Unmute audio"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleAudio();
-                }}
-                className={cn(
-                  "relative z-10 h-8 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
-                  !isAudioEnabled && "text-red-400 hover:text-red-300",
-                )}
-              >
-                {isAudioEnabled ? (
-                  <Volume2 className="h-3.5 w-3.5" />
-                ) : (
-                  <VolumeX className="h-3.5 w-3.5" />
-                )}
-                <span>{isAudioEnabled ? "Sound" : "Sound Off"}</span>
-              </Button>
-
-              {/* Vertical volume pop-up — pb-2 bridges the gap so mouse doesn't lose hover */}
-              <div
-                className={cn(
-                  "absolute bottom-full left-1/2 -translate-x-1/2 pb-2 transition-opacity duration-150 ease-out z-50",
-                  volOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
-                )}
-                onMouseEnter={openVol}
-                onMouseLeave={scheduleClose}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div
-                  className="flex items-center justify-center rounded-lg bg-black/60 backdrop-blur-sm"
-                  style={{ width: 32, height: 80, padding: "10px 0" }}
+          {/* Sound button + volume popup — the level popup is main-tile only.
+              Side tiles are small (as little as ~112px tall), too cramped
+              for a usable level control, so they stay a plain mute/unmute
+              button — the same reduced control they had originally.
+              Uses Popover (not a manually-positioned absolute div) because
+              the tile's own overflow-hidden clips anything that doesn't fit
+              above the button — Popover's content renders through a portal,
+              escaping that clipping. Visibility stays fully hover-driven via
+              volOpen; PopoverAnchor (not PopoverTrigger) is used specifically
+              so Radix's own click-to-toggle behavior never interferes with
+              the button's click = mute/unmute action. */}
+          <div
+            className="relative flex items-center shrink-0"
+            onMouseEnter={isMain && onVolumeChange ? openVol : undefined}
+            onMouseLeave={isMain && onVolumeChange ? scheduleClose : undefined}
+          >
+            <Popover open={isMain && onVolumeChange ? volOpen : false} onOpenChange={setVolOpen}>
+              <PopoverAnchor asChild>
+                <Button
+                  variant="ghost"
+                  size={isMain ? "sm" : "icon"}
+                  aria-label={isAudioEnabled ? "Mute audio" : "Unmute audio"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleAudio();
+                  }}
+                  className={cn(
+                    "relative z-10 shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
+                    isMain ? "h-8 gap-1.5 px-2.5 text-xs" : "h-6 w-6",
+                    !isAudioEnabled && "text-red-400 hover:text-red-300",
+                  )}
                 >
-                  <Slider
-                    orientation="vertical"
-                    value={[isAudioEnabled ? Math.round(volume * 100) : 0]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onValueChange={([v]) => onVolumeChange?.(v / 100)}
-                    style={{ height: 60, minHeight: 0 }}
-                    className="**:data-[slot=slider-track]:w-0.75 **:data-[slot=slider-track]:bg-white/30 **:data-[slot=slider-range]:bg-white **:data-[slot=slider-thumb]:h-3 **:data-[slot=slider-thumb]:w-3 **:data-[slot=slider-thumb]:border-white data-[orientation=vertical]:min-h-0"
-                    aria-label="Volume"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={isAudioEnabled ? "Mute audio" : "Unmute audio"}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleAudio();
-              }}
-              className={cn(
-                "h-6 w-6 shrink-0 text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
-                !isAudioEnabled && "text-red-400 hover:text-red-300",
+                  {isAudioEnabled ? (
+                    <Volume2 className={cn(isMain ? "h-3.5 w-3.5" : "h-3 w-3")} />
+                  ) : (
+                    <VolumeX className={cn(isMain ? "h-3.5 w-3.5" : "h-3 w-3")} />
+                  )}
+                  {isMain && <span>{isAudioEnabled ? "Sound" : "Sound Off"}</span>}
+                </Button>
+              </PopoverAnchor>
+
+              {isMain && onVolumeChange && (
+                <PopoverContent
+                  side="top"
+                  align="center"
+                  sideOffset={8}
+                  onMouseEnter={openVol}
+                  onMouseLeave={scheduleClose}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-auto border-white/10 bg-black/70 p-0 backdrop-blur-sm"
+                >
+                  <div
+                    className="flex items-center justify-center rounded-lg"
+                    style={{ width: 32, height: 80, padding: "10px 0" }}
+                  >
+                    <Slider
+                      orientation="vertical"
+                      value={[isAudioEnabled ? Math.round(volume * 100) : 0]}
+                      min={0}
+                      max={100}
+                      step={25}
+                      onValueChange={([v]) => {
+                        onVolumeChange(v / 100);
+                        // Reaching 0 mutes; moving off 0 unmutes — keeps the
+                        // button's red/active state in sync with the level
+                        // instead of leaving it silently at volume 0 while
+                        // still showing as "on".
+                        if (v === 0 && isAudioEnabled) onToggleAudio();
+                        else if (v > 0 && !isAudioEnabled) onToggleAudio();
+                      }}
+                      style={{ height: 60, minHeight: 0 }}
+                      className="**:data-[slot=slider-track]:w-0.75 **:data-[slot=slider-track]:bg-white/30 **:data-[slot=slider-range]:bg-white **:data-[slot=slider-thumb]:h-3 **:data-[slot=slider-thumb]:w-3 **:data-[slot=slider-thumb]:border-white data-[orientation=vertical]:min-h-0"
+                      aria-label="Volume"
+                    />
+                  </div>
+                </PopoverContent>
               )}
-            >
-              {isAudioEnabled ? (
-                <Volume2 className="h-3 w-3" />
-              ) : (
-                <VolumeX className="h-3 w-3" />
-              )}
-            </Button>
-          )}
+            </Popover>
+          </div>
 
           {/* Video toggle */}
           <Button
@@ -1356,6 +1444,10 @@ export function ScreenTile({
   observerMode = false,
   publishNetworkStatus = false,
   onLiveChange,
+  onConnectionStateChange,
+  onMediaPublisherReady,
+  showSelfView,
+  onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
   className,
@@ -1486,6 +1578,10 @@ export function ScreenTile({
         observerMode={observerMode}
         publishNetworkStatus={publishNetworkStatus}
         onLiveChange={onLiveChange}
+        onConnectionStateChange={onConnectionStateChange}
+        onMediaPublisherReady={onMediaPublisherReady}
+        showSelfView={showSelfView}
+        onUnrecoverableDisconnect={onUnrecoverableDisconnect}
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}
         className={className}

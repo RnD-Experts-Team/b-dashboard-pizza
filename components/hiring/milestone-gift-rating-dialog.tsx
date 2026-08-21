@@ -104,10 +104,11 @@ export function MilestoneGiftRatingDialog({
     });
   }
 
-  // Every question must have at least one selected option
+  // Every question must have at least one selected option, and comments are required
   const isFormValid =
     questions.length > 0 &&
-    questions.every((q) => (answers[q.id]?.length ?? 0) > 0);
+    questions.every((q) => (answers[q.id]?.length ?? 0) > 0) &&
+    additionalComments.trim().length > 0;
 
   function handleClose() {
     resetForm();
@@ -130,7 +131,7 @@ export function MilestoneGiftRatingDialog({
             question_id: q.id,
             option_ids: answers[q.id] ?? [],
           })),
-          additional_comments: additionalComments.trim() || null,
+          additional_comments: additionalComments.trim(),
         },
       );
 
@@ -270,8 +271,7 @@ export function MilestoneGiftRatingDialog({
             {/* Additional comments */}
             <div className="space-y-2">
               <Label htmlFor="mg-additional-comments">
-                Additional Comments{" "}
-                <span className="text-muted-foreground text-xs">(optional)</span>
+                Additional Comments <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="mg-additional-comments"
@@ -280,6 +280,7 @@ export function MilestoneGiftRatingDialog({
                 placeholder="Any extra notes about this employee…"
                 rows={3}
                 maxLength={2000}
+                required
               />
             </div>
 

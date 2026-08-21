@@ -11,14 +11,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, ImageOff, Loader2, Pencil, Power, PowerOff, Store, ZoomIn } from "lucide-react";
+import { AlertCircle, ImageOff, Loader2, Pencil, Power, PowerOff, Store, Tag, X, ZoomIn } from "lucide-react";
 
 import { useItemDetail } from "@/lib/hooks/use-inventory-items";
 import type { Item } from "@/types/inventory.types";
@@ -43,8 +43,15 @@ function ImageLightbox({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-fit max-w-none border-0 bg-transparent p-0 shadow-none sm:max-w-none [&>button]:rounded-full [&>button]:bg-white/20 [&>button]:p-1.5 [&>button]:text-white [&>button]:hover:bg-white/30">
+      <DialogContent
+        showCloseButton={false}
+        className="w-fit max-w-none border-0 bg-transparent p-0 shadow-none sm:max-w-none"
+      >
         <DialogTitle className="sr-only">{alt}</DialogTitle>
+        <DialogClose className="absolute -top-11 end-0 rounded-full bg-white/20 p-1.5 text-white transition-colors hover:bg-white/30">
+          <X className="h-5 w-5" />
+          <span className="sr-only">Close</span>
+        </DialogClose>
         <img
           src={src}
           alt={alt}
@@ -244,6 +251,20 @@ export function ItemDetailSheet({
                           </Badge>
                         ))}
                       </div>
+                      {item.tags && item.tags.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <Tag className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          {item.tags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              variant="outline"
+                              className="border-primary/30 bg-primary/5 text-[10px] text-primary"
+                            >
+                              {tag.name_en}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 

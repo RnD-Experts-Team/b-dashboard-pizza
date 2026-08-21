@@ -27,20 +27,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { TicketsListResponse, Ticket, TicketStatus } from "@/types/maintenance-tickets.types";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
+import { statusAccent } from "./status-accent";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Status badge                                                            */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-const STATUS_COLORS: Record<string, string> = {
-  pending:     "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
-  assigned:    "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
-  in_progress: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30 dark:text-indigo-400",
-  waiting:     "bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400",
-  complete:    "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
-  cancelled:   "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
-  deferred:    "bg-orange-500/10 text-orange-700 border-orange-500/30 dark:text-orange-400",
-};
 
 function StatusBadge({ status }: { status: string }) {
   const t = useTranslations("maintenanceTickets.status");
@@ -48,12 +39,13 @@ function StatusBadge({ status }: { status: string }) {
   const label = key === "cancelled"
     ? "Cancelled"
     : t(key as keyof ReturnType<typeof useTranslations<"maintenanceTickets.status">>);
+  const accent = statusAccent(status);
   return (
-    <span className={cn(
-      "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
-      STATUS_COLORS[status] ?? "bg-muted text-foreground border-border"
-    )}>
-      {label}
+    <span className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1">
+      <span className={cn("h-3 w-1 shrink-0 rounded-full", accent.bar)} />
+      <span className={cn("text-[11px] font-semibold uppercase tracking-wide", accent.text)}>
+        {label}
+      </span>
     </span>
   );
 }

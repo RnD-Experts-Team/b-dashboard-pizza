@@ -25,6 +25,18 @@ import type { DailyPayListResponse, DailyPayEntry } from "@/types/daily-pay.type
 /*  Helpers                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/** Formats a plain "YYYY-MM-DD" workday date without shifting to a UTC day boundary. */
+function formatDateOnly(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
+  }
+  const [, y, m, d] = match;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
+}
+
 function formatDate(value: string): string {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
@@ -45,7 +57,14 @@ function uniqueNames(entry: DailyPayEntry, kind: "tech" | "store"): string[] {
 }
 
 function totalOwed(entry: DailyPayEntry): number {
-  return entry.lines.reduce((sum, l) => sum + (l.moneyOwed ?? 0), 0);
+  return entry.lines.reduce(
+    (sum, l) => sum + (l.gas ?? 0) + (l.invoices ?? 0) + (l.moneyOwed ?? 0),
+    0
+  );
+}
+
+function totalHours(entry: DailyPayEntry): number {
+  return entry.lines.reduce((sum, l) => sum + (l.totalWorkingHours ?? 0), 0);
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -156,7 +175,7 @@ function DailyPayRow({ entry, onClick, onEdit, canEdit = true }: RowProps) {
     >
       <TableCell className="font-mono text-sm font-medium">#{entry.id}</TableCell>
       <TableCell className="whitespace-nowrap text-sm font-medium">
-        {formatDate(entry.date)}
+        {formatDateOnly(entry.date)}
       </TableCell>
       <TableCell className="text-sm">
         {entry.lines.length} {entry.lines.length === 1 ? "line" : "lines"}
@@ -169,6 +188,9 @@ function DailyPayRow({ entry, onClick, onEdit, canEdit = true }: RowProps) {
       </TableCell>
       <TableCell className="whitespace-nowrap text-sm tabular-nums">
         ${totalOwed(entry).toFixed(2)}
+      </TableCell>
+      <TableCell className="whitespace-nowrap text-sm tabular-nums">
+        {totalHours(entry).toFixed(2)}
       </TableCell>
       <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground sm:table-cell">
         {formatDate(entry.createdAt)}
@@ -241,6 +263,7 @@ export function DailyPayTable({
               <TableHead className="hidden md:table-cell">Technicians</TableHead>
               <TableHead className="hidden lg:table-cell">Stores</TableHead>
               <TableHead>Total Owed</TableHead>
+              <TableHead>Total Hours</TableHead>
               <TableHead className="hidden sm:table-cell">Created</TableHead>
               {canEdit && <TableHead className="text-end">Actions</TableHead>}
             </TableRow>

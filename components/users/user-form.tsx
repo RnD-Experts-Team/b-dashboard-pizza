@@ -708,11 +708,12 @@ export function UserForm({
             variant="outline"
             onClick={handleCancel}
             disabled={isSubmitting}
+            className="flex-1 sm:flex-none"
           >
             {tCommon("cancel")}
           </Button>
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
             {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
             {isEditMode ? t("edit.saveChanges") : t("createUser")}
           </Button>

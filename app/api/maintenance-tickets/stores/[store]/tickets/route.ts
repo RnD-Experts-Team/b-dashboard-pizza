@@ -45,13 +45,13 @@ export async function GET(
   const forwardParams = new URLSearchParams();
 
   const SCALAR_KEYS = [
-    "created_from", "created_to", "assigned_from", "assigned_to",
+    "created_from", "created_to", "changed_from", "changed_to",
     "part_cost_single_gt", "part_cost_total_gt",
     "trashed", "sort", "dir", "page", "per_page",
   ];
   const ARRAY_KEYS = [
     "statuses[]", "priorities[]", "issue_ids[]",
-    "issue_statuses[]", "technician_ids[]", "types[]",
+    "issue_statuses[]", "technician_ids[]", "types[]", "changed_statuses[]",
   ];
 
   for (const key of SCALAR_KEYS) {

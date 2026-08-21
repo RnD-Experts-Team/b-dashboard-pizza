@@ -9,7 +9,7 @@ import type {
 import { fmtPct, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
-import { V1Empty, V1_TBL, V1_TH, V1_TD, V1_NUM } from "@/components/dashboard-v1/v1-ui";
+import { V1Empty, V1Toggle, V1_TBL, V1_TH, V1_TD, V1_NUM } from "@/components/dashboard-v1/v1-ui";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1PortalWeeklyCard — multi-week Portal % / HNR % with point-change deltas.
@@ -60,6 +60,9 @@ export function V1PortalWeeklyCard({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [itemsMode, setItemsMode] = useState<"all" | "special">("all");
+  // Independent from the card's own toggle — switching one does not affect the other.
+  const [dialogItemsMode, setDialogItemsMode] = useState<"all" | "special">("all");
   if (isLoading)
     return (
       <div className={["col-span-1 md:col-span-1 lg:col-span-2", className].filter(Boolean).join(" ")}>
@@ -89,6 +92,17 @@ export function V1PortalWeeklyCard({
         headerNote={`${weeks.length} wks`}
         onExpand={() => setOpen(true)}
         bodyClassName="px-0"
+        headerControl={
+          <V1Toggle
+            className="ms-1"
+            options={[
+              { value: "all", label: "All" },
+              { value: "special", label: "Special" },
+            ]}
+            value={itemsMode}
+            onChange={setItemsMode}
+          />
+        }
       >
         <table className={V1_TBL}>
           <thead>
@@ -102,6 +116,8 @@ export function V1PortalWeeklyCard({
             {weeks.map((w, i) => {
               const prev = weeks[i + 1];
               const isCurrent = w.week_start === currentWeekStart;
+              const hnrSource = itemsMode === "special" ? w.important_items_hnr : w;
+              const prevHnrSource = itemsMode === "special" ? prev?.important_items_hnr : prev;
               return (
                 <tr key={w.week_start} className={cn(isCurrent && "font-semibold")}>
                   <td className={V1_TD}>{shortRange(w)}</td>
@@ -115,13 +131,19 @@ export function V1PortalWeeklyCard({
                     </span>
                   </td>
                   <td className={cn(V1_TD, V1_NUM)}>
-                    {fmtPct(w.hnr_promise_met_percent)}{" "}
-                    <span className="text-[10px]">
-                      <PpDelta
-                        curr={w.hnr_promise_met_percent}
-                        prev={prev?.hnr_promise_met_percent}
-                      />
-                    </span>
+                    {hnrSource ? (
+                      <>
+                        {fmtPct(hnrSource.hnr_promise_met_percent)}{" "}
+                        <span className="text-[10px]">
+                          <PpDelta
+                            curr={hnrSource.hnr_promise_met_percent}
+                            prev={prevHnrSource?.hnr_promise_met_percent}
+                          />
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -134,6 +156,16 @@ export function V1PortalWeeklyCard({
         title="Portal & HNR — Weekly History"
         badgeText={`${weeks.length} weeks`}
       >
+        <div className="mb-3 flex justify-end">
+          <V1Toggle
+            options={[
+              { value: "all", label: "All" },
+              { value: "special", label: "Special" },
+            ]}
+            value={dialogItemsMode}
+            onChange={setDialogItemsMode}
+          />
+        </div>
         <table className={V1_TBL}>
           <thead>
             <tr>
@@ -154,6 +186,8 @@ export function V1PortalWeeklyCard({
             {weeks.map((w, i) => {
               const prev = weeks[i + 1];
               const isCurrent = w.week_start === currentWeekStart;
+              const hnr = dialogItemsMode === "special" ? w.important_items_hnr : w;
+              const prevHnr = dialogItemsMode === "special" ? prev?.important_items_hnr : prev;
               return (
                 <tr key={w.week_start} className={cn(isCurrent && "font-semibold")}>
                   <td className={cn(V1_TD, "whitespace-nowrap")}>{shortRange(w)}</td>
@@ -167,16 +201,38 @@ export function V1PortalWeeklyCard({
                       prev={prev?.in_portal_on_time_percent}
                     />
                   </td>
-                  <td className={cn(V1_TD, V1_NUM)}>{w.hnr_transactions}</td>
-                  <td className={cn(V1_TD, V1_NUM)}>{w.hnr_broken_promises}</td>
-                  <td className={cn(V1_TD, V1_NUM)}>{w.hnr_promise_met}</td>
-                  <td className={cn(V1_TD, V1_NUM)}>{fmtPct(w.hnr_promise_met_percent)}</td>
-                  <td className={cn(V1_TD, V1_NUM)}>
-                    <PpDelta
-                      curr={w.hnr_promise_met_percent}
-                      prev={prev?.hnr_promise_met_percent}
-                    />
-                  </td>
+                  {hnr ? (
+                    <>
+                      <td className={cn(V1_TD, V1_NUM)}>{hnr.hnr_transactions}</td>
+                      <td className={cn(V1_TD, V1_NUM)}>{hnr.hnr_broken_promises}</td>
+                      <td className={cn(V1_TD, V1_NUM)}>{hnr.hnr_promise_met}</td>
+                      <td className={cn(V1_TD, V1_NUM)}>{fmtPct(hnr.hnr_promise_met_percent)}</td>
+                      <td className={cn(V1_TD, V1_NUM)}>
+                        <PpDelta
+                          curr={hnr.hnr_promise_met_percent}
+                          prev={prevHnr?.hnr_promise_met_percent}
+                        />
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className={cn(V1_TD, V1_NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(V1_TD, V1_NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(V1_TD, V1_NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(V1_TD, V1_NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                      <td className={cn(V1_TD, V1_NUM)}>
+                        <span className="text-muted-foreground">—</span>
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -184,7 +240,7 @@ export function V1PortalWeeklyCard({
         </table>
         <p className="mt-3 text-[11px] text-muted-foreground">
           Δ compares each week to the prior week. Portal % = in-portal on-time;
-          HNR % = promise met.
+          HNR % = promise met{dialogItemsMode === "special" ? " (Special Items)" : ""}.
         </p>
       </WbrDetailDialog>
     </V1Card>

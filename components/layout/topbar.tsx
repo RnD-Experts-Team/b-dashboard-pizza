@@ -10,8 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeToggleAnimated";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { DriveThruButton } from "@/components/screen-project/drive-thru/drive-thru-button";
+import { BreakTimerButton } from "./break-timer-button";
 import { LuminaEmbed } from "@/components/shared/lumina-embed";
 import { Breadcrumbs } from "./breadcrumbs";
+import { SoundToggle } from "@/components/uisfx/sound-toggle";
 import { Feature } from "@/lib/config";
 
 interface TopbarProps {
@@ -98,8 +101,15 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
       {/* AI assistant + Notifications */}
       <div className="flex items-center gap-1">
         {/* <LuminaEmbed /> */}
+        <BreakTimerButton />
+        <DriveThruButton />
         <NotificationBell />
       </div>
+
+      {/* Sound toggle - conditionally rendered */}
+      {/* <Feature name="soundFx">
+        <SoundToggle />
+      </Feature> */}
 
       {/* Theme toggle - conditionally rendered */}
       <Feature name="darkMode">

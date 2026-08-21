@@ -17,9 +17,12 @@ import {
   Gift,
   TrendingUp,
   UserMinus,
+  SprayCan,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
+import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
+import type { PeriodType } from "@/types/cleaning.types";
 
 /**
  * Parse a debrief action URL and extract keyId, date, and storeId.
@@ -37,6 +40,25 @@ function parseDebriefActionUrl(
     const storeId = parsed.searchParams.get("store_id") ?? "";
     if (!keyId || !date || !storeId) return null;
     return { keyId, date, storeId };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parse a cleaning-evaluation action URL and extract the store/period to
+ * deep-link into — e.g. /cleaning/evaluations?store_id=5&period_type=week&period_key=2026-W32
+ */
+function parseCleaningActionUrl(
+  url: string
+): { storeId: number; periodType: PeriodType; periodKey: string } | null {
+  try {
+    const parsed = new URL(url, "http://x");
+    const storeId = Number(parsed.searchParams.get("store_id"));
+    const periodType = parsed.searchParams.get("period_type");
+    const periodKey = parsed.searchParams.get("period_key");
+    if (!storeId || (periodType !== "week" && periodType !== "date") || !periodKey) return null;
+    return { storeId, periodType, periodKey };
   } catch {
     return null;
   }
@@ -105,6 +127,9 @@ function getTypeVisuals(type: string) {
   if (type.includes("info")) {
     return { Icon: Info, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
   }
+  if (type.startsWith("cleaning_")) {
+    return { Icon: SprayCan, bg: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" };
+  }
   return { Icon: Bell, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
 }
 
@@ -132,23 +157,6 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
 }
 
-/**
- * Extract the first path segment from action_url (ignores trailing ID segments).
- * "/announcements/8" → "announcements"
- * "/announcements"   → "announcements"
- * null / ""          → null
- */
-function getPageSegment(actionUrl: string | null | undefined): string | null {
-  if (!actionUrl) return null;
-  const segment = actionUrl.split("/").filter(Boolean)[0];
-  return segment ?? null;
-}
-
-/** Capitalize the page segment for display. "announcements" → "Announcements" */
-function formatPageLabel(segment: string): string {
-  return segment.charAt(0).toUpperCase() + segment.slice(1);
-}
-
 interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
@@ -162,6 +170,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
   const locale = (params?.locale as string) || "en";
   const openDebriefKey = useDebriefActionStore((s) => s.openDebriefKey);
   const openHiringRequest = useHiringActionStore((s) => s.openHiringRequest);
+  const openCleaningEvaluation = useCleaningActionStore((s) => s.openCleaningEvaluation);
   const isOnDueKeysPage = pathname?.includes("/due-keys") ?? false;
 
   const { Icon, bg } = getTypeVisuals(notification.type);
@@ -173,11 +182,11 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
     notification.type.startsWith("milestone_gift_request") ||
     notification.type.startsWith("separation_request");
   const isEmployeeType = notification.type.startsWith("employee_promoted");
-  const pageSegment = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType
-    ? null
-    : getPageSegment(notification.action_url);
-
-  const isClickable = isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || !!pageSegment;
+  const isCleaningType = notification.type.startsWith("cleaning_");
+  // Only these explicitly-coded type families are clickable — an uncoded
+  // type must never guess a navigation target, it just displays safely.
+  const isClickable =
+    isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -212,7 +221,14 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
       return;
     }
 
-    router.push(`/${locale}/dashboard/${pageSegment}`);
+    if (isCleaningType) {
+      const parsed = parseCleaningActionUrl(notification.action_url ?? "");
+      if (parsed) {
+        openCleaningEvaluation(parsed.storeId, parsed.periodType, parsed.periodKey);
+      }
+      router.push(`/${locale}/dashboard/cleaning-chart`);
+      return;
+    }
   }
 
   return (
@@ -264,7 +280,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
                   ? "Hiring Requests"
                   : isEmployeeType
                   ? "Employees"
-                  : formatPageLabel(pageSegment!)}
+                  : "Cleaning Chart"}
               </span>
             </>
           )}

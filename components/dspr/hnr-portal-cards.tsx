@@ -92,13 +92,45 @@ interface HnrCardProps {
   hnr: DsprHnr;
   weeklyHnr?: DsprHnr;
   weeklyAvgHnr?: DsprHnr;
+  importantItemsHnr?: DsprHnr;
+  weeklyImportantItemsHnr?: DsprHnr;
+  weeklyAvgImportantItemsHnr?: DsprHnr;
   className?: string;
 }
 
-export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProps) {
+export function HnrCard({
+  hnr,
+  weeklyHnr,
+  weeklyAvgHnr,
+  importantItemsHnr,
+  weeklyImportantItemsHnr,
+  weeklyAvgImportantItemsHnr,
+  className,
+}: HnrCardProps) {
   const [isWeekly, setIsWeekly] = useState(false);
+  const [itemsMode, setItemsMode] = useState<"all" | "special">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const activeHnr = isWeekly && weeklyHnr ? weeklyAvgHnr ?? weeklyHnr : hnr;
+  // Independent from the card's own All/Special toggle — switching one does not affect the other.
+  const [dialogItemsMode, setDialogItemsMode] = useState<"all" | "special">("all");
+  // WTD rankings come two ways — a running sum, or averaged per day.
+  const [wtdMode, setWtdMode] = useState<"sum" | "avg">("sum");
+  const hasSpecialItems = Boolean(importantItemsHnr);
+
+  const source =
+    itemsMode === "special"
+      ? {
+          day: importantItemsHnr ?? hnr,
+          wtd: weeklyImportantItemsHnr,
+          wtdAvg: weeklyAvgImportantItemsHnr,
+        }
+      : { day: hnr, wtd: weeklyHnr, wtdAvg: weeklyAvgHnr };
+  const useAvg = wtdMode === "avg";
+  const hasAvgData = Boolean(source.wtdAvg);
+  // True only when avg data actually exists for the current item scope — if the
+  // user picked "avg" then switched All/Special to a scope without avg data,
+  // this correctly falls back to sum without still claiming to show "Avg".
+  const showingAvg = useAvg && hasAvgData;
+  const activeHnr = isWeekly && source.wtd ? (showingAvg ? source.wtdAvg! : source.wtd) : source.day;
   const pct = activeHnr.hnr_promise_met_percent;
 
   return (
@@ -108,31 +140,85 @@ export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProp
           <div className="rounded p-0.5 bg-orange-500/15 dark:bg-orange-500/20">
             <Timer className="h-3 w-3 text-orange-500" />
           </div>
-          Hot-N-Ready{isWeekly ? " (WTD)" : ""}
-          {weeklyHnr ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn("h-5 w-5 ms-auto rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
-                  onClick={(e) => { e.stopPropagation(); setIsWeekly((v) => !v); }}
+          Hot-N-Ready{isWeekly ? (showingAvg ? " (WTD Avg)" : " (WTD)") : ""}{itemsMode === "special" ? " · Special Items" : ""}
+          <div className="ms-auto flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            {hasSpecialItems && (
+              <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    itemsMode === "all"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setItemsMode("all")}
                 >
-                  <CalendarDays className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="h-3 w-3 text-muted-foreground ms-auto cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-50">
-                Tracks how well HNR promises are being met
-              </TooltipContent>
-            </Tooltip>
-          )}
+                  All
+                </button>
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    itemsMode === "special"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setItemsMode("special")}
+                >
+                  Special
+                </button>
+              </div>
+            )}
+            {isWeekly && hasAvgData && (
+              <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    wtdMode === "sum"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setWtdMode("sum")}
+                >
+                  Sum
+                </button>
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    wtdMode === "avg"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setWtdMode("avg")}
+                >
+                  Avg
+                </button>
+              </div>
+            )}
+            {weeklyHnr ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn("h-5 w-5 rounded", isWeekly ? "bg-primary/15 text-primary" : "text-muted-foreground/40")}
+                    onClick={() => setIsWeekly((v) => !v)}
+                  >
+                    <CalendarDays className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{isWeekly ? "Switch to Daily" : "Switch to Week-to-Date"}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-50">
+                  Tracks how well HNR promises are being met
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="pb-1 px-3 flex flex-col gap-8">
@@ -166,24 +252,65 @@ export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProp
 
       {/* WTD Comparison Dialog */}
       {weeklyHnr && (() => {
-        const avgHnr = weeklyAvgHnr ?? weeklyHnr;
+        const dailyHnr = dialogItemsMode === "special" ? importantItemsHnr ?? hnr : hnr;
+        const sumHnr =
+          dialogItemsMode === "special"
+            ? weeklyImportantItemsHnr ?? weeklyHnr
+            : weeklyHnr;
+        const avgHnr =
+          dialogItemsMode === "special"
+            ? weeklyAvgImportantItemsHnr ?? weeklyImportantItemsHnr ?? weeklyAvgHnr ?? weeklyHnr
+            : weeklyAvgHnr ?? weeklyHnr;
+        const showSum = avgHnr !== sumHnr;
         return (
         <WtdComparisonDialog
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           title="Hot-N-Ready Comparison"
+          badgeText={`${dialogItemsMode === "special" ? "Special Items" : "All Items"} · Daily vs WTD${showSum ? " Avg" : ""}`}
         >
+          {hasSpecialItems && (
+            <div
+              className="mb-3 flex justify-end"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex gap-0.5 rounded-md bg-muted/60 p-0.5">
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    dialogItemsMode === "all"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setDialogItemsMode("all")}
+                >
+                  All Items
+                </button>
+                <button
+                  className={cn(
+                    "text-[9px] font-medium rounded px-1.5 py-0.5 transition-colors",
+                    dialogItemsMode === "special"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  onClick={() => setDialogItemsMode("special")}
+                >
+                  Special Items
+                </button>
+              </div>
+            </div>
+          )}
           <ComparisonGrid
             daily={
               <div className="space-y-2">
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                  {hnr.hnr_promise_met_percent.toFixed(1)}%
+                  {dailyHnr.hnr_promise_met_percent.toFixed(1)}%
                 </p>
                 <p className="text-[10px] text-muted-foreground">Promise Met</p>
                 <div className="flex gap-3 mt-2">
-                  <span className="text-[11px]">Trans: <b>{hnr.hnr_transactions}</b></span>
-                  <span className="text-[11px]">Kept: <b>{hnr.hnr_promise_met}</b></span>
-                  <span className="text-[11px]">Broken: <b>{hnr.hnr_broken_promises}</b></span>
+                  <span className="text-[11px]">Trans: <b>{dailyHnr.hnr_transactions}</b></span>
+                  <span className="text-[11px]">Kept: <b>{dailyHnr.hnr_promise_met}</b></span>
+                  <span className="text-[11px]">Broken: <b>{dailyHnr.hnr_broken_promises}</b></span>
                 </div>
               </div>
             }
@@ -192,7 +319,7 @@ export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProp
                 <p className="text-2xl font-bold text-primary tabular-nums">
                   {avgHnr.hnr_promise_met_percent.toFixed(1)}%
                 </p>
-                <p className="text-[10px] text-muted-foreground">Promise Met (Avg)</p>
+                <p className="text-[10px] text-muted-foreground">Promise Met{showSum ? " (Avg)" : ""}</p>
                 <div className="flex gap-3 mt-2">
                   <span className="text-[11px]">Trans: <b>{avgHnr.hnr_transactions}</b></span>
                   <span className="text-[11px]">Kept: <b>{avgHnr.hnr_promise_met}</b></span>
@@ -205,35 +332,39 @@ export function HnrCard({ hnr, weeklyHnr, weeklyAvgHnr, className }: HnrCardProp
             rows={[
               {
                 label: "Promise Met %",
-                daily: `${hnr.hnr_promise_met_percent.toFixed(1)}%`,
+                daily: `${dailyHnr.hnr_promise_met_percent.toFixed(1)}%`,
                 wtd: `${avgHnr.hnr_promise_met_percent.toFixed(1)}%`,
-                dailyNum: hnr.hnr_promise_met_percent,
+                dailyNum: dailyHnr.hnr_promise_met_percent,
                 wtdNum: avgHnr.hnr_promise_met_percent,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${sumHnr.hnr_promise_met_percent.toFixed(1)}%` : undefined,
               },
               {
                 label: "Transactions",
-                daily: `${hnr.hnr_transactions}`,
+                daily: `${dailyHnr.hnr_transactions}`,
                 wtd: `${avgHnr.hnr_transactions}`,
-                dailyNum: hnr.hnr_transactions,
+                dailyNum: dailyHnr.hnr_transactions,
                 wtdNum: avgHnr.hnr_transactions,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${sumHnr.hnr_transactions}` : undefined,
               },
               {
                 label: "Promises Kept",
-                daily: `${hnr.hnr_promise_met}`,
+                daily: `${dailyHnr.hnr_promise_met}`,
                 wtd: `${avgHnr.hnr_promise_met}`,
-                dailyNum: hnr.hnr_promise_met,
+                dailyNum: dailyHnr.hnr_promise_met,
                 wtdNum: avgHnr.hnr_promise_met,
                 higherIsBetter: true,
+                wtdSum: showSum ? `${sumHnr.hnr_promise_met}` : undefined,
               },
               {
                 label: "Broken Promises",
-                daily: `${hnr.hnr_broken_promises}`,
+                daily: `${dailyHnr.hnr_broken_promises}`,
                 wtd: `${avgHnr.hnr_broken_promises}`,
-                dailyNum: hnr.hnr_broken_promises,
+                dailyNum: dailyHnr.hnr_broken_promises,
                 wtdNum: avgHnr.hnr_broken_promises,
                 higherIsBetter: false,
+                wtdSum: showSum ? `${sumHnr.hnr_broken_promises}` : undefined,
               },
             ]}
           />

@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { ArrowRight, ChevronRight, History, Pencil } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
+import { ArrowRight, ChevronRight, History, Pencil, Tags } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,22 +12,57 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatUnitQty, formatTotal } from "@/lib/utils/number";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { RecountDialog } from "./recount-dialog";
-import type { EntryItem, EntryItemEdit } from "@/types/inventory.types";
+import type { EntryItem, EntryItemEdit, EntryItemItem, Unit } from "@/types/inventory.types";
 
-/** One unit's prev → new value, color-coded by direction of change. */
+/** A category chip filter — "all" | "uncategorized" | a real tag id. Client-side
+ *  only (hides/shows rows), unlike the Entries-list tag filter which is a server
+ *  request — so "uncategorized" is fine to offer here. */
+type CategoryFilter = "all" | "uncategorized" | number;
+
+function itemMatchesCategory(item: EntryItemItem, filter: CategoryFilter): boolean {
+  if (filter === "all") return true;
+  const tags = item.tags ?? [];
+  if (filter === "uncategorized") return tags.length === 0;
+  return tags.some((t) => t.id === filter);
+}
+
+/** A count paired with its actual unit name — "—" when the item has no such unit. */
+function UnitCell({ unit, count }: { unit: Unit | null; count: string }) {
+  if (!unit) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return (
+    <span className="inline-flex items-baseline gap-1 tabular-nums">
+      {formatUnitQty(count)}
+      <span className="text-xs font-normal text-muted-foreground">{unit.name}</span>
+    </span>
+  );
+}
+
+/** One unit's prev → new value, color-coded by direction of change. `unit` null
+ *  means the item has no such unit at all — render a dash instead of a diff. */
 function DiffField({
   label,
+  unit,
   prev,
   next,
   emphasize,
   format = (v) => v,
 }: {
   label: string;
+  unit?: Unit | null;
   prev: string;
   next: string;
   emphasize?: boolean;
@@ -35,14 +70,18 @@ function DiffField({
 }) {
   const changed = Number(prev) !== Number(next);
   const increased = Number(next) > Number(prev);
+  const unitless = unit === null;
 
   return (
     <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
+        {unit && <span className="ms-1 font-normal">({unit.name})</span>}
       </p>
       <p className={cn("mt-0.5 flex items-center gap-1 font-mono text-xs", emphasize && "text-sm font-semibold")}>
-        {changed ? (
+        {unitless ? (
+          <span className="text-muted-foreground">—</span>
+        ) : changed ? (
           <>
             <span className="text-muted-foreground line-through decoration-muted-foreground/50">
               {format(prev)}
@@ -67,7 +106,7 @@ function DiffField({
 }
 
 /** A single audit-log entry for one recount. */
-function EditLogEntry({ edit }: { edit: EntryItemEdit }) {
+function EditLogEntry({ edit, item }: { edit: EntryItemEdit; item: EntryItemItem }) {
   return (
     <li className="rounded-lg border bg-background p-3">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
@@ -81,9 +120,9 @@ function EditLogEntry({ edit }: { edit: EntryItemEdit }) {
         </p>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        <DiffField label="Unit 1" prev={edit.prev_count_unit_1} next={edit.new_count_unit_1} format={formatUnitQty} />
-        <DiffField label="Unit 2" prev={edit.prev_count_unit_2} next={edit.new_count_unit_2} format={formatUnitQty} />
-        <DiffField label="Unit 3" prev={edit.prev_count_unit_3} next={edit.new_count_unit_3} format={formatUnitQty} />
+        <DiffField label="Unit 1" unit={item.unit_1} prev={edit.prev_count_unit_1} next={edit.new_count_unit_1} format={formatUnitQty} />
+        <DiffField label="Unit 2" unit={item.unit_2} prev={edit.prev_count_unit_2} next={edit.new_count_unit_2} format={formatUnitQty} />
+        <DiffField label="Unit 3" unit={item.unit_3} prev={edit.prev_count_unit_3} next={edit.new_count_unit_3} format={formatUnitQty} />
         <DiffField label="Total (U1)" prev={edit.prev_total} next={edit.new_total} emphasize format={formatTotal} />
       </div>
     </li>
@@ -119,6 +158,25 @@ export function EntryDetailItems({
       )
   );
 
+  // Category filter — hides/shows rows only (never removes them from the map),
+  // so Recount/expand stay wired to a filtered-out-then-back-in row exactly as
+  // before. Built from tags already present on this entry's own items.
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+  const categories = useMemo(() => {
+    const byId = new Map<number, { id: number; name_en: string }>();
+    let hasUncategorized = false;
+    for (const item of items) {
+      const tags = item.item.tags ?? [];
+      if (tags.length === 0) hasUncategorized = true;
+      for (const tag of tags) byId.set(tag.id, tag);
+    }
+    return {
+      tags: Array.from(byId.values()).sort((a, b) => a.name_en.localeCompare(b.name_en)),
+      hasUncategorized,
+    };
+  }, [items]);
+  const hasVisibleMatch = items.some((i) => itemMatchesCategory(i.item, activeCategory));
+
   // Recount is a store-scoped-or-global action; pass the effective store so a
   // store_manager (store-scoped perm) passes, while admin/specialist pass via
   // global perms / super-admin bypass.
@@ -144,6 +202,41 @@ export function EntryDetailItems({
 
   return (
     <>
+      {(categories.tags.length > 0 || categories.hasUncategorized) && (
+        <div className="mb-3 flex items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Tags className="h-3 w-3" />
+            Category
+          </label>
+          <Select
+            value={String(activeCategory)}
+            onValueChange={(v) =>
+              setActiveCategory(v === "all" || v === "uncategorized" ? v : Number(v))
+            }
+          >
+            <SelectTrigger
+              className={cn(
+                "h-9 w-48 text-sm",
+                activeCategory !== "all" && "border-primary/40 bg-primary/5"
+              )}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {categories.tags.map((tag) => (
+                <SelectItem key={tag.id} value={String(tag.id)}>
+                  {tag.name_en}
+                </SelectItem>
+              ))}
+              {categories.hasUncategorized && (
+                <SelectItem value="uncategorized">Uncategorized</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-md border">
         <Table>
           <TableHeader>
@@ -163,15 +256,22 @@ export function EntryDetailItems({
                   No items in this entry.
                 </TableCell>
               </TableRow>
+            ) : !hasVisibleMatch ? (
+              <TableRow>
+                <TableCell colSpan={colSpan} className="h-24 text-center text-muted-foreground">
+                  No items in this category.
+                </TableCell>
+              </TableRow>
             ) : (
               items.map((item) => {
                 const hasHistory =
                   canViewHistory && Boolean(item.edits && item.edits.length > 0);
                 const isOpen = expanded.has(item.id);
+                const visible = itemMatchesCategory(item.item, activeCategory);
 
                 return (
                   <Fragment key={item.id}>
-                    <TableRow>
+                    <TableRow className={cn(!visible && "hidden")}>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{item.item.name_en}</span>
@@ -208,9 +308,15 @@ export function EntryDetailItems({
                           </Button>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">{formatUnitQty(item.count_unit_1)}</TableCell>
-                      <TableCell className="text-right">{formatUnitQty(item.count_unit_2)}</TableCell>
-                      <TableCell className="text-right">{formatUnitQty(item.count_unit_3)}</TableCell>
+                      <TableCell className="text-right">
+                        <UnitCell unit={item.item.unit_1} count={item.count_unit_1} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <UnitCell unit={item.item.unit_2} count={item.count_unit_2} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <UnitCell unit={item.item.unit_3} count={item.count_unit_3} />
+                      </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatTotal(item.total_in_unit_1)}
                       </TableCell>
@@ -230,11 +336,11 @@ export function EntryDetailItems({
 
                     {/* Full-width audit log — kept out of the cramped Item cell. */}
                     {hasHistory && isOpen && (
-                      <TableRow className="hover:bg-transparent">
+                      <TableRow className={cn("hover:bg-transparent", !visible && "hidden")}>
                         <TableCell colSpan={colSpan} className="bg-muted/20 p-0">
                           <ol className="space-y-2 border-t px-4 py-3">
                             {item.edits!.map((edit) => (
-                              <EditLogEntry key={edit.id} edit={edit} />
+                              <EditLogEntry key={edit.id} edit={edit} item={item.item} />
                             ))}
                           </ol>
                         </TableCell>

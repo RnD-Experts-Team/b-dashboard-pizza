@@ -191,7 +191,7 @@ export function V1SalesHistoryCard({
         onExpand={() => setOpen(true)}
         bodyClassName="overflow-hidden"
         headerControl={
-          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <V1Toggle
               options={[
                 ...V1_METRIC_TABS.map((t) => ({ value: t.key as View, label: t.label })),
@@ -200,6 +200,8 @@ export function V1SalesHistoryCard({
               value={view}
               onChange={setView}
             />
+            {/* Below sm, this spacer forces the granularity toggle onto its own line under the metric tabs. */}
+            <div className="basis-full sm:hidden" />
             <V1Toggle
               options={GRANULARITY_OPTIONS.map((o) => ({ value: o.key, label: o.label }))}
               value={granularity}

@@ -110,6 +110,7 @@ import type {
 import { EntityNotesAttachments } from "./entity-extras";
 import { NotesList } from "./notes-list";
 import { SearchCreateCombobox } from "./search-create-combobox";
+import { statusAccent } from "./status-accent";
 import {
   useTicketDraft,
   EMPTY_ISSUE_DRAFT,
@@ -276,18 +277,13 @@ function DateTimePicker({ value, onChange, placeholder, className }: {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function StatusChip({ value, label }: { value: string; label: string }) {
-  const colorMap: Record<string, string> = {
-    pending:     "bg-yellow-500/10 text-yellow-700 border-yellow-500/30 dark:text-yellow-400",
-    assigned:    "bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-400",
-    in_progress: "bg-indigo-500/10 text-indigo-700 border-indigo-500/30 dark:text-indigo-400",
-    waiting:     "bg-purple-500/10 text-purple-700 border-purple-500/30 dark:text-purple-400",
-    complete:    "bg-green-500/10 text-green-700 border-green-500/30 dark:text-green-400",
-    cancelled:   "bg-red-500/10 text-red-700 border-red-500/30 dark:text-red-400",
-    deferred:    "bg-orange-500/10 text-orange-700 border-orange-500/30 dark:text-orange-400",
-  };
+  const accent = statusAccent(value);
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium", colorMap[value] ?? "bg-muted text-foreground border-border")}>
-      {label}
+    <span className="inline-flex items-center gap-1 rounded-md border bg-card px-1.5 py-0.5">
+      <span className={cn("h-2.5 w-1 shrink-0 rounded-full", accent.bar)} />
+      <span className={cn("text-[11px] font-semibold uppercase tracking-wide", accent.text)}>
+        {label}
+      </span>
     </span>
   );
 }
@@ -374,7 +370,10 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
     filters?.part_cost_total_gt,
     filters?.trashed,
     filters?.per_page,
-  ].filter((v) => v != null && v !== 0).length;
+    filters?.changed_statuses?.length,
+    filters?.changed_from,
+    filters?.changed_to,
+  ].filter((v) => v != null && v !== 0 && v !== "").length;
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -505,6 +504,47 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                       <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Changed Status To */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed Status To</p>
+                  <Select
+                    value={filters?.changed_statuses?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("changed_statuses", v === "all" ? undefined : [v as IssueStatus])}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="pending" className={itemCls}>Pending</SelectItem>
+                      <SelectItem value="assigned" className={itemCls}>Assigned</SelectItem>
+                      <SelectItem value="in_progress" className={itemCls}>In Progress</SelectItem>
+                      <SelectItem value="waiting" className={itemCls}>Waiting</SelectItem>
+                      <SelectItem value="complete" className={itemCls}>Complete</SelectItem>
+                      <SelectItem value="deferred" className={itemCls}>Deferred</SelectItem>
+                      <SelectItem value="cancelled" className={itemCls}>Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Changed from */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed from</p>
+                  <DatePicker
+                    value={filters?.changed_from ?? ""}
+                    onChange={(v) => updateFilter("changed_from", v || undefined)}
+                    className="h-6 text-[10px] px-1.5"
+                  />
+                </div>
+
+                {/* Changed to */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Changed to</p>
+                  <DatePicker
+                    value={filters?.changed_to ?? ""}
+                    onChange={(v) => updateFilter("changed_to", v || undefined)}
+                    className="h-6 text-[10px] px-1.5"
+                  />
                 </div>
 
                 {/* Technician */}

@@ -16,11 +16,12 @@ import { DashboardV1 } from "@/components/dashboard-v1";
  * selected store is already global (Zustand) and stays in sync for free.
  */
 export function DashboardViewToggle() {
-  const [view, setView] = useState<"main" | "v1">("main");
+  const [view, setView] = useState<"main" | "v1">("v1");
   const [selectedDate, setSelectedDate] = useState<Date>(subDays(new Date(), 1));
 
   return (
     <div>
+      {/* Main/V1 toggle — temporarily disabled; V1 is the only view shown for now.
       <div className="mb-2 flex justify-end">
         <V1Toggle
           options={[
@@ -31,6 +32,7 @@ export function DashboardViewToggle() {
           onChange={setView}
         />
       </div>
+      */}
 
       <div className={cn(view !== "main" && "hidden")}>
         <DsprDashboard selectedDate={selectedDate} onSelectedDateChange={setSelectedDate} />

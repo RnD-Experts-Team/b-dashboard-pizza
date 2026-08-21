@@ -34,6 +34,36 @@ export interface ItemStoreRef {
   name: string;
 }
 
+/**
+ * A trilingual item tag/category, as returned on `Item`/`EntryItemItem`.
+ * Unrelated to the flat single-language `Tag` in `types/tag.types.ts` (a
+ * different feature, backed by a separate `/tags` endpoint) — kept as its
+ * own type so the two never get confused.
+ */
+export interface ItemTag {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  name_es: string;
+}
+
+/**
+ * A tag as sent on item create/update. Matching is by `name_en` only — if it
+ * matches an existing tag, that tag is reused and `name_ar`/`name_es` here are
+ * ignored server-side; otherwise a new tag is created from all three names.
+ */
+export interface ItemTagInput {
+  name_en: string;
+  name_ar: string;
+  name_es: string;
+}
+
+/** A tag as shown on the public (no-auth) counting link — single, pre-resolved language. */
+export interface PublicItemTag {
+  id: number;
+  name: string;
+}
+
 export interface Item {
   id: number;
   ultimatrix_id: string;
@@ -55,6 +85,7 @@ export interface Item {
   is_active: boolean;
   /** Present only when all_stores is false. */
   stores?: ItemStoreRef[];
+  tags: ItemTag[];
 }
 
 /**
@@ -79,6 +110,8 @@ export interface ItemFormValues {
   store_ids: string[]; // required when all_stores is false
   /** A newly selected file, or null to leave the existing image untouched. */
   image: File | null;
+  /** Required — at least one tag per item. */
+  tags: ItemTagInput[];
 }
 
 /* ── Links ─────────────────────────────────────────────────────────────── */
@@ -158,6 +191,8 @@ export interface EntryItemItem {
   unit_2_per_unit_1: string | null;
   unit_3: Unit | null;
   unit_3_per_unit_2: string | null;
+  /** Only present once the backend's tags feature is deployed — optional so older entries don't break. */
+  tags?: ItemTag[];
 }
 
 export interface EntryItem {
@@ -191,6 +226,8 @@ export interface EntryListParams extends ListParams {
   submitted_by?: string;
   /** true = only entries with at least one edited item; false = only entries with none. */
   edited?: boolean;
+  /** Only entries with at least one counted item carrying this tag. */
+  tag_id?: number;
 }
 
 export interface LinkListParams extends ListParams {
@@ -225,6 +262,8 @@ export interface PublicLinkItem {
   unit_2_per_unit_1: string | null;
   unit_3: { name: string | null } | null;
   unit_3_per_unit_2: string | null;
+  /** Empty array = uncategorized. */
+  tags: PublicItemTag[];
 }
 
 /** The public form payload returned by GET /public/inventory/{token}. */
@@ -260,4 +299,8 @@ export interface ListParams {
 export interface ItemListParams extends ListParams {
   /** true = only active items; false = only inactive; omit = all. */
   active?: boolean;
+  /** Free-text search against name/ultimatrix_id. */
+  search?: string;
+  /** Filter to items whose `types` array includes this value. */
+  type?: InventoryType;
 }

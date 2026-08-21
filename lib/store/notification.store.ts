@@ -12,7 +12,6 @@ interface NotificationStoreState {
 
 interface NotificationStoreActions {
   fetchNotifications: (signal?: AbortSignal) => Promise<void>;
-  fetchUnreadNotifications: (signal?: AbortSignal) => Promise<void>;
   markAsRead: (id: number) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   /** Prepend a notification received from the WebSocket channel */
@@ -42,15 +41,6 @@ export const useNotificationStore = create<NotificationStore>()((set) => ({
         error: err instanceof Error ? err.message : "Failed to load notifications",
         isLoading: false,
       });
-    }
-  },
-
-  fetchUnreadNotifications: async (signal?: AbortSignal) => {
-    try {
-      const data = await notificationService.getUnreadNotifications(signal);
-      set({ unreadCount: data.length });
-    } catch (err) {
-      if (axios.isCancel(err)) return;
     }
   },
 

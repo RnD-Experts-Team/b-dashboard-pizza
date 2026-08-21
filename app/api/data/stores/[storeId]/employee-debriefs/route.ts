@@ -252,6 +252,7 @@ export async function POST(
     employee_id = body.employee_id as number | undefined;
     note = body.note as string | undefined;
     const employee_name = body.employee_name;
+    const type = body.type;
 
     if (!date || typeof date !== "string" || !date.trim()) {
       return errorResponse("INVALID_PARAM", "date is required.", 400, { param: "date" });
@@ -270,6 +271,7 @@ export async function POST(
       employee_id,
       employee_name: typeof employee_name === "string" ? employee_name.trim() : undefined,
       note: note.trim(),
+      type: typeof type === "string" && type.trim() ? type.trim() : undefined,
     });
     upstreamContentType = "application/json";
   }

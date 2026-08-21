@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -46,6 +46,7 @@ import {
   Link2,
   LogOut,
   UserSearch,
+  Sparkles,
 } from "lucide-react";
 import {
   Dialog,
@@ -73,6 +74,8 @@ import { useAuth } from "@/lib/auth/use-auth";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
+import { useNotificationStore } from "@/lib/store/notification.store";
+import { getNotificationPageSegment } from "@/lib/notifications/notification-routing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -93,6 +96,12 @@ interface NavItem {
    * e.g. "manage users", "manage roles"
    */
   requiredPermission?: string;
+  /**
+   * Match the pathname exactly instead of by prefix.
+   * Needed for hrefs that are a prefix of sibling routes — e.g. the dashboard
+   * root `/{locale}/dashboard`, which prefixes every other dashboard page.
+   */
+  exact?: boolean;
 }
 
 interface NavGroup {
@@ -107,6 +116,32 @@ interface SidebarProps {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Small numbered badge for unread-notification counts               */
+/* ------------------------------------------------------------------ */
+function NotificationCountBadge({
+  count,
+  variant = "inline",
+}: {
+  count: number;
+  variant?: "inline" | "corner";
+}) {
+  if (count <= 0) return null;
+  const label = count > 9 ? "9+" : String(count);
+  if (variant === "corner") {
+    return (
+      <span className="absolute -top-1 -end-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold leading-none text-destructive-foreground">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground">
+      {label}
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Collapsible nav‑group rendered inside the sidebar                 */
 /* ------------------------------------------------------------------ */
 function SidebarNavGroup({
@@ -115,16 +150,21 @@ function SidebarNavGroup({
   locale,
   collapsed,
   onNavigate,
+  getUnreadCount,
 }: {
   group: NavGroup;
   pathname: string;
   locale: string;
   collapsed: boolean;
   onNavigate?: () => void;
+  getUnreadCount: (item: NavItem) => number;
 }) {
-  const hasActiveChild = group.items.some(
-    (item) => pathname === item.href || pathname.startsWith(item.href)
-  );
+  const isItemActive = (item: NavItem) =>
+    item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href);
+  const hasActiveChild = group.items.some(isItemActive);
+  const groupUnreadCount = group.items.reduce((sum, item) => sum + getUnreadCount(item), 0);
   const [open, setOpen] = useState(hasActiveChild);
   const { setSidebarCollapsed } = useUIStore();
 
@@ -155,10 +195,16 @@ function SidebarNavGroup({
             collapsed && "justify-center px-2"
           )}
         >
-          <group.icon className="h-5 w-5 shrink-0" />
+          <div className="relative shrink-0">
+            <group.icon className="h-5 w-5" />
+            {collapsed && <NotificationCountBadge count={groupUnreadCount} variant="corner" />}
+          </div>
           {!collapsed && (
             <>
-              <span className="truncate">{group.label}</span>
+              <span className="truncate inline-flex items-center gap-2.5">
+                {group.label}
+                <NotificationCountBadge count={groupUnreadCount} />
+              </span>
               <ChevronDown
                 className={cn(
                   "ms-auto h-4 w-4 shrink-0 transition-transform duration-200",
@@ -174,8 +220,7 @@ function SidebarNavGroup({
         <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
           <div className="ms-4 border-s ps-2 mt-1 space-y-0.5">
             {group.items.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href);
+              const isActive = isItemActive(item);
               return (
                 <Link
                   key={item.href}
@@ -189,7 +234,10 @@ function SidebarNavGroup({
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{item.title}</span>
+                  <span className="truncate inline-flex items-center gap-2.5">
+                    {item.title}
+                    <NotificationCountBadge count={getUnreadCount(item)} />
+                  </span>
                 </Link>
               );
             })}
@@ -228,6 +276,28 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const devToolsEnabled = useFeature("devTools");
   const i18nIntelligenceEnabled = useFeature("i18nIntelligence");
   const securityMonitorEnabled = useFeature("securityMonitor");
+
+  /* ---- Unread-notification → sidebar count mapping ----
+   * Derived from the same `notifications` array the bell's badge count and
+   * popover list render, so the sidebar badge can never disagree with the bell. */
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadPageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const notification of notifications) {
+      if (notification.read_at !== null) continue;
+      const segment = getNotificationPageSegment(notification);
+      if (segment) counts.set(segment, (counts.get(segment) ?? 0) + 1);
+    }
+    return counts;
+  }, [notifications]);
+
+  /** First path segment after `/dashboard/` in a nav item's href, e.g.
+   * `/${locale}/dashboard/hiring-request` → "hiring-request". */
+  const getHrefPageSegment = (href: string): string =>
+    href.split("/dashboard/")[1]?.split("/")[0] ?? "";
+
+  const getUnreadCount = (item: NavItem): number =>
+    unreadPageCounts.get(getHrefPageSegment(item.href)) ?? 0;
 
   /* ---- Flat nav items ---- */
   const screenProjectItem: NavItem = {
@@ -285,6 +355,23 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   /* ---- Collapsible groups ---- */
+  // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
+  // entry is marked `exact` (that href prefixes every other dashboard route).
+  const dashboardsGroup: NavGroup = {
+    label: "Dashboards",
+    icon: LayoutDashboard,
+    items: [
+      { ...dashboardItem, title: "DSPR Dashboard", exact: true },
+      {
+        title: "Labor Dashboard",
+        href: `/${locale}/dashboard/labor`,
+        icon: Users,
+        // No auth rule defined upstream yet — visible for any store the user
+        // can access, same as the Business Reports item.
+      },
+    ],
+  };
+
   const storeManagementGroup: NavGroup = {
     label: t("storeManagement"),
     icon: Building2,
@@ -378,12 +465,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       //   ],
       // },
       {
-        title: t("customReports"),
-        href: `/${locale}/dashboard/custom-reports`,
-        icon: BarChart3,
-        requirements: [
-          { service: "QA", method: "GET", path: "/custom-reports/*", storeId: effectiveStoreId },
-        ],
+        title: t("cleaningChart"),
+        href: `/${locale}/dashboard/cleaning-chart`,
+        icon: Sparkles,
+        // Role/permission gating deferred — visible to all for now.
       },
     ],
   };
@@ -662,6 +747,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   // Pre-filter all groups and flat items
+  const visibleDashboardsGroup = filterGroup(dashboardsGroup);
   const visibleStoreManagementGroup = filterGroup(storeManagementGroup);
   const visibleUserManagementGroup = filterGroup(userManagementGroup);
   const visibleQaManagementGroup = filterGroup(qaManagementGroup);
@@ -677,6 +763,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     const isActive =
       pathname === item.href ||
       (item.href !== basePath && pathname.startsWith(item.href));
+    const unreadCount = getUnreadCount(item);
 
     return (
       <Link
@@ -691,8 +778,16 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           collapsed && "justify-center px-2"
         )}
       >
-        <item.icon className="h-5 w-5 shrink-0" />
-        {!collapsed && <span className="truncate">{item.title}</span>}
+        <div className="relative shrink-0">
+          <item.icon className="h-5 w-5" />
+          {collapsed && <NotificationCountBadge count={unreadCount} variant="corner" />}
+        </div>
+        {!collapsed && (
+          <span className="truncate inline-flex items-center gap-2.5">
+            {item.title}
+            <NotificationCountBadge count={unreadCount} />
+          </span>
+        )}
       </Link>
     );
   };
@@ -742,7 +837,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
                 {currentStoreId ? ` – ${currentStoreId}` : ""}
               </p>
             </div>
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            {/* Hidden below md: on mobile this sidebar renders inside the
+                Sheet drawer, where the fixed top-4 end-4 close button
+                overlaps this icon. */}
+            <ChevronsUpDown className="hidden h-4 w-4 shrink-0 text-muted-foreground md:block" />
           </button>
         )}
       </div>
@@ -797,9 +895,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       {/* Navigation — scrollable when content overflows */}
       <ScrollArea className="flex-1 overflow-y-auto">
         <nav className="font-heading space-y-1 px-2 sm:px-3 py-2 sm:py-3">
-          {/* 1. Dashboard */}
-          {/* {renderNavLink(dashboardItem)} */}
-          {isNavItemVisible(dashboardItem) && renderNavLink(dashboardItem)}
+          {/* 1. Dashboards (DSPR Dashboard + Labor Dashboard) */}
+          {visibleDashboardsGroup && (
+            <SidebarNavGroup
+              group={visibleDashboardsGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
+            />
+          )}
 
           {/* 1a·1. Business Reports (flat link, right under Dashboard) */}
            {/* {isNavItemVisible(businessReportsItem) && renderNavLink(businessReportsItem)}  */}
@@ -821,6 +927,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -832,6 +939,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -843,6 +951,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -854,6 +963,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -865,6 +975,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
           {/* 7. Hiring Management */}
@@ -875,6 +986,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -886,6 +998,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 
@@ -897,6 +1010,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               locale={locale}
               collapsed={collapsed}
               onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
             />
           )}
 

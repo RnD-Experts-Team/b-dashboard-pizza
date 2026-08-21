@@ -26,8 +26,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTheme } from "next-themes";
 import { useAuthStore } from "@/lib/auth/auth.store";
-import { useDocumentColorMode } from "@/lib/theme/use-document-color-mode";
 
 const LUMINA_BASE =
   process.env.NEXT_PUBLIC_LUMINA_BASE || "https://ai.lcportal.cloud";
@@ -44,7 +44,11 @@ const LUMINA_ORIGIN = (() => {
 
 export function LuminaEmbed() {
   const token = useAuthStore((s) => s.token);
-  const mode = useDocumentColorMode();
+  // Authoritative light/dark from next-themes (the same source the dashboard's
+  // own ThemeSyncProvider uses). resolvedTheme collapses "system" → the actual
+  // active mode, so this always matches what the user sees.
+  const { resolvedTheme } = useTheme();
+  const mode = resolvedTheme === "dark" ? "dark" : "light";
   const [open, setOpen] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const tokenRef = useRef(token);
@@ -127,7 +131,7 @@ export function LuminaEmbed() {
               ref={iframeRef}
               title="PNE LC AI Assistant"
               src={`${LUMINA_BASE}/widget?embed=${EMBED_KEY}&theme=${mode}`}
-              sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
+              sandbox="allow-scripts allow-forms allow-popups allow-same-origin allow-downloads allow-popups-to-escape-sandbox"
               className="h-full w-full border-0"
             />
           </div>

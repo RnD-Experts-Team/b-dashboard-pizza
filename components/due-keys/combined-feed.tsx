@@ -29,6 +29,7 @@ import {
 import { useDueKeysFeed } from "@/lib/hooks/use-due-keys-feed";
 import { useDebriefsFeed } from "@/lib/hooks/use-debriefs-feed";
 import { DueKeyHistoryDialog } from "@/components/due-keys/due-key-history-dialog";
+import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
 import type { DueKeyItem, DueKeyValue, Employee, DueKeyAttachment } from "@/types/due-key.types";
 import type { DebriefAttachment, EmployeeDebriefItem } from "@/types/employee-debrief.types";
 
@@ -372,20 +373,17 @@ function DueKeyCard({ item, employee, storeId }: DueKeyCardProps) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold leading-tight">{fullName}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  {item.tags.length > 0 ? (
-                    item.tags.map((tag) => (
-                      <span
-                        key={tag.id}
-                        className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
-                      >
-                        #{tag.name}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
-                      {item.label}
+                  <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+                    {item.label}
+                  </span>
+                  {item.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center rounded-full border border-border/50 bg-muted/60 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground"
+                    >
+                      #{tag.name}
                     </span>
-                  )}
+                  ))}
                   <span className="text-[11px] text-muted-foreground">Store {storeId}</span>
                 </div>
               </div>
@@ -478,6 +476,7 @@ function DebriefCard({ item }: { item: EmployeeDebriefItem }) {
               <ClipboardList className="h-2.5 w-2.5" />
               Employee Debrief
             </span>
+            <DebriefTypeBadge type={item.type} />
           </div>
 
           <div className="rounded-2xl rounded-tl-sm border border-border/50 bg-card/80 p-3 shadow-sm backdrop-blur-sm">
@@ -563,6 +562,7 @@ export interface CombinedFeedProps {
   dateTo?: string | null;
   selectedTags?: number[] | null;
   employeeId?: number | null;
+  debriefTypeSlugs?: string[] | null;
   showDueKeys: boolean;
   showDebrief: boolean;
   updateKeyRef?: React.MutableRefObject<
@@ -577,6 +577,7 @@ export function CombinedFeed({
   dateTo,
   selectedTags,
   employeeId,
+  debriefTypeSlugs,
   showDueKeys,
   showDebrief,
   updateKeyRef,
@@ -665,9 +666,11 @@ export function CombinedFeed({
     }
 
     if (showDebrief) {
+      const typeFilter = debriefTypeSlugs && debriefTypeSlugs.length > 0 ? debriefTypeSlugs : null;
       for (const page of debriefs.pages) {
         for (const [day, items] of Object.entries(page.days)) {
           for (const item of items) {
+            if (typeFilter && !typeFilter.includes(item.type?.slug ?? "")) continue;
             const unified: UnifiedItem = {
               type: "debrief",
               date: day,
@@ -689,7 +692,7 @@ export function CombinedFeed({
 
     // Return sorted dates ascending so newest date is last (we'll scroll to bottom)
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [dueKeys.pages, debriefs.pages, employeeMap, showDueKeys, showDebrief, storeId]);
+  }, [dueKeys.pages, debriefs.pages, employeeMap, showDueKeys, showDebrief, storeId, debriefTypeSlugs]);
 
   const totalItems = groupedByDate.reduce((acc, [, items]) => acc + items.length, 0);
 

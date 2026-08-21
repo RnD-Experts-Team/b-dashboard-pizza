@@ -11,6 +11,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useEmployeeDebriefDetail } from "@/lib/hooks/use-employee-debriefs";
+import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
 import type { DebriefAttachment } from "@/types/employee-debrief.types";
 import { AlertCircle, CalendarDays, Paperclip, User, UserCog } from "lucide-react";
 
@@ -201,6 +202,7 @@ export function EmployeeDebriefDetailSheet({
                   {detail.authorName}
                 </Badge>
               )}
+              <DebriefTypeBadge type={detail.type} />
             </div>
 
             <Separator />

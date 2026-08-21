@@ -55,17 +55,25 @@ const fmtSales = (n: number) =>
 export function V1TopItemsCard({
   items,
   weeklyItems,
+  weeklyAvgItems,
   countItems,
   weeklyCountItems,
+  weeklyAvgCountItems,
   upselling,
   isLoading,
   span,
   className,
 }: {
   items: TopMenuItem[];
+  /** WTD top items by sales (running total). */
   weeklyItems?: TopMenuItem[];
+  /** WTD top items by sales, averaged per day — offered via the Sum/Avg tabs. */
+  weeklyAvgItems?: TopMenuItem[];
   countItems?: TopMenuItem[];
+  /** WTD top items by count (running total). */
   weeklyCountItems?: TopMenuItem[];
+  /** WTD top items by count, averaged per day — offered via the Sum/Avg tabs. */
+  weeklyAvgCountItems?: TopMenuItem[];
   upselling?: {
     day?: UpsellingRecord;
     week_to_date?: UpsellingRecord;
@@ -79,11 +87,13 @@ export function V1TopItemsCard({
   const [open, setOpen] = useState(false);
   const [period, setPeriod] = useState<"day" | "wtd">("day");
   const [metric, setMetric] = useState<"sales" | "count" | "upsell">("sales");
+  // WTD rankings come two ways — a running sum, or averaged per day.
+  const [wtdMode, setWtdMode] = useState<"sum" | "avg">("sum");
 
   if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!items)
     return (
-      <V1Card title="Top Menu Items" category="menu" period="D·WTD" span={span} className={className}>
+      <V1Card title="Top Menu Items" category="menu" period="D·WTD" showPeriodBadge={false} span={span} className={className}>
         <V1Empty>No data available for this period.</V1Empty>
       </V1Card>
     );
@@ -91,10 +101,15 @@ export function V1TopItemsCard({
   const isWeekly = period === "wtd";
   const hasWeekly =
     !!weeklyItems || !!weeklyCountItems || !!upselling?.week_to_date;
+  const useAvg = wtdMode === "avg";
+  const hasAvgForMetric =
+    metric === "sales" ? Boolean(weeklyAvgItems?.length)
+    : metric === "count" ? Boolean(weeklyAvgCountItems?.length)
+    : false;
 
-  const salesData = isWeekly ? weeklyItems ?? items : items;
+  const salesData = isWeekly ? ((useAvg && weeklyAvgItems) || weeklyItems || items) : items;
   const countData = isWeekly
-    ? weeklyCountItems ?? countItems ?? []
+    ? ((useAvg && weeklyAvgCountItems) || weeklyCountItems || countItems || [])
     : countItems ?? [];
 
   const upsellData = parseUpselling(
@@ -108,20 +123,32 @@ export function V1TopItemsCard({
         title="Top Menu Items"
         category="menu"
         period="D·WTD"
+        showPeriodBadge={false}
         span={span}
         className={className}
         onExpand={hasWeekly ? () => setOpen(true) : undefined}
         headerControl={
           hasWeekly ? (
-            <V1Toggle
-              options={[
-                { value: "day", label: "Day" },
-                { value: "wtd", label: "WTD" },
-              ]}
-              value={period}
-              onChange={setPeriod}
-              className="ms-1"
-            />
+            <div className="ms-1 flex flex-wrap items-center gap-1">
+              <V1Toggle
+                options={[
+                  { value: "day", label: "Day" },
+                  { value: "wtd", label: "WTD" },
+                ]}
+                value={period}
+                onChange={setPeriod}
+              />
+              {isWeekly && hasAvgForMetric && (
+                <V1Toggle
+                  options={[
+                    { value: "sum", label: "Sum" },
+                    { value: "avg", label: "Avg" },
+                  ]}
+                  value={wtdMode}
+                  onChange={setWtdMode}
+                />
+              )}
+            </div>
           ) : undefined
         }
       >
@@ -204,6 +231,7 @@ export function V1TopItemsCard({
               <RankShiftTable
                 today={items}
                 wtd={weeklyItems ?? []}
+                wtdAvg={weeklyAvgItems}
               />
             </div>
 
@@ -213,6 +241,7 @@ export function V1TopItemsCard({
               <RankShiftTable
                 today={countItems ?? []}
                 wtd={weeklyCountItems ?? []}
+                wtdAvg={weeklyAvgCountItems}
               />
             </div>
 
@@ -241,10 +270,13 @@ export function V1TopItemsCard({
 function RankShiftTable({
   today,
   wtd,
+  wtdAvg,
 }: {
   today: TopMenuItem[];
   wtd: TopMenuItem[];
+  wtdAvg?: TopMenuItem[];
 }) {
+  const showAvg = Boolean(wtdAvg && wtdAvg.length > 0);
   const allIds = Array.from(
     new Set([...today.map((i) => i.item_id), ...wtd.map((i) => i.item_id)]),
   );
@@ -258,6 +290,12 @@ function RankShiftTable({
           <th className={cn(V1_TH, V1_NUM)}>Today Sales</th>
           <th className={cn(V1_TH, V1_NUM)}>WTD Qty</th>
           <th className={cn(V1_TH, V1_NUM)}>WTD Sales</th>
+          {showAvg && (
+            <>
+              <th className={cn(V1_TH, V1_NUM)}>WTD Avg Qty</th>
+              <th className={cn(V1_TH, V1_NUM)}>WTD Avg Sales</th>
+            </>
+          )}
           <th className={cn(V1_TH, "text-center")}>Rank Shift</th>
         </tr>
       </thead>
@@ -267,6 +305,7 @@ function RankShiftTable({
           const wtdIdx = wtd.findIndex((i) => i.item_id === id);
           const todayItem = todayIdx !== -1 ? today[todayIdx] : null;
           const wtdItem = wtdIdx !== -1 ? wtd[wtdIdx] : null;
+          const wtdAvgItem = wtdAvg?.find((i) => i.item_id === id) ?? null;
           const name =
             todayItem?.menu_item_name ?? wtdItem?.menu_item_name ?? "—";
           const rankShift =
@@ -312,6 +351,24 @@ function RankShiftTable({
                   <span className="text-muted-foreground/40">—</span>
                 )}
               </td>
+              {showAvg && (
+                <>
+                  <td className={cn(V1_TD, V1_NUM)}>
+                    {wtdAvgItem ? (
+                      wtdAvgItem.quantity_sold
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
+                  </td>
+                  <td className={cn(V1_TD, V1_NUM, "font-bold")}>
+                    {wtdAvgItem ? (
+                      fmtSales(wtdAvgItem.gross_sales)
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
+                  </td>
+                </>
+              )}
               <td className={cn(V1_TD, "text-center")}>
                 {rankShift === null ? (
                   <span className="text-[10px] text-muted-foreground/40">—</span>

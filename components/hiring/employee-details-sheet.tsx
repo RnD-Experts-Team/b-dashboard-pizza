@@ -178,6 +178,21 @@ export function EmployeeDetailsSheet({
   const currentMarital = data?.maritals?.[0]?.marital_status?.label ?? "Single";
   const initials = [data?.first_name?.charAt(0), data?.last_name?.charAt(0)].filter(Boolean).join("").toUpperCase();
 
+  const contacts = data?.contacts ?? [];
+  const addresses = data?.addresses ?? [];
+  const stores = data?.stores ?? [];
+  const statusHistories = data?.status_histories ?? [];
+  const payHistories = data?.pay_histories ?? [];
+  const financialInfos = data?.financial_infos ?? [];
+  const ids = data?.ids ?? [];
+  const availabilityDays = data?.availability_days ?? [];
+  const attachments = data?.attachments ?? [];
+
+  const hasContactCard = contacts.length > 0 || addresses.length > 0;
+  const hasEmploymentCard = stores.length > 0 || statusHistories.length > 0;
+  const hasPayCard = payHistories.length > 0 || financialInfos.length > 0;
+  const hasIdsOrAvailability = ids.length > 0 || availabilityDays.length > 0;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex flex-col w-full sm:max-w-xl p-0 gap-0">
@@ -286,12 +301,13 @@ export function EmployeeDetailsSheet({
                 )}
 
                 {/* Contact & Location Card */}
+                {hasContactCard && (
                 <DataCard icon={Phone} title="Contact & Location">
-                  {data.contacts.length > 0 && (
+                  {contacts.length > 0 && (
                     <div className="space-y-2">
                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contacts</h4>
                        <div className="grid sm:grid-cols-2 gap-2">
-                         {data.contacts.map((c, idx) => (
+                         {contacts.map((c, idx) => (
                            <div key={idx} className="flex flex-col gap-1 p-2.5 rounded-md border border-border/50 bg-background">
                               <div className="flex justify-between items-start">
                                 <span className="text-xs font-medium capitalize text-muted-foreground flex items-center gap-1.5">
@@ -312,11 +328,11 @@ export function EmployeeDetailsSheet({
                     </div>
                   )}
 
-                  {data.addresses.length > 0 && (
+                  {addresses.length > 0 && (
                     <div className="space-y-2 mt-4 pt-4 border-t border-border/50">
                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Addresses</h4>
                        <div className="grid gap-2">
-                         {data.addresses.map((a, idx) => (
+                         {addresses.map((a, idx) => (
                            <div key={idx} className="flex flex-col gap-1 p-2.5 rounded-md border border-border/50 bg-background">
                               <div className="flex justify-between items-start mb-1">
                                 <span className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
@@ -339,17 +355,16 @@ export function EmployeeDetailsSheet({
                     </div>
                   )}
 
-                  {data.contacts.length === 0 && data.addresses.length === 0 && (
-                     <p className="text-xs text-muted-foreground">No contact or address information available.</p>
-                  )}
                 </DataCard>
+                )}
 
                 {/* Employment Details Card */}
+                {hasEmploymentCard && (
                 <DataCard icon={Building2} title="Employment History">
-                  {data.stores.length > 0 && (
+                  {stores.length > 0 && (
                     <div className="space-y-2">
                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Store Assignments</h4>
-                       {data.stores.map((s, idx) => (
+                       {stores.map((s, idx) => (
                          <div key={idx} className="flex justify-between items-center p-2 text-sm border-b border-border/50 last:border-0 pb-3">
                            <span className="font-medium select-text">{s.store?.store_number ?? `Store #${s.store_id}`}</span>
                            <span className="text-xs font-mono text-muted-foreground">{formatDate(s.effective_date)}</span>
@@ -358,10 +373,10 @@ export function EmployeeDetailsSheet({
                     </div>
                   )}
 
-                  {data.status_histories.length > 0 && (
+                  {statusHistories.length > 0 && (
                     <div className="space-y-2 mt-2 pt-4 border-t border-border/50">
                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status Changes</h4>
-                       {data.status_histories.map((s, idx) => (
+                       {statusHistories.map((s, idx) => (
                          <div key={idx} className="flex justify-between items-start p-2 text-sm border-b border-border/50 last:border-0 pb-3">
                            <div className="flex flex-col gap-0.5">
                              <span className="font-medium capitalize">{s.status}</span>
@@ -373,19 +388,17 @@ export function EmployeeDetailsSheet({
                        ))}
                     </div>
                   )}
-
-                  {data.stores.length === 0 && data.status_histories.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No employment records.</p>
-                  )}
                 </DataCard>
+                )}
 
                 {/* Pay & Financial Card */}
+                {hasPayCard && (
                 <DataCard icon={Wallet} title="Pay & Financials">
-                  {data.pay_histories.length > 0 && (
+                  {payHistories.length > 0 && (
                     <div className="space-y-2">
                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pay History</h4>
                        <div className="grid gap-2">
-                         {data.pay_histories.map((p, idx) => (
+                         {payHistories.map((p, idx) => (
                            <div key={idx} className="flex justify-between items-center p-2.5 rounded-md border border-border/50 bg-muted/10">
                               <div className="flex gap-4">
                                 <DetailItem label="Base Pay" value={`$${p.base_pay}`} />
@@ -401,11 +414,11 @@ export function EmployeeDetailsSheet({
                     </div>
                   )}
 
-                  {data.financial_infos.length > 0 && (
+                  {financialInfos.length > 0 && (
                     <div className="space-y-2 mt-4 pt-4 border-t border-border/50">
                        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Direct Deposit</h4>
                        <div className="grid gap-2">
-                         {data.financial_infos.map((f, idx) => (
+                         {financialInfos.map((f, idx) => (
                            <div key={idx} className="p-3 rounded-md border border-border/50 bg-background space-y-2.5">
                               <div className="flex justify-between">
                                  <Badge variant="outline" className="text-[10px] capitalize">{f.account_type ?? "Account"}</Badge>
@@ -421,19 +434,16 @@ export function EmployeeDetailsSheet({
                     </div>
                   )}
 
-                  {data.pay_histories.length === 0 && data.financial_infos.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No financial data.</p>
-                  )}
                 </DataCard>
+                )}
 
                 {/* System IDs & Availability Card */}
+                {hasIdsOrAvailability && (
                 <div className="grid sm:grid-cols-2 gap-6">
+                  {ids.length > 0 && (
                   <DataCard icon={IdCard} title="System IDs">
-                    {data.ids.length === 0 ? (
-                       <p className="text-xs text-muted-foreground">No IDs found.</p>
-                    ) : (
                       <div className="space-y-2">
-                        {data.ids.map((eid, idx) => {
+                        {ids.map((eid, idx) => {
                           const typeName =
                             eid.id_type?.label ??
                             (eid.id_type_id != null
@@ -448,23 +458,23 @@ export function EmployeeDetailsSheet({
                           );
                         })}
                       </div>
-                    )}
                   </DataCard>
+                  )}
 
+                  {availabilityDays.length > 0 && (
                   <DataCard icon={Clock} title="Availability">
-                    {data.availability_days.length === 0 ? (
-                       <p className="text-xs text-muted-foreground">No availability logged.</p>
-                    ) : (
                       <div className="space-y-2">
-                        {data.availability_days.map((av, idx) => (
+                        {availabilityDays.map((av, idx) => {
+                          const times = av.times ?? [];
+                          return (
                            <div key={idx} className="flex justify-between items-start py-1.5 border-b border-border/50 last:border-0">
                               <div className="flex flex-col gap-0.5">
                                  <span className="text-sm font-medium capitalize">{av.day_of_week}</span>
                                  {av.shift_type && <span className="text-[10px] text-muted-foreground uppercase">{av.shift_type}</span>}
                               </div>
                               <div className="text-right">
-                                {av.times.length > 0 ? (
-                                  av.times.map((t, ti) => (
+                                {times.length > 0 ? (
+                                  times.map((t, ti) => (
                                     <span key={ti} className="block text-xs font-mono">
                                       {t.available_from} - {t.available_to}
                                     </span>
@@ -474,17 +484,19 @@ export function EmployeeDetailsSheet({
                                 )}
                               </div>
                            </div>
-                        ))}
+                          );
+                        })}
                       </div>
-                    )}
                   </DataCard>
+                  )}
                 </div>
+                )}
 
                 {/* Attachments Card */}
-                {data.attachments.length > 0 && (
+                {attachments.length > 0 && (
                   <DataCard icon={Paperclip} title="Attachments">
                     <div className="grid sm:grid-cols-2 gap-3">
-                      {data.attachments.map((att, idx) => {
+                      {attachments.map((att, idx) => {
                         const typeName =
                           att.attachment_type?.label ??
                           (att.type_id != null
