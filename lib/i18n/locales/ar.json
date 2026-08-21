@@ -2296,7 +2296,14 @@
     "title": "مؤقت الاستراحة",
     "start": "بدء الاستراحة",
     "end": "إنهاء الاستراحة",
+    "freshCounter": "تصفير العدّاد إلى 0:00",
+    "hintIdle": "اضغط للبدء · اضغط مرتين للتفاصيل",
+    "hintOnBreak": "اضغط للإنهاء · اضغط مرتين للتفاصيل",
+    "cumulativeNote": "الاستراحات تتراكم في إجمالي واحد لليوم — وتُنبَّه عند تجاوزه الحد أدناه.",
     "onBreak": "في استراحة",
+    "onBreakSummary": "في استراحة · {duration} اليوم",
+    "totalToday": "{duration} إجمالي اليوم",
+    "counterReset": "تم تصفير العدّاد",
     "todaySummaryZero": "لا توجد استراحات اليوم",
     "todaySummary": "{breaks} · {duration} اليوم",
     "breaksCount": "استراحة واحدة",
@@ -2309,6 +2316,8 @@
     "resetHistoryConfirmAction": "إعادة تعيين",
     "resetHistoryConfirmCancel": "إلغاء",
     "overtimeThresholdLabel": "التنبيه بعد (بالدقائق)",
+    "overtimeIncrease": "زيادة دقيقة واحدة",
+    "overtimeDecrease": "إنقاص دقيقة واحدة",
     "overtimeAlert": "استراحتك طالت — يرجى العودة."
   }
 }

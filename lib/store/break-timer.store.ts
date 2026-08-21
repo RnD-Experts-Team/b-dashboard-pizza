@@ -7,6 +7,16 @@ import { todayIso } from "@/lib/hooks/use-cleaning";
 export interface BreakSession {
   start: number;
   end: number | null;
+  /**
+   * Which counter cycle this break belongs to. Breaks sharing a cycle add up
+   * into a single running counter, so starting a break resumes from where the
+   * previous one stopped instead of restarting at 0:00 — the day's break
+   * allowance is one budget, not one-per-break.
+   *
+   * Opening a new cycle (double-clicking the topbar trigger) is the only way
+   * to zero that counter without wiping the day's recorded history.
+   */
+  cycle: number;
 }
 
 interface BreakTimerState {
@@ -16,10 +26,20 @@ interface BreakTimerState {
   overtimeMinutes: number;
   ensureToday: () => void;
   startBreak: () => void;
+  /** Start a break in a brand-new cycle, so its counter begins at 0:00. */
+  startFreshCounter: () => void;
   endBreak: () => void;
   reset: () => void;
   setOvertimeMinutes: (minutes: number) => void;
 }
+
+/** The slice `partialize` writes to localStorage. */
+type PersistedBreakTimer = Pick<BreakTimerState, "date" | "sessions" | "overtimeMinutes">;
+
+/** The same slice as written before BreakSession gained `cycle`. */
+type LegacyPersistedBreakTimer = Omit<PersistedBreakTimer, "sessions"> & {
+  sessions?: (Omit<BreakSession, "cycle"> & { cycle?: number })[];
+};
 
 const DEFAULT_OVERTIME_MINUTES = 20;
 
@@ -44,6 +64,29 @@ export function totalBreakMs(sessions: BreakSession[], now: number = Date.now())
   return sessions.reduce((sum, s) => sum + (s.end ?? now) - s.start, 0);
 }
 
+/**
+ * The cycle a new break joins by default — the highest one recorded today.
+ * Cycles are 1-based so an untouched day already has a cycle to accumulate in.
+ */
+export function currentCycle(sessions: BreakSession[]): number {
+  return sessions.reduce((max, s) => Math.max(max, s.cycle), 1);
+}
+
+/**
+ * Break time inside one cycle — what the live counter paints. Includes the
+ * running break, which is the whole point: the clock has to keep climbing past
+ * the total the earlier breaks in this cycle already banked.
+ */
+export function cycleBreakMs(
+  sessions: BreakSession[],
+  cycle: number,
+  now: number = Date.now()
+): number {
+  return sessions
+    .filter((s) => s.cycle === cycle)
+    .reduce((sum, s) => sum + (s.end ?? now) - s.start, 0);
+}
+
 export const useBreakTimerStore = create<BreakTimerState>()(
   persist(
     (set, get) => ({
@@ -60,7 +103,30 @@ export const useBreakTimerStore = create<BreakTimerState>()(
         get().ensureToday();
         const { sessions } = get();
         if (isOnBreak(sessions)) return;
-        set({ sessions: [...sessions, { start: Date.now(), end: null }] });
+        set({
+          sessions: [
+            ...sessions,
+            { start: Date.now(), end: null, cycle: currentCycle(sessions) },
+          ],
+        });
+      },
+
+      startFreshCounter: () => {
+        get().ensureToday();
+        const { sessions } = get();
+        // Close anything still running first — a fresh counter must not leave
+        // the previous break open, or it would keep accruing invisibly in a
+        // cycle nothing is displaying any more.
+        const now = Date.now();
+        const closed = sessions.map((s) => (s.end === null ? { ...s, end: now } : s));
+        set({
+          sessions: [
+            ...closed,
+            // An empty day starts at cycle 1 rather than jumping to 2 — there
+            // is no earlier counter to step past.
+            { start: now, end: null, cycle: closed.length === 0 ? 1 : currentCycle(closed) + 1 },
+          ],
+        });
       },
 
       endBreak: () => {
@@ -84,6 +150,18 @@ export const useBreakTimerStore = create<BreakTimerState>()(
       storage: createJSONStorage(() =>
         typeof window !== "undefined" ? localStorage : noopStorage
       ),
+      // v1 introduced BreakSession.cycle. Migrating rather than bumping
+      // STORAGE_KEY again keeps the user's overtimeMinutes setting (and any
+      // break already logged today) instead of silently discarding both.
+      version: 1,
+      migrate: (persisted, version): PersistedBreakTimer => {
+        const prev = (persisted ?? {}) as LegacyPersistedBreakTimer;
+        if (version >= 1) return prev as PersistedBreakTimer;
+        return {
+          ...prev,
+          sessions: (prev.sessions ?? []).map((s) => ({ ...s, cycle: s.cycle ?? 1 })),
+        } as PersistedBreakTimer;
+      },
       partialize: (state) => ({
         date: state.date,
         sessions: state.sessions,
