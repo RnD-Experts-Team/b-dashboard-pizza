@@ -2297,7 +2297,14 @@
     "title": "Break Timer",
     "start": "Start Break",
     "end": "End Break",
+    "freshCounter": "Reset counter to 0:00",
+    "hintIdle": "Click to start · double-click for details",
+    "hintOnBreak": "Click to end · double-click for details",
+    "cumulativeNote": "Breaks add up into one daily total — you're warned once it passes the limit below.",
     "onBreak": "On break",
+    "onBreakSummary": "On break · {duration} today",
+    "totalToday": "{duration} total today",
+    "counterReset": "Counter reset",
     "todaySummaryZero": "No breaks yet today",
     "todaySummary": "{breaks} · {duration} today",
     "breaksCount": "{count} break",
@@ -2310,6 +2317,8 @@
     "resetHistoryConfirmAction": "Reset",
     "resetHistoryConfirmCancel": "Cancel",
     "overtimeThresholdLabel": "Alert after (minutes)",
+    "overtimeIncrease": "Increase by one minute",
+    "overtimeDecrease": "Decrease by one minute",
     "overtimeAlert": "Your break has run long — please wrap up."
   }
 }
