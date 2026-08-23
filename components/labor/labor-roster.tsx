@@ -269,7 +269,7 @@ export function LaborRoster({
               <SelectTrigger size="sm" className="w-[110px]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper">
                 <SelectItem value={ALL}>All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
@@ -280,7 +280,7 @@ export function LaborRoster({
                 <SelectTrigger size="sm" className="w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectItem value={ALL}>All positions</SelectItem>
                   {positions.map((p) => (
                     <SelectItem key={p} value={p}>

@@ -135,7 +135,7 @@ export function LaborTrend({ trend }: { trend: LaborTrendData }) {
             <SelectTrigger size="sm" className="w-[170px]">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {TREND_METRICS.map((m) => (
                 <SelectItem key={m.key} value={m.key}>
                   {m.label}

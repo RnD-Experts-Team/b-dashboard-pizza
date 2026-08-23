@@ -109,7 +109,7 @@ export function EmployeeReportTrendChart({
             <SelectTrigger size="sm" className="w-[170px]">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {metricOptions.map((o) => (
                 <SelectItem key={o.key} value={o.key}>
                   {o.label}

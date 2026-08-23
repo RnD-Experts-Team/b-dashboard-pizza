@@ -103,7 +103,7 @@ export function LaborHeader({
         <SelectTrigger size="sm" className="h-6 w-auto gap-1 px-2 text-xs">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent position="popper">
           {TREND_WEEK_OPTIONS.map((w) => (
             <SelectItem key={w} value={String(w)}>
               {w} weeks trend
