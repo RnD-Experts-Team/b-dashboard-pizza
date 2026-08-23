@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Coffee, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, Coffee, RotateCcw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
@@ -21,11 +21,14 @@ import { cn } from "@/lib/utils";
 import {
   useBreakTimerStore,
   isOnBreak,
+  currentCycle,
+  cycleBreakMs,
+  totalBreakMs,
   type BreakSession,
 } from "@/lib/store/break-timer.store";
 import { playSfx } from "@/lib/uisfx/play";
 
-/** A second click inside this window counts as a double-click (open history)
+/** A second click inside this window counts as a double-click (open the panel)
  * instead of a second single-click (toggle the break). */
 const DOUBLE_CLICK_MS = 300;
 
@@ -58,16 +61,31 @@ function formatClockTime(ms: number): string {
 }
 
 /**
- * Topbar break-timer trigger, beside the Drive Thru indicator. A single
- * click starts or ends a break; a second click within DOUBLE_CLICK_MS opens
- * the day's break history instead. State lives in localStorage via
- * useBreakTimerStore and resets automatically each day (and is cleared on
- * logout/account switch by resetIdentityScopedCaches in auth.store.ts).
+ * Topbar break-timer trigger, beside the Drive Thru indicator.
+ *
+ * A single click starts or ends a break; a second click within
+ * DOUBLE_CLICK_MS opens the day's panel instead. Zeroing the counter lives in
+ * that panel as a button rather than on a third gesture — two hidden gestures
+ * on one 32px target is already the ceiling.
+ *
+ * A started break resumes from the total of the earlier breaks in its cycle
+ * rather than from 0:00, so the counter tracks the day's break budget instead
+ * of one break at a time. State lives in localStorage via useBreakTimerStore
+ * and resets automatically each day (and is cleared on logout/account switch
+ * by resetIdentityScopedCaches in auth.store.ts).
  */
 export function BreakTimerButton() {
   const t = useTranslations("breakTimer");
-  const { sessions, ensureToday, startBreak, endBreak, reset, overtimeMinutes, setOvertimeMinutes } =
-    useBreakTimerStore();
+  const {
+    sessions,
+    ensureToday,
+    startBreak,
+    startFreshCounter,
+    endBreak,
+    reset,
+    overtimeMinutes,
+    setOvertimeMinutes,
+  } = useBreakTimerStore();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [now, setNow] = useState<number | null>(null);
@@ -99,18 +117,35 @@ export function BreakTimerButton() {
     []
   );
 
-  const current = sessions.find((s) => s.end === null) ?? null;
-  const liveMs = current && now != null ? now - current.start : 0;
+  const cycle = currentCycle(sessions);
   /**
-   * The clock face to paint. While a break runs it tracks `liveMs`; once the
-   * break ends we keep painting its final value for the length of the collapse
-   * animation. `liveMs` drops to 0 on the very frame the break ends, so reading
-   * it directly would flip the text to "0:00" and then shrink it — the number
-   * visibly resetting mid-glide instead of just sliding away.
+   * The running counter: every break in the current cycle, the live one
+   * included. This is what makes a new break "continue" — the clock opens at
+   * the cycle's banked total rather than at 0:00, and only a fresh cycle
+   * (double-click) puts it back to zero.
+   */
+  const counterMs = now != null ? cycleBreakMs(sessions, cycle, now) : 0;
+  /** Every break today, across all cycles — the figure shown beside the counter. */
+  const dayTotalMs = now != null ? totalBreakMs(sessions, now) : 0;
+  /** Only meaningful once a fresh counter has been started; before that the
+   * two numbers are the same and a second figure would just be noise. */
+  const hasEarlierCycles = cycle > 1;
+  /**
+   * The faces to paint. While a break runs they track the live values; once
+   * the break ends we keep painting the final ones for the length of the
+   * collapse animation. The live elapsed time drops out on the very frame the
+   * break ends, so reading it directly would flip the text to "0:00" and then
+   * shrink it — the number visibly resetting mid-glide instead of just sliding
+   * away.
    */
   const clockFaceRef = useRef("0:00");
-  if (onBreak) clockFaceRef.current = formatClock(liveMs);
+  const totalFaceRef = useRef<string | null>(null);
+  if (onBreak) {
+    clockFaceRef.current = formatClock(counterMs);
+    totalFaceRef.current = hasEarlierCycles ? formatDuration(dayTotalMs) : null;
+  }
   const clockFace = clockFaceRef.current;
+  const totalFace = totalFaceRef.current;
   const completedSessions = useMemo(
     () => sessions.filter((s): s is BreakSession & { end: number } => s.end !== null),
     [sessions]
@@ -127,7 +162,17 @@ export function BreakTimerButton() {
     () => completedSessions.reduce((sum, s) => sum + (s.end - s.start), 0),
     [completedSessions]
   );
-  const isOvertime = onBreak && liveMs >= overtimeMinutes * 60 * 1000;
+  /** Newest break first, matching how the history list reads. */
+  const orderedSessions = useMemo(
+    () => completedSessions.slice().reverse(),
+    [completedSessions]
+  );
+  /**
+   * Overtime measures the whole counter, not the single running break — with
+   * breaks accumulating, a per-break threshold would be trivially dodged by
+   * ending and restarting just short of the limit.
+   */
+  const isOvertime = onBreak && counterMs >= overtimeMinutes * 60 * 1000;
 
   // Keep nagging every few seconds once overtime starts — stops only when the
   // user actually ends the break (isOvertime flips false), not on its own.
@@ -138,6 +183,27 @@ export function BreakTimerButton() {
     return () => clearInterval(id);
   }, [isOvertime]);
 
+  /** "2 breaks · 14m today" — completed breaks only, so the count and the
+   * duration describe the same set. */
+  const summaryText =
+    completedSessions.length === 0 && !onBreak
+      ? t("todaySummaryZero")
+      : t("todaySummary", {
+          breaks: t(completedSessions.length === 1 ? "breaksCount" : "breaksCountPlural", {
+            count: completedSessions.length,
+          }),
+          duration: formatDuration(completedMs),
+        });
+  /**
+   * Headline for the tooltip. While a break runs it reports the live total
+   * instead of `summaryText`: sitting beside a counter reading 0:47, a
+   * completed-only "0 breaks · 0s today" reads as a contradiction rather than
+   * as the fine distinction it actually is.
+   */
+  const tooltipSummary = onBreak
+    ? t("onBreakSummary", { duration: formatDuration(dayTotalMs) })
+    : summaryText;
+
   const commitThreshold = () => {
     const parsed = Number(thresholdInput);
     if (Number.isFinite(parsed) && parsed > 0) {
@@ -145,6 +211,24 @@ export function BreakTimerButton() {
     } else {
       setThresholdInput(String(overtimeMinutes));
     }
+  };
+
+  /**
+   * Steps the store, never `thresholdInput`.
+   *
+   * Two reasons. The chevrons have to commit for real — they don't blur the
+   * field, so leaving it to `commitThreshold` would show a stepped value while
+   * the alarm still used the old one. And the base has to be read fresh from
+   * the store: computing it from the render's `thresholdInput` made a burst of
+   * clicks all step off the same stale number, so clicking up twice quickly
+   * landed on 21 instead of 22. The field re-syncs via the effect above.
+   *
+   * Any typed-but-unblurred edit is already folded in by then — pressing a
+   * chevron moves focus off the input, and blur fires on mousedown, ahead of
+   * the click.
+   */
+  const stepThreshold = (delta: number) => {
+    setOvertimeMinutes(useBreakTimerStore.getState().overtimeMinutes + delta);
   };
 
   const handleTriggerClick = () => {
@@ -192,7 +276,7 @@ export function BreakTimerButton() {
             `PopoverAnchor asChild` needs a real DOM child to measure and anchor
             against, and Radix's Tooltip root renders no element — so anchoring
             the popover to it would silently break the popover's positioning.
-            Both `asChild` wrappers now collapse onto the Button itself. */}
+            Both `asChild` wrappers collapse onto the Button itself. */}
         <Tooltip>
           <TooltipTrigger asChild>
             <PopoverAnchor asChild>
@@ -246,6 +330,12 @@ export function BreakTimerButton() {
                 >
                   <span className="overflow-hidden whitespace-nowrap text-xs font-semibold tabular-nums">
                     {clockFace}
+                    {/* Day total beside the counter — only once a fresh counter
+                        has split the two figures apart. Lighter and smaller so
+                        the counter stays the headline. */}
+                    {totalFace && (
+                      <span className="ms-1 text-[10px] font-normal opacity-70">· {totalFace}</span>
+                    )}
                   </span>
                 </span>
 
@@ -258,16 +348,13 @@ export function BreakTimerButton() {
               </Button>
             </PopoverAnchor>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="tabular-nums">
-            {completedSessions.length === 0 && !onBreak
-              ? t("todaySummaryZero")
-              : t("todaySummary", {
-                  breaks: t(
-                    completedSessions.length === 1 ? "breaksCount" : "breaksCountPlural",
-                    { count: completedSessions.length }
-                  ),
-                  duration: formatDuration(completedMs),
-                })}
+          {/* Two lines, no more: the totals, then a single short line naming
+              both gestures. Anything longer than this belongs in the panel the
+              second gesture opens — an unlabelled icon needs a nudge, not a
+              paragraph hanging over the dashboard. */}
+          <TooltipContent side="bottom" className="space-y-0.5 text-center">
+            <p className="font-medium tabular-nums">{tooltipSummary}</p>
+            <p className="text-background/70">{onBreak ? t("hintOnBreak") : t("hintIdle")}</p>
           </TooltipContent>
         </Tooltip>
 
@@ -278,6 +365,10 @@ export function BreakTimerButton() {
         >
           <div className="space-y-1">
             <p className="font-heading text-sm font-semibold">{t("title")}</p>
+            {/* The full explanation the tooltip is too small to carry — the
+                accumulating counter is the one non-obvious thing about this
+                widget, and the panel is where there's room to say it. */}
+            <p className="text-xs leading-snug text-muted-foreground">{t("cumulativeNote")}</p>
           </div>
 
           {onBreak ? (
@@ -291,7 +382,14 @@ export function BreakTimerButton() {
                 >
                   {t("onBreak")}
                 </span>
-                <span className="text-2xl font-bold tabular-nums">{formatClock(liveMs)}</span>
+                <span className="text-2xl font-bold tabular-nums">{formatClock(counterMs)}</span>
+                {/* Only worth a line once the counter and the day diverge —
+                    otherwise it would restate the number directly above it. */}
+                {hasEarlierCycles && (
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {t("totalToday", { duration: formatDuration(dayTotalMs) })}
+                  </span>
+                )}
               </div>
               <Button
                 variant="outline"
@@ -307,19 +405,27 @@ export function BreakTimerButton() {
             </Button>
           )}
 
-          <div className="border-t pt-3 text-sm text-muted-foreground">
-            {completedSessions.length === 0 && !onBreak ? (
-              t("todaySummaryZero")
-            ) : (
-              t("todaySummary", {
-                breaks: t(
-                  completedSessions.length === 1 ? "breaksCount" : "breaksCountPlural",
-                  { count: completedSessions.length }
-                ),
-                duration: formatDuration(completedMs),
-              })
-            )}
-          </div>
+          {/* The only way to zero the counter, now that both gestures on the
+              trigger are spoken for. Hidden on an untouched day — there is
+              nothing to reset yet, and it would just crowd "Start Break". */}
+          {sessions.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs text-muted-foreground hover:text-foreground"
+              onClick={startFreshCounter}
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t("freshCounter")}
+            </Button>
+          )}
+
+          {/* Completed-breaks roll-up, hidden while a break runs: the counter
+              block above is already reporting the day, so this line would sit
+              under a live 0:23 saying "0 breaks · 0s today". */}
+          {!onBreak && (
+            <div className="border-t pt-3 text-sm text-muted-foreground">{summaryText}</div>
+          )}
 
           {completedSessions.length > 0 && (
             <div className="space-y-1.5">
@@ -336,11 +442,19 @@ export function BreakTimerButton() {
                 </button>
               </div>
               <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-muted-foreground">
-                {completedSessions
-                  .slice()
-                  .reverse()
-                  .map((s, i) => (
-                    <li key={i} className="flex items-center justify-between gap-2">
+                {orderedSessions.map((s, i) => (
+                  <Fragment key={i}>
+                    {/* Marks where a fresh counter began, so the list explains
+                        why the durations above it don't add up to the ones
+                        below — the counter restarted here. */}
+                    {i > 0 && orderedSessions[i - 1].cycle !== s.cycle && (
+                      <li className="flex items-center gap-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                        <span className="h-px flex-1 bg-border" />
+                        {t("counterReset")}
+                        <span className="h-px flex-1 bg-border" />
+                      </li>
+                    )}
+                    <li className="flex items-center justify-between gap-2">
                       <span>
                         {t("sessionRange", {
                           start: formatClockTime(s.start),
@@ -349,24 +463,56 @@ export function BreakTimerButton() {
                       </span>
                       <span className="tabular-nums">{formatDuration(s.end - s.start)}</span>
                     </li>
-                  ))}
+                  </Fragment>
+                ))}
               </ul>
             </div>
           )}
 
+          {/* No help text of its own: what this field does is covered by the
+              note under the title, which points at it as "the limit below". */}
           <div className="flex items-center justify-between gap-2 border-t pt-3">
             <label htmlFor="break-overtime-minutes" className="text-xs text-muted-foreground">
               {t("overtimeThresholdLabel")}
             </label>
-            <Input
-              id="break-overtime-minutes"
-              type="number"
-              min={1}
-              value={thresholdInput}
-              onChange={(e) => setThresholdInput(e.target.value)}
-              onBlur={commitThreshold}
-              className="h-7 w-16 text-xs"
-            />
+            <div className="relative">
+              <Input
+                id="break-overtime-minutes"
+                type="number"
+                min={1}
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                onBlur={commitThreshold}
+                // The native spinner is suppressed in favour of the chevrons
+                // below — at h-7 it renders taller than the field's text and
+                // ignores the theme entirely. `pe-5` reserves the track for
+                // them; the appearance resets cover Blink/WebKit and Gecko.
+                className="h-7 w-16 pe-5 text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              {/* Hairline stepper. Two 10px chevrons stacked inside the field,
+                  muted until hover so the control reads as a number first and
+                  a spinner second. The input still steps with arrow keys, so
+                  these are a pointer affordance, not the only route in. */}
+              <div className="absolute inset-y-0.5 end-0.5 flex w-4 flex-col overflow-hidden rounded-sm">
+                <button
+                  type="button"
+                  aria-label={t("overtimeIncrease")}
+                  onClick={() => stepThreshold(1)}
+                  className="flex flex-1 items-center justify-center text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <ChevronUp className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("overtimeDecrease")}
+                  onClick={() => stepThreshold(-1)}
+                  disabled={overtimeMinutes <= 1}
+                  className="flex flex-1 items-center justify-center text-muted-foreground/50 transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronDown className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            </div>
           </div>
         </PopoverContent>
 
