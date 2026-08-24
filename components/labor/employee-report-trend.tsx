@@ -123,7 +123,7 @@ export function EmployeeReportTrendChart({
       {weeks.length === 0 ? (
         <V1Empty icon={TrendingUp}>No trailing week data</V1Empty>
       ) : (
-        <div className="employee-report-trend-chart h-[220px]">
+        <div className="employee-report-trend-chart h-[220px] overflow-hidden">
           <ReactApexChart options={options} series={series} type="line" height={220} />
         </div>
       )}

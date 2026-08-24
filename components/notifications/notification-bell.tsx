@@ -8,14 +8,44 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import { Sheet, SheetTrigger, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useNotificationStore } from "@/lib/store/notification.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useRealtimeNotifications } from "@/lib/realtime/use-realtime-notifications";
 import { NotificationPanel } from "@/components/notifications/notification-panel";
 import { cn } from "@/lib/utils";
 
+function BellIconButton({
+  unreadCount,
+  className,
+  ...props
+}: { unreadCount: number } & React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Notifications"
+      className={cn("relative", className)}
+      {...props}
+    >
+      <Bell className="h-[1.2rem] w-[1.2rem]" />
+      {unreadCount > 0 && (
+        <span
+          className={cn(
+            "absolute -top-1 -end-1 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold leading-none",
+            unreadCount > 9 ? "h-5 w-5" : "h-4 w-4"
+          )}
+        >
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      )}
+    </Button>
+  );
+}
+
 export function NotificationBell() {
-  const [open, setOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const fetchNotifications = useNotificationStore((state) => state.fetchNotifications);
 
@@ -35,26 +65,38 @@ export function NotificationBell() {
   useRealtimeNotifications({ token, userId });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notifications">
-          <Bell className="h-[1.2rem] w-[1.2rem]" />
-          {unreadCount > 0 && (
-            <span
-              className={cn(
-                "absolute -top-1 -end-1 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold leading-none",
-                unreadCount > 9 ? "h-5 w-5" : "h-4 w-4"
-              )}
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0" sideOffset={8}>
-        <NotificationPanel onClose={() => setOpen(false)} />
-      </PopoverContent>
-    </Popover>
+    <>
+      {/* Tablet/desktop — small anchored popover, same convention as app-shell's
+          desktop sidebar vs mobile Sheet split. */}
+      <div className="hidden sm:block">
+        <Popover open={desktopOpen} onOpenChange={setDesktopOpen}>
+          <PopoverTrigger asChild>
+            <BellIconButton unreadCount={unreadCount} />
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-auto overflow-hidden p-0"
+            sideOffset={8}
+            collisionPadding={16}
+          >
+            <NotificationPanel onClose={() => setDesktopOpen(false)} />
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Mobile — full-width bottom sheet, so there's room for the full
+          notification text and a reliably-visible close button. */}
+      <div className="sm:hidden">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild>
+            <BellIconButton unreadCount={unreadCount} />
+          </SheetTrigger>
+          <SheetContent side="bottom" className="flex h-[85dvh] flex-col gap-0 p-0">
+            <SheetTitle className="sr-only">Notifications</SheetTitle>
+            <NotificationPanel mobile onClose={() => setMobileOpen(false)} />
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }
-

@@ -86,15 +86,17 @@ export default function AnnouncementsPage() {
         description="Stay up to date with the latest news and updates."
       >
         <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant={viewMode === "user" ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            onClick={() => handleToggleView("user")}
-          >
-            <User className="h-4 w-4" />
-            <span className="hidden sm:inline">User View</span>
-          </Button>
+          {canAdminAnnouncements && (
+            <Button
+              variant={viewMode === "user" ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => handleToggleView("user")}
+            >
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">User View</span>
+            </Button>
+          )}
           {canAdminAnnouncements && (
             <Button
               variant={viewMode === "admin" ? "default" : "outline"}

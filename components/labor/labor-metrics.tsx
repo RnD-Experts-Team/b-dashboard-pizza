@@ -115,13 +115,13 @@ export function LaborMetrics({ labor }: { labor: LaborMetricsData }) {
       icon={Banknote}
       action={
         allRows.length > 0 ? (
-          <div className="relative">
+          <div className="relative w-full max-w-[220px] sm:w-40">
             <Search className="absolute start-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search metrics…"
-              className="h-7 w-40 ps-7 text-xs"
+              className="h-7 w-full ps-7 text-xs"
             />
           </div>
         ) : undefined
@@ -172,7 +172,7 @@ export function LaborMetrics({ labor }: { labor: LaborMetricsData }) {
               No metrics match “{query}”
             </p>
           ) : (
-            <div className="max-h-96 overflow-auto rounded-md border border-border/50">
+            <div className="max-h-96 overflow-auto contain-layout rounded-md border border-border/50">
               <table className={V1_TBL}>
                 <thead>
                   <tr>

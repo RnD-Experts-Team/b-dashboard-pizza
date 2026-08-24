@@ -153,7 +153,12 @@ export function LaborCard({
 }) {
   return (
     <Card
-      className={cn("gap-0 py-3", fillHeight && "h-full", PEOPLE.cardBorder, className)}
+      className={cn(
+        "gap-0 overflow-hidden py-3",
+        fillHeight && "h-full",
+        PEOPLE.cardBorder,
+        className,
+      )}
     >
       <CardHeader className="shrink-0 px-3 pb-2 [.border-b]:pb-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -165,7 +170,7 @@ export function LaborCard({
             )}
             <span className={PEOPLE.headerText}>{title}</span>
           </CardTitle>
-          {action && <div className="ms-auto">{action}</div>}
+          {action && <div className="w-full sm:ms-auto sm:w-auto">{action}</div>}
         </div>
       </CardHeader>
       <CardContent

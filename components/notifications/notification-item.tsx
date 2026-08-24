@@ -161,9 +161,17 @@ interface NotificationItemProps {
   notification: Notification;
   onMarkAsRead: (id: number) => void;
   onNavigate?: () => void;
+  /** Clamp the body preview to 2 lines (default). Set false to let the full
+   * description wrap — used by the mobile bottom-sheet notification panel. */
+  compact?: boolean;
 }
 
-export function NotificationItem({ notification, onMarkAsRead, onNavigate }: NotificationItemProps) {
+export function NotificationItem({
+  notification,
+  onMarkAsRead,
+  onNavigate,
+  compact = true,
+}: NotificationItemProps) {
   const router = useRouter();
   const params = useParams();
   const pathname = usePathname();
@@ -260,7 +268,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
         )}>
           {notification.title}
         </p>
-        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+        <p className={cn("text-xs text-muted-foreground mt-0.5", compact && "line-clamp-2")}>
           {stripHtml(notification.body)}
         </p>
         <div className="flex items-center gap-1.5 mt-1">
@@ -292,7 +300,7 @@ export function NotificationItem({ notification, onMarkAsRead, onNavigate }: Not
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="h-7 w-7 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onMarkAsRead(notification.id);

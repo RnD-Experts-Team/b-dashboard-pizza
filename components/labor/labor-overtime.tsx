@@ -54,7 +54,7 @@ export function LaborOvertime({ overtime }: { overtime: LaborOvertimeData }) {
         {rows.length === 0 ? (
           <V1Empty icon={Clock}>No one worked over {t40} hours this week</V1Empty>
         ) : (
-          <div className="max-h-72 overflow-auto rounded-md border border-border/50">
+          <div className="max-h-72 overflow-auto contain-layout rounded-md border border-border/50">
             <table className={V1_TBL}>
               <thead>
                 <tr>

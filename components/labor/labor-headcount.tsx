@@ -151,7 +151,7 @@ export function LaborHeadcount({ headcount, weekStart, weekEnd }: LaborHeadcount
           {positions.length === 0 ? (
             <V1Empty icon={UsersRound}>No active employees</V1Empty>
           ) : (
-            <div className="labor-headcount-chart min-h-[180px] flex-1">
+            <div className="labor-headcount-chart min-h-[180px] flex-1 overflow-hidden">
               <ReactApexChart
                 options={options}
                 series={series}

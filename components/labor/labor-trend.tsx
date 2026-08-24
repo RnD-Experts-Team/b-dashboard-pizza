@@ -132,7 +132,7 @@ export function LaborTrend({ trend }: { trend: LaborTrendData }) {
             value={metric}
             onValueChange={(v) => setMetric(v as keyof LaborTrendMetrics)}
           >
-            <SelectTrigger size="sm" className="w-[170px]">
+            <SelectTrigger size="sm" className="w-full max-w-[220px] sm:w-[170px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper">
@@ -150,7 +150,7 @@ export function LaborTrend({ trend }: { trend: LaborTrendData }) {
         {weeks.length === 0 ? (
           <V1Empty icon={TrendingUp}>No trailing week data</V1Empty>
         ) : (
-          <div className="labor-trend-chart h-[220px]">
+          <div className="labor-trend-chart h-[220px] overflow-hidden">
             <ReactApexChart
               options={options}
               series={series}

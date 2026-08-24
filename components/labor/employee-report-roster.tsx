@@ -209,7 +209,7 @@ export function EmployeeReportRoster({
           No employees match the current filters
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border/50">
+        <div className="overflow-x-auto contain-layout rounded-md border border-border/50">
           <table className={cn(V1_TBL, "min-w-[420px]")}>
             <thead>
               <tr>
