@@ -49,3 +49,6 @@ next-env.d.ts
 docs/pizza-dashboard-docs/.vitepress/dist
 docs/pizza-dashboard-docs/.vitepress/cache
 dataresponses.json
+# build output / debugging scratch (never commit these)
+build_*.txt
+.diag-tmp/
