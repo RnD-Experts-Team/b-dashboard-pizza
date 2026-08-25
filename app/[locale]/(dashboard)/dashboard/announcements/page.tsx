@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type { ParsedApiError } from "@/lib/api/utils/error";
 
 type ViewMode = "user" | "admin";
 
@@ -45,7 +46,7 @@ export default function AnnouncementsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleteErrMsg, setDeleteErrMsg] = useState<string | null>(null);
+  const [deleteErrMsg, setDeleteErrMsg] = useState<ParsedApiError | null>(null);
 
   const fetchData = useCallback(
     (mode: ViewMode, signal?: AbortSignal) => {
@@ -224,7 +225,16 @@ export default function AnnouncementsPage() {
           {deleteErrMsg && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{deleteErrMsg}</AlertDescription>
+              <AlertDescription>
+                <span>{deleteErrMsg.message}</span>
+                {deleteErrMsg.details.length > 0 && (
+                  <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
+                    {deleteErrMsg.details.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                )}
+              </AlertDescription>
             </Alert>
           )}
           <AlertDialogFooter>
@@ -242,7 +252,9 @@ export default function AnnouncementsPage() {
                   setDeleteId(null);
                 } else {
                   const storeErr = useAnnouncementStore.getState().deleteError;
-                  setDeleteErrMsg(storeErr ?? "Failed to delete the announcement.");
+                  setDeleteErrMsg(
+                    storeErr ?? { message: "Failed to delete the announcement.", details: [] },
+                  );
                 }
               }}
             >

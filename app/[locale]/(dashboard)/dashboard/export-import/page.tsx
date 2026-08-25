@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SearchableSelect } from "@/components/shared/searchable-select";
 import {
   FileArchive,
   FileSpreadsheet,
@@ -65,6 +66,7 @@ import type { DsprResponse } from "@/types/dspr.types";
 
 const EXPORT_MODELS = [
   "detail_orders",
+  "detail_transactions",
   "order_line",
   "summary_sales",
   "summary_items",
@@ -90,6 +92,11 @@ const EXPORT_MODELS = [
   "hourly_item_summary",
   "all",
 ];
+
+const exportModelOptions = EXPORT_MODELS.map((model) => ({
+  value: model,
+  label: model.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+}));
 
 type AggregationType =
   | "hourly"
@@ -771,6 +778,14 @@ export default function ExportImportPage() {
   }, []);
 
   const processorOptionsSet = useMemo(() => new Set(processorOptions), [processorOptions]);
+  const processorSelectOptions = useMemo(
+    () =>
+      processorOptions.map((option) => ({
+        value: option,
+        label: formatProcessorLabel(option),
+      })),
+    [processorOptions]
+  );
 
   useEffect(() => {
     if (processorOptions.length === 0) return;
@@ -1122,22 +1137,15 @@ export default function ExportImportPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="export-model">Model *</Label>
-                  <Select
+                  <Label>Model *</Label>
+                  <SearchableSelect
+                    options={exportModelOptions}
                     value={exportModel}
-                    onValueChange={(value) => setExportModel(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a model" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-75">
-                      {EXPORT_MODELS.map((model) => (
-                        <SelectItem key={model} value={model}>
-                          {model.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onChange={(value) => setExportModel(value)}
+                    placeholder="Select a model"
+                    searchPlaceholder="Search models…"
+                    emptyText="No models found."
+                  />
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -1545,16 +1553,15 @@ export default function ExportImportPage() {
                         </div>
 
                         <div className="space-y-1">
-                          <Label htmlFor={`processor-${item.id}`} className="text-xs">
-                            Processor key
-                          </Label>
-                          <Select
+                          <Label className="text-xs">Processor key</Label>
+                          <SearchableSelect
+                            options={processorSelectOptions}
                             value={
                               processorOptionsSet.has(item.processorKey)
                                 ? item.processorKey
                                 : ""
                             }
-                            onValueChange={(value) =>
+                            onChange={(value) =>
                               updateQueueItem(item.id, {
                                 processorKey: value,
                               })
@@ -1562,24 +1569,11 @@ export default function ExportImportPage() {
                             disabled={
                               isLoadingProcessorOptions || processorOptions.length === 0
                             }
-                          >
-                            <SelectTrigger id={`processor-${item.id}`}>
-                              <SelectValue
-                                placeholder={
-                                  isLoadingProcessorOptions
-                                    ? "Loading processor keys..."
-                                    : "Select processor key"
-                                }
-                              />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-75">
-                              {processorOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {formatProcessorLabel(option)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            loading={isLoadingProcessorOptions}
+                            placeholder="Select processor key"
+                            searchPlaceholder="Search processor keys…"
+                            emptyText="No processor keys found."
+                          />
                         </div>
                       </div>
                     ))

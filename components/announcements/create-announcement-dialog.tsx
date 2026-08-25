@@ -117,7 +117,16 @@ export function CreateAnnouncementDialog({
           {createError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{createError}</AlertDescription>
+              <AlertDescription>
+                <span>{createError.message}</span>
+                {createError.details.length > 0 && (
+                  <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
+                    {createError.details.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                )}
+              </AlertDescription>
             </Alert>
           )}
 

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import axios from "axios";
 import type { Announcement, CreateAnnouncementPayload, UpdateAnnouncementPayload } from "@/types/announcement.types";
 import { announcementService } from "@/lib/api/services/announcement.service";
+import { parseApiError, type ParsedApiError } from "@/lib/api/utils/error";
 
 interface AnnouncementStoreState {
   announcements: Announcement[];
@@ -9,13 +10,13 @@ interface AnnouncementStoreState {
   isLoading: boolean;
   error: string | null;
   isCreating: boolean;
-  createError: string | null;
+  createError: ParsedApiError | null;
   isMarkingSeen: boolean;
-  markSeenError: string | null;
+  markSeenError: ParsedApiError | null;
   isUpdating: boolean;
-  updateError: string | null;
+  updateError: ParsedApiError | null;
   isDeleting: boolean;
-  deleteError: string | null;
+  deleteError: ParsedApiError | null;
   activePopupAnnouncement: Announcement | null;
 }
 
@@ -92,7 +93,7 @@ export const useAnnouncementStore = create<AnnouncementStore>()((set) => ({
       return true;
     } catch (err) {
       set({
-        markSeenError: err instanceof Error ? err.message : "Failed to mark as seen",
+        markSeenError: parseApiError(err, "Failed to mark as seen."),
         isMarkingSeen: false,
       });
       return false;
@@ -110,8 +111,7 @@ export const useAnnouncementStore = create<AnnouncementStore>()((set) => ({
       return true;
     } catch (err) {
       set({
-        deleteError:
-          err instanceof Error ? err.message : "Failed to delete announcement",
+        deleteError: parseApiError(err, "Failed to delete announcement."),
         isDeleting: false,
       });
       return false;
@@ -131,8 +131,7 @@ export const useAnnouncementStore = create<AnnouncementStore>()((set) => ({
       return true;
     } catch (err) {
       set({
-        updateError:
-          err instanceof Error ? err.message : "Failed to update announcement",
+        updateError: parseApiError(err, "Failed to update announcement."),
         isUpdating: false,
       });
       return false;
@@ -150,7 +149,7 @@ export const useAnnouncementStore = create<AnnouncementStore>()((set) => ({
       return true;
     } catch (err) {
       set({
-        createError: err instanceof Error ? err.message : "Failed to create announcement",
+        createError: parseApiError(err, "Failed to create announcement."),
         isCreating: false,
       });
       return false;
