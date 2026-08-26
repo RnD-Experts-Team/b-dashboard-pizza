@@ -2,7 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Users, Search, ArrowUpDown, ChevronDown, UserRound } from "lucide-react";
+import {
+  Users,
+  Search,
+  ArrowUpDown,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  UserRound,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +47,7 @@ import { BADGE_STYLES } from "./labor-badges";
 type SortKey = "name" | "position" | "status" | "tenure_days" | "base_pay" | "hours";
 
 const ALL = "__all__";
+const PAGE_SIZE = 25;
 
 function SortHeader({
   label,
@@ -217,6 +228,9 @@ export function LaborRoster({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string>(ALL);
   const [position, setPosition] = useState<string>(ALL);
+  const [page, setPage] = useState(1);
+
+  const resetToFirstPage = () => setPage(1);
 
   const handleViewProfile = (employeeId: number) => {
     router.push(
@@ -256,6 +270,12 @@ export function LaborRoster({
     "asc",
   );
 
+  // Client-side pagination — the labor report returns the full roster in one
+  // response, so paging happens after filter+sort rather than as a request param.
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginated = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   const COL_COUNT = 7;
 
   return (
@@ -264,23 +284,35 @@ export function LaborRoster({
       icon={Users}
       action={
         employees.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger size="sm" className="w-[110px]">
+          <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+            <Select
+              value={status}
+              onValueChange={(v) => {
+                setStatus(v);
+                resetToFirstPage();
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full max-w-[180px] sm:w-[110px]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper">
                 <SelectItem value={ALL}>All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
             {positions.length > 0 && (
-              <Select value={position} onValueChange={setPosition}>
-                <SelectTrigger size="sm" className="w-[140px]">
+              <Select
+                value={position}
+                onValueChange={(v) => {
+                  setPosition(v);
+                  resetToFirstPage();
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full max-w-[200px] sm:w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper">
                   <SelectItem value={ALL}>All positions</SelectItem>
                   {positions.map((p) => (
                     <SelectItem key={p} value={p}>
@@ -290,13 +322,16 @@ export function LaborRoster({
                 </SelectContent>
               </Select>
             )}
-            <div className="relative">
+            <div className="relative w-full max-w-[220px] sm:w-40">
               <Search className="absolute start-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  resetToFirstPage();
+                }}
                 placeholder="Search name…"
-                className="h-7 w-40 ps-7 text-xs"
+                className="h-7 w-full ps-7 text-xs"
               />
             </div>
           </div>
@@ -310,7 +345,7 @@ export function LaborRoster({
           No employees match the current filters
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border/50">
+        <div className="overflow-x-auto contain-layout rounded-md border border-border/50">
           <table className={cn(V1_TBL, "min-w-[640px]")}>
             <thead>
               <tr>
@@ -359,7 +394,7 @@ export function LaborRoster({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((e) => (
+              {paginated.map((e) => (
                 <EmployeeRow
                   key={e.employee_id}
                   employee={e}
@@ -373,10 +408,63 @@ export function LaborRoster({
         </div>
       )}
 
-      <p className="mt-1.5 text-[10px] text-muted-foreground">
-        Showing {sorted.length} of {employees.length} · click a row for full
-        metrics
-      </p>
+      {sorted.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[10px] text-muted-foreground">
+            Showing {(currentPage - 1) * PAGE_SIZE + 1}–
+            {Math.min(currentPage * PAGE_SIZE, sorted.length)} of {sorted.length} · click a
+            row for full metrics
+          </p>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <span className="me-1 text-[10px] text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setPage(1)}
+                disabled={currentPage <= 1}
+              >
+                <span className="sr-only">First page</span>
+                <ChevronsLeft className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                <span className="sr-only">Previous page</span>
+                <ChevronLeft className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                <span className="sr-only">Next page</span>
+                <ChevronRight className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setPage(totalPages)}
+                disabled={currentPage >= totalPages}
+              >
+                <span className="sr-only">Last page</span>
+                <ChevronsRight className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
     </LaborCard>
   );
 }

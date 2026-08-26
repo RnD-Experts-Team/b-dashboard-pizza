@@ -65,6 +65,10 @@ import {
   Trash2,
   AlertCircle,
   ListChecks,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import type {
   Goal,
@@ -431,7 +435,16 @@ export default function GoalsPage() {
   const canViewGoalMetrics = canAccessRoute({ service: "Data", method: "GET", path: "/goal-metrics" });
 
   /* Goals */
-  const { data, isLoading, isRefreshing, error: listError, refetch, clearError: clearListError } = useGoalsList(storeId);
+  const {
+    data,
+    isLoading,
+    isRefreshing,
+    error: listError,
+    page: goalsPage,
+    setPage: setGoalsPage,
+    refetch,
+    clearError: clearListError,
+  } = useGoalsList(storeId);
   const { createGoal, isCreating, error: createError, clearError: clearCreateError } = useCreateGoal();
   const { updateGoal, isUpdating, error: updateError, clearError: clearUpdateError } = useUpdateGoal();
   const { deleteGoal, isDeleting, error: deleteError, clearError: clearDeleteError } = useDeleteGoal();
@@ -608,6 +621,59 @@ export default function GoalsPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+
+          {!isLoading && goals.length > 0 && data && data.meta.lastPage > 1 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <div className="flex-1 text-sm text-muted-foreground">
+                Showing {(data.meta.currentPage - 1) * data.meta.perPage + 1} to{" "}
+                {Math.min(data.meta.currentPage * data.meta.perPage, data.meta.total)} of{" "}
+                {data.meta.total} entries
+              </div>
+              <div className="flex items-center space-x-6 lg:space-x-8">
+                <div className="flex w-25 items-center justify-center text-sm font-medium">
+                  Page {data.meta.currentPage} of {data.meta.lastPage}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() => setGoalsPage(1)}
+                    disabled={goalsPage <= 1 || isLoading}
+                  >
+                    <span className="sr-only">Go to first page</span>
+                    <ChevronsLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setGoalsPage(goalsPage - 1)}
+                    disabled={goalsPage <= 1 || isLoading}
+                  >
+                    <span className="sr-only">Go to previous page</span>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-8 w-8 p-0"
+                    onClick={() => setGoalsPage(goalsPage + 1)}
+                    disabled={goalsPage >= data.meta.lastPage || isLoading}
+                  >
+                    <span className="sr-only">Go to next page</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="hidden h-8 w-8 p-0 lg:flex"
+                    onClick={() => setGoalsPage(data.meta.lastPage)}
+                    disabled={goalsPage >= data.meta.lastPage || isLoading}
+                  >
+                    <span className="sr-only">Go to last page</span>
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

@@ -148,9 +148,9 @@ function handleAxiosError(err: unknown): never {
 
 export const goalsService = {
   /**
-   * Fetch all goals for a store.
+   * Fetch a page of goals for a store.
    */
-  async getGoals(storeId: string, signal?: AbortSignal): Promise<GoalsListResponse> {
+  async getGoals(storeId: string, page = 1, signal?: AbortSignal): Promise<GoalsListResponse> {
     const token = getToken();
     if (!token) throw new GoalsError("You must be logged in to view goals.", "NOT_AUTHENTICATED");
 
@@ -159,6 +159,7 @@ export const goalsService = {
         `/api/data/stores/${encodeURIComponent(storeId)}/goals`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          params: { page },
           timeout: 15_000,
           signal,
         }

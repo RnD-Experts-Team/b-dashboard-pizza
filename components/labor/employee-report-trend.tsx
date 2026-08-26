@@ -109,7 +109,7 @@ export function EmployeeReportTrendChart({
             <SelectTrigger size="sm" className="w-[170px]">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper">
               {metricOptions.map((o) => (
                 <SelectItem key={o.key} value={o.key}>
                   {o.label}
@@ -123,7 +123,7 @@ export function EmployeeReportTrendChart({
       {weeks.length === 0 ? (
         <V1Empty icon={TrendingUp}>No trailing week data</V1Empty>
       ) : (
-        <div className="employee-report-trend-chart h-[220px]">
+        <div className="employee-report-trend-chart h-[220px] overflow-hidden">
           <ReactApexChart options={options} series={series} type="line" height={220} />
         </div>
       )}

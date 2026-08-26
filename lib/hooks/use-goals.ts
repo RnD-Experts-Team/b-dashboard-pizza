@@ -32,6 +32,8 @@ interface UseGoalsListReturn {
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
+  page: number;
+  setPage: (page: number) => void;
   refetch: () => void;
   clearError: () => void;
 }
@@ -41,18 +43,19 @@ export function useGoalsList(storeId: string | undefined): UseGoalsListReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const clearError = useCallback(() => setError(null), []);
 
   const fetchGoals = useCallback(
-    async (signal?: AbortSignal, isRefresh = false) => {
+    async (signal?: AbortSignal, isRefresh = false, pageArg = page) => {
       if (!storeId) return;
       if (isRefresh) setIsRefreshing(true);
       else setIsLoading(true);
       setError(null);
 
       try {
-        const result = await goalsService.getGoals(storeId, signal);
+        const result = await goalsService.getGoals(storeId, pageArg, signal);
         if (signal?.aborted) return;
         setData(result);
       } catch (err) {
@@ -66,21 +69,27 @@ export function useGoalsList(storeId: string | undefined): UseGoalsListReturn {
         }
       }
     },
-    [storeId]
+    [storeId, page]
   );
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchGoals(controller.signal);
+    fetchGoals(controller.signal, false, page);
     return () => controller.abort();
-  }, [fetchGoals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId, page]);
+
+  // Reset to page 1 whenever the store changes.
+  useEffect(() => {
+    setPage(1);
+  }, [storeId]);
 
   const refetch = useCallback(() => {
     const controller = new AbortController();
-    fetchGoals(controller.signal, true);
-  }, [fetchGoals]);
+    fetchGoals(controller.signal, true, page);
+  }, [fetchGoals, page]);
 
-  return { data, isLoading, isRefreshing, error, refetch, clearError };
+  return { data, isLoading, isRefreshing, error, page, setPage, refetch, clearError };
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */

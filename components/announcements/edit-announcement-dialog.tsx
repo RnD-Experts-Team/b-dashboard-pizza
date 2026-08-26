@@ -27,6 +27,7 @@ import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Pencil, AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/utils/error";
 
 interface EditAnnouncementDialogProps {
   announcementId: number | null;
@@ -102,9 +103,7 @@ export function EditAnnouncementDialog({
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError(
-          err instanceof Error ? err.message : "Failed to load announcement",
-        );
+        setLoadError(parseApiError(err, "Failed to load announcement.").message);
       })
       .finally(() => {
         if (!cancelled) setIsLoadingData(false);
@@ -149,7 +148,8 @@ export function EditAnnouncementDialog({
     form.starts_at &&
     form.ends_at;
 
-  const errorMessage = loadError || updateError;
+  const errorMessage = loadError ?? updateError?.message ?? null;
+  const errorDetails = loadError ? [] : updateError?.details ?? [];
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -176,7 +176,16 @@ export function EditAnnouncementDialog({
             {errorMessage && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{errorMessage}</AlertDescription>
+                <AlertDescription>
+                  <span>{errorMessage}</span>
+                  {errorDetails.length > 0 && (
+                    <ul className="mt-1 list-disc ps-4 text-xs space-y-0.5">
+                      {errorDetails.map((d, i) => (
+                        <li key={i}>{d}</li>
+                      ))}
+                    </ul>
+                  )}
+                </AlertDescription>
               </Alert>
             )}
 

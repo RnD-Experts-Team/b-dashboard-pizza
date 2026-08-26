@@ -180,7 +180,7 @@ export function EmployeeReportRoster({
               <SelectTrigger size="sm" className="w-[110px]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper">
                 <SelectItem value={ALL}>All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
@@ -209,7 +209,7 @@ export function EmployeeReportRoster({
           No employees match the current filters
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border/50">
+        <div className="overflow-x-auto contain-layout rounded-md border border-border/50">
           <table className={cn(V1_TBL, "min-w-[420px]")}>
             <thead>
               <tr>

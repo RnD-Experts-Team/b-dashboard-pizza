@@ -1,5 +1,14 @@
 import type { Theme, ThemeColors } from "./types";
 
+/**
+ * The single localStorage key both theme-mode engines must share
+ * (next-themes' own ThemeProvider and @space-man/react-theme-animation's
+ * NextThemeProvider) — they independently toggle the same `.dark` class on
+ * `document.documentElement`, and if they read/write different keys they
+ * disagree about which mode is active. See components/providers/feature-providers.tsx.
+ */
+export const THEME_STORAGE_KEY = "color-mode";
+
 // CSS variable names that map to theme color properties
 export const COLOR_VAR_MAP: Record<keyof ThemeColors, string> = {
   background: "--background",
@@ -162,8 +171,14 @@ export function createFOUCPreventionScript(): string {
       var state = JSON.parse(stored);
       if (state.state && state.state.activeTheme) {
         var theme = state.state.activeTheme;
-        var isDark = document.documentElement.classList.contains('dark') ||
-          window.matchMedia('(prefers-color-scheme: dark)').matches;
+        // Read the saved mode directly — at this point (before next-themes'
+        // own script has run) the 'dark' class never exists yet, so checking
+        // for it here always falls through to the OS preference and ignores
+        // whatever the user actually chose. next-themes stores a bare string
+        // ('dark' | 'light' | 'system'), not JSON.
+        var modeStored = localStorage.getItem('${THEME_STORAGE_KEY}');
+        var isDark = modeStored === 'dark' ||
+          (modeStored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         var colors = isDark ? theme.colors.dark : theme.colors.light;
         var root = document.documentElement;
         

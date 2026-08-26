@@ -7,13 +7,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { CheckCheck, Bell, Loader2, X } from "lucide-react";
+import { CheckCheck, Bell, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface NotificationPanelProps {
   onClose?: () => void;
+  /** Rendered full-height inside the mobile bottom Sheet instead of the
+   * small anchored desktop/tablet popover — fills the sheet and lets
+   * notification text wrap instead of being clamped. */
+  mobile?: boolean;
 }
 
-export function NotificationPanel({ onClose }: NotificationPanelProps) {
+export function NotificationPanel({ onClose, mobile = false }: NotificationPanelProps) {
   const { notifications, unreadCount, isLoading, error, markAsRead, markAllAsRead, fetchNotifications } =
     useNotificationStore();
   const unreadNotifications = notifications.filter((n) => n.read_at === null);
@@ -25,34 +30,23 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
   }, [fetchNotifications]);
 
   return (
-    <div className="w-80 sm:w-90">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <h3 className="text-sm font-semibold">Notifications</h3>
-        <div className="flex items-center gap-1">
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-auto py-1 px-2 text-xs text-muted-foreground"
-              onClick={markAllAsRead}
-            >
-              <CheckCheck className="h-3.5 w-3.5 me-1" />
-              Mark all as read
-            </Button>
-          )}
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 sm:hidden"
-              onClick={onClose}
-              aria-label="Close notifications"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+    <div className={mobile ? "flex h-full flex-col" : "w-80 sm:w-90"}>
+      {/* Header — the Sheet supplies its own close button on mobile (top-end
+          corner), and the popover dismisses on outside click on desktop/tablet,
+          so this row only ever needs the title + mark-all-read action. */}
+      <div className={cn("flex items-center justify-between gap-2 px-4 py-3", mobile && "pe-10")}>
+        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">Notifications</h3>
+        {unreadCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto shrink-0 px-2 py-1 text-xs text-muted-foreground"
+            onClick={markAllAsRead}
+          >
+            <CheckCheck className="me-1 h-3.5 w-3.5" />
+            Mark all as read
+          </Button>
+        )}
       </div>
 
       <Separator />
@@ -76,7 +70,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
 
       {/* Tabs */}
       {!isLoading || notifications.length > 0 ? (
-        <Tabs defaultValue="all" className="w-full">
+        <Tabs defaultValue="all" className={mobile ? "flex min-h-0 flex-1 flex-col" : "w-full"}>
           <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0">
             <TabsTrigger
               value="all"
@@ -92,8 +86,11 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="all" className="mt-0">
-            <ScrollArea className="h-80">
+          <TabsContent
+            value="all"
+            className={cn("mt-0", mobile && "flex min-h-0 flex-1 flex-col")}
+          >
+            <ScrollArea className={mobile ? "flex-1" : "h-80"}>
               {notifications.length > 0 ? (
                 <div className="divide-y">
                   {notifications.map((notification) => (
@@ -102,6 +99,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
                       notification={notification}
                       onMarkAsRead={markAsRead}
                       onNavigate={onClose}
+                      compact={!mobile}
                     />
                   ))}
                 </div>
@@ -114,8 +112,11 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="unread" className="mt-0">
-            <ScrollArea className="h-80">
+          <TabsContent
+            value="unread"
+            className={cn("mt-0", mobile && "flex min-h-0 flex-1 flex-col")}
+          >
+            <ScrollArea className={mobile ? "flex-1" : "h-80"}>
               {unreadNotifications.length > 0 ? (
                 <div className="divide-y">
                   {unreadNotifications.map((notification) => (
@@ -124,6 +125,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
                       notification={notification}
                       onMarkAsRead={markAsRead}
                       onNavigate={onClose}
+                      compact={!mobile}
                     />
                   ))}
                 </div>

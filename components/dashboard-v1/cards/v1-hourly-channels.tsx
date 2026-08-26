@@ -461,7 +461,11 @@ export function V1HourlyChannelsCard({
       period={hasWeekly ? "D·WTD" : "D"}
       showPeriodBadge={false}
       span={span}
-      className={cn("!overflow-visible", className)}
+      // Fixed 280px everywhere except mobile — on small screens the legend
+      // can wrap to more rows than the fixed height budgets for, clipping
+      // the chart at the bottom. Flexible height there lets the card grow
+      // to fit instead.
+      className={cn("!overflow-visible h-auto sm:h-[280px]", className)}
       bodyClassName="!overflow-visible !p-0 flex flex-col"
       onExpand={() => {
         setDialogTab(chanTab);
