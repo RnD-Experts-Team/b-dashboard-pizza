@@ -141,6 +141,8 @@ export function ScreenProjectView() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const micButtonRef = useRef<HTMLButtonElement>(null);
+  const camButtonRef = useRef<HTMLButtonElement>(null);
 
   /** Measured dimensions of the tile container — drives responsive layout math. */
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -278,6 +280,27 @@ export function ScreenProjectView() {
 
   // Reset side-panel scroll when the stations list changes
   useEffect(() => { setSideScroll(0); }, [nonDriveThruStations]);
+
+  // "M"/"C" shortcuts: focus the mic/camera button (doesn't toggle it — a
+  // focused native <button> already responds to Enter/Space with a click).
+  useEffect(() => {
+    const targets: Record<string, React.RefObject<HTMLButtonElement | null>> = {
+      m: micButtonRef,
+      c: camButtonRef,
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const target = targets[e.key.toLowerCase()];
+      if (!target) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return; // don't hijack OS/browser shortcuts
+      const active = document.activeElement;
+      const typing = active instanceof HTMLElement &&
+        (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+      if (typing) return; // e.g. StationsDialog's search/password fields
+      target.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   /**
    * PiP activation on route leave.
@@ -1052,6 +1075,7 @@ export function ScreenProjectView() {
 
           {/* Mic toggle */}
           <button
+            ref={micButtonRef}
             onClick={() => {
               setMyMicMuted((v) => {
                 if (!v) setBroadcastToAll(false);
@@ -1062,6 +1086,7 @@ export function ScreenProjectView() {
             aria-label={myMicMuted ? "Unmute microphone" : "Mute microphone"}
             className={cn(
               "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              "outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900",
               myMicMuted
                 ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                 : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
@@ -1075,11 +1100,13 @@ export function ScreenProjectView() {
 
           {/* Camera toggle */}
           <button
+            ref={camButtonRef}
             onClick={() => setMyVideoOff((v) => !v)}
             title={myVideoOff ? "Turn on camera" : "Turn off camera"}
             aria-label={myVideoOff ? "Turn on camera" : "Turn off camera"}
             className={cn(
               "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              "outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900",
               myVideoOff
                 ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                 : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
