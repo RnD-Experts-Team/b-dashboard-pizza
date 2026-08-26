@@ -15,6 +15,7 @@ import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { useSelectedStoreStore } from "@/lib/store";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
+import { useScreenProjectSelectionStore } from "@/lib/store/screen-project-selection.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -158,15 +159,30 @@ export function ScreenProjectView() {
   const closePiP = useScreenProjectPiPStore((s) => s.closePiP);
 
   /**
+   * One-time snapshot of a persisted station selection, read synchronously
+   * during the first render, so the state initializers just below can resume
+   * exactly where the user left off — regardless of whether they got back
+   * here via PiP, plain navigation, or a full page refresh — instead of
+   * resetting to the station-select stage. Ignored if it belongs to a
+   * different store or the user can't supervisor.
+   */
+  const [savedSelection] = useState(() => {
+    const saved = useScreenProjectSelectionStore.getState();
+    if (saved.storeId !== storeId || saved.selectedStationIds.length === 0 || !canSupervisor) return null;
+    return saved;
+  });
+
+  /**
    * Which token type to fetch — set once the user commits to a view.
    * null = user is on the select screen (no tokens needed yet).
    */
   const [activeTokenType, setActiveTokenType] = useState<"supervisor" | "observer" | null>(() => {
+    if (savedSelection) return "supervisor"; // resuming a persisted selection
     if (!canSupervisor && canObserver) return "observer"; // observer-only: fetch tokens immediately
     return null; // supervisor or both: wait until station selection is committed
   });
 
-  const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+  const [selectedStationIds, setSelectedStationIds] = useState<number[]>(() => savedSelection?.selectedStationIds ?? []);
 
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
     useScreenProject(activeTokenType, selectedStationIds.length ? selectedStationIds : undefined);
@@ -192,6 +208,7 @@ export function ScreenProjectView() {
 
   /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = view selector, "station-select" = station checklist before connecting */
   const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select" | "station-select">(() => {
+    if (savedSelection) return "supervisor"; // resuming a persisted selection
     if (canSupervisor && canObserver) return "select";
     if (!canSupervisor && canObserver) return "observer";
     return "station-select"; // supervisor-only: go to station selection before connecting
@@ -230,7 +247,13 @@ export function ScreenProjectView() {
     }
     setMainId((prev) => {
       const stillExists = nonDriveThruStations.some((s) => s.room_name === prev);
-      return stillExists ? prev : nonDriveThruStations[0].room_name;
+      if (stillExists) return prev;
+      // Prefer a station within the current selection so the main tile isn't
+      // filtered out of visibleStations by picking one outside it.
+      const preferred = selectedStationIds.length > 0
+        ? nonDriveThruStations.find((s) => selectedStationIds.includes(s.id))
+        : undefined;
+      return (preferred ?? nonDriveThruStations[0]).room_name;
     });
     setScreenStates((prev) => {
       const next: Record<string, ScreenState> = {};
@@ -251,7 +274,7 @@ export function ScreenProjectView() {
       });
       return next;
     });
-  }, [nonDriveThruStations]);
+  }, [nonDriveThruStations, selectedStationIds]);
 
   // Reset side-panel scroll when the stations list changes
   useEffect(() => { setSideScroll(0); }, [nonDriveThruStations]);
@@ -658,6 +681,7 @@ export function ScreenProjectView() {
       if (selectedStationIds.length === 0) return;
       const firstSelected = nonDriveThruStations.find((s) => selectedStationIds.includes(s.id));
       if (firstSelected) setMainId(firstSelected.room_name);
+      useScreenProjectSelectionStore.getState().setSelection(storeId, selectedStationIds);
       setActiveTokenType("supervisor");
       setViewMode("supervisor");
     }
@@ -1184,7 +1208,15 @@ export function ScreenProjectView() {
                 size="icon"
                 data-guide-id="sp-exit-session"
                 className="h-9 w-9 text-white/50 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
-                onClick={() => setSessionExited(true)}
+                onClick={() => {
+                  useScreenProjectSelectionStore.getState().clearSelection();
+                  // Tiles unmount right after this (rendered only while
+                  // !sessionExited) without ever reporting "not live" back
+                  // here — clear it explicitly so a later navigate-away
+                  // doesn't find stale entries and hand off to PiP anyway.
+                  liveRoomsRef.current.clear();
+                  setSessionExited(true);
+                }}
                 aria-label="Exit session"
               >
                 <LogOut className="h-4 w-4" />

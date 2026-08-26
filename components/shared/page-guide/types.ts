@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 export type GuidePlacement =
   | "top"
   | "bottom"
@@ -12,6 +14,8 @@ export interface GuideStep {
   /** Must match a `data-guide-id` attribute on a DOM element */
   id: string;
   title: string;
+  /** Optional icon rendered before the title */
+  icon?: LucideIcon;
   description: string;
   /** Preferred side to place the annotation label relative to the target */
   placement: GuidePlacement;

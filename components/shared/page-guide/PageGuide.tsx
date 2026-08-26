@@ -182,14 +182,22 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
                     <div className="flex items-center gap-2 min-w-0">
                       {isIntro ? (
                         /* Intro: no step badge, larger title */
-                        <p className="text-base font-semibold text-foreground leading-tight">
-                          {currentStep.title}
-                        </p>
+                        <>
+                          {currentStep.icon && (
+                            <currentStep.icon className="h-4 w-4 shrink-0 text-primary" />
+                          )}
+                          <p className="text-base font-semibold text-foreground leading-tight">
+                            {currentStep.title}
+                          </p>
+                        </>
                       ) : (
                         <>
                           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                             {currentIndex + 1}
                           </span>
+                          {currentStep.icon && (
+                            <currentStep.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          )}
                           <p className="truncate text-sm font-semibold text-foreground">
                             {currentStep.title}
                           </p>

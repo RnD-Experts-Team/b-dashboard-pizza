@@ -1,3 +1,4 @@
+import { Radio } from "lucide-react";
 import type { GuideStep } from "@/components/shared/page-guide";
 
 export function createScreenProjectGuideSteps(storeId: string): GuideStep[] {
@@ -5,7 +6,8 @@ export function createScreenProjectGuideSteps(storeId: string): GuideStep[] {
     // ── Step 0: Intro (no spotlight, centered card) ───────────────────────────
     {
       id: "sp-intro",
-      title: "📡 Screen Project — Store Manager View",
+      icon: Radio,
+      title: "Screen Project — Store Manager View",
       description:
         "This is where store managers watch and control all physical station screens in real time using live video feeds. Each station runs a dedicated page that can be opened on a TV, tablet, or any browser. Share the link below with your team so they can connect their screens.",
       bullets: [
