@@ -32,24 +32,24 @@ export function useAuthRules(initialParams?: GetAuthRulesParams) {
   const handleSearch = useCallback(
     (search: string) => {
       setFilters({ search });
-      fetchRules({ ...initialParams, search });
+      fetchRules({ ...initialParams, service: filters.service, search, page: 1 });
     },
-    [fetchRules, setFilters, initialParams]
+    [fetchRules, setFilters, initialParams, filters.service]
   );
 
   const handleServiceFilter = useCallback(
     (service: string | undefined) => {
       setFilters({ service });
-      fetchRules({ ...initialParams, service });
+      fetchRules({ ...initialParams, search: filters.search, service, page: 1 });
     },
-    [fetchRules, setFilters, initialParams]
+    [fetchRules, setFilters, initialParams, filters.search]
   );
 
   const handlePageChange = useCallback(
     (page: number) => {
-      fetchRules({ ...initialParams, page });
+      fetchRules({ ...initialParams, ...filters, page });
     },
-    [fetchRules, initialParams]
+    [fetchRules, initialParams, filters]
   );
 
   const handleFilterChange = useCallback(

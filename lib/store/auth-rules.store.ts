@@ -75,19 +75,24 @@ const initialState = {
   selectedRuleId: null,
 };
 
+let fetchRulesRequestId = 0;
+
 export const useAuthRulesStore = create<AuthRulesState>()((set, get) => ({
   ...initialState,
 
   fetchRules: async (params?: GetAuthRulesParams) => {
+    const requestId = ++fetchRulesRequestId;
     set({ isLoading: true, error: null });
     try {
       const response = await authRuleService.getAuthRules(params);
+      if (requestId !== fetchRulesRequestId) return;
       set({
         rules: response.data,
         pagination: response.meta,
         isLoading: false,
       });
     } catch (error) {
+      if (requestId !== fetchRulesRequestId) return;
       const message =
         error instanceof Error ? error.message : "Failed to fetch auth rules";
       set({ error: message, isLoading: false });
