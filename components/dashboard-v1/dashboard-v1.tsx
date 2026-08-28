@@ -43,6 +43,7 @@ import {
   ShieldAlert,
   Pizza,
   ExternalLink,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildDsprReportHtml } from "@/components/dspr/dspr-report-template";
@@ -51,6 +52,8 @@ import {
   DsprDailyReportDialog,
   type DsprReportValues,
 } from "@/components/dspr/dspr-daily-report-dialog";
+import { PageGuide, type GuideStep } from "@/components/shared/page-guide";
+import { DASHBOARD_V1_GUIDE_STEPS } from "./dashboard-v1-guide-config";
 import { V1Section } from "./v1-section";
 import {
   V1SalesTrendCard,
@@ -200,6 +203,26 @@ export function DashboardV1({
     if (!lastFetchedAt) return null;
     return formatDistanceToNow(lastFetchedAt, { addSuffix: true });
   }, [lastFetchedAt]);
+
+  // ── Page guide ────────────────────────────────────────────────────────────
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideSteps, setGuideSteps] = useState<GuideStep[]>(DASHBOARD_V1_GUIDE_STEPS);
+
+  /**
+   * Drop steps whose spotlight target isn't currently on the page before
+   * opening. The topbar steps are conditional — DriveThruButton renders nothing
+   * without a drive-thru station and Screens access — and PageGuide bails out
+   * of measuring a missing element, which would leave the previous step's
+   * highlight box stranded on screen with the wrong caption beside it.
+   */
+  const handleOpenGuide = useCallback(() => {
+    setGuideSteps(
+      DASHBOARD_V1_GUIDE_STEPS.filter(
+        (s) => s.noHighlight || document.querySelector(`[data-guide-id="${s.id}"]`) !== null,
+      ),
+    );
+    setGuideOpen(true);
+  }, []);
 
   // ── Screenshot ────────────────────────────────────────────────────────
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -461,7 +484,7 @@ export function DashboardV1({
       )}
 
       {/* ── Header bar ──────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1">
+      <div data-guide-id="v1-header" className="flex flex-wrap items-center gap-1">
         <Badge variant="secondary" className="gap-1.5 px-3 py-1 text-xs font-medium">
           <Store className="h-3.5 w-3.5" />
           Store {selectedStore.storeId}
@@ -558,6 +581,23 @@ export function DashboardV1({
             <TooltipContent>{isRefreshing ? "Refreshing…" : "Refresh report"}</TooltipContent>
           </Tooltip>
 
+          {/* Guide trigger — hidden from screenshots, it's chrome, not data. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-screenshot-ignore="true"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={handleOpenGuide}
+                aria-label="Open page guide"
+              >
+                <HelpCircle className="h-3 w-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Page guide</TooltipContent>
+          </Tooltip>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -604,13 +644,15 @@ export function DashboardV1({
       />
 
       {/* ── KPI hero ─────────────────────────────────────────────────────── */}
-      <DaySummaryStats day={day} />
+      <div data-guide-id="v1-summary">
+        <DaySummaryStats day={day} />
+      </div>
 
       {/* ── Store goals ribbon ───────────────────────────────────────────── */}
       {/* <StoreGoals sales={sales} day={day} goalMetrics={goal_metrics} /> */}
 
       {/* ── Sales & Trends ───────────────────────────────────────────────── */}
-      <V1Section category="sales" weekLabel={weekLabel} gridClassName="gap-[7px]">
+      <V1Section category="sales" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-sales">
         <V1SalesTrendCard sales={sales} laborWeekToDateByDay={day.labor_week_to_date_by_day} span={2} />
         <V1StoreScoreCard
           upsellingScore={day.upselling_score}
@@ -644,7 +686,7 @@ export function DashboardV1({
       </V1Section>
 
       {/* ── Operations & Speed ───────────────────────────────────────────── */}
-      <V1Section category="operations" weekLabel={weekLabel} gridClassName="gap-[7px]">
+      <V1Section category="operations" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-operations">
         <V1PortalGaugeCard portal={day.portal} span={1} />
         <V1HnrCard
           hnr={day.hnr}
@@ -669,7 +711,7 @@ export function DashboardV1({
       </V1Section>
 
       {/* ── Menu & Product ───────────────────────────────────────────────── */}
-      <V1Section category="menu" weekLabel={weekLabel} gridClassName="gap-[7px]">
+      <V1Section category="menu" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-menu">
         <V1TopItemsCard
           items={top.top_5_items_sales_for_day}
           weeklyItems={top.top_5_items_sales_week_to_date}
@@ -693,7 +735,7 @@ export function DashboardV1({
       </V1Section>
 
       {/* ── People & Labor ───────────────────────────────────────────────── */}
-      <V1Section category="people" weekLabel={weekLabel} gridClassName="gap-[7px]">
+      <V1Section category="people" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-people">
         <V1CurrentEmployeesCard managerDashboard={managerDashboard} span={2} />
         <V1HighHoursCard
           data={managerDashboard.highHoursEmployees}
@@ -710,7 +752,7 @@ export function DashboardV1({
       </V1Section>
 
       {/* ── Finance & Cash ───────────────────────────────────────────────── */}
-      <V1Section category="finance" weekLabel={weekLabel} gridClassName="gap-[7px]">
+      <V1Section category="finance" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-finance">
         <V1CashControlCard data={wbrData?.["cash-control"]} isLoading={isLoading} span={1} />
         <V1TransferInOutCard
           data={wbrData?.["transfer-in-out"]}
@@ -722,7 +764,7 @@ export function DashboardV1({
       </V1Section>
 
       {/* ── Quality & Voice of Customer ──────────────────────────────────── */}
-      <V1Section category="quality" weekLabel={weekLabel} gridClassName="gap-[7px]">
+      <V1Section category="quality" weekLabel={weekLabel} gridClassName="gap-[7px]" guideId="v1-quality">
         <V1QaRatingsCard
           requirements={[
             {
@@ -741,6 +783,12 @@ export function DashboardV1({
         <V1CustomerServiceCard data={wbrData?.["customer-service"]} isLoading={isLoading} span={2} />
         <V1PortioningCard data={wbrData?.portioning} isLoading={isLoading} span={4} />
       </V1Section>
+
+      <PageGuide
+        steps={guideSteps}
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
     </div>
   );
 }

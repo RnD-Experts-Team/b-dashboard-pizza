@@ -20,40 +20,143 @@ const GAP = 14;
 const PAD = 10;
 const HIGHLIGHT_PAD = 5;
 
+/**
+ * The first match that's actually rendered.
+ *
+ * A guide target can have more than one mount — the notification bell renders a
+ * desktop popover trigger and a mobile sheet trigger, only one of which is
+ * displayed at a time — and the hidden one measures 0×0, which would spotlight
+ * an empty box in the corner.
+ */
+function findTarget(stepId: string): HTMLElement | null {
+  const matches = Array.from(
+    document.querySelectorAll<HTMLElement>(`[data-guide-id="${stepId}"]`),
+  );
+  return matches.find((el) => el.getBoundingClientRect().height > 0) ?? matches[0] ?? null;
+}
+
+/**
+ * Bottom edge of the app's site header, in viewport coords — or 0 when there
+ * isn't one above `el`.
+ *
+ * The spotlight is clamped below this line. A category section is often taller
+ * than the viewport, so its real top edge sits off-screen and the highlight
+ * box would otherwise run up behind the topbar, drawing a border across it.
+ *
+ * Returns 0 for a target that lives *inside* the header (the break-timer,
+ * drive-thru and notification widgets do) — clamping those below the header
+ * that contains them would collapse the box to zero height.
+ */
+function headerSafeTop(el: Element): number {
+  const header = document.querySelector("header");
+  if (!header || header.contains(el)) return 0;
+  const r = header.getBoundingClientRect();
+  // Only counts while the header is actually parked at the top of the screen.
+  return r.top <= 8 ? Math.max(0, r.bottom) : 0;
+}
+
+/** How often to re-read the target's position while a smooth scroll settles. */
+const SETTLE_POLL_MS = 60;
+/** Two identical reads mean the scroll has stopped. */
+const SETTLE_STABLE_READS = 2;
+/** Give up waiting and measure anyway — a scroll should never take this long. */
+const SETTLE_TIMEOUT_MS = 1400;
+
+/**
+ * Scroll every scrollable ancestor of `el` back to its top, plus the window.
+ *
+ * Used by the intro step so reopening the guide returns to the top of the page
+ * instead of leaving the reader parked wherever the last tour ended.
+ */
+function scrollAncestorsToTop(el: Element | null) {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const overflowY = getComputedStyle(node).overflowY;
+    if (
+      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      node.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    node = node.parentElement;
+  }
+}
+
 // â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [vp, setVp] = useState({ w: 0, h: 0 });
+  /** Where the current step's spotlight is allowed to start (see headerSafeTop). */
+  const [safeTop, setSafeTop] = useState(0);
   const [copied, setCopied] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /**
+   * `steps` read without depending on its identity. A caller passing an inline
+   * array literal would otherwise re-run the step effect on every render,
+   * re-scrolling the page out from under the reader on each one.
+   */
+  const stepsRef = useRef(steps);
+  stepsRef.current = steps;
 
   const currentStep = steps[currentIndex] ?? steps[0];
   const isIntro = !!currentStep?.noHighlight;
 
   // Scroll to target element then measure it
   const scrollAndMeasure = useCallback((stepId: string) => {
-    const el = document.querySelector(`[data-guide-id="${stepId}"]`);
+    const el = findTarget(stepId);
     if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      const target = document.querySelector(`[data-guide-id="${stepId}"]`);
-      if (target) {
-        setTargetRect(target.getBoundingClientRect());
-        setVp({ w: window.innerWidth, h: window.innerHeight });
-      }
-    }, 400);
+    // A target taller than the space below the header scrolls to its TOP, so
+    // the spotlight opens on the section's own heading. Centering it instead
+    // parks the heading off-screen and shows the reader the section's middle.
+    // Shorter targets still center — that reads better for a single card.
+    const tall =
+      el.getBoundingClientRect().height > window.innerHeight - headerSafeTop(el) - PAD * 2;
+    el.scrollIntoView({ behavior: "smooth", block: tall ? "start" : "center" });
+
+    // Measure once the smooth scroll has actually SETTLED, by polling until the
+    // target's top stops moving. A fixed delay landed mid-flight on the long
+    // scrolls: the box was pinned wherever the section happened to be at that
+    // instant, the scroll then carried on, and the border ended up sitting
+    // below the section's own title instead of on it.
+    if (timerRef.current) clearInterval(timerRef.current);
+    let lastTop = Number.NaN;
+    let stableReads = 0;
+    let waited = 0;
+    timerRef.current = setInterval(() => {
+      const target = findTarget(stepId);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      waited += SETTLE_POLL_MS;
+      stableReads = Math.abs(rect.top - lastTop) < 0.5 ? stableReads + 1 : 0;
+      lastTop = rect.top;
+      if (stableReads < SETTLE_STABLE_READS && waited < SETTLE_TIMEOUT_MS) return;
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = null;
+      setTargetRect(rect);
+      setSafeTop(headerSafeTop(target));
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+    }, SETTLE_POLL_MS);
   }, []);
 
-  // Reset + capture viewport when opened
   useEffect(() => {
     if (isOpen) {
-      setCurrentIndex(0);
-      setTargetRect(null);
       setVp({ w: window.innerWidth, h: window.innerHeight });
+      return;
     }
+    // Rewind on CLOSE, not on open.
+    //
+    // Resetting on open is a frame too late: this effect and the step effect
+    // below both run in the same commit, so the step effect still sees the
+    // index the user closed on and fires a smooth scroll back to that step
+    // before the reset lands. Reopening visibly flew down to the last step and
+    // then back up. Closed, the step effect early-returns, so rewinding here
+    // scrolls nothing.
+    setCurrentIndex(0);
+    setTargetRect(null);
+    setSafeTop(0);
   }, [isOpen]);
 
   // Scroll + measure when step changes (skip for noHighlight steps)
@@ -61,12 +164,18 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
     if (!isOpen || !currentStep) return;
     if (currentStep.noHighlight) {
       setTargetRect(null);
+      setSafeTop(0);
       setVp({ w: window.innerWidth, h: window.innerHeight });
+      // The intro explains the page from the top, so put the reader there —
+      // on a reopen they're still parked wherever the last tour ended.
+      scrollAncestorsToTop(
+        findTarget(stepsRef.current.find((s) => !s.noHighlight)?.id ?? ""),
+      );
       return;
     }
     scrollAndMeasure(currentStep.id);
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isOpen, currentStep, scrollAndMeasure]);
 
@@ -113,15 +222,19 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
   })();
 
   // â”€â”€ Highlight box â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const highlight =
-    !isIntro && targetRect
-      ? {
-          left: targetRect.left - HIGHLIGHT_PAD,
-          top: targetRect.top - HIGHLIGHT_PAD,
-          width: targetRect.width + HIGHLIGHT_PAD * 2,
-          height: targetRect.height + HIGHLIGHT_PAD * 2,
-        }
-      : null;
+  // Clamped to start below the site header — see headerSafeTop. The bottom is
+  // left alone: a section taller than the screen is meant to run off it.
+  const highlight = (() => {
+    if (isIntro || !targetRect) return null;
+    const top = Math.max(targetRect.top - HIGHLIGHT_PAD, safeTop + 2);
+    const bottom = targetRect.bottom + HIGHLIGHT_PAD;
+    return {
+      left: targetRect.left - HIGHLIGHT_PAD,
+      top,
+      width: targetRect.width + HIGHLIGHT_PAD * 2,
+      height: Math.max(0, bottom - top),
+    };
+  })();
 
   return (
     <AnimatePresence>

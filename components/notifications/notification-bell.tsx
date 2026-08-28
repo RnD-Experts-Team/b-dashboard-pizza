@@ -68,7 +68,9 @@ export function NotificationBell() {
     <>
       {/* Tablet/desktop — small anchored popover, same convention as app-shell's
           desktop sidebar vs mobile Sheet split. */}
-      <div className="hidden sm:block">
+      {/* data-guide-id: PageGuide spotlight target. Both mounts carry it — the
+          guide picks whichever one is actually rendered at this breakpoint. */}
+      <div data-guide-id="topbar-notifications" className="hidden sm:block">
         <Popover open={desktopOpen} onOpenChange={setDesktopOpen}>
           <PopoverTrigger asChild>
             <BellIconButton unreadCount={unreadCount} />
@@ -86,7 +88,7 @@ export function NotificationBell() {
 
       {/* Mobile — full-width bottom sheet, so there's room for the full
           notification text and a reliably-visible close button. */}
-      <div className="sm:hidden">
+      <div data-guide-id="topbar-notifications" className="sm:hidden">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
             <BellIconButton unreadCount={unreadCount} />

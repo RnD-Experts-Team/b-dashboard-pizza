@@ -17,18 +17,24 @@ export function V1Section({
   children,
   className,
   gridClassName,
+  guideId,
 }: {
   category: CategoryKey;
   weekLabel?: string;
   children: ReactNode;
   className?: string;
   gridClassName?: string;
+  /** Marks this section as a PageGuide target (see dashboard-v1-guide-config). */
+  guideId?: string;
 }) {
   const cat = CATEGORIES[category];
   const Icon = cat.icon;
 
   return (
-    <section className={cn("space-y-1 border-l-2 pl-3 rounded-md", cat.border, className)}>
+    <section
+      data-guide-id={guideId}
+      className={cn("space-y-1 border-l-2 pl-3 rounded-md", cat.border, className)}
+    >
       <div className="flex items-center gap-1.5 px-0.5">
         <div className={cn("rounded p-0.5", cat.iconBg)}>
           <Icon className={cn("h-3.5 w-3.5", cat.text)} />
