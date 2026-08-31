@@ -340,6 +340,28 @@ export const featuresConfig: FeaturesConfig = {
     envOverride: "NEXT_PUBLIC_FEATURE_SOUND_FX",
     runtimeToggle: true,
   },
+
+  /**
+   * Mobile Bottom Navigation
+   *
+   * Enables a persistent, customizable 4-link bottom tab bar on mobile and
+   * tablet widths, sourced from the sidebar's nav items and filtered by the
+   * user's role/permissions. Auto-hides on scroll-down, reappears on scroll-up.
+   *
+   * Affects:
+   * - Bottom nav bar in AppShell (mobile/tablet widths only)
+   * - Its inline edit-mode link picker
+   */
+  mobileBottomNav: {
+    id: "mobileBottomNav",
+    name: "Mobile Bottom Navigation",
+    description:
+      "Customizable 4-link bottom nav bar for mobile/tablet, auto-hides on scroll.",
+    category: "ui",
+    enabled: true,
+    envOverride: "NEXT_PUBLIC_FEATURE_MOBILE_BOTTOM_NAV",
+    runtimeToggle: false,
+  },
 };
 
 /**

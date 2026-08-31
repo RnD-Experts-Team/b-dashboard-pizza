@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { Geist, Geist_Mono, Noto_Sans_Arabic, Space_Grotesk, Playfair_Display, IBM_Plex_Mono, Oswald, Instrument_Sans } from "next/font/google";
@@ -62,6 +62,12 @@ function createFontPreferenceScript(): string {
 export const metadata: Metadata = {
   title: "Pizza Dashboard",
   description: "Enterprise-grade dashboard foundation",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 type Props = {

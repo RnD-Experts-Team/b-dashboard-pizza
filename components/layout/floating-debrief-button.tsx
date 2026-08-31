@@ -118,6 +118,21 @@ const FAB_W = 108;    // approximate FAB button width in px
 const FAB_H = 44;     // FAB button height in px
 const EDGE = 8;       // minimum gap from each screen edge
 const PANEL_GAP = 10; // gap between the FAB and its popup panel (desktop)
+const BOTTOM_NAV_GAP = 10; // required clearance above the mobile bottom nav bar
+
+/**
+ * Extra bottom clearance so the FAB never rests on top of the mobile bottom
+ * nav bar (components/layout/bottom-nav.tsx, id="bottom-nav-bar"). Measures
+ * the bar's live rendered height (incl. its safe-area padding) rather than a
+ * hardcoded guess — returns 0 when the bar isn't mounted (desktop widths, or
+ * the mobileBottomNav feature disabled).
+ */
+function getBottomNavClearance(): number {
+  if (typeof document === "undefined") return 0;
+  const bar = document.getElementById("bottom-nav-bar");
+  if (!bar) return 0;
+  return bar.getBoundingClientRect().height + BOTTOM_NAV_GAP;
+}
 
 export function FloatingDebriefButton() {
   const pathname = usePathname();
@@ -266,7 +281,7 @@ export function FloatingDebriefButton() {
     check();
     setPos({
       x: window.innerWidth - FAB_W - EDGE,
-      y: window.innerHeight - FAB_H - EDGE,
+      y: window.innerHeight - FAB_H - EDGE - getBottomNavClearance(),
     });
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -304,7 +319,10 @@ export function FloatingDebriefButton() {
         if (!prev) return prev;
         return {
           x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, prev.x)),
-          y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, prev.y)),
+          y: Math.max(
+            EDGE,
+            Math.min(window.innerHeight - FAB_H - EDGE - getBottomNavClearance(), prev.y)
+          ),
         };
       });
     };
@@ -383,7 +401,13 @@ export function FloatingDebriefButton() {
     if (!hasDragged.current) return;
     setPos({
       x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, dragOrigin.current.ex + dx)),
-      y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, dragOrigin.current.ey + dy)),
+      y: Math.max(
+        EDGE,
+        Math.min(
+          window.innerHeight - FAB_H - EDGE - getBottomNavClearance(),
+          dragOrigin.current.ey + dy
+        )
+      ),
     });
   }
 

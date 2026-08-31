@@ -10,3 +10,4 @@ export { useDsprStore } from "./dspr.store";
 export { useNotificationStore } from "./notification.store";
 export { useAnnouncementStore } from "./announcement.store";
 export { useReferenceCatalogStore } from "./reference-catalog.store";
+export { useBottomNavStore } from "./bottom-nav.store";

@@ -46,6 +46,11 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "dashboards": "Dashboards",
+    "laborDashboard": "Labor Dashboard",
+    "announcements": "Announcements",
+    "dailyPay": "Daily Pay",
+    "employeeManagement": "Employee Management",
     "users": "Users",
     "employees": "Employees",
     "stores": "Stores",
@@ -2320,5 +2325,23 @@
     "overtimeIncrease": "Increase by one minute",
     "overtimeDecrease": "Decrease by one minute",
     "overtimeAlert": "Your break has run long — please wrap up."
+  },
+  "bottomNav": {
+    "editTrigger": "Customize quick links",
+    "editTitle": "Choose your quick links",
+    "editDescription": "Pick up to {max} links to show in the bottom bar.",
+    "selectedCount": "{count}/{max} selected",
+    "save": "Save",
+    "cancel": "Cancel",
+    "reset": "Reset",
+    "saved": "Quick links updated",
+    "discardChanges": {
+      "title": "Discard changes?",
+      "description": "You have unsaved changes to your quick links. Are you sure you want to discard them?"
+    },
+    "resetConfirm": {
+      "title": "Reset quick links",
+      "description": "This will restore the default quick links based on your permissions."
+    }
   }
 }

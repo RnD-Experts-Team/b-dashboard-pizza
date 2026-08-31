@@ -14,6 +14,7 @@ import { useDsprStore } from "@/lib/store/dspr.store";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useScreenProjectSelectionStore } from "@/lib/store/screen-project-selection.store";
 import { useBreakTimerStore } from "@/lib/store/break-timer.store";
+import { useBottomNavStore } from "@/lib/store/bottom-nav.store";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { AuthUser, LoginCredentials, AuthUserStore } from "@/types/auth.types";
 import type { AuthRule } from "@/types/auth-rule.types";
@@ -165,6 +166,7 @@ function resetIdentityScopedCaches() {
     }
     useScreenProjectSelectionStore.getState().clearSelection();
     useBreakTimerStore.getState().reset();
+    useBottomNavStore.getState().reset();
   } catch {
     // ignore client-side cache cleanup failures
   }

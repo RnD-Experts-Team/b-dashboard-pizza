@@ -46,6 +46,11 @@
   },
   "nav": {
     "dashboard": "لوحة التحكم",
+    "dashboards": "لوحات التحكم",
+    "laborDashboard": "لوحة العمالة",
+    "announcements": "الإعلانات",
+    "dailyPay": "الأجر اليومي",
+    "employeeManagement": "إدارة الموظفين",
     "users": "المستخدمون",
     "employees": "الموظفون",
     "stores": "الفروع",
@@ -2319,5 +2324,23 @@
     "overtimeIncrease": "زيادة دقيقة واحدة",
     "overtimeDecrease": "إنقاص دقيقة واحدة",
     "overtimeAlert": "استراحتك طالت — يرجى العودة."
+  },
+  "bottomNav": {
+    "editTrigger": "تخصيص الروابط السريعة",
+    "editTitle": "اختر روابطك السريعة",
+    "editDescription": "اختر حتى {max} روابط لعرضها في الشريط السفلي.",
+    "selectedCount": "{count}/{max} محدد",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "reset": "إعادة تعيين",
+    "saved": "تم تحديث الروابط السريعة",
+    "discardChanges": {
+      "title": "تجاهل التغييرات؟",
+      "description": "لديك تغييرات غير محفوظة في روابطك السريعة. هل أنت متأكد من رغبتك في تجاهلها؟"
+    },
+    "resetConfirm": {
+      "title": "إعادة تعيين الروابط السريعة",
+      "description": "سيؤدي هذا إلى استعادة الروابط السريعة الافتراضية بناءً على صلاحياتك."
+    }
   }
 }
