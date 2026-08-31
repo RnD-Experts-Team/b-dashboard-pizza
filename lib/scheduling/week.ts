@@ -131,3 +131,80 @@ export function dayIndexToDayOfWeek(dayIndex: number, weekStartDow: number): num
 export function todayIndexIn(week: WeekInfo): number {
   return week.fullDates.indexOf(todayIso());
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Display formatting — NEVER use `new Date(dateOnlyString)`                 */
+/*                                                                           */
+/*  `new Date("2026-08-04")` parses a date-only string as UTC MIDNIGHT, then  */
+/*  renders it in the viewer's timezone. In every negative-offset zone — i.e. */
+/*  every US store — that shows THE PREVIOUS DAY:                            */
+/*                                                                           */
+/*    new Date("2026-08-04").toLocaleDateString()  -> 8/3/2026   WRONG        */
+/*    formatIsoDate("2026-08-04", "MMM d")         -> Aug 4      correct      */
+/*                                                                           */
+/*  date-fns `parseISO` treats a date-only string as LOCAL midnight, so the   */
+/*  round trip is lossless. Every helper below goes through it. A date the    */
+/*  API sent as "2026-08-04" must always render as August 4th.               */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Format an API date-only string ("YYYY-MM-DD") for display.
+ *
+ * Use this for every `shiftDate`, `week.start`/`end`, `time_off.date` and
+ * `availability.date`. Returns the input unchanged if it cannot be parsed,
+ * rather than silently rendering "Invalid Date".
+ */
+export function formatIsoDate(iso: string, pattern = "MMM d, yyyy"): string {
+  if (!iso) return "";
+  try {
+    const parsed = parseISO(iso);
+    if (Number.isNaN(parsed.getTime())) return iso;
+    return format(parsed, pattern);
+  } catch {
+    return iso;
+  }
+}
+
+/** "Tuesday, Aug 4" — for dialog headers and day labels. */
+export function formatIsoDateWithWeekday(iso: string): string {
+  return formatIsoDate(iso, "EEEE, MMM d");
+}
+
+/**
+ * Format a full ISO TIMESTAMP (with a time component and offset).
+ *
+ * Timestamps are unambiguous, so `new Date()` is safe for them — unlike
+ * date-only strings. Kept as a separate function so the distinction stays
+ * explicit at every call site.
+ */
+export function formatTimestamp(
+  iso: string,
+  pattern = "MMM d, yyyy h:mm a"
+): string {
+  if (!iso) return "";
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return format(parsed, pattern);
+}
+
+/**
+ * True when the string is a bare "YYYY-MM-DD" with no time component.
+ *
+ * Useful as a guard before choosing between `formatIsoDate` and
+ * `formatTimestamp` for a field whose shape is not certain.
+ */
+export function isDateOnly(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/**
+ * Format either shape correctly, picking the safe parser for each.
+ *
+ * Prefer the explicit functions when the field's shape is known; this is for
+ * values that vary (e.g. rendering an audit trail of mixed fields).
+ */
+export function formatIsoDateOrTimestamp(iso: string, pattern?: string): string {
+  return isDateOnly(iso)
+    ? formatIsoDate(iso, pattern)
+    : formatTimestamp(iso, pattern);
+}

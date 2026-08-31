@@ -74,7 +74,7 @@ export function EmployeeProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader className="sr-only">
           <DialogTitle>{employee.name}</DialogTitle>
           <DialogDescription>Employee profile and schedule summary</DialogDescription>

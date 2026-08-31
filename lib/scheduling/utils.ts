@@ -32,46 +32,12 @@ export function timesOverlap(
   return a0 < b1 && b0 < a1;
 }
 
-/** Detect all pairwise shift conflicts in a set of shifts */
-export function detectConflicts(shifts: Shift[]): ShiftConflict[] {
-  const conflicts: ShiftConflict[] = [];
-  const byEmpDay: Record<string, Shift[]> = {};
-
-  for (const s of shifts) {
-    const key = `${s.employeeId}-${s.dayIndex}`;
-    if (!byEmpDay[key]) byEmpDay[key] = [];
-    byEmpDay[key].push(s);
-  }
-
-  for (const cell of Object.values(byEmpDay)) {
-    for (let i = 0; i < cell.length; i++) {
-      for (let j = i + 1; j < cell.length; j++) {
-        if (
-          timesOverlap(
-            cell[i].startTime,
-            cell[i].endTime,
-            cell[j].startTime,
-            cell[j].endTime
-          )
-        ) {
-          conflicts.push({
-            employeeId: cell[i].employeeId,
-            shiftAId: cell[i].id,
-            shiftBId: cell[j].id,
-            shiftDate: cell[i].shiftDate,
-          });
-        }
-      }
-    }
-  }
-  return conflicts;
-}
-
 /**
  * Flatten conflict rows into the set of conflicting ASSIGNMENT ids.
  *
- * Shaped to consume the server's `conflicts` array directly, so wiring C1 means
- * deleting `detectConflicts` and feeding the payload straight in here.
+ * Consumes the server's `conflicts` array directly. Conflict detection itself
+ * is server-side: it compares UTC instants, so it catches an overnight
+ * collision that wall-clock comparison would miss.
  */
 export function conflictedShiftIds(conflicts: ShiftConflict[]): Set<string> {
   const ids = new Set<string>();
@@ -82,7 +48,15 @@ export function conflictedShiftIds(conflicts: ShiftConflict[]): Set<string> {
   return ids;
 }
 
-/** Check if a proposed shift conflicts with existing shifts */
+/**
+ * ADVISORY pre-flight check for the add/edit dialog.
+ *
+ * The SERVER is authoritative for conflicts — it compares UTC instants and so
+ * catches an overnight collision (22:00-02:00 against the next morning's
+ * 01:00-09:00) that this wall-clock check misses, and it answers with a 409 the
+ * manager can override. This exists only to warn while the user is still
+ * typing, when no request has been made yet. Never treat it as the decision.
+ */
 export function wouldConflict(
   newStart: string,
   newEnd: string,
@@ -100,29 +74,10 @@ export function wouldConflict(
   );
 }
 
-/** Calculate weekly hours per employee → { empId: totalHours } */
-export function weeklyHoursMap(shifts: Shift[]): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (const s of shifts) {
-    map[s.employeeId] = (map[s.employeeId] ?? 0) + s.durationMinutes / 60;
-  }
-  return map;
-}
-
-/** Employees exceeding overtime threshold */
-export function overtimeEmployees(
-  shifts: Shift[],
-  threshold: number
-): Set<string> {
-  const hours = weeklyHoursMap(shifts);
-  const over = new Set<string>();
-  for (const [id, h] of Object.entries(hours)) {
-    if (h > threshold) over.add(id);
-  }
-  return over;
-}
-
-/** Check if an employee is unavailable at a given day/time */
+/**
+ * ADVISORY availability check for the add/edit dialog, same caveat as
+ * `wouldConflict`: the server enforces this and returns EMPLOYEE_UNAVAILABLE.
+ */
 export function isBlockedByAvailability(
   employeeId: string,
   dayIndex: number,
@@ -141,7 +96,10 @@ export function isBlockedByAvailability(
   );
 }
 
-/** Check if employee has time-off on a given day */
+/**
+ * ADVISORY time-off check for the add/edit dialog, same caveat as
+ * `wouldConflict`: the server enforces this and returns EMPLOYEE_ON_TIME_OFF.
+ */
 export function hasTimeOff(
   employeeId: string,
   dayIndex: number,
@@ -150,33 +108,6 @@ export function hasTimeOff(
   return entries.find(
     (e) => e.employeeId === employeeId && e.dayIndex === dayIndex
   );
-}
-
-/** Coverage per day: { dayIndex: { employeeCount, totalHours, shiftCount } } */
-export function dailyCoverage(shifts: Shift[]): Record<
-  number,
-  { employeeCount: number; totalHours: number; shiftCount: number }
-> {
-  const map: Record<number, { emps: Set<string>; hours: number; count: number }> = {};
-  for (let d = 0; d < 7; d++) {
-    map[d] = { emps: new Set(), hours: 0, count: 0 };
-  }
-  for (const s of shifts) {
-    if (s.dayIndex >= 0 && s.dayIndex < 7) {
-      map[s.dayIndex].emps.add(s.employeeId);
-      map[s.dayIndex].hours += s.durationMinutes / 60;
-      map[s.dayIndex].count += 1;
-    }
-  }
-  const result: Record<number, { employeeCount: number; totalHours: number; shiftCount: number }> = {};
-  for (let d = 0; d < 7; d++) {
-    result[d] = {
-      employeeCount: map[d].emps.size,
-      totalHours: map[d].hours,
-      shiftCount: map[d].count,
-    };
-  }
-  return result;
 }
 
 /** Find the ActualShift linked to a given planned shift id, if reviewed */
@@ -194,7 +125,9 @@ export function actualForPlanned(
  * - Planned shifts with no linked actual yet (still pending review) are excluded —
  *   totals only reflect shifts a manager has explicitly reviewed.
  * - Standalone "added" actuals (ad-hoc coverage, no plannedShiftId) are appended as-is.
- * Result is Shift-shaped so it drops straight into detectConflicts/weeklyHoursMap/overtimeEmployees.
+ * Result is Shift-shaped so it renders through the same grid components as the
+ * plan. Note the server's `stats`, `conflicts` and overtime describe the PLAN,
+ * so they are not shown against this merged view.
  */
 export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shift[] {
   const merged: Shift[] = [];

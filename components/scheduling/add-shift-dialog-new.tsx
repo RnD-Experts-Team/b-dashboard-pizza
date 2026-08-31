@@ -28,8 +28,12 @@ import type {
   Shift,
   AvailabilityRule,
   TimeOffEntry,
+  EmployeeSyncRequestStatus,
 } from "@/types/scheduling.types";
 import { EMPLOYEE_COLORS, SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
+import { EmployeeSyncWaiting } from "./employee-sync-notice";
+import { ScheduleErrorAlert } from "./schedule-error-alert";
+import type { SchedulingError } from "@/lib/scheduling/errors";
 import {
   wouldConflict,
   isBlockedByAvailability,
@@ -39,6 +43,26 @@ import {
 interface AddShiftDialogNewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** True while the create/update request is in flight. */
+  isSubmitting?: boolean;
+  /**
+   * Set when the API refused because the employee has no Humanity counterpart
+   * yet. This is a WAIT, not a failure: the dialog stays open with the typed
+   * values intact and the write replays automatically once setup completes.
+   */
+  syncWait?: {
+    employeeName: string;
+    status: EmployeeSyncRequestStatus;
+    elapsedSeconds: number;
+    timedOut: boolean;
+    lastError: string | null;
+  } | null;
+  onCancelSyncWait?: () => void;
+  onRequestManualSync?: () => void;
+  onRetryAfterSync?: () => void;
+  isRequestingSync?: boolean;
+  /** A refusal the manager cannot override, shown inline with the server's wording. */
+  error?: SchedulingError | null;
   employee: ScheduleEmployee | null;
   dayLabel: string;
   dayIndex: number;
@@ -59,6 +83,13 @@ interface AddShiftDialogNewProps {
 export function AddShiftDialogNew({
   open,
   onOpenChange,
+  isSubmitting = false,
+  syncWait = null,
+  onCancelSyncWait,
+  onRequestManualSync,
+  onRetryAfterSync,
+  isRequestingSync = false,
+  error = null,
   employee,
   dayLabel,
   dayIndex,
@@ -159,8 +190,10 @@ export function AddShiftDialogNew({
   };
 
   const handleSubmit = () => {
+    // Deliberately does not close the dialog: the write may be refused or
+    // suspended, and the manager's input must survive either. The parent closes
+    // this once the write actually succeeds.
     onConfirm(startTime, endTime, label, type, isRecurring, note.trim());
-    onOpenChange(false);
   };
 
   if (!employee) return null;
@@ -170,7 +203,7 @@ export function AddShiftDialogNew({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Shift" : "Add Shift"}</DialogTitle>
           <DialogDescription>
@@ -335,13 +368,43 @@ export function AddShiftDialogNew({
           </div>
         </div>
 
+        {/* Server refusal that is not overridable — shown with its own wording. */}
+        {error && !syncWait && (
+          <ScheduleErrorAlert
+            error={error}
+            title={isEditing ? "Couldn't save changes" : "Couldn't add this shift"}
+            compact
+          />
+        )}
+
+        {/* Resumable wait — the typed values above are preserved throughout. */}
+        {syncWait && (
+          <EmployeeSyncWaiting
+            employeeName={syncWait.employeeName}
+            status={syncWait.status}
+            elapsedSeconds={syncWait.elapsedSeconds}
+            timedOut={syncWait.timedOut}
+            lastError={syncWait.lastError}
+            onManualSync={() => onRequestManualSync?.()}
+            onRetry={() => onRetryAfterSync?.()}
+            onCancel={() => onCancelSyncWait?.()}
+            isRequesting={isRequestingSync}
+          />
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>
-            {isEditing ? "Save Changes" : "Add Shift"}
-          </Button>
+          {!syncWait && (
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting
+                ? "Saving…"
+                : isEditing
+                  ? "Save Changes"
+                  : "Add Shift"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

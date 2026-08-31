@@ -2,8 +2,7 @@
  * Presentation constants and pure display helpers for the scheduling feature.
  *
  * Split out of the old `lib/scheduling/data.ts`, which mixed these with mock
- * records. The mocks now live in `dev-fixtures.ts` and are deleted once the
- * OperationsPizza API is wired in.
+ * records. Those mocks are gone — the grid runs on the OperationsPizza API.
  */
 
 export const DAYS_OF_WEEK = [

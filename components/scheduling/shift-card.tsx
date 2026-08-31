@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
+import { formatIsoDateWithWeekday } from "@/lib/scheduling/week";
 import type { Shift } from "@/types/scheduling.types";
 import {
   ShiftOriginIndicator,
@@ -84,18 +85,21 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             </div>
           )}
 
-          {/* Sync state + origin — bottom-left, clear of the other corners */}
-          {(shift.syncStatus !== "synced" || shift.origin !== "operations") && (
-            <div className="absolute bottom-0.5 left-0.5 z-5 flex items-center gap-1">
+          {/*
+            Status markers, bottom-right.
+            Kept off the left edge on purpose: as the week grid scrolls, cards
+            slide under the sticky employee column and lose their left side
+            first, which would hide the sync state precisely when scrolled.
+          */}
+          {(shift.syncStatus !== "synced" ||
+            shift.origin !== "operations" ||
+            shift.note) && (
+            <div className="absolute bottom-0.5 right-0.5 z-5 flex items-center gap-1">
               <ShiftSyncIndicator syncStatus={shift.syncStatus} />
               <ShiftOriginIndicator origin={shift.origin} />
-            </div>
-          )}
-
-          {/* Note indicator */}
-          {shift.note && (
-            <div className={cn("absolute bottom-0.5 right-0.5 z-5")}>
-              <StickyNote className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400" />
+              {shift.note && (
+                <StickyNote className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400" />
+              )}
             </div>
           )}
 
@@ -122,6 +126,7 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
         <p className="font-semibold">{shift.label} Shift</p>
+        <p className="opacity-80">{formatIsoDateWithWeekday(shift.shiftDate)}</p>
         <p>
           {formatTime(shift.startTime)} – {formatTime(shift.endTime)} ({hours.toFixed(1)}h)
         </p>

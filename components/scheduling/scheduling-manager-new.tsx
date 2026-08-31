@@ -58,7 +58,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScheduleErrorAlert } from "./schedule-error-alert";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useScheduleWeek } from "@/lib/hooks/use-schedule-week";
+import { useShiftMutations } from "@/lib/hooks/use-shift-mutations";
+import { useActualShiftMutations } from "@/lib/hooks/use-actual-shift-mutations";
+import { useScheduleTemplates } from "@/lib/hooks/use-schedule-templates";
+import { usePublishedSchedules } from "@/lib/hooks/use-published-schedules";
+import { useBulkOperation } from "@/lib/hooks/use-bulk-operation";
+import { useAvailabilityMutations } from "@/lib/hooks/use-availability-mutations";
+import { schedulingService } from "@/lib/api/services/scheduling.service";
 import { ScheduleGrid } from "./schedule-grid-new";
 import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
@@ -77,33 +87,40 @@ import {
   type AvailabilityOverrideDraft,
   type TimeOffDraft,
 } from "./availability-time-off-dialog";
-import { DEFAULT_OVERTIME_THRESHOLD, calcHours, formatTime } from "@/lib/scheduling/constants";
+import { DEFAULT_OVERTIME_THRESHOLD, formatTime } from "@/lib/scheduling/constants";
 
 /**
- * Used when an employee has no rate on file.
- * TODO(C1): replace with `store.default_labor_rate` from the week payload.
+ * Last-resort rate, used only when an employee has no rate on file AND the
+ * store's own `defaultLaborRate` has not loaded yet. The resolution order is
+ * employee rate -> store default -> this.
  */
 const FALLBACK_LABOR_RATE = 15;
+
+/** Stable empty arrays — a fresh `[]` each render would invalidate every memo. */
+const NO_SHIFTS: Shift[] = [];
+const NO_ACTUAL_SHIFTS: ActualShift[] = [];
+const NO_AVAILABILITY: AvailabilityRule[] = [];
+const NO_TIME_OFF: TimeOffEntry[] = [];
 import {
   DEFAULT_WEEK_START_DOW,
   buildWeekInfo,
   dateForDayIndex,
+  formatIsoDateWithWeekday,
   shiftIsoDate,
   snapToWeekStart,
   todayIso,
+  formatTimestamp,
 } from "@/lib/scheduling/week";
-import { DEPARTMENTS, DUMMY_EMPLOYEES, INITIAL_ACTUAL_SHIFTS, INITIAL_AVAILABILITY, INITIAL_SHIFTS, INITIAL_TIME_OFF, PREVIOUS_WEEK_SHIFTS } from "@/lib/scheduling/dev-fixtures";
 import {
-  detectConflicts,
   conflictedShiftIds,
-  overtimeEmployees,
   mergeActualShifts,
 } from "@/lib/scheduling/utils";
 import type {
   Shift,
   ScheduleTemplate,
-  PublishedSchedule,
-  BulkOperation,
+  ScheduleEmployee,
+  ScheduleDepartment,
+  ScheduleStats,
   AvailabilityRule,
   TimeOffEntry,
   ActualShift,
@@ -129,7 +146,6 @@ export function SchedulingManager() {
    * would 404 on every call.
    */
   const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
-  void storeId; // TODO(C1): feed into use-schedule-week
 
   /**
    * The displayed week, as the ISO date of its first day.
@@ -137,77 +153,67 @@ export function SchedulingManager() {
    * Deliberately NOT a relative offset: an offset is resolved against
    * `new Date()` on every render, so a tab left open across a week-start
    * midnight would silently re-point every cached week at a different
-   * calendar week.
+   * calendar week. The server snaps whatever date we send to the store's true
+   * week start and reports it back.
    */
   const [weekStart, setWeekStart] = useState<string>(() =>
     snapToWeekStart(todayIso(), DEFAULT_WEEK_START_DOW)
   );
 
+  // Planned vs Actual toggle + Comparison mode
+  const [scheduleMode, setScheduleMode] = useState<"planned" | "actual">("planned");
+  const [comparisonMode, setComparisonMode] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("All");
+
   /**
-   * TODO(C1): replace with the `week` object from the schedule-week payload —
-   * the server snaps the date and reports the store's real `week_start_dow`.
+   * Comparison needs planned and actual together; otherwise fetch only what is
+   * rendered so we are not paying for actuals the UI will discard.
+   */
+  const apiMode: ScheduleMode = comparisonMode ? "both" : scheduleMode;
+
+  const {
+    data,
+    isLoading,
+    isRefetching,
+    error: weekError,
+    setupError,
+    refetch,
+  } = useScheduleWeek({ storeId, weekStart, mode: apiMode, department, search });
+
+  /**
+   * Render from the server's week object once it arrives. The local fallback
+   * only covers the very first paint, before any payload exists.
    */
   const week = useMemo(
-    () => buildWeekInfo(weekStart, DEFAULT_WEEK_START_DOW),
-    [weekStart]
+    () => data?.week ?? buildWeekInfo(weekStart, DEFAULT_WEEK_START_DOW),
+    [data?.week, weekStart]
   );
 
-  const previousWeekStart = useMemo(
-    () => shiftIsoDate(week.start, -7),
-    [week.start]
-  );
-
-  /** Per-week shift storage keyed by the week's ISO start date. */
-  const [allShifts, setAllShifts] = useState<Record<string, Shift[]>>(() => {
-    const thisWeek = snapToWeekStart(todayIso(), DEFAULT_WEEK_START_DOW);
-    return {
-      [thisWeek]: INITIAL_SHIFTS,
-      [shiftIsoDate(thisWeek, -7)]: PREVIOUS_WEEK_SHIFTS,
-    };
-  });
+  const employees: ScheduleEmployee[] = data?.employees ?? [];
+  const departments: ScheduleDepartment[] = data?.departments ?? [];
+  const store = data?.store ?? null;
+  const overtimeThreshold = store?.overtimeThresholdHours ?? DEFAULT_OVERTIME_THRESHOLD;
 
   /** employeeId -> employee, for rate and sync lookups. */
   const employeeLookup = useMemo(
-    () => new Map(DUMMY_EMPLOYEES.map((e) => [e.id, e])),
-    []
-  );
-
-  /** Convenience: shifts visible in the currently displayed week */
-  const shifts = allShifts[week.start] ?? [];
-
-  /** Mutate only the current week's slice */
-  const setCurrentShifts = useCallback(
-    (updater: (prev: Shift[]) => Shift[]) =>
-      setAllShifts((all) => ({
-        ...all,
-        [week.start]: updater(all[week.start] ?? []),
-      })),
-    [week.start]
+    () => new Map(employees.map((e) => [e.id, e])),
+    [employees]
   );
 
   /**
-   * Actual-schedule storage, keyed by week start just like allShifts.
-   * Each entry links back to a planned Shift via plannedShiftId (or stands
-   * alone as ad-hoc "added" coverage).
+   * Read straight from the payload — there is no local copy.
+   *
+   * Every write goes to the API and is followed by a refetch, so a mirror would
+   * only add a frame where the screen disagrees with the server. The shared
+   * empty arrays keep referential identity stable while `data` is null, so the
+   * memos below do not churn.
    */
-  const [allActualShifts, setAllActualShifts] = useState<Record<string, ActualShift[]>>(
-    () => ({
-      [snapToWeekStart(todayIso(), DEFAULT_WEEK_START_DOW)]: INITIAL_ACTUAL_SHIFTS,
-    })
-  );
-  const actualShifts = allActualShifts[week.start] ?? [];
-  const setCurrentActualShifts = useCallback(
-    (updater: (prev: ActualShift[]) => ActualShift[]) =>
-      setAllActualShifts((all) => ({
-        ...all,
-        [week.start]: updater(all[week.start] ?? []),
-      })),
-    [week.start]
-  );
-
-  // Planned vs Actual toggle + Comparison mode (week view only)
-  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("planned");
-  const [comparisonMode, setComparisonMode] = useState(false);
+  const shifts = data?.shifts ?? NO_SHIFTS;
+  const actualShifts = data?.actualShifts ?? NO_ACTUAL_SHIFTS;
+  const availability = data?.availability ?? NO_AVAILABILITY;
+  const timeOff = data?.timeOff ?? NO_TIME_OFF;
 
   // Actual-shift edit dialog state
   const [actualDialogOpen, setActualDialogOpen] = useState(false);
@@ -218,8 +224,6 @@ export function SchedulingManager() {
     actual?: ActualShift;
   } | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [department, setDepartment] = useState("All");
   const [isTakingScreenshot, setIsTakingScreenshot] = useState(false);
   const [isEmployeeScreenshot, setIsEmployeeScreenshot] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -227,36 +231,67 @@ export function SchedulingManager() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishedSchedules, setPublishedSchedules] = useState<PublishedSchedule[]>([]);
-  const [bulkOperation, setBulkOperation] = useState<BulkOperation | null>(null);
   /**
-   * Set when the week fetch reports STORE_NOT_MAPPED / POSITION_NOT_MAPPED.
-   * Stays null until C1 — these are setup failures, not user errors, so they
-   * replace the grid entirely rather than surfacing as a toast.
+   * A setup failure surfaced by a WRITE rather than the initial fetch. The hook
+   * reports fetch-time ones separately; either replaces the grid.
    */
-  const [setupError, setSetupError] = useState<{
+  const [writeSetupError, setWriteSetupError] = useState<{
     code: SetupErrorCode;
-    message?: string;
-  } | null>(null);
-  void setSetupError; // TODO(C1): set from the week fetch's error code
-  const [warning, setWarning] = useState<{
-    code: ScheduleWarningCode;
-    message?: string;
-    detail?: string;
+    message: string;
   } | null>(null);
 
-  // Template state
-  const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
+  const bulk = useBulkOperation({ storeId, onSettled: refetch });
+
+  const templates = useScheduleTemplates({ storeId });
+
+  const published = usePublishedSchedules({
+    storeId,
+    onSuccess: (message) => toast.success(message),
+  });
+
+  const availabilityMutations = useAvailabilityMutations({
+    storeId,
+    // The week payload carries the store's real week start, which the
+    // day_index -> day_of_week conversion depends on.
+    weekStartDow: week.weekStartDow,
+    refetchWeek: refetch,
+    onSuccess: (message) => toast.success(message),
+    onRefused: (message) => toast.error(message),
+  });
+
+  const actualMutations = useActualShiftMutations({
+    storeId,
+    refetchWeek: refetch,
+    onSuccess: (message) => toast.success(message),
+  });
+
+  const mutations = useShiftMutations({
+    storeId,
+    refetchWeek: refetch,
+    onSetupError: (code, message) => setWriteSetupError({ code, message }),
+    onSuccess: (kind) => {
+      toast.success(
+        kind === "delete"
+          ? "Shift removed"
+          : kind === "update"
+            ? "Shift updated"
+            : "Shift added"
+      );
+      if (kind !== "delete") {
+        // Also covers the replay that fires once an employee finishes setup,
+        // which does not run through the caller's promise chain.
+        setShiftDialogOpen(false);
+        setPendingAdd(null);
+        setEditingShift(null);
+      }
+    },
+  });
+
+  // Template dialog state (the list itself lives in useScheduleTemplates)
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [loadTemplateOpen, setLoadTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
-
-  // Availability & time-off
-  const [availability, setAvailability] = useState<AvailabilityRule[]>(INITIAL_AVAILABILITY);
-  const [timeOff, setTimeOff] = useState<TimeOffEntry[]>(INITIAL_TIME_OFF);
-  const [overtimeThreshold] = useState(DEFAULT_OVERTIME_THRESHOLD);
 
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -269,17 +304,20 @@ export function SchedulingManager() {
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
 
 
-  // Filter employees by search + department
-  const filteredEmployees = useMemo(() => {
-    return DUMMY_EMPLOYEES.filter((emp) => {
-      const matchSearch =
-        !search ||
-        emp.name.toLowerCase().includes(search.toLowerCase()) ||
-        emp.role.toLowerCase().includes(search.toLowerCase());
-      const matchDept = department === "All" || emp.department === department;
-      return matchSearch && matchDept;
-    });
-  }, [search, department]);
+  /**
+   * The roster, already filtered by the server.
+   *
+   * `department` and `search` are sent with the week request, and the server
+   * filters the roster AND the shifts together — so a filtered grid never shows
+   * a card with no row to sit on. Filtering again here would double-filter.
+   */
+  const filteredEmployees = employees;
+
+  /** "All" plus the store's mapped Humanity positions, from the payload. */
+  const departmentOptions = useMemo(
+    () => ["All", ...departments.map((d) => d.name)],
+    [departments]
+  );
 
   /**
    * Reviewed-only "what really happened" list — planned shifts merged with their
@@ -295,49 +333,76 @@ export function SchedulingManager() {
     [scheduleMode, comparisonMode, shifts, actualShifts]
   );
 
-  // Summary stats
-  const stats = useMemo(() => {
+  /**
+   * Summary stats.
+   *
+   * In planned mode the server's `stats` wins outright — it is computed from the
+   * same `duration_minutes` values and includes a labor cost resolved per
+   * employee, so recomputing here could only disagree with it.
+   *
+   * Actual and comparison modes have no server equivalent: `stats` describes the
+   * PLAN. Those totals are derived locally from the merged reality, still using
+   * `durationMinutes` rather than wall-clock arithmetic.
+   *
+   * Note the rates behind the local figure are each employee's CURRENT rate —
+   * the API does not expose the rate in force on the viewed date — so a past
+   * week's cost can change after someone's raise.
+   */
+  const isPlannedOnly = scheduleMode === "planned" && !comparisonMode;
+
+  const stats = useMemo<ScheduleStats>(() => {
+    if (isPlannedOnly && data?.stats) return data.stats;
+
     const totalHours = displayShifts.reduce(
       (acc, s) => acc + s.durationMinutes / 60,
       0
     );
-    const uniqueEmployees = new Set(displayShifts.map((s) => s.employeeId)).size;
-    // Per-employee rates rather than a flat $15/h. Note these are CURRENT
-    // rates: the API does not return the rate in force on the viewed date, so a
-    // past week can show a different cost than it did before someone's raise.
-    // TODO(C1): prefer the server's `stats.labor_cost` once the week payload lands.
     const rateFor = (employeeId: string) =>
-      employeeLookup.get(employeeId)?.hourlyRate ?? FALLBACK_LABOR_RATE;
-    const laborCost = displayShifts.reduce(
-      (acc, s) => acc + (s.durationMinutes / 60) * rateFor(s.employeeId),
-      0
-    );
+      employeeLookup.get(employeeId)?.hourlyRate ??
+      store?.defaultLaborRate ??
+      FALLBACK_LABOR_RATE;
     return {
       totalHours,
       totalShifts: displayShifts.length,
-      activeEmployees: uniqueEmployees,
-      laborCost,
+      activeEmployees: new Set(displayShifts.map((s) => s.employeeId)).size,
+      laborCost: displayShifts.reduce(
+        (acc, s) => acc + (s.durationMinutes / 60) * rateFor(s.employeeId),
+        0
+      ),
     };
-  }, [displayShifts, employeeLookup]);
+  }, [isPlannedOnly, data?.stats, displayShifts, employeeLookup, store?.defaultLaborRate]);
 
-  // Conflict detection
-  const conflicts = useMemo(() => detectConflicts(displayShifts), [displayShifts]);
+  /**
+   * Conflicts and overtime, authoritative from the server.
+   *
+   * The server computes conflicts on UTC INSTANTS, so it catches a 22:00-02:00
+   * shift colliding with the next morning's 01:00-09:00 one — precisely the
+   * overnight double-booking a wall-clock client check misses. Never re-derive
+   * these locally.
+   *
+   * Both describe the PLAN, so in actual/comparison mode they are left empty
+   * rather than shown against merged data they were not computed from.
+   */
+  const conflicts = useMemo(
+    () => (isPlannedOnly ? (data?.conflicts ?? []) : []),
+    [isPlannedOnly, data?.conflicts]
+  );
   const conflictIds = useMemo(() => conflictedShiftIds(conflicts), [conflicts]);
   const overtimeEmpIds = useMemo(
-    () => overtimeEmployees(displayShifts, overtimeThreshold),
-    [displayShifts, overtimeThreshold]
+    () => (isPlannedOnly ? (data?.overtimeEmployeeIds ?? new Set<string>()) : new Set<string>()),
+    [isPlannedOnly, data?.overtimeEmployeeIds]
   );
 
   // Dialog target employee
   const targetEmployee = useMemo(() => {
     const id = editingShift?.employeeId ?? pendingAdd?.employeeId;
-    return id ? DUMMY_EMPLOYEES.find((e) => e.id === id) ?? null : null;
+    return id ? employeeLookup.get(id) ?? null : null;
   }, [editingShift, pendingAdd]);
 
   // Actual-shift dialog target employee
   const targetActualEmployee = useMemo(() => {
     const id = editingActualTarget?.employeeId;
-    return id ? DUMMY_EMPLOYEES.find((e) => e.id === id) ?? null : null;
+    return id ? employeeLookup.get(id) ?? null : null;
   }, [editingActualTarget]);
 
   // --- Handlers ---
@@ -357,85 +422,85 @@ export function SchedulingManager() {
     setShiftDialogOpen(true);
   }, []);
 
-  const handleDeleteShift = useCallback((shiftId: string) => {
-    setCurrentShifts((prev) => prev.filter((s) => s.id !== shiftId));
-    toast.info("Shift removed");
-  }, [setCurrentShifts]);
-
-  const handleConfirmShift = useCallback(
-    (startTime: string, endTime: string, label: string, type: Shift["type"], isRecurring: boolean, note: string) => {
-      if (editingShift) {
-        setCurrentShifts((prev) =>
-          prev.map((s) =>
-            s.id === editingShift.id
-              ? {
-                  ...s,
-                  startTime,
-                  endTime,
-                  durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
-                  crossesMidnight: endTime <= startTime,
-                  label,
-                  type,
-                  isRecurring,
-                  recurringGroupId: isRecurring ? (s.recurringGroupId ?? s.id) : undefined,
-                  note: note || undefined,
-                }
-              : s
-          )
-        );
-        setEditingShift(null);
-        toast.success("Shift updated");
-        return;
-      }
-      if (!pendingAdd) return;
-      const shiftId = `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const newShift: Shift = {
-        id: shiftId,
-        // TODO(C3): the server assigns both ids; drop the local generation.
-        shiftId: `s-${shiftId}`,
-        employeeId: pendingAdd.employeeId,
-        dayIndex: pendingAdd.dayIndex,
-        shiftDate: dateForDayIndex(week, pendingAdd.dayIndex),
-        startTime,
-        endTime,
-        durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
-        crossesMidnight: endTime <= startTime,
-        isPublished: false,
-        syncStatus: "synced",
-        origin: "operations",
-        label,
-        type,
-        isRecurring,
-        recurringGroupId: isRecurring ? shiftId : undefined,
-        note: note || undefined,
-      };
-      setCurrentShifts((prev) => [...prev, newShift]);
-      setPendingAdd(null);
-      toast.success("Shift added");
+  /**
+   * Delete a shift.
+   *
+   * Addresses `shiftId` — the SHIFT — not the assignment id the card carries as
+   * `id`. One Humanity shift can hold several employees, so an assignment id
+   * would address the wrong thing or 404.
+   *
+   * No optimistic removal. If the write fails the shift is still live for the
+   * employee, and a card that vanished locally but not upstream is the worst
+   * divergence this system can produce.
+   */
+  const handleDeleteShift = useCallback(
+    (assignmentId: string) => {
+      const shift = shifts.find((s) => s.id === assignmentId);
+      if (!shift) return;
+      const who = employeeLookup.get(shift.employeeId)?.name ?? "This employee";
+      void mutations.deleteShift(shift.shiftId, {
+        detail: `${who} · ${formatIsoDateWithWeekday(shift.shiftDate)} · ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`,
+      });
     },
-    [pendingAdd, editingShift, setCurrentShifts]
+    [shifts, employeeLookup, mutations]
   );
 
-  /** Instantly confirm a ghost/pending planned shift as worked-as-scheduled — no dialog */
+  const handleConfirmShift = useCallback(
+    (
+      startTime: string,
+      endTime: string,
+      label: string,
+      type: Shift["type"],
+      isRecurring: boolean,
+      note: string
+    ) => {
+      const target = editingShift
+        ? { employeeId: editingShift.employeeId, dayIndex: editingShift.dayIndex }
+        : pendingAdd;
+      if (!target) return;
+
+      const who = employeeLookup.get(target.employeeId)?.name ?? "This employee";
+      // The absolute date comes from the week payload — never computed here.
+      const shiftDate = dateForDayIndex(week, target.dayIndex);
+      const detail = `${who} · ${formatIsoDateWithWeekday(shiftDate)} · ${formatTime(startTime)} – ${formatTime(endTime)}`;
+
+      /**
+       * `is_recurring` is accepted upstream and silently ignored — series
+       * generation is not implemented — so it is not sent. The dialog no longer
+       * offers the toggle either; see the note in add-shift-dialog-new.
+       */
+      const payload: Record<string, unknown> = {
+        employee_id: Number(target.employeeId) || target.employeeId,
+        shift_date: shiftDate,
+        start_time: startTime,
+        end_time: endTime,
+        label: label || undefined,
+        shift_type: type,
+        note: note || undefined,
+      };
+
+      if (editingShift) {
+        void mutations.updateShift(editingShift.shiftId, payload, {
+          employeeId: target.employeeId,
+          detail,
+        });
+        return;
+      }
+
+      void mutations.createShift(payload, {
+        employeeId: target.employeeId,
+        detail,
+      });
+    },
+    [pendingAdd, editingShift, employeeLookup, week, mutations]
+  );
+
+  /** One-click "worked exactly as planned" — no dialog, addresses the assignment. */
   const handleConfirmActualShift = useCallback(
     (plannedShift: Shift) => {
-      const newActual: ActualShift = {
-        id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        employeeId: plannedShift.employeeId,
-        dayIndex: plannedShift.dayIndex,
-        shiftDate: plannedShift.shiftDate,
-        startTime: plannedShift.startTime,
-        endTime: plannedShift.endTime,
-        durationMinutes: plannedShift.durationMinutes,
-        label: plannedShift.label,
-        type: plannedShift.type,
-        status: "confirmed",
-        plannedShiftId: plannedShift.id,
-      };
-      setCurrentActualShifts((prev) => [...prev, newActual]);
-      toast.success("Marked as worked as planned");
+      void actualMutations.confirmAsPlanned(plannedShift);
     },
-    [setCurrentActualShifts]
+    [actualMutations]
   );
 
   /** Open the actual-shift dialog to edit a linked/ghost shift, or add ad-hoc coverage */
@@ -466,202 +531,167 @@ export function SchedulingManager() {
     setActualDialogOpen(true);
   }, []);
 
-  /** Save the actual-shift dialog — creates or updates an ActualShift */
+  /**
+   * Save the actual-shift dialog.
+   *
+   * `status` is NOT computed here any more — the server derives it from the
+   * times and sends it back. The old local derivation compared only start and
+   * end, so a label-only change was reported as "confirmed" even though the type
+   * itself documents that as "modified".
+   *
+   * Three cases, and they need different endpoints:
+   *
+   *   Linked to a planned shift -> post with the ASSIGNMENT id, which amends
+   *   that assignment's actual rather than stacking a duplicate.
+   *
+   *   Editing existing AD-HOC coverage -> there is no assignment behind it, so
+   *   it must address the actual's own id. Posting to the collection endpoint
+   *   without an assignment id would create a SECOND coverage row.
+   *
+   *   Brand-new ad-hoc coverage -> post with no assignment id.
+   */
   const handleSaveActualShift = useCallback(
     (startTime: string, endTime: string, label: string, type: Shift["type"], note: string) => {
       if (!editingActualTarget) return;
       const { employeeId, dayIndex, plannedShift, actual } = editingActualTarget;
 
-      const status: ActualShift["status"] = !plannedShift
-        ? "added"
-        : startTime === plannedShift.startTime && endTime === plannedShift.endTime
-          ? "confirmed"
-          : "modified";
-
-      if (actual) {
-        setCurrentActualShifts((prev) =>
-          prev.map((a) =>
-            a.id === actual.id
-              ? {
-                  ...a,
-                  startTime,
-                  endTime,
-                  durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
-                  label,
-                  type,
-                  status,
-                  note: note || undefined,
-                }
-              : a
-          )
-        );
-        toast.success("Actual shift updated");
-      } else {
-        const newActual: ActualShift = {
-          id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-          employeeId,
-          dayIndex,
-          shiftDate: dateForDayIndex(week, dayIndex),
-          startTime,
-          endTime,
-          durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
-          label,
-          type,
-          status,
-          plannedShiftId: plannedShift?.id,
-          note: note || undefined,
-        };
-        setCurrentActualShifts((prev) => [...prev, newActual]);
-        toast.success(plannedShift ? "Actual shift recorded" : "Coverage added");
-      }
-      setActualDialogOpen(false);
-      setEditingActualTarget(null);
-    },
-    [editingActualTarget, setCurrentActualShifts]
-  );
-
-  /** Mark the shift currently open in the actual-shift dialog as no attendance */
-  const handleMarkAbsent = useCallback(() => {
-    if (!editingActualTarget) return;
-    const { employeeId, dayIndex, plannedShift, actual } = editingActualTarget;
-
-    if (actual) {
-      setCurrentActualShifts((prev) =>
-        prev.map((a) => (a.id === actual.id ? { ...a, status: "absent" as const } : a))
-      );
-    } else if (plannedShift) {
-      const newActual: ActualShift = {
-        id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        employeeId,
-        dayIndex,
-        shiftDate: plannedShift.shiftDate,
-        startTime: plannedShift.startTime,
-        endTime: plannedShift.endTime,
-        durationMinutes: plannedShift.durationMinutes,
-        label: plannedShift.label,
-        type: plannedShift.type,
-        status: "absent",
-        plannedShiftId: plannedShift.id,
-      };
-      setCurrentActualShifts((prev) => [...prev, newActual]);
-    }
-    toast.info("Marked as no attendance");
-    setActualDialogOpen(false);
-    setEditingActualTarget(null);
-  }, [editingActualTarget, setCurrentActualShifts]);
-
-  /** Delete an actual entry — reverts linked shifts back to ghost/pending, removes standalone coverage entirely */
-  const handleDeleteActualShift = useCallback(
-    (actual: ActualShift) => {
-      setCurrentActualShifts((prev) => prev.filter((a) => a.id !== actual.id));
-      toast.info(actual.plannedShiftId ? "Reverted to planned schedule" : "Coverage removed");
-    },
-    [setCurrentActualShifts]
-  );
-
-  /** TODO(C8): POST /availability-overrides, converting dayIndex -> day_of_week. */
-  const handleAddAvailability = useCallback((draft: AvailabilityOverrideDraft) => {
-    setAvailability((prev) => [
-      ...prev,
-      {
-        id: `avail-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        employeeId: draft.employeeId,
-        dayIndex: draft.dayIndex,
-        date: draft.specificDate,
-        allDay: draft.allDay,
-        startTime: draft.startTime,
-        endTime: draft.endTime,
-        reason: draft.reason,
-        source: "override",
-      },
-    ]);
-    toast.success("Blocked time added");
-  }, []);
-
-  const handleDeleteAvailability = useCallback((rule: AvailabilityRule) => {
-    if (rule.source === "employee_profile") {
-      toast.error("This comes from the employee's profile and must be changed there");
-      return;
-    }
-    setAvailability((prev) => prev.filter((r) => r.id !== rule.id));
-    toast.info("Blocked time removed");
-  }, []);
-
-  /** TODO(C8): POST /time-off with a date range; the API expands it per day. */
-  const handleAddTimeOff = useCallback(
-    (draft: TimeOffDraft) => {
-      const timeOffId = `${Date.now()}`;
-      const added: TimeOffEntry[] = [];
-      week.fullDates.forEach((date, dayIndex) => {
-        if (date >= draft.startDate && date <= draft.endDate) {
-          added.push({
-            id: `${timeOffId}-${dayIndex}`,
-            timeOffId,
-            employeeId: draft.employeeId,
-            dayIndex,
-            date,
-            type: draft.type,
-            label: draft.label,
-            status: "approved",
-            origin: "operations",
-          });
+      const done = (ok: boolean) => {
+        if (ok) {
+          setActualDialogOpen(false);
+          setEditingActualTarget(null);
         }
-      });
-      if (added.length === 0) {
-        toast.warning("That date range doesn't overlap the week on screen");
+      };
+
+      if (!plannedShift && actual) {
+        void actualMutations
+          .updateActual(actual.id, { startTime, endTime, label, shiftType: type, note })
+          .then(done);
         return;
       }
-      setTimeOff((prev) => [...prev, ...added]);
-      toast.success(`Time off added for ${added.length} day${added.length !== 1 ? "s" : ""}`);
+
+      void actualMutations
+        .saveActual({
+          employeeId,
+          shiftDate: plannedShift?.shiftDate ?? dateForDayIndex(week, dayIndex),
+          startTime,
+          endTime,
+          label,
+          shiftType: type,
+          note,
+          assignmentId: plannedShift?.id,
+        })
+        .then(done);
     },
-    [week.fullDates]
+    [editingActualTarget, week, actualMutations]
   );
 
-  const handleDeleteTimeOff = useCallback((entry: TimeOffEntry) => {
-    if (entry.origin === "humanity") {
-      toast.error("This leave was approved in the HR system and must be withdrawn there");
-      return;
-    }
-    // Deleting removes every day of the leave, which is what the API does.
-    setTimeOff((prev) => prev.filter((e) => e.timeOffId !== entry.timeOffId));
-    toast.info("Time off removed");
-  }, []);
+  /** Mark a planned shift as a no-show. */
+  const handleMarkAbsent = useCallback(() => {
+    if (!editingActualTarget) return;
+    const { plannedShift, actual } = editingActualTarget;
+
+    /**
+     * The absent endpoint addresses an ACTUAL. When a planned shift has not been
+     * reviewed yet there is no actual to mark, so one is created from the plan
+     * first and then flipped — two calls, but it keeps the client from having to
+     * assert a status the server owns.
+     */
+    const run = async () => {
+      let target = actual;
+      if (!target && plannedShift) {
+        const created = await actualMutations.saveActual({
+          employeeId: plannedShift.employeeId,
+          shiftDate: plannedShift.shiftDate,
+          startTime: plannedShift.startTime,
+          endTime: plannedShift.endTime,
+          label: plannedShift.label,
+          shiftType: plannedShift.type,
+          assignmentId: plannedShift.id,
+        });
+        if (!created) return;
+        // The refetch that follows brings the new actual back with its id.
+        setActualDialogOpen(false);
+        setEditingActualTarget(null);
+        toast.info("Recorded — mark it as a no-show from the card once it appears.");
+        return;
+      }
+      if (!target) return;
+      const ok = await actualMutations.markAbsent(target);
+      if (ok) {
+        setActualDialogOpen(false);
+        setEditingActualTarget(null);
+      }
+    };
+
+    void run();
+  }, [editingActualTarget, actualMutations]);
+
+  const handleDeleteActualShift = useCallback(
+    (actual: ActualShift) => {
+      void actualMutations.deleteActual(actual);
+    },
+    [actualMutations]
+  );
+
+  const handleAddAvailability = useCallback(
+    (draft: AvailabilityOverrideDraft) => {
+      void availabilityMutations.addAvailability(draft);
+    },
+    [availabilityMutations]
+  );
+
+  const handleDeleteAvailability = useCallback(
+    (rule: AvailabilityRule) => {
+      void availabilityMutations.deleteAvailability(rule);
+    },
+    [availabilityMutations]
+  );
+
+  const handleAddTimeOff = useCallback(
+    (draft: TimeOffDraft) => {
+      void availabilityMutations.addTimeOff(draft);
+    },
+    [availabilityMutations]
+  );
+
+  const handleDeleteTimeOff = useCallback(
+    (entry: TimeOffEntry) => {
+      void availabilityMutations.deleteTimeOff(entry);
+    },
+    [availabilityMutations]
+  );
 
   const handleGoToToday = useCallback(() => {
     setWeekStart(snapToWeekStart(todayIso(), week.weekStartDow));
   }, [week.weekStartDow]);
 
   /**
-   * Copy previous week's shifts into the current week.
-   * Each shift gets a fresh ID to avoid duplicates.
-   * dayIndex is preserved (0=Tue … 6=Mon) — it maps 1:1 between weeks.
+   * Copy the previous week into this one.
+   *
+   * Goes through the bulk endpoint rather than reading a cached week: only the
+   * displayed week is fetched, and `replace` mode sequences the deletes before
+   * the creates so a mid-run failure is visible rather than doubling the week.
    */
   const handleConfirmCopyPreviousWeek = useCallback(() => {
-    const prevShifts = allShifts[previousWeekStart] ?? [];
-    if (prevShifts.length === 0) {
-      toast.warning("No shifts found in the previous week");
-      return;
-    }
-    const copied: Shift[] = prevShifts.map((s, i) => {
-      const id = `shift-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`;
-      return {
-        ...s,
-        id,
-        shiftId: `s-${id}`,
-        // dayIndex maps 1:1 between weeks, but the absolute date must move.
-        shiftDate: dateForDayIndex(week, s.dayIndex),
-      };
-    });
-    setAllShifts((all) => ({ ...all, [week.start]: copied }));
-    toast.success(
-      `Copied ${copied.length} shift${copied.length !== 1 ? "s" : ""} from the previous week`
+    setCopyConfirmOpen(false);
+    void bulk.run(
+      () =>
+        schedulingService.copyWeek(storeId!, {
+          source_week_start: shiftIsoDate(week.start, -7),
+          target_week_start: week.start,
+          mode: "replace",
+        }),
+      { fallbackMessage: "Could not copy the previous week." }
     );
-  }, [allShifts, previousWeekStart, week.start]);
+  }, [bulk, storeId, week.start]);
 
-  /** Derived: does the previous week have any shifts? Used to disable the menu item. */
-  const hasPreviousWeekShifts = (allShifts[previousWeekStart] ?? []).length > 0;
-
-  /** Save the current week's shifts as a reusable template */
+  /**
+   * Save the current week as a reusable template.
+   *
+   * Only the NAME and the WEEK go to the server — it snapshots the week itself.
+   * The client used to build the shift list, which described what the browser
+   * had rendered rather than what was actually saved.
+   */
   const handleSaveTemplate = useCallback(() => {
     if (!templateName.trim()) {
       toast.warning("Please enter a template name");
@@ -671,65 +701,53 @@ export function SchedulingManager() {
       toast.warning("No shifts to save as a template");
       return;
     }
-    const totalHours = shifts.reduce(
-      (acc, s) => acc + s.durationMinutes / 60,
-      0
-    );
-    const template: ScheduleTemplate = {
-      id: `tmpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: templateName.trim(),
-      description: templateDescription.trim(),
-      createdAt: new Date().toISOString(),
-      shifts: shifts.map((s) => ({
-        employeeId: s.employeeId,
-        dayIndex: s.dayIndex,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        label: s.label,
-        type: s.type,
-        note: s.note,
-      })),
-      shiftCount: shifts.length,
-      totalHours,
-    };
-    setTemplates((prev) => [template, ...prev]);
-    setSaveTemplateOpen(false);
-    setTemplateName("");
-    setTemplateDescription("");
-    toast.success(`Template "${template.name}" saved`);
-  }, [templateName, templateDescription, shifts]);
+    void templates
+      .saveTemplate({
+        name: templateName.trim(),
+        description: templateDescription.trim(),
+        weekStart: week.start,
+      })
+      .then((ok) => {
+        if (!ok) return;
+        setSaveTemplateOpen(false);
+        setTemplateName("");
+        setTemplateDescription("");
+        toast.success(`Template "${templateName.trim()}" saved`);
+      });
+  }, [templateName, templateDescription, shifts.length, week.start, templates]);
 
-  /** Load a template's shifts into the current week */
+  /**
+   * Apply a template to the displayed week.
+   *
+   * This fans out into one Humanity write per shift, so it runs as an async
+   * batch rather than a single request. `replace` matches what "Load Week
+   * Template" has always implied, and it sequences deletes before creates so a
+   * mid-run failure is visible instead of silently doubling the week.
+   */
   const handleLoadTemplate = useCallback(
     (template: ScheduleTemplate) => {
-      const loaded: Shift[] = (template.shifts ?? []).map((s, i) => {
-        const id = `shift-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`;
-        return {
-          ...s,
-          id,
-          shiftId: `s-${id}`,
-          shiftDate: dateForDayIndex(week, s.dayIndex),
-          durationMinutes: Math.round(calcHours(s.startTime, s.endTime) * 60),
-          crossesMidnight: s.endTime <= s.startTime,
-          isPublished: false,
-          syncStatus: "synced" as const,
-          origin: "operations" as const,
-        };
-      });
-      setAllShifts((all) => ({ ...all, [week.start]: loaded }));
       setLoadTemplateOpen(false);
-      toast.success(
-        `Loaded template "${template.name}" — ${loaded.length} shift${loaded.length !== 1 ? "s" : ""}`
+      void bulk.run(
+        () =>
+          schedulingService.applyTemplate(storeId!, {
+            template_id: template.id,
+            week_start: week.start,
+            mode: "replace",
+          }),
+        { fallbackMessage: `Could not apply "${template.name}".` }
       );
     },
-    [week.start]
+    [bulk, storeId, week.start]
   );
 
-  /** Delete a saved template */
-  const handleDeleteTemplate = useCallback((templateId: string) => {
-    setTemplates((prev) => prev.filter((t) => t.id !== templateId));
-    toast.info("Template deleted");
-  }, []);
+  const handleDeleteTemplate = useCallback(
+    (templateId: string) => {
+      void templates.deleteTemplate(templateId).then((ok) => {
+        if (ok) toast.info("Template deleted");
+      });
+    },
+    [templates]
+  );
 
   /** Export the schedule as a CSV file that Excel opens natively */
   const handleExportExcel = useCallback(async () => {
@@ -747,7 +765,7 @@ export function SchedulingManager() {
 
       const rows: string[][] = [headers];
 
-      for (const emp of DUMMY_EMPLOYEES) {
+      for (const emp of employees) {
         let totalHours = 0;
         let totalShifts = 0;
         const dayCells = week.dayNamesShort.map((_, dayIdx) => {
@@ -849,73 +867,68 @@ export function SchedulingManager() {
   /**
    * Publish the current week.
    *
-   * Uses the EMPLOYEE view (no hours, totals or time off) because that is what
-   * actually gets posted in store, and `canvas.toBlob` rather than
-   * `toDataURL` — at scale 2 a 10x7 grid is 1-3 MB, which has no business
-   * travelling as base64 inside a JSON body.
+   * Uses the EMPLOYEE view — no hours, totals or time off — because that is what
+   * actually gets posted in store, and it must not leak pay-adjacent detail to
+   * everyone who walks past the noticeboard.
    *
-   * TODO(C9): POST multipart to /published-schedules and let the browser set
-   * the Content-Type boundary itself.
+   * `canvas.toBlob`, never `toDataURL`: the upload is multipart, and a data URL
+   * would put 1-3 MB of base64 inside a JSON body. The download-a-PNG handlers
+   * elsewhere still use `toDataURL`, which is correct for an <a download>.
    */
   const handlePublishWeek = useCallback(async () => {
-    setIsPublishing(true);
     setIsEmployeeScreenshot(true);
+    // Let React paint the employee-view grid before capturing it.
     await new Promise((r) => setTimeout(r, 100));
+
+    let blob: Blob | null = null;
     try {
       const html2canvas = (await import("html2canvas-pro")).default;
       const target = gridRef.current;
-      if (!target) return;
-      const canvas = await html2canvas(target, {
-        backgroundColor: null,
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/png")
-      );
-      if (!blob) {
-        toast.error("Could not render the schedule image");
-        return;
+      if (target) {
+        const canvas = await html2canvas(target, {
+          backgroundColor: null,
+          scale: 2,
+          useCORS: true,
+          logging: false,
+        });
+        blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob((b) => resolve(b), "image/png")
+        );
       }
-
-      setPublishedSchedules((prev) => [
-        {
-          id: `pub-${Date.now()}`,
-          weekStartDate: week.start,
-          weekLabel: week.label,
-          publishedAt: new Date().toISOString(),
-          screenshotUrl: URL.createObjectURL(blob),
-          shiftCount: shifts.length,
-          totalHours: shifts.reduce((acc, sh) => acc + sh.durationMinutes / 60, 0),
-        },
-        // Re-publishing a week supersedes the previous record for it.
-        ...prev.map((rec) =>
-          rec.weekStartDate === week.start && !rec.unpublishedAt
-            ? { ...rec, unpublishedAt: new Date().toISOString() }
-            : rec
-        ),
-      ]);
-      toast.success(`Published ${week.label}`);
     } catch {
-      toast.error("Could not publish this week");
+      // The screenshot is optional upstream — publishing the week still matters
+      // more than the image, so carry on without it rather than blocking.
+      blob = null;
     } finally {
       setIsEmployeeScreenshot(false);
-      setIsPublishing(false);
     }
-  }, [week.start, week.label, shifts]);
 
-  const handleDeletePublished = useCallback((id: string) => {
-    setPublishedSchedules((prev) => prev.filter((p) => p.id !== id));
-    toast.info("Published schedule deleted");
-  }, []);
+    if (!blob) {
+      toast.warning("Publishing without a preview image — the grid couldn't be captured.");
+    }
 
-  /** TODO(C7): POST /schedule/bulk/clear-week with confirm:true, then poll. */
+    await published.publish(week.start, blob);
+  }, [week.start, published]);
+
+  const handleDeletePublished = useCallback(
+    (id: string) => {
+      void published.remove(id);
+    },
+    [published]
+  );
+
+  /**
+   * Clear every shift in the displayed week.
+   *
+   * `confirm: true` is mandatory upstream — this deletes real shifts employees
+   * may already be working from. Runs as a batch and there is no undo.
+   */
   const handleConfirmClearWeek = useCallback(() => {
-    setCurrentShifts(() => []);
     setClearConfirmOpen(false);
-    toast.info("Week cleared");
-  }, [setCurrentShifts]);
+    void bulk.run(() => schedulingService.clearWeek(storeId!, week.start), {
+      fallbackMessage: "Could not clear this week.",
+    });
+  }, [bulk, storeId, week.start]);
 
   const handleEmployeeScreenshot = useCallback(async () => {
     setIsEmployeeScreenshot(true);
@@ -945,29 +958,17 @@ export function SchedulingManager() {
     }
   }, [week.label]);
 
-  if (setupError) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          title="Employee Schedule"
-          description="Manage weekly shifts for your team"
-        />
-        <ScheduleSetupError
-          code={setupError.code}
-          message={setupError.message}
-          storeLabel={selectedStore?.name ?? selectedStore?.storeId ?? null}
-        />
-      </div>
-    );
-  }
+  const pageHeader = (
+    <PageHeader
+      title="Employee Schedule"
+      description="Manage weekly shifts for your team"
+    />
+  );
 
   if (!selectedStore) {
     return (
       <div className="space-y-6">
-        <PageHeader
-          title="Employee Schedule"
-          description="Manage weekly shifts for your team"
-        />
+        {pageHeader}
         <Card className="border-2 border-dashed border-muted-foreground/25">
           <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
             <div className="rounded-full bg-muted p-2.5">
@@ -985,14 +986,93 @@ export function SchedulingManager() {
     );
   }
 
+  const activeSetupError = setupError ?? writeSetupError;
+
+  if (activeSetupError) {
+    return (
+      <div className="space-y-6">
+        {pageHeader}
+        <ScheduleSetupError
+          code={activeSetupError.code}
+          message={activeSetupError.message}
+          storeLabel={selectedStore?.name ?? selectedStore?.storeId ?? null}
+        />
+      </div>
+    );
+  }
+
+  // First load for this store/week — nothing to keep on screen yet.
+  if (isLoading && !data) {
+    return (
+      <div className="space-y-4">
+        {pageHeader}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-md" />
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-8 w-8 rounded-md" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-45 rounded-md" />
+            <Skeleton className="h-8 w-32 rounded-md" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-lg" />
+          ))}
+        </div>
+        <Skeleton className="h-125 rounded-lg" />
+      </div>
+    );
+  }
+
+  /**
+   * A hard load failure with nothing cached. The server's own message is the
+   * headline — a bare status code tells a manager nothing actionable.
+   */
+  if (weekError && !data) {
+    return (
+      <div className="space-y-4">
+        {pageHeader}
+        <ScheduleErrorAlert
+          error={weekError}
+          title="Couldn't load this week's schedule"
+          onRetry={refetch}
+        />
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
         {/* Page header */}
-        <PageHeader
-          title="Employee Schedule"
-          description="Manage weekly shifts for your team"
-        />
+        {pageHeader}
+
+        {/*
+          A bulk operation that never started. `operation` stays null in that
+          case, so the progress dialog cannot report it — without this the
+          manager confirms an action and sees nothing happen at all.
+        */}
+        {bulk.error && !bulk.operation && (
+          <ScheduleErrorAlert
+            error={bulk.error}
+            title="Couldn't start that operation"
+            onDismiss={bulk.dismiss}
+            compact
+          />
+        )}
+
+        {/* A refetch failed but we still have a usable week on screen. */}
+        {weekError && data && (
+          <ScheduleErrorAlert
+            error={weekError}
+            title="Couldn't refresh this week"
+            onRetry={refetch}
+            compact
+          />
+        )}
 
         {/* Toolbar: week nav + filters */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1008,7 +1088,11 @@ export function SchedulingManager() {
             </Button>
 
             <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              {isRefetching ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              )}
               <span className="text-sm font-medium whitespace-nowrap">
                 {week.label}
               </span>
@@ -1118,7 +1202,7 @@ export function SchedulingManager() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {DEPARTMENTS.map((dept) => (
+                {departmentOptions.map((dept) => (
                   <DropdownMenuItem
                     key={dept}
                     onSelect={() => setDepartment(dept)}
@@ -1143,7 +1227,6 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={!hasPreviousWeekShifts}
                   onSelect={() => setCopyConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1164,11 +1247,11 @@ export function SchedulingManager() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={isPublishing || shifts.length === 0}
+                  disabled={published.isPublishing || shifts.length === 0}
                   onSelect={handlePublishWeek}
                   className="gap-2 cursor-pointer"
                 >
-                  {isPublishing ? (
+                  {published.isPublishing ? (
                     <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
                   ) : (
                     <Send className="h-4 w-4 text-emerald-600" />
@@ -1194,7 +1277,7 @@ export function SchedulingManager() {
                   Save as Template
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={templates.length === 0}
+                  disabled={templates.templates.length === 0}
                   onSelect={() => setLoadTemplateOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1395,10 +1478,7 @@ export function SchedulingManager() {
               variant="ghost"
               size="sm"
               className="text-destructive hover:text-destructive text-xs"
-              onClick={() => {
-                setCurrentShifts(() => []);
-                toast.info("All shifts cleared");
-              }}
+              onClick={() => setClearConfirmOpen(true)}
             >
               Clear All Shifts
             </Button>
@@ -1411,6 +1491,8 @@ export function SchedulingManager() {
           onOpenChange={(open) => {
             setShiftDialogOpen(open);
             if (!open) {
+              mutations.cancelSyncWait();
+              mutations.clearError();
               setPendingAdd(null);
               setEditingShift(null);
             }
@@ -1429,6 +1511,18 @@ export function SchedulingManager() {
           timeOff={timeOff}
           onConfirm={handleConfirmShift}
           editingShift={editingShift}
+          isSubmitting={mutations.isSubmitting}
+          syncWait={mutations.syncWait}
+          onCancelSyncWait={() => {
+            mutations.cancelSyncWait();
+            setShiftDialogOpen(false);
+            setPendingAdd(null);
+            setEditingShift(null);
+          }}
+          onRequestManualSync={() => void mutations.requestManualSync()}
+          onRetryAfterSync={mutations.retryPending}
+          isRequestingSync={mutations.isRequestingSync}
+          error={mutations.error}
         />
 
         {/* Availability & time off */}
@@ -1436,7 +1530,7 @@ export function SchedulingManager() {
           open={availabilityOpen}
           onOpenChange={setAvailabilityOpen}
           week={week}
-          employees={DUMMY_EMPLOYEES}
+          employees={employees}
           availability={availability}
           timeOff={timeOff}
           onAddAvailability={handleAddAvailability}
@@ -1447,7 +1541,7 @@ export function SchedulingManager() {
 
         {/* Published history */}
         <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
-          <DialogContent className="sm:max-w-3xl">
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Published schedules</DialogTitle>
               <DialogDescription>
@@ -1455,9 +1549,17 @@ export function SchedulingManager() {
                 supersedes its previous record.
               </DialogDescription>
             </DialogHeader>
+            {published.error && (
+              <ScheduleErrorAlert
+                error={published.error}
+                title="Publishing problem"
+                onDismiss={published.clearError}
+                compact
+              />
+            )}
             <div className="max-h-[60vh] overflow-y-auto">
               <PublishedSchedules
-                schedules={publishedSchedules}
+                schedules={published.schedules}
                 onDelete={handleDeletePublished}
               />
             </div>
@@ -1475,18 +1577,20 @@ export function SchedulingManager() {
 
         {/* Overridable refusals (conflict / unavailable / on leave / published) */}
         <ScheduleWarningDialog
-          code={warning?.code ?? null}
-          message={warning?.message}
-          detail={warning?.detail}
-          onConfirm={() => setWarning(null)}
-          onCancel={() => setWarning(null)}
+          code={mutations.warning?.code ?? null}
+          message={mutations.warning?.message}
+          detail={mutations.warning?.detail}
+          onConfirm={mutations.confirmWarning}
+          onCancel={mutations.cancelWarning}
+          isSubmitting={mutations.isSubmitting}
         />
 
         {/* Async bulk operation progress */}
         <BulkOperationProgress
-          operation={bulkOperation}
-          onRetryFailed={() => undefined}
-          onClose={() => setBulkOperation(null)}
+          operation={bulk.operation}
+          onRetryFailed={() => void bulk.retryFailed()}
+          onClose={bulk.dismiss}
+          isRetrying={bulk.isRetrying}
         />
 
         {/* Clear week confirmation */}
@@ -1566,7 +1670,7 @@ export function SchedulingManager() {
             }
           }}
         >
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Save as Template</DialogTitle>
               <DialogDescription>
@@ -1612,7 +1716,7 @@ export function SchedulingManager() {
 
         {/* Load Week Template dialog */}
         <Dialog open={loadTemplateOpen} onOpenChange={setLoadTemplateOpen}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Load Week Template</DialogTitle>
               <DialogDescription>
@@ -1620,7 +1724,7 @@ export function SchedulingManager() {
                 This will replace all current shifts.
               </DialogDescription>
             </DialogHeader>
-            {templates.length === 0 ? (
+            {templates.templates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <FolderOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
                 <p className="text-sm text-muted-foreground">
@@ -1633,7 +1737,7 @@ export function SchedulingManager() {
             ) : (
               <ScrollArea className="max-h-80">
                 <div className="space-y-2 pr-3">
-                  {templates.map((tmpl) => (
+                  {templates.templates.map((tmpl) => (
                     <div
                       key={tmpl.id}
                       className="group flex items-start gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors"
@@ -1656,11 +1760,7 @@ export function SchedulingManager() {
                             {tmpl.totalHours.toFixed(1)}h
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            {new Date(tmpl.createdAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
+                            {formatTimestamp(tmpl.createdAt, "MMM d, yyyy")}
                           </span>
                         </div>
                       </div>

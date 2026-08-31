@@ -94,6 +94,8 @@ These areas are designed for customization:
 | `components/dashboard-v1/**` | Dashboard V1 re-skin components — reuses DSPR's hooks/services, no new data layer |
 | `components/dspr/**` | DSPR dashboard components (data source for the classic dashboard and Dashboard V1) |
 | `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay) |
+| `components/scheduling/**` | Weekly scheduling grid, wired to the OperationsPizza API. `day-view.tsx` / `month-overview.tsx` are PARKED — kept on disk but not mounted; the week grid is the only live view |
+| `lib/scheduling/**` | Scheduling support: presentation constants, week identity + date-display helpers, snake_case API adapters, error parsing |
 | `components/cleaning/**` | Cleaning Chart feature (task scheduling/completion, evaluation grid, reports) — tab visibility gated by `lib/auth/cleaning-access.ts`, not a feature flag |
 | `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`, `cleaning.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
 | `lib/notifications/**` | Notification → page-segment routing helper, shared by notification click-routing and the sidebar unread-dot indicator |

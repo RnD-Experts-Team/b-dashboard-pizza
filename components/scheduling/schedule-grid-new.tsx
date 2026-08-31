@@ -152,8 +152,12 @@ export function ScheduleGrid({
           <thead>
             <tr className="border-b bg-muted/30">
               {/* Employee column header */}
-              <th className="sticky left-0 z-20 bg-muted/30 backdrop-blur-sm w-55 min-w-55 border-r px-3 py-2.5 text-left">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <th className="sticky left-0 z-20 relative bg-card w-55 min-w-55 border-r px-3 py-2.5 text-left">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-muted/30"
+                />
+                <span className="relative text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Employee
                 </span>
               </th>
@@ -480,8 +484,12 @@ export function ScheduleGrid({
           {!employeeView && (
           <tfoot>
             <tr className="border-t bg-muted/20">
-              <td className="sticky left-0 z-10 bg-muted/20 border-r px-3 py-2">
-                <span className="text-xs font-semibold text-muted-foreground">
+              <td className="sticky left-0 z-10 relative bg-card border-r px-3 py-2">
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 bg-muted/20"
+                />
+                <span className="relative text-xs font-semibold text-muted-foreground">
                   Daily Totals
                 </span>
               </td>

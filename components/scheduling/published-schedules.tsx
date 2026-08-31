@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ImageOff, Trash2 } from "lucide-react";
 import type { PublishedSchedule } from "@/types/scheduling.types";
+import { formatIsoDate, formatTimestamp } from "@/lib/scheduling/week";
 
 /**
  * History of published weeks.
@@ -51,7 +52,7 @@ export function PublishedSchedules({
                   {schedule.weekLabel}
                 </CardTitle>
                 <Badge variant="outline" className="shrink-0 text-[10px]">
-                  {new Date(schedule.publishedAt).toLocaleDateString()}
+                  {formatTimestamp(schedule.publishedAt, "MMM d, yyyy")}
                 </Badge>
               </div>
             </CardHeader>
@@ -79,6 +80,8 @@ export function PublishedSchedules({
                 </span>
                 <span>·</span>
                 <span>{schedule.totalHours.toFixed(1)}h</span>
+                <span>·</span>
+                <span>week of {formatIsoDate(schedule.weekStartDate, "MMM d")}</span>
                 {superseded && (
                   <Badge
                     variant="outline"

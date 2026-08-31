@@ -56,6 +56,16 @@ const qaApiUrl =
   process.env.QA_API_URL ||
   process.env.NEXT_PUBLIC_QA_API_URL ||
   "https://qatesting.lcportal.cloud/api";
+
+// Scheduling backend (OperationsPizza). Data/API calls are proxied through
+// app/api/scheduling/.../route.ts. Only the published-week screenshots in
+// /storage go through the rewrite below, so they stay same-origin.
+const operationsApiUrl =
+  process.env.OPERATIONS_API_URL ||
+  process.env.NEXT_PUBLIC_OPERATIONS_API_URL ||
+  "https://operationstesting.lcportal.cloud/api";
+const operationsOrigin =
+  getApiDomain(operationsApiUrl) || "https://operationstesting.lcportal.cloud";
 const qaOrigin = getApiDomain(qaApiUrl) || "https://qatesting.lcportal.cloud/api";
 
 const nextConfig: NextConfig = {
@@ -141,6 +151,14 @@ const nextConfig: NextConfig = {
         {
           source: "/cleaning-storage/:path*",
           destination: `${qaOrigin}/storage/:path*`,
+        },
+        // Published-schedule screenshots: /operations-storage/schedules/x.png
+        // → {operationsOrigin}/storage/schedules/x.png
+        // Keeps <Image> same-origin, so neither the CSP nor next/image's
+        // remotePatterns need touching.
+        {
+          source: "/operations-storage/:path*",
+          destination: `${operationsOrigin}/storage/:path*`,
         },
       ],
     };
