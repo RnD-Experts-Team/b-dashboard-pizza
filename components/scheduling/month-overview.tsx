@@ -1,5 +1,23 @@
 "use client";
 
+/**
+ * PARKED — not mounted anywhere. The week grid (`schedule-grid-new.tsx`) is the
+ * only live schedule view; the week/day/month switcher was removed when the
+ * scheduling feature was wired to the OperationsPizza backend.
+ *
+ * Kept on disk for future use. NOT wired to the API and not maintained beyond
+ * keeping it compiling. Known issues to fix if it is ever revived:
+ *  - Takes `weekOffset` / `allShifts` / `getWeekDates` and walks arbitrary week
+ *    offsets, so it only ever rendered weeks the user had already visited —
+ *    most months showed near-empty. A real version needs per-week fetches or a
+ *    month-range endpoint (neither exists today).
+ *
+ * The 9am–midnight time axis it relies on (GRID_START_HOUR / GRID_END_HOUR in
+ * lib/scheduling/constants.ts) is hardcoded, but store open/close hours are a
+ * per-store API setting — that would need threading through before this is
+ * accurate for a store that isn't 9am–midnight.
+ */
+
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,13 +27,26 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { calcHours } from "@/lib/scheduling/data";
-import type { Shift, WeekInfo } from "@/types/scheduling.types";
+import { calcHours } from "@/lib/scheduling/constants";
+import type { Shift } from "@/types/scheduling.types";
+
+/**
+ * This view predates `WeekInfo` switching to ISO date strings, and it does
+ * calendar arithmetic on `Date` objects throughout. Rather than rework parked
+ * code, it keeps its own legacy shape — nothing constructs it any more.
+ */
+interface LegacyWeekInfo {
+  start: Date;
+  end: Date;
+  label: string;
+  dayDates: string[];
+  fullDates: Date[];
+}
 
 interface MonthOverviewProps {
   weekOffset: number;
   allShifts: Record<number, Shift[]>;
-  getWeekDates: (offset: number) => WeekInfo;
+  getWeekDates: (offset: number) => LegacyWeekInfo;
   onNavigateToWeek: (offset: number) => void;
   onNavigateToDay: (offset: number, dayIndex: number) => void;
 }

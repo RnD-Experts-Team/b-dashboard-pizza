@@ -8,7 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
 import type { Shift, ActualShift } from "@/types/scheduling.types";
 
 interface ActualShiftCardProps {
@@ -35,7 +35,7 @@ export function ActualShiftCard({
   // Ghost / pending — planned shift not yet reviewed
   if (!actual) {
     if (!plannedShift) return null;
-    const hours = calcHours(plannedShift.startTime, plannedShift.endTime);
+    const hours = plannedShift.durationMinutes / 60;
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -136,7 +136,7 @@ export function ActualShiftCard({
   }
 
   // Confirmed / modified / added — solid worked-shift card
-  const hours = calcHours(actual.startTime, actual.endTime);
+  const hours = actual.durationMinutes / 60;
   const isModified = actual.status === "modified";
   const isAdded = actual.status === "added";
 

@@ -7,7 +7,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
 import type { Shift, ActualShift } from "@/types/scheduling.types";
 
 interface ComparisonShiftCardProps {

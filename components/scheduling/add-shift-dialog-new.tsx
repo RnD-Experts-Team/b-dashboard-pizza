@@ -20,22 +20,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Repeat, Ban, StickyNote } from "lucide-react";
+import { AlertTriangle, Ban, StickyNote } from "lucide-react";
 import type {
   ScheduleEmployee,
   Shift,
   AvailabilityRule,
   TimeOffEntry,
 } from "@/types/scheduling.types";
-import {
-  SHIFT_PRESETS,
-  formatTime,
-  calcHours,
-  EMPLOYEE_COLORS,
-} from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS, SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
 import {
   wouldConflict,
   isBlockedByAvailability,
@@ -79,6 +73,10 @@ export function AddShiftDialogNew({
   const [label, setLabel] = useState("Morning");
   const [type, setType] = useState<Shift["type"]>("morning");
   const [activePreset, setActivePreset] = useState<number | null>(0);
+  // No UI control: the backend accepts is_recurring and silently ignores it, so
+  // offering a toggle would promise scheduling that never happens. The state is
+  // kept so editing an existing recurring shift preserves its flag rather than
+  // stripping it. Restore the toggle once series generation ships.
   const [isRecurring, setIsRecurring] = useState(false);
   const [note, setNote] = useState("");
 
@@ -277,23 +275,6 @@ export function AddShiftDialogNew({
                 <SelectItem value="Custom">Custom</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Recurring toggle */}
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Repeat className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Recurring weekly</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Repeat this shift every week
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={isRecurring}
-              onCheckedChange={setIsRecurring}
-            />
           </div>
 
           {/* Shift note */}

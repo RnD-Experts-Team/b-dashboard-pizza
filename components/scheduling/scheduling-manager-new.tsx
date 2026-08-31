@@ -18,16 +18,13 @@ import {
   Loader2,
   Copy,
   Trash2,
-  EyeOff,
-  UserX,
   BookmarkPlus,
   FolderOpen,
   AlertTriangle,
-  CalendarDays,
-  LayoutGrid,
-  CalendarRange,
-  Undo2,
   Send,
+  Store,
+  History,
+  CalendarOff,
   CalendarCheck,
   ClipboardCheck,
   GitCompare,
@@ -61,25 +58,41 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layout/page-header";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { ScheduleGrid } from "./schedule-grid-new";
 import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
-import { DayView } from "./day-view";
-import { MonthOverview } from "./month-overview";
+import { PublishedSchedules } from "./published-schedules";
+import { BulkOperationProgress } from "./bulk-operation-progress";
 import {
-  DUMMY_EMPLOYEES,
-  DAYS_OF_WEEK,
-  DAYS_SHORT,
-  DEPARTMENTS,
-  INITIAL_SHIFTS,
-  PREVIOUS_WEEK_SHIFTS,
-  INITIAL_AVAILABILITY,
-  INITIAL_TIME_OFF,
-  INITIAL_ACTUAL_SHIFTS,
-  DEFAULT_OVERTIME_THRESHOLD,
-  calcHours,
-  formatTime,
-} from "@/lib/scheduling/data";
+  ScheduleWarningDialog,
+  type ScheduleWarningCode,
+} from "./schedule-warning-dialog";
+import {
+  ScheduleSetupError,
+  type SetupErrorCode,
+} from "./schedule-setup-error";
+import {
+  AvailabilityTimeOffDialog,
+  type AvailabilityOverrideDraft,
+  type TimeOffDraft,
+} from "./availability-time-off-dialog";
+import { DEFAULT_OVERTIME_THRESHOLD, calcHours, formatTime } from "@/lib/scheduling/constants";
+
+/**
+ * Used when an employee has no rate on file.
+ * TODO(C1): replace with `store.default_labor_rate` from the week payload.
+ */
+const FALLBACK_LABOR_RATE = 15;
+import {
+  DEFAULT_WEEK_START_DOW,
+  buildWeekInfo,
+  dateForDayIndex,
+  shiftIsoDate,
+  snapToWeekStart,
+  todayIso,
+} from "@/lib/scheduling/week";
+import { DEPARTMENTS, DUMMY_EMPLOYEES, INITIAL_ACTUAL_SHIFTS, INITIAL_AVAILABILITY, INITIAL_SHIFTS, INITIAL_TIME_OFF, PREVIOUS_WEEK_SHIFTS } from "@/lib/scheduling/dev-fixtures";
 import {
   detectConflicts,
   conflictedShiftIds,
@@ -88,9 +101,9 @@ import {
 } from "@/lib/scheduling/utils";
 import type {
   Shift,
-  WeekInfo,
   ScheduleTemplate,
-  ScheduleViewMode,
+  PublishedSchedule,
+  BulkOperation,
   AvailabilityRule,
   TimeOffEntry,
   ActualShift,
@@ -108,81 +121,88 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-/**
- * Returns the week range starting on Tuesday and ending on Monday.
- * offset = 0 → the current week.
- */
-function getWeekDates(offset: number): WeekInfo {
-  const now = new Date();
-  const jsDay = now.getDay(); // 0=Sun … 6=Sat
-  const distToTue = (jsDay + 5) % 7;
-  const start = new Date(now);
-  start.setDate(now.getDate() - distToTue + offset * 7);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-
-  const dayDates: string[] = [];
-  const fullDates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    dayDates.push(d.getDate().toString());
-    fullDates.push(new Date(d));
-  }
-
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return {
-    start,
-    end,
-    label: `${fmt(start)} – ${fmt(end)}, ${start.getFullYear()}`,
-    dayDates,
-    fullDates,
-  };
-}
-
 export function SchedulingManager() {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const { selectedStore } = useSelectedStoreStore();
+  /**
+   * The store_number (e.g. "03795-00001"), NOT the numeric internal id.
+   * OperationsPizza scopes every route by store_number; passing `.id` here
+   * would 404 on every call.
+   */
+  const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
+  void storeId; // TODO(C1): feed into use-schedule-week
 
   /**
-   * Per-week shift storage keyed by weekOffset.
-   * -1 = previous week, 0 = current week, 1 = next week, etc.
+   * The displayed week, as the ISO date of its first day.
+   *
+   * Deliberately NOT a relative offset: an offset is resolved against
+   * `new Date()` on every render, so a tab left open across a week-start
+   * midnight would silently re-point every cached week at a different
+   * calendar week.
    */
-  const [allShifts, setAllShifts] = useState<Record<number, Shift[]>>({
-    0: INITIAL_SHIFTS,
-    [-1]: PREVIOUS_WEEK_SHIFTS,
+  const [weekStart, setWeekStart] = useState<string>(() =>
+    snapToWeekStart(todayIso(), DEFAULT_WEEK_START_DOW)
+  );
+
+  /**
+   * TODO(C1): replace with the `week` object from the schedule-week payload —
+   * the server snaps the date and reports the store's real `week_start_dow`.
+   */
+  const week = useMemo(
+    () => buildWeekInfo(weekStart, DEFAULT_WEEK_START_DOW),
+    [weekStart]
+  );
+
+  const previousWeekStart = useMemo(
+    () => shiftIsoDate(week.start, -7),
+    [week.start]
+  );
+
+  /** Per-week shift storage keyed by the week's ISO start date. */
+  const [allShifts, setAllShifts] = useState<Record<string, Shift[]>>(() => {
+    const thisWeek = snapToWeekStart(todayIso(), DEFAULT_WEEK_START_DOW);
+    return {
+      [thisWeek]: INITIAL_SHIFTS,
+      [shiftIsoDate(thisWeek, -7)]: PREVIOUS_WEEK_SHIFTS,
+    };
   });
 
+  /** employeeId -> employee, for rate and sync lookups. */
+  const employeeLookup = useMemo(
+    () => new Map(DUMMY_EMPLOYEES.map((e) => [e.id, e])),
+    []
+  );
+
   /** Convenience: shifts visible in the currently displayed week */
-  const shifts = allShifts[weekOffset] ?? [];
+  const shifts = allShifts[week.start] ?? [];
 
   /** Mutate only the current week's slice */
   const setCurrentShifts = useCallback(
     (updater: (prev: Shift[]) => Shift[]) =>
       setAllShifts((all) => ({
         ...all,
-        [weekOffset]: updater(all[weekOffset] ?? []),
+        [week.start]: updater(all[week.start] ?? []),
       })),
-    [weekOffset]
+    [week.start]
   );
 
   /**
-   * Actual-schedule storage, keyed by weekOffset just like allShifts.
+   * Actual-schedule storage, keyed by week start just like allShifts.
    * Each entry links back to a planned Shift via plannedShiftId (or stands
    * alone as ad-hoc "added" coverage).
    */
-  const [allActualShifts, setAllActualShifts] = useState<Record<number, ActualShift[]>>({
-    0: INITIAL_ACTUAL_SHIFTS,
-  });
-  const actualShifts = allActualShifts[weekOffset] ?? [];
+  const [allActualShifts, setAllActualShifts] = useState<Record<string, ActualShift[]>>(
+    () => ({
+      [snapToWeekStart(todayIso(), DEFAULT_WEEK_START_DOW)]: INITIAL_ACTUAL_SHIFTS,
+    })
+  );
+  const actualShifts = allActualShifts[week.start] ?? [];
   const setCurrentActualShifts = useCallback(
     (updater: (prev: ActualShift[]) => ActualShift[]) =>
       setAllActualShifts((all) => ({
         ...all,
-        [weekOffset]: updater(all[weekOffset] ?? []),
+        [week.start]: updater(all[week.start] ?? []),
       })),
-    [weekOffset]
+    [week.start]
   );
 
   // Planned vs Actual toggle + Comparison mode (week view only)
@@ -204,6 +224,27 @@ export function SchedulingManager() {
   const [isEmployeeScreenshot, setIsEmployeeScreenshot] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [copyConfirmOpen, setCopyConfirmOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const [publishedOpen, setPublishedOpen] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishedSchedules, setPublishedSchedules] = useState<PublishedSchedule[]>([]);
+  const [bulkOperation, setBulkOperation] = useState<BulkOperation | null>(null);
+  /**
+   * Set when the week fetch reports STORE_NOT_MAPPED / POSITION_NOT_MAPPED.
+   * Stays null until C1 — these are setup failures, not user errors, so they
+   * replace the grid entirely rather than surfacing as a toast.
+   */
+  const [setupError, setSetupError] = useState<{
+    code: SetupErrorCode;
+    message?: string;
+  } | null>(null);
+  void setSetupError; // TODO(C1): set from the week fetch's error code
+  const [warning, setWarning] = useState<{
+    code: ScheduleWarningCode;
+    message?: string;
+    detail?: string;
+  } | null>(null);
 
   // Template state
   const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
@@ -212,46 +253,12 @@ export function SchedulingManager() {
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
 
-  // View mode
-  const [viewMode, setViewMode] = useState<ScheduleViewMode>("week");
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-
   // Availability & time-off
-  const [availability] = useState<AvailabilityRule[]>(INITIAL_AVAILABILITY);
-  const [timeOff] = useState<TimeOffEntry[]>(INITIAL_TIME_OFF);
+  const [availability, setAvailability] = useState<AvailabilityRule[]>(INITIAL_AVAILABILITY);
+  const [timeOff, setTimeOff] = useState<TimeOffEntry[]>(INITIAL_TIME_OFF);
   const [overtimeThreshold] = useState(DEFAULT_OVERTIME_THRESHOLD);
 
   const gridRef = useRef<HTMLDivElement>(null);
-
-  // Undo stack — stores previous allShifts + allActualShifts snapshots (max 20)
-  const undoStackRef = useRef<
-    { allShifts: Record<number, Shift[]>; allActualShifts: Record<number, ActualShift[]>; label: string }[]
-  >([]);
-  const [canUndo, setCanUndo] = useState(false);
-
-  /** Save current allShifts/allActualShifts state before a mutation */
-  const pushUndo = useCallback(
-    (label: string) => {
-      undoStackRef.current.push({
-        allShifts: structuredClone(allShifts),
-        allActualShifts: structuredClone(allActualShifts),
-        label,
-      });
-      if (undoStackRef.current.length > 20) undoStackRef.current.shift();
-      setCanUndo(true);
-    },
-    [allShifts, allActualShifts]
-  );
-
-  /** Restore the last saved state */
-  const handleUndo = useCallback(() => {
-    const entry = undoStackRef.current.pop();
-    if (!entry) return;
-    setAllShifts(entry.allShifts);
-    setAllActualShifts(entry.allActualShifts);
-    setCanUndo(undoStackRef.current.length > 0);
-    toast.info(`Undone: ${entry.label}`);
-  }, []);
 
   // Shift dialog state
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false);
@@ -261,7 +268,6 @@ export function SchedulingManager() {
   } | null>(null);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
 
-  const week = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
 
   // Filter employees by search + department
   const filteredEmployees = useMemo(() => {
@@ -292,18 +298,27 @@ export function SchedulingManager() {
   // Summary stats
   const stats = useMemo(() => {
     const totalHours = displayShifts.reduce(
-      (acc, s) => acc + calcHours(s.startTime, s.endTime),
+      (acc, s) => acc + s.durationMinutes / 60,
       0
     );
     const uniqueEmployees = new Set(displayShifts.map((s) => s.employeeId)).size;
-    const laborCost = totalHours * 15;
+    // Per-employee rates rather than a flat $15/h. Note these are CURRENT
+    // rates: the API does not return the rate in force on the viewed date, so a
+    // past week can show a different cost than it did before someone's raise.
+    // TODO(C1): prefer the server's `stats.labor_cost` once the week payload lands.
+    const rateFor = (employeeId: string) =>
+      employeeLookup.get(employeeId)?.hourlyRate ?? FALLBACK_LABOR_RATE;
+    const laborCost = displayShifts.reduce(
+      (acc, s) => acc + (s.durationMinutes / 60) * rateFor(s.employeeId),
+      0
+    );
     return {
       totalHours,
       totalShifts: displayShifts.length,
       activeEmployees: uniqueEmployees,
       laborCost,
     };
-  }, [displayShifts]);
+  }, [displayShifts, employeeLookup]);
 
   // Conflict detection
   const conflicts = useMemo(() => detectConflicts(displayShifts), [displayShifts]);
@@ -343,19 +358,28 @@ export function SchedulingManager() {
   }, []);
 
   const handleDeleteShift = useCallback((shiftId: string) => {
-    pushUndo("Delete shift");
     setCurrentShifts((prev) => prev.filter((s) => s.id !== shiftId));
     toast.info("Shift removed");
-  }, [setCurrentShifts, pushUndo]);
+  }, [setCurrentShifts]);
 
   const handleConfirmShift = useCallback(
     (startTime: string, endTime: string, label: string, type: Shift["type"], isRecurring: boolean, note: string) => {
-      pushUndo(editingShift ? "Edit shift" : "Add shift");
       if (editingShift) {
         setCurrentShifts((prev) =>
           prev.map((s) =>
             s.id === editingShift.id
-              ? { ...s, startTime, endTime, label, type, isRecurring, recurringGroupId: isRecurring ? (s.recurringGroupId ?? s.id) : undefined, note: note || undefined }
+              ? {
+                  ...s,
+                  startTime,
+                  endTime,
+                  durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
+                  crossesMidnight: endTime <= startTime,
+                  label,
+                  type,
+                  isRecurring,
+                  recurringGroupId: isRecurring ? (s.recurringGroupId ?? s.id) : undefined,
+                  note: note || undefined,
+                }
               : s
           )
         );
@@ -367,10 +391,18 @@ export function SchedulingManager() {
       const shiftId = `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const newShift: Shift = {
         id: shiftId,
+        // TODO(C3): the server assigns both ids; drop the local generation.
+        shiftId: `s-${shiftId}`,
         employeeId: pendingAdd.employeeId,
         dayIndex: pendingAdd.dayIndex,
+        shiftDate: dateForDayIndex(week, pendingAdd.dayIndex),
         startTime,
         endTime,
+        durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
+        crossesMidnight: endTime <= startTime,
+        isPublished: false,
+        syncStatus: "synced",
+        origin: "operations",
         label,
         type,
         isRecurring,
@@ -381,19 +413,20 @@ export function SchedulingManager() {
       setPendingAdd(null);
       toast.success("Shift added");
     },
-    [pendingAdd, editingShift, setCurrentShifts, pushUndo]
+    [pendingAdd, editingShift, setCurrentShifts]
   );
 
   /** Instantly confirm a ghost/pending planned shift as worked-as-scheduled — no dialog */
   const handleConfirmActualShift = useCallback(
     (plannedShift: Shift) => {
-      pushUndo("Confirm shift");
       const newActual: ActualShift = {
         id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         employeeId: plannedShift.employeeId,
         dayIndex: plannedShift.dayIndex,
+        shiftDate: plannedShift.shiftDate,
         startTime: plannedShift.startTime,
         endTime: plannedShift.endTime,
+        durationMinutes: plannedShift.durationMinutes,
         label: plannedShift.label,
         type: plannedShift.type,
         status: "confirmed",
@@ -402,7 +435,7 @@ export function SchedulingManager() {
       setCurrentActualShifts((prev) => [...prev, newActual]);
       toast.success("Marked as worked as planned");
     },
-    [setCurrentActualShifts, pushUndo]
+    [setCurrentActualShifts]
   );
 
   /** Open the actual-shift dialog to edit a linked/ghost shift, or add ad-hoc coverage */
@@ -438,7 +471,6 @@ export function SchedulingManager() {
     (startTime: string, endTime: string, label: string, type: Shift["type"], note: string) => {
       if (!editingActualTarget) return;
       const { employeeId, dayIndex, plannedShift, actual } = editingActualTarget;
-      pushUndo(actual ? "Edit actual shift" : "Add actual coverage");
 
       const status: ActualShift["status"] = !plannedShift
         ? "added"
@@ -450,7 +482,16 @@ export function SchedulingManager() {
         setCurrentActualShifts((prev) =>
           prev.map((a) =>
             a.id === actual.id
-              ? { ...a, startTime, endTime, label, type, status, note: note || undefined }
+              ? {
+                  ...a,
+                  startTime,
+                  endTime,
+                  durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
+                  label,
+                  type,
+                  status,
+                  note: note || undefined,
+                }
               : a
           )
         );
@@ -460,8 +501,10 @@ export function SchedulingManager() {
           id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           employeeId,
           dayIndex,
+          shiftDate: dateForDayIndex(week, dayIndex),
           startTime,
           endTime,
+          durationMinutes: Math.round(calcHours(startTime, endTime) * 60),
           label,
           type,
           status,
@@ -474,14 +517,13 @@ export function SchedulingManager() {
       setActualDialogOpen(false);
       setEditingActualTarget(null);
     },
-    [editingActualTarget, setCurrentActualShifts, pushUndo]
+    [editingActualTarget, setCurrentActualShifts]
   );
 
   /** Mark the shift currently open in the actual-shift dialog as no attendance */
   const handleMarkAbsent = useCallback(() => {
     if (!editingActualTarget) return;
     const { employeeId, dayIndex, plannedShift, actual } = editingActualTarget;
-    pushUndo("Mark no attendance");
 
     if (actual) {
       setCurrentActualShifts((prev) =>
@@ -492,8 +534,10 @@ export function SchedulingManager() {
         id: `actual-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         employeeId,
         dayIndex,
+        shiftDate: plannedShift.shiftDate,
         startTime: plannedShift.startTime,
         endTime: plannedShift.endTime,
+        durationMinutes: plannedShift.durationMinutes,
         label: plannedShift.label,
         type: plannedShift.type,
         status: "absent",
@@ -504,21 +548,88 @@ export function SchedulingManager() {
     toast.info("Marked as no attendance");
     setActualDialogOpen(false);
     setEditingActualTarget(null);
-  }, [editingActualTarget, setCurrentActualShifts, pushUndo]);
+  }, [editingActualTarget, setCurrentActualShifts]);
 
   /** Delete an actual entry — reverts linked shifts back to ghost/pending, removes standalone coverage entirely */
   const handleDeleteActualShift = useCallback(
     (actual: ActualShift) => {
-      pushUndo(actual.plannedShiftId ? "Revert to planned" : "Remove coverage");
       setCurrentActualShifts((prev) => prev.filter((a) => a.id !== actual.id));
       toast.info(actual.plannedShiftId ? "Reverted to planned schedule" : "Coverage removed");
     },
-    [setCurrentActualShifts, pushUndo]
+    [setCurrentActualShifts]
   );
 
-  const handleGoToToday = useCallback(() => {
-    setWeekOffset(0);
+  /** TODO(C8): POST /availability-overrides, converting dayIndex -> day_of_week. */
+  const handleAddAvailability = useCallback((draft: AvailabilityOverrideDraft) => {
+    setAvailability((prev) => [
+      ...prev,
+      {
+        id: `avail-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        employeeId: draft.employeeId,
+        dayIndex: draft.dayIndex,
+        date: draft.specificDate,
+        allDay: draft.allDay,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        reason: draft.reason,
+        source: "override",
+      },
+    ]);
+    toast.success("Blocked time added");
   }, []);
+
+  const handleDeleteAvailability = useCallback((rule: AvailabilityRule) => {
+    if (rule.source === "employee_profile") {
+      toast.error("This comes from the employee's profile and must be changed there");
+      return;
+    }
+    setAvailability((prev) => prev.filter((r) => r.id !== rule.id));
+    toast.info("Blocked time removed");
+  }, []);
+
+  /** TODO(C8): POST /time-off with a date range; the API expands it per day. */
+  const handleAddTimeOff = useCallback(
+    (draft: TimeOffDraft) => {
+      const timeOffId = `${Date.now()}`;
+      const added: TimeOffEntry[] = [];
+      week.fullDates.forEach((date, dayIndex) => {
+        if (date >= draft.startDate && date <= draft.endDate) {
+          added.push({
+            id: `${timeOffId}-${dayIndex}`,
+            timeOffId,
+            employeeId: draft.employeeId,
+            dayIndex,
+            date,
+            type: draft.type,
+            label: draft.label,
+            status: "approved",
+            origin: "operations",
+          });
+        }
+      });
+      if (added.length === 0) {
+        toast.warning("That date range doesn't overlap the week on screen");
+        return;
+      }
+      setTimeOff((prev) => [...prev, ...added]);
+      toast.success(`Time off added for ${added.length} day${added.length !== 1 ? "s" : ""}`);
+    },
+    [week.fullDates]
+  );
+
+  const handleDeleteTimeOff = useCallback((entry: TimeOffEntry) => {
+    if (entry.origin === "humanity") {
+      toast.error("This leave was approved in the HR system and must be withdrawn there");
+      return;
+    }
+    // Deleting removes every day of the leave, which is what the API does.
+    setTimeOff((prev) => prev.filter((e) => e.timeOffId !== entry.timeOffId));
+    toast.info("Time off removed");
+  }, []);
+
+  const handleGoToToday = useCallback(() => {
+    setWeekStart(snapToWeekStart(todayIso(), week.weekStartDow));
+  }, [week.weekStartDow]);
 
   /**
    * Copy previous week's shifts into the current week.
@@ -526,24 +637,29 @@ export function SchedulingManager() {
    * dayIndex is preserved (0=Tue … 6=Mon) — it maps 1:1 between weeks.
    */
   const handleConfirmCopyPreviousWeek = useCallback(() => {
-    const prevShifts = allShifts[weekOffset - 1] ?? [];
+    const prevShifts = allShifts[previousWeekStart] ?? [];
     if (prevShifts.length === 0) {
       toast.warning("No shifts found in the previous week");
       return;
     }
-    const copied: Shift[] = prevShifts.map((s) => ({
-      ...s,
-      id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    }));
-    pushUndo("Copy previous week");
-    setAllShifts((all) => ({ ...all, [weekOffset]: copied }));
+    const copied: Shift[] = prevShifts.map((s, i) => {
+      const id = `shift-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`;
+      return {
+        ...s,
+        id,
+        shiftId: `s-${id}`,
+        // dayIndex maps 1:1 between weeks, but the absolute date must move.
+        shiftDate: dateForDayIndex(week, s.dayIndex),
+      };
+    });
+    setAllShifts((all) => ({ ...all, [week.start]: copied }));
     toast.success(
       `Copied ${copied.length} shift${copied.length !== 1 ? "s" : ""} from the previous week`
     );
-  }, [allShifts, weekOffset]);
+  }, [allShifts, previousWeekStart, week.start]);
 
   /** Derived: does the previous week have any shifts? Used to disable the menu item. */
-  const hasPreviousWeekShifts = (allShifts[weekOffset - 1] ?? []).length > 0;
+  const hasPreviousWeekShifts = (allShifts[previousWeekStart] ?? []).length > 0;
 
   /** Save the current week's shifts as a reusable template */
   const handleSaveTemplate = useCallback(() => {
@@ -556,7 +672,7 @@ export function SchedulingManager() {
       return;
     }
     const totalHours = shifts.reduce(
-      (acc, s) => acc + calcHours(s.startTime, s.endTime),
+      (acc, s) => acc + s.durationMinutes / 60,
       0
     );
     const template: ScheduleTemplate = {
@@ -564,7 +680,15 @@ export function SchedulingManager() {
       name: templateName.trim(),
       description: templateDescription.trim(),
       createdAt: new Date().toISOString(),
-      shifts: shifts.map(({ id: _id, ...rest }) => rest),
+      shifts: shifts.map((s) => ({
+        employeeId: s.employeeId,
+        dayIndex: s.dayIndex,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        label: s.label,
+        type: s.type,
+        note: s.note,
+      })),
       shiftCount: shifts.length,
       totalHours,
     };
@@ -578,18 +702,27 @@ export function SchedulingManager() {
   /** Load a template's shifts into the current week */
   const handleLoadTemplate = useCallback(
     (template: ScheduleTemplate) => {
-      const loaded: Shift[] = template.shifts.map((s) => ({
-        ...s,
-        id: `shift-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      }));
-      pushUndo("Load template");
-      setAllShifts((all) => ({ ...all, [weekOffset]: loaded }));
+      const loaded: Shift[] = (template.shifts ?? []).map((s, i) => {
+        const id = `shift-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`;
+        return {
+          ...s,
+          id,
+          shiftId: `s-${id}`,
+          shiftDate: dateForDayIndex(week, s.dayIndex),
+          durationMinutes: Math.round(calcHours(s.startTime, s.endTime) * 60),
+          crossesMidnight: s.endTime <= s.startTime,
+          isPublished: false,
+          syncStatus: "synced" as const,
+          origin: "operations" as const,
+        };
+      });
+      setAllShifts((all) => ({ ...all, [week.start]: loaded }));
       setLoadTemplateOpen(false);
       toast.success(
         `Loaded template "${template.name}" — ${loaded.length} shift${loaded.length !== 1 ? "s" : ""}`
       );
     },
-    [weekOffset]
+    [week.start]
   );
 
   /** Delete a saved template */
@@ -607,7 +740,7 @@ export function SchedulingManager() {
         "Employee",
         "Role",
         "Department",
-        ...DAYS_SHORT.map((d, i) => `${d} ${week.dayDates[i] ?? ""}`),
+        ...week.dayNamesShort.map((d, i) => `${d} ${week.dayDates[i] ?? ""}`),
         "Total Hours",
         "Total Shifts",
       ];
@@ -617,7 +750,7 @@ export function SchedulingManager() {
       for (const emp of DUMMY_EMPLOYEES) {
         let totalHours = 0;
         let totalShifts = 0;
-        const dayCells = DAYS_SHORT.map((_, dayIdx) => {
+        const dayCells = week.dayNamesShort.map((_, dayIdx) => {
           const dayShifts = shifts.filter(
             (s) => s.employeeId === emp.id && s.dayIndex === dayIdx
           );
@@ -625,7 +758,7 @@ export function SchedulingManager() {
           totalShifts += dayShifts.length;
           return dayShifts
             .map((s) => {
-              const h = calcHours(s.startTime, s.endTime);
+              const h = s.durationMinutes / 60;
               totalHours += h;
               return `${formatTime(s.startTime)}-${formatTime(s.endTime)} (${s.label})`;
             })
@@ -648,13 +781,13 @@ export function SchedulingManager() {
         "Daily Totals",
         "",
         "",
-        ...DAYS_SHORT.map((_, dayIdx) => {
+        ...week.dayNamesShort.map((_, dayIdx) => {
           const h = shifts
             .filter((s) => s.dayIndex === dayIdx)
-            .reduce((acc, s) => acc + calcHours(s.startTime, s.endTime), 0);
+            .reduce((acc, s) => acc + s.durationMinutes / 60, 0);
           return h > 0 ? `${h.toFixed(1)}h` : "—";
         }),
-        `${shifts.reduce((acc, s) => acc + calcHours(s.startTime, s.endTime), 0).toFixed(1)}h`,
+        `${shifts.reduce((acc, s) => acc + s.durationMinutes / 60, 0).toFixed(1)}h`,
         String(shifts.length),
       ];
       rows.push(dayTotalRow);
@@ -713,6 +846,77 @@ export function SchedulingManager() {
   }, [week.label]);
 
   /** Capture an employee-facing screenshot (no hours, totals, or time-off) */
+  /**
+   * Publish the current week.
+   *
+   * Uses the EMPLOYEE view (no hours, totals or time off) because that is what
+   * actually gets posted in store, and `canvas.toBlob` rather than
+   * `toDataURL` — at scale 2 a 10x7 grid is 1-3 MB, which has no business
+   * travelling as base64 inside a JSON body.
+   *
+   * TODO(C9): POST multipart to /published-schedules and let the browser set
+   * the Content-Type boundary itself.
+   */
+  const handlePublishWeek = useCallback(async () => {
+    setIsPublishing(true);
+    setIsEmployeeScreenshot(true);
+    await new Promise((r) => setTimeout(r, 100));
+    try {
+      const html2canvas = (await import("html2canvas-pro")).default;
+      const target = gridRef.current;
+      if (!target) return;
+      const canvas = await html2canvas(target, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/png")
+      );
+      if (!blob) {
+        toast.error("Could not render the schedule image");
+        return;
+      }
+
+      setPublishedSchedules((prev) => [
+        {
+          id: `pub-${Date.now()}`,
+          weekStartDate: week.start,
+          weekLabel: week.label,
+          publishedAt: new Date().toISOString(),
+          screenshotUrl: URL.createObjectURL(blob),
+          shiftCount: shifts.length,
+          totalHours: shifts.reduce((acc, sh) => acc + sh.durationMinutes / 60, 0),
+        },
+        // Re-publishing a week supersedes the previous record for it.
+        ...prev.map((rec) =>
+          rec.weekStartDate === week.start && !rec.unpublishedAt
+            ? { ...rec, unpublishedAt: new Date().toISOString() }
+            : rec
+        ),
+      ]);
+      toast.success(`Published ${week.label}`);
+    } catch {
+      toast.error("Could not publish this week");
+    } finally {
+      setIsEmployeeScreenshot(false);
+      setIsPublishing(false);
+    }
+  }, [week.start, week.label, shifts]);
+
+  const handleDeletePublished = useCallback((id: string) => {
+    setPublishedSchedules((prev) => prev.filter((p) => p.id !== id));
+    toast.info("Published schedule deleted");
+  }, []);
+
+  /** TODO(C7): POST /schedule/bulk/clear-week with confirm:true, then poll. */
+  const handleConfirmClearWeek = useCallback(() => {
+    setCurrentShifts(() => []);
+    setClearConfirmOpen(false);
+    toast.info("Week cleared");
+  }, [setCurrentShifts]);
+
   const handleEmployeeScreenshot = useCallback(async () => {
     setIsEmployeeScreenshot(true);
     // Give React one tick to re-render with employeeView=true
@@ -741,6 +945,46 @@ export function SchedulingManager() {
     }
   }, [week.label]);
 
+  if (setupError) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Employee Schedule"
+          description="Manage weekly shifts for your team"
+        />
+        <ScheduleSetupError
+          code={setupError.code}
+          message={setupError.message}
+          storeLabel={selectedStore?.name ?? selectedStore?.storeId ?? null}
+        />
+      </div>
+    );
+  }
+
+  if (!selectedStore) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Employee Schedule"
+          description="Manage weekly shifts for your team"
+        />
+        <Card className="border-2 border-dashed border-muted-foreground/25">
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <div className="rounded-full bg-muted p-2.5">
+              <Store className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold">No Store Selected</h3>
+              <p className="max-w-sm text-[11px] text-muted-foreground">
+                Select a store from the sidebar to view and edit its schedule.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-4">
@@ -758,7 +1002,7 @@ export function SchedulingManager() {
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setWeekOffset((o) => o - 1)}
+              onClick={() => setWeekStart((w) => shiftIsoDate(w, -7))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -774,12 +1018,12 @@ export function SchedulingManager() {
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setWeekOffset((o) => o + 1)}
+              onClick={() => setWeekStart((w) => shiftIsoDate(w, 7))}
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            {weekOffset !== 0 && (
+            {week.start !== snapToWeekStart(todayIso(), week.weekStartDow) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -790,114 +1034,54 @@ export function SchedulingManager() {
               </Button>
             )}
 
-            {/* View mode toggle */}
-            <div className="flex items-center rounded-md border bg-muted/40 p-0.5 ml-2">
+            <div
+              className={cn(
+                "flex items-center rounded-md border bg-muted/40 p-0.5 ml-2 transition-opacity",
+                comparisonMode && "opacity-50 pointer-events-none"
+              )}
+            >
               <Button
-                variant={viewMode === "week" ? "default" : "ghost"}
+                variant={scheduleMode === "planned" ? "default" : "ghost"}
                 size="sm"
                 className="h-7 gap-1 text-xs px-2.5"
-                onClick={() => setViewMode("week")}
+                onClick={() => setScheduleMode("planned")}
+                disabled={comparisonMode}
               >
-                <LayoutGrid className="h-3.5 w-3.5" />
-                Week
+                <CalendarCheck className="h-3.5 w-3.5" />
+                Planned
               </Button>
               <Button
-                variant={viewMode === "day" ? "default" : "ghost"}
+                variant={scheduleMode === "actual" ? "default" : "ghost"}
                 size="sm"
                 className="h-7 gap-1 text-xs px-2.5"
-                onClick={() => setViewMode("day")}
+                onClick={() => setScheduleMode("actual")}
+                disabled={comparisonMode}
               >
-                <CalendarDays className="h-3.5 w-3.5" />
-                Day
-              </Button>
-              <Button
-                variant={viewMode === "month" ? "default" : "ghost"}
-                size="sm"
-                className="h-7 gap-1 text-xs px-2.5"
-                onClick={() => setViewMode("month")}
-              >
-                <CalendarRange className="h-3.5 w-3.5" />
-                Month
+                <ClipboardCheck className="h-3.5 w-3.5" />
+                Actual
               </Button>
             </div>
 
-            {/* Planned / Actual toggle + Comparison — week view only */}
-            {viewMode === "week" && (
-              <>
-                <div
-                  className={cn(
-                    "flex items-center rounded-md border bg-muted/40 p-0.5 ml-2 transition-opacity",
-                    comparisonMode && "opacity-50 pointer-events-none"
-                  )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={comparisonMode ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 gap-1.5 text-xs ml-1"
+                  onClick={() => setComparisonMode((c) => !c)}
                 >
-                  <Button
-                    variant={scheduleMode === "planned" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-7 gap-1 text-xs px-2.5"
-                    onClick={() => setScheduleMode("planned")}
-                    disabled={comparisonMode}
-                  >
-                    <CalendarCheck className="h-3.5 w-3.5" />
-                    Planned
-                  </Button>
-                  <Button
-                    variant={scheduleMode === "actual" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-7 gap-1 text-xs px-2.5"
-                    onClick={() => setScheduleMode("actual")}
-                    disabled={comparisonMode}
-                  >
-                    <ClipboardCheck className="h-3.5 w-3.5" />
-                    Actual
-                  </Button>
-                </div>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={comparisonMode ? "default" : "outline"}
-                      size="sm"
-                      className="h-8 gap-1.5 text-xs ml-1"
-                      onClick={() => setComparisonMode((c) => !c)}
-                    >
-                      <GitCompare className="h-3.5 w-3.5" />
-                      Compare
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
-                    Comparison always shows both planned and actual times side by side
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            )}
+                  <GitCompare className="h-3.5 w-3.5" />
+                  Compare
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Comparison always shows both planned and actual times side by side
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Filters */}
           <div className="flex items-center gap-2">
-            {/* Day selector (visible in day view) */}
-            {viewMode === "day" && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
-                    <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                    {DAYS_SHORT[selectedDayIndex]} {week.dayDates[selectedDayIndex]}
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {DAYS_SHORT.map((day, idx) => (
-                    <DropdownMenuItem
-                      key={idx}
-                      onSelect={() => setSelectedDayIndex(idx)}
-                      className="gap-2 cursor-pointer"
-                    >
-                      {idx === selectedDayIndex && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                      <span className={idx === selectedDayIndex ? "font-medium" : "pl-3.5"}>{day} {week.dayDates[idx]}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -907,6 +1091,23 @@ export function SchedulingManager() {
                 className="h-8 w-45 pl-8 text-sm"
               />
             </div>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-sm"
+                  onClick={() => setAvailabilityOpen(true)}
+                >
+                  <CalendarOff className="h-3.5 w-3.5 text-muted-foreground" />
+                  Availability
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Manage blocked times and time off for this week
+              </TooltipContent>
+            </Tooltip>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -942,15 +1143,6 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={!canUndo}
-                  onSelect={handleUndo}
-                  className="gap-2 cursor-pointer"
-                >
-                  <Undo2 className="h-4 w-4 text-sky-600" />
-                  Undo Last Action
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
                   disabled={!hasPreviousWeekShifts}
                   onSelect={() => setCopyConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
@@ -958,17 +1150,37 @@ export function SchedulingManager() {
                   <Copy className="h-4 w-4 text-blue-600" />
                   Copy Previous Week
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled className="gap-2 cursor-not-allowed opacity-60">
+                <DropdownMenuItem
+                  disabled={shifts.length === 0}
+                  onSelect={() => setClearConfirmOpen(true)}
+                  className="gap-2 cursor-pointer"
+                >
                   <Trash2 className="h-4 w-4 text-rose-500" />
                   Clear Week
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled className="gap-2 cursor-not-allowed opacity-60">
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                  Unpublish Week
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Publish
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={isPublishing || shifts.length === 0}
+                  onSelect={handlePublishWeek}
+                  className="gap-2 cursor-pointer"
+                >
+                  {isPublishing ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  ) : (
+                    <Send className="h-4 w-4 text-emerald-600" />
+                  )}
+                  Publish Week
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled className="gap-2 cursor-not-allowed opacity-60">
-                  <UserX className="h-4 w-4 text-amber-500" />
-                  Unassign Week
+                <DropdownMenuItem
+                  onSelect={() => setPublishedOpen(true)}
+                  className="gap-2 cursor-pointer"
+                >
+                  <History className="h-4 w-4 text-sky-600" />
+                  Published History
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Templates</DropdownMenuLabel>
@@ -1093,7 +1305,7 @@ export function SchedulingManager() {
               </div>
               <div>
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                  Est. Labor
+                  Est. Labor (current rates)
                 </p>
                 <p className="text-lg font-bold leading-tight">
                   ${stats.laborCost.toLocaleString("en-US", {
@@ -1145,65 +1357,31 @@ export function SchedulingManager() {
           </div>
         )}
 
-        {/* The schedule view — switches between week / day / month */}
+        {/* The schedule view — week grid */}
         <div ref={gridRef}>
-          {viewMode === "week" && (
-            <ScheduleGrid
-              employees={filteredEmployees}
-              shifts={shifts}
-              week={week}
-              conflictIds={conflictIds}
-              overtimeEmpIds={overtimeEmpIds}
-              overtimeThreshold={overtimeThreshold}
-              availability={availability}
-              timeOff={timeOff}
-              onAddShift={handleAddShift}
-              onEditShift={handleEditShift}
-              onDeleteShift={handleDeleteShift}
-              employeeView={isEmployeeScreenshot}
-              scheduleMode={scheduleMode}
-              comparisonMode={comparisonMode}
-              actualShifts={actualShifts}
-              displayShifts={displayShifts}
-              onConfirmActual={handleConfirmActualShift}
-              onEditActual={handleOpenActualDialog}
-              onDeleteActual={handleDeleteActualShift}
-              onAddCoverage={handleAddCoverage}
-            />
-          )}
+          <ScheduleGrid
+            employees={filteredEmployees}
+            shifts={shifts}
+            week={week}
+            conflictIds={conflictIds}
+            overtimeEmpIds={overtimeEmpIds}
+            overtimeThreshold={overtimeThreshold}
+            availability={availability}
+            timeOff={timeOff}
+            onAddShift={handleAddShift}
+            onEditShift={handleEditShift}
+            onDeleteShift={handleDeleteShift}
+            employeeView={isEmployeeScreenshot}
+            scheduleMode={scheduleMode}
+            comparisonMode={comparisonMode}
+            actualShifts={actualShifts}
+            displayShifts={displayShifts}
+            onConfirmActual={handleConfirmActualShift}
+            onEditActual={handleOpenActualDialog}
+            onDeleteActual={handleDeleteActualShift}
+          onAddCoverage={handleAddCoverage}
+        />
 
-          {viewMode === "day" && (
-            <DayView
-              employees={filteredEmployees}
-              shifts={shifts}
-              dayIndex={selectedDayIndex}
-              week={week}
-              conflictIds={conflictIds}
-              overtimeEmpIds={overtimeEmpIds}
-              availability={availability}
-              timeOff={timeOff}
-              onAddShift={handleAddShift}
-              onEditShift={handleEditShift}
-              onDeleteShift={handleDeleteShift}
-            />
-          )}
-
-          {viewMode === "month" && (
-            <MonthOverview
-              weekOffset={weekOffset}
-              allShifts={allShifts}
-              getWeekDates={getWeekDates}
-              onNavigateToWeek={(offset) => {
-                setWeekOffset(offset);
-                setViewMode("week");
-              }}
-              onNavigateToDay={(offset, dayIdx) => {
-                setWeekOffset(offset);
-                setSelectedDayIndex(dayIdx);
-                setViewMode("day");
-              }}
-            />
-          )}
         </div>
 
         {/* Quick actions footer */}
@@ -1218,7 +1396,6 @@ export function SchedulingManager() {
               size="sm"
               className="text-destructive hover:text-destructive text-xs"
               onClick={() => {
-                pushUndo("Clear all shifts");
                 setCurrentShifts(() => []);
                 toast.info("All shifts cleared");
               }}
@@ -1241,9 +1418,9 @@ export function SchedulingManager() {
           employee={targetEmployee}
           dayLabel={
             editingShift
-              ? DAYS_OF_WEEK[editingShift.dayIndex]
+              ? week.dayNames[editingShift.dayIndex]
               : pendingAdd
-                ? DAYS_OF_WEEK[pendingAdd.dayIndex]
+                ? week.dayNames[pendingAdd.dayIndex]
                 : ""
           }
           dayIndex={editingShift?.dayIndex ?? pendingAdd?.dayIndex ?? 0}
@@ -1254,6 +1431,88 @@ export function SchedulingManager() {
           editingShift={editingShift}
         />
 
+        {/* Availability & time off */}
+        <AvailabilityTimeOffDialog
+          open={availabilityOpen}
+          onOpenChange={setAvailabilityOpen}
+          week={week}
+          employees={DUMMY_EMPLOYEES}
+          availability={availability}
+          timeOff={timeOff}
+          onAddAvailability={handleAddAvailability}
+          onDeleteAvailability={handleDeleteAvailability}
+          onAddTimeOff={handleAddTimeOff}
+          onDeleteTimeOff={handleDeleteTimeOff}
+        />
+
+        {/* Published history */}
+        <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Published schedules</DialogTitle>
+              <DialogDescription>
+                Weeks that have been published for staff. Re-publishing a week
+                supersedes its previous record.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-y-auto">
+              <PublishedSchedules
+                schedules={publishedSchedules}
+                onDelete={handleDeletePublished}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPublishedOpen(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Overridable refusals (conflict / unavailable / on leave / published) */}
+        <ScheduleWarningDialog
+          code={warning?.code ?? null}
+          message={warning?.message}
+          detail={warning?.detail}
+          onConfirm={() => setWarning(null)}
+          onCancel={() => setWarning(null)}
+        />
+
+        {/* Async bulk operation progress */}
+        <BulkOperationProgress
+          operation={bulkOperation}
+          onRetryFailed={() => undefined}
+          onClose={() => setBulkOperation(null)}
+        />
+
+        {/* Clear week confirmation */}
+        <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear this week?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This deletes all <strong>{shifts.length}</strong> shift
+                {shifts.length !== 1 ? "s" : ""} in <strong>{week.label}</strong>.
+                Employees may already be working from this schedule, and this
+                cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmClearWeek}
+                className="bg-destructive text-white hover:bg-destructive/90"
+              >
+                Clear week
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Edit Actual Shift dialog */}
         <EditActualShiftDialog
           open={actualDialogOpen}
@@ -1262,7 +1521,7 @@ export function SchedulingManager() {
             if (!open) setEditingActualTarget(null);
           }}
           employee={targetActualEmployee}
-          dayLabel={editingActualTarget ? DAYS_OF_WEEK[editingActualTarget.dayIndex] : ""}
+          dayLabel={editingActualTarget ? week.dayNames[editingActualTarget.dayIndex] : ""}
           plannedShift={editingActualTarget?.plannedShift}
           editingActual={editingActualTarget?.actual}
           onSave={handleSaveActualShift}

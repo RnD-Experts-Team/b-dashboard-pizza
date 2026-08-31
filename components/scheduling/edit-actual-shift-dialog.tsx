@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { UserX, Clock } from "lucide-react";
 import type { ScheduleEmployee, Shift, ActualShift } from "@/types/scheduling.types";
-import { formatTime, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS, calcHours, formatTime } from "@/lib/scheduling/constants";
 
 interface EditActualShiftDialogProps {
   open: boolean;

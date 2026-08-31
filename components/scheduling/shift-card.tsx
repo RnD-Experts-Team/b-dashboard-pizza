@@ -8,8 +8,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
 import type { Shift } from "@/types/scheduling.types";
+import {
+  ShiftOriginIndicator,
+  ShiftSyncIndicator,
+} from "./shift-sync-badge";
 
 interface ShiftCardProps {
   shift: Shift;
@@ -21,7 +25,7 @@ interface ShiftCardProps {
 
 export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: ShiftCardProps) {
   const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
-  const hours = calcHours(shift.startTime, shift.endTime);
+  const hours = shift.durationMinutes / 60;
 
   return (
     <Tooltip>
@@ -32,7 +36,11 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             hasConflict
               ? "bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-700 ring-1 ring-red-400/40"
               : cn(palette.bg, palette.border),
-            shift.isRecurring && "border-dashed border-2"
+            shift.isRecurring && "border-dashed border-2",
+            !hasConflict &&
+              shift.syncStatus === "parked" &&
+              "border-rose-400/70 dark:border-rose-700/70",
+            !hasConflict && shift.syncStatus === "pending" && "opacity-90"
           )}
           onClick={() => onEdit(shift)}
         >
@@ -76,6 +84,14 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             </div>
           )}
 
+          {/* Sync state + origin — bottom-left, clear of the other corners */}
+          {(shift.syncStatus !== "synced" || shift.origin !== "operations") && (
+            <div className="absolute bottom-0.5 left-0.5 z-5 flex items-center gap-1">
+              <ShiftSyncIndicator syncStatus={shift.syncStatus} />
+              <ShiftOriginIndicator origin={shift.origin} />
+            </div>
+          )}
+
           {/* Note indicator */}
           {shift.note && (
             <div className={cn("absolute bottom-0.5 right-0.5 z-5")}>
@@ -114,6 +130,17 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
         )}
         {shift.isRecurring && (
           <p className="text-indigo-500">↻ Recurring weekly</p>
+        )}
+        {shift.syncStatus === "pending" && (
+          <p className="text-sky-500">Saved — waiting to reach Humanity</p>
+        )}
+        {shift.syncStatus === "parked" && (
+          <p className="font-medium text-rose-500">
+            Saved here, but not in Humanity — needs attention
+          </p>
+        )}
+        {shift.origin !== "operations" && (
+          <p className="text-muted-foreground">Last changed in Humanity</p>
         )}
         {shift.note && (
           <p className="text-amber-600 dark:text-amber-400 italic">📝 {shift.note}</p>

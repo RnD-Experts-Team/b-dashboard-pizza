@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { Plus, Ban, Palmtree, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -11,7 +10,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { DAYS_SHORT, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS } from "@/lib/scheduling/constants";
+import { todayIndexIn } from "@/lib/scheduling/week";
+import { EmployeeSyncBadge } from "./employee-sync-notice";
 import { actualForPlanned } from "@/lib/scheduling/utils";
 import { ShiftCard } from "./shift-card";
 import { ActualShiftCard } from "./actual-shift-card";
@@ -110,7 +111,7 @@ export function ScheduleGrid({
   const hoursMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of effectiveShifts) {
-      map[s.employeeId] = (map[s.employeeId] ?? 0) + calcHours(s.startTime, s.endTime);
+      map[s.employeeId] = (map[s.employeeId] ?? 0) + s.durationMinutes / 60;
     }
     return map;
   }, [effectiveShifts]);
@@ -124,17 +125,8 @@ export function ScheduleGrid({
     return map;
   }, [effectiveShifts]);
 
-  // Today highlight: find which dayIndex (0=Tue..6=Mon) is today
-  const todayIndex = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(week.fullDates[i]);
-      d.setHours(0, 0, 0, 0);
-      if (d.getTime() === today.getTime()) return i;
-    }
-    return -1;
-  }, [week.fullDates]);
+  // Today highlight — fullDates are ISO strings, so this is a plain lookup
+  const todayIndex = useMemo(() => todayIndexIn(week), [week]);
 
   // Per-day totals
   const dayTotals = useMemo(() => {
@@ -144,7 +136,7 @@ export function ScheduleGrid({
     }));
     for (const s of effectiveShifts) {
       if (s.dayIndex >= 0 && s.dayIndex < 7) {
-        totals[s.dayIndex].hours += calcHours(s.startTime, s.endTime);
+        totals[s.dayIndex].hours += s.durationMinutes / 60;
         totals[s.dayIndex].shifts += 1;
       }
     }
@@ -167,7 +159,7 @@ export function ScheduleGrid({
               </th>
 
               {/* Day columns */}
-              {DAYS_SHORT.map((day, i) => (
+              {week.dayNamesShort.map((day, i) => (
                 <th
                   key={day}
                   className={cn(
@@ -248,6 +240,7 @@ export function ScheduleGrid({
                           >
                             {emp.name}
                           </button>
+                          {!emp.synced && <EmployeeSyncBadge className="shrink-0" />}
                           {isOvertime && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -270,7 +263,7 @@ export function ScheduleGrid({
                   </td>
 
                   {/* Day cells */}
-                  {DAYS_SHORT.map((_, dayIdx) => {
+                  {week.dayNamesShort.map((_, dayIdx) => {
                     const key = `${emp.id}-${dayIdx}`;
                     const cellShifts = shiftMap[key] ?? [];
                     const cellAddedActuals = addedActualMap[key] ?? [];
@@ -423,9 +416,11 @@ export function ScheduleGrid({
                               {!isFullDayBlocked && !employeeView && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
+                                    <span className="block w-full">
                                     <Button
                                       variant="ghost"
                                       size="sm"
+                                      disabled={!emp.synced}
                                       className={cn(
                                         "h-6 w-full border border-dashed border-transparent text-muted-foreground/40",
                                         "hover:border-primary/30 hover:text-primary hover:bg-primary/5",
@@ -438,9 +433,12 @@ export function ScheduleGrid({
                                     >
                                       <Plus className="h-3 w-3" />
                                     </Button>
+                                    </span>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="text-xs">
-                                    Add shift for {emp.name}
+                                    {emp.synced
+                                      ? `Add shift for ${emp.name}`
+                                      : `${emp.name} is still being set up and can't be scheduled yet`}
                                   </TooltipContent>
                                 </Tooltip>
                               )}
@@ -487,7 +485,7 @@ export function ScheduleGrid({
                   Daily Totals
                 </span>
               </td>
-              {DAYS_SHORT.map((_, i) => (
+              {week.dayNamesShort.map((_, i) => (
                 <td
                   key={i}
                   className={cn(
@@ -510,7 +508,7 @@ export function ScheduleGrid({
               <td className="px-2 py-2 text-center">
                 <p className="text-xs font-bold">
                   {effectiveShifts.length > 0
-                    ? `${effectiveShifts.reduce((t, s) => t + calcHours(s.startTime, s.endTime), 0).toFixed(1)}h`
+                    ? `${effectiveShifts.reduce((t, s) => t + s.durationMinutes / 60, 0).toFixed(1)}h`
                     : "—"}
                 </p>
               </td>

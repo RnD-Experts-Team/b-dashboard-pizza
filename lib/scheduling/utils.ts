@@ -5,7 +5,6 @@ import type {
   TimeOffEntry,
   ActualShift,
 } from "@/types/scheduling.types";
-import { calcHours } from "./data";
 
 /** Convert "HH:mm" to total minutes from midnight */
 function toMinutes(time: string): number {
@@ -56,10 +55,10 @@ export function detectConflicts(shifts: Shift[]): ShiftConflict[] {
           )
         ) {
           conflicts.push({
-            shiftA: cell[i],
-            shiftB: cell[j],
             employeeId: cell[i].employeeId,
-            dayIndex: cell[i].dayIndex,
+            shiftAId: cell[i].id,
+            shiftBId: cell[j].id,
+            shiftDate: cell[i].shiftDate,
           });
         }
       }
@@ -68,12 +67,17 @@ export function detectConflicts(shifts: Shift[]): ShiftConflict[] {
   return conflicts;
 }
 
-/** Get the set of shift IDs that are in conflict */
+/**
+ * Flatten conflict rows into the set of conflicting ASSIGNMENT ids.
+ *
+ * Shaped to consume the server's `conflicts` array directly, so wiring C1 means
+ * deleting `detectConflicts` and feeding the payload straight in here.
+ */
 export function conflictedShiftIds(conflicts: ShiftConflict[]): Set<string> {
   const ids = new Set<string>();
   for (const c of conflicts) {
-    ids.add(c.shiftA.id);
-    ids.add(c.shiftB.id);
+    ids.add(c.shiftAId);
+    ids.add(c.shiftBId);
   }
   return ids;
 }
@@ -100,7 +104,7 @@ export function wouldConflict(
 export function weeklyHoursMap(shifts: Shift[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const s of shifts) {
-    map[s.employeeId] = (map[s.employeeId] ?? 0) + calcHours(s.startTime, s.endTime);
+    map[s.employeeId] = (map[s.employeeId] ?? 0) + s.durationMinutes / 60;
   }
   return map;
 }
@@ -148,24 +152,6 @@ export function hasTimeOff(
   );
 }
 
-/** Generate recurring shift copies for N future weeks. Returns new shifts keyed by weekOffset */
-export function generateRecurringShifts(
-  sourceShifts: Shift[],
-  weeksAhead: number,
-  currentWeekOffset: number
-): Record<number, Shift[]> {
-  const recurring = sourceShifts.filter((s) => s.isRecurring);
-  const result: Record<number, Shift[]> = {};
-  for (let w = 1; w <= weeksAhead; w++) {
-    const offset = currentWeekOffset + w;
-    result[offset] = recurring.map((s) => ({
-      ...s,
-      id: `shift-${Date.now()}-${w}-${Math.random().toString(36).slice(2, 7)}`,
-    }));
-  }
-  return result;
-}
-
 /** Coverage per day: { dayIndex: { employeeCount, totalHours, shiftCount } } */
 export function dailyCoverage(shifts: Shift[]): Record<
   number,
@@ -178,7 +164,7 @@ export function dailyCoverage(shifts: Shift[]): Record<
   for (const s of shifts) {
     if (s.dayIndex >= 0 && s.dayIndex < 7) {
       map[s.dayIndex].emps.add(s.employeeId);
-      map[s.dayIndex].hours += calcHours(s.startTime, s.endTime);
+      map[s.dayIndex].hours += s.durationMinutes / 60;
       map[s.dayIndex].count += 1;
     }
   }
@@ -218,15 +204,14 @@ export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shif
     if (!linked) continue; // pending review — excluded
     if (linked.status === "absent") continue; // no-show — excluded
     merged.push({
-      id: shift.id,
-      employeeId: linked.employeeId,
-      dayIndex: linked.dayIndex,
+      ...shift,
+      // Identity and sync state stay with the planned shift; times, label and
+      // duration come from what actually happened.
       startTime: linked.startTime,
       endTime: linked.endTime,
+      durationMinutes: linked.durationMinutes,
       label: linked.label,
       type: linked.type,
-      isRecurring: shift.isRecurring,
-      recurringGroupId: shift.recurringGroupId,
       note: linked.note ?? shift.note,
     });
   }
@@ -235,13 +220,21 @@ export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shif
     if (a.status === "added" && !a.plannedShiftId) {
       merged.push({
         id: a.id,
+        // Ad-hoc coverage has no planned shift behind it, so there is no
+        // Humanity shift id to carry.
+        shiftId: a.id,
         employeeId: a.employeeId,
         dayIndex: a.dayIndex,
+        shiftDate: a.shiftDate,
         startTime: a.startTime,
         endTime: a.endTime,
+        durationMinutes: a.durationMinutes,
         label: a.label,
         type: a.type,
         note: a.note,
+        isPublished: false,
+        syncStatus: "synced",
+        origin: "operations",
       });
     }
   }

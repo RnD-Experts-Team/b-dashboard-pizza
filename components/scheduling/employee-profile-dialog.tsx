@@ -22,7 +22,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS, DAYS_OF_WEEK, calcHours, formatTime } from "@/lib/scheduling/data";
+import { DAYS_OF_WEEK, EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
 import type {
   ScheduleEmployee,
   Shift,
@@ -57,7 +57,7 @@ export function EmployeeProfileDialog({
 
   const empShifts = shifts.filter((s) => s.employeeId === employee.id);
   const totalHours = empShifts.reduce(
-    (acc, s) => acc + calcHours(s.startTime, s.endTime),
+    (acc, s) => acc + s.durationMinutes / 60,
     0
   );
   const recurringCount = empShifts.filter((s) => s.isRecurring).length;
@@ -205,7 +205,7 @@ export function EmployeeProfileDialog({
                       )}
                     </div>
                     <span className="text-[11px] text-muted-foreground">
-                      {formatTime(s.startTime)} – {formatTime(s.endTime)} · {calcHours(s.startTime, s.endTime).toFixed(1)}h
+                      {formatTime(s.startTime)} – {formatTime(s.endTime)} · {(s.durationMinutes / 60).toFixed(1)}h
                     </span>
                     {s.note && (
                       <div className="flex items-center gap-1 mt-0.5">
