@@ -117,7 +117,7 @@ export default function CleaningChartPage() {
               {visibleTabs.map((tab) => (
                 <TabsTrigger key={tab.id} value={tab.id} className="gap-2 whitespace-nowrap">
                   <tab.icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t(`tabs.${tab.labelKey}`)}</span>
+                  <span>{t(`tabs.${tab.labelKey}`)}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -260,16 +260,16 @@ function DueTab() {
             type="button"
             onClick={() => setStatus(statusTab.key)}
             className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none",
+              "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-3",
               status === statusTab.key
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t(`due.${statusTab.labelKey}`)}
+            <span className="truncate">{t(`due.${statusTab.labelKey}`)}</span>
             <span
               className={cn(
-                "rounded-full px-1.5 text-xs tabular-nums",
+                "shrink-0 rounded-full px-1.5 text-xs tabular-nums",
                 status === statusTab.key ? "bg-muted" : "bg-muted/60"
               )}
             >

@@ -329,7 +329,7 @@ export function SalesChart({
           wide
         >
           {/* Weekly Totals Summary */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
             {(
               [
                 { label: "This Week", value: thisWeekTotal, color: "#008FFB", compare: prevWeekTotal },
@@ -375,8 +375,10 @@ export function SalesChart({
             })}
           </div>
 
-          {/* Day-by-day table */}
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+          {/* Day-by-day table — bleeds to the dialog's edges on mobile so the
+              horizontally-scrolling table gets the full viewport width to work
+              with, instead of being squeezed inside the dialog's own padding. */}
+          <div className="-mx-4 sm:mx-0 overflow-x-auto border-y sm:rounded-lg sm:border border-zinc-200 dark:border-zinc-700">
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-700">

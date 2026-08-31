@@ -160,7 +160,7 @@ export default function ItemsPage() {
       header: "Status",
       cell: (item: Item) =>
         item.is_active ? (
-          <Badge className="bg-green-500 hover:bg-green-500/80">Active</Badge>
+          <Badge>Active</Badge>
         ) : (
           <Badge variant="outline" className="text-muted-foreground">
             Inactive
