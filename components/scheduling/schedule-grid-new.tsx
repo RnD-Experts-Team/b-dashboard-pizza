@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Ban, Palmtree, AlertTriangle } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS, calcHours } from "@/lib/scheduling/constants";
+import { EMPLOYEE_COLORS, calcHours, formatTime } from "@/lib/scheduling/constants";
 import { todayIndexIn } from "@/lib/scheduling/week";
 import { EmployeeSyncBadge } from "./employee-sync-notice";
 import { DraftShiftCard } from "./draft-shift-card";
@@ -18,7 +18,11 @@ import type { DraftShift } from "@/lib/scheduling/draft.store";
 
 /** Stable empty array — a fresh `[]` each render would invalidate the memos. */
 const NO_DRAFTS: DraftShift[] = [];
-import { actualForPlanned } from "@/lib/scheduling/utils";
+import {
+  actualForPlanned,
+  hasTimeOff,
+  isBlockedByAvailability,
+} from "@/lib/scheduling/utils";
 import { ShiftCard } from "./shift-card";
 import { ActualShiftCard } from "./actual-shift-card";
 import { ComparisonShiftCard } from "./comparison-shift-card";
@@ -64,6 +68,59 @@ interface ScheduleGridProps {
   draftShifts?: DraftShift[];
   onEditDraft?: (draft: DraftShift) => void;
   onDeleteDraft?: (draftId: string) => void;
+}
+
+/**
+ * The compact day-state pill: time off, all-day unavailable, or a partial block.
+ *
+ * All three were previously styled differently — two tall bordered boxes with
+ * centred icons, and one small one-line pill for partial blocks. Size ended up
+ * carrying meaning it was never meant to: a fully blocked day looked far more
+ * serious than a partially blocked one purely because its box was bigger, and
+ * the two tall boxes ate most of a cell that also has to hold shift cards. They
+ * are the same class of information, so they now share one shape and differ only
+ * by colour and wording, with the detail moved into the tooltip.
+ */
+function DayBlockPill({
+  tone,
+  label,
+  title,
+  detail,
+}: {
+  tone: "leave" | "blocked";
+  label: string;
+  title: string;
+  detail?: string | null;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            "rounded px-1 py-0.5 text-center",
+            tone === "leave"
+              ? "bg-purple-100 dark:bg-purple-900/30"
+              : "bg-slate-100 dark:bg-slate-800/30",
+          )}
+        >
+          <p
+            className={cn(
+              "truncate text-[9px] font-medium leading-tight",
+              tone === "leave"
+                ? "text-purple-600 dark:text-purple-300"
+                : "text-slate-400",
+            )}
+          >
+            {label}
+          </p>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        <p className="font-semibold">{title}</p>
+        {detail && <p>{detail}</p>}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function ScheduleGrid({
@@ -342,6 +399,33 @@ export function ScheduleGrid({
                     const isFullDayBlocked =
                       !!empTimeOff || empUnavailable.some((r) => r.allDay);
 
+                    /**
+                     * Why a specific shift clashes, or null.
+                     *
+                     * Computed PER SHIFT rather than per cell so a partial block
+                     * ("not before 17:00") only marks the shifts that actually
+                     * overlap it, instead of every card in the day.
+                     */
+                    const blockReasonFor = (
+                      startTime: string,
+                      endTime: string,
+                    ): string | null => {
+                      if (employeeView) return null;
+                      const off = hasTimeOff(emp.id, dayIdx, timeOff);
+                      if (off) return `${emp.name} is on ${off.label} this day`;
+                      const rule = isBlockedByAvailability(
+                        emp.id,
+                        dayIdx,
+                        startTime,
+                        endTime,
+                        availability,
+                      );
+                      if (!rule) return null;
+                      return rule.reason
+                        ? `${emp.name} is unavailable: ${rule.reason}`
+                        : `${emp.name} is marked unavailable at this time`;
+                    };
+
                     return (
                       <td
                         key={dayIdx}
@@ -352,50 +436,53 @@ export function ScheduleGrid({
                         )}
                       >
                         <div className="flex flex-col gap-0.5 sm:gap-1 min-h-13">
-                          {/* Time-off block */}
+                          {/* Day state — one shape for all three, see DayBlockPill */}
                           {empTimeOff && !employeeView && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="rounded-md border border-dashed border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-950/30 px-2 py-2 text-center">
-                                  <Palmtree className="h-3.5 w-3.5 mx-auto text-purple-500" />
-                                  <p className="text-[10px] font-semibold text-purple-700 dark:text-purple-300 mt-0.5">
-                                    {empTimeOff.label}
-                                  </p>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                <p className="font-semibold">{empTimeOff.label}</p>
-                                <p>{emp.name} is off this day</p>
-                              </TooltipContent>
-                            </Tooltip>
+                            <DayBlockPill
+                              tone="leave"
+                              label={empTimeOff.label}
+                              title={empTimeOff.label}
+                              detail={`${emp.name} is off this day`}
+                            />
                           )}
 
-                          {/* Unavailable block (all-day only when no time-off) */}
-                          {!empTimeOff && !employeeView && empUnavailable.some((r) => r.allDay) && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="rounded-md border border-dashed border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/40 px-2 py-2 text-center">
-                                  <Ban className="h-3.5 w-3.5 mx-auto text-slate-400" />
-                                  <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Unavailable
-                                  </p>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                <p className="font-semibold">Unavailable</p>
-                                <p>{empUnavailable.find((r) => r.allDay)?.reason}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
+                          {!empTimeOff &&
+                            !employeeView &&
+                            empUnavailable.some((r) => r.allDay) && (
+                              <DayBlockPill
+                                tone="blocked"
+                                label="Unavailable"
+                                title="Unavailable all day"
+                                detail={
+                                  empUnavailable.find((r) => r.allDay)?.reason ||
+                                  `${emp.name} is marked unavailable this day`
+                                }
+                              />
+                            )}
 
-                          {/* Partial unavailability indicator (non-blocking) */}
-                          {!empTimeOff && !employeeView && !empUnavailable.some((r) => r.allDay) && empUnavailable.length > 0 && (
-                            <div className="rounded bg-slate-100 dark:bg-slate-800/30 px-1 py-0.5 text-center">
-                              <p className="text-[9px] text-slate-400">
-                                Partial block
-                              </p>
-                            </div>
-                          )}
+                          {!empTimeOff &&
+                            !employeeView &&
+                            !empUnavailable.some((r) => r.allDay) &&
+                            empUnavailable.length > 0 && (
+                              <DayBlockPill
+                                tone="blocked"
+                                label="Partial block"
+                                title="Partially unavailable"
+                                detail={empUnavailable
+                                  .map((r) =>
+                                    [
+                                      r.startTime && r.endTime
+                                        ? `${formatTime(r.startTime)} – ${formatTime(r.endTime)}`
+                                        : null,
+                                      r.reason || null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" — "),
+                                  )
+                                  .filter(Boolean)
+                                  .join("; ")}
+                              />
+                            )}
 
                           {/* Comparison mode — side-by-side planned/actual diff, ignores day-block gating */}
                           {comparisonMode && (
@@ -465,17 +552,20 @@ export function ScheduleGrid({
                           {/* Planned mode (default) — unchanged existing behavior */}
                           {!comparisonMode && !isActualMode && (
                             <>
-                              {(!isFullDayBlocked || employeeView) &&
-                                cellShifts.map((shift) => (
-                                  <ShiftCard
-                                    key={shift.id}
-                                    shift={shift}
-                                    color={emp.color}
-                                    hasConflict={conflictIds.has(shift.id)}
-                                    onEdit={onEditShift}
-                                    onDelete={onDeleteShift}
-                                  />
-                                ))}
+                              {cellShifts.map((shift) => (
+                                <ShiftCard
+                                  key={shift.id}
+                                  shift={shift}
+                                  color={emp.color}
+                                  hasConflict={conflictIds.has(shift.id)}
+                                  blockedReason={blockReasonFor(
+                                    shift.startTime,
+                                    shift.endTime,
+                                  )}
+                                  onEdit={onEditShift}
+                                  onDelete={onDeleteShift}
+                                />
+                              ))}
 
                               {/*
                                 Drafts render after the saved cards. Gated on
@@ -484,20 +574,31 @@ export function ScheduleGrid({
                                 capture — unsaved shifts must never reach the
                                 PNG that gets posted in store.
                               */}
-                              {!isFullDayBlocked &&
-                                !employeeView &&
+                              {!employeeView &&
                                 cellDrafts.map((draft) => (
                                   <DraftShiftCard
                                     key={draft.draftId}
                                     draft={draft}
                                     color={emp.color}
+                                    blockedReason={blockReasonFor(
+                                      draft.startTime,
+                                      draft.endTime,
+                                    )}
                                     onEdit={(d) => onEditDraft?.(d)}
                                     onDelete={(id) => onDeleteDraft?.(id)}
                                   />
                                 ))}
 
-                              {/* Add shift button (hidden when fully blocked or employee view) */}
-                              {!isFullDayBlocked && !employeeView && (
+                              {/*
+                                Add shift button.
+                                Deliberately NOT hidden on a blocked day: a
+                                manager must be able to schedule over a block
+                                when they know why (someone agreed to cover).
+                                The tooltip warns, the add dialog warns again
+                                with the reason, and the resulting card is
+                                marked — but nothing here refuses.
+                              */}
+                              {!employeeView && (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <span className="block w-full">
@@ -507,7 +608,9 @@ export function ScheduleGrid({
                                       disabled={!emp.synced}
                                       className={cn(
                                         "h-6 w-full border border-dashed border-transparent text-muted-foreground/40",
-                                        "hover:border-primary/30 hover:text-primary hover:bg-primary/5",
+                                        isFullDayBlocked
+                                          ? "hover:border-amber-400/50 hover:text-amber-600 hover:bg-amber-500/5"
+                                          : "hover:border-primary/30 hover:text-primary hover:bg-primary/5",
                                         "transition-all",
                                         cellShifts.length === 0 &&
                                           cellDrafts.length === 0 &&
@@ -521,9 +624,22 @@ export function ScheduleGrid({
                                     </span>
                                   </TooltipTrigger>
                                   <TooltipContent side="top" className="text-xs">
-                                    {emp.synced
-                                      ? `Add shift for ${emp.name}`
-                                      : `${emp.name} is still being set up and can't be scheduled yet`}
+                                    {!emp.synced ? (
+                                      `${emp.name} is still being set up and can't be scheduled yet`
+                                    ) : isFullDayBlocked ? (
+                                      <>
+                                        <p className="font-medium text-amber-600 dark:text-amber-400">
+                                          {empTimeOff
+                                            ? `${emp.name} is on ${empTimeOff.label} this day`
+                                            : `${emp.name} is marked unavailable this day`}
+                                        </p>
+                                        <p className="opacity-80">
+                                          You can still schedule over it.
+                                        </p>
+                                      </>
+                                    ) : (
+                                      `Add shift for ${emp.name}`
+                                    )}
                                   </TooltipContent>
                                 </Tooltip>
                               )}

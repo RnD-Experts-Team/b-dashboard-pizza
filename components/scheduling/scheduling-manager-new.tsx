@@ -1942,7 +1942,12 @@ export function SchedulingManager() {
 
         {/* Published history */}
         <Dialog open={publishedOpen} onOpenChange={setPublishedOpen}>
-          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/*
+            Single scroller, same fix as the availability dialog: the content
+            box no longer scrolls as a whole while an inner div also scrolls,
+            which chained the wheel between the two and pushed the footer away.
+          */}
+          <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden sm:max-w-3xl">
             <DialogHeader>
               <DialogTitle>Published schedules</DialogTitle>
               <DialogDescription>
@@ -1958,14 +1963,14 @@ export function SchedulingManager() {
                 compact
               />
             )}
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto px-1 pt-1">
               <PublishedSchedules
                 schedules={published.schedules}
                 onDelete={handleDeletePublished}
                 readOnly={comparisonMode}
               />
             </div>
-            <DialogFooter>
+            <DialogFooter className="mt-3 border-t pt-3">
               <Button
                 variant="outline"
                 size="sm"

@@ -201,7 +201,9 @@ export function ActualShiftCard({
           </div>
           <p
             className={cn(
-              "mt-0.5 text-[10px] leading-tight opacity-75",
+              "mt-0.5 truncate text-[10px] leading-tight opacity-75",
+              // Bottom-right note icon floats over this row when present.
+              actual.note && "pe-4",
               isModified
                 ? "text-amber-600 dark:text-amber-400"
                 : isAdded

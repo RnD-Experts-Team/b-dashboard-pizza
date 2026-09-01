@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -170,7 +169,14 @@ export function AvailabilityTimeOffDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/*
+        Bounded flex column, NOT `overflow-y-auto` on the content itself.
+        The dialog previously scrolled as a whole while the two lists inside it
+        were their own scrollers — nesting scroll containers, so the wheel
+        chained unpredictably between them and the header and Done button
+        scrolled out of reach. Now exactly one thing scrolls: the tab body.
+      */}
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Availability &amp; time off</DialogTitle>
           <DialogDescription>
@@ -178,7 +184,7 @@ export function AvailabilityTimeOffDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="availability">
+        <Tabs defaultValue="availability" className="flex min-h-0 flex-1 flex-col">
           <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
             <TabsTrigger value="availability" className="gap-1.5 text-xs">
               <Ban className="h-3.5 w-3.5" />
@@ -191,7 +197,7 @@ export function AvailabilityTimeOffDialog({
           </TabsList>
 
           {/* ── Availability ─────────────────────────────────────────────── */}
-          <TabsContent value="availability" className="space-y-3 pt-3">
+          <TabsContent value="availability" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pt-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-xs">Employee</Label>
@@ -311,7 +317,7 @@ export function AvailabilityTimeOffDialog({
           </TabsContent>
 
           {/* ── Time off ─────────────────────────────────────────────────── */}
-          <TabsContent value="time-off" className="space-y-3 pt-3">
+          <TabsContent value="time-off" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pt-3">
             <div className="flex items-start gap-2 rounded-md border border-muted bg-muted/40 px-2.5 py-2">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               <p className="text-[11px] text-muted-foreground">
@@ -405,7 +411,7 @@ export function AvailabilityTimeOffDialog({
           </TabsContent>
         </Tabs>
 
-        <DialogFooter>
+        <DialogFooter className="mt-3 border-t pt-3">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Done
           </Button>
@@ -448,7 +454,7 @@ function AvailabilityList({
   }
 
   return (
-    <ScrollArea className="max-h-56 rounded-md border">
+    <div className="rounded-md border">
       <div className="divide-y">
         {rules.map((rule) => {
           const deletable = canDelete(rule);
@@ -503,7 +509,7 @@ function AvailabilityList({
           );
         })}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
@@ -525,7 +531,7 @@ function TimeOffList({
   }
 
   return (
-    <ScrollArea className="max-h-56 rounded-md border">
+    <div className="rounded-md border">
       <div className="divide-y">
         {entries.map((entry) => {
           const deletable = canDelete(entry);
@@ -580,6 +586,6 @@ function TimeOffList({
           );
         })}
       </div>
-    </ScrollArea>
+    </div>
   );
 }

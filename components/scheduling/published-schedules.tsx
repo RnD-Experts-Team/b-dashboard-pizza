@@ -1,15 +1,28 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ImageOff, Trash2 } from "lucide-react";
+import { ExternalLink, ImageOff, Maximize2, Trash2 } from "lucide-react";
 import type { PublishedSchedule } from "@/types/scheduling.types";
 import { formatIsoDate, formatTimestamp } from "@/lib/scheduling/week";
 
 /**
  * History of published weeks.
+ *
+ * The thumbnail opens a full-size viewer. It is the whole point of the card —
+ * a week grid squeezed into an `aspect-video` box is unreadable, so leaving it
+ * as a static image meant the history could be browsed but not actually read.
  *
  * Two things changed when this was wired up:
  *
@@ -37,6 +50,17 @@ export function PublishedSchedules({
   onDelete,
   readOnly = false,
 }: PublishedSchedulesProps) {
+  /**
+   * `previewOpen` is deliberately separate from `preview`.
+   *
+   * Binding the dialog to `open={!!preview}` and nulling the data on close
+   * empties the content on the same frame the close begins, so the title and
+   * image blank out while the dialog is still fading. Keeping the last
+   * selection lets it stay rendered until it is gone.
+   */
+  const [preview, setPreview] = useState<PublishedSchedule | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   if (schedules.length === 0) {
     return (
       <div className="rounded-lg border border-dashed p-12 text-center">
@@ -66,13 +90,26 @@ export function PublishedSchedules({
             <CardContent className="space-y-3">
               <div className="relative aspect-video overflow-hidden rounded-md border bg-muted">
                 {schedule.screenshotUrl ? (
-                  <Image
-                    src={schedule.screenshotUrl}
-                    alt={`Schedule for ${schedule.weekLabel}`}
-                    fill
-                    className="object-contain"
-                    unoptimized
-                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPreview(schedule);
+                      setPreviewOpen(true);
+                    }}
+                    aria-label={`View the schedule posted for ${schedule.weekLabel}`}
+                    className="group absolute inset-0 cursor-zoom-in"
+                  >
+                    <Image
+                      src={schedule.screenshotUrl}
+                      alt={`Schedule for ${schedule.weekLabel}`}
+                      fill
+                      className="object-contain"
+                      unoptimized
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                      <Maximize2 className="h-5 w-5 text-white" />
+                    </span>
+                  </button>
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
                     <ImageOff className="h-5 w-5" />
@@ -114,6 +151,54 @@ export function PublishedSchedules({
           </Card>
         );
       })}
+
+      {/*
+        Full-size viewer. Same single-scroller shape as the availability dialog:
+        a bounded flex column whose middle pane scrolls, so a tall week grid can
+        be read without the header and actions sliding away.
+      */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>{preview?.weekLabel}</DialogTitle>
+            <DialogDescription>
+              {preview
+                ? `Posted ${formatTimestamp(preview.publishedAt, "MMM d, yyyy 'at' h:mm a")}`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-muted">
+            {preview?.screenshotUrl && (
+              <Image
+                src={preview.screenshotUrl}
+                alt={`Schedule for ${preview.weekLabel}`}
+                width={1600}
+                height={900}
+                className="h-auto w-full"
+                unoptimized
+              />
+            )}
+          </div>
+
+          <DialogFooter className="mt-3 gap-2 border-t pt-3 sm:justify-between">
+            {preview?.screenshotUrl && (
+              <a
+                href={preview.screenshotUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open the original image
+              </a>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setPreviewOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

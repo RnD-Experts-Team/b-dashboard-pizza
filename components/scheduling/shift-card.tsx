@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Pencil, Trash2, AlertTriangle, Repeat, StickyNote } from "lucide-react";
+import { Ban, Clock, Pencil, Trash2, AlertTriangle, Repeat, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -16,17 +16,51 @@ import {
   ShiftSyncIndicator,
 } from "./shift-sync-badge";
 
+/**
+ * Right-hand space reserved on the text rows for the absolutely-positioned
+ * corner markers.
+ *
+ * `truncate` alone is not enough: it clips against the card's full width, which
+ * knows nothing about the icons floating over it, so a long time range slides
+ * underneath them. Indexed by how many markers that corner is actually showing,
+ * so a card with no markers keeps its full width.
+ *
+ * Logical (`pe-`) rather than `pr-` because the markers sit at `right-0.5` via
+ * `end`-agnostic positioning and the grid is rendered RTL for Arabic.
+ */
+const MARKER_RESERVE = ["", "pe-4", "pe-7", "pe-10"] as const;
+
 interface ShiftCardProps {
   shift: Shift;
   color: string;
   hasConflict?: boolean;
+  /**
+   * Set when this shift falls inside blocked availability or approved leave.
+   *
+   * The grid used to HIDE these cards entirely, which hid the problem rather
+   * than the card: the shift stayed scheduled, staff still saw it, and it kept
+   * counting toward the hours column and daily totals — so the row read "3
+   * shifts" while only two were drawn. A manager cannot fix a clash they cannot
+   * see, so the card is shown and marked instead.
+   */
+  blockedReason?: string | null;
   onEdit: (shift: Shift) => void;
   onDelete: (shiftId: string) => void;
 }
 
-export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: ShiftCardProps) {
+export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, onDelete }: ShiftCardProps) {
   const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
   const hours = shift.durationMinutes / 60;
+  // An overlap is the louder problem, so red wins the card; the block still
+  // gets its own marker and tooltip line below.
+  const isBlocked = !!blockedReason && !hasConflict;
+
+  const topMarkers =
+    Number(!!hasConflict) + Number(isBlocked) + Number(!!shift.isRecurring);
+  const bottomMarkers =
+    Number(shift.syncStatus !== "synced") +
+    Number(shift.origin !== "operations") +
+    Number(!!shift.note);
 
   return (
     <Tooltip>
@@ -36,7 +70,9 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             "group relative rounded-md border px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs cursor-pointer transition-all overflow-hidden",
             hasConflict
               ? "bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-700 ring-1 ring-red-400/40"
-              : cn(palette.bg, palette.border),
+              : isBlocked
+                ? "bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-700 ring-1 ring-amber-400/40"
+                : cn(palette.bg, palette.border),
             shift.isRecurring && "border-dashed border-2",
             !hasConflict &&
               shift.syncStatus === "parked" &&
@@ -71,17 +107,18 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             </Button>
           </div>
 
-          {/* Conflict indicator */}
-          {hasConflict && (
-            <div className="absolute top-0.5 right-0.5 z-5">
-              <AlertTriangle className="h-3 w-3 text-red-500" />
-            </div>
-          )}
-
-          {/* Recurring indicator */}
-          {shift.isRecurring && (
-            <div className={cn("absolute top-0.5 z-5", hasConflict ? "right-4" : "right-0.5")}>
-              <Repeat className="h-2.5 w-2.5 text-indigo-500 dark:text-indigo-400" />
+          {/*
+            Top-right markers. One flex cluster rather than individually
+            positioned icons, so a third marker cannot collide with the other
+            two the way a hardcoded `right-4` offset would.
+          */}
+          {(hasConflict || isBlocked || shift.isRecurring) && (
+            <div className="absolute top-0.5 right-0.5 z-5 flex items-center gap-0.5">
+              {hasConflict && <AlertTriangle className="h-3 w-3 text-red-500" />}
+              {isBlocked && <Ban className="h-3 w-3 text-amber-500" />}
+              {shift.isRecurring && (
+                <Repeat className="h-2.5 w-2.5 text-indigo-500 dark:text-indigo-400" />
+              )}
             </div>
           )}
 
@@ -106,7 +143,12 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
           {/* Time range */}
           <div className={cn(
             "flex items-center gap-1 font-semibold leading-tight",
-            hasConflict ? "text-red-700 dark:text-red-300" : palette.text
+            MARKER_RESERVE[topMarkers],
+            hasConflict
+              ? "text-red-700 dark:text-red-300"
+              : isBlocked
+                ? "text-amber-700 dark:text-amber-300"
+                : palette.text
           )}>
             <Clock className="h-3 w-3 shrink-0" />
             <span className="truncate">
@@ -116,8 +158,13 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
 
           {/* Label */}
           <p className={cn(
-            "mt-0.5 text-[9px] sm:text-[10px] leading-tight opacity-75",
-            hasConflict ? "text-red-600 dark:text-red-400" : palette.text
+            "mt-0.5 truncate text-[9px] sm:text-[10px] leading-tight opacity-75",
+            MARKER_RESERVE[bottomMarkers],
+            hasConflict
+              ? "text-red-600 dark:text-red-400"
+              : isBlocked
+                ? "text-amber-600 dark:text-amber-400"
+                : palette.text
           )}>
             {shift.label}
             {shift.isRecurring && " ↻"}
@@ -132,6 +179,11 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
         </p>
         {hasConflict && (
           <p className="text-red-500 font-medium">⚠ Overlapping shift conflict</p>
+        )}
+        {blockedReason && (
+          <p className="font-medium text-amber-600 dark:text-amber-400">
+            ⚠ {blockedReason}
+          </p>
         )}
         {shift.isRecurring && (
           <p className="text-indigo-500">↻ Recurring weekly</p>

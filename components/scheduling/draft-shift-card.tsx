@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Pencil, Trash2 } from "lucide-react";
+import { Ban, Clock, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -33,6 +33,14 @@ import type { DraftShift } from "@/lib/scheduling/draft.store";
 interface DraftShiftCardProps {
   draft: DraftShift;
   color: string;
+  /**
+   * Set when the draft falls inside blocked availability or approved leave.
+   *
+   * The card keeps its amber dashed "unsaved" styling and gains a marker rather
+   * than changing colour — amber already means "not saved yet" here, and
+   * recolouring would make two different states look identical.
+   */
+  blockedReason?: string | null;
   onEdit: (draft: DraftShift) => void;
   onDelete: (draftId: string) => void;
 }
@@ -40,6 +48,7 @@ interface DraftShiftCardProps {
 export function DraftShiftCard({
   draft,
   color,
+  blockedReason,
   onEdit,
   onDelete,
 }: DraftShiftCardProps) {
@@ -95,6 +104,9 @@ export function DraftShiftCard({
             <span className="truncate">
               {formatTime(draft.startTime)} - {formatTime(draft.endTime)}
             </span>
+            {blockedReason && (
+              <Ban className="ms-auto h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+            )}
           </div>
 
           <div className="mt-0.5 flex items-center justify-between gap-1">
@@ -119,6 +131,11 @@ export function DraftShiftCard({
         <p className="mt-0.5 opacity-75">
           Overlaps and overtime are checked when it is saved.
         </p>
+        {blockedReason && (
+          <p className="mt-0.5 font-medium text-amber-600 dark:text-amber-400">
+            ⚠ {blockedReason}
+          </p>
+        )}
         {draft.note && (
           <p className="mt-0.5 italic text-amber-600 dark:text-amber-400">
             📝 {draft.note}
