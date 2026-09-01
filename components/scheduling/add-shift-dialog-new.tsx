@@ -78,6 +78,18 @@ interface AddShiftDialogNewProps {
     note: string
   ) => void;
   editingShift?: Shift | null;
+  /**
+   * Set when editing an UNSAVED shift. Carries only times/label/note —
+   * a draft has no server-assigned fields, which is why it cannot just be
+   * passed as `editingShift`.
+   */
+  editingDraft?: {
+    startTime: string;
+    endTime: string;
+    label: string;
+    type: Shift["type"];
+    note?: string;
+  } | null;
 }
 
 export function AddShiftDialogNew({
@@ -98,6 +110,7 @@ export function AddShiftDialogNew({
   timeOff: timeOffEntries,
   onConfirm,
   editingShift,
+  editingDraft = null,
 }: AddShiftDialogNewProps) {
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("16:00");
@@ -111,11 +124,24 @@ export function AddShiftDialogNew({
   const [isRecurring, setIsRecurring] = useState(false);
   const [note, setNote] = useState("");
 
-  const isEditing = !!editingShift;
+  const isEditing = !!editingShift || !!editingDraft;
 
   // Sync form when dialog opens
   useEffect(() => {
-    if (editingShift) {
+    if (editingDraft) {
+      setStartTime(editingDraft.startTime);
+      setEndTime(editingDraft.endTime);
+      setLabel(editingDraft.label);
+      setType(editingDraft.type);
+      setNote(editingDraft.note ?? "");
+      setIsRecurring(false);
+      const draftPreset = SHIFT_PRESETS.findIndex(
+        (pr) =>
+          pr.startTime === editingDraft.startTime &&
+          pr.endTime === editingDraft.endTime
+      );
+      setActivePreset(draftPreset >= 0 ? draftPreset : null);
+    } else if (editingShift) {
       setStartTime(editingShift.startTime);
       setEndTime(editingShift.endTime);
       setLabel(editingShift.label);
@@ -138,7 +164,7 @@ export function AddShiftDialogNew({
       setIsRecurring(false);
       setNote("");
     }
-  }, [editingShift, open]);
+  }, [editingShift, editingDraft, open]);
 
   // Conflict warning
   const conflictWarning = useMemo(() => {

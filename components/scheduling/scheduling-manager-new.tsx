@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -67,17 +67,30 @@ import { useActualShiftMutations } from "@/lib/hooks/use-actual-shift-mutations"
 import { useScheduleTemplates } from "@/lib/hooks/use-schedule-templates";
 import { usePublishedSchedules } from "@/lib/hooks/use-published-schedules";
 import { useBulkOperation } from "@/lib/hooks/use-bulk-operation";
+import {
+  useScheduleDraftStore,
+  useWeekDrafts,
+  useWeekDraftSaveMode,
+  type DraftShift,
+} from "@/lib/scheduling/draft.store";
+import { DraftActionBar } from "./draft-action-bar";
+import {
+  useUnsavedShiftsGuard,
+  UnsavedShiftsDialog,
+} from "./unsaved-shifts-guard";
 import { useAvailabilityMutations } from "@/lib/hooks/use-availability-mutations";
-import { schedulingService } from "@/lib/api/services/scheduling.service";
+import {
+  schedulingService,
+  handleUnauthorized,
+} from "@/lib/api/services/scheduling.service";
+import { adaptScheduleWeek } from "@/lib/scheduling/adapters";
+import { parseSchedulingError } from "@/lib/scheduling/errors";
 import { ScheduleGrid } from "./schedule-grid-new";
 import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { PublishedSchedules } from "./published-schedules";
 import { BulkOperationProgress } from "./bulk-operation-progress";
-import {
-  ScheduleWarningDialog,
-  type ScheduleWarningCode,
-} from "./schedule-warning-dialog";
+import { ScheduleWarningDialog } from "./schedule-warning-dialog";
 import {
   ScheduleSetupError,
   type SetupErrorCode,
@@ -87,7 +100,11 @@ import {
   type AvailabilityOverrideDraft,
   type TimeOffDraft,
 } from "./availability-time-off-dialog";
-import { DEFAULT_OVERTIME_THRESHOLD, formatTime } from "@/lib/scheduling/constants";
+import {
+  DEFAULT_OVERTIME_THRESHOLD,
+  calcHours,
+  formatTime,
+} from "@/lib/scheduling/constants";
 
 /**
  * Last-resort rate, used only when an employee has no rate on file AND the
@@ -240,7 +257,30 @@ export function SchedulingManager() {
     message: string;
   } | null>(null);
 
-  const bulk = useBulkOperation({ storeId, onSettled: refetch });
+  const bulk = useBulkOperation({
+    storeId,
+    onSettled: (operation) => {
+      refetch();
+      /**
+       * A whole-batch failure means nothing was created, so the manager's layout
+       * must come back rather than vanish. Per-item failures are NOT restored —
+       * those are recoverable server-side through `retry-failed`, which the
+       * progress dialog already offers, and re-drafting them would double up.
+       */
+      if (operation?.status === "failed" && lastSubmittedDraftsRef.current.length) {
+        // `onSettled` lives in a ref that is refreshed every render, so these
+        // read current values rather than the ones from mount.
+        replaceDraftWeek(
+          storeId!,
+          week.start,
+          lastSubmittedDraftsRef.current.map(({ draftId: _drop, ...rest }) => rest),
+          "merge"
+        );
+        lastSubmittedDraftsRef.current = [];
+        toast.error("Nothing was saved — your shifts have been put back.");
+      }
+    },
+  });
 
   const templates = useScheduleTemplates({ storeId });
 
@@ -302,6 +342,34 @@ export function SchedulingManager() {
     dayIndex: number;
   } | null>(null);
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
+  /** Set when the dialog is editing an UNSAVED shift rather than a saved one. */
+  const [editingDraft, setEditingDraft] = useState<DraftShift | null>(null);
+  const [cancelDraftsOpen, setCancelDraftsOpen] = useState(false);
+  const [isCopyingWeek, setIsCopyingWeek] = useState(false);
+  /** The set most recently submitted, so a failed batch can be restored. */
+  const lastSubmittedDraftsRef = useRef<DraftShift[]>([]);
+
+  /* ── Drafts ──────────────────────────────────────────────────────────────
+   * Adding a shift is local until Save. Drafts are persisted per store + week,
+   * so changing week or store parks them rather than losing them.
+   */
+  const drafts = useWeekDrafts(storeId, week.start);
+  const draftSaveMode = useWeekDraftSaveMode(storeId, week.start);
+  const addDraft = useScheduleDraftStore((st) => st.addDraft);
+  const updateDraft = useScheduleDraftStore((st) => st.updateDraft);
+  const removeDraft = useScheduleDraftStore((st) => st.removeDraft);
+  const clearDraftWeek = useScheduleDraftStore((st) => st.clearWeek);
+  const replaceDraftWeek = useScheduleDraftStore((st) => st.replaceWeek);
+  const pruneExpiredDrafts = useScheduleDraftStore((st) => st.pruneExpired);
+
+  useEffect(() => {
+    pruneExpiredDrafts();
+  }, [pruneExpiredDrafts]);
+
+  const hasDrafts = drafts.length > 0;
+
+  /** Warns before any action that moves away from drafted shifts. */
+  const guard = useUnsavedShiftsGuard({ hasDrafts, draftCount: drafts.length });
 
 
   /**
@@ -350,27 +418,76 @@ export function SchedulingManager() {
    */
   const isPlannedOnly = scheduleMode === "planned" && !comparisonMode;
 
-  const stats = useMemo<ScheduleStats>(() => {
-    if (isPlannedOnly && data?.stats) return data.stats;
+  /**
+   * Guard a view-mode change, but only when it moves AWAY from planned.
+   *
+   * Drafts live in the planned view: that is where they render and where Save
+   * lives. Switching back to planned brings them into view, so warning there is
+   * backwards — it asks the manager to confirm returning to their own work.
+   * Only leaving planned hides them, so only that direction warrants a warning.
+   */
+  const requestModeChange = useCallback(
+    (targetIsPlanned: boolean, run: () => void) => {
+      if (isPlannedOnly && !targetIsPlanned) {
+        guard.requestAction(run);
+        return;
+      }
+      run();
+    },
+    // `guard` is a fresh object each render; `requestAction` is the stable part.
+    [isPlannedOnly, guard.requestAction]
+  );
 
-    const totalHours = displayShifts.reduce(
-      (acc, s) => acc + s.durationMinutes / 60,
-      0
-    );
+  const stats = useMemo<ScheduleStats>(() => {
+    // The server's figures describe SAVED shifts only, so once drafts exist
+    // they would be stale — the manager would add five shifts and watch the
+    // totals refuse to move. Fall through to the local calculation instead.
+    if (isPlannedOnly && data?.stats && !hasDrafts) return data.stats;
+
+    // Drafts have no server-computed duration, so their hours come from the
+    // times on screen. Wall-clock is acceptable here and nowhere else: these
+    // shifts are not saved, so no payroll figure depends on them yet.
+    const draftMinutes = isPlannedOnly
+      ? drafts.reduce(
+          (acc, d) => acc + Math.round(calcHours(d.startTime, d.endTime) * 60),
+          0
+        )
+      : 0;
+    const totalHours =
+      displayShifts.reduce((acc, s) => acc + s.durationMinutes / 60, 0) +
+      draftMinutes / 60;
     const rateFor = (employeeId: string) =>
       employeeLookup.get(employeeId)?.hourlyRate ??
       store?.defaultLaborRate ??
       FALLBACK_LABOR_RATE;
+    const countedDrafts = isPlannedOnly ? drafts : [];
     return {
       totalHours,
-      totalShifts: displayShifts.length,
-      activeEmployees: new Set(displayShifts.map((s) => s.employeeId)).size,
-      laborCost: displayShifts.reduce(
-        (acc, s) => acc + (s.durationMinutes / 60) * rateFor(s.employeeId),
-        0
-      ),
+      totalShifts: displayShifts.length + countedDrafts.length,
+      activeEmployees: new Set([
+        ...displayShifts.map((s) => s.employeeId),
+        ...countedDrafts.map((d) => d.employeeId),
+      ]).size,
+      laborCost:
+        displayShifts.reduce(
+          (acc, s) => acc + (s.durationMinutes / 60) * rateFor(s.employeeId),
+          0
+        ) +
+        countedDrafts.reduce(
+          (acc, d) =>
+            acc + calcHours(d.startTime, d.endTime) * rateFor(d.employeeId),
+          0
+        ),
     };
-  }, [isPlannedOnly, data?.stats, displayShifts, employeeLookup, store?.defaultLaborRate]);
+  }, [
+    isPlannedOnly,
+    data?.stats,
+    displayShifts,
+    employeeLookup,
+    store?.defaultLaborRate,
+    hasDrafts,
+    drafts,
+  ]);
 
   /**
    * Conflicts and overtime, authoritative from the server.
@@ -395,9 +512,12 @@ export function SchedulingManager() {
 
   // Dialog target employee
   const targetEmployee = useMemo(() => {
-    const id = editingShift?.employeeId ?? pendingAdd?.employeeId;
+    const id =
+      editingDraft?.employeeId ??
+      editingShift?.employeeId ??
+      pendingAdd?.employeeId;
     return id ? employeeLookup.get(id) ?? null : null;
-  }, [editingShift, pendingAdd]);
+  }, [editingShift, editingDraft, pendingAdd, employeeLookup]);
 
   // Actual-shift dialog target employee
   const targetActualEmployee = useMemo(() => {
@@ -445,6 +565,17 @@ export function SchedulingManager() {
     [shifts, employeeLookup, mutations]
   );
 
+  /**
+   * Save the add/edit shift dialog.
+   *
+   * Three destinations:
+   *   new shift        -> a local DRAFT, no request. Submitted later in one
+   *                      bulk call when the manager presses Save.
+   *   saved shift      -> straight to the API, exactly as before. Editing an
+   *                      existing shift is not draftable, because the bulk
+   *                      endpoint only creates.
+   *   unsaved draft    -> update the draft in place.
+   */
   const handleConfirmShift = useCallback(
     (
       startTime: string,
@@ -454,21 +585,46 @@ export function SchedulingManager() {
       isRecurring: boolean,
       note: string
     ) => {
+      // Editing an unsaved shift never touches the network.
+      if (editingDraft) {
+        updateDraft(storeId!, week.start, editingDraft.draftId, {
+          startTime,
+          endTime,
+          label,
+          type,
+          note: note || undefined,
+        });
+        setShiftDialogOpen(false);
+        setEditingDraft(null);
+        return;
+      }
+
       const target = editingShift
         ? { employeeId: editingShift.employeeId, dayIndex: editingShift.dayIndex }
         : pendingAdd;
       if (!target) return;
+
+      // A new shift becomes a draft. Nothing is sent yet.
+      if (!editingShift) {
+        addDraft(storeId!, week.start, {
+          employeeId: target.employeeId,
+          dayIndex: target.dayIndex,
+          startTime,
+          endTime,
+          label,
+          type,
+          note: note || undefined,
+        });
+        setShiftDialogOpen(false);
+        setPendingAdd(null);
+        return;
+      }
 
       const who = employeeLookup.get(target.employeeId)?.name ?? "This employee";
       // The absolute date comes from the week payload — never computed here.
       const shiftDate = dateForDayIndex(week, target.dayIndex);
       const detail = `${who} · ${formatIsoDateWithWeekday(shiftDate)} · ${formatTime(startTime)} – ${formatTime(endTime)}`;
 
-      /**
-       * `is_recurring` is accepted upstream and silently ignored — series
-       * generation is not implemented — so it is not sent. The dialog no longer
-       * offers the toggle either; see the note in add-shift-dialog-new.
-       */
       const payload: Record<string, unknown> = {
         employee_id: Number(target.employeeId) || target.employeeId,
         shift_date: shiftDate,
@@ -479,20 +635,99 @@ export function SchedulingManager() {
         note: note || undefined,
       };
 
-      if (editingShift) {
-        void mutations.updateShift(editingShift.shiftId, payload, {
-          employeeId: target.employeeId,
-          detail,
-        });
-        return;
-      }
-
-      void mutations.createShift(payload, {
+      void mutations.updateShift(editingShift.shiftId, payload, {
         employeeId: target.employeeId,
         detail,
       });
     },
-    [pendingAdd, editingShift, employeeLookup, week, mutations]
+    [
+      pendingAdd,
+      editingShift,
+      editingDraft,
+      employeeLookup,
+      week,
+      mutations,
+      storeId,
+      addDraft,
+      updateDraft,
+    ]
+  );
+
+  /**
+   * Submit every drafted shift in one request.
+   *
+   * `day_index` is week-relative, which is exactly what the grid carries — no
+   * date maths on the way out. The endpoint caps a request at 500 shifts; beyond
+   * that it is split, and only the FIRST batch may carry `replace`, since
+   * repeating it would delete what the previous batch just created.
+   */
+  const handleSaveDrafts = useCallback(() => {
+    if (!storeId || drafts.length === 0) return;
+
+    const MAX_PER_REQUEST = 500;
+    const batches: DraftShift[][] = [];
+    for (let i = 0; i < drafts.length; i += MAX_PER_REQUEST) {
+      batches.push(drafts.slice(i, i + MAX_PER_REQUEST));
+    }
+
+    // Held so a total batch failure can put the manager's layout back.
+    lastSubmittedDraftsRef.current = drafts;
+
+    void bulk
+      .run(
+        async () => {
+          let last: unknown = null;
+          for (const [index, batch] of batches.entries()) {
+            last = await schedulingService.bulkCreateShifts(storeId, {
+              week_start: week.start,
+              mode: index === 0 ? draftSaveMode : "merge",
+              shifts: batch.map((d) => ({
+                employee_id: Number(d.employeeId) || d.employeeId,
+                day_index: d.dayIndex,
+                start_time: d.startTime,
+                end_time: d.endTime,
+                label: d.label || undefined,
+                shift_type: d.type || undefined,
+                note: d.note || undefined,
+              })),
+            });
+          }
+          return last;
+        },
+        { fallbackMessage: "Could not save these shifts." }
+      )
+      .then((accepted) => {
+        /**
+         * Only clear once the batch has actually been ACCEPTED. Clearing on
+         * submit would throw the manager's layout away on a rejected request,
+         * even though nothing was written. If the batch later fails outright,
+         * `onSettled` puts the drafts back.
+         */
+        if (accepted) clearDraftWeek(storeId, week.start);
+      });
+  }, [storeId, drafts, draftSaveMode, week.start, bulk, clearDraftWeek]);
+
+  const handleCancelDrafts = useCallback(() => {
+    setCancelDraftsOpen(false);
+    if (!storeId) return;
+    clearDraftWeek(storeId, week.start);
+    refetch();
+    toast.info("Unsaved shifts discarded");
+  }, [storeId, week.start, clearDraftWeek, refetch]);
+
+  const handleEditDraft = useCallback((draft: DraftShift) => {
+    setEditingDraft(draft);
+    setEditingShift(null);
+    setPendingAdd(null);
+    setShiftDialogOpen(true);
+  }, []);
+
+  const handleDeleteDraft = useCallback(
+    (draftId: string) => {
+      removeDraft(storeId!, week.start, draftId);
+      toast.info("Unsaved shift removed");
+    },
+    [removeDraft, storeId, week.start]
   );
 
   /** One-click "worked exactly as planned" — no dialog, addresses the assignment. */
@@ -666,24 +901,92 @@ export function SchedulingManager() {
   }, [week.weekStartDow]);
 
   /**
-   * Copy the previous week into this one.
+   * Copy the previous week in as DRAFTS.
    *
-   * Goes through the bulk endpoint rather than reading a cached week: only the
-   * displayed week is fetched, and `replace` mode sequences the deletes before
-   * the creates so a mid-run failure is visible rather than doubling the week.
+   * Fetches last week rather than calling the server-side copy endpoint, so the
+   * manager can review and adjust before anything is written. The copied set
+   * describes the whole intended week, so it saves with `mode: "replace"` — that
+   * is the only place replace is used, and it is why the confirm dialog says the
+   * current schedule will be replaced.
    */
-  const handleConfirmCopyPreviousWeek = useCallback(() => {
+  const handleConfirmCopyPreviousWeek = useCallback(async () => {
     setCopyConfirmOpen(false);
-    void bulk.run(
-      () =>
-        schedulingService.copyWeek(storeId!, {
-          source_week_start: shiftIsoDate(week.start, -7),
-          target_week_start: week.start,
-          mode: "replace",
-        }),
-      { fallbackMessage: "Could not copy the previous week." }
-    );
-  }, [bulk, storeId, week.start]);
+    if (!storeId) return;
+
+    setIsCopyingWeek(true);
+    try {
+      const raw = await schedulingService.getWeek(storeId, {
+        week_start: shiftIsoDate(week.start, -7),
+        mode: "planned",
+      });
+      const previous = adaptScheduleWeek(raw);
+
+      if (previous.shifts.length === 0) {
+        toast.warning("The previous week has no shifts to copy.");
+        return;
+      }
+
+      /**
+       * Someone scheduled last week may have left, or moved store, since. Their
+       * shifts cannot be created here, so drop them and say who rather than
+       * letting the whole save fail on EMPLOYEE_NOT_IN_STORE.
+       */
+      const currentIds = new Set(employees.map((e) => e.id));
+      const kept = previous.shifts.filter((sh) => currentIds.has(sh.employeeId));
+      const droppedNames = Array.from(
+        new Set(
+          previous.shifts
+            .filter((sh) => !currentIds.has(sh.employeeId))
+            .map(
+              (sh) =>
+                previous.employees.find((e) => e.id === sh.employeeId)?.name ??
+                "an employee no longer here"
+            )
+        )
+      );
+
+      if (kept.length === 0) {
+        toast.warning(
+          "None of last week's staff are on this week's roster, so there is nothing to copy."
+        );
+        return;
+      }
+
+      replaceDraftWeek(
+        storeId,
+        week.start,
+        kept.map((sh) => ({
+          employeeId: sh.employeeId,
+          dayIndex: sh.dayIndex,
+          startTime: sh.startTime,
+          endTime: sh.endTime,
+          label: sh.label,
+          type: sh.type,
+          note: sh.note,
+        })),
+        // The drafts ARE the week, so saving replaces what is there.
+        "replace"
+      );
+
+      toast.success(
+        `Copied ${kept.length} shift${kept.length !== 1 ? "s" : ""} — review, then press Save.`
+      );
+      if (droppedNames.length > 0) {
+        toast.warning(
+          `Skipped shifts for ${droppedNames.join(", ")} — not on this week's roster.`
+        );
+      }
+    } catch (err) {
+      const parsed = parseSchedulingError(
+        err,
+        "Could not load the previous week."
+      );
+      if (handleUnauthorized(parsed.status)) return;
+      toast.error(parsed.message);
+    } finally {
+      setIsCopyingWeek(false);
+    }
+  }, [storeId, week.start, employees, replaceDraftWeek]);
 
   /**
    * Save the current week as a reusable template.
@@ -693,6 +996,12 @@ export function SchedulingManager() {
    * had rendered rather than what was actually saved.
    */
   const handleSaveTemplate = useCallback(() => {
+    // The server snapshots the week from its OWN data, so drafts are invisible
+    // to it — saving now would produce a template missing the shifts on screen.
+    if (hasDrafts) {
+      toast.warning("Save your unsaved shifts first — a template can't include them.");
+      return;
+    }
     if (!templateName.trim()) {
       toast.warning("Please enter a template name");
       return;
@@ -714,7 +1023,7 @@ export function SchedulingManager() {
         setTemplateDescription("");
         toast.success(`Template "${templateName.trim()}" saved`);
       });
-  }, [templateName, templateDescription, shifts.length, week.start, templates]);
+  }, [templateName, templateDescription, shifts.length, week.start, templates, hasDrafts]);
 
   /**
    * Apply a template to the displayed week.
@@ -1006,8 +1315,8 @@ export function SchedulingManager() {
     return (
       <div className="space-y-4">
         {pageHeader}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <Skeleton className="h-8 w-8 rounded-md" />
             <Skeleton className="h-8 w-48" />
             <Skeleton className="h-8 w-8 rounded-md" />
@@ -1075,14 +1384,18 @@ export function SchedulingManager() {
         )}
 
         {/* Toolbar: week nav + filters */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Week navigation */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setWeekStart((w) => shiftIsoDate(w, -7))}
+              onClick={() =>
+                  guard.requestAction(() =>
+                    setWeekStart((w) => shiftIsoDate(w, -7))
+                  )
+                }
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -1102,7 +1415,11 @@ export function SchedulingManager() {
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setWeekStart((w) => shiftIsoDate(w, 7))}
+              onClick={() =>
+                  guard.requestAction(() =>
+                    setWeekStart((w) => shiftIsoDate(w, 7))
+                  )
+                }
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -1112,7 +1429,7 @@ export function SchedulingManager() {
                 variant="ghost"
                 size="sm"
                 className="text-xs h-8"
-                onClick={handleGoToToday}
+                onClick={() => guard.requestAction(handleGoToToday)}
               >
                 Today
               </Button>
@@ -1128,7 +1445,9 @@ export function SchedulingManager() {
                 variant={scheduleMode === "planned" ? "default" : "ghost"}
                 size="sm"
                 className="h-7 gap-1 text-xs px-2.5"
-                onClick={() => setScheduleMode("planned")}
+                onClick={() =>
+                  requestModeChange(true, () => setScheduleMode("planned"))
+                }
                 disabled={comparisonMode}
               >
                 <CalendarCheck className="h-3.5 w-3.5" />
@@ -1138,7 +1457,9 @@ export function SchedulingManager() {
                 variant={scheduleMode === "actual" ? "default" : "ghost"}
                 size="sm"
                 className="h-7 gap-1 text-xs px-2.5"
-                onClick={() => setScheduleMode("actual")}
+                onClick={() =>
+                  requestModeChange(false, () => setScheduleMode("actual"))
+                }
                 disabled={comparisonMode}
               >
                 <ClipboardCheck className="h-3.5 w-3.5" />
@@ -1152,7 +1473,12 @@ export function SchedulingManager() {
                   variant={comparisonMode ? "default" : "outline"}
                   size="sm"
                   className="h-8 gap-1.5 text-xs ml-1"
-                  onClick={() => setComparisonMode((c) => !c)}
+                  onClick={() =>
+                      requestModeChange(
+                        comparisonMode && scheduleMode === "planned",
+                        () => setComparisonMode((c) => !c)
+                      )
+                    }
                 >
                   <GitCompare className="h-3.5 w-3.5" />
                   Compare
@@ -1165,7 +1491,7 @@ export function SchedulingManager() {
           </div>
 
           {/* Filters */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
@@ -1182,6 +1508,7 @@ export function SchedulingManager() {
                   variant="outline"
                   size="sm"
                   className="h-8 gap-1.5 text-sm"
+                  disabled={comparisonMode}
                   onClick={() => setAvailabilityOpen(true)}
                 >
                   <CalendarOff className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1189,7 +1516,9 @@ export function SchedulingManager() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
-                Manage blocked times and time off for this week
+                {comparisonMode
+                  ? "Not available while comparing — switch to Planned or Actual"
+                  : "Manage blocked times and time off for this week"}
               </TooltipContent>
             </Tooltip>
 
@@ -1224,9 +1553,19 @@ export function SchedulingManager() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
+                {comparisonMode && (
+                  <>
+                    <div className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+                      Compare is a read-only view. Switch to Planned or Actual
+                      to make changes.
+                    </div>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  disabled={isCopyingWeek || comparisonMode}
                   onSelect={() => setCopyConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1234,7 +1573,7 @@ export function SchedulingManager() {
                   Copy Previous Week
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={shifts.length === 0}
+                  disabled={shifts.length === 0 || comparisonMode}
                   onSelect={() => setClearConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1247,7 +1586,9 @@ export function SchedulingManager() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={published.isPublishing || shifts.length === 0}
+                  disabled={
+                    published.isPublishing || shifts.length === 0 || comparisonMode
+                  }
                   onSelect={handlePublishWeek}
                   className="gap-2 cursor-pointer"
                 >
@@ -1269,7 +1610,7 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Templates</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={shifts.length === 0}
+                  disabled={shifts.length === 0 || comparisonMode}
                   onSelect={() => setSaveTemplateOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1277,7 +1618,7 @@ export function SchedulingManager() {
                   Save as Template
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={templates.templates.length === 0}
+                  disabled={templates.templates.length === 0 || comparisonMode}
                   onSelect={() => setLoadTemplateOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1288,7 +1629,7 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Export</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={isExporting}
+                  disabled={isExporting || comparisonMode}
                   onSelect={handleExportExcel}
                   className="gap-2 cursor-pointer"
                 >
@@ -1334,15 +1675,15 @@ export function SchedulingManager() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card className="h-fit p-0">
-            <CardContent className="flex items-center gap-3 py-3 px-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-                <Clock className="h-4 w-4 text-primary" />
+            <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
+              <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
               </div>
-              <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
                   Total Hours
                 </p>
-                <p className="text-lg font-bold leading-tight">
+                <p className="text-base sm:text-lg font-bold leading-tight">
                   {stats.totalHours.toFixed(1)}h
                 </p>
               </div>
@@ -1350,15 +1691,15 @@ export function SchedulingManager() {
           </Card>
 
           <Card className="h-fit p-0">
-            <CardContent className="flex items-center gap-3 py-3 px-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
-                <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
+              <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
                   Shifts
                 </p>
-                <p className="text-lg font-bold leading-tight">
+                <p className="text-base sm:text-lg font-bold leading-tight">
                   {stats.totalShifts}
                 </p>
               </div>
@@ -1366,15 +1707,15 @@ export function SchedulingManager() {
           </Card>
 
           <Card className="h-fit p-0">
-            <CardContent className="flex items-center gap-3 py-3 px-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
-                <Users className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
+              <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-violet-600 dark:text-violet-400" />
               </div>
-              <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
                   Active Staff
                 </p>
-                <p className="text-lg font-bold leading-tight">
+                <p className="text-base sm:text-lg font-bold leading-tight">
                   {stats.activeEmployees}
                 </p>
               </div>
@@ -1382,15 +1723,15 @@ export function SchedulingManager() {
           </Card>
 
           <Card className="h-fit p-0">
-            <CardContent className="flex items-center gap-3 py-3 px-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10">
+            <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
+              <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
                 <span className="text-sm font-bold text-amber-600 dark:text-amber-400">$</span>
               </div>
-              <div>
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
                   Est. Labor (current rates)
                 </p>
-                <p className="text-lg font-bold leading-tight">
+                <p className="text-base sm:text-lg font-bold leading-tight">
                   ${stats.laborCost.toLocaleString("en-US", {
                     minimumFractionDigits: 0,
                   })}
@@ -1440,6 +1781,26 @@ export function SchedulingManager() {
           </div>
         )}
 
+        {/*
+          Save / Cancel for unsaved shifts. Deliberately outside `gridRef`: the
+          screenshot and publish handlers capture that element, and this bar has
+          no business appearing in the PNG that goes up in the store.
+        */}
+        {/*
+          Planned mode only. Drafts are unsaved additions to the PLAN, so a Save
+          button in Actual or Compare would act on shifts that view does not
+          render — which is exactly what it used to do.
+        */}
+        {isPlannedOnly && (
+          <DraftActionBar
+            count={drafts.length}
+            saveMode={draftSaveMode}
+            isSaving={bulk.isStarting}
+            onSave={handleSaveDrafts}
+            onCancel={() => setCancelDraftsOpen(true)}
+          />
+        )}
+
         {/* The schedule view — week grid */}
         <div ref={gridRef}>
           <ScheduleGrid
@@ -1462,8 +1823,11 @@ export function SchedulingManager() {
             onConfirmActual={handleConfirmActualShift}
             onEditActual={handleOpenActualDialog}
             onDeleteActual={handleDeleteActualShift}
-          onAddCoverage={handleAddCoverage}
-        />
+            onAddCoverage={handleAddCoverage}
+            draftShifts={drafts}
+            onEditDraft={handleEditDraft}
+            onDeleteDraft={handleDeleteDraft}
+          />
 
         </div>
 
@@ -1495,22 +1859,30 @@ export function SchedulingManager() {
               mutations.clearError();
               setPendingAdd(null);
               setEditingShift(null);
+              setEditingDraft(null);
             }
           }}
           employee={targetEmployee}
           dayLabel={
-            editingShift
-              ? week.dayNames[editingShift.dayIndex]
-              : pendingAdd
-                ? week.dayNames[pendingAdd.dayIndex]
-                : ""
+            week.dayNames[
+              editingDraft?.dayIndex ??
+                editingShift?.dayIndex ??
+                pendingAdd?.dayIndex ??
+                0
+            ] ?? ""
           }
-          dayIndex={editingShift?.dayIndex ?? pendingAdd?.dayIndex ?? 0}
+          dayIndex={
+            editingDraft?.dayIndex ??
+            editingShift?.dayIndex ??
+            pendingAdd?.dayIndex ??
+            0
+          }
           currentShifts={shifts}
           availability={availability}
           timeOff={timeOff}
           onConfirm={handleConfirmShift}
           editingShift={editingShift}
+          editingDraft={editingDraft}
           isSubmitting={mutations.isSubmitting}
           syncWait={mutations.syncWait}
           onCancelSyncWait={() => {
@@ -1524,6 +1896,35 @@ export function SchedulingManager() {
           isRequestingSync={mutations.isRequestingSync}
           error={mutations.error}
         />
+
+        {/* Warns before week / mode changes and before leaving the page */}
+        <UnsavedShiftsDialog {...guard.dialogProps} />
+
+        {/* Cancel drafts — this one genuinely discards, so it says so */}
+        <AlertDialog open={cancelDraftsOpen} onOpenChange={setCancelDraftsOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Discard {drafts.length} unsaved shift
+                {drafts.length !== 1 ? "s" : ""}?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This removes the shifts you have laid out but not saved, and
+                reloads the week as it is actually scheduled. This cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep editing</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleCancelDrafts}
+                className="bg-destructive text-white hover:bg-destructive/90"
+              >
+                Discard
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Availability & time off */}
         <AvailabilityTimeOffDialog
@@ -1561,6 +1962,7 @@ export function SchedulingManager() {
               <PublishedSchedules
                 schedules={published.schedules}
                 onDelete={handleDeletePublished}
+                readOnly={comparisonMode}
               />
             </div>
             <DialogFooter>

@@ -10,9 +10,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS } from "@/lib/scheduling/constants";
+import { EMPLOYEE_COLORS, calcHours } from "@/lib/scheduling/constants";
 import { todayIndexIn } from "@/lib/scheduling/week";
 import { EmployeeSyncBadge } from "./employee-sync-notice";
+import { DraftShiftCard } from "./draft-shift-card";
+import type { DraftShift } from "@/lib/scheduling/draft.store";
+
+/** Stable empty array — a fresh `[]` each render would invalidate the memos. */
+const NO_DRAFTS: DraftShift[] = [];
 import { actualForPlanned } from "@/lib/scheduling/utils";
 import { ShiftCard } from "./shift-card";
 import { ActualShiftCard } from "./actual-shift-card";
@@ -55,6 +60,10 @@ interface ScheduleGridProps {
   onEditActual?: (plannedShift: Shift | undefined, actual: ActualShift | undefined) => void;
   onDeleteActual?: (actual: ActualShift) => void;
   onAddCoverage?: (employeeId: string, dayIndex: number) => void;
+  /** Unsaved shifts, rendered alongside the saved ones in planned mode. */
+  draftShifts?: DraftShift[];
+  onEditDraft?: (draft: DraftShift) => void;
+  onDeleteDraft?: (draftId: string) => void;
 }
 
 export function ScheduleGrid({
@@ -79,10 +88,27 @@ export function ScheduleGrid({
   onEditActual,
   onDeleteActual,
   onAddCoverage,
+  draftShifts = [],
+  onEditDraft,
+  onDeleteDraft,
 }: ScheduleGridProps) {
   const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
   const isActualMode = scheduleMode === "actual" && !comparisonMode;
   const effectiveShifts = displayShifts ?? shifts;
+
+  /**
+   * Drafts are a PLANNED-schedule concept: they are unsaved additions to the
+   * plan and they save through the bulk create-shifts endpoint, which only
+   * creates planned shifts. They mean nothing in Actual (what really happened)
+   * or Compare (plan against reality).
+   *
+   * Gated once here rather than at each consumer. The previous shape gated the
+   * cards but not the three totals, so Actual mode drew no draft cards while
+   * still counting them in the Hours column and Daily Totals — and disagreeing
+   * with the summary cards above the grid, which did exclude them.
+   */
+  const isPlannedMode = !isActualMode && !comparisonMode;
+  const effectiveDrafts = isPlannedMode ? draftShifts : NO_DRAFTS;
 
   // Group shifts by employee + day for O(1) lookup
   const shiftMap = useMemo(() => {
@@ -94,6 +120,17 @@ export function ScheduleGrid({
     }
     return map;
   }, [shifts]);
+
+  // Group drafts by employee + day, same key shape as shiftMap
+  const draftMap = useMemo(() => {
+    const map: Record<string, DraftShift[]> = {};
+    for (const d of effectiveDrafts) {
+      const key = `${d.employeeId}-${d.dayIndex}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(d);
+    }
+    return map;
+  }, [effectiveDrafts]);
 
   // Group standalone "added" actual shifts (ad-hoc coverage) by employee + day
   const addedActualMap = useMemo(() => {
@@ -107,14 +144,27 @@ export function ScheduleGrid({
     return map;
   }, [actualShifts]);
 
+  /**
+   * Drafts are counted in every total below.
+   *
+   * The summary cards above the grid already include them, so leaving them out
+   * here would make the Hours column and the Daily Totals row disagree with the
+   * headline figures — which reads as a bug rather than a distinction. Draft
+   * hours come from `calcHours` because an unsaved shift has no server-computed
+   * duration yet, and nothing payroll-facing depends on them until it is saved.
+   */
   // Per-employee weekly hours
   const hoursMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of effectiveShifts) {
       map[s.employeeId] = (map[s.employeeId] ?? 0) + s.durationMinutes / 60;
     }
+    for (const d of effectiveDrafts) {
+      map[d.employeeId] =
+        (map[d.employeeId] ?? 0) + calcHours(d.startTime, d.endTime);
+    }
     return map;
-  }, [effectiveShifts]);
+  }, [effectiveShifts, effectiveDrafts]);
 
   // Per-employee shift counts
   const shiftCountMap = useMemo(() => {
@@ -122,8 +172,11 @@ export function ScheduleGrid({
     for (const s of effectiveShifts) {
       map[s.employeeId] = (map[s.employeeId] ?? 0) + 1;
     }
+    for (const d of effectiveDrafts) {
+      map[d.employeeId] = (map[d.employeeId] ?? 0) + 1;
+    }
     return map;
-  }, [effectiveShifts]);
+  }, [effectiveShifts, effectiveDrafts]);
 
   // Today highlight — fullDates are ISO strings, so this is a plain lookup
   const todayIndex = useMemo(() => todayIndexIn(week), [week]);
@@ -134,6 +187,12 @@ export function ScheduleGrid({
       hours: 0,
       shifts: 0,
     }));
+    for (const d of effectiveDrafts) {
+      if (d.dayIndex >= 0 && d.dayIndex < 7) {
+        totals[d.dayIndex].hours += calcHours(d.startTime, d.endTime);
+        totals[d.dayIndex].shifts += 1;
+      }
+    }
     for (const s of effectiveShifts) {
       if (s.dayIndex >= 0 && s.dayIndex < 7) {
         totals[s.dayIndex].hours += s.durationMinutes / 60;
@@ -141,23 +200,23 @@ export function ScheduleGrid({
       }
     }
     return totals;
-  }, [effectiveShifts]);
+  }, [effectiveShifts, effectiveDrafts]);
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
       {/* Horizontal scroll wrapper */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-225 border-collapse">
+        <table className="w-full min-w-200 sm:min-w-225 border-collapse">
           {/* Header row */}
           <thead>
             <tr className="border-b bg-muted/30">
               {/* Employee column header */}
-              <th className="sticky left-0 z-20 relative bg-card w-55 min-w-55 border-r px-3 py-2.5 text-left">
+              <th className="sticky left-0 z-20 relative bg-card w-31 min-w-31 sm:w-55 sm:min-w-55 border-r px-2 sm:px-3 py-2 sm:py-2.5 text-left">
                 <span
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-muted/30"
                 />
-                <span className="relative text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="relative text-[9px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Employee
                 </span>
               </th>
@@ -167,17 +226,19 @@ export function ScheduleGrid({
                 <th
                   key={day}
                   className={cn(
-                    comparisonMode ? "min-w-40" : "min-w-32.5",
-                    "border-r last:border-r-0 px-2 py-2.5 text-center",
+                    comparisonMode
+                      ? "min-w-32 sm:min-w-40"
+                      : "min-w-32 sm:min-w-32.5",
+                    "border-r last:border-r-0 px-1 sm:px-2 py-1.5 sm:py-2.5 text-center",
                     todayIndex === i && "bg-primary/5"
                   )}
                 >
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  <p className="text-[9px] sm:text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     {day}
                   </p>
                   <p
                     className={cn(
-                      "text-lg font-bold leading-tight mt-0.5",
+                      "text-sm sm:text-lg font-bold leading-tight mt-0.5",
                       todayIndex === i
                         ? "text-primary"
                         : "text-foreground"
@@ -193,8 +254,8 @@ export function ScheduleGrid({
 
               {/* Hours column */}
               {!employeeView && (
-              <th className="w-20 min-w-20 px-2 py-2.5 text-center">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <th className="w-14 min-w-14 sm:w-20 sm:min-w-20 px-1 sm:px-2 py-2 sm:py-2.5 text-center">
+                <span className="text-[9px] sm:text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                   Hours
                 </span>
               </th>
@@ -219,12 +280,12 @@ export function ScheduleGrid({
                   )}
                 >
                   {/* Employee info — sticky left */}
-                  <td className="sticky left-0 z-10 bg-card border-r px-3 py-2">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar className="h-8 w-8 shrink-0">
+                  <td className="sticky left-0 z-10 bg-card border-r px-2 sm:px-3 py-1.5 sm:py-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2.5">
+                      <Avatar className="h-6 w-6 sm:h-8 sm:w-8 shrink-0">
                         <AvatarFallback
                           className={cn(
-                            "text-xs font-semibold",
+                            "text-[9px] sm:text-xs font-semibold",
                             palette.bg,
                             palette.text
                           )}
@@ -236,7 +297,7 @@ export function ScheduleGrid({
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            className="text-sm font-medium leading-tight truncate text-left hover:underline hover:text-primary transition-colors cursor-pointer"
+                            className="text-[11px] sm:text-sm font-medium leading-tight truncate text-left hover:underline hover:text-primary transition-colors cursor-pointer"
                             onClick={() => {
                               setProfileEmp(emp);
                               onEmployeeClick?.(emp);
@@ -259,7 +320,7 @@ export function ScheduleGrid({
                             </Tooltip>
                           )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground truncate">
+                        <p className="text-[9px] sm:text-[11px] text-muted-foreground truncate">
                           {emp.role}
                         </p>
                       </div>
@@ -271,6 +332,7 @@ export function ScheduleGrid({
                     const key = `${emp.id}-${dayIdx}`;
                     const cellShifts = shiftMap[key] ?? [];
                     const cellAddedActuals = addedActualMap[key] ?? [];
+                    const cellDrafts = draftMap[key] ?? [];
                     const empTimeOff = timeOff.find(
                       (t) => t.employeeId === emp.id && t.dayIndex === dayIdx
                     );
@@ -284,12 +346,12 @@ export function ScheduleGrid({
                       <td
                         key={dayIdx}
                         className={cn(
-                          "border-r last:border-r-0 px-1.5 py-1.5 align-top min-h-15",
+                          "border-r last:border-r-0 px-1 sm:px-1.5 py-1 sm:py-1.5 align-top min-h-15",
                           todayIndex === dayIdx && "bg-primary/2",
                           isFullDayBlocked && "bg-slate-100/60 dark:bg-slate-900/20"
                         )}
                       >
-                        <div className="flex flex-col gap-1 min-h-13">
+                        <div className="flex flex-col gap-0.5 sm:gap-1 min-h-13">
                           {/* Time-off block */}
                           {empTimeOff && !employeeView && (
                             <Tooltip>
@@ -343,11 +405,10 @@ export function ScheduleGrid({
                                   key={shift.id}
                                   plannedShift={shift}
                                   actual={actualForPlanned(shift.id, actualShifts)}
-                                  color={emp.color}
                                 />
                               ))}
                               {cellAddedActuals.map((a) => (
-                                <ComparisonShiftCard key={a.id} actual={a} color={emp.color} />
+                                <ComparisonShiftCard key={a.id} actual={a} />
                               ))}
                             </>
                           )}
@@ -416,6 +477,25 @@ export function ScheduleGrid({
                                   />
                                 ))}
 
+                              {/*
+                                Drafts render after the saved cards. Gated on
+                                employeeView because that flag is what strips
+                                manager-only chrome for the publish/screenshot
+                                capture — unsaved shifts must never reach the
+                                PNG that gets posted in store.
+                              */}
+                              {!isFullDayBlocked &&
+                                !employeeView &&
+                                cellDrafts.map((draft) => (
+                                  <DraftShiftCard
+                                    key={draft.draftId}
+                                    draft={draft}
+                                    color={emp.color}
+                                    onEdit={(d) => onEditDraft?.(d)}
+                                    onDelete={(id) => onDeleteDraft?.(id)}
+                                  />
+                                ))}
+
                               {/* Add shift button (hidden when fully blocked or employee view) */}
                               {!isFullDayBlocked && !employeeView && (
                                 <Tooltip>
@@ -430,6 +510,7 @@ export function ScheduleGrid({
                                         "hover:border-primary/30 hover:text-primary hover:bg-primary/5",
                                         "transition-all",
                                         cellShifts.length === 0 &&
+                                          cellDrafts.length === 0 &&
                                           !empUnavailable.length &&
                                           "mt-2"
                                       )}
@@ -484,12 +565,12 @@ export function ScheduleGrid({
           {!employeeView && (
           <tfoot>
             <tr className="border-t bg-muted/20">
-              <td className="sticky left-0 z-10 relative bg-card border-r px-3 py-2">
+              <td className="sticky left-0 z-10 relative bg-card border-r px-2 sm:px-3 py-2">
                 <span
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-muted/20"
                 />
-                <span className="relative text-xs font-semibold text-muted-foreground">
+                <span className="relative text-[10px] sm:text-xs font-semibold text-muted-foreground">
                   Daily Totals
                 </span>
               </td>
@@ -497,24 +578,24 @@ export function ScheduleGrid({
                 <td
                   key={i}
                   className={cn(
-                    "border-r last:border-r-0 px-2 py-2 text-center",
+                    "border-r last:border-r-0 px-1 sm:px-2 py-2 text-center",
                     todayIndex === i && "bg-primary/5"
                   )}
                 >
-                  <p className="text-xs font-semibold">
+                  <p className="text-[11px] sm:text-xs font-semibold">
                     {dayTotals[i].hours > 0
                       ? `${dayTotals[i].hours.toFixed(1)}h`
                       : "—"}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[9px] sm:text-[10px] text-muted-foreground">
                     {dayTotals[i].shifts > 0
                       ? `${dayTotals[i].shifts} shift${dayTotals[i].shifts > 1 ? "s" : ""}`
                       : ""}
                   </p>
                 </td>
               ))}
-              <td className="px-2 py-2 text-center">
-                <p className="text-xs font-bold">
+              <td className="px-1 sm:px-2 py-2 text-center">
+                <p className="text-[11px] sm:text-xs font-bold">
                   {effectiveShifts.length > 0
                     ? `${effectiveShifts.reduce((t, s) => t + s.durationMinutes / 60, 0).toFixed(1)}h`
                     : "—"}

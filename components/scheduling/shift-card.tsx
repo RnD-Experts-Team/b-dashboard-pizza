@@ -33,7 +33,7 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "group relative rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-all overflow-hidden",
+            "group relative rounded-md border px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs cursor-pointer transition-all overflow-hidden",
             hasConflict
               ? "bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-700 ring-1 ring-red-400/40"
               : cn(palette.bg, palette.border),
@@ -116,7 +116,7 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
 
           {/* Label */}
           <p className={cn(
-            "mt-0.5 text-[10px] leading-tight opacity-75",
+            "mt-0.5 text-[9px] sm:text-[10px] leading-tight opacity-75",
             hasConflict ? "text-red-600 dark:text-red-400" : palette.text
           )}>
             {shift.label}

@@ -39,8 +39,14 @@ function isTerminal(status: BulkOperation["status"]): boolean {
 
 export interface UseBulkOperationOptions {
   storeId: string | null;
-  /** Called once the batch reaches a terminal state, to refresh the grid. */
-  onSettled: () => void;
+  /**
+   * Called once the batch reaches a terminal state, to refresh the grid.
+   *
+   * Receives the settled operation so the caller can distinguish "finished with
+   * some per-item failures" from "the whole batch failed" — they need different
+   * recovery. `null` means we lost track of it (poll error or timeout).
+   */
+  onSettled: (operation: BulkOperation | null) => void;
 }
 
 export interface UseBulkOperationResult {
@@ -51,11 +57,16 @@ export interface UseBulkOperationResult {
   /**
    * Kick off a bulk operation. `start` receives the trigger call itself, so the
    * caller decides which endpoint to hit while polling stays here.
+   *
+   * Resolves `true` once the batch has been ACCEPTED (the 202 came back), and
+   * `false` if it never started. Callers that discard local state on submit must
+   * wait for `true` — otherwise a rejected request would throw the work away
+   * even though nothing was written.
    */
   run: (
     trigger: () => Promise<unknown>,
     opts?: { fallbackMessage?: string },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   retryFailed: () => Promise<void>;
   dismiss: () => void;
 }
@@ -106,7 +117,7 @@ export function useBulkOperation({
         if (isTerminal(next.status)) {
           clearTimers();
           // Refresh regardless of outcome: even a partial run changed the week.
-          onSettledRef.current();
+          onSettledRef.current(next);
           return;
         }
 
@@ -119,7 +130,7 @@ export function useBulkOperation({
               ),
             ),
           );
-          onSettledRef.current();
+          onSettledRef.current(null);
           return;
         }
 
@@ -134,7 +145,7 @@ export function useBulkOperation({
         clearTimers();
         setError(parsed);
         // The batch may well have continued, so the week is still stale.
-        onSettledRef.current();
+        onSettledRef.current(null);
       }
     },
     [storeId, clearTimers],
@@ -142,7 +153,7 @@ export function useBulkOperation({
 
   const run = useCallback<UseBulkOperationResult["run"]>(
     async (trigger, opts) => {
-      if (!storeId) return;
+      if (!storeId) return false;
       clearTimers();
       setError(null);
       setIsStarting(true);
@@ -154,21 +165,23 @@ export function useBulkOperation({
         setOperation(started);
 
         if (isTerminal(started.status)) {
-          onSettledRef.current();
-          return;
+          onSettledRef.current(started);
+          return true;
         }
         timerRef.current = setTimeout(
           () => void poll(started.id),
           POLL_INTERVAL_MS,
         );
+        return true;
       } catch (err) {
         const parsed = parseSchedulingError(
           err,
           opts?.fallbackMessage ?? "Could not start this operation.",
         );
-        if (handleUnauthorized(parsed.status)) return;
+        if (handleUnauthorized(parsed.status)) return false;
         setError(parsed);
         setOperation(null);
+        return false;
       } finally {
         setIsStarting(false);
       }
@@ -189,7 +202,7 @@ export function useBulkOperation({
       const next = adaptBulkOperation(raw);
       setOperation(next);
       if (isTerminal(next.status)) {
-        onSettledRef.current();
+        onSettledRef.current(next);
       } else {
         startedAtRef.current = Date.now();
         timerRef.current = setTimeout(() => void poll(next.id), POLL_INTERVAL_MS);

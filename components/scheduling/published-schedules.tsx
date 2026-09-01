@@ -24,11 +24,18 @@ import { formatIsoDate, formatTimestamp } from "@/lib/scheduling/week";
 interface PublishedSchedulesProps {
   schedules: PublishedSchedule[];
   onDelete: (id: string) => void;
+  /**
+   * Hides the Delete action. Set from the Compare view, which is read-only —
+   * the history is still worth browsing there, but deleting a published week
+   * is a real change and does not belong behind a comparison.
+   */
+  readOnly?: boolean;
 }
 
 export function PublishedSchedules({
   schedules,
   onDelete,
+  readOnly = false,
 }: PublishedSchedulesProps) {
   if (schedules.length === 0) {
     return (
@@ -92,15 +99,17 @@ export function PublishedSchedules({
                 )}
               </div>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-destructive hover:text-destructive"
-                onClick={() => onDelete(schedule.id)}
-              >
-                <Trash2 className="me-1.5 h-3.5 w-3.5" />
-                Delete
-              </Button>
+              {!readOnly && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-destructive hover:text-destructive"
+                  onClick={() => onDelete(schedule.id)}
+                >
+                  <Trash2 className="me-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              )}
             </CardContent>
           </Card>
         );
