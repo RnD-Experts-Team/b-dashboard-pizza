@@ -16,6 +16,7 @@ import {
   FileSpreadsheet,
   Camera,
   Loader2,
+  RefreshCw,
   Copy,
   Trash2,
   BookmarkPlus,
@@ -89,6 +90,7 @@ import { ScheduleGrid } from "./schedule-grid-new";
 import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { PublishedSchedules } from "./published-schedules";
+import { DataFreshness } from "./data-freshness";
 import { BulkOperationProgress } from "./bulk-operation-progress";
 import { ScheduleWarningDialog } from "./schedule-warning-dialog";
 import {
@@ -141,7 +143,6 @@ import type {
   AvailabilityRule,
   TimeOffEntry,
   ActualShift,
-  ScheduleMode,
 } from "@/types/scheduling.types";
 import {
   Dialog,
@@ -185,11 +186,13 @@ export function SchedulingManager() {
   const [department, setDepartment] = useState("All");
 
   /**
-   * Comparison needs planned and actual together; otherwise fetch only what is
-   * rendered so we are not paying for actuals the UI will discard.
+   * One request serves all three views.
+   *
+   * This used to derive an `apiMode` per view, which made every toggle refetch.
+   * `useScheduleWeek` now always asks for `mode=both` — a strict superset, since
+   * `displayShifts` is merged locally below and the server's `stats` describes
+   * the plan in every mode — so switching views costs nothing.
    */
-  const apiMode: ScheduleMode = comparisonMode ? "both" : scheduleMode;
-
   const {
     data,
     isLoading,
@@ -197,7 +200,27 @@ export function SchedulingManager() {
     error: weekError,
     setupError,
     refetch,
-  } = useScheduleWeek({ storeId, weekStart, mode: apiMode, department, search });
+    revalidateIfStale,
+    lastFetchedAt,
+  } = useScheduleWeek({ storeId, weekStart, department, search });
+
+  /**
+   * Re-check freshness when the view changes.
+   *
+   * The toggle does not change what is requested — one `both` response serves
+   * Planned, Actual and Compare — so without this a manager parked on one week
+   * could toggle all day and never see another manager's edits. Guarded on the
+   * view actually changing: `revalidateIfStale` also changes identity when the
+   * week does, and that path has just fetched, so firing there would double up.
+   */
+  const prevViewRef = useRef<string>("");
+  useEffect(() => {
+    const view = `${scheduleMode}|${comparisonMode}`;
+    if (prevViewRef.current && prevViewRef.current !== view) {
+      revalidateIfStale();
+    }
+    prevViewRef.current = view;
+  }, [scheduleMode, comparisonMode, revalidateIfStale]);
 
   /**
    * Render from the server's week object once it arrives. The local fallback
@@ -1383,9 +1406,20 @@ export function SchedulingManager() {
           />
         )}
 
-        {/* Toolbar: week nav + filters */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Week navigation */}
+        {/*
+          Toolbar — two rows, each wrapping on its own.
+
+          This was one `justify-between` row holding two wrapping groups. When
+          it overflowed, `justify-between` spread the fragments apart and the
+          inner items wrapped independently, so single buttons ended up stranded
+          on lines of their own (Compare, then Actions). Splitting it into two
+          rows of related controls, and keeping tightly-coupled controls in
+          non-wrapping groups, makes the reflow predictable at any width —
+          which matters because the sidebar swings the available width by 192px
+          and no media query can see that.
+        */}
+        <div className="@container space-y-2">
+          {/* Row 1 — which week, and which view of it */}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
@@ -1435,9 +1469,17 @@ export function SchedulingManager() {
               </Button>
             )}
 
+
+            {/*
+              The view controls travel together: the Planned/Actual toggle and
+              Compare are one choice, and Compare stranded on its own line was
+              the most visible symptom of the old layout. `shrink-0` keeps the
+              pair intact so they wrap as a unit.
+            */}
+            <div className="flex shrink-0 items-center gap-2">
             <div
               className={cn(
-                "flex items-center rounded-md border bg-muted/40 p-0.5 ml-2 transition-opacity",
+                "flex items-center rounded-md border bg-muted/40 p-0.5 transition-opacity",
                 comparisonMode && "opacity-50 pointer-events-none"
               )}
             >
@@ -1472,7 +1514,7 @@ export function SchedulingManager() {
                 <Button
                   variant={comparisonMode ? "default" : "outline"}
                   size="sm"
-                  className="h-8 gap-1.5 text-xs ml-1"
+                  className="h-8 gap-1.5 text-xs"
                   onClick={() =>
                       requestModeChange(
                         comparisonMode && scheduleMode === "planned",
@@ -1488,17 +1530,18 @@ export function SchedulingManager() {
                 Comparison always shows both planned and actual times side by side
               </TooltipContent>
             </Tooltip>
+            </div>
           </div>
 
-          {/* Filters */}
+          {/* Row 2 — narrowing what the grid shows, and acting on it */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <div className="relative min-w-32 flex-1 sm:max-w-xs">
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search employees..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-8 w-45 pl-8 text-sm"
+                className="h-8 w-full ps-8 text-sm"
               />
             </div>
 
@@ -1538,13 +1581,49 @@ export function SchedulingManager() {
                     className="gap-2 cursor-pointer"
                   >
                     {dept === department && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                    <span className={dept === department ? "font-medium" : "pl-3.5"}>{dept}</span>
+                    <span className={dept === department ? "font-medium" : "ps-3.5"}>{dept}</span>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Actions dropdown */}
+            {/*
+              Freshness, refresh and Actions travel together at the inline-end.
+
+              The age sits immediately left of the control that changes it, so
+              "how old is this" and "make it newer" read as one unit. `ms-auto`
+              is on the group rather than on Actions alone, so the three wrap as
+              a block instead of Actions detaching from the pair.
+            */}
+            <div className="ms-auto flex items-center gap-2">
+              <DataFreshness
+                lastFetchedAt={lastFetchedAt}
+                isRefreshing={isRefetching || isLoading}
+                className="hidden @2xl:inline"
+              />
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 text-sm"
+                    onClick={refetch}
+                    disabled={isLoading || isRefetching}
+                  >
+                    {isRefetching || isLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                    Refresh
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Fetch this week again now
+                </TooltipContent>
+              </Tooltip>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
@@ -1669,12 +1748,24 @@ export function SchedulingManager() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
         </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card className="h-fit p-0">
+        {/*
+          Summary cards.
+
+          `@container` + `@2xl:` rather than `sm:` on purpose. Viewport media
+          queries cannot see the sidebar, which swings the content box by 192px
+          (w-64 expanded vs w-16 collapsed) — so `sm:grid-cols-4` fired on a
+          1024px viewport even when the sidebar left only ~720px, squeezing four
+          tiles to ~140px each and wrapping their labels onto three lines. A
+          container query tracks the width these cards actually get.
+          `@2xl` (672px) is where four tiles clear ~150px each plus gaps.
+        */}
+        <div className="@container">
+        <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+          <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                 <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
@@ -1690,7 +1781,7 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card className="h-fit p-0">
+          <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
                 <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400" />
@@ -1706,7 +1797,7 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card className="h-fit p-0">
+          <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
                 <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-violet-600 dark:text-violet-400" />
@@ -1722,23 +1813,28 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card className="h-fit p-0">
+          <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
                 <span className="text-sm font-bold text-amber-600 dark:text-amber-400">$</span>
               </div>
               <div className="min-w-0">
                 <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
-                  Est. Labor (current rates)
+                  Est. Labor
                 </p>
                 <p className="text-base sm:text-lg font-bold leading-tight">
                   ${stats.laborCost.toLocaleString("en-US", {
                     minimumFractionDigits: 0,
                   })}
                 </p>
+                {/* The qualifier that used to sit in the label and wrap it. */}
+                <p className="truncate text-[9px] leading-tight text-muted-foreground/70">
+                  at current rates
+                </p>
               </div>
             </CardContent>
           </Card>
+        </div>
         </div>
 
         {/* Conflict & overtime warnings */}

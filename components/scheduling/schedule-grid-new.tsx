@@ -268,7 +268,7 @@ export function ScheduleGrid({
           <thead>
             <tr className="border-b bg-muted/30">
               {/* Employee column header */}
-              <th className="sticky left-0 z-20 relative bg-card w-31 min-w-31 sm:w-55 sm:min-w-55 border-r px-2 sm:px-3 py-2 sm:py-2.5 text-left">
+              <th className="relative md:sticky left-0 z-20 bg-card w-31 min-w-31 sm:w-55 sm:min-w-55 border-r px-2 sm:px-3 py-2 sm:py-2.5 text-left">
                 <span
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-muted/30"
@@ -337,7 +337,7 @@ export function ScheduleGrid({
                   )}
                 >
                   {/* Employee info — sticky left */}
-                  <td className="sticky left-0 z-10 bg-card border-r px-2 sm:px-3 py-1.5 sm:py-2">
+                  <td className="md:sticky left-0 z-10 bg-card border-r px-2 sm:px-3 py-1.5 sm:py-2">
                     <div className="flex items-center gap-1.5 sm:gap-2.5">
                       <Avatar className="h-6 w-6 sm:h-8 sm:w-8 shrink-0">
                         <AvatarFallback
@@ -681,7 +681,7 @@ export function ScheduleGrid({
           {!employeeView && (
           <tfoot>
             <tr className="border-t bg-muted/20">
-              <td className="sticky left-0 z-10 relative bg-card border-r px-2 sm:px-3 py-2">
+              <td className="relative md:sticky left-0 z-10 bg-card border-r px-2 sm:px-3 py-2">
                 <span
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-muted/20"
