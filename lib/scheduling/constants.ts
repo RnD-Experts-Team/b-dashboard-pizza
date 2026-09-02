@@ -33,6 +33,18 @@ export const SHIFT_PRESETS = [
   { label: "Split PM", type: "split" as const, startTime: "17:00", endTime: "21:00" },
 ] as const;
 
+/**
+ * @deprecated Per-employee hues were removed from the scheduling grid.
+ *
+ * Every row of the grid IS one employee, with their name in the sticky column,
+ * so tinting their cards a unique colour repeated what the row already said —
+ * while being the largest of the six colour systems the grid was running. State
+ * is now carried by `lib/scheduling/accents.ts` (three tones, rail + icon).
+ *
+ * The only remaining consumer is `components/scheduling/day-view.tsx`, which
+ * CLAUDE.md records as PARKED and unmounted. Do not reintroduce this anywhere
+ * that renders.
+ */
 export const EMPLOYEE_COLORS: Record<string, { bg: string; border: string; text: string; hoverBg: string }> = {
   blue: { bg: "bg-blue-50 dark:bg-blue-950/40", border: "border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300", hoverBg: "hover:bg-blue-100 dark:hover:bg-blue-950/60" },
   emerald: { bg: "bg-emerald-50 dark:bg-emerald-950/40", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300", hoverBg: "hover:bg-emerald-100 dark:hover:bg-emerald-950/60" },

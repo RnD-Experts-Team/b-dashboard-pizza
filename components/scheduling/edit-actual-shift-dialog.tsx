@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { UserX, Clock } from "lucide-react";
+import { UserX, Clock, User } from "lucide-react";
 import type { ScheduleEmployee, Shift, ActualShift } from "@/types/scheduling.types";
-import { EMPLOYEE_COLORS, calcHours, formatTime } from "@/lib/scheduling/constants";
+import { calcHours, formatTime } from "@/lib/scheduling/constants";
 
 interface EditActualShiftDialogProps {
   open: boolean;
@@ -93,7 +93,6 @@ export function EditActualShiftDialog({
 
   if (!employee) return null;
 
-  const palette = EMPLOYEE_COLORS[employee.color] ?? EMPLOYEE_COLORS.blue;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -110,21 +109,18 @@ export function EditActualShiftDialog({
           {/* Employee preview */}
           <div
             className={cn(
-              "flex items-center gap-2 rounded-md border px-3 py-2",
-              palette.bg,
-              palette.border
+              "flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2",
             )}
           >
             <div
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                palette.text
+                "flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground",
               )}
             >
-              {employee.avatar}
+              <User className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className={cn("text-sm font-semibold", palette.text)}>{employee.name}</p>
+              <p className="text-sm font-semibold">{employee.name}</p>
               <p className="text-xs text-muted-foreground">{employee.role}</p>
             </div>
           </div>

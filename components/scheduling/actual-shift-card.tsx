@@ -1,6 +1,14 @@
 "use client";
 
-import { Check, Pencil, Trash2, UserX, Clock, StickyNote } from "lucide-react";
+import {
+  Check,
+  Pencil,
+  Trash2,
+  UserPlus,
+  UserX,
+  Clock,
+  StickyNote,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -8,7 +16,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
+import { formatTime } from "@/lib/scheduling/constants";
+import {
+  SHIFT_ACCENT,
+  SHIFT_CARD_SURFACE,
+  SHIFT_RAIL_BASE,
+} from "@/lib/scheduling/accents";
 import type { Shift, ActualShift } from "@/types/scheduling.types";
 
 interface ActualShiftCardProps {
@@ -16,7 +29,6 @@ interface ActualShiftCardProps {
   plannedShift?: Shift;
   /** The linked (or standalone) actual entry, if the shift has been reviewed. */
   actual?: ActualShift;
-  color: string;
   onConfirm: (plannedShift: Shift) => void;
   onEdit: (plannedShift: Shift | undefined, actual: ActualShift | undefined) => void;
   onDelete: (actual: ActualShift) => void;
@@ -25,12 +37,10 @@ interface ActualShiftCardProps {
 export function ActualShiftCard({
   plannedShift,
   actual,
-  color,
   onConfirm,
   onEdit,
   onDelete,
 }: ActualShiftCardProps) {
-  const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
 
   // Ghost / pending — planned shift not yet reviewed
   if (!actual) {
@@ -41,8 +51,9 @@ export function ActualShiftCard({
         <TooltipTrigger asChild>
           <div
             className={cn(
-              "group relative rounded-md border border-dashed px-2 py-1.5 text-xs opacity-60 transition-all overflow-hidden",
-              palette.border
+              "group relative px-2 py-1.5 text-xs opacity-60 transition-all overflow-hidden",
+              SHIFT_CARD_SURFACE,
+              "border-dashed",
             )}
           >
             <div className="absolute inset-0 flex items-center justify-center gap-3 rounded-md bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -64,13 +75,13 @@ export function ActualShiftCard({
               </Button>
             </div>
 
-            <div className={cn("flex items-center gap-1 font-semibold leading-tight", palette.text)}>
+            <div className="flex items-center gap-1 font-semibold leading-tight text-foreground">
               <Clock className="h-3 w-3 shrink-0" />
               <span className="truncate">
                 {formatTime(plannedShift.startTime)} - {formatTime(plannedShift.endTime)}
               </span>
             </div>
-            <p className={cn("mt-0.5 text-[10px] leading-tight opacity-75", palette.text)}>
+            <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">
               {plannedShift.label} · Pending review
             </p>
           </div>
@@ -91,7 +102,16 @@ export function ActualShiftCard({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="group relative rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-2 py-1.5 text-xs cursor-pointer transition-all overflow-hidden">
+          <div
+            className={cn(
+              "group relative px-2 py-1.5 text-xs cursor-pointer transition-all overflow-hidden",
+              SHIFT_CARD_SURFACE,
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(SHIFT_RAIL_BASE, SHIFT_ACCENT.critical.rail)}
+            />
             <div className="absolute inset-0 flex items-center justify-center gap-3 rounded-md bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity z-10">
               <Button
                 variant="ghost"
@@ -111,12 +131,22 @@ export function ActualShiftCard({
               </Button>
             </div>
 
-            <div className="flex items-center gap-1 font-semibold leading-tight text-red-700 dark:text-red-300">
+            <div
+              className={cn(
+                "flex items-center gap-1 font-semibold leading-tight",
+                SHIFT_ACCENT.critical.text,
+              )}
+            >
               <UserX className="h-3 w-3 shrink-0" />
               <span className="truncate">No Show</span>
             </div>
             {plannedShift && (
-              <p className="mt-0.5 text-[10px] leading-tight text-red-600 dark:text-red-400 line-through opacity-75">
+              <p
+                className={cn(
+                  "mt-0.5 text-[10px] leading-tight line-through opacity-75",
+                  SHIFT_ACCENT.critical.text,
+                )}
+              >
                 {formatTime(plannedShift.startTime)} - {formatTime(plannedShift.endTime)}
               </p>
             )}
@@ -139,20 +169,26 @@ export function ActualShiftCard({
   const hours = actual.durationMinutes / 60;
   const isModified = actual.status === "modified";
   const isAdded = actual.status === "added";
+  /**
+   * "Worked as planned" is the expected outcome, so it gets no rail at all.
+   * Only a change (attention) or unplanned cover (info) is worth marking.
+   */
+  const tone = isModified ? "attention" : isAdded ? "info" : "neutral";
+  const accent = SHIFT_ACCENT[tone];
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "group relative rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-all overflow-hidden",
-            isModified
-              ? "bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-700"
-              : isAdded
-                ? "bg-sky-50 dark:bg-sky-950/30 border-sky-400 dark:border-sky-700"
-                : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-700"
+            "group relative px-2 py-1.5 text-xs cursor-pointer transition-all overflow-hidden",
+            SHIFT_CARD_SURFACE,
           )}
         >
+          {tone !== "neutral" && (
+            <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          )}
+
           <div className="absolute inset-0 flex items-center justify-center gap-3 rounded-md bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <Button
               variant="ghost"
@@ -181,17 +217,13 @@ export function ActualShiftCard({
           <div
             className={cn(
               "flex items-center gap-1 font-semibold leading-tight",
-              isModified
-                ? "text-amber-700 dark:text-amber-300"
-                : isAdded
-                  ? "text-sky-700 dark:text-sky-300"
-                  : "text-emerald-700 dark:text-emerald-300"
+              tone === "neutral" ? "text-foreground" : accent.text,
             )}
           >
             {isModified ? (
               <Pencil className="h-3 w-3 shrink-0" />
             ) : isAdded ? (
-              <UserX className="h-3 w-3 shrink-0 rotate-180" />
+              <UserPlus className="h-3 w-3 shrink-0" />
             ) : (
               <Check className="h-3 w-3 shrink-0" />
             )}
@@ -204,11 +236,7 @@ export function ActualShiftCard({
               "mt-0.5 truncate text-[10px] leading-tight opacity-75",
               // Bottom-right note icon floats over this row when present.
               actual.note && "pe-4",
-              isModified
-                ? "text-amber-600 dark:text-amber-400"
-                : isAdded
-                  ? "text-sky-600 dark:text-sky-400"
-                  : "text-emerald-600 dark:text-emerald-400"
+              tone === "neutral" ? "text-muted-foreground" : accent.text,
             )}
           >
             {isAdded ? "Added coverage" : isModified ? "Time changed" : "Worked as planned"}
@@ -225,7 +253,11 @@ export function ActualShiftCard({
             Planned: {formatTime(plannedShift.startTime)} – {formatTime(plannedShift.endTime)}
           </p>
         )}
-        {isAdded && <p className="text-sky-500">Ad-hoc coverage — not in the original plan</p>}
+        {isAdded && (
+          <p className={SHIFT_ACCENT.info.text}>
+            Ad-hoc coverage — not in the original plan
+          </p>
+        )}
         {actual.note && <p className="text-amber-600 dark:text-amber-400 italic">📝 {actual.note}</p>}
       </TooltipContent>
     </Tooltip>

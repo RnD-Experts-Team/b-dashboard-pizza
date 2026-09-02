@@ -1333,8 +1333,16 @@ export function SchedulingManager() {
     );
   }
 
-  // First load for this store/week — nothing to keep on screen yet.
-  if (isLoading && !data) {
+  /**
+   * Nothing to show and something on the way.
+   *
+   * Gated on BOTH flags deliberately. `isLoading` alone left a hole: a request
+   * that counted itself a refetch while `data` was null fell through to the
+   * full grid and rendered empty arrays — a blank schedule with no indicator.
+   * The hook no longer produces that combination, but "no data plus a request
+   * in flight" should show a skeleton whatever the flag bookkeeping decides.
+   */
+  if (!data && (isLoading || isRefetching)) {
     return (
       <div className="space-y-4">
         {pageHeader}
@@ -1632,11 +1640,21 @@ export function SchedulingManager() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                {comparisonMode && (
+                {/*
+                  Why half this menu is greyed out.
+
+                  Everything below down to Export edits the PLANNED schedule, so
+                  it is available in Planned only. Without a reason stated here
+                  a manager in Actual just sees dead items — and the old copy
+                  was worse than nothing once Actual became a gated mode too,
+                  since it told them to switch to Actual to make changes.
+                */}
+                {!isPlannedOnly && (
                   <>
                     <div className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
-                      Compare is a read-only view. Switch to Planned or Actual
-                      to make changes.
+                      {comparisonMode
+                        ? "Compare is a read-only view. Switch to Planned to change the schedule."
+                        : "You're viewing recorded attendance. Switch to Planned to change the schedule."}
                     </div>
                     <DropdownMenuSeparator />
                   </>
@@ -1644,7 +1662,7 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Schedule</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={isCopyingWeek || comparisonMode}
+                  disabled={isCopyingWeek || !isPlannedOnly}
                   onSelect={() => setCopyConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1652,7 +1670,7 @@ export function SchedulingManager() {
                   Copy Previous Week
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={shifts.length === 0 || comparisonMode}
+                  disabled={shifts.length === 0 || !isPlannedOnly}
                   onSelect={() => setClearConfirmOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1666,7 +1684,7 @@ export function SchedulingManager() {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={
-                    published.isPublishing || shifts.length === 0 || comparisonMode
+                    published.isPublishing || shifts.length === 0 || !isPlannedOnly
                   }
                   onSelect={handlePublishWeek}
                   className="gap-2 cursor-pointer"
@@ -1689,7 +1707,7 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Templates</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={shifts.length === 0 || comparisonMode}
+                  disabled={shifts.length === 0 || !isPlannedOnly}
                   onSelect={() => setSaveTemplateOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1697,7 +1715,7 @@ export function SchedulingManager() {
                   Save as Template
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={templates.templates.length === 0 || comparisonMode}
+                  disabled={templates.templates.length === 0 || !isPlannedOnly}
                   onSelect={() => setLoadTemplateOpen(true)}
                   className="gap-2 cursor-pointer"
                 >
@@ -1708,7 +1726,7 @@ export function SchedulingManager() {
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Export</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={isExporting || comparisonMode}
+                  disabled={isExporting || !isPlannedOnly}
                   onSelect={handleExportExcel}
                   className="gap-2 cursor-pointer"
                 >

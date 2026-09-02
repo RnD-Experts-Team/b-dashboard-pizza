@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, AlertTriangle } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Plus, AlertTriangle, User } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS, calcHours, formatTime } from "@/lib/scheduling/constants";
+import { calcHours, formatTime } from "@/lib/scheduling/constants";
 import { todayIndexIn } from "@/lib/scheduling/week";
 import { EmployeeSyncBadge } from "./employee-sync-notice";
 import { DraftShiftCard } from "./draft-shift-card";
@@ -78,16 +78,19 @@ interface ScheduleGridProps {
  * carrying meaning it was never meant to: a fully blocked day looked far more
  * serious than a partially blocked one purely because its box was bigger, and
  * the two tall boxes ate most of a cell that also has to hold shift cards. They
- * are the same class of information, so they now share one shape and differ only
- * by colour and wording, with the detail moved into the tooltip.
+ * are the same class of information, so they share one shape and one muted
+ * treatment, with the detail moved into the tooltip.
+ *
+ * The leave variant used to be purple. The label already reads "Vacation" or
+ * "PTO", so the colour repeated what the words said while adding a sixth hue to
+ * a grid that had too many — none of these states is a problem to be flagged,
+ * they are just facts about the day.
  */
 function DayBlockPill({
-  tone,
   label,
   title,
   detail,
 }: {
-  tone: "leave" | "blocked";
   label: string;
   title: string;
   detail?: string | null;
@@ -95,22 +98,8 @@ function DayBlockPill({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div
-          className={cn(
-            "rounded px-1 py-0.5 text-center",
-            tone === "leave"
-              ? "bg-purple-100 dark:bg-purple-900/30"
-              : "bg-slate-100 dark:bg-slate-800/30",
-          )}
-        >
-          <p
-            className={cn(
-              "truncate text-[9px] font-medium leading-tight",
-              tone === "leave"
-                ? "text-purple-600 dark:text-purple-300"
-                : "text-slate-400",
-            )}
-          >
+        <div className="rounded bg-muted px-1 py-0.5 text-center">
+          <p className="truncate text-[9px] font-medium leading-tight text-muted-foreground">
             {label}
           </p>
         </div>
@@ -121,6 +110,17 @@ function DayBlockPill({
       </TooltipContent>
     </Tooltip>
   );
+}
+
+/**
+ * `ScheduleEmployee.avatar` has always held initials, and this grid never
+ * imported `AvatarImage` — so a profile picture has never rendered here at all.
+ * Treat the field as an image only when it looks like one, so photos work if
+ * the API starts sending URLs and the neutral icon shows otherwise.
+ */
+function avatarImageUrl(avatar: string | undefined): string | undefined {
+  if (!avatar) return undefined;
+  return /^(https?:\/\/|\/)/.test(avatar) ? avatar : undefined;
 }
 
 export function ScheduleGrid({
@@ -325,7 +325,6 @@ export function ScheduleGrid({
             {employees.map((emp) => {
               const empHours = hoursMap[emp.id] ?? 0;
               const empShiftCount = shiftCountMap[emp.id] ?? 0;
-              const palette = EMPLOYEE_COLORS[emp.color] ?? EMPLOYEE_COLORS.blue;
               const isOvertime = overtimeEmpIds.has(emp.id);
 
               return (
@@ -340,14 +339,13 @@ export function ScheduleGrid({
                   <td className="md:sticky left-0 z-10 bg-card border-r px-2 sm:px-3 py-1.5 sm:py-2">
                     <div className="flex items-center gap-1.5 sm:gap-2.5">
                       <Avatar className="h-6 w-6 sm:h-8 sm:w-8 shrink-0">
-                        <AvatarFallback
-                          className={cn(
-                            "text-[9px] sm:text-xs font-semibold",
-                            palette.bg,
-                            palette.text
-                          )}
-                        >
-                          {emp.avatar}
+                        <AvatarImage
+                          src={avatarImageUrl(emp.avatar)}
+                          alt={emp.name}
+                          className="object-cover"
+                        />
+                        <AvatarFallback className="bg-muted text-muted-foreground">
+                          <User className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
@@ -439,7 +437,6 @@ export function ScheduleGrid({
                           {/* Day state — one shape for all three, see DayBlockPill */}
                           {empTimeOff && !employeeView && (
                             <DayBlockPill
-                              tone="leave"
                               label={empTimeOff.label}
                               title={empTimeOff.label}
                               detail={`${emp.name} is off this day`}
@@ -450,7 +447,6 @@ export function ScheduleGrid({
                             !employeeView &&
                             empUnavailable.some((r) => r.allDay) && (
                               <DayBlockPill
-                                tone="blocked"
                                 label="Unavailable"
                                 title="Unavailable all day"
                                 detail={
@@ -465,7 +461,6 @@ export function ScheduleGrid({
                             !empUnavailable.some((r) => r.allDay) &&
                             empUnavailable.length > 0 && (
                               <DayBlockPill
-                                tone="blocked"
                                 label="Partial block"
                                 title="Partially unavailable"
                                 detail={empUnavailable
@@ -508,7 +503,6 @@ export function ScheduleGrid({
                                   key={shift.id}
                                   plannedShift={shift}
                                   actual={actualForPlanned(shift.id, actualShifts)}
-                                  color={emp.color}
                                   onConfirm={(s) => onConfirmActual?.(s)}
                                   onEdit={(s, a) => onEditActual?.(s, a)}
                                   onDelete={(a) => onDeleteActual?.(a)}
@@ -518,7 +512,6 @@ export function ScheduleGrid({
                                 <ActualShiftCard
                                   key={a.id}
                                   actual={a}
-                                  color={emp.color}
                                   onConfirm={() => {}}
                                   onEdit={(s, act) => onEditActual?.(s, act)}
                                   onDelete={(act) => onDeleteActual?.(act)}
@@ -531,7 +524,9 @@ export function ScheduleGrid({
                                     size="sm"
                                     className={cn(
                                       "h-6 w-full border border-dashed border-transparent text-muted-foreground/40",
-                                      "hover:border-sky-400/40 hover:text-sky-600 hover:bg-sky-500/5",
+                                      // Violet: this button creates added coverage, so it
+                                      // previews the accent that coverage will carry.
+                                      "hover:border-violet-400/40 hover:text-violet-600 hover:bg-violet-500/5",
                                       "transition-all",
                                       cellShifts.length === 0 &&
                                         cellAddedActuals.length === 0 &&
@@ -556,7 +551,6 @@ export function ScheduleGrid({
                                 <ShiftCard
                                   key={shift.id}
                                   shift={shift}
-                                  color={emp.color}
                                   hasConflict={conflictIds.has(shift.id)}
                                   blockedReason={blockReasonFor(
                                     shift.startTime,
@@ -579,7 +573,6 @@ export function ScheduleGrid({
                                   <DraftShiftCard
                                     key={draft.draftId}
                                     draft={draft}
-                                    color={emp.color}
                                     blockedReason={blockReasonFor(
                                       draft.startTime,
                                       draft.endTime,

@@ -8,7 +8,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
+import { formatTime } from "@/lib/scheduling/constants";
+import {
+  SHIFT_ACCENT,
+  SHIFT_CARD_SURFACE,
+  SHIFT_RAIL_BASE,
+  hasRail,
+  type ShiftTone,
+} from "@/lib/scheduling/accents";
 import { formatIsoDateWithWeekday } from "@/lib/scheduling/week";
 import type { Shift } from "@/types/scheduling.types";
 import {
@@ -32,7 +39,6 @@ const MARKER_RESERVE = ["", "pe-4", "pe-7", "pe-10"] as const;
 
 interface ShiftCardProps {
   shift: Shift;
-  color: string;
   hasConflict?: boolean;
   /**
    * Set when this shift falls inside blocked availability or approved leave.
@@ -48,12 +54,18 @@ interface ShiftCardProps {
   onDelete: (shiftId: string) => void;
 }
 
-export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, onDelete }: ShiftCardProps) {
-  const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
+export function ShiftCard({ shift, hasConflict, blockedReason, onEdit, onDelete }: ShiftCardProps) {
   const hours = shift.durationMinutes / 60;
-  // An overlap is the louder problem, so red wins the card; the block still
-  // gets its own marker and tooltip line below.
+  // An overlap is the louder problem, so it owns the rail; the block still gets
+  // its own marker and tooltip line below.
   const isBlocked = !!blockedReason && !hasConflict;
+
+  const tone: ShiftTone = hasConflict
+    ? "critical"
+    : isBlocked
+      ? "attention"
+      : "neutral";
+  const accent = SHIFT_ACCENT[tone];
 
   const topMarkers =
     Number(!!hasConflict) + Number(isBlocked) + Number(!!shift.isRecurring);
@@ -67,20 +79,17 @@ export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, on
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "group relative rounded-md border px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs cursor-pointer transition-all overflow-hidden",
-            hasConflict
-              ? "bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-700 ring-1 ring-red-400/40"
-              : isBlocked
-                ? "bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-700 ring-1 ring-amber-400/40"
-                : cn(palette.bg, palette.border),
-            shift.isRecurring && "border-dashed border-2",
-            !hasConflict &&
-              shift.syncStatus === "parked" &&
-              "border-rose-400/70 dark:border-rose-700/70",
-            !hasConflict && shift.syncStatus === "pending" && "opacity-90"
+            "group relative px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs cursor-pointer transition-all overflow-hidden",
+            SHIFT_CARD_SURFACE,
+            shift.isRecurring && "border-dashed",
+            shift.syncStatus === "pending" && "opacity-90"
           )}
           onClick={() => onEdit(shift)}
         >
+          {/* Status rail — drawn only when something needs attention. */}
+          {hasRail(tone) && (
+            <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          )}
           {/* Dark overlay + centered actions on hover */}
           <div className="absolute inset-0 flex items-center justify-center gap-3 rounded-md bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <Button
@@ -114,8 +123,10 @@ export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, on
           */}
           {(hasConflict || isBlocked || shift.isRecurring) && (
             <div className="absolute top-0.5 right-0.5 z-5 flex items-center gap-0.5">
-              {hasConflict && <AlertTriangle className="h-3 w-3 text-red-500" />}
-              {isBlocked && <Ban className="h-3 w-3 text-amber-500" />}
+              {hasConflict && (
+                <AlertTriangle className={cn("h-3 w-3", accent.text)} />
+              )}
+              {isBlocked && <Ban className={cn("h-3 w-3", accent.text)} />}
               {shift.isRecurring && (
                 <Repeat className="h-2.5 w-2.5 text-indigo-500 dark:text-indigo-400" />
               )}
@@ -142,13 +153,8 @@ export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, on
 
           {/* Time range */}
           <div className={cn(
-            "flex items-center gap-1 font-semibold leading-tight",
-            MARKER_RESERVE[topMarkers],
-            hasConflict
-              ? "text-red-700 dark:text-red-300"
-              : isBlocked
-                ? "text-amber-700 dark:text-amber-300"
-                : palette.text
+            "flex items-center gap-1 font-semibold leading-tight text-foreground",
+            MARKER_RESERVE[topMarkers]
           )}>
             <Clock className="h-3 w-3 shrink-0" />
             <span className="truncate">
@@ -158,13 +164,8 @@ export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, on
 
           {/* Label */}
           <p className={cn(
-            "mt-0.5 truncate text-[9px] sm:text-[10px] leading-tight opacity-75",
-            MARKER_RESERVE[bottomMarkers],
-            hasConflict
-              ? "text-red-600 dark:text-red-400"
-              : isBlocked
-                ? "text-amber-600 dark:text-amber-400"
-                : palette.text
+            "mt-0.5 truncate text-[9px] sm:text-[10px] leading-tight text-muted-foreground",
+            MARKER_RESERVE[bottomMarkers]
           )}>
             {shift.label}
             {shift.isRecurring && " ↻"}
@@ -178,10 +179,17 @@ export function ShiftCard({ shift, color, hasConflict, blockedReason, onEdit, on
           {formatTime(shift.startTime)} – {formatTime(shift.endTime)} ({hours.toFixed(1)}h)
         </p>
         {hasConflict && (
-          <p className="text-red-500 font-medium">⚠ Overlapping shift conflict</p>
+          <p className={cn("font-medium", accent.text)}>
+            ⚠ Overlapping shift conflict
+          </p>
         )}
         {blockedReason && (
-          <p className="font-medium text-amber-600 dark:text-amber-400">
+          <p
+            className={cn(
+              "font-medium",
+              hasConflict ? SHIFT_ACCENT.attention.text : accent.text,
+            )}
+          >
             ⚠ {blockedReason}
           </p>
         )}

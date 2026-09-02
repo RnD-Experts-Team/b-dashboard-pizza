@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Ban, StickyNote } from "lucide-react";
+import { AlertTriangle, Ban, StickyNote, User } from "lucide-react";
 import type {
   ScheduleEmployee,
   Shift,
@@ -30,7 +30,7 @@ import type {
   TimeOffEntry,
   EmployeeSyncRequestStatus,
 } from "@/types/scheduling.types";
-import { EMPLOYEE_COLORS, SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
+import { SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
 import { EmployeeSyncWaiting } from "./employee-sync-notice";
 import { ScheduleErrorAlert } from "./schedule-error-alert";
 import type { SchedulingError } from "@/lib/scheduling/errors";
@@ -224,7 +224,6 @@ export function AddShiftDialogNew({
 
   if (!employee) return null;
 
-  const palette = EMPLOYEE_COLORS[employee.color] ?? EMPLOYEE_COLORS.blue;
   const hours = calcHours(startTime, endTime);
 
   return (
@@ -242,21 +241,18 @@ export function AddShiftDialogNew({
           {/* Employee preview */}
           <div
             className={cn(
-              "flex items-center gap-2 rounded-md border px-3 py-2",
-              palette.bg,
-              palette.border
+              "flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2",
             )}
           >
             <div
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                palette.text
+                "flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground",
               )}
             >
-              {employee.avatar}
+              <User className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className={cn("text-sm font-semibold", palette.text)}>
+              <p className="text-sm font-semibold">
                 {employee.name}
               </p>
               <p className="text-xs text-muted-foreground">{employee.role}</p>

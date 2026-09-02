@@ -8,11 +8,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { calcHours, formatTime } from "@/lib/scheduling/constants";
 import {
-  EMPLOYEE_COLORS,
-  calcHours,
-  formatTime,
-} from "@/lib/scheduling/constants";
+  SHIFT_ACCENT,
+  SHIFT_CARD_SURFACE,
+  SHIFT_RAIL_BASE,
+} from "@/lib/scheduling/accents";
 import type { DraftShift } from "@/lib/scheduling/draft.store";
 
 /**
@@ -32,7 +33,6 @@ import type { DraftShift } from "@/lib/scheduling/draft.store";
 
 interface DraftShiftCardProps {
   draft: DraftShift;
-  color: string;
   /**
    * Set when the draft falls inside blocked availability or approved leave.
    *
@@ -47,12 +47,10 @@ interface DraftShiftCardProps {
 
 export function DraftShiftCard({
   draft,
-  color,
   blockedReason,
   onEdit,
   onDelete,
 }: DraftShiftCardProps) {
-  const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
   const hours = calcHours(draft.startTime, draft.endTime);
 
   return (
@@ -60,11 +58,11 @@ export function DraftShiftCard({
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "group relative cursor-pointer overflow-hidden rounded-md border-2 border-dashed px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs transition-all",
-            // Dashed + desaturated so it reads as "not real yet" at a glance,
-            // while still carrying the employee's colour for scanability.
-            palette.bg,
-            "border-amber-400/70 dark:border-amber-500/60",
+            "group relative cursor-pointer overflow-hidden px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs transition-all",
+            SHIFT_CARD_SURFACE,
+            // Dashed border is what says "not saved yet" — no fill, so an
+            // unsaved shift reads as provisional rather than as a warning.
+            "border-dashed",
           )}
           onClick={() => onEdit(draft)}
         >
@@ -94,23 +92,31 @@ export function DraftShiftCard({
             </Button>
           </div>
 
-          <div
-            className={cn(
-              "flex items-center gap-1 font-semibold leading-tight",
-              palette.text,
-            )}
-          >
+          {/* A blocked draft still earns a rail — it is a real clash. */}
+          {blockedReason && (
+            <span
+              aria-hidden
+              className={cn(SHIFT_RAIL_BASE, SHIFT_ACCENT.attention.rail)}
+            />
+          )}
+
+          <div className="flex items-center gap-1 font-semibold leading-tight text-foreground">
             <Clock className="h-3 w-3 shrink-0" />
             <span className="truncate">
               {formatTime(draft.startTime)} - {formatTime(draft.endTime)}
             </span>
             {blockedReason && (
-              <Ban className="ms-auto h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+              <Ban
+                className={cn(
+                  "ms-auto h-3 w-3 shrink-0",
+                  SHIFT_ACCENT.attention.text,
+                )}
+              />
             )}
           </div>
 
           <div className="mt-0.5 flex items-center justify-between gap-1">
-            <p className={cn("truncate text-[10px] leading-tight opacity-75", palette.text)}>
+            <p className="truncate text-[10px] leading-tight text-muted-foreground">
               {draft.label}
             </p>
             <span className="shrink-0 rounded-sm bg-amber-500/20 px-1 text-[8px] font-bold uppercase leading-tight tracking-wide text-amber-700 dark:text-amber-300">
@@ -132,7 +138,7 @@ export function DraftShiftCard({
           Overlaps and overtime are checked when it is saved.
         </p>
         {blockedReason && (
-          <p className="mt-0.5 font-medium text-amber-600 dark:text-amber-400">
+          <p className={cn("mt-0.5 font-medium", SHIFT_ACCENT.attention.text)}>
             ⚠ {blockedReason}
           </p>
         )}

@@ -119,8 +119,23 @@ export function useScheduleWeek({
    * during the initial load would abort that load and start an identical one.
    */
   const inFlightRef = useRef(false);
-  /** Distinguishes the first load (show a skeleton) from a refetch (keep the grid). */
-  const hasLoadedRef = useRef(false);
+  /**
+   * WHICH store the data on screen belongs to, or null when there is none.
+   *
+   * This was a bare "have we loaded" boolean, which could not tell "we already
+   * have this store's week" from "we have some other store's week". A separate
+   * `[storeId]` effect cleared it, but effects run in declaration order, so the
+   * fetch below read the stale `true` first and chose "refetch" (keep the grid)
+   * where it should have chosen "first load" (show the skeleton). The grid then
+   * rendered against data the reset effect had just nulled: a blank schedule
+   * with no indicator. Worse, on a cache hit the fetch returned with nothing in
+   * flight and the reset wiped it, leaving the grid blank until the user
+   * changed week or hit Refresh.
+   *
+   * Holding the store id here lets `fetchWeek` settle it alone, so no ordering
+   * between effects matters.
+   */
+  const dataStoreRef = useRef<string | null>(null);
 
   const [debouncedSearch, setDebouncedSearch] = useState(search ?? "");
   useEffect(() => {
@@ -139,9 +154,19 @@ export function useScheduleWeek({
     async (opts?: { skipCache?: boolean }) => {
     if (!storeId) {
       setData(null);
-      hasLoadedRef.current = false;
+      dataStoreRef.current = null;
       return;
     }
+
+    /**
+     * A different store is a different schedule. Clear immediately so one
+     * store's shifts can never appear under another store's name, and so the
+     * request below counts as a first load rather than a refetch — a refetch
+     * keeps the grid on screen, which is wrong when nothing legitimate is left
+     * to keep.
+     */
+    const isNewStore = dataStoreRef.current !== storeId;
+    if (isNewStore) setData(null);
 
     const key = keyFor(storeId, weekStart, department, debouncedSearch);
 
@@ -156,7 +181,7 @@ export function useScheduleWeek({
         setSetupError(null);
         setIsLoading(false);
         setIsRefetching(false);
-        hasLoadedRef.current = true;
+        dataStoreRef.current = storeId;
         return;
       }
     }
@@ -166,7 +191,8 @@ export function useScheduleWeek({
     abortRef.current = controller;
 
     inFlightRef.current = true;
-    if (hasLoadedRef.current) setIsRefetching(true);
+    // Keep the grid up only when it already shows THIS store's data.
+    if (!isNewStore && dataStoreRef.current !== null) setIsRefetching(true);
     else setIsLoading(true);
     setError(null);
     setSetupError(null);
@@ -189,7 +215,7 @@ export function useScheduleWeek({
         const adapted = adaptScheduleWeek(raw);
         write(key, adapted);
         setData(adapted);
-        hasLoadedRef.current = true;
+        dataStoreRef.current = storeId;
       }
     } catch (err) {
       if (controller.signal.aborted || axios.isCancel(err)) return;
@@ -269,13 +295,6 @@ export function useScheduleWeek({
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [revalidateIfStale]);
-
-  // A store change is a different schedule entirely — drop the old week so the
-  // grid never shows one store's shifts under another store's name.
-  useEffect(() => {
-    hasLoadedRef.current = false;
-    setData(null);
-  }, [storeId]);
 
   return {
     data,

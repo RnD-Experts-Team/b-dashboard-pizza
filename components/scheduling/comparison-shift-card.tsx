@@ -8,6 +8,12 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/scheduling/constants";
+import {
+  SHIFT_ACCENT,
+  SHIFT_CARD_SURFACE,
+  SHIFT_RAIL_BASE,
+  type ShiftTone,
+} from "@/lib/scheduling/accents";
 import type { Shift, ActualShift } from "@/types/scheduling.types";
 
 /**
@@ -37,40 +43,23 @@ interface ComparisonShiftCardProps {
 
 type Outcome = "match" | "differs" | "absent" | "unplanned" | "not-recorded";
 
-const ACCENT: Record<
+/**
+ * Outcomes mapped onto the three shared tones.
+ *
+ * `match` and `not-recorded` are deliberately `neutral` — one is the expected
+ * result and the other is simply "nobody has looked yet". Neither is a problem,
+ * so neither earns colour; that is what leaves the genuinely notable outcomes
+ * visible at a glance instead of competing with four other hues.
+ */
+const OUTCOME: Record<
   Outcome,
-  { card: string; rail: string; label: string; icon: typeof Check | null }
+  { tone: ShiftTone; dashed?: boolean; icon: typeof Check | null }
 > = {
-  match: {
-    card: "border-emerald-300/70 bg-emerald-50/60 dark:border-emerald-800/60 dark:bg-emerald-950/20",
-    rail: "bg-emerald-500",
-    label: "text-emerald-700 dark:text-emerald-300",
-    icon: Check,
-  },
-  differs: {
-    card: "border-amber-300/70 bg-amber-50/60 dark:border-amber-800/60 dark:bg-amber-950/20",
-    rail: "bg-amber-500",
-    label: "text-amber-700 dark:text-amber-300",
-    icon: AlertTriangle,
-  },
-  absent: {
-    card: "border-rose-300/70 bg-rose-50/60 dark:border-rose-800/60 dark:bg-rose-950/20",
-    rail: "bg-rose-500",
-    label: "text-rose-700 dark:text-rose-300",
-    icon: UserX,
-  },
-  unplanned: {
-    card: "border-sky-300/70 bg-sky-50/60 dark:border-sky-800/60 dark:bg-sky-950/20",
-    rail: "bg-sky-500",
-    label: "text-sky-700 dark:text-sky-300",
-    icon: AlertTriangle,
-  },
-  "not-recorded": {
-    card: "border-dashed border-muted-foreground/30 bg-muted/20",
-    rail: "bg-muted-foreground/30",
-    label: "text-muted-foreground",
-    icon: null,
-  },
+  match: { tone: "neutral", icon: Check },
+  differs: { tone: "attention", icon: AlertTriangle },
+  absent: { tone: "critical", icon: UserX },
+  unplanned: { tone: "info", icon: AlertTriangle },
+  "not-recorded": { tone: "neutral", dashed: true, icon: null },
 };
 
 /** "+20m" / "−1h 05m", or null when the durations match. */
@@ -135,8 +124,9 @@ export function ComparisonShiftCard({
         ? "match"
         : "differs";
 
-  const accent = ACCENT[outcome];
-  const Icon = accent.icon;
+  const spec = OUTCOME[outcome];
+  const accent = SHIFT_ACCENT[spec.tone];
+  const Icon = spec.icon;
 
   const delta =
     plannedShift && actual && outcome === "differs"
@@ -148,25 +138,19 @@ export function ComparisonShiftCard({
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "relative overflow-hidden rounded-md border ps-2 pe-1.5 py-1",
-            accent.card,
+            "relative overflow-hidden ps-2 pe-1.5 py-1",
+            SHIFT_CARD_SURFACE,
+            spec.dashed && "border-dashed",
           )}
         >
-          {/* Colour rail: the state is readable before any text is parsed. */}
-          <span
-            aria-hidden
-            className={cn(
-              "pointer-events-none absolute inset-y-0 start-0 w-0.5",
-              accent.rail,
-            )}
-          />
+          {/* Rail only for outcomes worth noticing — see OUTCOME above. */}
+          {spec.tone !== "neutral" && (
+            <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          )}
 
           {Icon && (
             <Icon
-              className={cn(
-                "absolute end-0.5 top-0.5 h-2.5 w-2.5",
-                accent.label,
-              )}
+              className={cn("absolute end-0.5 top-0.5 h-2.5 w-2.5", accent.text)}
             />
           )}
 
@@ -181,7 +165,7 @@ export function ComparisonShiftCard({
             strike={outcome === "absent"}
             className={cn(
               Icon && "pe-3",
-              outcome === "absent" && accent.label,
+              outcome === "absent" && accent.text,
             )}
           >
             {plannedShift
@@ -197,7 +181,7 @@ export function ComparisonShiftCard({
             muted={!actual || outcome === "not-recorded"}
             className={
               outcome === "absent" || outcome === "differs" || outcome === "unplanned"
-                ? accent.label
+                ? accent.text
                 : undefined
             }
           >
@@ -212,7 +196,7 @@ export function ComparisonShiftCard({
             <p
               className={cn(
                 "mt-0.5 text-end text-[9px] font-semibold tabular-nums leading-none",
-                accent.label,
+                accent.text,
               )}
             >
               {delta}

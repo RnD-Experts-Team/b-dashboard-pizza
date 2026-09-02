@@ -20,9 +20,10 @@ import {
   Ban,
   Repeat,
   StickyNote,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DAYS_OF_WEEK, EMPLOYEE_COLORS, formatTime } from "@/lib/scheduling/constants";
+import { DAYS_OF_WEEK, formatTime } from "@/lib/scheduling/constants";
 import type {
   ScheduleEmployee,
   Shift,
@@ -53,7 +54,6 @@ export function EmployeeProfileDialog({
 }: EmployeeProfileDialogProps) {
   if (!employee) return null;
 
-  const palette = EMPLOYEE_COLORS[employee.color] ?? EMPLOYEE_COLORS.blue;
 
   const empShifts = shifts.filter((s) => s.employeeId === employee.id);
   const totalHours = empShifts.reduce(
@@ -83,14 +83,8 @@ export function EmployeeProfileDialog({
         {/* Profile header */}
         <div className="flex flex-col items-center gap-3 pt-2 pb-4">
           <Avatar className="h-16 w-16">
-            <AvatarFallback
-              className={cn(
-                "text-xl font-bold",
-                palette.bg,
-                palette.text
-              )}
-            >
-              {employee.avatar}
+            <AvatarFallback className="bg-muted text-muted-foreground">
+              <User className="h-7 w-7" />
             </AvatarFallback>
           </Avatar>
           <div className="text-center">
