@@ -198,8 +198,10 @@ interface Props {
   onRemoveItem: (id: number) => Promise<void>;
   onUpdateItemWeight: (id: number, weight: number) => Promise<void>;
   onFinalize: (storeId: number) => Promise<void>;
-  /** Super Admin only — omit/false hides the Reopen action entirely rather
-   *  than showing a control the backend would 403. */
+  /** Gated by the "cleaning specialist" permission (not Super Admin only —
+   *  confirmed against the live permission registry). Omit/false hides the
+   *  Reopen action entirely rather than showing a control the backend
+   *  would 403. */
   canReopen?: boolean;
   onReopen?: (storeId: number) => Promise<void>;
   onAllocateWeight: (
@@ -208,8 +210,10 @@ interface Props {
     amounts: { targetTaskId: number; amount: number }[]
   ) => Promise<void>;
   onDeleteAllocation: (storeId: number, sourceTaskId: number) => Promise<void>;
-  /** Super Admin only — omit/false hides the settings gear entirely rather
-   *  than showing a control the backend would 403 on save. */
+  /** Gated by the "cleaning specialist" permission (not Super Admin only —
+   *  confirmed against the live permission registry). Omit/false hides the
+   *  settings gear entirely rather than showing a control the backend
+   *  would 403 on save. */
   canManageSettings?: boolean;
 }
 
@@ -932,7 +936,7 @@ export function EvaluationGrid({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reopen — Super Admin only; unfreezes scores back to live computation */}
+      {/* Reopen — gated by the "cleaning specialist" permission; unfreezes scores back to live computation */}
       <AlertDialog
         open={reopenTarget != null}
         onOpenChange={(o) => !o && setReopenTarget(null)}

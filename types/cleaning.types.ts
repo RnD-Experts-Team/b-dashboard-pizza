@@ -463,8 +463,10 @@ export interface FinalizePayload {
   period_key: string;
 }
 
-/** Super Admin only — clears the finalize lock and returns the evaluation to
- *  live computation, discarding the frozen scores. */
+/** Gated by the "cleaning specialist" permission (confirmed against the live
+ *  permission registry — not Super Admin only, despite the migration guide's
+ *  prose). Clears the finalize lock and returns the evaluation to live
+ *  computation, discarding the frozen scores. */
 export type ReopenPayload = FinalizePayload;
 
 /* ── Track 2: Inspection item weight ─────────────────────────────────────── */
@@ -500,7 +502,8 @@ export interface DeleteAllocationPayload {
   source_task_id: number;
 }
 
-/* ── Track 2: Scoring settings (Super Admin) ─────────────────────────────── */
+/* ── Track 2: Scoring settings (gated by the "cleaning specialist" permission,
+   confirmed against the live registry — not Super Admin only) ───────────── */
 
 export interface ApiCleaningSettings {
   score_formula: ScoreFormula;

@@ -22,8 +22,10 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * PUT /api/cleaning/settings — Super Admin only (backend-enforced, 403
- * otherwise). `items_share + chart_share` must equal 100 exactly (422 otherwise).
+ * PUT /api/cleaning/settings — gated by the "cleaning specialist" permission
+ * (backend-enforced, 403 otherwise) — confirmed against the live permission
+ * registry, not Super Admin only as the migration guide's prose implied.
+ * `items_share + chart_share` must equal 100 exactly (422 otherwise).
  */
 export async function PUT(request: NextRequest) {
   const authError = requireAuthorization(request);

@@ -29,7 +29,10 @@ const EXAMPLE_ITEM_SCORE = 85;
 const EXAMPLE_CHART_SCORE = 60;
 
 /**
- * Super Admin only (visibility gated by the caller via `canManageCleaningSettings`).
+ * Gated by the "cleaning specialist" permission (visibility controlled by the
+ * caller via `canManageCleaningSettings`) — confirmed against the live
+ * permission registry, not Super Admin only as the migration guide's prose
+ * implied.
  *
  * The backend still supports a legacy "excel" formula (guide §9), but this
  * dialog deliberately only ever offers/saves "average" — there's no product

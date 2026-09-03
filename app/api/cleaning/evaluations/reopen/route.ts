@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/cleaning/evaluations/reopen — { store_id, period_type, period_key }
  *
- * Super Admin only (backend-enforced, 403 otherwise). Clears the finalize
+ * Gated by the "cleaning specialist" permission (backend-enforced, 403
+ * otherwise) — confirmed against the live permission registry, not Super
+ * Admin only as the migration guide's prose implied. Clears the finalize
  * lock and discards the frozen scores, returning the evaluation to live
  * computation.
  */

@@ -124,11 +124,15 @@ export function canEvaluateCleaning(auth: {
 }
 
 /**
- * Whether this user may reopen a finalized evaluation — the backend rule is
- * Super Admin only (403 otherwise, per the migration guide §8), so this is a
- * permission check rather than a hardcoded role list: it stays correct if the
- * backend ever grants the underlying permission more broadly, the same way
- * `canEvaluateCleaning` mirrors POST /evaluations instead of assuming a role.
+ * Whether this user may reopen a finalized evaluation. The migration guide's
+ * prose (§8) described this as "Super Admin only", but the backend's actual
+ * registered permission for `POST /cleaning/evaluations/reopen` is the same
+ * "cleaning specialist" permission that gates the rest of the Evaluation tab
+ * — confirmed directly against the live permission registry, not a role
+ * restriction at all. Checked as a permission (not a hardcoded role list)
+ * specifically so this stays correct regardless of which way that
+ * assumption was wrong, the same way `canEvaluateCleaning` mirrors
+ * POST /evaluations instead of assuming a role.
  */
 export function canReopenCleaningEvaluation(auth: {
   canAccessRoute: (params: CanAccessParams) => boolean;
@@ -141,10 +145,12 @@ export function canReopenCleaningEvaluation(auth: {
 }
 
 /**
- * Whether this user may change the score formula/shares — Super Admin only
- * (guide §9), checked the same way as `canReopenCleaningEvaluation`. Gates
- * the whole Settings dialog (not just the Save button): showing a read-only
- * view of Super-Admin-only configuration to everyone else isn't useful here.
+ * Whether this user may change the score formula/shares. Also gated by the
+ * "cleaning specialist" permission per the live registry — not Super Admin
+ * only, despite guide §9's prose (see `canReopenCleaningEvaluation` above).
+ * Still gates the whole Settings dialog (not just the Save button): showing
+ * a read-only view of configuration to everyone else who can't save it
+ * isn't useful here.
  */
 export function canManageCleaningSettings(auth: {
   canAccessRoute: (params: CanAccessParams) => boolean;

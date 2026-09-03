@@ -84,8 +84,10 @@ interface CleaningState {
    *  when the evaluation still has ungraded cells — the grid needs that to
    *  show which cells, not just "incomplete". */
   finalizeStore: (storeId: number) => Promise<void>;
-  /** Super Admin only — 403 otherwise. Clears the lock and discards the
-   *  frozen scores; the caller should refetch the grid after this resolves. */
+  /** Gated by the "cleaning specialist" permission (not Super Admin only —
+   *  confirmed against the live permission registry). Clears the lock and
+   *  discards the frozen scores; the caller should refetch the grid after
+   *  this resolves. */
   reopenStore: (storeId: number) => Promise<void>;
 
   reset: () => void;

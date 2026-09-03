@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
   ApiDueResponse,
   DueResponse,
@@ -119,23 +120,35 @@ function authHeaders(): Record<string, string> {
 
 /**
  * The dashboard's currently-selected store as its HUMAN code (e.g.
- * "03795-00001") — read straight from the persisted store rather than passed
- * in, so every call site gets it without threading a param through.
+ * "03795-00001") — read straight from persisted/auth state rather than
+ * passed in, so every call site gets it without threading a param through.
  *
- * Same helper/convention as qa.service.ts's getSelectedStoreId: cleaning talks
- * to the same QA backend, whose store-scoped auth rules resolve the store from
- * the `X-Store-Id` header, and they expect the human code, not the numeric id.
+ * Same base convention as qa.service.ts's getSelectedStoreId (cleaning talks
+ * to the same QA backend, whose store-scoped auth rules resolve the store
+ * from the `X-Store-Id` header and expect the human code, not the numeric
+ * id) — extended here with an `overviewStores` fallback so it doesn't
+ * depend on a store-switcher widget having been used at least once.
  */
 function getSelectedStoreCode(): string | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("selected-store-storage");
-  if (!raw) return null;
-  try {
-    const storeId = JSON.parse(raw)?.state?.selectedStore?.storeId;
-    return typeof storeId === "string" && storeId.trim() ? storeId.trim() : null;
-  } catch {
-    return null;
+  if (raw) {
+    try {
+      const storeId = JSON.parse(raw)?.state?.selectedStore?.storeId;
+      if (typeof storeId === "string" && storeId.trim()) return storeId.trim();
+    } catch {
+      // fall through to the overviewStores fallback below
+    }
   }
+  // "selected-store-storage" only gets written once a store-switcher widget
+  // has actually been used — a store manager who never touches one (common
+  // when they only have one store) would otherwise always resolve to null
+  // here. Falls back to their own first assigned store from
+  // GET /auth/general-overview, loaded at login regardless of widget use.
+  const overviewStoreId = useAuthStore.getState().overviewStores?.[0]?.storeId;
+  return typeof overviewStoreId === "string" && overviewStoreId.trim()
+    ? overviewStoreId.trim()
+    : null;
 }
 
 /**
@@ -733,8 +746,10 @@ export const cleaningService = {
     }
   },
 
-  /** Super Admin only — 403 otherwise. Clears the finalize lock and discards
-   *  the frozen scores, returning the evaluation to live computation. */
+  /** Gated by the "cleaning specialist" permission (403 otherwise) — not
+   *  Super Admin only, confirmed against the live permission registry.
+   *  Clears the finalize lock and discards the frozen scores, returning the
+   *  evaluation to live computation. */
   async reopenStore(payload: ReopenPayload): Promise<void> {
     try {
       await axios.post(`/api/cleaning/evaluations/reopen`, payload, {
@@ -752,6 +767,12 @@ export const cleaningService = {
    * The only legitimate source of period keys — never generate one locally
    * (see the migration guide §4: local ISO-week keys silently diverge from
    * the accounting calendar on 2026-12-29).
+   *
+   * Store-scoped headers, same as `getEvaluations` — this URL carries no
+   * store, so a store_manager whose "cleaning specialist" permission is
+   * granted at the store level (not globally) 403s without `X-Store-Id` to
+   * resolve which store to authorize them against (confirmed live: a store
+   * manager on the My Store tab got 403 here with plain auth headers).
    */
   async getPeriods(
     type: PeriodType,
@@ -762,7 +783,7 @@ export const cleaningService = {
     try {
       const res = await axios.get<ApiPeriodsResponse>(`/api/cleaning/periods`, {
         params: { type, around, span },
-        headers: authHeaders(),
+        headers: storeScopedHeaders(),
         timeout: 15_000,
         signal,
       });
@@ -899,7 +920,9 @@ export const cleaningService = {
     }
   },
 
-  /* ── Track 2: Scoring settings (Super Admin) ── */
+  /* ── Track 2: Scoring settings (gated by the "cleaning specialist"
+     permission, confirmed against the live registry — not Super Admin
+     only) ── */
 
   async getSettings(signal?: AbortSignal): Promise<CleaningSettings> {
     try {
@@ -914,8 +937,9 @@ export const cleaningService = {
     }
   },
 
-  /** Super Admin only. `items_share + chart_share` must equal 100 exactly
-   *  (422 otherwise) — the caller should enforce this before submitting. */
+  /** Gated by the "cleaning specialist" permission — not Super Admin only.
+   *  `items_share + chart_share` must equal 100 exactly (422 otherwise) —
+   *  the caller should enforce this before submitting. */
   async updateSettings(payload: UpdateSettingsPayload): Promise<CleaningSettings> {
     try {
       const res = await axios.put(`/api/cleaning/settings`, payload, {

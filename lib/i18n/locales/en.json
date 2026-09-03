@@ -2325,7 +2325,7 @@
     "settingsDialog": {
       "trigger": "Scoring settings",
       "title": "Scoring settings",
-      "description": "Super Admin only. Changes apply to unfinalized evaluations immediately and never affect finalized ones.",
+      "description": "Changes apply to unfinalized evaluations immediately and never affect finalized ones.",
       "formulaAverageHint": "The Final Score is a weighted average of the Item Score and Chart Score, split by the percentages below.",
       "sharesLabel": "Items / Chart split",
       "sharesItemsEnd": "Items",
