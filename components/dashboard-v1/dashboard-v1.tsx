@@ -72,6 +72,7 @@ import {
   V1GoToCard,
   V1PortalWeeklyCard,
   V1NonNegotiableCard,
+  V1HnrPlusCard,
   V1TopItemsCard,
   V1TopIngredientsCard,
   V1PromoCard,
@@ -708,6 +709,7 @@ export function DashboardV1({
         <V1GoToCard data={wbrData?.["go-to"]} isLoading={isLoading} span={1} />
         <V1PortalWeeklyCard data={wbrData?.["portal-weekly"]} isLoading={isLoading} span={2} />
         <V1NonNegotiableCard data={wbrData?.["non-negotiable-reports"]} isLoading={isLoading} span={2} />
+        <V1HnrPlusCard data={wbrData?.["hnr-plus"]} isLoading={isLoading} span={4} />
       </V1Section>
 
       {/* ── Menu & Product ───────────────────────────────────────────────── */}
