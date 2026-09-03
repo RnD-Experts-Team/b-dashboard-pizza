@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  Award,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -39,7 +40,7 @@ interface DetailTarget {
   photos: string[];
 }
 
-const EMPTY_ITEM_CELL: ItemCell = { value: "empty", note: null, photos: [] };
+const EMPTY_ITEM_CELL: ItemCell = { value: "empty", weight: 1, note: null, photos: [] };
 
 /** True once a cell carries a note and/or at least one photo. */
 function isAnnotated(cell: { note: string | null; photos: string[] }): boolean {
@@ -54,15 +55,20 @@ function scoreFillTone(pct: number): string {
 }
 
 /** Score tile for the header strip — a number plus a fill bar so the score's
- * quality reads at a glance, not just as text. Same shape for Item/Chart Score. */
+ * quality reads at a glance, not just as text. Same shape for Item/Chart/Final
+ * Score. `pct: null` (final score only — migration guide §15: nothing
+ * scoreable yet, NOT a zero) renders a dash and an empty bar instead of
+ * treating null as 0. */
 function ScoreTile({
   icon: Icon,
   label,
   pct,
+  hint,
 }: {
   icon: React.ElementType;
   label: string;
-  pct: number;
+  pct: number | null;
+  hint?: string;
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-4">
@@ -74,13 +80,25 @@ function ScoreTile({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {label}
           </p>
-          <ScoreText pct={pct} variant="passOnly" className="text-xl" />
+          {pct == null ? (
+            <span className="text-xl font-semibold tabular-nums text-muted-foreground/40">
+              --
+            </span>
+          ) : (
+            <ScoreText pct={pct} variant="passOnly" className="text-xl" />
+          )}
+          {hint && (
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{hint}</p>
+          )}
         </div>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className={cn("h-full rounded-full transition-[width]", scoreFillTone(pct))}
-          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+          className={cn(
+            "h-full rounded-full transition-[width]",
+            pct == null ? "bg-transparent" : scoreFillTone(pct)
+          )}
+          style={{ width: `${pct == null ? 0 : Math.min(100, Math.max(0, pct))}%` }}
         />
       </div>
     </div>
@@ -192,9 +210,19 @@ export function MyStoreResults() {
       {row && (
         <div className="space-y-6">
           {/* Hero score strip */}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
             <ScoreTile icon={ClipboardList} label={t("itemScore")} pct={row.itemScore} />
             <ScoreTile icon={SprayCan} label={t("chartScoreLabel")} pct={row.chartScore} />
+            <ScoreTile
+              icon={Award}
+              label={t("finalScoreLabel")}
+              pct={row.finalScore}
+              hint={
+                row.finalScore != null && row.scoreSides.length === 1
+                  ? t(`scoreSide.${row.scoreSides[0]}`)
+                  : undefined
+              }
+            />
           </div>
 
           {/* Inspection items — same table shell as the Due Today list */}

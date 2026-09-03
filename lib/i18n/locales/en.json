@@ -1933,7 +1933,9 @@
       "noEvaluationTitle": "No evaluation data",
       "noEvaluationDescription": "Nothing to grade for this period yet.",
       "openFull": "Open in Cleaning Chart",
-      "pendingTotal": "{pending} pending · {total} total"
+      "pendingTotal": "{pending} pending · {total} total",
+      "openedFromNotification": "Showing {store}'s evaluation for {period}.",
+      "openedFromNotificationFallbackStore": "your store"
     },
     "tabs": {
       "due": "Due Today",
@@ -1947,7 +1949,8 @@
       "delete": "Delete",
       "refresh": "Refresh",
       "loading": "Loading…",
-      "date": "Date"
+      "date": "Date",
+      "close": "Close"
     },
     "frequency": {
       "daily": "Daily",
@@ -1973,6 +1976,7 @@
       "pass": "Pass",
       "fail": "Fail",
       "auto_fail": "Auto",
+      "not_applicable": "N/A",
       "empty": "Empty"
     },
     "storePicker": {
@@ -2149,6 +2153,8 @@
       "searchEmployees": "Search employees…",
       "loadingShort": "Loading…",
       "noEmployees": "No employees found for this store.",
+      "employeesLoadFailed": "Couldn't load employees.",
+      "retry": "Retry",
       "note": "Note (optional)",
       "notePlaceholder": "e.g. done during opening",
       "photo": "Photo",
@@ -2179,10 +2185,26 @@
       "load": "Load",
       "periodSearchPlaceholder": "Search periods…",
       "periodSearchEmpty": "No matching period.",
+      "periodLoadError": "Couldn't load periods — try again.",
       "addItemPlaceholder": "Add inspection item…",
+      "newItemWeightTitle": "Weight (1–100) — you can change this later from the item's weight editor",
+      "weightPrefix": "Wt",
       "add": "Add",
       "legendLabel": "Legend",
-      "legendHint": "Click an inspection item to grade it · click a chart chip to toggle Pass/Fail",
+      "legendHint": "Click an inspection item to grade it · click a chart chip to cycle Pass/Fail/N-A, click × to clear",
+      "itemValueExplain": {
+        "pass": "Counts as a pass toward the score.",
+        "fail": "Counts as a fail toward the score.",
+        "auto_fail": "An automatic, serious fail — zeroes out the Item Score for this store (but never the Final Score by itself).",
+        "not_applicable": "Doesn't apply here — excluded from scoring entirely, doesn't help or hurt.",
+        "empty": "No grade yet. Setting an already-graded cell to Empty permanently deletes its note and photos."
+      },
+      "legendWeight": "task weight",
+      "legendWeightExplain": "How much this task counts toward the Chart Score, relative to the others.",
+      "legendAllocated": "weight boosted",
+      "legendAllocatedExplain": "This task's own weight, plus extra weight given to it from a task that isn't due this period (e.g. 3+2 = weight 3, plus 2 more allocated to it).",
+      "legendNote": "has a note/photo",
+      "legendHistorical": "locked (past period)",
       "noStores": {
         "title": "No stores to evaluate",
         "description": "Nothing to grade for this period yet."
@@ -2191,29 +2213,68 @@
         "store": "Store",
         "inspectionItems": "Inspection Items",
         "itemScore": "Item Score",
+        "itemScoreExplain": "Share of graded inspection items that passed.",
         "cleaningChart": "Cleaning Chart",
         "chartScore": "Chart Score",
+        "chartScoreExplain": "Share of graded cleaning-chart tasks that passed, weighted by each task's weight.",
+        "finalScore": "Final Score",
+        "finalScoreExplain": "The overall score — a weighted average of Item Score and Chart Score. This is the number that matters most.",
         "notify": "Notify"
       },
+      "scoreSide": {
+        "items": "Items only",
+        "chart": "Chart only"
+      },
+      "itemWeight": {
+        "badge": "wt {weight}",
+        "title": "Weight: {weight} — click to edit",
+        "label": "Weight (1–100)",
+        "save": "Save",
+        "failed": "Could not save the weight."
+      },
+      "absentTasksLink": "{count, plural, one {# absent task} other {# absent tasks}} — allocate",
       "removeItemTitle": "Remove item",
       "cellWeightTitle": "{name} (weight {weight})",
+      "cellWeightTitleAllocated": "{name} (weight {weight}, base {base} + allocated from {sources})",
+      "historicalTitle": "Graded before this task became absent this period — locked so the sent report doesn't change",
+      "clearVerdictTitle": "Clear verdict",
+      "hasNoteTitle": "Has a note or photo",
       "finalize": "Finalize",
+      "finalized": "Finalized",
+      "reopen": "Reopen",
+      "completionHint": "{graded}/{required} graded",
+      "completionHintExplain": "Every inspection item and cleaning-chart task must be graded (Pass/Fail/Auto/N-A) before this store can be finalized.",
+      "absentTasksLinkExplain": "These monthly tasks aren't due this specific week — click to give their weight to tasks that are due this week, instead of leaving it unused.",
       "noItems": "No inspection items yet — add one above to start grading.",
       "removeDialog": {
         "title": "Remove inspection item?",
         "description": "This removes the “{name}” column and its recorded values for all stores in this period. This cannot be undone.",
         "confirm": "Remove"
       },
+      "missingDialog": {
+        "title": "Can't finalize yet",
+        "description": "{store} still has ungraded cells for this period:",
+        "kind": {
+          "item": "Item",
+          "chart": "Chart"
+        }
+      },
+      "reopenDialog": {
+        "title": "Reopen this evaluation?",
+        "description": "{store}'s finalized scores will be discarded and the evaluation returns to live computation. The store's cells become editable again.",
+        "confirm": "Reopen"
+      },
       "toasts": {
         "saveFailed": "Save failed.",
-        "notified": "{store} notified."
+        "notified": "{store} notified.",
+        "reopened": "{store}'s evaluation reopened."
       }
     },
     "gradeDialog": {
       "title": "Grade “{item}”",
       "description": "{store} — set the verdict, a note, and any supporting photos.",
       "verdict": "Verdict",
-      "verdictHint": "Pass or Fail for a normal check; Auto marks it auto-failed; Empty clears any verdict.",
+      "verdictHint": "Pass or Fail for a normal check; Auto marks it auto-failed; N/A excludes it from scoring; Empty permanently deletes this cell's note and photos.",
       "note": "Note",
       "notePlaceholder": "What did you find?",
       "noteHint": "Optional, but recommended for Fail/Auto so the store manager knows what to fix.",
@@ -2223,7 +2284,14 @@
       "cancel": "Cancel",
       "save": "Save",
       "saved": "“{item}” graded.",
-      "failed": "Could not save the grade."
+      "failed": "Could not save the grade.",
+      "emptyConfirm": {
+        "title": "Delete this grade?",
+        "descriptionNoteAndPhotos": "Setting this to Empty permanently deletes the note and {count, plural, one {# photo} other {# photos}} attached to this cell. This can't be undone.",
+        "descriptionNoteOnly": "Setting this to Empty permanently deletes the note attached to this cell. This can't be undone.",
+        "descriptionPhotosOnly": "Setting this to Empty permanently deletes the {count, plural, one {# photo} other {# photos}} attached to this cell. This can't be undone.",
+        "confirm": "Delete and clear"
+      }
     },
     "photoPicker": {
       "choose": "Add photos",
@@ -2231,6 +2299,43 @@
       "remove": "Remove {name}",
       "savedAlt": "Saved photo {n}",
       "pasted": "Photo pasted from clipboard."
+    },
+    "allocateDialog": {
+      "title": "Allocate weight",
+      "description": "{store} — split an absent task's weight across this period's in-play tasks.",
+      "noAbsentTasks": "No absent tasks for this period — every assigned task is in play.",
+      "currentSplits": "Current splits",
+      "removeSplit": "Remove this split",
+      "sourceLabel": "Absent task",
+      "sourcePlaceholder": "Choose an absent task…",
+      "sourceOption": "{name} — weight {weight} ({unallocated} unallocated)",
+      "splitLabel": "Split {weight} points across:",
+      "noTargets": "No in-play tasks to allocate to this period.",
+      "remainingZero": "Fully allocated",
+      "remaining": "{remaining} left",
+      "fill": "Fill",
+      "fillRemaining": "Give this task everything that's left to allocate",
+      "evenSplitHint": "An even split changes no score — this only matters when the split is deliberately uneven.",
+      "cancel": "Cancel",
+      "save": "Save split",
+      "saved": "Weight from “{task}” allocated.",
+      "deleted": "Allocation removed.",
+      "failed": "Could not save the allocation."
+    },
+    "settingsDialog": {
+      "trigger": "Scoring settings",
+      "title": "Scoring settings",
+      "description": "Super Admin only. Changes apply to unfinalized evaluations immediately and never affect finalized ones.",
+      "formulaAverageHint": "The Final Score is a weighted average of the Item Score and Chart Score, split by the percentages below.",
+      "sharesLabel": "Items / Chart split",
+      "sharesItemsEnd": "Items",
+      "sharesChartEnd": "Chart",
+      "previewTitle": "Example",
+      "previewBody": "A store scoring {itemScore}% on items and {chartScore}% on the chart would get a Final Score of {result}%.",
+      "close": "Close",
+      "save": "Save",
+      "saved": "Scoring settings saved.",
+      "failed": "Could not save the settings."
     },
     "reports": {
       "title": "Cleaning Report",
@@ -2255,8 +2360,7 @@
         "score": "Score",
         "average": "Average",
         "empty": "No stores to report for this period.",
-        "pass": "Pass",
-        "fail": "Fail"
+        "completionTitle": "{pct}% of cells graded"
       },
       "toasts": {
         "imageDownloaded": "Report image downloaded.",
@@ -2269,6 +2373,11 @@
       "noRow": "No evaluation recorded for your store in this period yet.",
       "itemScore": "Item Score",
       "chartScoreLabel": "Chart Score",
+      "finalScoreLabel": "Final Score",
+      "scoreSide": {
+        "items": "Items only",
+        "chart": "Chart only"
+      },
       "inspectionItems": "Inspection Items",
       "itemColumn": "Item",
       "resultColumn": "Result",
@@ -2286,7 +2395,7 @@
       "verdict": {
         "pass": "Pass",
         "fail": "Fail",
-        "auto_fail": "Auto"
+        "not_applicable": "N/A"
       },
       "photoAlt": "Photo {n}"
     },

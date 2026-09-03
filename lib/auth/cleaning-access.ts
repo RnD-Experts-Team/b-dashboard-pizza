@@ -122,3 +122,36 @@ export function canEvaluateCleaning(auth: {
     path: "/cleaning/evaluations",
   });
 }
+
+/**
+ * Whether this user may reopen a finalized evaluation — the backend rule is
+ * Super Admin only (403 otherwise, per the migration guide §8), so this is a
+ * permission check rather than a hardcoded role list: it stays correct if the
+ * backend ever grants the underlying permission more broadly, the same way
+ * `canEvaluateCleaning` mirrors POST /evaluations instead of assuming a role.
+ */
+export function canReopenCleaningEvaluation(auth: {
+  canAccessRoute: (params: CanAccessParams) => boolean;
+}): boolean {
+  return auth.canAccessRoute({
+    service: "QA",
+    method: "POST",
+    path: "/cleaning/evaluations/reopen",
+  });
+}
+
+/**
+ * Whether this user may change the score formula/shares — Super Admin only
+ * (guide §9), checked the same way as `canReopenCleaningEvaluation`. Gates
+ * the whole Settings dialog (not just the Save button): showing a read-only
+ * view of Super-Admin-only configuration to everyone else isn't useful here.
+ */
+export function canManageCleaningSettings(auth: {
+  canAccessRoute: (params: CanAccessParams) => boolean;
+}): boolean {
+  return auth.canAccessRoute({
+    service: "QA",
+    method: "PUT",
+    path: "/cleaning/settings",
+  });
+}

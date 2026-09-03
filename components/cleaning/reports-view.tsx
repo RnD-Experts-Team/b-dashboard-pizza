@@ -16,12 +16,11 @@ import {
 import { cn } from "@/lib/utils";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
 import {
-  AccentBadge,
   ValueBadge,
   ScoreOrDash,
   cellBorder,
   headerCell,
-  VALUE_ACCENT,
+  formatScorePct,
 } from "./cleaning-ui";
 import type {
   EvaluationGrid,
@@ -36,19 +35,19 @@ interface ReportRow {
   /** Flattened to the bare verdict — reports don't render notes/photos. */
   itemValues: Record<string, ItemValue>;
   itemScore: number;
-  passCount: number;
-  itemCount: number;
-  chartCommitment: boolean;
-  scorePct: number;
+  chartScore: number;
+  /** Server-computed, one decimal — never recomputed here (migration guide
+   *  §1/§12). `null` means nothing scoreable exists yet, NOT a zero score. */
+  finalScore: number | null;
+  completionPct: number;
+  isComplete: boolean;
   /** No inspection items scored AND no chart verdicts set — nothing to report yet. */
   unevaluated: boolean;
 }
 
-/** Report Score = (# pass items + chart commitment) / (item count + 1). */
 function buildRows(grid: EvaluationGrid): ReportRow[] {
-  const itemCount = grid.items.length;
   const rows = grid.rows.map((row) => {
-    // Flatten {value, note, photos} → the bare verdict this report scores on.
+    // Flatten {value, weight, note, photos} → the bare verdict this report shows.
     const values: Record<string, ItemValue> = {};
     for (const item of grid.items) {
       values[item.name] = row.itemValues[item.name]?.value ?? "empty";
@@ -57,28 +56,29 @@ function buildRows(grid: EvaluationGrid): ReportRow[] {
     const hasAnyChartVerdict = (["daily", "weekly", "monthly", "hourly"] as const).some((g) =>
       row.chart[g].some((c) => c.verdict != null)
     );
-    const passCount = grid.items.reduce(
-      (acc, item) => acc + (values[item.name] === "pass" ? 1 : 0),
-      0
-    );
-    const chartCommitment = row.chartScore >= 100;
-    const scorePct = Math.round(
-      ((passCount + (chartCommitment ? 1 : 0)) / (itemCount + 1)) * 100
-    );
     return {
       storeId: row.storeId,
       store: row.store,
       itemValues: values,
       itemScore: row.itemScore ?? 0,
-      passCount,
-      itemCount,
-      chartCommitment,
-      scorePct,
+      chartScore: row.chartScore ?? 0,
+      finalScore: row.finalScore,
+      completionPct: row.completionPct ?? 0,
+      isComplete: row.isComplete ?? false,
       unevaluated: !hasAnyItemValue && !hasAnyChartVerdict,
     };
   });
-  // Order by score, highest first; tie-break by store name.
-  return rows.sort((a, b) => b.scorePct - a.scorePct || a.store.localeCompare(b.store));
+  // Order by final score, highest first; tie-break by store name. A `null`
+  // score (nothing to rank yet) always sorts last — `null` is never treated
+  // as 0 here (guide §15: `null <= 50` is `true` in JS and would otherwise
+  // misrank an ungraded store as a worst performer).
+  return rows.sort((a, b) => {
+    if (a.finalScore == null && b.finalScore == null) return a.store.localeCompare(b.store);
+    if (a.finalScore == null) return 1;
+    if (b.finalScore == null) return -1;
+    if (a.finalScore !== b.finalScore) return b.finalScore - a.finalScore;
+    return a.store.localeCompare(b.store);
+  });
 }
 
 /* ── Presentational bits ── */
@@ -98,7 +98,9 @@ function ScoreBar({ pct, unevaluated }: { pct: number; unevaluated?: boolean }) 
       <div className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-muted">
         <div className={cn("h-full rounded-full", scoreTone(p))} style={{ width: `${p}%` }} />
       </div>
-      <span className="w-7 shrink-0 text-end text-[11px] font-bold tabular-nums">{p}%</span>
+      <span className="w-10 shrink-0 text-end text-[11px] font-bold tabular-nums">
+        {formatScorePct(p)}%
+      </span>
     </div>
   );
 }
@@ -117,6 +119,7 @@ const COLORFUL_VALUE_STYLE: Record<ItemValue, string> = {
   pass: "bg-green-300 text-green-950",
   fail: "bg-red-300 text-red-950",
   auto_fail: "bg-red-400 text-red-950",
+  not_applicable: "bg-blue-200 text-blue-950",
   empty: "bg-amber-50/70 text-zinc-400",
 };
 
@@ -163,8 +166,8 @@ function ColorfulScoreBar({
       <div className={cn("h-1.5 w-12 shrink-0 overflow-hidden rounded-full", dark ? "bg-amber-950/40" : "bg-sky-100")}>
         <div className={cn("h-full rounded-full", dark ? "bg-sky-300" : "bg-sky-500")} style={{ width: `${p}%` }} />
       </div>
-      <span className={cn("w-7 shrink-0 text-end font-bold tabular-nums", dark ? "text-white" : "text-sky-950")}>
-        {p}%
+      <span className={cn("w-10 shrink-0 text-end font-bold tabular-nums", dark ? "text-white" : "text-sky-950")}>
+        {formatScorePct(p)}%
       </span>
     </div>
   );
@@ -187,9 +190,13 @@ function ColorfulReportTable({
 }) {
   const t = useTranslations("cleaningChart.reports");
   const tVal = useTranslations("cleaningChart.itemValue");
-  const evaluatedRows = rows.filter((r) => !r.unevaluated);
-  const avg = evaluatedRows.length
-    ? Math.round(evaluatedRows.reduce((a, r) => a + r.scorePct, 0) / evaluatedRows.length)
+  // Never average in a null final score (guide §15) — a row can be
+  // `!unevaluated` (something was graded) yet still have no rankable score.
+  const scoredRows = rows.filter((r): r is ReportRow & { finalScore: number } =>
+    !r.unevaluated && r.finalScore != null
+  );
+  const avg = scoredRows.length
+    ? Math.round(scoredRows.reduce((a, r) => a + r.finalScore, 0) / scoredRows.length)
     : 0;
   const border = "border border-amber-900/15";
 
@@ -275,19 +282,13 @@ function ColorfulReportTable({
                     );
                   })}
                   <td className={cn("bg-amber-100/60 px-2 py-0.5 text-center font-bold", border, r.unevaluated ? "text-zinc-400" : "text-amber-950")}>
-                    {r.unevaluated ? "--" : `${r.itemScore}%`}
+                    {r.unevaluated ? "--" : `${formatScorePct(r.itemScore)}%`}
                   </td>
-                  <td
-                    className={cn(
-                      "px-2 py-0.5 text-center font-bold uppercase",
-                      border,
-                      r.unevaluated ? "bg-cyan-50 text-zinc-400" : COLORFUL_VALUE_STYLE[r.chartCommitment ? "pass" : "fail"]
-                    )}
-                  >
-                    {r.unevaluated ? "—" : r.chartCommitment ? t("table.pass") : t("table.fail")}
+                  <td className={cn("bg-amber-100/60 px-2 py-0.5 text-center font-bold", border, r.unevaluated ? "text-zinc-400" : "text-amber-950")}>
+                    {r.unevaluated ? "--" : `${formatScorePct(r.chartScore)}%`}
                   </td>
-                  <td className={cn("px-2 py-0.5", r.unevaluated ? "bg-sky-50" : "bg-sky-50/40")}>
-                    <ColorfulScoreBar pct={r.scorePct} unevaluated={r.unevaluated} />
+                  <td className={cn("px-2 py-0.5", r.finalScore == null ? "bg-sky-50" : "bg-sky-50/40")}>
+                    <ColorfulScoreBar pct={r.finalScore ?? 0} unevaluated={r.finalScore == null} />
                   </td>
                 </tr>
               ))
@@ -300,7 +301,7 @@ function ColorfulReportTable({
                 <td className={border} />
                 <td className={border} />
                 <td className="px-2 py-1">
-                  <ColorfulScoreBar pct={avg} unevaluated={evaluatedRows.length === 0} dark />
+                  <ColorfulScoreBar pct={avg} unevaluated={scoredRows.length === 0} dark />
                 </td>
               </tr>
             )}
@@ -341,9 +342,13 @@ function ReportTable({
   rows: ReportRow[];
 }) {
   const t = useTranslations("cleaningChart.reports");
-  const evaluatedRows = rows.filter((r) => !r.unevaluated);
-  const avg = evaluatedRows.length
-    ? Math.round(evaluatedRows.reduce((a, r) => a + r.scorePct, 0) / evaluatedRows.length)
+  // Never average in a null final score (guide §15) — a row can be
+  // `!unevaluated` (something was graded) yet still have no rankable score.
+  const scoredRows = rows.filter((r): r is ReportRow & { finalScore: number } =>
+    !r.unevaluated && r.finalScore != null
+  );
+  const avg = scoredRows.length
+    ? Math.round(scoredRows.reduce((a, r) => a + r.finalScore, 0) / scoredRows.length)
     : 0;
 
   return (
@@ -432,18 +437,22 @@ function ReportTable({
                     <ScoreOrDash pct={r.itemScore} unevaluated={r.unevaluated} className="text-xs" />
                   </td>
                   <td className={cn("px-2 py-0.5 text-center", cellBorder)}>
-                    {r.unevaluated ? (
-                      <span className="text-xs text-muted-foreground/40">--</span>
-                    ) : (
-                      <AccentBadge
-                        accent={r.chartCommitment ? VALUE_ACCENT.pass : VALUE_ACCENT.fail}
-                        label={r.chartCommitment ? t("table.pass") : t("table.fail")}
-                        className="px-1.5 py-0.5"
-                      />
-                    )}
+                    <ScoreOrDash pct={r.chartScore} unevaluated={r.unevaluated} className="text-xs" />
                   </td>
                   <td className="px-2 py-0.5">
-                    <ScoreBar pct={r.scorePct} unevaluated={r.unevaluated} />
+                    <div className="flex items-center gap-1.5">
+                      <ScoreBar pct={r.finalScore ?? 0} unevaluated={r.finalScore == null} />
+                      {/* Distinct from "unevaluated" — this store HAS a score,
+                          just not from every cell yet (guide §7/§15). */}
+                      {!r.isComplete && r.finalScore != null && (
+                        <span
+                          className="text-[10px] text-muted-foreground"
+                          title={t("table.completionTitle", { pct: Math.round(r.completionPct) })}
+                        >
+                          ({Math.round(r.completionPct)}%)
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -456,7 +465,7 @@ function ReportTable({
                 <td className={cellBorder} />
                 <td className={cellBorder} />
                 <td className="px-2 py-1">
-                  <ScoreBar pct={avg} unevaluated={evaluatedRows.length === 0} />
+                  <ScoreBar pct={avg} unevaluated={scoredRows.length === 0} />
                 </td>
               </tr>
             )}

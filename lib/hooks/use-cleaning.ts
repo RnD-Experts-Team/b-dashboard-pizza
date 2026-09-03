@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCleaningStore } from "@/lib/store/cleaning.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { usePeriodOptions } from "@/lib/hooks/use-cleaning-periods";
 
 /** Local YYYY-MM-DD for "today" (no timezone shift). */
 export function todayIso(): string {
@@ -99,25 +100,16 @@ export function useCleaningTasks() {
   };
 }
 
-/** Default ISO week key like `2026-W30` for the current date. */
-export function currentWeekKey(): string {
-  const d = new Date();
-  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNr = (target.getUTCDay() + 6) % 7;
-  target.setUTCDate(target.getUTCDate() - dayNr + 3);
-  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
-  const weekNo =
-    1 +
-    Math.round(
-      ((target.getTime() - firstThursday.getTime()) / 86400000 -
-        3 +
-        ((firstThursday.getUTCDay() + 6) % 7)) /
-        7
-    );
-  return `${target.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-}
-
-/** Track 2 — Evaluation grid state + cell mutations. */
+/**
+ * Track 2 — Evaluation grid state + cell mutations.
+ *
+ * Period keys are never computed locally (see the migration guide §4 — a
+ * local ISO-week key silently diverges from the backend's accounting-calendar
+ * numbering on 2026-12-29). Until the store has a `periodKey`, this resolves
+ * one from `GET /cleaning/periods`' server-reported `current` and waits;
+ * `gridLoading`/`gridError` reflect that resolution step too, so callers
+ * don't need to special-case "no key yet" separately from "grid loading".
+ */
 export function useCleaningEvaluation() {
   const {
     grid,
@@ -130,28 +122,41 @@ export function useCleaningEvaluation() {
     setChartCell,
     addInspectionItem,
     removeInspectionItem,
+    updateInspectionItemWeight,
+    allocateWeight,
+    deleteAllocation,
     finalizeStore,
+    reopenStore,
   } = useCleaningStore();
 
-  const defaultKey = useMemo(() => currentWeekKey(), []);
+  const effectivePeriodType = periodType || "week";
+  const resolvingKey = !periodKey;
+  const {
+    current: resolvedCurrentKey,
+    loading: periodsLoading,
+    error: periodsError,
+  } = usePeriodOptions(effectivePeriodType);
 
   useEffect(() => {
-    const key = periodKey || defaultKey;
-    fetchGrid(periodType || "week", key);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (periodKey || !resolvedCurrentKey) return;
+    fetchGrid(effectivePeriodType, resolvedCurrentKey);
+  }, [periodKey, resolvedCurrentKey, effectivePeriodType, fetchGrid]);
 
   return {
     grid,
-    gridLoading,
-    gridError,
-    periodType: periodType || "week",
-    periodKey: periodKey || defaultKey,
+    gridLoading: gridLoading || (resolvingKey && periodsLoading),
+    gridError: gridError ?? (resolvingKey ? periodsError : null),
+    periodType: effectivePeriodType,
+    periodKey,
     fetchGrid,
     setItemCell,
     setChartCell,
     addInspectionItem,
     removeInspectionItem,
+    updateInspectionItemWeight,
+    allocateWeight,
+    deleteAllocation,
     finalizeStore,
+    reopenStore,
   };
 }

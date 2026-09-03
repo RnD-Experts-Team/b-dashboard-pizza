@@ -12,6 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,7 +38,7 @@ import { VALUE_ACCENT } from "./cleaning-ui";
 import { PhotoPicker } from "./photo-picker";
 import type { ItemCell, ItemValue } from "@/types/cleaning.types";
 
-const VERDICTS: ItemValue[] = ["pass", "fail", "auto_fail", "empty"];
+const VERDICTS: ItemValue[] = ["pass", "fail", "auto_fail", "not_applicable", "empty"];
 
 export interface GradeTarget {
   storeId: number;
@@ -66,6 +76,10 @@ export function GradeItemDialog({
   const [note, setNote] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
+  // `empty` now DELETES the cell's note + attachments server-side (migration
+  // guide §5) instead of just storing a value — confirm before submitting
+  // whenever there's something on the cell to actually lose.
+  const [confirmEmptyOpen, setConfirmEmptyOpen] = useState(false);
 
   // Re-seed whenever a different cell is opened.
   useEffect(() => {
@@ -74,6 +88,7 @@ export function GradeItemDialog({
     setNote(target.cell.note ?? "");
     setImages([]);
     setSaving(false);
+    setConfirmEmptyOpen(false);
   }, [target]);
 
   // Ctrl+V works anywhere in the dialog, not just while the photo picker
@@ -90,6 +105,10 @@ export function GradeItemDialog({
       toast.success(t("photoPasted"));
     }
   };
+
+  // Whether this cell currently has something an "Empty" save would delete.
+  const cellHasNote = Boolean(target?.cell.note?.trim());
+  const cellPhotoCount = target?.cell.photos.length ?? 0;
 
   const handleSubmit = async () => {
     if (!target) return;
@@ -112,9 +131,20 @@ export function GradeItemDialog({
     }
   };
 
+  /** Save button entry point — routes through the destructive-empty
+   *  confirmation when applicable, otherwise submits directly. */
+  const handleSaveClick = () => {
+    if (value === "empty" && (cellHasNote || cellPhotoCount > 0)) {
+      setConfirmEmptyOpen(true);
+      return;
+    }
+    void handleSubmit();
+  };
+
   return (
-    <Dialog open={target != null} onOpenChange={(o) => !o && onOpenChange(false)}>
-      <DialogContent className="sm:max-w-md" onPaste={handleDialogPaste}>
+    <>
+      <Dialog open={target != null} onOpenChange={(o) => !o && onOpenChange(false)}>
+        <DialogContent className="sm:max-w-md" onPaste={handleDialogPaste}>
         <DialogHeader>
           <DialogTitle>{t("title", { item: target?.itemName ?? "" })}</DialogTitle>
           <DialogDescription>
@@ -193,12 +223,45 @@ export function GradeItemDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             {t("cancel")}
           </Button>
-          <Button onClick={handleSubmit} disabled={saving}>
+          <Button onClick={handleSaveClick} disabled={saving}>
             {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
             {t("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+      {/* Empty permanently deletes the note + attachments server-side — confirm
+          before that destructive save actually goes out (migration guide §5). */}
+      <AlertDialog open={confirmEmptyOpen} onOpenChange={setConfirmEmptyOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("emptyConfirm.title")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cellHasNote && cellPhotoCount > 0
+                ? t("emptyConfirm.descriptionNoteAndPhotos", { count: cellPhotoCount })
+                : cellHasNote
+                  ? t("emptyConfirm.descriptionNoteOnly")
+                  : t("emptyConfirm.descriptionPhotosOnly", { count: cellPhotoCount })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={saving}
+              onClick={(e) => {
+                e.preventDefault();
+                setConfirmEmptyOpen(false);
+                void handleSubmit();
+              }}
+            >
+              {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {t("emptyConfirm.confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

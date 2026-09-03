@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Loader2, Users } from "lucide-react";
+import axios from "axios";
+import { Loader2, RefreshCw, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,8 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
   const t = useTranslations("cleaningChart.completeDialog");
   const [employees, setEmployees] = useState<MultiSelectOption<number>[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
+  const [empError, setEmpError] = useState(false);
+  const [empRetryKey, setEmpRetryKey] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -58,12 +61,17 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
     [selected, photoRequired, photos, submitting]
   );
 
-  /* ── Fetch the store's active employees on mount ── */
+  /* ── Fetch the store's active employees on mount (and on retry) ──
+   * A failed fetch previously fell back to an empty list indistinguishable
+   * from "this store has no active employees" — now it's surfaced as an
+   * error with a way to try again, since silently emptying the picker left
+   * the Complete button disabled with no clue why. */
   useEffect(() => {
     if (!storeCode) return;
     let cancelled = false;
     const controller = new AbortController();
     setEmpLoading(true);
+    setEmpError(false);
     employeeService
       .getEmployeesAll(
         [storeCode],
@@ -83,8 +91,11 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
           }))
         );
       })
-      .catch(() => {
-        if (!cancelled) setEmployees([]);
+      .catch((err) => {
+        if (cancelled || axios.isCancel(err)) return;
+        setEmployees([]);
+        setEmpError(true);
+        toast.error(t("employeesLoadFailed"));
       })
       .finally(() => {
         if (!cancelled) setEmpLoading(false);
@@ -93,7 +104,7 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
       cancelled = true;
       controller.abort();
     };
-  }, [storeCode]);
+  }, [storeCode, empRetryKey]);
 
   /* ── Ctrl+V paste an image while the form is open ── */
   const handlePaste = useCallback(
@@ -147,6 +158,19 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
           emptyText={empLoading ? t("loadingShort") : t("noEmployees")}
           disabled={empLoading}
         />
+        {empError && !empLoading && (
+          <p className="flex items-center gap-1.5 text-xs text-destructive">
+            {t("employeesLoadFailed")}
+            <button
+              type="button"
+              onClick={() => setEmpRetryKey((k) => k + 1)}
+              className="inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline"
+            >
+              <RefreshCw className="h-3 w-3" />
+              {t("retry")}
+            </button>
+          </p>
+        )}
       </div>
 
       {/* Note */}

@@ -13,6 +13,11 @@ import type {
   UpdateTaskPayload,
 } from "@/types/cleaning.types";
 
+interface AllocationAmount {
+  targetTaskId: number;
+  amount: number;
+}
+
 function asError(err: unknown): CleaningError {
   return err instanceof CleaningError
     ? err
@@ -60,11 +65,28 @@ interface CleaningState {
   setChartCell: (
     storeId: number,
     cleaningTaskId: number,
-    verdict: ChartVerdict
+    verdict: ChartVerdict | "empty"
   ) => Promise<void>;
-  addInspectionItem: (name: string) => Promise<void>;
+  addInspectionItem: (name: string, weight?: number) => Promise<void>;
   removeInspectionItem: (id: number) => Promise<void>;
+  /** PUT /inspection-items/{id} — weights are snapshotted per graded cell, so
+   *  this never re-scores an evaluation that already went out. */
+  updateInspectionItemWeight: (id: number, weight: number) => Promise<void>;
+  /** Replaces the ENTIRE split for one source task in a single transaction
+   *  (amounts must sum to the source task's weight exactly, server-enforced). */
+  allocateWeight: (
+    storeId: number,
+    sourceTaskId: number,
+    amounts: AllocationAmount[]
+  ) => Promise<void>;
+  deleteAllocation: (storeId: number, sourceTaskId: number) => Promise<void>;
+  /** Throws (does not swallow) a CONFLICT CleaningError with `.missing` set
+   *  when the evaluation still has ungraded cells — the grid needs that to
+   *  show which cells, not just "incomplete". */
   finalizeStore: (storeId: number) => Promise<void>;
+  /** Super Admin only — 403 otherwise. Clears the lock and discards the
+   *  frozen scores; the caller should refetch the grid after this resolves. */
+  reopenStore: (storeId: number) => Promise<void>;
 
   reset: () => void;
 }
@@ -175,8 +197,8 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
     replaceRow(set, storeId, row);
   },
 
-  addInspectionItem: async (name) => {
-    await cleaningService.addInspectionItem(name);
+  addInspectionItem: async (name, weight) => {
+    await cleaningService.addInspectionItem(name, weight);
     const { periodType, periodKey, fetchGrid } = get();
     await fetchGrid(periodType, periodKey);
   },
@@ -187,13 +209,55 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
     await fetchGrid(periodType, periodKey);
   },
 
+  updateInspectionItemWeight: async (id, weight) => {
+    await cleaningService.updateInspectionItem(id, { weight });
+    const { periodType, periodKey, fetchGrid } = get();
+    await fetchGrid(periodType, periodKey);
+  },
+
+  allocateWeight: async (storeId, sourceTaskId, amounts) => {
+    const { periodType, periodKey, fetchGrid } = get();
+    await cleaningService.setAllocation({
+      store_id: storeId,
+      period_type: periodType,
+      period_key: periodKey,
+      source_task_id: sourceTaskId,
+      amounts: amounts.map((a) => ({ target_task_id: a.targetTaskId, amount: a.amount })),
+    });
+    await fetchGrid(periodType, periodKey);
+  },
+
+  deleteAllocation: async (storeId, sourceTaskId) => {
+    const { periodType, periodKey, fetchGrid } = get();
+    await cleaningService.deleteAllocation({
+      store_id: storeId,
+      period_type: periodType,
+      period_key: periodKey,
+      source_task_id: sourceTaskId,
+    });
+    await fetchGrid(periodType, periodKey);
+  },
+
   finalizeStore: async (storeId) => {
-    const { periodType, periodKey } = get();
+    const { periodType, periodKey, fetchGrid } = get();
     await cleaningService.finalizeStore({
       store_id: storeId,
       period_type: periodType,
       period_key: periodKey,
     });
+    // The response carries no row — refetch so `finalizedAt`/`scoreFrozen`
+    // reflect the lock immediately instead of on the next unrelated fetch.
+    await fetchGrid(periodType, periodKey);
+  },
+
+  reopenStore: async (storeId) => {
+    const { periodType, periodKey, fetchGrid } = get();
+    await cleaningService.reopenStore({
+      store_id: storeId,
+      period_type: periodType,
+      period_key: periodKey,
+    });
+    await fetchGrid(periodType, periodKey);
   },
 
   reset: () =>

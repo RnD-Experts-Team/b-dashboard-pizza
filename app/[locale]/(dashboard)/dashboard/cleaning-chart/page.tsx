@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   CalendarDays,
   ClipboardList,
@@ -23,9 +24,14 @@ import { useCleaningStore } from "@/lib/store/cleaning.store";
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
-import { canAccessCleaningTab, canEvaluateCleaning, type CleaningTabId } from "@/lib/auth/cleaning-access";
+import {
+  canAccessCleaningTab,
+  canEvaluateCleaning,
+  canReopenCleaningEvaluation,
+  canManageCleaningSettings,
+  type CleaningTabId,
+} from "@/lib/auth/cleaning-access";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import { currentPeriodKey } from "@/lib/cleaning/period-options";
 import type { ChartVerdict, EvaluationGrid as Grid, DueStatus, PeriodType } from "@/types/cleaning.types";
 import {
   DueList,
@@ -88,9 +94,15 @@ export default function CleaningChartPage() {
     if (visibleTabs.some((tab) => tab.id === "my-store")) {
       setActiveTab("my-store");
       void fetchGrid(pendingCleaningAction.periodType, pendingCleaningAction.periodKey);
+      toast.success(
+        t("page.openedFromNotification", {
+          store: pendingCleaningAction.store ?? t("page.openedFromNotificationFallbackStore"),
+          period: pendingCleaningAction.periodKey,
+        })
+      );
     }
     clearPendingCleaningAction();
-  }, [pendingCleaningAction, visibleTabs, fetchGrid, clearPendingCleaningAction]);
+  }, [pendingCleaningAction, visibleTabs, fetchGrid, clearPendingCleaningAction, t]);
 
   return (
     <div className="space-y-6">
@@ -348,6 +360,9 @@ function TasksTab() {
 /* ── Evaluation ── */
 function EvaluationTab() {
   const t = useTranslations("cleaningChart");
+  const { canAccessRoute } = useAuthStore();
+  const canReopen = canReopenCleaningEvaluation({ canAccessRoute });
+  const canManageSettings = canManageCleaningSettings({ canAccessRoute });
   const {
     grid,
     gridLoading,
@@ -359,7 +374,11 @@ function EvaluationTab() {
     setChartCell,
     addInspectionItem,
     removeInspectionItem,
+    updateInspectionItemWeight,
+    allocateWeight,
+    deleteAllocation,
     finalizeStore,
+    reopenStore,
   } = useCleaningEvaluation();
 
   if (gridLoading && !grid) return <EvaluationSkeleton />;
@@ -390,7 +409,13 @@ function EvaluationTab() {
       onSetChartCell={setChartCell}
       onAddItem={addInspectionItem}
       onRemoveItem={removeInspectionItem}
+      onUpdateItemWeight={updateInspectionItemWeight}
       onFinalize={finalizeStore}
+      canReopen={canReopen}
+      onReopen={reopenStore}
+      onAllocateWeight={allocateWeight}
+      onDeleteAllocation={deleteAllocation}
+      canManageSettings={canManageSettings}
     />
   );
 }
@@ -398,13 +423,18 @@ function EvaluationTab() {
 /* ── Reports (own fetch via /reports/data, own period — independent of Evaluation) ── */
 function ReportsTab() {
   const [periodType, setPeriodType] = useState<PeriodType>("week");
-  const [periodKey, setPeriodKey] = useState<string>(() => currentPeriodKey("week"));
+  // Empty until `PeriodPicker` resolves the server's current period for this
+  // type (see the migration guide §4 — never computed locally). The fetch
+  // effect below waits for a non-empty key before calling the API, since an
+  // empty `period_key` is rejected upstream with 422.
+  const [periodKey, setPeriodKey] = useState<string>("");
   const [grid, setGrid] = useState<Grid | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<CleaningError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!periodKey) return;
     // Cancellation flag: an aborted/stale request must NOT touch state, or its
     // .finally would flip `loading` off for the request that's still in flight
     // (which briefly showed "No report data").

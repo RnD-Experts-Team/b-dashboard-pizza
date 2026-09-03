@@ -46,22 +46,41 @@ function parseDebriefActionUrl(
 }
 
 /**
- * Parse a cleaning-evaluation action URL and extract the store/period to
- * deep-link into — e.g. /cleaning/evaluations?store_id=5&period_type=week&period_key=2026-W32
+ * Extract the store/period a cleaning-evaluation notification is about.
+ *
+ * The real payload (confirmed against a live notification) carries
+ * `period_type`/`period_key`/`store` as direct fields on `notification.data`
+ * — e.g. `{ period_type: "week", period_key: "2026-W36", store: "Store 1" }`
+ * — NOT as a numeric `store_id` in `action_url`'s query string (an earlier,
+ * unverified assumption this replaces). `store` here is a human label, not
+ * an id — there's nothing to resolve it against, and the one place this
+ * deep-links to (the "My Store" tab) already shows the viewing user's own
+ * store regardless, so it's carried through only for display, never
+ * required. Falls back to parsing `action_url`'s query string in case a
+ * future payload omits the direct fields.
  */
 function parseCleaningActionUrl(
-  url: string
-): { storeId: number; periodType: PeriodType; periodKey: string } | null {
-  try {
-    const parsed = new URL(url, "http://x");
-    const storeId = Number(parsed.searchParams.get("store_id"));
-    const periodType = parsed.searchParams.get("period_type");
-    const periodKey = parsed.searchParams.get("period_key");
-    if (!storeId || (periodType !== "week" && periodType !== "date") || !periodKey) return null;
-    return { storeId, periodType, periodKey };
-  } catch {
-    return null;
+  notification: Notification
+): { periodType: PeriodType; periodKey: string; store: string | null } | null {
+  const data = notification.data;
+  let periodType = typeof data?.period_type === "string" ? data.period_type : null;
+  let periodKey = typeof data?.period_key === "string" ? data.period_key : null;
+  let store = typeof data?.store === "string" ? data.store : null;
+
+  if (!periodType || !periodKey) {
+    try {
+      const parsed = new URL(notification.action_url ?? "", "http://x");
+      periodType ??= parsed.searchParams.get("period_type");
+      periodKey ??= parsed.searchParams.get("period_key");
+      store ??= parsed.searchParams.get("store");
+    } catch {
+      // fall through — handled by the validity check below
+    }
   }
+
+  if (periodType !== "week" && periodType !== "date") return null;
+  if (!periodKey) return null;
+  return { periodType, periodKey, store };
 }
 
 const HIRING_SEGMENT_TO_TAB: Record<string, HiringActionTab> = {
@@ -230,9 +249,9 @@ export function NotificationItem({
     }
 
     if (isCleaningType) {
-      const parsed = parseCleaningActionUrl(notification.action_url ?? "");
+      const parsed = parseCleaningActionUrl(notification);
       if (parsed) {
-        openCleaningEvaluation(parsed.storeId, parsed.periodType, parsed.periodKey);
+        openCleaningEvaluation(parsed.periodType, parsed.periodKey, parsed.store);
       }
       router.push(`/${locale}/dashboard/cleaning-chart`);
       return;
