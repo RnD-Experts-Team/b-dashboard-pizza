@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import type { ChartVerdict, DueItem } from "@/types/cleaning.types";
+import type { ChartVerdict, CleaningEmployee, DueItem } from "@/types/cleaning.types";
 import { StatusPill } from "./cleaning-ui";
 import { CompleteTaskDialog } from "./complete-task-dialog";
 import { HistoryDrawer } from "./history-drawer";
@@ -44,7 +44,9 @@ function hasCompletionThisPeriod(item: DueItem): boolean {
 
 interface Props {
   storeId: number;
-  storeCode: string | null;
+  /** The store's employees, as returned alongside the Due list — threaded
+   *  down to CompleteTaskDialog so it never has to fetch employees itself. */
+  employees: CleaningEmployee[];
   date: string;
   items: DueItem[];
   onComplete: (
@@ -63,7 +65,7 @@ interface Props {
 
 export function DueList({
   storeId,
-  storeCode,
+  employees,
   date,
   items,
   onComplete,
@@ -332,7 +334,7 @@ export function DueList({
           open={!!completeItem}
           onOpenChange={(o) => !o && setCompleteItem(null)}
           storeId={storeId}
-          storeCode={storeCode}
+          employees={employees}
           date={date}
           item={completeItem}
           onComplete={(payload) => onComplete(storeId, completeItem.taskId, payload)}
