@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Camera, Check, History, Loader2, Undo2, X } from "lucide-react";
@@ -25,28 +25,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import type { ChartVerdict, CleaningEmployee, DueItem } from "@/types/cleaning.types";
+import { CleaningError } from "@/lib/api/services/cleaning.service";
+import type { ChartVerdict, DueItem } from "@/types/cleaning.types";
 import { StatusPill } from "./cleaning-ui";
 import { CompleteTaskDialog } from "./complete-task-dialog";
 import { HistoryDrawer } from "./history-drawer";
 
-/**
- * A completion recorded for THIS period — the only history `/due` can prove on
- * its own. Deliberately does NOT treat "overdue" or `hasPhoto` as proof: an
- * overdue task may never have been completed at all, and photo metadata can
- * outlive a reverted completion. Everything else is verified against the
- * history endpoint (see the effect below).
- */
-function hasCompletionThisPeriod(item: DueItem): boolean {
-  return item.status === "done" || item.completionId != null;
-}
-
 interface Props {
   storeId: number;
-  /** The store's employees, as returned alongside the Due list — threaded
-   *  down to CompleteTaskDialog so it never has to fetch employees itself. */
-  employees: CleaningEmployee[];
+  storeCode: string | null;
   date: string;
   items: DueItem[];
   onComplete: (
@@ -65,7 +52,7 @@ interface Props {
 
 export function DueList({
   storeId,
-  employees,
+  storeCode,
   date,
   items,
   onComplete,
@@ -113,59 +100,13 @@ export function DueList({
   };
 
   /**
-   * Whether a task has completion history in EARLIER periods. `/due` only
-   * describes the current period, so tasks with nothing recorded *now* are
-   * verified against the history endpoint — that's what keeps a brand-new
-   * task from showing an empty History drawer.
+   * History is offered whenever the task was ever completed. `has_history`
+   * comes straight off the due item now — no per-task /history probe needed
+   * (that endpoint is the heaviest call in the module; it walks the
+   * recurrence rule to derive misses, so it's only called on demand when the
+   * user actually opens the History drawer, not to test whether it exists).
    */
-  const [pastHistory, setPastHistory] = useState<Record<string, boolean>>({});
-  /**
-   * Cache the in-flight PROMISE (not a "checked" flag). If the effect re-runs —
-   * React StrictMode double-invokes it in dev — the re-run re-subscribes to the
-   * SAME request instead of skipping it, so the result is never silently
-   * dropped by the first invocation's `alive = false` cleanup. Caching a plain
-   * "checked" boolean instead loses that guarantee and makes the button's
-   * visibility flaky (each row's outcome then depends on whichever effect
-   * invocation happened to still be "alive" when the request resolved).
-   */
-  const cacheRef = useRef<Map<string, Promise<boolean>>>(new Map());
-  const historyKey = (taskId: number) => `${storeId}:${taskId}`;
-
-  useEffect(() => {
-    // Tasks completed this period already prove history exists — skip those.
-    const toCheck = items.filter((i) => !hasCompletionThisPeriod(i));
-    if (toCheck.length === 0) return;
-
-    let alive = true;
-    for (const item of toCheck) {
-      const key = historyKey(item.taskId);
-      let request = cacheRef.current.get(key);
-      if (!request) {
-        request = cleaningService
-          .getHistory(storeId, item.taskId)
-          .then((rows) => rows.length > 0)
-          .catch((err) => {
-            if (process.env.NODE_ENV === "development") {
-              console.warn(`[cleaning] history check failed for task ${item.taskId}:`, err);
-            }
-            return false;
-          });
-        cacheRef.current.set(key, request);
-      }
-      request.then((has) => {
-        if (!alive) return;
-        setPastHistory((prev) => (prev[key] === has ? prev : { ...prev, [key]: has }));
-      });
-    }
-
-    return () => {
-      alive = false;
-    };
-  }, [items, storeId]);
-
-  /** History is offered only when we know a completion actually exists. */
-  const showHistory = (item: DueItem) =>
-    hasCompletionThisPeriod(item) || pastHistory[historyKey(item.taskId)] === true;
+  const showHistory = (item: DueItem) => item.hasHistory;
 
   const confirmUndo = async () => {
     const item = undoTarget;
@@ -173,15 +114,8 @@ export function DueList({
     setUndoing(item.taskId);
     try {
       await onUncomplete(storeId, item.taskId, date);
-      // That completion is gone — re-check whether any earlier history remains,
-      // so a task whose only record was just reverted stops offering History.
-      const key = historyKey(item.taskId);
-      cacheRef.current.delete(key);
-      setPastHistory((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      // onUncomplete refetches the due list, so hasHistory reflects the
+      // server's view again (unset once no completion remains at all).
       toast.success(t("due.toasts.reverted", { label: item.label }));
       setUndoTarget(null);
     } catch (err) {
@@ -334,7 +268,7 @@ export function DueList({
           open={!!completeItem}
           onOpenChange={(o) => !o && setCompleteItem(null)}
           storeId={storeId}
-          employees={employees}
+          storeCode={storeCode}
           date={date}
           item={completeItem}
           onComplete={(payload) => onComplete(storeId, completeItem.taskId, payload)}

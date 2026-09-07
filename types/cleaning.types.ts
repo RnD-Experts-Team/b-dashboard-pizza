@@ -45,6 +45,11 @@ export interface ApiDueItem {
   photos: string[];
   note: string | null;
   completion_id: number | null;
+  /** Ever completed, in any period — not just this one. */
+  has_history: boolean;
+  completions_count: number;
+  /** Whether derivable past periods can exist for this task at all. */
+  started_at_or_before_period: boolean;
 }
 export interface DueItem {
   taskId: number;
@@ -60,6 +65,9 @@ export interface DueItem {
   hasPhoto: boolean;
   photos: string[];
   note: string | null;
+  hasHistory: boolean;
+  completionsCount: number;
+  startedAtOrBeforePeriod: boolean;
   completionId: number | null;
 }
 

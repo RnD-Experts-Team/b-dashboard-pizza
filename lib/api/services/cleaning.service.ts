@@ -281,6 +281,9 @@ function transformDueItem(raw: ApiDueItem): DueItem {
     photos: raw.photos ?? [],
     note: raw.note ?? null,
     completionId: raw.completion_id ?? null,
+    hasHistory: raw.has_history ?? false,
+    completionsCount: raw.completions_count ?? 0,
+    startedAtOrBeforePeriod: raw.started_at_or_before_period ?? false,
   };
 }
 

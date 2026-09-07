@@ -308,7 +308,7 @@ function DueTab() {
           {dueData && (
             <DueList
               storeId={store.id}
-              employees={dueData.employees}
+              storeCode={store.code}
               date={date}
               items={visibleItems}
               onComplete={completeTask}

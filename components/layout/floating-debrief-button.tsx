@@ -795,7 +795,7 @@ export function FloatingDebriefButton() {
                 {t("completeDialog.title", { label: cleaningCompleteItem.label })}
               </p>
               <CompleteTaskForm
-                employees={dueData?.employees ?? []}
+                storeCode={cleaningStore.code}
                 date={cleaningDate}
                 item={cleaningCompleteItem}
                 onComplete={(payload) =>
