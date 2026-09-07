@@ -21,6 +21,7 @@ import {
   AlertCircle,
   CircleDot,
   Flag,
+  Star,
   Check,
   Search,
   CalendarDays,
@@ -550,7 +551,7 @@ export function TicketsFiltersBar({
   }
 
   const FILTER_KEYS: (keyof TicketsFilters)[] = [
-    "statuses", "priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
+    "statuses", "priorities", "assigned_priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
     "part_cost_total_gt", "part_cost_single_gt", "created_from", "created_to",
     "changed_statuses", "changed_from", "changed_to", "trashed", "sort", "dir", "page", "per_page",
   ];
@@ -569,6 +570,7 @@ export function TicketsFiltersBar({
   const activeFilterCount = [
     filters.statuses?.length,
     filters.priorities?.length,
+    filters.assigned_priorities?.length,
     filters.issue_ids?.length,
     filters.issue_statuses?.length,
     filters.technician_ids?.length,
@@ -601,6 +603,14 @@ export function TicketsFiltersBar({
 
   const priorityOptions: SearchableSelectOption[] = [
     { value: "all", label: "All priorities" },
+    { value: "urgent", label: "Urgent" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
+  const assignedPriorityOptions: SearchableSelectOption[] = [
+    { value: "all", label: "Any assigned priority" },
     { value: "urgent", label: "Urgent" },
     { value: "high", label: "High" },
     { value: "medium", label: "Medium" },
@@ -801,6 +811,22 @@ export function TicketsFiltersBar({
                 disabled={disabled}
                 active={!!draftFilters.priorities?.length}
                 searchPlaceholder="Search priorities…"
+              />
+            </div>
+
+            {/* Assigned Priority */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Star className="h-3 w-3" />
+                Assigned Priority
+              </label>
+              <SearchableSelect
+                value={draftFilters.assigned_priorities?.[0] || "all"}
+                options={assignedPriorityOptions}
+                onChange={(v) => updateField("assigned_priorities", v === "all" ? [] : [v as Priority])}
+                disabled={disabled}
+                active={!!draftFilters.assigned_priorities?.length}
+                searchPlaceholder="Search…"
               />
             </div>
 

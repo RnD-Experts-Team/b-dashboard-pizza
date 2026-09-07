@@ -9,6 +9,7 @@ import {
   parseSchedulingError,
   type SchedulingError,
 } from "@/lib/scheduling/errors";
+import { adaptActualShift } from "@/lib/scheduling/adapters";
 import type { ActualShift, Shift } from "@/types/scheduling.types";
 
 /**
@@ -66,6 +67,30 @@ export interface UseActualShiftMutationsResult {
     input: Omit<SaveActualInput, "employeeId" | "shiftDate" | "assignmentId">,
   ) => Promise<boolean>;
   markAbsent: (actual: ActualShift, note?: string) => Promise<boolean>;
+  /**
+   * Mark a planned shift as a no-show when it has no actual yet.
+   *
+   * `/absent` addresses an ACTUAL, and an unreviewed plan has none — so this
+   * creates one from the plan and flips it, in that order, behind a single
+   * refetch. It used to stop after the create and ask the user to come back and
+   * repeat the action, which meant "mark no attendance" quietly did something
+   * else: it recorded them as having worked the shift as planned.
+   */
+  markAbsentForPlan: (plannedShift: Shift, note?: string) => Promise<boolean>;
+  /**
+   * Accept an unlinked clock-in as the actual for a planned shift.
+   *
+   * The timeclock sends punches with `planned_shift_id: null`, so nothing ties
+   * them to the shift they belong to. Agreeing writes a LINKED actual carrying
+   * the punch's times, then removes the unlinked punch — without the second
+   * step the same work would be counted twice, once through the plan and once
+   * as ad-hoc coverage.
+   *
+   * Create-then-delete on purpose: if the delete fails you get a visible
+   * duplicate, which a manager can fix. The reverse order risks losing the only
+   * record of the punch.
+   */
+  agreeClockIn: (plannedShift: Shift, clockIn: ActualShift) => Promise<boolean>;
   deleteActual: (actual: ActualShift) => Promise<boolean>;
   isSubmitting: boolean;
   error: SchedulingError | null;
@@ -156,6 +181,62 @@ export function useActualShiftMutations({
     [run, storeId],
   );
 
+  const agreeClockIn = useCallback(
+    (plannedShift: Shift, clockIn: ActualShift) =>
+      run(
+        async () => {
+          await schedulingService.saveActualShift(storeId!, {
+            employee_id:
+              Number(plannedShift.employeeId) || plannedShift.employeeId,
+            shift_date: plannedShift.shiftDate,
+            start_time: clockIn.startTime,
+            end_time: clockIn.endTime,
+            label: plannedShift.label || undefined,
+            shift_type: plannedShift.type || undefined,
+            note: clockIn.note || undefined,
+            shift_assignment_id: plannedShift.id,
+            // `status` stays absent — the server compares against the plan and
+            // decides `confirmed` or `modified` itself.
+          });
+          await schedulingService.deleteActualShift(storeId!, clockIn.id);
+        },
+        "Could not accept this clock-in.",
+        "Clock-in accepted",
+      ),
+    [run, storeId],
+  );
+
+  const markAbsentForPlan = useCallback(
+    (plannedShift: Shift, note?: string) =>
+      run(
+        async () => {
+          const created = await schedulingService.saveActualShift(storeId!, {
+            employee_id:
+              Number(plannedShift.employeeId) || plannedShift.employeeId,
+            shift_date: plannedShift.shiftDate,
+            start_time: plannedShift.startTime,
+            end_time: plannedShift.endTime,
+            label: plannedShift.label || undefined,
+            shift_type: plannedShift.type || undefined,
+            shift_assignment_id: plannedShift.id,
+          });
+          const id = adaptActualShift(created).id;
+          // Without an id the second call would address nothing, and silently
+          // leaving a "worked as planned" record behind is the exact failure
+          // this replaced. Say so instead.
+          if (!id) {
+            throw new Error(
+              "Recorded the shift, but could not mark it as a no-show. Open the card and mark it from there.",
+            );
+          }
+          await schedulingService.markActualAbsent(storeId!, id, note);
+        },
+        "Could not mark this as a no-show.",
+        "Marked as a no-show",
+      ),
+    [run, storeId],
+  );
+
   const markAbsent = useCallback(
     (actual: ActualShift, note?: string) =>
       run(
@@ -185,6 +266,8 @@ export function useActualShiftMutations({
     saveActual,
     updateActual,
     markAbsent,
+    markAbsentForPlan,
+    agreeClockIn,
     deleteActual,
     isSubmitting,
     error,

@@ -110,6 +110,69 @@ export function hasTimeOff(
   );
 }
 
+/**
+ * Pair timeclock clock-ins with the planned shift they belong to.
+ *
+ * The backend sends a clock-in with `planned_shift_id: null` and
+ * `status: "added"` — it makes no connection to that day's planned shift. Taken
+ * literally that puts two unrelated cards in one cell: a "Pending review" ghost
+ * for the plan, and an "Added coverage" card for the punch captioned "not in the
+ * original plan", which is false when the shift plainly WAS planned.
+ *
+ * So the pairing is inferred here. Two rules, both deliberately conservative,
+ * because a confident wrong pairing is worse than none:
+ *
+ *   Only `source === "timeclock"` pairs. A `manual` entry with no planned shift
+ *   is coverage somebody typed in on purpose — genuinely extra, even on a day
+ *   the employee was also scheduled.
+ *
+ *   Only when the cell holds exactly ONE planned shift. Every clock-in in that
+ *   cell then attaches to it, which is what a lunch break looks like: one shift,
+ *   two punches. With two or more planned shifts there is no honest way to tell
+ *   which punch belongs to which, so nothing groups and the cell renders as it
+ *   did before.
+ *
+ * Presentation only — `mergeActualShifts` still counts the clock-in and still
+ * excludes the unreviewed plan, so hours are unaffected.
+ */
+export interface TimeclockGroup {
+  plannedShift: Shift;
+  clockIns: ActualShift[];
+}
+
+export function groupClockInsByPlan(
+  cellShifts: Shift[],
+  cellAddedActuals: ActualShift[],
+  allActuals: ActualShift[],
+): {
+  groups: TimeclockGroup[];
+  looseShifts: Shift[];
+  looseActuals: ActualShift[];
+} {
+  const clockIns = cellAddedActuals.filter((a) => a.source === "timeclock");
+  const plan = cellShifts.length === 1 ? cellShifts[0] : undefined;
+
+  /**
+   * A plan that already has a linked actual is settled — somebody reviewed it.
+   * Grouping it would drop that reviewed record from the cell entirely (the
+   * plan gets consumed by the group and its `ActualShiftCard` never renders),
+   * leaving the plan's times and a stray punch on screen instead of what was
+   * actually recorded. Only unreviewed plans are candidates.
+   */
+  const isUnreviewed = plan && !actualForPlanned(plan.id, allActuals);
+
+  if (!plan || !isUnreviewed || clockIns.length === 0) {
+    return { groups: [], looseShifts: cellShifts, looseActuals: cellAddedActuals };
+  }
+
+  const clockInIds = new Set(clockIns.map((a) => a.id));
+  return {
+    groups: [{ plannedShift: plan, clockIns }],
+    looseShifts: [],
+    looseActuals: cellAddedActuals.filter((a) => !clockInIds.has(a.id)),
+  };
+}
+
 /** Find the ActualShift linked to a given planned shift id, if reviewed */
 export function actualForPlanned(
   shiftId: string,

@@ -245,6 +245,8 @@ export interface TicketIssue {
   issueTitle: string | null;
   otherTitle: string | null;
   priority: EnumField;
+  /** Independent priority set later by staff (distinct from `priority`, chosen at creation). Null until set. */
+  assignedPriority: EnumField | null;
   status: EnumField;
   description: string | null;
   parentId: number | null;
@@ -394,6 +396,16 @@ export interface WaitPayload {
   reason: string;
 }
 
+/** Re-links a ticket-issue line to a different catalog issue — nothing else on the line changes. */
+export interface RelinkIssuePayload {
+  issue_id: number;
+}
+
+/** Sets (or clears, via null) the independent assigned_priority on a ticket-issue line. */
+export interface AssignedPriorityPayload {
+  priority: Priority | null;
+}
+
 /** A typed closing note appended to a ticket (multipart; supports files). */
 export interface FinalNotePayload {
   body: string;
@@ -469,6 +481,8 @@ export interface ChangeAssignmentTechniciansPayload {
 export interface TicketsFilters {
   statuses?: TicketStatus[];
   priorities?: Priority[];
+  /** Matches tickets with an issue whose independently-set assigned_priority is one of these. */
+  assigned_priorities?: Priority[];
   issue_ids?: number[];
   issue_statuses?: IssueStatus[];
   technician_ids?: number[];
@@ -697,6 +711,7 @@ export interface ApiTicketIssue {
   display_title: string | null;
   other_title: string | null;
   priority: ApiEnumField;
+  assigned_priority: ApiEnumField | null;
   status: ApiEnumField;
   description: string | null;
   parent_id: number | null;

@@ -233,13 +233,33 @@ export function ActualShiftCard({
           </div>
           <p
             className={cn(
-              "mt-0.5 truncate text-[10px] leading-tight opacity-75",
+              "mt-0.5 flex items-center gap-1 truncate text-[10px] leading-tight opacity-75",
               // Bottom-right note icon floats over this row when present.
               actual.note && "pe-4",
               tone === "neutral" ? "text-muted-foreground" : accent.text,
             )}
           >
-            {isAdded ? "Added coverage" : isModified ? "Time changed" : "Worked as planned"}
+            <span className="truncate">
+              {isAdded
+                ? "Added coverage"
+                : isModified
+                  ? "Time changed"
+                  : "Worked as planned"}
+            </span>
+            {/*
+              Where this record came from. A clock-in is evidence; a manual
+              entry is somebody's recollection typed in later, and until now the
+              grid showed them identically — `source` was fetched and adapted
+              but never rendered anywhere.
+            */}
+            {actual.source === "timeclock" && (
+              <span
+                aria-label="Recorded by the time clock"
+                className="shrink-0 rounded-sm border border-current px-0.5 text-[8px] font-bold leading-[1.4] tracking-tight"
+              >
+                C
+              </span>
+            )}
           </p>
         </div>
       </TooltipTrigger>
@@ -247,6 +267,11 @@ export function ActualShiftCard({
         <p className="font-semibold">{actual.label} Shift</p>
         <p>
           {formatTime(actual.startTime)} – {formatTime(actual.endTime)} ({hours.toFixed(1)}h)
+        </p>
+        <p className="opacity-80">
+          {actual.source === "timeclock"
+            ? "Recorded by the time clock"
+            : "Entered by hand"}
         </p>
         {plannedShift && isModified && (
           <p className="text-amber-500">

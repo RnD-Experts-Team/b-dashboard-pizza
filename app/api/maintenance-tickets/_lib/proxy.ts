@@ -122,6 +122,41 @@ export async function proxyJsonPost(request: NextRequest, upstreamUrl: string) {
   }
 }
 
+export async function proxyJsonPatch(request: NextRequest, upstreamUrl: string) {
+  const auth = authorizationOrError(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorJson("INVALID_REQUEST", "Invalid JSON body", 400);
+  }
+
+  try {
+    const res = await fetchWithTimeout(upstreamUrl, {
+      method: "PATCH",
+      headers: {
+        Authorization: auth.authorization,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    if (msg.includes("abort") || msg.includes("timed out")) {
+      return errorJson("TIMEOUT", "Upstream request timed out", 504);
+    }
+    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
+  }
+}
+
 export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
   const auth = authorizationOrError(request);
   if ("error" in auth) return auth.error;

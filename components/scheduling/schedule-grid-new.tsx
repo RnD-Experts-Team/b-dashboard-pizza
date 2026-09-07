@@ -20,11 +20,13 @@ import type { DraftShift } from "@/lib/scheduling/draft.store";
 const NO_DRAFTS: DraftShift[] = [];
 import {
   actualForPlanned,
+  groupClockInsByPlan,
   hasTimeOff,
   isBlockedByAvailability,
 } from "@/lib/scheduling/utils";
 import { ShiftCard } from "./shift-card";
 import { ActualShiftCard } from "./actual-shift-card";
+import { TimeclockReviewCard } from "./timeclock-review-card";
 import { ComparisonShiftCard } from "./comparison-shift-card";
 import { EmployeeProfileDialog } from "./employee-profile-dialog";
 import type {
@@ -61,6 +63,8 @@ interface ScheduleGridProps {
   /** Reviewed-only merged shifts, used for hours/totals when not in pure planned mode */
   displayShifts?: Shift[];
   onConfirmActual?: (plannedShift: Shift) => void;
+  /** Accept an unlinked clock-in as the actual for its planned shift. */
+  onAgreeClockIn?: (plannedShift: Shift, clockIn: ActualShift) => void;
   onEditActual?: (plannedShift: Shift | undefined, actual: ActualShift | undefined) => void;
   onDeleteActual?: (actual: ActualShift) => void;
   onAddCoverage?: (employeeId: string, dayIndex: number) => void;
@@ -142,6 +146,7 @@ export function ScheduleGrid({
   actualShifts = [],
   displayShifts,
   onConfirmActual,
+  onAgreeClockIn,
   onEditActual,
   onDeleteActual,
   onAddCoverage,
@@ -495,10 +500,36 @@ export function ScheduleGrid({
                             </>
                           )}
 
-                          {/* Actual mode — ghost/confirmed/modified/absent cards + ad-hoc coverage */}
-                          {isActualMode && (
+                          {/*
+                            Actual mode.
+
+                            Clock-ins arrive unlinked, so pair them with the
+                            planned shift first — otherwise the plan and its own
+                            punch draw as two unrelated cards. Anything that does
+                            not pair falls through to the previous rendering:
+                            plans with no punch stay "Pending review" ghosts, and
+                            genuine ad-hoc coverage keeps its violet card.
+                          */}
+                          {isActualMode && (() => {
+                            const { groups, looseShifts, looseActuals } =
+                              groupClockInsByPlan(
+                                cellShifts,
+                                cellAddedActuals,
+                                actualShifts,
+                              );
+                            return (
                             <>
-                              {cellShifts.map((shift) => (
+                              {groups.map((g) => (
+                                <TimeclockReviewCard
+                                  key={g.plannedShift.id}
+                                  plannedShift={g.plannedShift}
+                                  clockIns={g.clockIns}
+                                  onAgree={(ps, c) => onAgreeClockIn?.(ps, c)}
+                                  onEdit={(s, a) => onEditActual?.(s, a)}
+                                  onDelete={(a) => onDeleteActual?.(a)}
+                                />
+                              ))}
+                              {looseShifts.map((shift) => (
                                 <ActualShiftCard
                                   key={shift.id}
                                   plannedShift={shift}
@@ -508,7 +539,7 @@ export function ScheduleGrid({
                                   onDelete={(a) => onDeleteActual?.(a)}
                                 />
                               ))}
-                              {cellAddedActuals.map((a) => (
+                              {looseActuals.map((a) => (
                                 <ActualShiftCard
                                   key={a.id}
                                   actual={a}
@@ -542,7 +573,8 @@ export function ScheduleGrid({
                                 </TooltipContent>
                               </Tooltip>
                             </>
-                          )}
+                            );
+                          })()}
 
                           {/* Planned mode (default) — unchanged existing behavior */}
                           {!comparisonMode && !isActualMode && (

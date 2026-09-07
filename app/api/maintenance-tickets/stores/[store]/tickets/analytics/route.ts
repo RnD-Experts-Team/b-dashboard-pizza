@@ -51,7 +51,7 @@ export async function GET(
     "trashed", "sort", "dir",
   ];
   const ARRAY_KEYS = [
-    "statuses[]", "priorities[]", "issue_ids[]",
+    "statuses[]", "priorities[]", "assigned_priorities[]", "issue_ids[]",
     "issue_statuses[]", "technician_ids[]", "types[]", "changed_statuses[]",
   ];
 

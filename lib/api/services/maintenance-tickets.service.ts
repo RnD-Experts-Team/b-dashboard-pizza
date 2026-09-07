@@ -12,6 +12,8 @@ import type {
   DeferPayload,
   CancelPayload,
   WaitPayload,
+  RelinkIssuePayload,
+  AssignedPriorityPayload,
   FinalNotePayload,
   CreateNotePayload,
   CreateDiagnosisPayload,
@@ -232,6 +234,7 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     issueTitle: raw.display_title ?? raw.issue?.title ?? null,
     otherTitle: raw.other_title,
     priority: transformEnumField(raw.priority),
+    assignedPriority: raw.assigned_priority ? transformEnumField(raw.assigned_priority) : null,
     status: transformEnumField(raw.status),
     description: raw.description,
     parentId: raw.parent_id,
@@ -429,6 +432,7 @@ function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   const p = new URLSearchParams();
   (filters.statuses ?? []).forEach((v) => v && p.append("statuses[]", v));
   (filters.priorities ?? []).forEach((v) => v && p.append("priorities[]", v));
+  (filters.assigned_priorities ?? []).forEach((v) => v && p.append("assigned_priorities[]", v));
   (filters.issue_ids ?? []).forEach((v) => p.append("issue_ids[]", String(v)));
   (filters.issue_statuses ?? []).forEach((v) => v && p.append("issue_statuses[]", v));
   (filters.technician_ids ?? []).forEach((v) => p.append("technician_ids[]", String(v)));
@@ -842,6 +846,58 @@ export const maintenanceTicketsService = {
     try {
       await axios.post(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/wait`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Re-link a ticket-issue line to a different catalog issue. Only the catalog association changes. */
+  async relinkIssue(
+    storeId: string,
+    ticketId: number,
+    issueId: number,
+    payload: RelinkIssuePayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.patch(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Set (or clear, via `priority: null`) the independent assigned_priority on a ticket-issue line. */
+  async setAssignedPriority(
+    storeId: string,
+    ticketId: number,
+    issueId: number,
+    payload: AssignedPriorityPayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/assigned-priority`,
         payload,
         {
           headers: {

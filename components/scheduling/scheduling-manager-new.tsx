@@ -855,26 +855,20 @@ export function SchedulingManager() {
      * assert a status the server owns.
      */
     const run = async () => {
-      let target = actual;
-      if (!target && plannedShift) {
-        const created = await actualMutations.saveActual({
-          employeeId: plannedShift.employeeId,
-          shiftDate: plannedShift.shiftDate,
-          startTime: plannedShift.startTime,
-          endTime: plannedShift.endTime,
-          label: plannedShift.label,
-          shiftType: plannedShift.type,
-          assignmentId: plannedShift.id,
-        });
-        if (!created) return;
-        // The refetch that follows brings the new actual back with its id.
-        setActualDialogOpen(false);
-        setEditingActualTarget(null);
-        toast.info("Recorded — mark it as a no-show from the card once it appears.");
+      // No actual yet: the hook creates one from the plan and flips it in a
+      // single step. This used to stop after the create and ask the user to
+      // repeat the action from the card — so "mark no attendance" recorded them
+      // as having WORKED the shift, the opposite of what was clicked.
+      if (!actual && plannedShift) {
+        const ok = await actualMutations.markAbsentForPlan(plannedShift);
+        if (ok) {
+          setActualDialogOpen(false);
+          setEditingActualTarget(null);
+        }
         return;
       }
-      if (!target) return;
-      const ok = await actualMutations.markAbsent(target);
+      if (!actual) return;
+      const ok = await actualMutations.markAbsent(actual);
       if (ok) {
         setActualDialogOpen(false);
         setEditingActualTarget(null);
@@ -883,6 +877,20 @@ export function SchedulingManager() {
 
     void run();
   }, [editingActualTarget, actualMutations]);
+
+  /**
+   * Accept a timeclock punch as the actual for the planned shift it sits on.
+   *
+   * The punch arrives unlinked, so this writes a linked actual from its times
+   * and removes the unlinked row — see `agreeClockIn` for why both halves are
+   * needed.
+   */
+  const handleAgreeClockIn = useCallback(
+    (plannedShift: Shift, clockIn: ActualShift) => {
+      void actualMutations.agreeClockIn(plannedShift, clockIn);
+    },
+    [actualMutations],
+  );
 
   const handleDeleteActualShift = useCallback(
     (actual: ActualShift) => {
@@ -1935,6 +1943,7 @@ export function SchedulingManager() {
             actualShifts={actualShifts}
             displayShifts={displayShifts}
             onConfirmActual={handleConfirmActualShift}
+            onAgreeClockIn={handleAgreeClockIn}
             onEditActual={handleOpenActualDialog}
             onDeleteActual={handleDeleteActualShift}
             onAddCoverage={handleAddCoverage}

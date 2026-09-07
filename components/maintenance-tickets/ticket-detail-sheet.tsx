@@ -74,6 +74,7 @@ import {
   Info,
   Zap,
   ClipboardPaste,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -297,10 +298,10 @@ const PRIORITY_DOT_COLORS: Record<string, string> = {
   low: "bg-blue-500",
 };
 
-function PriorityChip({ value, label }: { value: string; label: string }) {
+function PriorityChip({ value, label, prefix = "Priority:" }: { value: string; label: string; prefix?: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground/70">Priority:</span>
+      <span className="font-medium text-foreground/70">{prefix}</span>
       <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_COLORS[value] ?? "bg-muted-foreground/40")} />
       {label}
     </span>
@@ -364,6 +365,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
   const activeFilterCount = [
     filters?.statuses?.length,
     filters?.priorities?.length,
+    filters?.assigned_priorities?.length,
     filters?.issue_statuses?.length,
     filters?.technician_ids?.length,
     filters?.issue_ids?.length,
@@ -473,6 +475,24 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                   <Select
                     value={filters?.priorities?.[0] || "all"}
                     onValueChange={(v) => updateFilter("priorities", v === "all" ? [] : [v as Priority])}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="urgent" className={itemCls}>{t("priority.urgent")}</SelectItem>
+                      <SelectItem value="high" className={itemCls}>{t("priority.high")}</SelectItem>
+                      <SelectItem value="medium" className={itemCls}>{t("priority.medium")}</SelectItem>
+                      <SelectItem value="low" className={itemCls}>{t("priority.low")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Assigned Priority */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Assigned Priority</p>
+                  <Select
+                    value={filters?.assigned_priorities?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("assigned_priorities", v === "all" ? [] : [v as Priority])}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -802,6 +822,156 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !hasChanged}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("common.save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface AssignPriorityPanelProps {
+  issue: TicketIssue;
+  storeId: string;
+  ticketId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+/** Sets or clears the independent `assignedPriority` — separate from `priority`, which never changes after creation. */
+function AssignPriorityPanel({ issue, storeId, ticketId, onClose, onSuccess }: AssignPriorityPanelProps) {
+  const initial = (issue.assignedPriority?.value as Priority | undefined) ?? null;
+  const [priority, setPriority] = useState<Priority | null>(initial);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasChanged = priority !== initial;
+
+  async function handleSubmit() {
+    setIsSubmitting(true);
+    try {
+      await maintenanceTicketsService.setAssignedPriority(storeId, ticketId, issue.id, { priority });
+      toast.success(priority ? "Assigned priority updated" : "Assigned priority cleared");
+      onSuccess(); onClose();
+    } catch (err) {
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
+    } finally { setIsSubmitting(false); }
+  }
+
+  const priorityOptions: { value: Priority; label: string }[] = [
+    { value: "urgent", label: "Urgent" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assign Priority</p>
+      <div className="flex flex-wrap gap-1.5">
+        {priorityOptions.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => setPriority(p.value)}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              priority === p.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-input hover:bg-muted/50"
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setPriority(null)}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+            priority === null
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background text-muted-foreground border-input hover:bg-muted/50"
+          )}
+        >
+          Clear
+        </button>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !hasChanged}>
+          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface RelinkIssuePanelProps {
+  issue: TicketIssue;
+  storeId: string;
+  ticketId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+/** Re-links this ticket-issue line to a different catalog issue. Only the catalog association changes. */
+function RelinkIssuePanel({ issue, storeId, ticketId, onClose, onSuccess }: RelinkIssuePanelProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<number | null>(issue.issueId);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setCatalogLoading(true);
+    maintenanceTicketsService.getCatalogIssues(ctrl.signal, storeId)
+      .then((issues) => setCatalogIssues(issues.filter((i) => !i.deletedAt)))
+      .catch(() => {})
+      .finally(() => setCatalogLoading(false));
+    return () => ctrl.abort();
+  }, [storeId]);
+
+  const hasChanged = selectedId !== issue.issueId;
+
+  async function handleSubmit() {
+    if (!selectedId) {
+      setError("Select a catalog issue.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await maintenanceTicketsService.relinkIssue(storeId, ticketId, issue.id, { issue_id: selectedId });
+      toast.success("Issue re-linked successfully");
+      onSuccess(); onClose();
+    } catch (err) {
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
+    } finally { setIsSubmitting(false); }
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Change Issue</p>
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Catalog issue <span className="text-destructive">*</span></Label>
+        {/* No onCreate — re-linking only picks an existing catalog issue, never creates one. */}
+        <SearchCreateCombobox
+          items={catalogIssues.map((i) => ({ id: i.id, label: i.title }))}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          placeholder="Search issues…"
+          loading={catalogLoading}
+        />
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || catalogLoading || !hasChanged}>
+          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+          Save
         </Button>
       </div>
     </div>
@@ -2127,6 +2297,8 @@ type ActiveAction =
   | "defer"
   | "cancel"
   | "wait"
+  | "assignPriority"
+  | "relinkIssue"
   | "diagnosis"
   | "attendance"
   | "part"
@@ -2328,6 +2500,8 @@ function IssueNode({
     ...(canDefer ? [{ key: "defer" as const, label: "Defer", Icon: TimerReset, group: "Issue" as const }] : []),
     ...(canWait ? [{ key: "wait" as const, label: "Wait", Icon: ClockIcon, group: "Issue" as const }] : []),
     ...(canCancel ? [{ key: "cancel" as const, label: "Cancel", Icon: X, group: "Issue" as const, destructive: true }] : []),
+    { key: "assignPriority", label: "Assign priority", Icon: Flag, group: "Issue" },
+    { key: "relinkIssue", label: "Change issue", Icon: RefreshCw, group: "Issue" },
     { key: "diagnosis", label: "Troubleshooting", Icon: FileText, group: "Add records" },
     { key: "attendance", label: "Attendance", Icon: Wrench, group: "Add records" },
     { key: "part", label: "Part usage", Icon: Package, group: "Add records" },
@@ -2442,6 +2616,9 @@ function IssueNode({
                     </span>
                   )}
                   <PriorityChip value={issue.priority.value} label={issue.priority.label} />
+                  {issue.assignedPriority && (
+                    <PriorityChip value={issue.assignedPriority.value} label={issue.assignedPriority.label} prefix="Assigned:" />
+                  )}
                   <span className="text-xs font-mono text-muted-foreground/60">#{issue.id}</span>
                   {issue.creator && (
                     <span className="text-xs text-muted-foreground flex items-center gap-0.5">
@@ -3368,6 +3545,14 @@ function IssueNode({
                           {activeTab === "cancel" && (
                             <CancelPanel issue={issue} storeId={storeId} ticketId={ticketId}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "assignPriority" && (
+                            <AssignPriorityPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "relinkIssue" && (
+                            <RelinkIssuePanel issue={issue} storeId={storeId} ticketId={ticketId}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
                           {activeTab === "diagnosis" && (
