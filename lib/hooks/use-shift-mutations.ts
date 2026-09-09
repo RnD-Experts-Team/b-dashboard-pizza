@@ -78,7 +78,7 @@ export interface UseShiftMutationsOptions {
    * request, and it is the only way `conflicts`, `stats` and `syncStatus` stay
    * truthful together.
    */
-  refetchWeek: () => void;
+  refetchWeek: () => void | Promise<void>;
   /** Raised when the store itself turns out not to be configured. */
   onSetupError: (code: SetupErrorCode, message: string) => void;
   onSuccess?: (kind: WriteKind) => void;
@@ -165,8 +165,10 @@ export function useShiftMutations({
 
         pendingRef.current = null;
         setWarning(null);
-        refetchWeek();
         onSuccess?.(write.kind);
+        // See the note in `use-actual-shift-mutations` — the caller's pending
+        // state has to outlive the write, or it clears onto stale content.
+        await refetchWeek();
         return true;
       } catch (err) {
         const parsed = parseSchedulingError(

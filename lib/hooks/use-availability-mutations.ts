@@ -58,7 +58,7 @@ export interface UseAvailabilityMutationsOptions {
   storeId: string | null;
   /** 0=Sun..6=Sat, from the week payload. Needed for the day conversion. */
   weekStartDow: number;
-  refetchWeek: () => void;
+  refetchWeek: () => void | Promise<void>;
   onSuccess?: (message: string) => void;
   onRefused?: (message: string) => void;
 }

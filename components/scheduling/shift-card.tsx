@@ -17,6 +17,17 @@ import {
   type ShiftTone,
 } from "@/lib/scheduling/accents";
 import { formatIsoDateWithWeekday } from "@/lib/scheduling/week";
+import {
+  PENDING_CARD_CLASS,
+  ShiftPendingOverlay,
+} from "./shift-pending";
+import {
+  ShiftTooltipBody,
+  ShiftTooltipHeader,
+  ShiftTooltipHint,
+  ShiftTooltipRow,
+  ShiftTooltipStatus,
+} from "./shift-tooltip";
 import type { Shift } from "@/types/scheduling.types";
 import {
   ShiftOriginIndicator,
@@ -52,9 +63,11 @@ interface ShiftCardProps {
   blockedReason?: string | null;
   onEdit: (shift: Shift) => void;
   onDelete: (shiftId: string) => void;
+  /** An action on this shift is in flight. */
+  isPending?: boolean;
 }
 
-export function ShiftCard({ shift, hasConflict, blockedReason, onEdit, onDelete }: ShiftCardProps) {
+export function ShiftCard({ shift, hasConflict, blockedReason, isPending, onEdit, onDelete }: ShiftCardProps) {
   const hours = shift.durationMinutes / 60;
   // An overlap is the louder problem, so it owns the rail; the block still gets
   // its own marker and tooltip line below.
@@ -81,11 +94,14 @@ export function ShiftCard({ shift, hasConflict, blockedReason, onEdit, onDelete 
           className={cn(
             "group relative px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs cursor-pointer transition-all overflow-hidden",
             SHIFT_CARD_SURFACE,
+            isPending && PENDING_CARD_CLASS,
             shift.isRecurring && "border-dashed",
             shift.syncStatus === "pending" && "opacity-90"
           )}
           onClick={() => onEdit(shift)}
         >
+          {isPending && <ShiftPendingOverlay />}
+
           {/* Status rail — drawn only when something needs attention. */}
           {hasRail(tone) && (
             <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
@@ -172,44 +188,45 @@ export function ShiftCard({ shift, hasConflict, blockedReason, onEdit, onDelete 
           </p>
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        <p className="font-semibold">{shift.label} Shift</p>
-        <p className="opacity-80">{formatIsoDateWithWeekday(shift.shiftDate)}</p>
-        <p>
-          {formatTime(shift.startTime)} – {formatTime(shift.endTime)} ({hours.toFixed(1)}h)
-        </p>
-        {hasConflict && (
-          <p className={cn("font-medium", accent.text)}>
-            ⚠ Overlapping shift conflict
-          </p>
-        )}
-        {blockedReason && (
-          <p
-            className={cn(
-              "font-medium",
-              hasConflict ? SHIFT_ACCENT.attention.text : accent.text,
-            )}
-          >
-            ⚠ {blockedReason}
-          </p>
-        )}
-        {shift.isRecurring && (
-          <p className="text-indigo-500">↻ Recurring weekly</p>
-        )}
-        {shift.syncStatus === "pending" && (
-          <p className="text-sky-500">Saved — waiting to reach Humanity</p>
-        )}
-        {shift.syncStatus === "parked" && (
-          <p className="font-medium text-rose-500">
-            Saved here, but not in Humanity — needs attention
-          </p>
-        )}
-        {shift.origin !== "operations" && (
-          <p className="text-muted-foreground">Last changed in Humanity</p>
-        )}
-        {shift.note && (
-          <p className="text-amber-600 dark:text-amber-400 italic">📝 {shift.note}</p>
-        )}
+      <TooltipContent side="top" className="max-w-60 text-xs">
+        <ShiftTooltipHeader
+          time={`${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`}
+          hours={hours}
+        />
+        <ShiftTooltipStatus tone={tone}>
+          {hasConflict
+            ? "Overlaps another shift"
+            : isBlocked
+              ? "Scheduled over a block"
+              : "Scheduled"}
+        </ShiftTooltipStatus>
+
+        <ShiftTooltipBody>
+          <ShiftTooltipRow label="Date">
+            {formatIsoDateWithWeekday(shift.shiftDate)}
+          </ShiftTooltipRow>
+          <ShiftTooltipRow label="Label">
+            {shift.label}
+            {shift.isRecurring ? " · repeats weekly" : ""}
+          </ShiftTooltipRow>
+          {shift.syncStatus !== "synced" && (
+            <ShiftTooltipRow label="Sync">
+              {shift.syncStatus === "pending"
+                ? "Saved — waiting to reach Humanity"
+                : "Saved here, but not in Humanity"}
+            </ShiftTooltipRow>
+          )}
+          {shift.origin !== "operations" && (
+            <ShiftTooltipRow label="Origin">
+              Last changed in Humanity
+            </ShiftTooltipRow>
+          )}
+          {shift.note && (
+            <ShiftTooltipRow label="Note">{shift.note}</ShiftTooltipRow>
+          )}
+        </ShiftTooltipBody>
+
+        {blockedReason && <ShiftTooltipHint>{blockedReason}</ShiftTooltipHint>}
       </TooltipContent>
     </Tooltip>
   );

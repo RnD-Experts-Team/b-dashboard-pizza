@@ -20,6 +20,8 @@
 import type {
   ActualShift,
   ActualShiftSource,
+  ActualReviewState,
+  ActualTimeVariance,
   ActualShiftStatus,
   AvailabilityRule,
   AvailabilitySource,
@@ -129,6 +131,16 @@ const ACTUAL_STATUSES: readonly ActualShiftStatus[] = [
   "added",
 ];
 const ACTUAL_SOURCES: readonly ActualShiftSource[] = ["manual", "timeclock"];
+const TIME_VARIANCES: readonly ActualTimeVariance[] = [
+  "matches",
+  "differs",
+  "unplanned",
+];
+const REVIEW_STATES: readonly ActualReviewState[] = [
+  "unreviewed",
+  "worked",
+  "absent",
+];
 const AVAILABILITY_SOURCES: readonly AvailabilitySource[] = [
   "employee_profile",
   "override",
@@ -291,6 +303,18 @@ export function adaptActualShift(raw: unknown): ActualShift {
     type: oneOf(a.type, SHIFT_TYPES, "custom"),
     // Derived server-side; read it, never assert it.
     status: oneOf(a.status, ACTUAL_STATUSES, "modified"),
+    /**
+     * Left undefined when the field is absent rather than defaulted: a default
+     * would either hide genuinely unreviewed punches or flag every older record
+     * as needing review. Absent means "this response predates the split", and
+     * callers fall back to `status`.
+     */
+    timeVariance: a.time_variance
+      ? oneOf(a.time_variance, TIME_VARIANCES, "matches")
+      : undefined,
+    reviewState: a.review_state
+      ? oneOf(a.review_state, REVIEW_STATES, "worked")
+      : undefined,
     plannedShiftId: strOrNull(a.planned_shift_id) ?? undefined,
     note: strOrNull(a.note) ?? undefined,
     source: oneOf(a.source, ACTUAL_SOURCES, "manual"),

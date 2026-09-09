@@ -7,13 +7,28 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime } from "@/lib/scheduling/constants";
+import {
+  MATCH_TOLERANCE_MINUTES,
+  formatTime,
+} from "@/lib/scheduling/constants";
+import {
+  formatDurationDelta,
+  shiftEdgeOffsets,
+  workedAsPlanned,
+} from "@/lib/scheduling/utils";
 import {
   SHIFT_ACCENT,
   SHIFT_CARD_SURFACE,
   SHIFT_RAIL_BASE,
   type ShiftTone,
 } from "@/lib/scheduling/accents";
+import {
+  ShiftTooltipBody,
+  ShiftTooltipHeader,
+  ShiftTooltipHint,
+  ShiftTooltipRow,
+  ShiftTooltipStatus,
+} from "./shift-tooltip";
 import type { Shift, ActualShift } from "@/types/scheduling.types";
 
 /**
@@ -55,22 +70,18 @@ const OUTCOME: Record<
   Outcome,
   { tone: ShiftTone; dashed?: boolean; icon: typeof Check | null }
 > = {
-  match: { tone: "neutral", icon: Check },
+  // Plan and reality agree — worth showing as a positive, not as absence.
+  match: { tone: "success", icon: Check },
   differs: { tone: "attention", icon: AlertTriangle },
   absent: { tone: "critical", icon: UserX },
   unplanned: { tone: "info", icon: AlertTriangle },
   "not-recorded": { tone: "neutral", dashed: true, icon: null },
 };
 
-/** "+20m" / "−1h 05m", or null when the durations match. */
-function formatDelta(plannedMinutes: number, actualMinutes: number): string | null {
-  const diff = actualMinutes - plannedMinutes;
-  if (diff === 0) return null;
-  const sign = diff > 0 ? "+" : "−";
-  const abs = Math.abs(diff);
-  const h = Math.floor(abs / 60);
-  const m = abs % 60;
-  return h > 0 ? `${sign}${h}h ${String(m).padStart(2, "0")}m` : `${sign}${m}m`;
+/** "+7m" / "−4m" / "on time" — one edge against the plan. */
+function offsetLabel(minutes: number): string {
+  if (minutes === 0) return "on time";
+  return `${minutes > 0 ? "+" : "−"}${Math.abs(minutes)}m`;
 }
 
 /** One side of the comparison. Fixed label column so the times line up. */
@@ -117,21 +128,36 @@ export function ComparisonShiftCard({
   if (!plannedShift) outcome = "unplanned";
   else if (!actual) outcome = "not-recorded";
   else if (actual.status === "absent") outcome = "absent";
-  else
-    outcome =
-      plannedShift.startTime === actual.startTime &&
-      plannedShift.endTime === actual.endTime
-        ? "match"
-        : "differs";
+  // Not equality: a time clock almost never reproduces the plan to the minute,
+  // and calling every two-minute punch a discrepancy buried the real ones.
+  else outcome = workedAsPlanned(plannedShift, actual) ? "match" : "differs";
 
   const spec = OUTCOME[outcome];
   const accent = SHIFT_ACCENT[spec.tone];
   const Icon = spec.icon;
 
-  const delta =
-    plannedShift && actual && outcome === "differs"
-      ? formatDelta(plannedShift.durationMinutes, actual.durationMinutes)
+  /**
+   * Shown for a match too, not only for a discrepancy.
+   *
+   * Counting a near-miss as "as planned" is only honest if the near-miss is
+   * still on screen — otherwise a shift eight minutes long over the plan looks
+   * identical to one worked to the minute, and the hours at the end of the row
+   * stop adding up for the reader.
+   */
+  const compared =
+    plannedShift && actual && outcome !== "absent" && outcome !== "unplanned"
+      ? {
+          delta: formatDurationDelta(
+            plannedShift.durationMinutes,
+            actual.durationMinutes,
+          ),
+          offsets: shiftEdgeOffsets(plannedShift, actual),
+        }
       : null;
+
+  const delta = compared?.delta ?? null;
+  const offsets = compared?.offsets ?? null;
+  const shifted = !!offsets && (offsets.start !== 0 || offsets.end !== 0);
 
   return (
     <Tooltip>
@@ -205,44 +231,73 @@ export function ComparisonShiftCard({
         </div>
       </TooltipTrigger>
 
-      <TooltipContent side="top" className="max-w-56 text-xs">
-        <p className="font-semibold">
+      <TooltipContent side="top" className="max-w-60 text-xs">
+        <ShiftTooltipHeader
+          time={
+            actual && actual.status !== "absent"
+              ? `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`
+              : plannedShift
+                ? `${formatTime(plannedShift.startTime)} – ${formatTime(plannedShift.endTime)}`
+                : "—"
+          }
+          hours={
+            actual && actual.status !== "absent"
+              ? actual.durationMinutes / 60
+              : plannedShift
+                ? plannedShift.durationMinutes / 60
+                : undefined
+          }
+        />
+        <ShiftTooltipStatus tone={spec.tone}>
           {outcome === "match" && "Worked as planned"}
           {outcome === "differs" && "Worked different hours"}
           {outcome === "absent" && "Did not attend"}
           {outcome === "unplanned" && "Worked without a planned shift"}
           {outcome === "not-recorded" && "Not reviewed yet"}
-        </p>
+        </ShiftTooltipStatus>
 
-        <p className="mt-1">
-          <span className="opacity-70">Planned: </span>
-          {plannedShift
-            ? `${formatTime(plannedShift.startTime)} – ${formatTime(plannedShift.endTime)}`
-            : "nothing scheduled"}
-        </p>
-        <p>
-          <span className="opacity-70">Actual: </span>
-          {!actual
-            ? "no attendance recorded"
-            : actual.status === "absent"
-              ? "did not work"
-              : `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`}
-        </p>
+        <ShiftTooltipBody>
+          <ShiftTooltipRow label="Plan">
+            {plannedShift
+              ? `${formatTime(plannedShift.startTime)} – ${formatTime(plannedShift.endTime)}`
+              : "Nothing scheduled"}
+          </ShiftTooltipRow>
+          <ShiftTooltipRow label="Actual">
+            {!actual
+              ? "Nothing recorded"
+              : actual.status === "absent"
+                ? "Did not work"
+                : `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`}
+          </ShiftTooltipRow>
+          {delta && (
+            <ShiftTooltipRow label="Against">{delta} the plan</ShiftTooltipRow>
+          )}
+          {/*
+            The two edges, because the total hides them: clocking in and out
+            ten minutes late nets to zero, and the row above would then say
+            nothing at all about a shift that moved.
+          */}
+          {shifted && offsets && (
+            <ShiftTooltipRow label="Clocked">
+              in {offsetLabel(offsets.start)} · out {offsetLabel(offsets.end)}
+            </ShiftTooltipRow>
+          )}
+          {actual?.note && (
+            <ShiftTooltipRow label="Note">{actual.note}</ShiftTooltipRow>
+          )}
+        </ShiftTooltipBody>
 
-        {delta && (
-          <p className="mt-0.5 font-medium">
-            {delta} against the plan
-          </p>
+        {outcome === "match" && shifted && (
+          <ShiftTooltipHint>
+            Within {MATCH_TOLERANCE_MINUTES} minutes of the plan, so it counts
+            as worked as planned.
+          </ShiftTooltipHint>
         )}
 
         {outcome === "not-recorded" && (
-          <p className="mt-0.5 opacity-80">
+          <ShiftTooltipHint>
             Switch to the Actual view to record what happened.
-          </p>
-        )}
-
-        {actual?.note && (
-          <p className="mt-0.5 italic opacity-90">📝 {actual.note}</p>
+          </ShiftTooltipHint>
         )}
       </TooltipContent>
     </Tooltip>

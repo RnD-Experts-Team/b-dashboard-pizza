@@ -27,6 +27,22 @@ interface ScheduleErrorAlertProps {
   compact?: boolean;
 }
 
+/**
+ * A wait, in words.
+ *
+ * This printed raw seconds, which was tolerable while every retry-after was a
+ * handful of seconds. The TCP daily quota resets at midnight, so the same field
+ * now carries values like 43200 — "try again in about 43200s" is not something
+ * anyone can act on.
+ */
+function formatRetryWait(seconds: number): string {
+  if (seconds < 90) return `${Math.max(1, Math.round(seconds))}s`;
+  const mins = Math.round(seconds / 60);
+  if (mins < 90) return `${mins} minute${mins === 1 ? "" : "s"}`;
+  const hours = Math.round(seconds / 3600);
+  return `${hours} hour${hours === 1 ? "" : "s"}`;
+}
+
 export function ScheduleErrorAlert({
   error,
   title,
@@ -89,7 +105,7 @@ export function ScheduleErrorAlert({
 
         {error.retryAfterSeconds != null && (
           <p className="text-xs opacity-80">
-            Try again in about {error.retryAfterSeconds}s.
+            Try again in about {formatRetryWait(error.retryAfterSeconds)}.
           </p>
         )}
 

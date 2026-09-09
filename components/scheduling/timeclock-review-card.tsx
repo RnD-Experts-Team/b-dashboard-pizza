@@ -9,11 +9,23 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/scheduling/constants";
+import { formatDurationDelta } from "@/lib/scheduling/utils";
 import {
   SHIFT_ACCENT,
   SHIFT_CARD_SURFACE,
   SHIFT_RAIL_BASE,
 } from "@/lib/scheduling/accents";
+import {
+  PENDING_CARD_CLASS,
+  ShiftPendingOverlay,
+} from "./shift-pending";
+import {
+  ShiftTooltipBody,
+  ShiftTooltipHeader,
+  ShiftTooltipHint,
+  ShiftTooltipRow,
+  ShiftTooltipStatus,
+} from "./shift-tooltip";
 import type { ActualShift, Shift } from "@/types/scheduling.types";
 
 /**
@@ -32,9 +44,10 @@ import type { ActualShift, Shift } from "@/types/scheduling.types";
  * `attention` (amber), not `info` (violet): violet means unplanned, and the
  * whole point of this card is that the shift WAS planned.
  *
- * Agreeing writes a linked actual from the punch's times AND deletes the
- * unlinked punch. Both halves matter: without the delete the same work counts
- * twice, once through the plan and once as ad-hoc coverage.
+ * Agreeing LINKS the punch to the plan — one call, and the punch row is left
+ * exactly as the clock recorded it. It must never re-enter the times and delete
+ * the original: actuals write through to TCP, so that would swap real payroll
+ * evidence for a manager-typed record.
  */
 
 interface TimeclockReviewCardProps {
@@ -47,17 +60,8 @@ interface TimeclockReviewCardProps {
    * than one punch — see the note on the button below.
    */
   onAgree?: (plannedShift: Shift, clockIn: ActualShift) => void;
-}
-
-/** Total recorded minutes across every punch, against the planned duration. */
-function deltaLabel(plannedMinutes: number, workedMinutes: number): string | null {
-  const diff = workedMinutes - plannedMinutes;
-  if (diff === 0) return null;
-  const sign = diff > 0 ? "+" : "−";
-  const abs = Math.abs(diff);
-  const h = Math.floor(abs / 60);
-  const m = abs % 60;
-  return h > 0 ? `${sign}${h}h ${String(m).padStart(2, "0")}m` : `${sign}${m}m`;
+  /** An action on this shift or one of its punches is in flight. */
+  isPending?: boolean;
 }
 
 export function TimeclockReviewCard({
@@ -66,10 +70,27 @@ export function TimeclockReviewCard({
   onEdit,
   onDelete,
   onAgree,
+  isPending,
 }: TimeclockReviewCardProps) {
-  const accent = SHIFT_ACCENT.attention;
   const workedMinutes = clockIns.reduce((n, a) => n + a.durationMinutes, 0);
-  const delta = deltaLabel(plannedShift.durationMinutes, workedMinutes);
+  // Total recorded minutes across every punch, against the planned duration.
+  const delta = formatDurationDelta(plannedShift.durationMinutes, workedMinutes);
+
+  /**
+   * Two different questions, deliberately kept apart.
+   *
+   * Grouping answers "which plan does this punch belong to" — a structural
+   * link. `review_state` answers "has a human looked at it". A punch someone
+   * already amended is still unlinked, so it still groups, but it should read
+   * calmly rather than shout for attention it has already had.
+   *
+   * Undefined on responses predating the field, in which case the card keeps
+   * its previous behaviour and treats grouping itself as the signal.
+   */
+  const needsReview = clockIns.some(
+    (a) => a.reviewState === "unreviewed" || a.reviewState === undefined,
+  );
+  const accent = SHIFT_ACCENT[needsReview ? "attention" : "neutral"];
 
   return (
     <Tooltip>
@@ -78,9 +99,13 @@ export function TimeclockReviewCard({
           className={cn(
             "relative overflow-hidden ps-2 pe-1.5 py-1 text-[10px] sm:text-xs",
             SHIFT_CARD_SURFACE,
+            isPending && PENDING_CARD_CLASS,
           )}
         >
-          <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          {isPending && <ShiftPendingOverlay />}
+          {needsReview && (
+            <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          )}
 
           {/* Plan — context, not the record, so it is muted and has no actions. */}
           <div className="flex items-baseline gap-1.5">
@@ -144,7 +169,7 @@ export function TimeclockReviewCard({
           <div className="mt-0.5 flex items-center gap-1">
             <Clock className={cn("h-2.5 w-2.5 shrink-0", accent.text)} />
             <p className={cn("min-w-0 flex-1 truncate text-[9px] leading-tight", accent.text)}>
-              Needs review
+              {needsReview ? "Needs review" : "Not linked to the plan"}
               {delta ? ` · ${delta}` : ""}
             </p>
             {/*
@@ -170,26 +195,34 @@ export function TimeclockReviewCard({
         </div>
       </TooltipTrigger>
 
-      <TooltipContent side="top" className="max-w-56 text-xs">
-        <p className="font-semibold">Clocked in, not yet reviewed</p>
-        <p className="mt-1">
-          <span className="opacity-70">Planned: </span>
-          {formatTime(plannedShift.startTime)} –{" "}
-          {formatTime(plannedShift.endTime)} (
-          {(plannedShift.durationMinutes / 60).toFixed(1)}h)
-        </p>
-        <p>
-          <span className="opacity-70">
-            {clockIns.length > 1 ? `Clocked (${clockIns.length}): ` : "Clocked: "}
-          </span>
-          {(workedMinutes / 60).toFixed(1)}h
-        </p>
-        {delta && <p className="mt-0.5 font-medium">{delta} against the plan</p>}
-        <p className="mt-0.5 opacity-80">
+      <TooltipContent side="top" className="max-w-60 text-xs">
+        <ShiftTooltipHeader
+          time={clockIns
+            .map((a) => `${formatTime(a.startTime)} – ${formatTime(a.endTime)}`)
+            .join(", ")}
+          hours={workedMinutes / 60}
+        />
+        <ShiftTooltipStatus tone={needsReview ? "attention" : "neutral"}>
+          {needsReview ? "Clocked in, not yet reviewed" : "Not linked to the plan"}
+        </ShiftTooltipStatus>
+
+        <ShiftTooltipBody>
+          <ShiftTooltipRow label="Source">Time clock</ShiftTooltipRow>
+          <ShiftTooltipRow label="Plan">
+            {formatTime(plannedShift.startTime)} –{" "}
+            {formatTime(plannedShift.endTime)} (
+            {(plannedShift.durationMinutes / 60).toFixed(1)}h)
+          </ShiftTooltipRow>
+          {delta && (
+            <ShiftTooltipRow label="Against">{delta} the plan</ShiftTooltipRow>
+          )}
+        </ShiftTooltipBody>
+
+        <ShiftTooltipHint>
           {clockIns.length === 1
-            ? "Agree to record these clocked times as the actual for this shift, or edit them first if the clock got it wrong."
-            : "Two or more punches, so there is no single pair of times to accept — edit or delete them individually."}
-        </p>
+            ? "Tick to accept these times, or edit them first if the clock got it wrong."
+            : "More than one punch, so there is no single pair of times to accept — edit or delete them individually."}
+        </ShiftTooltipHint>
       </TooltipContent>
     </Tooltip>
   );

@@ -5,6 +5,7 @@ import type {
   TimeOffEntry,
   ActualShift,
 } from "@/types/scheduling.types";
+import { MATCH_TOLERANCE_MINUTES } from "./constants";
 
 /** Convert "HH:mm" to total minutes from midnight */
 function toMinutes(time: string): number {
@@ -18,6 +19,71 @@ function normaliseRange(start: string, end: string): [number, number] {
   let e = toMinutes(end);
   if (e <= s) e += 24 * 60;
   return [s, e];
+}
+
+/**
+ * Signed minutes from one clock time to another, by the shorter way round.
+ *
+ * Plain subtraction breaks at midnight: 23:55 against a 00:00 plan reads as
+ * 1435 minutes late rather than 5 minutes early. Wrapping into ±12h gives the
+ * reading a person would give.
+ */
+function signedOffsetMinutes(from: string, to: string): number {
+  const raw = (toMinutes(to) - toMinutes(from) + 1440) % 1440;
+  return raw > 720 ? raw - 1440 : raw;
+}
+
+/**
+ * How far each end of a recorded shift sits from the planned one.
+ *
+ * Negative is early, positive is late — for both edges, so "in −4, out +6"
+ * reads as a slightly long shift without the reader having to flip a sign.
+ */
+export function shiftEdgeOffsets(
+  planned: { startTime: string; endTime: string },
+  actual: { startTime: string; endTime: string },
+): { start: number; end: number } {
+  return {
+    start: signedOffsetMinutes(planned.startTime, actual.startTime),
+    end: signedOffsetMinutes(planned.endTime, actual.endTime),
+  };
+}
+
+/**
+ * Did this get worked as planned, allowing for time-clock drift?
+ *
+ * Both edges must be inside the tolerance. Checking the total instead would
+ * pass a shift worked entirely in the wrong half of the day, which is the one
+ * thing the Compare view exists to catch.
+ */
+export function workedAsPlanned(
+  planned: { startTime: string; endTime: string },
+  actual: { startTime: string; endTime: string },
+  toleranceMinutes: number = MATCH_TOLERANCE_MINUTES,
+): boolean {
+  const { start, end } = shiftEdgeOffsets(planned, actual);
+  return Math.abs(start) <= toleranceMinutes && Math.abs(end) <= toleranceMinutes;
+}
+
+/**
+ * "+20m" / "−1h 05m", or null when the durations match exactly.
+ *
+ * One formatter for every place a worked duration gets compared to a planned
+ * one — the comparison card, the grouped clock-in card, and the actual-shift
+ * card all showed this figure with their own copy of the same function before
+ * this, and they had already started to drift in the rounding.
+ */
+export function formatDurationDelta(
+  plannedMinutes: number,
+  actualMinutes: number,
+): string | null {
+  const diff = actualMinutes - plannedMinutes;
+  if (diff === 0) return null;
+  const sign = diff > 0 ? "+" : "−";
+  const abs = Math.abs(diff);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return h > 0 ? `${sign}${h}h ${String(m).padStart(2, "0")}m` : `${sign}${m}m`;
 }
 
 /** Check if two time ranges overlap */

@@ -237,6 +237,23 @@ export const schedulingService = {
   },
 
   /** One-click "worked exactly as planned", against the ASSIGNMENT id. */
+  /**
+   * Mark a planned shift as a no-show, with no actual behind it yet.
+   *
+   * The mirror of `confirmActual`. Writes NO TCP work segment — an absence is
+   * the absence of worked time, and TCP has no way to represent one. Replaces
+   * a create-then-flip pair that briefly recorded the person as having worked
+   * the shift and spent two calls against the daily TCP quota to do it.
+   */
+  async absentActual(storeId: string, assignmentId: string, note?: string) {
+    const { data } = await axios.post<DataEnvelope<unknown>>(
+      `${base(storeId)}/shift-assignments/${encodeURIComponent(assignmentId)}/absent-actual`,
+      note ? { note } : {},
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
   async confirmActual(storeId: string, assignmentId: string) {
     const { data } = await axios.post<DataEnvelope<unknown>>(
       `${base(storeId)}/shift-assignments/${encodeURIComponent(assignmentId)}/confirm-actual`,

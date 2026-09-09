@@ -66,6 +66,19 @@ export const EMPLOYEE_COLORS: Record<string, { bg: string; border: string; text:
  */
 export const DEFAULT_OVERTIME_THRESHOLD = 40;
 
+/**
+ * How far a recorded time may sit from the plan and still count as "as planned".
+ *
+ * Actuals come off a time clock, so an exact match is the exception — people
+ * punch in a few minutes early and out a few minutes late every single shift.
+ * Comparing on equality made almost every cell in the Compare view amber, which
+ * left nothing to notice: if everything is flagged, nothing is.
+ *
+ * Applied to each edge separately rather than to the total, so a shift worked
+ * an hour late cannot pass by being an hour long either way.
+ */
+export const MATCH_TOLERANCE_MINUTES = 10;
+
 /** Format 24h time string to 12h display */
 export function formatTime(time: string): string {
   const [hStr, mStr] = time.split(":");

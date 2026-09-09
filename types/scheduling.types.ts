@@ -133,6 +133,22 @@ export interface Shift {
 
 export type ActualShiftStatus = "confirmed" | "modified" | "absent" | "added";
 
+/**
+ * How the recorded times compare with the plan. DERIVED server-side on every
+ * write and by the TCP sync — never sent by a client.
+ */
+export type ActualTimeVariance = "matches" | "differs" | "unplanned";
+
+/**
+ * The human verdict on a record. Only an explicit action sets it; no background
+ * job touches it.
+ *
+ * `unreviewed` is the one thing `status` cannot express — a punch nobody has
+ * looked at reads as `confirmed` there, indistinguishable from one a manager
+ * has actually confirmed.
+ */
+export type ActualReviewState = "unreviewed" | "worked" | "absent";
+
 export type ActualShiftSource = "manual" | "timeclock";
 
 export interface ActualShift {
@@ -152,6 +168,13 @@ export interface ActualShift {
    * `added`; the absent endpoint gives `absent`.
    */
   status: ActualShiftStatus;
+  /**
+   * `status` split into its two independent halves. Optional because a response
+   * predating the split omits them — absent means "unknown", and every caller
+   * falls back to `status`, which the server still computes from these two.
+   */
+  timeVariance?: ActualTimeVariance;
+  reviewState?: ActualReviewState;
   /** The originating ASSIGNMENT id. Absent for ad-hoc `added` entries. */
   plannedShiftId?: string;
   note?: string;
@@ -391,7 +414,13 @@ export type SchedulingErrorCode =
   | "EMPLOYEE_NOT_IN_STORE"
   | "SHIFT_UNASSIGNED"
   | "HUMANITY_WRITE_FAILED"
-  | "HUMANITY_RATE_LIMITED";
+  | "HUMANITY_RATE_LIMITED"
+  /* Worked hours write through to TCP Manager+; these are its failure modes. */
+  | "EMPLOYEE_NOT_IN_TCP"
+  | "TCP_WRITE_FAILED"
+  | "TCP_RATE_LIMITED"
+  | "TCP_DAILY_QUOTA_EXHAUSTED"
+  | "STORE_NOT_ALLOWLISTED";
 
 /** The three 409s a manager may override by resending the identical payload with `force`. */
 export const FORCEABLE_ERROR_CODES: readonly SchedulingErrorCode[] = [
@@ -404,4 +433,7 @@ export const FORCEABLE_ERROR_CODES: readonly SchedulingErrorCode[] = [
 export const SETUP_ERROR_CODES: readonly SchedulingErrorCode[] = [
   "STORE_NOT_MAPPED",
   "POSITION_NOT_MAPPED",
+  // Not switched on for external writes yet. Expected during the pilot, and
+  // no amount of retrying by a manager will change it.
+  "STORE_NOT_ALLOWLISTED",
 ];

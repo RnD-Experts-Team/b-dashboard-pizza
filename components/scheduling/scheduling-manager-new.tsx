@@ -29,6 +29,7 @@ import {
   CalendarCheck,
   ClipboardCheck,
   GitCompare,
+  HelpCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +62,12 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleErrorAlert } from "./schedule-error-alert";
+import { PageGuide, type GuideStep } from "@/components/shared/page-guide";
+import {
+  SCHEDULING_GUIDE,
+  type SchedulingGuideEntry,
+  type SchedulingGuideView,
+} from "./scheduling-guide-config";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useScheduleWeek } from "@/lib/hooks/use-schedule-week";
 import { useShiftMutations } from "@/lib/hooks/use-shift-mutations";
@@ -91,6 +98,8 @@ import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { PublishedSchedules } from "./published-schedules";
 import { DataFreshness } from "./data-freshness";
+import { ShiftLegend } from "./shift-legend";
+import { pendingActualKey, pendingShiftKey } from "./shift-pending";
 import { BulkOperationProgress } from "./bulk-operation-progress";
 import { ScheduleWarningDialog } from "./schedule-warning-dialog";
 import {
@@ -272,6 +281,41 @@ export function SchedulingManager() {
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [publishedOpen, setPublishedOpen] = useState(false);
   /**
+   * Deleting an actual now deletes the employee's TCP work segment with it —
+   * real payroll data, and no undo. It was a one-click hover button, which is
+   * too little friction for that.
+   */
+  const [deletingActual, setDeletingActual] = useState<ActualShift | null>(null);
+
+  /**
+   * Which shifts have an action in flight, so the card can show it.
+   *
+   * Every mutation here is fire-and-refetch, so between the click and the week
+   * coming back nothing on the card moved — and silence reads as "it didn't
+   * register", which invites a second click on something that already fired.
+   */
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
+  const withPending = useCallback(
+    async (keys: string[], action: () => Promise<unknown>) => {
+      setPendingIds((prev) => new Set([...prev, ...keys]));
+      try {
+        await action();
+      } finally {
+        // `finally` matters: a rejected mutation must not leave the card
+        // stuck faded with a spinner that never stops.
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          for (const k of keys) next.delete(k);
+          return next;
+        });
+      }
+    },
+    [],
+  );
+  /**
    * A setup failure surfaced by a WRITE rather than the initial fetch. The hook
    * reports fetch-time ones separately; either replaces the grid.
    */
@@ -449,6 +493,65 @@ export function SchedulingManager() {
    * backwards — it asks the manager to confirm returning to their own work.
    * Only leaving planned hides them, so only that direction warrants a warning.
    */
+  /**
+   * The guided tour.
+   *
+   * It drives the view as it advances — the three views are the thing a new
+   * manager most needs shown rather than told — so the view they were on is
+   * kept and restored when the tour ends.
+   */
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideEntries, setGuideEntries] =
+    useState<SchedulingGuideEntry[]>(SCHEDULING_GUIDE);
+  const guideReturnRef = useRef<SchedulingGuideView | null>(null);
+
+  const guideSteps = useMemo<GuideStep[]>(
+    () => guideEntries.map((e) => e.step),
+    [guideEntries],
+  );
+
+  const handleOpenGuide = useCallback(() => {
+    guideReturnRef.current = { mode: scheduleMode, comparison: comparisonMode };
+    // Same guard the V1 dashboard uses: a step whose target is not on the page
+    // would leave the previous step's spotlight stranded with the wrong caption
+    // beside it, because the overlay bails out of measuring a missing element.
+    setGuideEntries(
+      SCHEDULING_GUIDE.filter(
+        (e) =>
+          e.step.noHighlight ||
+          document.querySelector(`[data-guide-id="${e.step.id}"]`) !== null,
+      ),
+    );
+    setGuideOpen(true);
+  }, [scheduleMode, comparisonMode]);
+
+  const handleGuideStep = useCallback(
+    (_step: GuideStep, index: number) => {
+      const view = guideEntries[index]?.view;
+      if (!view) return;
+      /*
+       * Set directly rather than through `requestModeChange`.
+       *
+       * That guard exists to warn before unsaved drafts are hidden — but drafts
+       * survive the switch, the tour returns to the starting view anyway, and a
+       * confirm dialog opening on top of the spotlight would be worse than the
+       * thing it is warning about.
+       */
+      setScheduleMode(view.mode);
+      setComparisonMode(view.comparison);
+    },
+    [guideEntries],
+  );
+
+  const handleCloseGuide = useCallback(() => {
+    setGuideOpen(false);
+    const back = guideReturnRef.current;
+    guideReturnRef.current = null;
+    if (!back) return;
+    setScheduleMode(back.mode);
+    setComparisonMode(back.comparison);
+  }, []);
+
   const requestModeChange = useCallback(
     (targetIsPlanned: boolean, run: () => void) => {
       if (isPlannedOnly && !targetIsPlanned) {
@@ -581,11 +684,13 @@ export function SchedulingManager() {
       const shift = shifts.find((s) => s.id === assignmentId);
       if (!shift) return;
       const who = employeeLookup.get(shift.employeeId)?.name ?? "This employee";
-      void mutations.deleteShift(shift.shiftId, {
-        detail: `${who} · ${formatIsoDateWithWeekday(shift.shiftDate)} · ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`,
-      });
+      void withPending([pendingShiftKey(shift.id)], () =>
+        mutations.deleteShift(shift.shiftId, {
+          detail: `${who} · ${formatIsoDateWithWeekday(shift.shiftDate)} · ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`,
+        }),
+      );
     },
-    [shifts, employeeLookup, mutations]
+    [shifts, employeeLookup, mutations, withPending]
   );
 
   /**
@@ -658,10 +763,14 @@ export function SchedulingManager() {
         note: note || undefined,
       };
 
-      void mutations.updateShift(editingShift.shiftId, payload, {
-        employeeId: target.employeeId,
-        detail,
-      });
+      // Keyed on the assignment id, which is what the card in the grid carries —
+      // `shiftId` is the row the API addresses and matches nothing on screen.
+      void withPending([pendingShiftKey(editingShift.id)], () =>
+        mutations.updateShift(editingShift.shiftId, payload, {
+          employeeId: target.employeeId,
+          detail,
+        }),
+      );
     },
     [
       pendingAdd,
@@ -673,6 +782,7 @@ export function SchedulingManager() {
       storeId,
       addDraft,
       updateDraft,
+      withPending,
     ]
   );
 
@@ -756,9 +866,11 @@ export function SchedulingManager() {
   /** One-click "worked exactly as planned" — no dialog, addresses the assignment. */
   const handleConfirmActualShift = useCallback(
     (plannedShift: Shift) => {
-      void actualMutations.confirmAsPlanned(plannedShift);
+      void withPending([pendingShiftKey(plannedShift.id)], () =>
+        actualMutations.confirmAsPlanned(plannedShift),
+      );
     },
-    [actualMutations]
+    [actualMutations, withPending]
   );
 
   /** Open the actual-shift dialog to edit a linked/ghost shift, or add ad-hoc coverage */
@@ -820,27 +932,60 @@ export function SchedulingManager() {
         }
       };
 
-      if (!plannedShift && actual) {
-        void actualMutations
-          .updateActual(actual.id, { startTime, endTime, label, shiftType: type, note })
-          .then(done);
-        return;
+      // The card that should look busy: the record being amended, or the plan
+      // the new entry is being written against.
+      const keys = [
+        ...(actual ? [pendingActualKey(actual.id)] : []),
+        ...(plannedShift ? [pendingShiftKey(plannedShift.id)] : []),
+      ];
+
+      /**
+       * Anything that already exists is amended through its own id.
+       *
+       * The collection endpoint amends "the actual behind this assignment", so
+       * it is only safe once the two are linked. A timeclock punch sitting on a
+       * plan is NOT linked — `planned_shift_id` is null — so posting the
+       * assignment id would write a second record and leave the punch orphaned,
+       * which under TCP write-through means duplicated payroll data. Editing a
+       * grouped punch therefore corrects and links it in one call, exactly as
+       * agreeing to it does.
+       */
+      if (actual) {
+        const linkTo =
+          plannedShift && !actual.plannedShiftId ? plannedShift.id : undefined;
+        if (!plannedShift || linkTo) {
+          void withPending(keys, () =>
+            actualMutations
+              .updateActual(actual.id, {
+                startTime,
+                endTime,
+                label,
+                shiftType: type,
+                note,
+                assignmentId: linkTo,
+              })
+              .then(done),
+          );
+          return;
+        }
       }
 
-      void actualMutations
-        .saveActual({
-          employeeId,
-          shiftDate: plannedShift?.shiftDate ?? dateForDayIndex(week, dayIndex),
-          startTime,
-          endTime,
-          label,
-          shiftType: type,
-          note,
-          assignmentId: plannedShift?.id,
-        })
-        .then(done);
+      void withPending(keys, () =>
+        actualMutations
+          .saveActual({
+            employeeId,
+            shiftDate: plannedShift?.shiftDate ?? dateForDayIndex(week, dayIndex),
+            startTime,
+            endTime,
+            label,
+            shiftType: type,
+            note,
+            assignmentId: plannedShift?.id,
+          })
+          .then(done),
+      );
     },
-    [editingActualTarget, week, actualMutations]
+    [editingActualTarget, week, actualMutations, withPending]
   );
 
   /** Mark a planned shift as a no-show. */
@@ -854,6 +999,14 @@ export function SchedulingManager() {
      * first and then flipped — two calls, but it keeps the client from having to
      * assert a status the server owns.
      */
+    // The card behind the dialog is the one that will change, so it is the one
+    // that should look busy once the dialog closes.
+    const keys = actual
+      ? [pendingActualKey(actual.id)]
+      : plannedShift
+        ? [pendingShiftKey(plannedShift.id)]
+        : [];
+
     const run = async () => {
       // No actual yet: the hook creates one from the plan and flips it in a
       // single step. This used to stop after the create and ask the user to
@@ -875,29 +1028,48 @@ export function SchedulingManager() {
       }
     };
 
-    void run();
-  }, [editingActualTarget, actualMutations]);
+    void withPending(keys, run);
+  }, [editingActualTarget, actualMutations, withPending]);
 
   /**
    * Accept a timeclock punch as the actual for the planned shift it sits on.
    *
-   * The punch arrives unlinked, so this writes a linked actual from its times
-   * and removes the unlinked row — see `agreeClockIn` for why both halves are
-   * needed.
+   * The punch arrives unlinked, so this attaches it to the plan and leaves the
+   * recorded times exactly as the clock captured them — see `agreeClockIn` for
+   * why it must not re-enter them as a new record.
    */
   const handleAgreeClockIn = useCallback(
     (plannedShift: Shift, clockIn: ActualShift) => {
-      void actualMutations.agreeClockIn(plannedShift, clockIn);
+      void withPending(
+        [pendingShiftKey(plannedShift.id), pendingActualKey(clockIn.id)],
+        () => actualMutations.agreeClockIn(plannedShift, clockIn),
+      );
     },
-    [actualMutations],
+    [actualMutations, withPending],
   );
 
-  const handleDeleteActualShift = useCallback(
+  /** Accept a record as reviewed, without opening anything. */
+  const handleMarkReviewed = useCallback(
     (actual: ActualShift) => {
-      void actualMutations.deleteActual(actual);
+      void withPending([pendingActualKey(actual.id)], () =>
+        actualMutations.markReviewed(actual),
+      );
     },
-    [actualMutations]
+    [actualMutations, withPending],
   );
+
+  const handleDeleteActualShift = useCallback((actual: ActualShift) => {
+    setDeletingActual(actual);
+  }, []);
+
+  const handleConfirmDeleteActual = useCallback(() => {
+    const target = deletingActual;
+    if (!target) return;
+    setDeletingActual(null);
+    void withPending([pendingActualKey(target.id)], () =>
+      actualMutations.deleteActual(target),
+    );
+  }, [deletingActual, actualMutations, withPending]);
 
   const handleAddAvailability = useCallback(
     (draft: AvailabilityOverrideDraft) => {
@@ -1302,7 +1474,34 @@ export function SchedulingManager() {
     <PageHeader
       title="Employee Schedule"
       description="Manage weekly shifts for your team"
-    />
+    >
+      {/*
+        Chrome, not data — kept out of the screenshot actions.
+
+        Desktop only. The tour spotlights toolbar controls that wrap onto
+        several rows on a narrow screen, and it drives the view between Planned,
+        Actual and Compare — on a phone or tablet that is a caption box sitting
+        on top of the thing it is describing. Hiding the way in is honest;
+        offering a tour that cannot land its own highlights is not.
+      */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            data-screenshot-ignore="true"
+            variant="ghost"
+            size="icon"
+            className="hidden h-8 w-8 text-muted-foreground lg:inline-flex"
+            onClick={handleOpenGuide}
+            aria-label="Open page guide"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          Page guide
+        </TooltipContent>
+      </Tooltip>
+    </PageHeader>
   );
 
   if (!selectedStore) {
@@ -1423,6 +1622,62 @@ export function SchedulingManager() {
         )}
 
         {/*
+          Failed writes from the cell-level actions.
+          Planned-shift errors have always had the dialog to surface them, but
+          these two hooks are driven straight from the grid, so a refusal had
+          nowhere to appear — the card simply went back to how it was and the
+          manager was left to guess. The card's busy state made that worse, not
+          better: it now clearly does something and then clearly undoes it.
+        */}
+        {actualMutations.error && (
+          <ScheduleErrorAlert
+            error={actualMutations.error}
+            title="Couldn't record that"
+            onDismiss={actualMutations.clearError}
+            compact
+          />
+        )}
+        {availabilityMutations.error && (
+          <ScheduleErrorAlert
+            error={availabilityMutations.error}
+            title="Couldn't save that entry"
+            onDismiss={availabilityMutations.clearError}
+            compact
+          />
+        )}
+
+        {/*
+          Planned-shift writes, when there is no dialog to carry the message.
+          The add/edit dialog shows this error itself, so it is suppressed while
+          that is open — but deleting happens straight from a card in the grid,
+          and a refused delete had nowhere at all to appear. The shift simply
+          stayed where it was, which reads as a click that never registered.
+        */}
+        {mutations.error && !shiftDialogOpen && (
+          <ScheduleErrorAlert
+            error={mutations.error}
+            title="Couldn't change that shift"
+            onDismiss={mutations.clearError}
+            compact
+          />
+        )}
+
+        {/*
+          Publishing, same reasoning. Publish Week runs from the Actions menu
+          with nothing open, while the history dialog below renders this error
+          for the deletes taken inside it — hence the gate, so one failure is
+          never announced twice.
+        */}
+        {published.error && !publishedOpen && (
+          <ScheduleErrorAlert
+            error={published.error}
+            title="Couldn't publish this week"
+            onDismiss={published.clearError}
+            compact
+          />
+        )}
+
+        {/*
           Toolbar — two rows, each wrapping on its own.
 
           This was one `justify-between` row holding two wrapping groups. When
@@ -1437,6 +1692,16 @@ export function SchedulingManager() {
         <div className="@container space-y-2">
           {/* Row 1 — which week, and which view of it */}
           <div className="flex flex-wrap items-center gap-2">
+            {/*
+              The four week controls travel together, for the same reason the
+              view controls below do: they are one decision, and a stranded
+              arrow on its own line reads as a stray button. It also gives the
+              page guide a single thing to point at.
+            */}
+            <div
+              className="flex shrink-0 items-center gap-2"
+              data-guide-id="sched-week"
+            >
             <Button
               variant="outline"
               size="icon"
@@ -1484,6 +1749,7 @@ export function SchedulingManager() {
                 Today
               </Button>
             )}
+            </div>
 
 
             {/*
@@ -1492,7 +1758,10 @@ export function SchedulingManager() {
               the most visible symptom of the old layout. `shrink-0` keeps the
               pair intact so they wrap as a unit.
             */}
-            <div className="flex shrink-0 items-center gap-2">
+            <div
+              className="flex shrink-0 items-center gap-2"
+              data-guide-id="sched-views"
+            >
             <div
               className={cn(
                 "flex items-center rounded-md border bg-muted/40 p-0.5 transition-opacity",
@@ -1551,7 +1820,10 @@ export function SchedulingManager() {
 
           {/* Row 2 — narrowing what the grid shows, and acting on it */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-32 flex-1 sm:max-w-xs">
+            <div
+              className="relative min-w-32 flex-1 sm:max-w-xs"
+              data-guide-id="sched-search"
+            >
               <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search employees..."
@@ -1567,6 +1839,7 @@ export function SchedulingManager() {
                   variant="outline"
                   size="sm"
                   className="h-8 gap-1.5 text-sm"
+                  data-guide-id="sched-availability"
                   disabled={comparisonMode}
                   onClick={() => setAvailabilityOpen(true)}
                 >
@@ -1618,12 +1891,17 @@ export function SchedulingManager() {
                 className="hidden @2xl:inline"
               />
 
+              <span className="inline-flex" data-guide-id="sched-legend">
+                <ShiftLegend />
+              </span>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-8 gap-1.5 text-sm"
+                    data-guide-id="sched-refresh"
                     onClick={refetch}
                     disabled={isLoading || isRefetching}
                   >
@@ -1642,7 +1920,12 @@ export function SchedulingManager() {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-sm"
+                  data-guide-id="sched-actions"
+                >
                   Actions
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
@@ -1924,7 +2207,7 @@ export function SchedulingManager() {
         )}
 
         {/* The schedule view — week grid */}
-        <div ref={gridRef}>
+        <div ref={gridRef} data-guide-id="sched-grid">
           <ScheduleGrid
             employees={filteredEmployees}
             shifts={shifts}
@@ -1944,6 +2227,8 @@ export function SchedulingManager() {
             displayShifts={displayShifts}
             onConfirmActual={handleConfirmActualShift}
             onAgreeClockIn={handleAgreeClockIn}
+            onMarkReviewed={handleMarkReviewed}
+            pendingIds={pendingIds}
             onEditActual={handleOpenActualDialog}
             onDeleteActual={handleDeleteActualShift}
             onAddCoverage={handleAddCoverage}
@@ -2147,6 +2432,43 @@ export function SchedulingManager() {
           </AlertDialogContent>
         </AlertDialog>
 
+        <AlertDialog
+          open={deletingActual !== null}
+          onOpenChange={(open) => !open && setDeletingActual(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this recorded time?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deletingActual && (
+                  <>
+                    This removes the{" "}
+                    <strong>
+                      {formatTime(deletingActual.startTime)} –{" "}
+                      {formatTime(deletingActual.endTime)}
+                    </strong>{" "}
+                    record
+                    {deletingActual.source === "timeclock"
+                      ? " that the time clock produced"
+                      : ""}
+                    . Worked time feeds payroll, so this deletes it there too and
+                    cannot be undone.
+                  </>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteActual}
+                className="bg-destructive text-white hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Edit Actual Shift dialog */}
         <EditActualShiftDialog
           open={actualDialogOpen}
@@ -2207,6 +2529,15 @@ export function SchedulingManager() {
                 Save the current week&apos;s {shifts.length} shift{shifts.length !== 1 ? "s" : ""} as a reusable template.
               </DialogDescription>
             </DialogHeader>
+            {/* The dialog stays open on failure, so the reason belongs in it. */}
+            {templates.error && (
+              <ScheduleErrorAlert
+                error={templates.error}
+                title="Couldn't save this template"
+                onDismiss={templates.clearError}
+                compact
+              />
+            )}
             <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label htmlFor="template-name">Template Name</Label>
@@ -2254,6 +2585,19 @@ export function SchedulingManager() {
                 This will replace all current shifts.
               </DialogDescription>
             </DialogHeader>
+            {/*
+              Deleting a template happens in this list. Applying one closes the
+              dialog and runs as a batch, so that failure surfaces through the
+              bulk alert on the page instead.
+            */}
+            {templates.error && (
+              <ScheduleErrorAlert
+                error={templates.error}
+                title="Couldn't delete that template"
+                onDismiss={templates.clearError}
+                compact
+              />
+            )}
             {templates.templates.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <FolderOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
@@ -2323,6 +2667,13 @@ export function SchedulingManager() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <PageGuide
+          steps={guideSteps}
+          isOpen={guideOpen}
+          onClose={handleCloseGuide}
+          onStepChange={handleGuideStep}
+        />
       </div>
     </TooltipProvider>
   );

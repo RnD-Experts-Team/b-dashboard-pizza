@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { UserX, Clock, User } from "lucide-react";
 import type { ScheduleEmployee, Shift, ActualShift } from "@/types/scheduling.types";
-import { calcHours, formatTime } from "@/lib/scheduling/constants";
+import { SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
 
 interface EditActualShiftDialogProps {
   open: boolean;
@@ -37,6 +37,17 @@ interface EditActualShiftDialogProps {
   onSave: (startTime: string, endTime: string, label: string, type: Shift["type"], note: string) => void;
   onMarkAbsent: () => void;
 }
+
+/**
+ * A label for a record that has none.
+ *
+ * Preferring the preset that matches the record's own shift type keeps a
+ * label-less evening punch from being announced as "Morning" purely because
+ * that preset happens to be first. Types with no preset (e.g. `afternoon`)
+ * still land on the first one, which is a guess either way.
+ */
+const presetLabelFor = (t: Shift["type"] | undefined) =>
+  SHIFT_PRESETS.find((p) => p.type === t)?.label ?? SHIFT_PRESETS[0].label;
 
 export function EditActualShiftDialog({
   open,
@@ -61,19 +72,28 @@ export function EditActualShiftDialog({
     if (editingActual && editingActual.status !== "absent") {
       setStartTime(editingActual.startTime);
       setEndTime(editingActual.endTime);
-      setLabel(editingActual.label);
+      /**
+       * A timeclock punch has `"label": null`, which the adapter turns into "".
+       * That matched no option, so the Select rendered an empty box. Fall back
+       * to the plan's label, then to the first preset.
+       */
+      setLabel(
+        editingActual.label ||
+          plannedShift?.label ||
+          presetLabelFor(editingActual.type),
+      );
       setType(editingActual.type);
       setNote(editingActual.note ?? "");
     } else if (plannedShift) {
       setStartTime(plannedShift.startTime);
       setEndTime(plannedShift.endTime);
-      setLabel(plannedShift.label);
+      setLabel(plannedShift.label || presetLabelFor(plannedShift.type));
       setType(plannedShift.type);
       setNote("");
     } else {
       setStartTime("08:00");
       setEndTime("16:00");
-      setLabel("Morning");
+      setLabel(SHIFT_PRESETS[0].label);
       setType("morning");
       setNote("");
     }
@@ -173,14 +193,17 @@ export function EditActualShiftDialog({
             </Label>
             <Select value={label} onValueChange={setLabel}>
               <SelectTrigger id="actual-shift-label" className="mt-1">
-                <SelectValue />
+                {/* Placeholder so an unrecognised value can never render blank. */}
+                <SelectValue placeholder="Choose a label" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Morning">Morning</SelectItem>
-                <SelectItem value="Evening">Evening</SelectItem>
-                <SelectItem value="Night">Night</SelectItem>
-                <SelectItem value="Split AM">Split AM</SelectItem>
-                <SelectItem value="Split PM">Split PM</SelectItem>
+                {/* From the shared presets — this list was duplicated from the
+                    add dialog and could drift out of step with it. */}
+                {SHIFT_PRESETS.map((preset) => (
+                  <SelectItem key={preset.label} value={preset.label}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
                 <SelectItem value="Custom">Custom</SelectItem>
               </SelectContent>
             </Select>

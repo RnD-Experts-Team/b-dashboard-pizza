@@ -9,7 +9,6 @@ import {
   parseSchedulingError,
   type SchedulingError,
 } from "@/lib/scheduling/errors";
-import { adaptActualShift } from "@/lib/scheduling/adapters";
 import type { ActualShift, Shift } from "@/types/scheduling.types";
 
 /**
@@ -47,7 +46,7 @@ export interface SaveActualInput {
 
 export interface UseActualShiftMutationsOptions {
   storeId: string | null;
-  refetchWeek: () => void;
+  refetchWeek: () => void | Promise<void>;
   onSuccess?: (message: string) => void;
 }
 
@@ -61,36 +60,51 @@ export interface UseActualShiftMutationsResult {
    * Needed for AD-HOC coverage: it has no planned shift behind it, so there is
    * no assignment id to amend against. Posting to the collection endpoint
    * without one would create a second row instead of editing this one.
+   *
+   * `assignmentId` attaches the record to a planned shift in the same call —
+   * for a timeclock punch that arrived unlinked and is being corrected and
+   * accepted at once. Same single-call shape as `agreeClockIn`, and for the
+   * same reason: the punch is real payroll evidence and must be amended in
+   * place, never re-created.
    */
   updateActual: (
     actualId: string,
-    input: Omit<SaveActualInput, "employeeId" | "shiftDate" | "assignmentId">,
+    input: Omit<SaveActualInput, "employeeId" | "shiftDate">,
   ) => Promise<boolean>;
   markAbsent: (actual: ActualShift, note?: string) => Promise<boolean>;
   /**
    * Mark a planned shift as a no-show when it has no actual yet.
    *
-   * `/absent` addresses an ACTUAL, and an unreviewed plan has none — so this
-   * creates one from the plan and flips it, in that order, behind a single
-   * refetch. It used to stop after the create and ask the user to come back and
-   * repeat the action, which meant "mark no attendance" quietly did something
-   * else: it recorded them as having worked the shift as planned.
+   * One call to the dedicated endpoint, which writes no TCP segment at all.
+   * This previously created an actual from the plan and then flipped it absent:
+   * the first call recorded the person as having WORKED the shift, so a failure
+   * in between left exactly the opposite of what was clicked on screen, and it
+   * spent two calls against the daily TCP quota to write a segment purely to
+   * delete it.
    */
   markAbsentForPlan: (plannedShift: Shift, note?: string) => Promise<boolean>;
   /**
    * Accept an unlinked clock-in as the actual for a planned shift.
    *
-   * The timeclock sends punches with `planned_shift_id: null`, so nothing ties
-   * them to the shift they belong to. Agreeing writes a LINKED actual carrying
-   * the punch's times, then removes the unlinked punch — without the second
-   * step the same work would be counted twice, once through the plan and once
-   * as ad-hoc coverage.
+   * Agreeing LINKS the existing punch — it does not re-enter it. An earlier
+   * version created a linked actual from the punch's times and deleted the
+   * punch row, which was defensible while actuals were local. It no longer is:
+   * `actual_shifts` writes through to TCP, so that delete removes the
+   * employee's real work segment along with `actualTimeIn`/`actualTimeOut` and
+   * TCP's missed-punch flags, replacing evidence with a manager-typed record.
    *
-   * Create-then-delete on purpose: if the delete fails you get a visible
-   * duplicate, which a manager can fix. The reverse order risks losing the only
-   * record of the punch.
+   * `POST /actual-shifts/{id}` now takes `shift_assignment_id`, so this is one
+   * call and the punch is left exactly as TCP recorded it.
    */
   agreeClockIn: (plannedShift: Shift, clockIn: ActualShift) => Promise<boolean>;
+  /**
+   * Accept a record as reviewed, changing nothing else about it.
+   *
+   * For a punch with no planned shift behind it, where there is nothing to link
+   * — only to agree with. Amending would also promote it server-side, but that
+   * means opening a dialog to say "this is fine as it is".
+   */
+  markReviewed: (actual: ActualShift) => Promise<boolean>;
   deleteActual: (actual: ActualShift) => Promise<boolean>;
   isSubmitting: boolean;
   error: SchedulingError | null;
@@ -116,8 +130,11 @@ export function useActualShiftMutations({
       setError(null);
       try {
         await action();
-        refetchWeek();
         onSuccess?.(successMessage);
+        // Awaited, not fired and forgotten: callers use the returned promise to
+        // hold a card in its "working" state, and letting go before the fresh
+        // week lands would drop that state onto stale content for a frame.
+        await refetchWeek();
         return true;
       } catch (err) {
         const parsed = parseSchedulingError(err, fallback);
@@ -173,6 +190,9 @@ export function useActualShiftMutations({
             label: input.label || undefined,
             shift_type: input.shiftType || undefined,
             note: input.note || undefined,
+            ...(input.assignmentId
+              ? { shift_assignment_id: input.assignmentId }
+              : {}),
             // `status` stays absent — the server re-derives it from the times.
           }),
         "Could not update this entry.",
@@ -181,25 +201,33 @@ export function useActualShiftMutations({
     [run, storeId],
   );
 
+  const markReviewed = useCallback(
+    (actual: ActualShift) =>
+      run(
+        () =>
+          schedulingService.updateActualShift(storeId!, actual.id, {
+            review_state: "worked",
+          }),
+        "Could not mark this as reviewed.",
+        "Marked as reviewed",
+      ),
+    [run, storeId],
+  );
+
   const agreeClockIn = useCallback(
     (plannedShift: Shift, clockIn: ActualShift) =>
       run(
-        async () => {
-          await schedulingService.saveActualShift(storeId!, {
-            employee_id:
-              Number(plannedShift.employeeId) || plannedShift.employeeId,
-            shift_date: plannedShift.shiftDate,
-            start_time: clockIn.startTime,
-            end_time: clockIn.endTime,
-            label: plannedShift.label || undefined,
-            shift_type: plannedShift.type || undefined,
-            note: clockIn.note || undefined,
+        () =>
+          schedulingService.updateActualShift(storeId!, clockIn.id, {
+            // Attach the punch to the shift it was really for, and change
+            // nothing else — the backend sees no TCP-modelled field move and
+            // skips the TCP write entirely.
             shift_assignment_id: plannedShift.id,
-            // `status` stays absent — the server compares against the plan and
-            // decides `confirmed` or `modified` itself.
-          });
-          await schedulingService.deleteActualShift(storeId!, clockIn.id);
-        },
+            // Carried on purpose: the variance derivation compares label as
+            // well as times, so a punch left unlabelled against a plan called
+            // "Morning" would read as `differs` even with identical times.
+            label: plannedShift.label || undefined,
+          }),
         "Could not accept this clock-in.",
         "Clock-in accepted",
       ),
@@ -209,28 +237,7 @@ export function useActualShiftMutations({
   const markAbsentForPlan = useCallback(
     (plannedShift: Shift, note?: string) =>
       run(
-        async () => {
-          const created = await schedulingService.saveActualShift(storeId!, {
-            employee_id:
-              Number(plannedShift.employeeId) || plannedShift.employeeId,
-            shift_date: plannedShift.shiftDate,
-            start_time: plannedShift.startTime,
-            end_time: plannedShift.endTime,
-            label: plannedShift.label || undefined,
-            shift_type: plannedShift.type || undefined,
-            shift_assignment_id: plannedShift.id,
-          });
-          const id = adaptActualShift(created).id;
-          // Without an id the second call would address nothing, and silently
-          // leaving a "worked as planned" record behind is the exact failure
-          // this replaced. Say so instead.
-          if (!id) {
-            throw new Error(
-              "Recorded the shift, but could not mark it as a no-show. Open the card and mark it from there.",
-            );
-          }
-          await schedulingService.markActualAbsent(storeId!, id, note);
-        },
+        () => schedulingService.absentActual(storeId!, plannedShift.id, note),
         "Could not mark this as a no-show.",
         "Marked as a no-show",
       ),
@@ -268,6 +275,7 @@ export function useActualShiftMutations({
     markAbsent,
     markAbsentForPlan,
     agreeClockIn,
+    markReviewed,
     deleteActual,
     isSubmitting,
     error,

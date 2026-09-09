@@ -27,6 +27,7 @@ import {
 import { ShiftCard } from "./shift-card";
 import { ActualShiftCard } from "./actual-shift-card";
 import { TimeclockReviewCard } from "./timeclock-review-card";
+import { pendingActualKey, pendingShiftKey } from "./shift-pending";
 import { ComparisonShiftCard } from "./comparison-shift-card";
 import { EmployeeProfileDialog } from "./employee-profile-dialog";
 import type {
@@ -65,6 +66,13 @@ interface ScheduleGridProps {
   onConfirmActual?: (plannedShift: Shift) => void;
   /** Accept an unlinked clock-in as the actual for its planned shift. */
   onAgreeClockIn?: (plannedShift: Shift, clockIn: ActualShift) => void;
+  /** Accept a record as reviewed without changing it. */
+  onMarkReviewed?: (actual: ActualShift) => void;
+  /**
+   * Namespaced ids with an action in flight. A set rather than a single id
+   * because a grouped card covers a plan AND its punches at once.
+   */
+  pendingIds?: ReadonlySet<string>;
   onEditActual?: (plannedShift: Shift | undefined, actual: ActualShift | undefined) => void;
   onDeleteActual?: (actual: ActualShift) => void;
   onAddCoverage?: (employeeId: string, dayIndex: number) => void;
@@ -147,6 +155,8 @@ export function ScheduleGrid({
   displayShifts,
   onConfirmActual,
   onAgreeClockIn,
+  onMarkReviewed,
+  pendingIds,
   onEditActual,
   onDeleteActual,
   onAddCoverage,
@@ -390,6 +400,10 @@ export function ScheduleGrid({
                   {/* Day cells */}
                   {week.dayNamesShort.map((_, dayIdx) => {
                     const key = `${emp.id}-${dayIdx}`;
+                    const isPendingShift = (id: string) =>
+                      pendingIds?.has(pendingShiftKey(id)) ?? false;
+                    const isPendingActual = (id: string) =>
+                      pendingIds?.has(pendingActualKey(id)) ?? false;
                     const cellShifts = shiftMap[key] ?? [];
                     const cellAddedActuals = addedActualMap[key] ?? [];
                     const cellDrafts = draftMap[key] ?? [];
@@ -484,21 +498,71 @@ export function ScheduleGrid({
                               />
                             )}
 
-                          {/* Comparison mode — side-by-side planned/actual diff, ignores day-block gating */}
-                          {comparisonMode && (
+                          {/*
+                            Comparison mode — side-by-side planned/actual diff,
+                            ignores day-block gating.
+
+                            Uses the same pairing inference as Actual. Matching
+                            on `plannedShiftId` alone is not enough: a clock-in
+                            arrives unlinked, so the plan rendered "Not recorded"
+                            while its own punch sat beside it as "unplanned" —
+                            two cards for one shift, in the view whose entire
+                            job is putting plan and reality side by side.
+                          */}
+                          {comparisonMode && (() => {
+                            const { groups, looseShifts, looseActuals } =
+                              groupClockInsByPlan(
+                                cellShifts,
+                                cellAddedActuals,
+                                actualShifts,
+                              );
+                            /**
+                             * This card holds ONE actual, so only a single-punch
+                             * group can be shown as a pair. A lunch break's two
+                             * punches stay separate rather than having one of
+                             * them arbitrarily chosen to represent the day.
+                             */
+                            const paired = groups.filter(
+                              (g) => g.clockIns.length === 1,
+                            );
+                            const pairedIds = new Set(paired.map((g) => g.plannedShift.id));
+                            const pairedPunchIds = new Set(
+                              paired.map((g) => g.clockIns[0].id),
+                            );
+                            const restShifts = [
+                              ...looseShifts,
+                              ...groups
+                                .filter((g) => !pairedIds.has(g.plannedShift.id))
+                                .map((g) => g.plannedShift),
+                            ];
+                            const restActuals = [
+                              ...looseActuals,
+                              ...groups
+                                .filter((g) => !pairedIds.has(g.plannedShift.id))
+                                .flatMap((g) => g.clockIns),
+                            ].filter((a) => !pairedPunchIds.has(a.id));
+                            return (
                             <>
-                              {cellShifts.map((shift) => (
+                              {paired.map((g) => (
+                                <ComparisonShiftCard
+                                  key={g.plannedShift.id}
+                                  plannedShift={g.plannedShift}
+                                  actual={g.clockIns[0]}
+                                />
+                              ))}
+                              {restShifts.map((shift) => (
                                 <ComparisonShiftCard
                                   key={shift.id}
                                   plannedShift={shift}
                                   actual={actualForPlanned(shift.id, actualShifts)}
                                 />
                               ))}
-                              {cellAddedActuals.map((a) => (
+                              {restActuals.map((a) => (
                                 <ComparisonShiftCard key={a.id} actual={a} />
                               ))}
                             </>
-                          )}
+                            );
+                          })()}
 
                           {/*
                             Actual mode.
@@ -524,6 +588,10 @@ export function ScheduleGrid({
                                   key={g.plannedShift.id}
                                   plannedShift={g.plannedShift}
                                   clockIns={g.clockIns}
+                                  isPending={
+                                    isPendingShift(g.plannedShift.id) ||
+                                    g.clockIns.some((c) => isPendingActual(c.id))
+                                  }
                                   onAgree={(ps, c) => onAgreeClockIn?.(ps, c)}
                                   onEdit={(s, a) => onEditActual?.(s, a)}
                                   onDelete={(a) => onDeleteActual?.(a)}
@@ -534,9 +602,18 @@ export function ScheduleGrid({
                                   key={shift.id}
                                   plannedShift={shift}
                                   actual={actualForPlanned(shift.id, actualShifts)}
+                                  isPending={
+                                    isPendingShift(shift.id) ||
+                                    (actualForPlanned(shift.id, actualShifts)
+                                      ? isPendingActual(
+                                          actualForPlanned(shift.id, actualShifts)!.id,
+                                        )
+                                      : false)
+                                  }
                                   onConfirm={(s) => onConfirmActual?.(s)}
                                   onEdit={(s, a) => onEditActual?.(s, a)}
                                   onDelete={(a) => onDeleteActual?.(a)}
+                                  onMarkReviewed={(a) => onMarkReviewed?.(a)}
                                 />
                               ))}
                               {looseActuals.map((a) => (
@@ -546,6 +623,8 @@ export function ScheduleGrid({
                                   onConfirm={() => {}}
                                   onEdit={(s, act) => onEditActual?.(s, act)}
                                   onDelete={(act) => onDeleteActual?.(act)}
+                                  isPending={isPendingActual(a.id)}
+                                  onMarkReviewed={(act) => onMarkReviewed?.(act)}
                                 />
                               ))}
                               <Tooltip>
@@ -584,6 +663,7 @@ export function ScheduleGrid({
                                   key={shift.id}
                                   shift={shift}
                                   hasConflict={conflictIds.has(shift.id)}
+                                  isPending={isPendingShift(shift.id)}
                                   blockedReason={blockReasonFor(
                                     shift.startTime,
                                     shift.endTime,

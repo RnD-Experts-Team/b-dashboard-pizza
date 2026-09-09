@@ -26,7 +26,12 @@
  * actually needs attention.
  */
 
-export type ShiftTone = "neutral" | "attention" | "critical" | "info";
+export type ShiftTone =
+  | "neutral"
+  | "success"
+  | "attention"
+  | "critical"
+  | "info";
 
 export interface ShiftAccent {
   /** Leading 2px rail. Empty for `neutral` — the caller renders nothing. */
@@ -37,6 +42,21 @@ export interface ShiftAccent {
 
 export const SHIFT_ACCENT: Record<ShiftTone, ShiftAccent> = {
   neutral: { rail: "", text: "text-muted-foreground" },
+  /**
+   * Happened, and was fine.
+   *
+   * Emerald is the house green (`sales` in `components/dashboard-v1/category.ts`,
+   * `#10b981`), not a hue invented here.
+   *
+   * Deliberately NOT used for planned shifts. A shift that has not happened yet
+   * has not "worked", and railing every planned cell would put colour back on
+   * almost the whole grid — the opposite of what the accent system is for. Only
+   * a reviewed `confirmed` actual and a Compare `match` earn it.
+   */
+  success: {
+    rail: "bg-emerald-500",
+    text: "text-emerald-600 dark:text-emerald-400",
+  },
   attention: {
     rail: "bg-amber-500",
     text: "text-amber-600 dark:text-amber-400",

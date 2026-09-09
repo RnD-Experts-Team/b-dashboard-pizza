@@ -84,7 +84,11 @@ export interface UseScheduleWeekResult {
    * makes caching safe here. A future mutation that updates state directly
    * without calling this will serve stale data.
    */
-  refetch: () => void;
+  /**
+   * Resolves once fresh data is in state, so a caller that wants to stay in a
+   * busy state until the grid actually changes can await it.
+   */
+  refetch: () => Promise<void>;
   /**
    * Refetch only if the cached week has aged out.
    *
@@ -264,7 +268,7 @@ export function useScheduleWeek({
    */
   const refetch = useCallback(() => {
     if (storeId) invalidateStore(storeId);
-    void fetchWeek({ skipCache: true });
+    return fetchWeek({ skipCache: true });
   }, [storeId, fetchWeek]);
 
   /**

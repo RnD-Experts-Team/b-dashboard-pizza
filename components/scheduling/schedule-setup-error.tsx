@@ -16,7 +16,7 @@ import type { SchedulingErrorCode } from "@/types/scheduling.types";
 
 export type SetupErrorCode = Extract<
   SchedulingErrorCode,
-  "STORE_NOT_MAPPED" | "POSITION_NOT_MAPPED"
+  "STORE_NOT_MAPPED" | "POSITION_NOT_MAPPED" | "STORE_NOT_ALLOWLISTED"
 >;
 
 const SETUP_COPY: Record<SetupErrorCode, { title: string; body: string }> = {
@@ -27,6 +27,10 @@ const SETUP_COPY: Record<SetupErrorCode, { title: string; body: string }> = {
   POSITION_NOT_MAPPED: {
     title: "This store has no default scheduling position",
     body: "Shifts need a position to be created against, and this store does not have one configured yet. This needs a one-time setup by whoever administers the integration — it is not something you can fix from here.",
+  },
+  STORE_NOT_ALLOWLISTED: {
+    title: "This store isn't switched on for scheduling yet",
+    body: "Recording worked time is being rolled out store by store, and this one has not been enabled. Nothing is wrong with the schedule itself — whoever administers the integration controls when this store is turned on.",
   },
 };
 

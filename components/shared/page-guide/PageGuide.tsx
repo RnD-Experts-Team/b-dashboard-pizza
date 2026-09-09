@@ -11,6 +11,20 @@ interface PageGuideProps {
   steps: GuideStep[];
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Called as each step becomes current, before its target is measured.
+   *
+   * For pages where the steps do not all live on screen at once — a tour that
+   * walks through tabs, say. The alternative is one guide per tab, which asks
+   * the reader to find and re-open the guide to see the rest of the page.
+   *
+   * Optional and additive: a page that does not pass it behaves exactly as
+   * before. Whatever it does must land in the DOM promptly — the measure below
+   * polls for the target rather than reading it once, so an element that
+   * appears a tick later is fine, but one that takes longer than the settle
+   * timeout is not.
+   */
+  onStepChange?: (step: GuideStep, index: number) => void;
 }
 
 const CARD_W = 292;
@@ -85,7 +99,12 @@ function scrollAncestorsToTop(el: Element | null) {
 
 // â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
+export function PageGuide({
+  steps,
+  isOpen,
+  onClose,
+  onStepChange,
+}: PageGuideProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [vp, setVp] = useState({ w: 0, h: 0 });
@@ -100,6 +119,8 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
    */
   const stepsRef = useRef(steps);
   stepsRef.current = steps;
+  const onStepChangeRef = useRef(onStepChange);
+  onStepChangeRef.current = onStepChange;
 
   const currentStep = steps[currentIndex] ?? steps[0];
   const isIntro = !!currentStep?.noHighlight;
@@ -158,6 +179,19 @@ export function PageGuide({ steps, isOpen, onClose }: PageGuideProps) {
     setTargetRect(null);
     setSafeTop(0);
   }, [isOpen]);
+
+  /**
+   * Tell the page which step it is on, before anything is measured.
+   *
+   * Declaration order is the whole mechanism here — effects run in the order
+   * they are declared, so putting this above the measure effect means a page
+   * that swaps its content per step has already done so when the target is
+   * looked up.
+   */
+  useEffect(() => {
+    if (!isOpen || !currentStep) return;
+    onStepChangeRef.current?.(currentStep, currentIndex);
+  }, [isOpen, currentStep, currentIndex]);
 
   // Scroll + measure when step changes (skip for noHighlight steps)
   useEffect(() => {
