@@ -2022,7 +2022,8 @@
         "evaluated": "تم تقييم “{label}”.",
         "evaluateCleared": "تم مسح تقييم “{label}”.",
         "evaluateFailed": "تعذّر حفظ التقييم.",
-        "evaluateForbidden": "ليس لديك صلاحية لتقييم المهام."
+        "evaluateForbidden": "ليس لديك صلاحية لتقييم المهام.",
+        "noPeriodForWeek": "تعذّر تحديد الأسبوع الذي ينتمي إليه هذا التاريخ — أعد التحميل وحاول مرة أخرى."
       }
     },
     "tasks": {

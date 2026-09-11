@@ -2023,7 +2023,8 @@
         "evaluated": "“{label}” evaluated.",
         "evaluateCleared": "“{label}” evaluation cleared.",
         "evaluateFailed": "Could not save the evaluation.",
-        "evaluateForbidden": "You don't have permission to evaluate tasks."
+        "evaluateForbidden": "You don't have permission to evaluate tasks.",
+        "noPeriodForWeek": "Couldn't work out which week this date belongs to — reload and try again."
       }
     },
     "tasks": {
