@@ -267,6 +267,22 @@ export interface AllocatedFrom {
   amount: number;
 }
 
+/** Who/what decided the current `verdict` — an auditor's real grade, or the
+ *  system substituting an auto-fail for a task the store never logged. */
+export type ChartVerdictSource = "auditor" | "system";
+
+/** Whether a task's required completions for this period were logged at all
+ *  (distinct from whether an auditor has graded it). `pending` means the
+ *  period hasn't reached this task's due occurrence yet — locked, but not
+ *  failed (see `ChartLockReason`). */
+export type ChartCompletionStatus = "done" | "pending" | "partial" | "missing";
+
+/** `period_not_finished` = locked but NOT failed (deadline hasn't passed,
+ *  `verdict` stays null). `not_completed`/`partially_completed` = locked AND
+ *  auto-failed (deadline passed with nothing/not-enough logged). These two
+ *  families must render differently — see `renderChartChip`. */
+export type ChartLockReason = "period_not_finished" | "not_completed" | "partially_completed";
+
 export interface ApiChartCell {
   task_id: number;
   name: string;
@@ -281,6 +297,29 @@ export interface ApiChartCell {
   /** Graded before this task became absent under the new period rules —
    *  shown and scored, but not editable. */
   historical?: boolean;
+
+  /** Sept 2026: completion-lock fields (FRONTEND-guide.md §1-2). */
+  verdict_source?: ChartVerdictSource | null;
+  /** Only occurrences already past their deadline — drives auto-fail. */
+  completion_expected?: number;
+  completion_found?: number;
+  /** Everything the period asks for — drives whether the cell is editable
+   *  at all (`evaluable`), regardless of deadlines. */
+  completion_expected_period?: number;
+  completion_found_period?: number;
+  completion_pct?: number;
+  completion_status?: ChartCompletionStatus;
+  completion_done?: boolean;
+  completion_late?: boolean;
+  last_done_at?: string | null;
+  done_by?: string[];
+  /** `false` = read-only, no verdict of any kind accepted (guide §2). */
+  evaluable?: boolean;
+  /** `true` only when the deadline has passed with nothing/not-enough
+   *  logged — the explicit flag for "the system failed it," distinct from
+   *  `evaluable === false` alone (which also covers the not-yet-due case). */
+  auto_failed?: boolean;
+  lock_reason?: ChartLockReason | null;
 }
 export interface ChartCell {
   taskId: number;
@@ -295,6 +334,21 @@ export interface ChartCell {
   /** Relative `/storage/…` URLs — run through `resolvePhotoUrl` before rendering. */
   photos: string[];
   historical: boolean;
+
+  verdictSource: ChartVerdictSource | null;
+  completionExpected: number;
+  completionFound: number;
+  completionExpectedPeriod: number;
+  completionFoundPeriod: number;
+  completionPct: number;
+  completionStatus: ChartCompletionStatus;
+  completionDone: boolean;
+  completionLate: boolean;
+  lastDoneAt: string | null;
+  doneBy: string[];
+  evaluable: boolean;
+  autoFailed: boolean;
+  lockReason: ChartLockReason | null;
 }
 
 /** One graded inspection-item cell. */
@@ -390,6 +444,12 @@ export interface ApiEvalRow {
 
   finalized_at: string | null;
   finalized_by: string | null;
+
+  /** Sept 2026: row-level rollup of the completion-lock feature. */
+  completion_enforced?: boolean;
+  tasks_not_completed?: number;
+  tasks_auto_failed?: number;
+  tasks_in_play?: number;
 }
 export interface EvalRow {
   storeId: number;
@@ -424,6 +484,11 @@ export interface EvalRow {
 
   finalizedAt: string | null;
   finalizedBy: string | null;
+
+  completionEnforced: boolean;
+  tasksNotCompleted: number;
+  tasksAutoFailed: number;
+  tasksInPlay: number;
 }
 
 export interface ApiEvaluationGrid {
@@ -510,8 +575,161 @@ export interface DeleteAllocationPayload {
   source_task_id: number;
 }
 
+/* ── Track 2: Copy a store's weight split to other stores ───────────────── */
+
+export type AllocationCopySkipReason =
+  | "nothing_to_copy"
+  | "evaluation_already_finalized"
+  | "source_task_not_absent_here"
+  | "target_task_not_in_play"
+  | "split_does_not_match_weight"
+  | "store_not_visible";
+
+export interface AllocationCopyRequest {
+  source_store_id: number;
+  /** Max 50; the source store is ignored if included. */
+  target_store_ids: number[];
+  period_type: PeriodType;
+  period_key: string;
+  /** Preview only — writes nothing. Always send `true` first. */
+  dry_run?: boolean;
+}
+
+export interface ApiAllocationCopySplitTarget {
+  target_task_id: number;
+  amount: number;
+}
+export interface AllocationCopySplitTarget {
+  targetTaskId: number;
+  amount: number;
+}
+
+export interface ApiAllocationCopySplit {
+  source_task_id: number;
+  name: string;
+  targets: ApiAllocationCopySplitTarget[];
+  replaces_existing: boolean;
+}
+export interface AllocationCopySplit {
+  sourceTaskId: number;
+  name: string;
+  targets: AllocationCopySplitTarget[];
+  replacesExisting: boolean;
+}
+
+export interface ApiAllocationCopySkip {
+  reason: AllocationCopySkipReason;
+  detail?: string;
+}
+export interface AllocationCopySkip {
+  reason: AllocationCopySkipReason;
+  detail: string | null;
+}
+
+export interface ApiAllocationCopyResult {
+  store_id: number;
+  store: string;
+  copied: number;
+  skipped?: ApiAllocationCopySkip[];
+  splits?: ApiAllocationCopySplit[];
+}
+export interface AllocationCopyResult {
+  storeId: number;
+  store: string;
+  copied: number;
+  skipped: AllocationCopySkip[];
+  splits: AllocationCopySplit[];
+}
+
+export interface ApiAllocationCopyResponse {
+  dry_run: boolean;
+  source: { store_id: number; store: string; splits: number; rows: number };
+  period: { period_type: PeriodType; period_key: string };
+  results: ApiAllocationCopyResult[];
+}
+export interface AllocationCopyResponse {
+  dryRun: boolean;
+  source: { storeId: number; store: string; splits: number; rows: number };
+  period: { periodType: PeriodType; periodKey: string };
+  results: AllocationCopyResult[];
+}
+
+/* ── Track 2: Remove saved splits from several stores at once ───────────── */
+
+/** `nothing_to_remove` is NOT an error — the call is idempotent, so pressing
+ *  Remove twice is harmless (remove-button guide §1). */
+export type AllocationRemoveSkipReason = "evaluation_already_finalized" | "nothing_to_remove";
+
+export interface AllocationRemoveRequest {
+  /** 1–50, no duplicates. Unlike the copy endpoint, the store the auditor is
+   *  currently looking at IS allowed here. */
+  store_ids: number[];
+  period_type: PeriodType;
+  period_key: string;
+  /** Omit to clear EVERY split in the period (the "I copied by mistake"
+   *  case); pass ids to remove only those and leave the rest alone. */
+  source_task_ids?: number[];
+  /** Preview only — writes nothing. Always send `true` first. */
+  dry_run?: boolean;
+}
+
+export interface ApiAllocationRemoveSplit {
+  source_task_id: number;
+  name: string;
+  amount: number;
+  /** How many receiving tasks this one split fed. */
+  targets: number;
+}
+export interface AllocationRemoveSplit {
+  sourceTaskId: number;
+  name: string;
+  amount: number;
+  targets: number;
+}
+
+export interface ApiAllocationRemoveSkip {
+  reason: AllocationRemoveSkipReason;
+  detail?: string;
+}
+export interface AllocationRemoveSkip {
+  reason: AllocationRemoveSkipReason;
+  detail: string | null;
+}
+
+export interface ApiAllocationRemoveResult {
+  store_id: number;
+  store: string;
+  /** Counts SPLITS (source tasks), not database rows — one split feeding 3
+   *  receiving tasks is `removed: 1`, `targets: 3`. */
+  removed: number;
+  skipped?: ApiAllocationRemoveSkip[];
+  splits?: ApiAllocationRemoveSplit[];
+}
+export interface AllocationRemoveResult {
+  storeId: number;
+  store: string;
+  removed: number;
+  skipped: AllocationRemoveSkip[];
+  splits: AllocationRemoveSplit[];
+}
+
+export interface ApiAllocationRemoveResponse {
+  dry_run: boolean;
+  period: { period_type: PeriodType; period_key: string };
+  scope: "all_splits" | "selected_tasks";
+  results: ApiAllocationRemoveResult[];
+}
+export interface AllocationRemoveResponse {
+  dryRun: boolean;
+  period: { periodType: PeriodType; periodKey: string };
+  scope: "all_splits" | "selected_tasks";
+  results: AllocationRemoveResult[];
+}
+
 /* ── Track 2: Scoring settings (gated by the "cleaning specialist" permission,
    confirmed against the live registry — not Super Admin only) ───────────── */
+
+export type ChartCompletionRule = "all" | "any" | "threshold";
 
 export interface ApiCleaningSettings {
   score_formula: ScoreFormula;
@@ -523,18 +741,31 @@ export interface ApiCleaningSettings {
   shares?: { items?: number; chart?: number };
   score_shares?: { items?: number; chart?: number };
   explain: Record<string, string>;
+
+  /** Sept 2026: chart-completion-lock settings (FRONTEND-guide.md §4). */
+  chart_requires_completion?: boolean;
+  completion_rule?: ChartCompletionRule;
+  /** Only meaningful when `completion_rule === "threshold"`. */
+  completion_threshold?: number;
 }
 export interface CleaningSettings {
   scoreFormula: ScoreFormula;
   itemsShare: number;
   chartShare: number;
   explain: Record<string, string>;
+
+  chartRequiresCompletion: boolean;
+  completionRule: ChartCompletionRule;
+  completionThreshold: number;
 }
 
 export interface UpdateSettingsPayload {
   score_formula?: ScoreFormula;
   items_share?: number;
   chart_share?: number;
+  chart_requires_completion?: boolean;
+  completion_rule?: ChartCompletionRule;
+  completion_threshold?: number;
 }
 
 /* ── Shared error shape returned by the proxy routes ───────────────────── */

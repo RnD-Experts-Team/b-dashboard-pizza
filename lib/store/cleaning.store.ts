@@ -11,6 +11,10 @@ import type {
   CompleteTaskPayload,
   CreateTaskPayload,
   UpdateTaskPayload,
+  AllocationCopyRequest,
+  AllocationCopyResponse,
+  AllocationRemoveRequest,
+  AllocationRemoveResponse,
 } from "@/types/cleaning.types";
 
 interface AllocationAmount {
@@ -62,10 +66,14 @@ interface CleaningState {
     note?: string,
     images?: File[]
   ) => Promise<void>;
+  /** `period` overrides the store's own selected period — the Due page grades
+   *  into the week containing ITS selected date, which isn't necessarily the
+   *  week the Evaluation tab is showing. Omit it to use the shared period. */
   setChartCell: (
     storeId: number,
     cleaningTaskId: number,
-    verdict: ChartVerdict | "empty"
+    verdict: ChartVerdict | "empty",
+    period?: { periodType: PeriodType; periodKey: string }
   ) => Promise<void>;
   addInspectionItem: (name: string, weight?: number) => Promise<void>;
   removeInspectionItem: (id: number) => Promise<void>;
@@ -80,6 +88,14 @@ interface CleaningState {
     amounts: AllocationAmount[]
   ) => Promise<void>;
   deleteAllocation: (storeId: number, sourceTaskId: number) => Promise<void>;
+  /** Copies the source store's whole saved split to other stores. A
+   *  `dry_run` preview never touches grid state; a real run refetches so
+   *  target stores' `allocations`/`absentTasks` reflect the copy. */
+  copyAllocation: (payload: AllocationCopyRequest) => Promise<AllocationCopyResponse>;
+  /** Clears saved splits from many stores in one call — the undo for
+   *  `copyAllocation`. A `dry_run` preview never touches grid state; a real
+   *  run refetches, since every affected store's chart score moves. */
+  removeAllocations: (payload: AllocationRemoveRequest) => Promise<AllocationRemoveResponse>;
   /** Throws (does not swallow) a CONFLICT CleaningError with `.missing` set
    *  when the evaluation still has ungraded cells — the grid needs that to
    *  show which cells, not just "incomplete". */
@@ -186,8 +202,10 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
     replaceRow(set, storeId, row);
   },
 
-  setChartCell: async (storeId, cleaningTaskId, verdict) => {
-    const { periodType, periodKey } = get();
+  setChartCell: async (storeId, cleaningTaskId, verdict, period) => {
+    const state = get();
+    const periodType = period?.periodType ?? state.periodType;
+    const periodKey = period?.periodKey ?? state.periodKey;
     const row = await cleaningService.setCell({
       store_id: storeId,
       period_type: periodType,
@@ -196,7 +214,13 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
       cleaning_task_id: cleaningTaskId,
       verdict,
     });
-    replaceRow(set, storeId, row);
+    // Only splice the recalculated row back in when this write targeted the
+    // period the loaded grid is actually showing — an override writes to a
+    // DIFFERENT period, and pasting its numbers into this grid would show
+    // one week's scores under another week's heading.
+    if (periodType === state.periodType && periodKey === state.periodKey) {
+      replaceRow(set, storeId, row);
+    }
   },
 
   addInspectionItem: async (name, weight) => {
@@ -238,6 +262,24 @@ export const useCleaningStore = create<CleaningState>((set, get) => ({
       source_task_id: sourceTaskId,
     });
     await fetchGrid(periodType, periodKey);
+  },
+
+  copyAllocation: async (payload) => {
+    const result = await cleaningService.copyAllocation(payload);
+    if (!payload.dry_run) {
+      const { periodType, periodKey, fetchGrid } = get();
+      await fetchGrid(periodType, periodKey);
+    }
+    return result;
+  },
+
+  removeAllocations: async (payload) => {
+    const result = await cleaningService.removeAllocations(payload);
+    if (!payload.dry_run) {
+      const { periodType, periodKey, fetchGrid } = get();
+      await fetchGrid(periodType, periodKey);
+    }
+    return result;
   },
 
   finalizeStore: async (storeId) => {

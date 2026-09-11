@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Loader2, X } from "lucide-react";
+import { Copy, Loader2, Trash2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +39,6 @@ import type { AbsentTask, Allocation, EvalRow } from "@/types/cleaning.types";
 export interface AllocateTarget {
   storeId: number;
   store: string;
-  row: EvalRow;
 }
 
 /** Flatten the four chart groups into one "in-play this period" task list —
@@ -58,11 +67,21 @@ function groupAllocations(allocations: Allocation[]): Map<number, Allocation[]> 
 
 export function AllocateWeightDialog({
   target,
+  row,
   onOpenChange,
   onAllocate,
   onDeleteAllocation,
+  onCopyToStores,
+  onRemoveFromStores,
 }: {
   target: AllocateTarget | null;
+  /** The LIVE row for `target.storeId` — read fresh from the grid on every
+   *  render, not captured once when the dialog opened. Allocate/delete both
+   *  refetch the grid; without a live row, "Current splits" keeps showing
+   *  whatever it looked like at the moment the dialog was opened, and a
+   *  just-removed split appears to stick around until the dialog is closed
+   *  and reopened. */
+  row: EvalRow | null;
   onOpenChange: (open: boolean) => void;
   onAllocate: (
     storeId: number,
@@ -70,24 +89,34 @@ export function AllocateWeightDialog({
     amounts: { targetTaskId: number; amount: number }[]
   ) => Promise<void>;
   onDeleteAllocation: (storeId: number, sourceTaskId: number) => Promise<void>;
+  /** Opens the copy-to-other-stores flow (guide §3) for this store. Copies
+   *  whatever is SAVED, not what's on screen — callers should warn first if
+   *  there are unsaved edits (see `hasUnsavedEdits` below). */
+  onCopyToStores: (storeId: number, store: string) => void;
+  /** Opens the remove-from-stores flow — the undo for a copy. Passes the
+   *  currently selected absent task (if any) so the dialog can offer the
+   *  "only remove this one" scope; it defaults to clearing everything. */
+  onRemoveFromStores: (
+    storeId: number,
+    store: string,
+    task: { taskId: number; name: string } | null
+  ) => void;
 }) {
   const t = useTranslations("cleaningChart.allocateDialog");
   const [sourceTaskId, setSourceTaskId] = useState<number | null>(null);
   const [amounts, setAmounts] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const [deletingSource, setDeletingSource] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ taskId: number; name: string } | null>(null);
 
   // Only a monthly task legitimately goes absent (due once every 4 weeks,
   // guide §2.1/§11) — daily/weekly/hourly tasks are supposed to be in-play
   // every period. Filtered here too (not just by the caller) so this dialog
   // never offers reallocating a task that shouldn't be absent in the first
   // place, regardless of what triggers it.
-  const absentTasks = (target?.row.absentTasks ?? []).filter((a) => a.frequency === "monthly");
-  const targets = useMemo(() => (target ? inPlayTasks(target.row) : []), [target]);
-  const allocationsBySource = useMemo(
-    () => groupAllocations(target?.row.allocations ?? []),
-    [target]
-  );
+  const absentTasks = (row?.absentTasks ?? []).filter((a) => a.frequency === "monthly");
+  const targets = useMemo(() => (row ? inPlayTasks(row) : []), [row]);
+  const allocationsBySource = useMemo(() => groupAllocations(row?.allocations ?? []), [row]);
 
   /** Pre-fill from whatever is already allocated for this source, so opening
    *  the dialog on a task that's already split shows exactly where its
@@ -169,6 +198,38 @@ export function AllocateWeightDialog({
     }
   };
 
+  // The copy endpoint reads what's SAVED, not what's on screen (guide §3) —
+  // compare the current draft against the seeded (saved) split for the
+  // active source task so we can warn instead of silently copying stale data.
+  const hasUnsavedEdits = (() => {
+    if (sourceTaskId == null) return false;
+    const saved = allocationsBySource.get(sourceTaskId) ?? [];
+    if (saved.length !== entries.length) return true;
+    const savedByTarget = new Map(saved.map((a) => [a.targetTaskId, a.amount]));
+    return entries.some((e) => savedByTarget.get(e.targetTaskId) !== e.amount);
+  })();
+
+  const handleCopyClick = () => {
+    if (!target) return;
+    if (hasUnsavedEdits) {
+      toast.error(t("copyUnsavedWarning"));
+      return;
+    }
+    onCopyToStores(target.storeId, target.store);
+  };
+
+  // No unsaved-edits guard here, unlike copy: remove deletes saved splits by
+  // task id and never reads the draft amounts on screen, so a half-typed
+  // split can't make it do the wrong thing.
+  const handleRemoveClick = () => {
+    if (!target) return;
+    onRemoveFromStores(
+      target.storeId,
+      target.store,
+      source ? { taskId: source.taskId, name: source.name } : null
+    );
+  };
+
   const handleDelete = async (taskId: number) => {
     if (!target) return;
     setDeletingSource(taskId);
@@ -180,27 +241,56 @@ export function AllocateWeightDialog({
       toast.error(err instanceof CleaningError ? err.message : t("failed"));
     } finally {
       setDeletingSource(null);
+      setDeleteTarget(null);
     }
   };
 
   return (
+    <>
     <Dialog open={target != null} onOpenChange={(o) => !o && onOpenChange(false)}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="max-h-[92vh] w-[95vw] gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="border-b px-6 py-4">
           <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
             {t("description", { store: target?.store ?? "" })}
           </DialogDescription>
         </DialogHeader>
 
-        {absentTasks.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("noAbsentTasks")}</p>
-        ) : (
-          <div className="space-y-4">
-            {/* Existing splits, if any — click a row to edit it below */}
-            {allocationsBySource.size > 0 && (
+        <div className="max-h-[62vh] space-y-4 overflow-y-auto px-6 py-5">
+          {/* Saved splits live outside the absent-task branch on purpose: a
+              store can still have splits saved when nothing is absent right
+              now, and that's exactly when you'd want to clear them. */}
+          {allocationsBySource.size > 0 && (
               <div className="space-y-1.5">
-                <Label>{t("currentSplits")}</Label>
+                {/* The two cross-store actions sit with the SAVED splits they
+                    act on — not in the footer next to Save, which made them
+                    look like they applied to the draft below (and wrapped
+                    onto their own line, misaligned with Cancel/Save). */}
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                  <Label>{t("currentSplits")}</Label>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 px-2 text-xs"
+                      onClick={handleCopyClick}
+                      disabled={saving}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {t("copyToStores")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={handleRemoveClick}
+                      disabled={saving}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {t("removeFromStores")}
+                    </Button>
+                  </div>
+                </div>
                 <ul className="space-y-1 rounded-md border p-2 text-sm">
                   {Array.from(allocationsBySource.entries()).map(([srcId, list]) => {
                     const srcTask = absentTasks.find((a) => a.taskId === srcId);
@@ -229,7 +319,9 @@ export function AllocateWeightDialog({
                         <button
                           type="button"
                           disabled={deletingSource === srcId}
-                          onClick={() => void handleDelete(srcId)}
+                          onClick={() =>
+                            setDeleteTarget({ taskId: srcId, name: srcTask?.name ?? `#${srcId}` })
+                          }
                           className="shrink-0 text-muted-foreground/60 transition-colors hover:text-destructive disabled:opacity-50"
                           title={t("removeSplit")}
                         >
@@ -244,8 +336,12 @@ export function AllocateWeightDialog({
                   })}
                 </ul>
               </div>
-            )}
+          )}
 
+          {absentTasks.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{t("noAbsentTasks")}</p>
+          ) : (
+            <div className="space-y-4">
             {/* Source (absent task) picker */}
             <div className="space-y-1.5">
               <Label htmlFor="allocate-source">{t("sourceLabel")}</Label>
@@ -324,8 +420,11 @@ export function AllocateWeightDialog({
             )}
           </div>
         )}
+        </div>
 
-        <DialogFooter>
+        {/* Footer is only the edit action for THIS store's draft now — the
+            cross-store actions moved up beside the splits they operate on. */}
+        <DialogFooter className="border-t px-6 py-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             {t("cancel")}
           </Button>
@@ -338,5 +437,31 @@ export function AllocateWeightDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={deleteTarget != null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("removeSplitDialog.title")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("removeSplitDialog.description", { task: deleteTarget?.name ?? "" })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deletingSource != null}>{t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-white hover:bg-destructive/90"
+            disabled={deletingSource != null}
+            onClick={(e) => {
+              e.preventDefault();
+              if (deleteTarget) void handleDelete(deleteTarget.taskId);
+            }}
+          >
+            {deletingSource != null && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
+            {t("removeSplitDialog.confirm")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
