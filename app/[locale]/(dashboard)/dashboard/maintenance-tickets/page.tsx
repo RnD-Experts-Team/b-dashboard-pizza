@@ -17,6 +17,7 @@ import {
   TicketDetailSheet,
   CatalogManagementDialog,
 } from "@/components/maintenance-tickets";
+import { LogVisitDialog } from "@/components/maintenance-tickets/log-visit-dialog";
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
 import { useAuth } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
@@ -40,6 +41,14 @@ export default function MaintenanceTicketsPage() {
     service: "Maintenance",
     method: "POST",
     path: "/stores/placeholder/tickets/placeholder/cancel",
+  });
+
+  /** Logging a visit posts to the GLOBAL attendance endpoint, not a
+   *  ticket-scoped one — hence no storeId on the probe. */
+  const canLogVisit = canAccessRoute({
+    service: "Maintenance",
+    method: "POST",
+    path: "/attendance-entries",
   });
 
   /** True when the current user may fetch all stores via GET /tickets */
@@ -134,6 +143,7 @@ export default function MaintenanceTicketsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [logVisitOpen, setLogVisitOpen] = useState(false);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   /** Called only when the user clicks Apply in the store filter — not per checkbox click. */
@@ -214,6 +224,9 @@ export default function MaintenanceTicketsPage() {
           stores={activeStores}
           selectedStoreIds={pageStoreSelection ?? []}
           onStoreApply={handleStoreApply}
+          loadedCreators={(data?.data ?? []).map((ticket) => ticket.creator)}
+          canLogVisit={canLogVisit}
+          onLogVisitClick={() => setLogVisitOpen(true)}
         />
       )}
 
@@ -284,6 +297,15 @@ export default function MaintenanceTicketsPage() {
         isPageLoading={isLoading || isRefreshing}
         onNextPage={() => goToPage(currentPage + 1)}
         onPreviousPage={() => goToPage(currentPage - 1)}
+      />
+
+      {/* Log a visit — one attendance entry across any number of tickets */}
+      <LogVisitDialog
+        open={logVisitOpen}
+        technicians={catalogTechnicians}
+        storeNumber={activeStoreId ?? null}
+        onClose={() => setLogVisitOpen(false)}
+        onSuccess={refetch}
       />
 
       {/* Catalog management dialog */}

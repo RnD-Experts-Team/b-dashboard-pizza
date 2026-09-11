@@ -111,6 +111,11 @@ import type {
 import { EntityNotesAttachments } from "./entity-extras";
 import { NotesList } from "./notes-list";
 import { SearchCreateCombobox } from "./search-create-combobox";
+import { AttendancePanel } from "./attendance-panel";
+import { PartUsagePanel } from "./part-usage-panel";
+import { PaymentStatusBadge, RecordPaymentBlockDisplay } from "./payment-status-badge";
+import { AttendanceDurationsStrip } from "./attendance-durations-strip";
+import { PasteFileZone } from "./paste-file-zone";
 import { statusAccent } from "./status-accent";
 import {
   useTicketDraft,
@@ -1362,302 +1367,6 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
   );
 }
 
-function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
-  type ClockEntry   = { uid: number; kind: "start_clock"    | "end_clock";    value: string };
-  type BreakEntry   = { uid: number; kind: "start_break"    | "end_break";    value: string };
-  type PartsEntry   = { uid: number; kind: "start_parts_run"| "end_parts_run";value: string };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [technicianId, setTechnicianId] = useState(issueDraft.attendanceTechnicianId ?? "");
-  const [clockEntries, setClockEntries] = useState<ClockEntry[]>([]);
-  const [breakEntries, setBreakEntries] = useState<BreakEntry[]>([]);
-  const [partsEntries, setPartsEntries] = useState<PartsEntry[]>([]);
-  const uidRef = useRef(0);
-  function nextUid() { return uidRef.current++; }
-
-  function addClock()  { setClockEntries((p) => [...p, { uid: nextUid(), kind: "start_clock",     value: "" }]); }
-  function addBreak()  { setBreakEntries((p) => [...p, { uid: nextUid(), kind: "start_break",     value: "" }]); }
-  function addParts()  { setPartsEntries((p) => [...p, { uid: nextUid(), kind: "start_parts_run", value: "" }]); }
-
-  function patchClock(uid: number, patch: Partial<ClockEntry>) { setClockEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
-  function patchBreak(uid: number, patch: Partial<BreakEntry>) { setBreakEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
-  function patchParts(uid: number, patch: Partial<PartsEntry>) { setPartsEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
-
-  function removeClock(uid: number) { setClockEntries((p) => p.filter((e) => e.uid !== uid)); }
-  function removeBreak(uid: number) { setBreakEntries((p) => p.filter((e) => e.uid !== uid)); }
-  function removeParts(uid: number) { setPartsEntries((p) => p.filter((e) => e.uid !== uid)); }
-
-  async function handleSubmit() {
-    if (!technicianId) { setError("Technician is required."); return; }
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const base = { ticket_issue_ids: issueIds ?? [issue.id], technician_id: Number(technicianId) };
-      const calls: Promise<unknown>[] = [];
-      for (const e of clockEntries) {
-        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
-      }
-      for (const e of breakEntries) {
-        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
-      }
-      for (const e of partsEntries) {
-        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
-      }
-      if (calls.length === 0) {
-        calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, base));
-      }
-      await Promise.all(calls);
-      onClearDraftFields([
-        "attendanceTechnicianId",
-        "attendanceStartClock", "attendanceEndClock",
-        "attendanceStartBreak", "attendanceEndBreak",
-        "attendanceStartPartsRun", "attendanceEndPartsRun",
-      ]);
-      toast.success("Attendance saved successfully");
-      onSuccess(); onClose();
-    } catch (err) {
-      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
-      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Attendance</p>
-
-      {/* Technician (required) */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Technician <span className="text-destructive">*</span></Label>
-        <Select value={technicianId} onValueChange={setTechnicianId}>
-          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
-          <SelectContent>
-            {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
-              <SelectItem key={tech.id} value={String(tech.id)}>{tech.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Work Clock */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</p>
-        {clockEntries.map((entry) => (
-          <div key={entry.uid} className="flex items-center gap-2">
-            {/* Type toggle */}
-            <div className="flex shrink-0 rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => patchClock(entry.uid, { kind: "start_clock" })}
-                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
-                  entry.kind === "start_clock" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Clock In</button>
-              <button
-                type="button"
-                onClick={() => patchClock(entry.uid, { kind: "end_clock" })}
-                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
-                  entry.kind === "end_clock" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Clock Out</button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <DateTimePicker
-                value={entry.value}
-                onChange={(v) => patchClock(entry.uid, { value: v })}
-                placeholder={entry.kind === "start_clock" ? "Clock in time" : "Clock out time"}
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeClock(entry.uid)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addClock}>
-          <Plus className="me-1 h-3 w-3" /> Add Work Clock
-        </Button>
-      </div>
-
-      {/* Break */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Break</p>
-        {breakEntries.map((entry) => (
-          <div key={entry.uid} className="flex items-center gap-2">
-            <div className="flex shrink-0 rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => patchBreak(entry.uid, { kind: "start_break" })}
-                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
-                  entry.kind === "start_break" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Break Start</button>
-              <button
-                type="button"
-                onClick={() => patchBreak(entry.uid, { kind: "end_break" })}
-                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
-                  entry.kind === "end_break" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Break End</button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <DateTimePicker
-                value={entry.value}
-                onChange={(v) => patchBreak(entry.uid, { value: v })}
-                placeholder={entry.kind === "start_break" ? "Break start time" : "Break end time"}
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeBreak(entry.uid)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addBreak}>
-          <Plus className="me-1 h-3 w-3" /> Add Break
-        </Button>
-      </div>
-
-      {/* Parts Run */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</p>
-        {partsEntries.map((entry) => (
-          <div key={entry.uid} className="flex items-center gap-2">
-            <div className="flex shrink-0 rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => patchParts(entry.uid, { kind: "start_parts_run" })}
-                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
-                  entry.kind === "start_parts_run" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Depart</button>
-              <button
-                type="button"
-                onClick={() => patchParts(entry.uid, { kind: "end_parts_run" })}
-                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
-                  entry.kind === "end_parts_run" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Return</button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <DateTimePicker
-                value={entry.value}
-                onChange={(v) => patchParts(entry.uid, { value: v })}
-                placeholder={entry.kind === "start_parts_run" ? "Depart time" : "Return time"}
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeParts(entry.uid)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addParts}>
-          <Plus className="me-1 h-3 w-3" /> Add Parts Run
-        </Button>
-      </div>
-
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !technicianId}>
-          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: Omit<LifecyclePanelProps, "technicians">) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
-  const [partsLoading, setPartsLoading] = useState(true);
-  useEffect(() => {
-    const ctrl = new AbortController();
-    setPartsLoading(true);
-    maintenanceTicketsService.getCatalogParts(ctrl.signal)
-      .then((parts) => setCatalogParts(parts.filter((p) => !p.deletedAt)))
-      .catch(() => {})
-      .finally(() => setPartsLoading(false));
-    return () => ctrl.abort();
-  }, []);
-
-  /** Creates a catalog part and returns the new id. Called by SearchCreateCombobox. */
-  async function createCatalogPart(name: string): Promise<number> {
-    const newPart = await maintenanceTicketsService.createCatalogPart({ name });
-    setCatalogParts((prev) => [...prev, newPart]);
-    return newPart.id;
-  }
-
-  async function handleSubmit() {
-    const partId = asOptionalNumber(issueDraft.partId);
-    const partCost = asOptionalNumber(issueDraft.partCost);
-    if (!partId || partCost == null) {
-      setError("Part and cost are required.");
-      return;
-    }
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      await maintenanceTicketsService.createPartUsage(storeId, ticketId, {
-        ticket_issue_ids: issueIds ?? [issue.id],
-        part_id: partId,
-        cost: partCost,
-      }, files);
-      onClearDraftFields(["partId", "partCost"]);
-      setFiles([]);
-      toast.success("Part usage saved successfully");
-      onSuccess(); onClose();
-    } catch (err) {
-      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
-      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Part Usage</p>
-
-      {/* Part search + create */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Part <span className="text-destructive">*</span></Label>
-        <SearchCreateCombobox
-          items={catalogParts.map((p) => ({ id: p.id, label: p.name }))}
-          selectedId={asOptionalNumber(issueDraft.partId) ?? null}
-          onSelect={(id) => onPatchDraft({ partId: id != null ? String(id) : "" })}
-          onCreate={createCatalogPart}
-          placeholder="Search parts or type to create a new one…"
-          loading={partsLoading}
-        />
-      </div>
-
-      {/* Cost */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Cost ($) <span className="text-destructive">*</span></Label>
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          className="h-8"
-          placeholder="0.00"
-          value={issueDraft.partCost}
-          onChange={(e) => onPatchDraft({ partCost: e.target.value })}
-        />
-      </div>
-
-      {/* Attachments */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Attachments</Label>
-        <PasteFileZone files={files} onChange={setFiles} />
-      </div>
-
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || partsLoading}>
-          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1953,6 +1662,13 @@ const BULK_DUMMY_ISSUE = {
   statusChanges: [],
   children: [],
   parentId: null,
+  // A dummy has no payment state, and null is exactly "not loaded" — the badge
+  // renders nothing for it, which is correct.
+  //
+  // NOTE: the `as unknown as` cast below means TypeScript will NOT flag a field
+  // missing from this literal. Anything reading a new TicketIssue field off it
+  // must optional-chain, or it throws only in bulk mode.
+  payment: null,
 } as unknown as TicketIssue;
 
 interface BulkActionBarProps {
@@ -2077,6 +1793,7 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
       )}
       {bulkAction === "part" && (
         <PartUsagePanel issue={BULK_DUMMY_ISSUE} storeId={storeId} ticketId={ticketId}
+          technicians={technicians}
           issueIds={issueIds}
           issueDraft={bulkDraft} onPatchDraft={patchDraft} onClearDraftFields={clearDraftFields}
           onClose={() => setBulkAction(null)} onSuccess={handleActionSuccess} />
@@ -2110,89 +1827,6 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Paste-aware file zone (used in Diagnosis / Part / Warranty panels)      */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-function PasteFileZone({
-  files,
-  onChange,
-}: {
-  files: File[];
-  onChange: (files: File[]) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const zoneRef = useRef<HTMLDivElement>(null);
-
-  function handlePaste(e: React.ClipboardEvent) {
-    const newFiles = Array.from(e.clipboardData.items)
-      .filter((item) => item.kind === "file")
-      .map((item, i) => {
-        const blob = item.getAsFile();
-        if (!blob) return null;
-        const ext = blob.type ? blob.type.split("/")[1] ?? "bin" : "bin";
-        return new File([blob], `paste-${Date.now()}-${i}.${ext}`, { type: blob.type });
-      })
-      .filter((f): f is File => f !== null);
-    if (newFiles.length === 0) return;
-    e.preventDefault();
-    onChange([...files, ...newFiles]);
-  }
-
-  function handleMouseEnter() {
-    const active = document.activeElement as HTMLElement | null;
-    const isInteractive = active && ["INPUT","TEXTAREA","SELECT","BUTTON"].includes(active.tagName);
-    if (!isInteractive) zoneRef.current?.focus({ preventScroll: true });
-  }
-
-  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(e.target.files ?? []);
-    if (picked.length) onChange([...files, ...picked]);
-    e.target.value = "";
-  }
-
-  return (
-    <div
-      ref={zoneRef}
-      tabIndex={-1}
-      onPaste={handlePaste}
-      onMouseEnter={handleMouseEnter}
-      className={cn(
-        "rounded-md border border-dashed bg-muted/20 outline-none transition-all",
-        "hover:border-primary/50 hover:bg-primary/5",
-        "focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/40"
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <span className="flex items-center gap-1.5">
-          <Paperclip className="h-3.5 w-3.5 shrink-0" />
-          {files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""} staged` : "Attach files…"}
-        </span>
-        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
-          <ClipboardPaste className="h-3 w-3" /> Paste
-        </span>
-      </button>
-      <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileInput} />
-      {files.length > 0 && (
-        <ul className="px-3 pb-2 space-y-0.5">
-          {files.map((f, i) => (
-            <li key={i} className="flex items-center justify-between gap-2 rounded bg-muted/40 px-2 py-0.5 text-[11px]">
-              <span className="truncate max-w-[200px]">{f.name}</span>
-              <button
-                type="button"
-                onClick={() => onChange(files.filter((_, idx) => idx !== i))}
-                className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 function SectionCollapse({
   title,
@@ -2413,6 +2047,11 @@ interface IssueNodeProps {
   sharedDiagnosisIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
   /** map: issue id -> display title */
   issueTitleById?: ReadonlyMap<number, string>;
+  /**
+   * Every issue on this ticket, for the attendance panel's cross-issue picker.
+   * Optional — the picker degrades to this-issue-only when it is absent.
+   */
+  ticketIssues?: TicketIssue[];
   /** trigger transient highlight animation for issue cards */
   onHighlightIssues?: (issueIds: number[]) => void;
   /** show shared indicator chip in card header row (used for no-grouping mode) */
@@ -2457,6 +2096,7 @@ function IssueNode({
   sharedWarrantyIssueIdsByRecordId,
   sharedDiagnosisIssueIdsByRecordId,
   issueTitleById,
+  ticketIssues,
   onHighlightIssues,
   showSharedIndicatorWhenCollapsed = false,
   isHighlighted = false,
@@ -2609,6 +2249,15 @@ function IssueNode({
                 {/* Row 2: Status chip + Shared chip + Priority text + ID + creator */}
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusChip value={issue.status.value} label={issue.status.label} />
+                  {/* Rolled-up server-side. Optional chaining is mandatory:
+                      BULK_DUMMY_ISSUE is cast `as unknown as TicketIssue` and
+                      carries no `payment` key, so TypeScript will not catch a
+                      direct access here. Non-interactive by necessity — this
+                      row sits inside the expand <button>. */}
+                  <PaymentStatusBadge
+                    status={issue.payment?.status}
+                    title="Anything still owed dominates: this reads Not yet paid until the last payable on this issue is settled."
+                  />
                   {showSharedIndicatorWhenCollapsed && hasSharedAction && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -2940,38 +2589,46 @@ function IssueNode({
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
                         <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
-                          {/* Mistaken banner or ··· menu */}
-                          {item.mistaken ? (
-                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                              This record has been marked as mistaken
+                          {/* Header. The mistaken banner and the ··· menu are
+                              mutually exclusive, but the payment badge shows in
+                              BOTH states — so it lives in a shared right-hand
+                              slot rather than being repeated per branch. */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              {item.mistaken ? (
+                                <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  This record has been marked as mistaken
+                                </div>
+                              ) : (
+                                <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
+                              )}
                             </div>
-                          ) : canMarkMistaken ? (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setMistakenConfirm({
-                                      label: `Attendance entry #${item.id}`,
-                                      onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
-                                    })}
-                                  >
-                                    <AlertTriangle className="h-4 w-4" />
-                                    Mark as Mistaken
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <PaymentStatusBadge status={item.payment?.status} />
+                              {!item.mistaken && canMarkMistaken && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => setMistakenConfirm({
+                                        label: `Attendance entry #${item.id}`,
+                                        onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
+                                      })}
+                                    >
+                                      <AlertTriangle className="h-4 w-4" />
+                                      Mark as Mistaken
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
-                          )}
+                          </div>
                           {/* Labeled data — 2-column layout */}
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <div className="flex flex-col gap-0.5">
@@ -2989,6 +2646,12 @@ function IssueNode({
                               </div>
                             )}
                           </div>
+                          {/* The SERVER's figures. Sits above the per-section
+                              spans, which are gross — see AttendanceDurationsStrip. */}
+                          <AttendanceDurationsStrip durations={item.durations} />
+                          {/* Which pay sheet(s) covered this entry. Renders
+                              nothing when the claims were not loaded. */}
+                          <RecordPaymentBlockDisplay payment={item.payment} kind="attendance" />
                           {/* Work clock section — 2-column */}
                           {(item.startClock || item.endClock) && (() => {
                             const dur = (item.startClock && item.endClock) ? calcDuration(item.startClock, item.endClock) : null;
@@ -3012,7 +2675,7 @@ function IssueNode({
                                   )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="text-muted-foreground">Span (gross)</span>
                                       <span className="font-semibold text-sm">{dur}</span>
                                     </div>
                                   )}
@@ -3041,7 +2704,7 @@ function IssueNode({
                                   )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="text-muted-foreground">Span (gross)</span>
                                       <span className="font-semibold text-sm">{dur}</span>
                                     </div>
                                   )}
@@ -3070,7 +2733,7 @@ function IssueNode({
                                   )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="text-muted-foreground">Span (gross)</span>
                                       <span className="font-semibold text-sm">{dur}</span>
                                     </div>
                                   )}
@@ -3116,48 +2779,115 @@ function IssueNode({
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
                         <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
-                          {/* Mistaken banner or ··· menu */}
-                          {item.mistaken ? (
-                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                              This record has been marked as mistaken
+                          {/* Header — same shape as the attendance card: the
+                              badge shows whether or not the record is mistaken,
+                              so it sits in a shared right-hand slot. */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              {item.mistaken ? (
+                                <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  This record has been marked as mistaken
+                                </div>
+                              ) : (
+                                <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
+                              )}
                             </div>
-                          ) : canMarkMistaken ? (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setMistakenConfirm({
-                                      label: `Part usage #${item.id}`,
-                                      onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
-                                    })}
-                                  >
-                                    <AlertTriangle className="h-4 w-4" />
-                                    Mark as Mistaken
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <PaymentStatusBadge status={item.payment?.status} />
+                              {!item.mistaken && canMarkMistaken && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => setMistakenConfirm({
+                                        label: `Part usage #${item.id}`,
+                                        onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
+                                      })}
+                                    >
+                                      <AlertTriangle className="h-4 w-4" />
+                                      Mark as Mistaken
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
-                          )}
-                          {/* Labeled data — 2-column */}
+                          </div>
+                          {/* Labeled data — 2-column.
+                              `strike` is applied to the VALUES when the record is
+                              mistaken: the spec asks for flagged records struck
+                              through rather than hidden, since they are the audit
+                              trail. Same treatment as the delay rows above. */}
+                          {(() => {
+                            const strike = item.mistaken ? "line-through" : "";
+                            return (
                           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-muted-foreground">Part</span>
-                              <span className="text-sm font-medium">{item.part?.name || `Part #${item.partId}`}</span>
+                              <span className={cn("text-sm font-medium", strike)}>{item.part?.name || `Part #${item.partId}`}</span>
                             </div>
+                            {/* A legacy row has no quantity, so it renders as a bare
+                                cost — a fabricated "1 ×" would be inventing data. */}
+                            {!item.isLegacy && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Quantity</span>
+                                <span className={cn("text-sm tabular-nums", strike)}>
+                                  {item.quantity} × ${item.unitCost.toFixed(2)}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex flex-col gap-0.5">
                               <span className="text-muted-foreground">Cost</span>
-                              <span className="text-sm font-semibold">${item.cost.toFixed(2)}</span>
+                              <span className={cn("text-sm font-semibold tabular-nums", strike)}>${item.cost.toFixed(2)}</span>
                             </div>
+                            {/* Net cost is what the payer is out of pocket after
+                                returns, and is what a daily pay reimburses. Shown
+                                only when it actually differs from the gross. */}
+                            {item.netCost !== item.cost && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Net cost</span>
+                                <span className={cn("text-sm font-semibold tabular-nums", strike)}>
+                                  ${item.netCost.toFixed(2)}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">after returns</span>
+                              </div>
+                            )}
+                            {item.source && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Source</span>
+                                <span className={cn("text-sm", strike)}>{item.source.label}</span>
+                              </div>
+                            )}
+                            {item.paidBy && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Paid by</span>
+                                <span className={cn("text-sm", strike)}>
+                                  {item.paidBy.label}
+                                  {item.paidByTechnician && ` · ${item.paidByTechnician.name}`}
+                                </span>
+                              </div>
+                            )}
+                            {item.storageLocation && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Taken from</span>
+                                <span className={cn("text-sm", strike)}>{item.storageLocation.name}</span>
+                              </div>
+                            )}
+                            {item.returnedQuantity != null && item.returnedQuantity > 0 && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Returned</span>
+                                <span className={cn("text-sm tabular-nums", strike)}>
+                                  {item.returnedQuantity}
+                                  {item.returnedToStorageLocation &&
+                                    ` → ${item.returnedToStorageLocation.name}`}
+                                </span>
+                              </div>
+                            )}
                             {(item.creator?.name || item.createdBy != null) && (
                               <div className="flex flex-col gap-0.5 col-span-2">
                                 <span className="text-muted-foreground">Added by</span>
@@ -3169,6 +2899,13 @@ function IssueNode({
                               </div>
                             )}
                           </div>
+                            );
+                          })()}
+                          {/* Claims are NOT struck through on a mistaken record:
+                              a claim is a fact about a pay sheet that really
+                              exists, and striking it would imply the payment
+                              was reversed, which nothing here knows. */}
+                          <RecordPaymentBlockDisplay payment={item.payment} kind="part" />
                           {isShared && sharedWithIds.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1 text-xs">
                               <span className="text-muted-foreground">Shared with:</span>
@@ -3562,12 +3299,15 @@ function IssueNode({
                           )}
                           {activeTab === "attendance" && (
                             <AttendancePanel issue={issue} storeId={storeId} ticketId={ticketId}
-                              technicians={technicians.filter((t) => issue.technicians.some((at) => at.id === t.id))}
+                              technicians={technicians}
+                              ticketIssues={ticketIssues}
+                              storeNumber={storeId}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
                           {activeTab === "part" && (
                             <PartUsagePanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
@@ -4280,6 +4020,7 @@ function RightPanel({
                         sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                         sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                         issueTitleById={issueTitleById}
+                      ticketIssues={issuesResponse.data}
                         onHighlightIssues={triggerIssueHighlight}
                         showSharedIndicatorWhenCollapsed={false}
                         isHighlighted={highlightedIssueIds.has(grp.root.id)}
@@ -4321,6 +4062,7 @@ function RightPanel({
                                 sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                                 sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                                 issueTitleById={issueTitleById}
+                              ticketIssues={issuesResponse.data}
                                 onHighlightIssues={triggerIssueHighlight}
                                 showSharedIndicatorWhenCollapsed={false}
                                 isHighlighted={highlightedIssueIds.has(desc.id)}
@@ -4413,6 +4155,7 @@ function RightPanel({
                       sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                       sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                       issueTitleById={issueTitleById}
+                      ticketIssues={issuesResponse.data}
                       onHighlightIssues={triggerIssueHighlight}
                       showSharedIndicatorWhenCollapsed={true}
                       isHighlighted={highlightedIssueIds.has(group.root.id)}
@@ -4454,6 +4197,7 @@ function RightPanel({
                               sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                               sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                               issueTitleById={issueTitleById}
+                              ticketIssues={issuesResponse.data}
                               onHighlightIssues={triggerIssueHighlight}
                               showSharedIndicatorWhenCollapsed={true}
                               isHighlighted={highlightedIssueIds.has(child.id)}

@@ -106,7 +106,8 @@
       "title": "أدوات المطور",
       "i18n": "ذكاء الترجمة",
       "security": "مراقب الأمان"
-    }
+    },
+    "storage": "المخزون والمستودعات"
   },
   "breadcrumbs": {
     "dashboard": "لوحة التحكم",
@@ -154,7 +155,8 @@
     "edit": "تعديل",
     "store-details": "تفاصيل الفرع",
     "user-details": "تفاصيل المستخدم",
-    "screen-project": "مشروع الشاشة"
+    "screen-project": "مشروع الشاشة",
+    "storage": "المخزون والمستودعات"
   },
   "employees": {
     "title": "الموظفون",

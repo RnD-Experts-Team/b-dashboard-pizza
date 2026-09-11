@@ -106,7 +106,8 @@
       "i18n": "i18n Intelligence",
       "security": "Security Monitor"
     },
-    "breadcrumb": "Breadcrumb"
+    "breadcrumb": "Breadcrumb",
+    "storage": "Storage & Stock"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -154,7 +155,8 @@
     "edit": "Edit",
     "store-details": "Store Details",
     "user-details": "User Details",
-    "screen-project": "Screen Project"
+    "screen-project": "Screen Project",
+    "storage": "Storage & Stock"
   },
   "auth": {
     "login": {

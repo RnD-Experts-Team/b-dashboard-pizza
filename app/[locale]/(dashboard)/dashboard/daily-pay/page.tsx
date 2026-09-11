@@ -51,8 +51,16 @@ function parseFiltersFromUrl(params: URLSearchParams): DailyPayFilters {
   const dateTo = params.get("date_to");
   if (dateTo) filters.date_to = dateTo;
 
-  const filledBy = params.get("filled_by");
-  if (filledBy && Number.isInteger(Number(filledBy))) filters.filled_by = Number(filledBy);
+  // filled_by became an ARRAY in the v2 release — same comma-joined URL
+  // encoding as technician_ids / store_ids.
+  const filledBy = parseIntList(params.get("filled_by"));
+  if (filledBy) filters.filled_by = filledBy;
+
+  const createdFrom = params.get("created_from");
+  if (createdFrom) filters.created_from = createdFrom;
+
+  const createdTo = params.get("created_to");
+  if (createdTo) filters.created_to = createdTo;
 
   const sort = params.get("sort");
   if (sort === "date" || sort === "created_at") filters.sort = sort;
@@ -77,7 +85,9 @@ function buildUrlFromFilters(filters: DailyPayFilters): string {
   if (filters.date) params.set("date", filters.date);
   if (filters.date_from) params.set("date_from", filters.date_from);
   if (filters.date_to) params.set("date_to", filters.date_to);
-  if (filters.filled_by) params.set("filled_by", String(filters.filled_by));
+  if (filters.filled_by?.length) params.set("filled_by", filters.filled_by.join(","));
+  if (filters.created_from) params.set("created_from", filters.created_from);
+  if (filters.created_to) params.set("created_to", filters.created_to);
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.dir) params.set("dir", filters.dir);
   if (filters.per_page) params.set("per_page", String(filters.per_page));
@@ -107,6 +117,7 @@ function DailyPayPageInner() {
     clearError,
     stores,
     technicians,
+    filledByOptions,
   } = useDailyPay();
 
   // ── URL is the source of truth: fetch whenever the query string changes ──
@@ -195,6 +206,7 @@ function DailyPayPageInner() {
         onCreateClick={handleCreate}
         stores={stores}
         technicians={technicians}
+        filledByOptions={filledByOptions}
         disabled={isLoading}
       />
 
@@ -227,6 +239,9 @@ function DailyPayPageInner() {
         entryId={detailId}
         onClose={() => setSheetOpen(false)}
         onEdit={handleEditFromSheet}
+        onChanged={refetch}
+        technicians={technicians}
+        stores={stores}
       />
 
       {/* Create / edit dialog */}

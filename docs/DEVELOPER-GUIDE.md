@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-08-31 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-09-10 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -102,6 +102,11 @@ These areas are designed for customization:
 | `components/uisfx/**` | Sound-fx UI: global click-sound + unlock singleton (`sound-fx-init.tsx`, mounted once in AppShell), topbar mute toggle (`sound-toggle.tsx`) |
 | `lib/uisfx/**` | Sound-fx logic: `sound.store.ts` (persisted Zustand preferences — pack/volume/enabled), `client.ts` (lazy `uisfx` singleton), `sync.ts` (store→library side effects), `play.ts` (`playSfx(cue)` call-site helper, gated on the `soundFx` feature flag + enabled + unlocked) |
 | `lib/nav/**` | Bottom-nav-eligible link list + permission filtering (`bottom-nav-items.ts`, `bottom-nav-access.ts`) for the mobile/tablet `BottomNav` bar — mirrors `sidebar.tsx`'s nav metadata/order independently rather than importing from that Core file, gated on the `mobileBottomNav` feature flag |
+| `components/daily-pay/**` | Daily Pay v2 — three-level pay sheets (Entry -> Payment -> Line). The create/edit dialog, detail sheet, table, filters, payment/line cards, labour control, warnings panel and revision viewer |
+| `lib/daily-pay/**` | Daily Pay pure logic, no React: `entry-form-state.ts` (form state machine — gather-vs-override hours, lump-sum exclusivity, duplicate-payee detection), `money.ts` (display/preview formulas; the server is authoritative), `field-errors.ts` (Laravel 422 dotted keys -> per-field errors), `warnings.ts` (aggregation-warning copy), `revision-snapshot.ts` (v1/v2 snapshot parsing) |
+| `lib/maintenance-tickets/**` | Ticket-side pure logic, no React: `attendance-durations.ts` (warning-code parsing, minute formatting, and `computeAttendancePreview` — a FORM-ONLY preview; the read-only attendance card always renders the server's `durations` instead) |
+| `components/storage/**` | Storage & Stock — GLOBAL (not store-scoped) storage locations, the append-only stock-movement ledger, and on-hand balances. Page at `dashboard/storage`, tabs Balances / Movements / Locations |
+| `lib/storage/**` | Stock pure logic, no React: `movement-types.ts` (the type→direction table; `reversal` cannot be a key, so it is unpostable at the type level), `movement-builder.ts` (composer form → payload, transfer expansion, 422 line-index mapping), `reversal-pairing.ts` (pairs a mistaken movement with its reversal; degrades to null rather than guessing). A mistaken movement STILL COUNTS toward every balance — the flag is display-only |
 | `types/**` | Your custom TypeScript types |
 
 ---

@@ -32,6 +32,112 @@ export interface EnumField {
   label: string;
 }
 
+/**
+ * Whether the money owed on a record has been paid. DERIVED ON READ from the
+ * daily pay sheets themselves, so it can never disagree with them — nothing
+ * stores it and nothing needs keeping in sync.
+ *
+ * Being on a pay sheet IS being paid; there is no separate "money sent" step.
+ *
+ *   unpaid      → owed, and not yet on any pay sheet
+ *   paid        → covered by a pay sheet
+ *   not_payable → nobody is owed: a part we bought ourselves, or a mistaken record
+ */
+export type PaymentStatusValue = "unpaid" | "paid" | "not_payable";
+
+/** Returned as { value, label }; filters take the bare `value`. */
+export type PaymentStatusField = EnumField & { value: PaymentStatusValue };
+
+/** Where a part came from. `from_storage` draws stock in the same transaction. */
+export type PartUsageSource = "purchased" | "from_storage";
+
+/** Who paid for a part. `us` means nobody is owed, so it is not payable. */
+export type PartUsagePayer = "us" | "technician";
+
+/**
+ * One daily pay claim against a record. Being on a pay sheet IS being paid.
+ * `amount` is part-usages only; attendance entries carry `minutes` instead.
+ */
+export interface RecordPaymentClaim {
+  dailyPayPaymentId: number;
+  dailyPayEntryId: number;
+  dailyPayLineId: number | null;
+  date: string;
+  technicianId: number;
+  technician: { id: number; name: string } | null;
+  /** Part usages only. */
+  amount: number | null;
+  /**
+   * Attendance entries only: the minutes THIS payment actually counted, which
+   * can differ from the entry's own durations when several payments touch it.
+   */
+  minutes: AttendanceMinutes | null;
+}
+
+/**
+ * Payment status on an attendance entry or part usage.
+ *
+ * The whole block is `null` when the claims were not loaded; `payments` is `[]`
+ * when the record is genuinely unpaid. Never collapse those two.
+ */
+export interface RecordPaymentBlock {
+  status: PaymentStatusField;
+  payments: RecordPaymentClaim[];
+}
+
+/**
+ * Rolled-up payment status on a ticket issue.
+ *
+ * ANYTHING STILL OWED DOMINATES: an issue reads `unpaid` until the last of its
+ * payables is settled, so an issue whose hours are paid but whose late receipt
+ * is not still shows unpaid. That is deliberate — it is the state finance
+ * cares about. An issue that costs nobody anything reads `not_payable`.
+ */
+export interface IssuePaymentBlock {
+  status: PaymentStatusField;
+  dailyPayLineIds: number[];
+}
+
+/** Minutes per bucket. Authoritative; `hours` is the same figure rounded. */
+export interface AttendanceMinutes {
+  work: number;
+  travel: number;
+  break: number;
+  parts_run: number;
+}
+
+export interface AttendanceHours {
+  work: number;
+  travel: number;
+  break: number;
+  parts_run: number;
+}
+
+/**
+ * Server-computed durations for an attendance entry. Nothing is stored — this
+ * is derived from the clocks on every read.
+ *
+ * `work` is NET: break, parts-run and travel intervals that fall inside the
+ * clock window are merged and subtracted once. The other three are reported at
+ * full recorded length, because they are their own line items.
+ */
+export interface AttendanceDurations {
+  minutes: AttendanceMinutes;
+  hours: AttendanceHours;
+  /**
+   * `incomplete_pair:<bucket>` (counted as zero), `inverted_pair:<bucket>`
+   * (counted as zero), `implausible_pair:<bucket>` (clamped to 24h).
+   */
+  warnings: string[];
+}
+
+/** Minimal storage-location reference on a part usage. */
+export interface StorageLocationRef {
+  id: number;
+  name: string;
+  code: string | null;
+}
+
 /** Minimal user reference returned in `creator` fields. */
 export interface UserRef {
   id: number;
@@ -177,6 +283,13 @@ export interface TicketIssueAttendance {
   endBreak: string | null;
   startPartsRun: string | null;
   endPartsRun: string | null;
+  /** Travel clocks. Any subset of the four pairs may be set — deliberate. */
+  startTravel: string | null;
+  endTravel: string | null;
+  /** Server-computed; null only when the API predates the durations block. */
+  durations: AttendanceDurations | null;
+  /** Null when the payment claims were not loaded. */
+  payment: RecordPaymentBlock | null;
   attachments: TicketAttachment[];
   notes: TicketNote[];
   mistaken: boolean;
@@ -185,14 +298,55 @@ export interface TicketIssueAttendance {
   createdAt: string;
 }
 
-/** Part used during a repair, with cost, for one or more ticket issues. */
+/**
+ * Part used during a repair, for one or more ticket issues.
+ *
+ * Was a flat `{ part_id, cost }`; now quantity × unit cost, with a source, a
+ * payer, and optional returns. `cost` is COMPUTED server-side and is never
+ * sent by the client.
+ *
+ * `cost` vs `net_cost`: `cost` is the gross outlay and is what the
+ * `part_cost_single_gt` / `part_cost_total_gt` ticket filters sum. `net_cost`
+ * is what the payer is actually out of pocket after returns, and is what a
+ * daily pay reimburses. On 10 at £5 with 4 returned: cost 50.00,
+ * net_cost 30.00, net_quantity 6.00.
+ */
 export interface TicketIssuePartUsage {
   id: number;
   ticketIssueId: number;
   partId: number;
   part: { id: number; name: string } | null;
-  /** Numeric cost — API returns as decimal string; the service parses it. */
+  quantity: number;
+  unitCost: number;
+  /** Gross outlay: quantity × unit cost. Computed server-side. */
   cost: number;
+  /** Quantity kept after returns. */
+  netQuantity: number;
+  /** What the payer is actually out of pocket after returns. */
+  netCost: number;
+  /** Null on pre-v2 rows — do NOT synthesize a value, show nothing. */
+  source: EnumField | null;
+  paidBy: EnumField | null;
+  /** True when somebody other than us paid and is therefore owed. */
+  reimbursable: boolean;
+  paidByTechnicianId: number | null;
+  paidByTechnician: { id: number; name: string } | null;
+  /** The shelf the part came off, when source is `from_storage`. */
+  storageLocationId: number | null;
+  storageLocation: StorageLocationRef | null;
+  returnedQuantity: number | null;
+  returnedToStorageLocationId: number | null;
+  returnedToStorageLocation: StorageLocationRef | null;
+  /** Ledger rows this usage wrote. `[]`, never null. */
+  stockMovementIds: number[];
+  /** Null when the payment claims were not loaded. */
+  payment: RecordPaymentBlock | null;
+  /**
+   * True for a legacy `{ part_id, cost }` row with no quantity. Such a row
+   * must render as a bare cost — showing a fabricated "1 ×" would be inventing
+   * data we do not have.
+   */
+  isLegacy: boolean;
   attachments: TicketAttachment[];
   notes: TicketNote[];
   mistaken: boolean;
@@ -259,6 +413,11 @@ export interface TicketIssue {
   partUsages: TicketIssuePartUsage[];
   payEntries: TicketIssuePayEntry[];
   warranties: TicketIssueWarranty[];
+  /**
+   * Rolled-up payment status. ANYTHING STILL OWED DOMINATES — see
+   * IssuePaymentBlock. Null when the claims were not loaded.
+   */
+  payment: IssuePaymentBlock | null;
   attachments: TicketAttachment[];
   notes: TicketNote[];
   createdBy: number | null;
@@ -423,7 +582,22 @@ export interface CreateDiagnosisPayload {
   body?: string;
 }
 
+/** A note sent alongside the record it belongs to, in the same request. */
+export interface InlineNotePayload {
+  body: string;
+  type?: string;
+  files?: File[];
+}
+
 export interface CreateAttendanceEntryPayload {
+  /**
+   * ATTENDANCE ONLY: the nested endpoint now accepts issues belonging to OTHER
+   * tickets, so long as at least one belongs to this one. That is the fix for
+   * "drove to one store, worked three tickets" — one entry, not three.
+   *
+   * The relaxation does NOT extend to parts, assignments or diagnoses, which
+   * still require every issue to belong to the ticket.
+   */
   ticket_issue_ids: number[];
   technician_id: number;
   start_clock?: string;
@@ -432,12 +606,34 @@ export interface CreateAttendanceEntryPayload {
   end_break?: string;
   start_parts_run?: string;
   end_parts_run?: string;
+  start_travel?: string;
+  end_travel?: string;
+  notes?: InlineNotePayload[];
 }
 
+/**
+ * `cost` is deliberately absent: the server computes it as
+ * quantity × unit_cost and does not accept it from the client.
+ */
 export interface CreatePartUsagePayload {
+  /** Must ALL belong to this ticket — unlike attendance. */
   ticket_issue_ids: number[];
   part_id: number;
-  cost: number;
+  quantity: number;
+  /** The price of ONE unit, not the total. */
+  unit_cost: number;
+  source: PartUsageSource;
+  paid_by: PartUsagePayer;
+  /** Required when paid_by is "technician". */
+  paid_by_technician_id?: number;
+  /** Required when source is "from_storage". */
+  storage_location_id?: number;
+  /** Must not exceed `quantity`. */
+  returned_quantity?: number;
+  /** Required when returning anything. */
+  returned_to_storage_location_id?: number;
+  /** Vendor and receipt details go here — there is deliberately no vendor column. */
+  notes?: InlineNotePayload[];
 }
 
 export interface CreatePayEntryPayload {
@@ -489,6 +685,16 @@ export interface TicketsFilters {
   types?: TicketType[];
   /** Global index only: limit to tickets for these store numbers (multi-select, OR logic) */
   stores?: string[];
+  /** Who filed the ticket. */
+  creator_ids?: number[];
+  /**
+   * Rolled up per ticket, with the same rules as the badge:
+   *   unpaid      → at least one payable is still unclaimed
+   *   paid        → has payables, and every one of them is claimed
+   *   not_payable → no payables at all
+   */
+  payment_statuses?: PaymentStatusValue[];
+  /** Both of these sum GROSS `cost`, not `net_cost` after returns. */
   part_cost_total_gt?: number;
   part_cost_single_gt?: number;
   created_from?: string;
@@ -636,6 +842,41 @@ export interface ApiTicketIssueDiagnosis {
   created_at: string;
 }
 
+export interface ApiAttendanceDurations {
+  minutes?: Partial<AttendanceMinutes> | null;
+  hours?: Partial<AttendanceHours> | null;
+  warnings?: string[] | null;
+}
+
+export interface ApiRecordPaymentClaim {
+  daily_pay_payment_id: number;
+  daily_pay_entry_id: number;
+  daily_pay_line_id?: number | null;
+  date: string;
+  technician_id: number;
+  technician?: { id: number; name: string } | null;
+  /** Part usages only. */
+  amount?: string | null;
+  /** Attendance entries only. */
+  minutes?: Partial<AttendanceMinutes> | null;
+}
+
+export interface ApiRecordPaymentBlock {
+  status: { value: string; label: string };
+  payments?: ApiRecordPaymentClaim[] | null;
+}
+
+export interface ApiIssuePaymentBlock {
+  status: { value: string; label: string };
+  daily_pay_line_ids?: number[] | null;
+}
+
+export interface ApiStorageLocationRef {
+  id: number;
+  name: string;
+  code?: string | null;
+}
+
 export interface ApiTicketIssueAttendance {
   id: number;
   ticket_issue_id: number;
@@ -647,6 +888,10 @@ export interface ApiTicketIssueAttendance {
   end_break: string | null;
   start_parts_run: string | null;
   end_parts_run: string | null;
+  start_travel?: string | null;
+  end_travel?: string | null;
+  durations?: ApiAttendanceDurations | null;
+  payment?: ApiRecordPaymentBlock | null;
   attachments: ApiTicketAttachment[];
   notes?: ApiTicketNote[];
   mistaken: boolean;
@@ -660,8 +905,31 @@ export interface ApiTicketIssuePartUsage {
   ticket_issue_id: number;
   part_id: number;
   part: { id: number; name: string; description: string | null } | null;
-  /** Laravel returns decimal fields as strings (e.g. "49.99") */
+  /**
+   * Laravel returns decimal fields as strings (e.g. "49.99").
+   *
+   * Every v2 field below is OPTIONAL so that a legacy row — or a
+   * partially-deployed upstream — still parses. See transformPartUsage for the
+   * fallback table and why `source` / `paid_by` fall back to null rather than
+   * to a fabricated value.
+   */
   cost: string;
+  quantity?: string | null;
+  unit_cost?: string | null;
+  net_quantity?: string | null;
+  net_cost?: string | null;
+  source?: { value: string; label: string } | null;
+  paid_by?: { value: string; label: string } | null;
+  reimbursable?: boolean | null;
+  paid_by_technician_id?: number | null;
+  paid_by_technician?: { id: number; name: string } | null;
+  storage_location_id?: number | null;
+  storage_location?: ApiStorageLocationRef | null;
+  returned_quantity?: string | null;
+  returned_to_storage_location_id?: number | null;
+  returned_to_storage_location?: ApiStorageLocationRef | null;
+  stock_movement_ids?: number[] | null;
+  payment?: ApiRecordPaymentBlock | null;
   attachments: ApiTicketAttachment[];
   notes?: ApiTicketNote[];
   mistaken: boolean;
@@ -724,6 +992,7 @@ export interface ApiTicketIssue {
   part_usages: ApiTicketIssuePartUsage[];
   pay_entries: ApiTicketIssuePayEntry[];
   warranties: ApiTicketIssueWarranty[];
+  payment?: ApiIssuePaymentBlock | null;
   attachments?: ApiTicketAttachment[];
   notes?: ApiTicketNote[];
   created_by?: number | null;

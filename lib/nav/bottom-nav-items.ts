@@ -21,6 +21,7 @@ import {
   Link2,
   Ticket,
   Wallet,
+  Warehouse,
   Gauge,
   Wrench,
   Briefcase,
@@ -239,6 +240,17 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "dailyPay",
     requirements: (storeId) => [
       { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "storage",
+    href: (locale) => `/${locale}/dashboard/storage`,
+    icon: Warehouse,
+    titleKey: "storage",
+    // Zero-arg: storage is global, so no storeId is threaded through.
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/storage-locations" },
     ],
     groupKey: "maintenance",
   },

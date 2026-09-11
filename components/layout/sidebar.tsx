@@ -40,6 +40,7 @@ import {
   LifeBuoy,
   Ticket,
   Wallet,
+  Warehouse,
   Package,
   Boxes,
   Ruler,
@@ -648,6 +649,16 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: Wallet,
         requirements: [
           { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId: effectiveStoreId }
+        ],
+      },
+      {
+        title: t("storage"),
+        href: `/${locale}/dashboard/storage`,
+        icon: Warehouse,
+        requirements: [
+          // NO storeId on purpose — storage endpoints are GLOBAL, and a
+          // store-scoped probe would be wrong. Same as inventoryUnits above.
+          { service: "Maintenance", method: "GET", path: "/storage-locations" }
         ],
       },
       {

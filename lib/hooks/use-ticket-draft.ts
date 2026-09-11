@@ -29,9 +29,29 @@ export interface IssueDraft {
   attendanceEndBreak: string;
   attendanceStartPartsRun: string;
   attendanceEndPartsRun: string;
+  attendanceStartTravel: string;
+  attendanceEndTravel: string;
+  /** Note sent WITH the attendance entry, not as a follow-up note. */
+  attendanceNoteBody: string;
   /** For part usage action */
   partId: string;
+  /**
+   * Legacy: the old single total-cost field. Nothing reads it any more, but it
+   * stays in the interface while cached drafts (7-day TTL) drain, so the
+   * onClearDraftFields(["partCost"]) call sites keep type-checking.
+   */
   partCost: string;
+  partQuantity: string;
+  /** The price of ONE unit, not the total. */
+  partUnitCost: string;
+  partSource: string;
+  partPaidBy: string;
+  partPaidByTechnicianId: string;
+  partStorageLocationId: string;
+  partReturnedQuantity: string;
+  partReturnedToStorageLocationId: string;
+  /** Vendor / receipt details — saved as a note, since there is no vendor column. */
+  partVendorNote: string;
   /** For pay entry action */
   payTechnicianId: string;
   basePay: string;
@@ -74,8 +94,20 @@ export const EMPTY_ISSUE_DRAFT: IssueDraft = {
   attendanceEndBreak: "",
   attendanceStartPartsRun: "",
   attendanceEndPartsRun: "",
+  attendanceStartTravel: "",
+  attendanceEndTravel: "",
+  attendanceNoteBody: "",
   partId: "",
   partCost: "",
+  partQuantity: "",
+  partUnitCost: "",
+  partSource: "",
+  partPaidBy: "",
+  partPaidByTechnicianId: "",
+  partStorageLocationId: "",
+  partReturnedQuantity: "",
+  partReturnedToStorageLocationId: "",
+  partVendorNote: "",
   payTechnicianId: "",
   basePay: "",
   performancePay: "",
@@ -190,7 +222,11 @@ export function useTicketDraft(storeId: string, ticketId: number | null) {
   /** Get the draft for a specific issue (fallback to empty) */
   const getIssueDraft = useCallback(
     (issueId: number): IssueDraft =>
-      draft.issues[String(issueId)] ?? { ...EMPTY_ISSUE_DRAFT },
+      // MERGE, do not just fall back. A draft persisted before a new key was
+      // added deserializes without it: TypeScript would say `string` while the
+      // runtime handed back `undefined`. With a 7-day TTL, every user holding
+      // a cached draft hits that the moment fields are added.
+      ({ ...EMPTY_ISSUE_DRAFT, ...(draft.issues[String(issueId)] ?? {}) }),
     [draft.issues]
   );
 

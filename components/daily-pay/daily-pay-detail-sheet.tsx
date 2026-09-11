@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -13,21 +14,29 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   AlertTriangle,
-  Pencil,
-  Paperclip,
-  StickyNote,
-  Ticket,
+  ChevronDown,
   History,
-  User,
-  Store,
+  Loader2,
+  Pencil,
+  RefreshCw,
 } from "lucide-react";
-import {
-  dailyPayService,
-  DailyPayError,
-} from "@/lib/api/services/daily-pay.service";
-import type { DailyPayEntry, DailyPayLine } from "@/types/daily-pay.types";
+import { cn } from "@/lib/utils";
+import { dailyPayService, DailyPayError } from "@/lib/api/services/daily-pay.service";
+import { entryTotal, formatMoney } from "@/lib/daily-pay/money";
+import { parseRevisionSnapshot, snapshotVersionLabel } from "@/lib/daily-pay/revision-snapshot";
+import { DailyPayPaymentDetailCard } from "./daily-pay-payment-detail-card";
+import { DailyPayRevisionViewer } from "./daily-pay-revision-viewer";
+import type { DailyPayEntry, DailyPayRevision } from "@/types/daily-pay.types";
+import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { DailyPayStoreOption } from "@/lib/hooks/use-daily-pay";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
@@ -50,153 +59,56 @@ function formatDateTime(value: string): string {
   return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy 'at' h:mm a");
 }
 
-function money(value: number | null): string {
-  return value == null ? "—" : `$${value.toFixed(2)}`;
-}
-
-function num(value: number | null, suffix = ""): string {
-  return value == null ? "—" : `${value}${suffix}`;
-}
-
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Field grid for one line                                                 */
+/*  Revision row                                                            */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-0.5">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium tabular-nums">{value}</p>
-    </div>
-  );
-}
+function RevisionRow({
+  revision,
+  technicians,
+  stores,
+}: {
+  revision: DailyPayRevision;
+  technicians: CatalogTechnician[];
+  stores: DailyPayStoreOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  const parsed = parseRevisionSnapshot(revision.schemaVersion, revision.snapshot);
 
-function LineCard({ line, index }: { line: DailyPayLine; index: number }) {
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="font-normal">
-            Line {index + 1}
+    <Collapsible open={open} onOpenChange={setOpen} className="rounded-md border">
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted/50">
+        <span className="flex items-center gap-2">
+          <span className="text-muted-foreground">Revision #{revision.id}</span>
+          <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
+            {snapshotVersionLabel(parsed)}
           </Badge>
-          <span className="flex items-center gap-1 text-sm font-medium">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            {line.technician?.name ?? `Technician #${line.technicianId}`}
+          {revision.editor?.name && (
+            <span className="text-xs text-muted-foreground">by {revision.editor.name}</span>
+          )}
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {formatDateTime(revision.createdAt)}
           </span>
-          <span className="flex items-center gap-1 text-sm text-muted-foreground">
-            <Store className="h-3.5 w-3.5" />
-            {line.store?.storeNumber ?? `#${line.storeId}`}
-          </span>
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+              open && "rotate-180"
+            )}
+          />
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="border-t p-3">
+          <DailyPayRevisionViewer
+            revision={revision}
+            technicians={technicians}
+            stores={stores}
+          />
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-        <Field label="Working hours" value={num(line.totalWorkingHours, " h")} />
-        <Field label="Break time" value={num(line.totalBreakTime, " h")} />
-        <Field label="Travel time" value={num(line.travelTime, " h")} />
-        <Field label="Hourly rate" value={money(line.hourlyPaymentRate)} />
-        <Field label="Gas" value={money(line.gas)} />
-        <Field label="Invoices" value={money(line.invoices)} />
-        <Field label="Money owed" value={money(line.moneyOwed)} />
-      </div>
-
-      {/* Linked ticket issues */}
-      {line.ticketIssues.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Ticket className="h-3.5 w-3.5" />
-            Linked ticket issues
-          </p>
-          <div className="space-y-1">
-            {line.ticketIssues.map((ti) => (
-              <div
-                key={ti.id}
-                className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5 text-sm"
-              >
-                <span className="font-mono text-xs text-muted-foreground">
-                  Ticket #{ti.ticketId}
-                </span>
-                <span className="font-medium">
-                  {ti.issueTitle || ti.otherTitle || `Issue #${ti.id}`}
-                </span>
-                {ti.status && (
-                  <Badge variant="secondary" className="font-normal capitalize">
-                    {ti.status}
-                  </Badge>
-                )}
-                {ti.priority && (
-                  <Badge variant="outline" className="font-normal capitalize">
-                    {ti.priority}
-                  </Badge>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Notes */}
-      {line.notes.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <StickyNote className="h-3.5 w-3.5" />
-            Notes
-          </p>
-          <div className="space-y-1.5">
-            {line.notes.map((note) => (
-              <div key={note.id} className="rounded-md border bg-muted/30 p-2.5 text-sm">
-                {note.typeLabel && (
-                  <Badge variant="secondary" className="mb-1 font-normal">
-                    {note.typeLabel}
-                  </Badge>
-                )}
-                <p className="whitespace-pre-wrap">{note.body}</p>
-                {note.attachments.length > 0 && (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {note.attachments.map((att) => (
-                      <a
-                        key={att.id}
-                        href={att.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs text-primary hover:underline"
-                      >
-                        <Paperclip className="h-3 w-3" />
-                        {att.fileName}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Line attachments */}
-      {line.attachments.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Paperclip className="h-3.5 w-3.5" />
-            Attachments
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {line.attachments.map((att) => (
-              <a
-                key={att.id}
-                href={att.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs text-primary hover:underline"
-              >
-                <Paperclip className="h-3 w-3" />
-                {att.fileName}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -210,6 +122,11 @@ interface DailyPayDetailSheetProps {
   onClose: () => void;
   onEdit?: (entry: DailyPayEntry) => void;
   canEdit?: boolean;
+  /** Called after a recalculate, so the list picks up the moved totals. */
+  onChanged?: () => void;
+  /** Used to resolve the ids inside revision snapshots to names. */
+  technicians?: CatalogTechnician[];
+  stores?: DailyPayStoreOption[];
 }
 
 export function DailyPayDetailSheet({
@@ -218,10 +135,14 @@ export function DailyPayDetailSheet({
   onClose,
   onEdit,
   canEdit = true,
+  onChanged,
+  technicians = [],
+  stores = [],
 }: DailyPayDetailSheetProps) {
   const [entry, setEntry] = useState<DailyPayEntry | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
   useEffect(() => {
     if (!open || entryId == null) return;
@@ -249,9 +170,30 @@ export function DailyPayDetailSheet({
     return () => ctrl.abort();
   }, [open, entryId]);
 
+  async function handleRecalculate() {
+    if (entryId == null) return;
+    setIsRecalculating(true);
+    try {
+      const result = await dailyPayService.recalculateEntry(entryId);
+      setEntry(result);
+      toast.success("Hours and parts re-pulled from attendance.");
+      // Totals move, so the list behind the sheet is now stale.
+      onChanged?.();
+    } catch (err) {
+      if (err instanceof DailyPayError && err.code === "CANCELLED") return;
+      toast.error(err instanceof DailyPayError ? err.message : "Failed to recalculate.");
+    } finally {
+      setIsRecalculating(false);
+    }
+  }
+
+  const total = entry ? entryTotal(entry) : null;
+  const payments = entry?.payments ?? null;
+  const revisions = entry?.revisions ?? null;
+
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+      <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>
             {entry ? `Daily Pay Entry #${entry.id}` : "Daily Pay Entry"}
@@ -284,7 +226,7 @@ export function DailyPayDetailSheet({
           {/* Content */}
           {!isLoading && !error && entry && (
             <>
-              {/* Meta */}
+              {/* Meta + entry total */}
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                 <div className="space-y-0.5">
                   <p className="text-muted-foreground">Submitted by</p>
@@ -294,48 +236,85 @@ export function DailyPayDetailSheet({
                   <p className="text-muted-foreground">Created</p>
                   <p className="font-medium">{formatDateTime(entry.createdAt)}</p>
                 </div>
-                {canEdit && onEdit && (
-                  <Button size="sm" variant="outline" onClick={() => onEdit(entry)}>
-                    <Pencil className="me-1.5 h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                )}
-              </div>
-
-              {/* Lines */}
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-semibold">
-                  Lines ({entry.lines.length})
-                </h3>
-                <div className="space-y-3">
-                  {entry.lines.map((line, i) => (
-                    <LineCard key={line.id} line={line} index={i} />
-                  ))}
+                <div className="space-y-0.5">
+                  <p className="text-muted-foreground">Entry total</p>
+                  <p className="text-base font-semibold tabular-nums">{formatMoney(total)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* This tooltip is load-bearing: recalculate deliberately does
+                      nothing to overridden lines, so a user who overrode
+                      everything will report the button as broken without it. */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleRecalculate}
+                        disabled={isRecalculating}
+                      >
+                        {isRecalculating ? (
+                          <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="me-1.5 h-3.5 w-3.5" />
+                        )}
+                        Recalculate hours
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-64">
+                      Re-pulls hours and reimbursable parts from attendance. Lines with
+                      overridden hours are left as they are.
+                    </TooltipContent>
+                  </Tooltip>
+                  {canEdit && onEdit && (
+                    <Button size="sm" variant="outline" onClick={() => onEdit(entry)}>
+                      <Pencil className="me-1.5 h-3.5 w-3.5" />
+                      Edit
+                    </Button>
+                  )}
                 </div>
               </div>
 
+              {/* Payments */}
+              <div className="space-y-1.5">
+                <h3 className="text-sm font-semibold">
+                  Payments ({payments?.length ?? 0})
+                </h3>
+                {payments == null ? (
+                  <p className="text-sm text-muted-foreground">Payments were not loaded.</p>
+                ) : payments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    This entry has no payments.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {payments.map((payment, i) => (
+                      <DailyPayPaymentDetailCard
+                        key={payment.id}
+                        payment={payment}
+                        index={i}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Revisions */}
-              {entry.revisions.length > 0 && (
+              {revisions != null && revisions.length > 0 && (
                 <>
                   <Separator />
                   <div className="space-y-1.5">
                     <h3 className="flex items-center gap-1.5 text-sm font-semibold">
                       <History className="h-4 w-4 text-muted-foreground" />
-                      Revision history ({entry.revisions.length})
+                      Revision history ({revisions.length})
                     </h3>
                     <div className="space-y-1.5">
-                      {entry.revisions.map((rev) => (
-                        <div
+                      {revisions.map((rev) => (
+                        <RevisionRow
                           key={rev.id}
-                          className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                        >
-                          <span className="text-muted-foreground">
-                            Revision #{rev.id}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDateTime(rev.createdAt)}
-                          </span>
-                        </div>
+                          revision={rev}
+                          technicians={technicians}
+                          stores={stores}
+                        />
                       ))}
                     </div>
                   </div>

@@ -53,6 +53,7 @@ export async function GET(
   const ARRAY_KEYS = [
     "statuses[]", "priorities[]", "assigned_priorities[]", "issue_ids[]",
     "issue_statuses[]", "technician_ids[]", "types[]", "changed_statuses[]",
+    "payment_statuses[]", "creator_ids[]",
   ];
 
   for (const key of SCALAR_KEYS) {

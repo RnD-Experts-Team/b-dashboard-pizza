@@ -25,8 +25,10 @@ import {
   Check,
   Search,
   CalendarDays,
+  ArrowDownUp,
+  TimerReset,
 } from "lucide-react";
-import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus } from "@/types/maintenance-tickets.types";
+import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus, PaymentStatusValue, UserRef } from "@/types/maintenance-tickets.types";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { cn } from "@/lib/utils";
@@ -489,6 +491,15 @@ interface TicketsFiltersBarProps {
   stores?: OverviewStore[];
   selectedStoreIds?: string[];
   onStoreApply?: (selection: string[]) => void;
+  /**
+   * Creators present in the currently loaded results, for the "Filed by"
+   * filter. There is no users endpoint in this service, so the options are
+   * page-derived and the control says so.
+   */
+  loadedCreators?: (UserRef | null)[];
+  /** Opens the global "log a visit" dialog. Optional — hidden when absent. */
+  onLogVisitClick?: () => void;
+  canLogVisit?: boolean;
 }
 
 export function TicketsFiltersBar({
@@ -502,6 +513,9 @@ export function TicketsFiltersBar({
   stores,
   selectedStoreIds,
   onStoreApply,
+  loadedCreators,
+  onLogVisitClick,
+  canLogVisit,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -552,6 +566,7 @@ export function TicketsFiltersBar({
 
   const FILTER_KEYS: (keyof TicketsFilters)[] = [
     "statuses", "priorities", "assigned_priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
+    "creator_ids", "payment_statuses",
     "part_cost_total_gt", "part_cost_single_gt", "created_from", "created_to",
     "changed_statuses", "changed_from", "changed_to", "trashed", "sort", "dir", "page", "per_page",
   ];
@@ -575,7 +590,14 @@ export function TicketsFiltersBar({
     filters.issue_statuses?.length,
     filters.technician_ids?.length,
     filters.types?.length,
+    filters.creator_ids?.length,
+    filters.payment_statuses?.length,
     filters.part_cost_total_gt,
+    // These three were in FILTER_KEYS but missing here, so the badge
+    // undercounted whenever they were the only active filter.
+    filters.part_cost_single_gt,
+    filters.sort,
+    filters.dir,
     filters.trashed,
     filters.per_page,
     filters.created_from,
@@ -591,8 +613,7 @@ export function TicketsFiltersBar({
 
   /* ── Option lists ──────────────────────────────────────────────────────── */
 
-  const ticketStatusOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All statuses" },
+  const ticketStatusOptions: MultiCheckOption<TicketStatus>[] = [
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
@@ -601,16 +622,14 @@ export function TicketsFiltersBar({
     { value: "cancelled", label: "Cancelled" },
   ];
 
-  const priorityOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All priorities" },
+  const priorityOptions: MultiCheckOption<Priority>[] = [
     { value: "urgent", label: "Urgent" },
     { value: "high", label: "High" },
     { value: "medium", label: "Medium" },
     { value: "low", label: "Low" },
   ];
 
-  const assignedPriorityOptions: SearchableSelectOption[] = [
-    { value: "all", label: "Any assigned priority" },
+  const assignedPriorityOptions: MultiCheckOption<Priority>[] = [
     { value: "urgent", label: "Urgent" },
     { value: "high", label: "High" },
     { value: "medium", label: "Medium" },
@@ -619,8 +638,7 @@ export function TicketsFiltersBar({
 
   const issueOptions: MultiCheckOption[] = catalogIssues.map((i) => ({ value: i.id, label: i.title }));
 
-  const issueStatusOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All statuses" },
+  const issueStatusOptions: MultiCheckOption<IssueStatus>[] = [
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
@@ -640,17 +658,49 @@ export function TicketsFiltersBar({
     { value: "cancelled", label: "Cancelled" },
   ];
 
-  const technicianOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All technicians" },
-    ...catalogTechnicians.map((tech) => ({
-      value: String(tech.id),
-      label: tech.name,
-      subLabel: tech.categoryName ?? undefined,
-    })),
+  const technicianOptions: MultiCheckOption[] = catalogTechnicians.map((tech) => ({
+    value: tech.id,
+    label: tech.name,
+  }));
+
+  /**
+   * "Filed by" options, derived from the creators on the loaded page — there is
+   * no users endpoint in this service. The label says so, rather than implying
+   * the list is every user who has ever filed a ticket.
+   */
+  const creatorOptions: MultiCheckOption[] = (() => {
+    const byId = new Map<number, string>();
+    for (const ticket of loadedCreators ?? []) {
+      if (ticket) byId.set(ticket.id, ticket.name);
+    }
+    for (const id of draftFilters.creator_ids ?? []) {
+      if (!byId.has(id)) byId.set(id, `User #${id}`);
+    }
+    return Array.from(byId, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  })();
+
+  const paymentStatusOptions: MultiCheckOption<PaymentStatusValue>[] = [
+    { value: "unpaid", label: "Not yet paid" },
+    { value: "paid", label: "Paid" },
+    { value: "not_payable", label: "Nothing to pay" },
   ];
 
-  const typeOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All types" },
+  const sortOptions: SearchableSelectOption[] = [
+    { value: "default", label: "Default" },
+    { value: "created_at", label: "Created" },
+    { value: "updated_at", label: "Updated" },
+    { value: "id", label: "ID" },
+  ];
+
+  const dirOptions: SearchableSelectOption[] = [
+    { value: "default", label: "Default" },
+    { value: "desc", label: "Newest first" },
+    { value: "asc", label: "Oldest first" },
+  ];
+
+  const typeOptions: MultiCheckOption<TicketType>[] = [
     { value: "normal", label: "Normal" },
     { value: "preventive_maintenance", label: "Preventive Maintenance" },
   ];
@@ -727,6 +777,12 @@ export function TicketsFiltersBar({
 
         {/* Right side actions */}
         <div className="ms-auto flex items-center gap-2">
+          {canLogVisit && onLogVisitClick && (
+            <Button variant="outline" size="sm" onClick={onLogVisitClick} disabled={disabled} className="h-9 gap-1.5">
+              <TimerReset className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Log visit</span>
+            </Button>
+          )}
           {canAccessCatalog && (
             <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled} className="h-9 gap-1.5">
               <BookOpen className="h-3.5 w-3.5" />
@@ -788,12 +844,12 @@ export function TicketsFiltersBar({
                 <CircleDot className="h-3 w-3" />
                 Ticket Status
               </label>
-              <SearchableSelect
-                value={draftFilters.statuses?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.statuses ?? []}
                 options={ticketStatusOptions}
-                onChange={(v) => updateField("statuses", v === "all" ? [] : [v as TicketStatus])}
+                onChange={(v) => updateField("statuses", v)}
                 disabled={disabled}
-                active={!!draftFilters.statuses?.length}
+                placeholder="Any status"
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -804,12 +860,12 @@ export function TicketsFiltersBar({
                 <Flag className="h-3 w-3" />
                 Priority
               </label>
-              <SearchableSelect
-                value={draftFilters.priorities?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.priorities ?? []}
                 options={priorityOptions}
-                onChange={(v) => updateField("priorities", v === "all" ? [] : [v as Priority])}
+                onChange={(v) => updateField("priorities", v)}
                 disabled={disabled}
-                active={!!draftFilters.priorities?.length}
+                placeholder="Any priority"
                 searchPlaceholder="Search priorities…"
               />
             </div>
@@ -820,12 +876,12 @@ export function TicketsFiltersBar({
                 <Star className="h-3 w-3" />
                 Assigned Priority
               </label>
-              <SearchableSelect
-                value={draftFilters.assigned_priorities?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.assigned_priorities ?? []}
                 options={assignedPriorityOptions}
-                onChange={(v) => updateField("assigned_priorities", v === "all" ? [] : [v as Priority])}
+                onChange={(v) => updateField("assigned_priorities", v)}
                 disabled={disabled}
-                active={!!draftFilters.assigned_priorities?.length}
+                placeholder="Any assigned priority"
                 searchPlaceholder="Search…"
               />
             </div>
@@ -853,12 +909,12 @@ export function TicketsFiltersBar({
                 <span className="h-3 w-3 rounded-full border-2 border-muted-foreground/50" />
                 Issue Status
               </label>
-              <SearchableSelect
-                value={draftFilters.issue_statuses?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.issue_statuses ?? []}
                 options={issueStatusOptions}
-                onChange={(v) => updateField("issue_statuses", v === "all" ? [] : [v as IssueStatus])}
+                onChange={(v) => updateField("issue_statuses", v)}
                 disabled={disabled}
-                active={!!draftFilters.issue_statuses?.length}
+                placeholder="Any status"
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -869,15 +925,48 @@ export function TicketsFiltersBar({
                 <User className="h-3 w-3" />
                 Technician
               </label>
-              <SearchableSelect
-                value={draftFilters.technician_ids?.[0] != null ? String(draftFilters.technician_ids[0]) : "all"}
-                options={catalogLoading ? [{ value: "all", label: "Loading…" }] : technicianOptions}
-                onChange={(v) => updateField("technician_ids", v === "all" ? [] : [Number(v)])}
+              <MultiCheckSelect
+                value={draftFilters.technician_ids ?? []}
+                options={technicianOptions}
+                onChange={(v) => updateField("technician_ids", v)}
                 disabled={disabled || catalogLoading}
-                active={!!draftFilters.technician_ids?.length}
-                placeholder={catalogLoading ? "Loading…" : "All technicians"}
+                loading={catalogLoading}
+                placeholder={catalogLoading ? "Loading…" : "Any technician"}
                 searchPlaceholder="Search technicians…"
               />
+            </div>
+
+            {/* Payment Status — how finance pulls up everything still owed */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                Payment Status
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.payment_statuses ?? []}
+                options={paymentStatusOptions}
+                onChange={(v) => updateField("payment_statuses", v)}
+                disabled={disabled}
+                placeholder="Any payment status"
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Filed by */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <User className="h-3 w-3" />
+                Filed by
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.creator_ids ?? []}
+                options={creatorOptions}
+                onChange={(v) => updateField("creator_ids", v)}
+                disabled={disabled}
+                placeholder="Anyone"
+                searchPlaceholder="Search…"
+              />
+              <p className="text-[10px] text-muted-foreground">From loaded results.</p>
             </div>
 
             {/* Changed Status To */}
@@ -956,12 +1045,12 @@ export function TicketsFiltersBar({
                 <List className="h-3 w-3" />
                 Ticket Type
               </label>
-              <SearchableSelect
-                value={draftFilters.types?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.types ?? []}
                 options={typeOptions}
-                onChange={(v) => updateField("types", v === "all" ? [] : [v as TicketType])}
+                onChange={(v) => updateField("types", v)}
                 disabled={disabled}
-                active={!!draftFilters.types?.length}
+                placeholder="Any type"
                 searchPlaceholder="Search types…"
               />
             </div>
@@ -1020,11 +1109,14 @@ export function TicketsFiltersBar({
               </div>
             </div>
 
-            {/* Min part cost */}
+            {/* Min ticket part cost. Renamed: the old "Min part cost" label
+                did not say which of the two cost filters it mapped to. Both
+                sum GROSS cost, not net_cost after returns, so neither will
+                ever match a reimbursement figure. */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <DollarSign className="h-3 w-3" />
-                Min part cost
+                Min ticket part cost
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-xs text-muted-foreground">$</span>
@@ -1042,6 +1134,36 @@ export function TicketsFiltersBar({
                   )}
                 />
               </div>
+              <p className="text-[10px] text-muted-foreground">
+                Whole ticket, gross; a shared part counts once.
+              </p>
+            </div>
+
+            {/* Min single-issue part cost */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                Min single-issue part cost
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-xs text-muted-foreground">$</span>
+                <Input
+                  placeholder="0.00"
+                  value={draftFilters.part_cost_single_gt ?? ""}
+                  onChange={(e) => updateField("part_cost_single_gt", e.target.value ? Number(e.target.value) : undefined)}
+                  disabled={disabled}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={cn(
+                    "h-9 ps-6 text-sm",
+                    draftFilters.part_cost_single_gt != null && "border-primary/40 bg-primary/5"
+                  )}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                At least one issue whose parts exceed this, gross.
+              </p>
             </div>
 
             {/* Deleted records */}
@@ -1056,6 +1178,40 @@ export function TicketsFiltersBar({
                 onChange={(v) => updateField("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
                 disabled={disabled}
                 active={!!draftFilters.trashed}
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Sort */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <ArrowDownUp className="h-3 w-3" />
+                Sort by
+              </label>
+              <SearchableSelect
+                value={draftFilters.sort ?? "default"}
+                options={sortOptions}
+                onChange={(v) => updateField("sort", v === "default" ? undefined : v)}
+                disabled={disabled}
+                active={!!draftFilters.sort}
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Direction */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <ArrowDownUp className="h-3 w-3" />
+                Direction
+              </label>
+              <SearchableSelect
+                value={draftFilters.dir ?? "default"}
+                options={dirOptions}
+                onChange={(v) =>
+                  updateField("dir", v === "default" ? undefined : (v as TicketsFilters["dir"]))
+                }
+                disabled={disabled}
+                active={!!draftFilters.dir}
                 searchPlaceholder="Search…"
               />
             </div>
