@@ -19,6 +19,7 @@
  */
 
 import { useMemo } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -234,7 +235,7 @@ export function MonthOverview({
                             {cell.shiftCount}
                           </Badge>
                           <span className="text-[9px] text-muted-foreground hidden sm:inline">
-                            {cell.totalHours.toFixed(0)}h
+                            {fmtFixed(cell.totalHours, 0)}h
                           </span>
                         </div>
                       )}
@@ -253,7 +254,7 @@ export function MonthOverview({
                     </p>
                     <p>
                       {cell.shiftCount} shift{cell.shiftCount !== 1 ? "s" : ""} ·{" "}
-                      {cell.totalHours.toFixed(1)}h · {cell.uniqueEmployees} staff
+                      {fmtFixed(cell.totalHours, 1)}h · {cell.uniqueEmployees} staff
                     </p>
                     <p className="text-muted-foreground">Click to view day</p>
                   </TooltipContent>

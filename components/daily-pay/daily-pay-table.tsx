@@ -1,6 +1,5 @@
 "use client";
 
-import { format } from "date-fns";
 import {
   ChevronFirst,
   ChevronLast,
@@ -10,6 +9,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateOnly, formatTimestamp } from "@/lib/utils/date-display";
 import {
   Table,
   TableBody,
@@ -26,23 +26,6 @@ import type { DailyPayListResponse, DailyPayEntry } from "@/types/daily-pay.type
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-/** Formats a plain "YYYY-MM-DD" workday date without shifting to a UTC day boundary. */
-function formatDateOnly(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!match) {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
-  }
-  const [, y, m, d] = match;
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
-}
-
-function formatDate(value: string): string {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
-}
 
 /**
  * Payee names for a row. The list endpoint returns payments (and their money)
@@ -215,7 +198,7 @@ function DailyPayRow({ entry, onClick, onEdit, canEdit = true, showWarnings }: R
         </TableCell>
       )}
       <TableCell className="hidden whitespace-nowrap text-sm text-muted-foreground sm:table-cell">
-        {formatDate(entry.createdAt)}
+        {formatTimestamp(entry.createdAt, "MMM d, yyyy")}
       </TableCell>
       {canEdit && (
         <TableCell>

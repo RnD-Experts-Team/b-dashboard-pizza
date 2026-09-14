@@ -15,12 +15,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@/components/shared/searchable-select";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
@@ -210,6 +207,17 @@ export function AttendanceFields({
   children,
 }: AttendanceFieldsProps) {
   const preview = useMemo(() => computeAttendancePreview(value), [value]);
+  const technicianOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      technicians
+        .filter((tech) => !tech.deletedAt)
+        .map((tech) => ({
+          value: String(tech.id),
+          label: tech.name,
+          hint: tech.categoryName ?? undefined,
+        })),
+    [technicians]
+  );
   const hasAnyTime = ATTENDANCE_BUCKETS.some((b) => preview.minutes[b] > 0);
   const showPreview = hasAnyTime || preview.warnings.length > 0;
 
@@ -220,26 +228,16 @@ export function AttendanceFields({
         <Label className="text-xs text-muted-foreground">
           Technician <span className="text-destructive">*</span>
         </Label>
-        <Select
+        <SearchableSelect
+          options={technicianOptions}
           value={value.technicianId || undefined}
-          onValueChange={(v) => onChange({ technicianId: v })}
+          onChange={(v) => onChange({ technicianId: v })}
           disabled={disabled}
-        >
-          <SelectTrigger
-            className={cn("h-8 text-sm", fieldErrors.technician_id && "border-destructive")}
-          >
-            <SelectValue placeholder="Select technician" />
-          </SelectTrigger>
-          <SelectContent>
-            {technicians
-              .filter((tech) => !tech.deletedAt)
-              .map((tech) => (
-                <SelectItem key={tech.id} value={String(tech.id)}>
-                  {tech.name}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+          placeholder="Select technician"
+          searchPlaceholder="Search technicians…"
+          emptyText="No technicians found."
+          className={cn("h-8 text-sm", fieldErrors.technician_id && "border-destructive")}
+        />
         <FieldError message={fieldErrors.technician_id} />
       </div>
 
@@ -470,6 +468,11 @@ function CrossIssueSection({
         <IssuePickerDialog
           open
           storeNumber={storeNumber}
+          // NO technicianId on purpose. Cross-ticket attendance exists for
+          // "drove to one store, worked three tickets", so narrowing to one
+          // technician's assignments defeats the exact relaxation this is for —
+          // and the list is already bounded by the ticket in front of you.
+          // LogVisitDialog DOES filter: it is unscoped and fetches globally.
           selectedIssueIds={crossTicketExtras}
           lockedIssueIds={baseIssueIds}
           onClose={() => setPickerOpen(false)}

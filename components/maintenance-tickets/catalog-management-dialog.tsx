@@ -276,7 +276,7 @@ function TechniciansTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
         <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder={t("catalog.phonePlaceholder")} className="text-sm" />
         <Select value={categoryId} onValueChange={setCategoryId}>
           <SelectTrigger className="text-sm"><SelectValue placeholder={t("catalog.categoryPlaceholder")} /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
             <SelectItem value="none">{t("catalog.noCategory")}</SelectItem>
             {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
           </SelectContent>

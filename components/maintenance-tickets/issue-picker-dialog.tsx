@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckSquare, Loader2, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import {
   Dialog,
   DialogContent,
@@ -26,29 +27,22 @@ import type { Ticket, TicketIssue } from "@/types/maintenance-tickets.types";
 /*  and that duplication is deliberate rather than an oversight.              */
 /*                                                                            */
 /*  The daily-pay dialog hard-filters to issues assigned to the payment's     */
-/*  payee, because the backend REQUIRES that for a pay line. Attendance has   */
-/*  the opposite requirement: the whole point of the cross-ticket relaxation  */
-/*  is "drove to one store, worked three tickets", so filtering by technician */
-/*  would defeat it. Generalising the daily-pay component in place would mean */
-/*  editing another feature's file to add a flag whose only job is to switch  */
-/*  off that feature's core invariant.                                        */
+/*  payee, because the backend REQUIRES that for a pay line — it is that      */
+/*  feature's core invariant, not a preference. Attendance does not have that */
+/*  requirement: "drove to one store, worked three tickets" is the whole      */
+/*  point of the cross-ticket relaxation. Generalising the daily-pay          */
+/*  component in place would mean editing another feature's file to add a     */
+/*  flag whose only job is to switch off that feature's invariant.            */
+/*                                                                            */
+/*  So here `technicianId` is OPTIONAL, and the two callers differ on purpose: */
+/*   - AttendancePanel  omits it — bounded by the ticket you are already on.  */
+/*   - LogVisitDialog   passes it — unscoped and global, so the filter is     */
+/*                      navigation rather than restriction.                    */
 /*                                                                            */
 /*  COST, stated honestly: ~250 lines of near-identical fetch/table/selection */
 /*  code now live twice. If a THIRD caller appears, lift the shell into       */
 /*  components/shared/ and let each feature supply its own predicate.         */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
-}
 
 interface IssuePickerDialogProps {
   open: boolean;
@@ -134,8 +128,11 @@ export function IssuePickerDialog({
       });
 
     return () => ctrl.abort();
+    // selectedIssueIds is deliberately omitted — it seeds local state on open
+    // and re-running on every parent re-render would discard the user's picks.
+    // technicianId IS included: it is part of the server query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, technicianId]);
 
   useEffect(() => {
     if (!selectedTicket) return;
@@ -237,7 +234,7 @@ export function IssuePickerDialog({
                           {ticket.storeId ?? ticket.otherStore ?? "Other"}
                         </td>
                         <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                          {formatDate(ticket.createdAt)}
+                          {formatTimestamp(ticket.createdAt, "MMM d, yyyy")}
                         </td>
                       </tr>
                     ))}

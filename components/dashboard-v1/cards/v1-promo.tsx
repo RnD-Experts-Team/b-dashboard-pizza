@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { cn } from "@/lib/utils";
 import type { Promo } from "@/types/dashboard-report.types";
 import {
@@ -132,7 +133,7 @@ export function V1PromoCard({
                 )}
               >
                 ({week_over_week.promo_to_sales_pct_change >= 0 ? "+" : ""}
-                {week_over_week.promo_to_sales_pct_change.toFixed(2)} pts)
+                {fmtFixed(week_over_week.promo_to_sales_pct_change, 2)} pts)
               </span>
             }
           />

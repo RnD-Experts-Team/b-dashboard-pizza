@@ -15,6 +15,12 @@ export interface SearchableSelectOption<TValue extends string | number = string>
   value: TValue;
   label: string;
   hint?: string;
+  /**
+   * Renders greyed and unclickable but STILL LISTED and still findable by
+   * typing. The point of a disabled option is to show WHY it cannot be picked
+   * — filtering it out instead just reads as "the app lost that record".
+   */
+  disabled?: boolean;
 }
 
 interface SearchableSelectProps<TValue extends string | number = string> {
@@ -107,7 +113,16 @@ export function SearchableSelect<TValue extends string | number = string>({
             autoFocus
           />
         </div>
-        <div className="max-h-[240px] overflow-y-auto p-1">
+        {/* Fixed 240px, deliberately not configurable — that one number IS the
+            "fixed height" every dropdown in the app now shares.
+            onWheel: without it, scrolling past the end of this list chains to a
+            scrolling parent (the daily-pay dialog is max-h-[90vh] overflow-y-auto),
+            which moves the trigger this popover is anchored to. House style —
+            daily-pay/multi-select.tsx does the same. */}
+        <div
+          className="max-h-[240px] overflow-y-auto p-1"
+          onWheel={(e) => e.stopPropagation()}
+        >
           {filtered.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-muted-foreground">
               {emptyText}
@@ -119,6 +134,8 @@ export function SearchableSelect<TValue extends string | number = string>({
                 <button
                   key={option.value}
                   type="button"
+                  disabled={option.disabled}
+                  aria-disabled={option.disabled}
                   onClick={() => {
                     onChange(option.value);
                     setOpen(false);
@@ -126,7 +143,9 @@ export function SearchableSelect<TValue extends string | number = string>({
                   }}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
+                    option.disabled
+                      ? "cursor-not-allowed opacity-50"
+                      : "hover:bg-accent hover:text-accent-foreground",
                     isSelected && "bg-accent/60"
                   )}
                 >

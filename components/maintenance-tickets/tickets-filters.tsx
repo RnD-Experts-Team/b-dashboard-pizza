@@ -4,9 +4,10 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePicker } from "@/components/ui/date-picker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   BookOpen,
@@ -28,6 +29,7 @@ import {
   ArrowDownUp,
   TimerReset,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus, PaymentStatusValue, UserRef } from "@/types/maintenance-tickets.types";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
@@ -480,6 +482,69 @@ function MultiCheckSelect<T extends string | number = number>({
 /*  Filters bar                                                             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Filter groups — ONE source of truth                                      */
+/*                                                                            */
+/*  FILTER_KEYS (Apply-gating), the header's active count, and the per-tab    */
+/*  badges all derive from this. They used to be separate hand-maintained     */
+/*  lists and had ALREADY drifted once — three keys were in FILTER_KEYS but   */
+/*  missing from the count, so the badge undercounted. A third list would     */
+/*  have guaranteed a third drift.                                           */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+type FilterGroupId = "ticket" | "work" | "dates" | "money" | "results";
+
+interface FilterGroup {
+  id: FilterGroupId;
+  label: string;
+  icon: LucideIcon;
+  keys: readonly (keyof TicketsFilters)[];
+}
+
+const FILTER_GROUPS: readonly FilterGroup[] = [
+  // Properties of the ticket as a record. Most used, so first and default.
+  { id: "ticket", label: "Ticket", icon: CircleDot,
+    keys: ["statuses", "priorities", "assigned_priorities", "types"] },
+  // What is wrong, and who is on it.
+  { id: "work", label: "Work", icon: User,
+    keys: ["issue_ids", "issue_statuses", "technician_ids", "creator_ids"] },
+  // Changed-Status-To lives here, not under Ticket: its two date bounds are
+  // meaningless without it, and splitting the trio makes the pair look broken.
+  { id: "dates", label: "Dates", icon: CalendarDays,
+    keys: ["created_from", "created_to", "changed_statuses", "changed_from", "changed_to"] },
+  // The two cost thresholds are easy to confuse (whole-ticket vs single-issue,
+  // both gross), so they sit where their captions can be compared.
+  { id: "money", label: "Money", icon: DollarSign,
+    keys: ["payment_statuses", "part_cost_total_gt", "part_cost_single_gt"] },
+  // NOT filters — these shape the result set rather than narrow it.
+  { id: "results", label: "Results", icon: List,
+    keys: ["trashed", "sort", "dir", "per_page"] },
+] as const;
+
+/**
+ * `page` is the one key that is pending-change-relevant but is never a
+ * user-chosen "filter", so it belongs in the gating list and in no group.
+ */
+const FILTER_KEYS: (keyof TicketsFilters)[] = [
+  ...FILTER_GROUPS.flatMap((g) => g.keys),
+  "page",
+];
+
+const COUNTED_FILTER_KEYS: (keyof TicketsFilters)[] = FILTER_GROUPS.flatMap((g) => g.keys);
+
+/** Arrays count by length, scalars by value — the original predicate exactly. */
+function isActiveValue(value: unknown): boolean {
+  const v = Array.isArray(value) ? value.length : value;
+  return v != null && v !== 0 && v !== "";
+}
+
+function countActive(
+  f: TicketsFilters,
+  keys: readonly (keyof TicketsFilters)[]
+): number {
+  return keys.filter((k) => isActiveValue(f[k])).length;
+}
+
 interface TicketsFiltersBarProps {
   filters: TicketsFilters;
   onFiltersChange: (filters: TicketsFilters) => void;
@@ -519,6 +584,7 @@ export function TicketsFiltersBar({
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState<FilterGroupId>("ticket");
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogTechnicians, setCatalogTechnicians] = useState<CatalogTechnician[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -529,7 +595,10 @@ export function TicketsFiltersBar({
   // Every time the panel opens, reset the draft to the currently applied filters —
   // discards any unsaved edits from a previous open, same as the store selector.
   useEffect(() => {
-    if (advancedOpen) setDraftFilters(filters);
+    if (advancedOpen) {
+      setDraftFilters(filters);
+      setFilterTab("ticket");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advancedOpen]);
 
@@ -564,13 +633,6 @@ export function TicketsFiltersBar({
     onFiltersChange({});
   }
 
-  const FILTER_KEYS: (keyof TicketsFilters)[] = [
-    "statuses", "priorities", "assigned_priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
-    "creator_ids", "payment_statuses",
-    "part_cost_total_gt", "part_cost_single_gt", "created_from", "created_to",
-    "changed_statuses", "changed_from", "changed_to", "trashed", "sort", "dir", "page", "per_page",
-  ];
-
   function fieldEqual(a: unknown, b: unknown): boolean {
     if (Array.isArray(a) || Array.isArray(b)) {
       const aArr = (a as unknown[] | undefined) ?? [];
@@ -582,30 +644,23 @@ export function TicketsFiltersBar({
 
   const hasPendingChanges = FILTER_KEYS.some((k) => !fieldEqual(draftFilters[k], filters[k]));
 
-  const activeFilterCount = [
-    filters.statuses?.length,
-    filters.priorities?.length,
-    filters.assigned_priorities?.length,
-    filters.issue_ids?.length,
-    filters.issue_statuses?.length,
-    filters.technician_ids?.length,
-    filters.types?.length,
-    filters.creator_ids?.length,
-    filters.payment_statuses?.length,
-    filters.part_cost_total_gt,
-    // These three were in FILTER_KEYS but missing here, so the badge
-    // undercounted whenever they were the only active filter.
-    filters.part_cost_single_gt,
-    filters.sort,
-    filters.dir,
-    filters.trashed,
-    filters.per_page,
-    filters.created_from,
-    filters.created_to,
-    filters.changed_statuses?.length,
-    filters.changed_from,
-    filters.changed_to,
-  ].filter((v) => v != null && v !== 0 && v !== "").length;
+  // Counts the APPLIED filters, for the toolbar and panel-header badges.
+  const activeFilterCount = countActive(filters, COUNTED_FILTER_KEYS);
+
+  // Counts the DRAFT, per tab. Draft rather than applied on purpose: tabs hide
+  // controls, so if these counted only what is applied, setting a filter on
+  // Dates and switching to Ticket would show "Dates 0" until Apply — exactly
+  // the thing the badges exist to prevent. The consequence is that the tab
+  // badges can briefly total more than the header's "N active" while edits are
+  // pending; that is self-explaining, because the header shows an enabled
+  // "Apply filters" in precisely that state.
+  const groupCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        FILTER_GROUPS.map((g) => [g.id, countActive(draftFilters, g.keys)])
+      ) as Record<FilterGroupId, number>,
+    [draftFilters]
+  );
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -835,9 +890,36 @@ export function TicketsFiltersBar({
             </div>
           </div>
 
-          {/* Filter fields grid */}
-          <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Filter fields, grouped into tabs. Twenty controls in one grid
+              was five rows deep; grouped it is at most two. Each trigger
+              carries a count of ITS OWN active filters, because tabs hide
+              controls and a hidden active filter is worse than a tall panel. */}
+          <Tabs
+            value={filterTab}
+            onValueChange={(v) => setFilterTab(v as FilterGroupId)}
+            className="w-full"
+          >
+            <div className="-mx-1 overflow-x-auto px-5 pt-3">
+              <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
+                {FILTER_GROUPS.map((g) => (
+                  <TabsTrigger key={g.id} value={g.id} className="gap-1.5 whitespace-nowrap">
+                    <g.icon className="h-3.5 w-3.5" />
+                    <span>{g.label}</span>
+                    {groupCounts[g.id] > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 min-w-4 px-1 text-[10px] leading-none tabular-nums"
+                      >
+                        {groupCounts[g.id]}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
+            <TabsContent value="ticket" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Ticket Status */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -886,6 +968,27 @@ export function TicketsFiltersBar({
               />
             </div>
 
+            {/* Ticket Type */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <List className="h-3 w-3" />
+                Ticket Type
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.types ?? []}
+                options={typeOptions}
+                onChange={(v) => updateField("types", v)}
+                disabled={disabled}
+                placeholder="Any type"
+                searchPlaceholder="Search types…"
+              />
+            </div>
+
+              </div>
+            </TabsContent>
+
+            <TabsContent value="work" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Issue */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -936,22 +1039,6 @@ export function TicketsFiltersBar({
               />
             </div>
 
-            {/* Payment Status — how finance pulls up everything still owed */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <DollarSign className="h-3 w-3" />
-                Payment Status
-              </label>
-              <MultiCheckSelect
-                value={draftFilters.payment_statuses ?? []}
-                options={paymentStatusOptions}
-                onChange={(v) => updateField("payment_statuses", v)}
-                disabled={disabled}
-                placeholder="Any payment status"
-                searchPlaceholder="Search…"
-              />
-            </div>
-
             {/* Filed by */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -969,6 +1056,11 @@ export function TicketsFiltersBar({
               <p className="text-[10px] text-muted-foreground">From loaded results.</p>
             </div>
 
+              </div>
+            </TabsContent>
+
+            <TabsContent value="dates" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Changed Status To */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -1039,22 +1131,6 @@ export function TicketsFiltersBar({
               </div>
             </div>
 
-            {/* Ticket Type */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <List className="h-3 w-3" />
-                Ticket Type
-              </label>
-              <MultiCheckSelect
-                value={draftFilters.types ?? []}
-                options={typeOptions}
-                onChange={(v) => updateField("types", v)}
-                disabled={disabled}
-                placeholder="Any type"
-                searchPlaceholder="Search types…"
-              />
-            </div>
-
             {/* Created from */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -1107,6 +1183,27 @@ export function TicketsFiltersBar({
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
+            </div>
+
+              </div>
+            </TabsContent>
+
+            <TabsContent value="money" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Payment Status — how finance pulls up everything still owed */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                Payment Status
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.payment_statuses ?? []}
+                options={paymentStatusOptions}
+                onChange={(v) => updateField("payment_statuses", v)}
+                disabled={disabled}
+                placeholder="Any payment status"
+                searchPlaceholder="Search…"
+              />
             </div>
 
             {/* Min ticket part cost. Renamed: the old "Min part cost" label
@@ -1166,6 +1263,11 @@ export function TicketsFiltersBar({
               </p>
             </div>
 
+              </div>
+            </TabsContent>
+
+            <TabsContent value="results" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Deleted records */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -1231,8 +1333,10 @@ export function TicketsFiltersBar({
                 searchPlaceholder="Search…"
               />
             </div>
+              </div>
+            </TabsContent>
 
-          </div>
+          </Tabs>
         </div>
       )}
     </div>

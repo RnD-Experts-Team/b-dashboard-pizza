@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { format } from "date-fns";
@@ -88,6 +89,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { formatDateOrTimestamp, formatTimestamp } from "@/lib/utils/date-display";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
@@ -126,19 +128,6 @@ import {
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-function fmtDate(iso: string) {
-  try {
-    // Date-only strings (YYYY-MM-DD) must be parsed in local time — `new Date("YYYY-MM-DD")` parses
-    // as UTC midnight which shifts the displayed date one day back in UTC-offset timezones.
-    const d = /^\d{4}-\d{2}-\d{2}$/.test(iso.trim()) ? new Date(iso + "T00:00") : new Date(iso);
-    return format(d, "MMM d, yyyy");
-  } catch { return iso; }
-}
-
-function fmtDateTime(iso: string) {
-  try { return format(new Date(iso), "MMM d, yyyy HH:mm"); } catch { return iso; }
-}
 
 function calcDuration(startIso: string, endIso: string): string | null {
   try {
@@ -282,6 +271,18 @@ function DateTimePicker({ value, onChange, placeholder, className }: {
 /*  Color-coded chips                                                        */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * House dropdown skin for this sheet: a fixed 192px cap plus a thin custom
+ * scrollbar. Deliberately denser than the app-wide 240px used everywhere else —
+ * this is the compact text-[11px] navigator/panel skin, and consistency WITHIN
+ * a skin beats consistency across skins.
+ *
+ * Module-scoped so every panel in the file can reach it; it used to live inside
+ * TicketNavigator, which is why three selects further down had no cap at all.
+ */
+const SELECT_CONTENT_CLS =
+  "text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40";
+
 function StatusChip({ value, label }: { value: string; label: string }) {
   const accent = statusAccent(value);
   return (
@@ -395,7 +396,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
   }
 
   const selectCls = "h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5";
-  const selectContentCls = "text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40";
+  const selectContentCls = SELECT_CONTENT_CLS;
   const itemCls = "text-[11px] py-1 px-2";
   const labelCls = "text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate";
 
@@ -1414,7 +1415,7 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Pay Entry</p>
       <Select value={issueDraft.payTechnicianId} onValueChange={(v) => onPatchDraft({ payTechnicianId: v })}>
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
-        <SelectContent>
+        <SelectContent position="popper" className={SELECT_CONTENT_CLS}>
           {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
             <SelectItem key={tech.id} value={String(tech.id)}>{tech.name}</SelectItem>
           ))}
@@ -1524,10 +1525,10 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
         <Label className="text-xs text-muted-foreground">Assignment <span className="text-destructive">*</span></Label>
         <Select value={issueDraft.delayAssignmentId} onValueChange={(v) => onPatchDraft({ delayAssignmentId: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select assignment" /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className={SELECT_CONTENT_CLS}>
             {issue.assignments.map((assignment) => (
               <SelectItem key={assignment.id} value={String(assignment.id)}>
-                #{assignment.id} · {fmtDate(assignment.assignedDate)}
+                #{assignment.id} · {formatDateOrTimestamp(assignment.assignedDate, "MMM d, yyyy")}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1593,10 +1594,10 @@ function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, o
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Change Assignment Technicians</p>
       <Select value={issueDraft.changeAssignmentId} onValueChange={(v) => onPatchDraft({ changeAssignmentId: v })}>
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select assignment" /></SelectTrigger>
-        <SelectContent>
+        <SelectContent position="popper" className={SELECT_CONTENT_CLS}>
           {issue.assignments.map((assignment) => (
             <SelectItem key={assignment.id} value={String(assignment.id)}>
-              #{assignment.id} · {fmtDate(assignment.assignedDate)}
+              #{assignment.id} · {formatDateOrTimestamp(assignment.assignedDate, "MMM d, yyyy")}
             </SelectItem>
           ))}
         </SelectContent>
@@ -1910,7 +1911,7 @@ function StatusHistory({ changes }: { changes: TicketIssue["statusChanges"] }) {
                   {c.creator ? c.creator.name : c.changedBy}
                 </span>
               )}
-              <span>{fmtDateTime(c.createdAt)}</span>
+              <span>{formatTimestamp(c.createdAt, "MMM d, yyyy HH:mm")}</span>
               {c.reason && <span className="italic">"{c.reason}"</span>}
             </div>
           ))}
@@ -2384,7 +2385,7 @@ function IssueNode({
                           <div className="flex flex-col gap-0.5">
                             <span className="text-muted-foreground">Scheduled</span>
                             <span className="text-sm font-medium">
-                              {fmtDate(a.assignedDate)}{a.assignedHour ? `, ${a.assignedHour}` : ""}
+                              {formatDateOrTimestamp(a.assignedDate, "MMM d, yyyy")}{a.assignedHour ? `, ${a.assignedHour}` : ""}
                             </span>
                           </div>
                           {a.technicians.length > 0 && (
@@ -2443,7 +2444,7 @@ function IssueNode({
                                 <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                                   <span className="text-muted-foreground">Rescheduled to:</span>
                                   <span className={cn("font-medium", delay.mistaken && "line-through")}>
-                                    {fmtDate(delay.newDate)}{delay.newHour ? `, ${delay.newHour}` : ""}
+                                    {formatDateOrTimestamp(delay.newDate, "MMM d, yyyy")}{delay.newHour ? `, ${delay.newHour}` : ""}
                                   </span>
                                   {delay.reason && (
                                     <>
@@ -2522,7 +2523,7 @@ function IssueNode({
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <User className="h-3 w-3 shrink-0" />
                               <span>Added by <span className="font-medium text-foreground">{item.creator?.name ?? `#${item.createdBy}`}</span></span>
-                              <span>· {fmtDate(item.createdAt)}</span>
+                              <span>· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                             </div>
                           )}
                           {isShared && sharedWithIds.length > 0 && (
@@ -2641,7 +2642,7 @@ function IssueNode({
                                 <span className="text-sm flex items-center gap-1">
                                   <User className="h-3 w-3 shrink-0" />
                                   {item.creator?.name ?? `#${item.createdBy}`}
-                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                  <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                                 </span>
                               </div>
                             )}
@@ -2664,13 +2665,13 @@ function IssueNode({
                                   {item.startClock && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Clock In</span>
-                                      <span className="font-medium">{fmtDateTime(item.startClock)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.startClock, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {item.endClock && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Clock Out</span>
-                                      <span className="font-medium">{fmtDateTime(item.endClock)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.endClock, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {dur && (
@@ -2693,13 +2694,13 @@ function IssueNode({
                                   {item.startBreak && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Start</span>
-                                      <span className="font-medium">{fmtDateTime(item.startBreak)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.startBreak, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {item.endBreak && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">End</span>
-                                      <span className="font-medium">{fmtDateTime(item.endBreak)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.endBreak, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {dur && (
@@ -2722,13 +2723,13 @@ function IssueNode({
                                   {item.startPartsRun && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Depart</span>
-                                      <span className="font-medium">{fmtDateTime(item.startPartsRun)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.startPartsRun, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {item.endPartsRun && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Return</span>
-                                      <span className="font-medium">{fmtDateTime(item.endPartsRun)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.endPartsRun, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {dur && (
@@ -2837,13 +2838,13 @@ function IssueNode({
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Quantity</span>
                                 <span className={cn("text-sm tabular-nums", strike)}>
-                                  {item.quantity} × ${item.unitCost.toFixed(2)}
+                                  {item.quantity} × ${fmtFixed(item.unitCost, 2)}
                                 </span>
                               </div>
                             )}
                             <div className="flex flex-col gap-0.5">
                               <span className="text-muted-foreground">Cost</span>
-                              <span className={cn("text-sm font-semibold tabular-nums", strike)}>${item.cost.toFixed(2)}</span>
+                              <span className={cn("text-sm font-semibold tabular-nums", strike)}>${fmtFixed(item.cost, 2)}</span>
                             </div>
                             {/* Net cost is what the payer is out of pocket after
                                 returns, and is what a daily pay reimburses. Shown
@@ -2852,7 +2853,7 @@ function IssueNode({
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Net cost</span>
                                 <span className={cn("text-sm font-semibold tabular-nums", strike)}>
-                                  ${item.netCost.toFixed(2)}
+                                  ${fmtFixed(item.netCost, 2)}
                                 </span>
                                 <span className="text-[10px] text-muted-foreground">after returns</span>
                               </div>
@@ -2894,7 +2895,7 @@ function IssueNode({
                                 <span className="text-sm flex items-center gap-1">
                                   <User className="h-3 w-3 shrink-0" />
                                   {item.creator?.name ?? `#${item.createdBy}`}
-                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                  <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                                 </span>
                               </div>
                             )}
@@ -3003,25 +3004,25 @@ function IssueNode({
                             {item.basePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Base Pay</span>
-                                <span className="text-sm font-medium">${item.basePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.basePay, 2)}</span>
                               </div>
                             )}
                             {item.performancePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Performance Pay</span>
-                                <span className="text-sm font-medium">${item.performancePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.performancePay, 2)}</span>
                               </div>
                             )}
                             {item.drivingBasePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Driving Base Pay</span>
-                                <span className="text-sm font-medium">${item.drivingBasePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.drivingBasePay, 2)}</span>
                               </div>
                             )}
                             {item.drivingPerformancePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Driving Perf. Pay</span>
-                                <span className="text-sm font-medium">${item.drivingPerformancePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.drivingPerformancePay, 2)}</span>
                               </div>
                             )}
                             {item.drivingTime != null && (
@@ -3042,7 +3043,7 @@ function IssueNode({
                                 <span className="text-sm flex items-center gap-1">
                                   <User className="h-3 w-3 shrink-0" />
                                   {item.creator?.name ?? `#${item.createdBy}`}
-                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                  <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                                 </span>
                               </div>
                             )}
@@ -3136,7 +3137,7 @@ function IssueNode({
                                 <span className="text-muted-foreground">Expires</span>
                                 <span className={cn("text-sm flex items-center gap-1", expiryColor)}>
                                   <CalendarIcon className="h-3 w-3 shrink-0" />
-                                  {fmtDate(item.expiryDate)}
+                                  {formatDateOrTimestamp(item.expiryDate, "MMM d, yyyy")}
                                   {daysLeft < 0 && <span className="text-xs">(expired)</span>}
                                   {daysLeft >= 0 && daysLeft <= 30 && <span className="text-xs">({daysLeft}d left)</span>}
                                 </span>
@@ -3149,7 +3150,7 @@ function IssueNode({
                               <span className="text-sm flex items-center gap-1">
                                 <User className="h-3 w-3 shrink-0" />
                                 {item.creator?.name ?? `#${item.createdBy}`}
-                                <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                               </span>
                             </div>
                           )}

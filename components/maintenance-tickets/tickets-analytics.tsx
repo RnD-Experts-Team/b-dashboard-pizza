@@ -27,6 +27,18 @@ function formatHours(avgHours: number | null): string {
   return avgHours == null ? "—" : `${avgHours.toFixed(1)}h`;
 }
 
+/**
+ * An average, or an em dash when there is nothing to average.
+ *
+ * NOT `(n ?? 0).toFixed()`. Every figure in this panel is an aggregate the API
+ * nulls out when no tickets match, and "0.00 tickets per week" is a different
+ * claim from "no tickets" — one of them is false. Same reasoning as
+ * formatHours above, which this panel has always done correctly.
+ */
+function formatAvg(value: number | null, dp = 2): string {
+  return value == null ? "—" : value.toFixed(dp);
+}
+
 /** One headline metric cell inside the top strip. */
 function StatCell({
   icon: Icon,
@@ -124,8 +136,14 @@ export function TicketsAnalyticsPanel({ analytics, isLoading, error }: TicketsAn
             <StatCell
               icon={CalendarDays}
               label="Avg Tickets / Week"
-              value={avgTicketsPerWeek.value.toFixed(2)}
-              hint={`All-time · ${fmtDate(avgTicketsPerWeek.spanStart)} – ${fmtDate(avgTicketsPerWeek.spanEnd)}`}
+              value={formatAvg(avgTicketsPerWeek.value)}
+              // No span means no tickets matched, so there is no date range to
+              // show — an "—  – —" range reads as a broken widget.
+              hint={
+                avgTicketsPerWeek.spanStart && avgTicketsPerWeek.spanEnd
+                  ? `All-time · ${fmtDate(avgTicketsPerWeek.spanStart)} – ${fmtDate(avgTicketsPerWeek.spanEnd)}`
+                  : "No tickets in range"
+              }
             />
           </div>
 

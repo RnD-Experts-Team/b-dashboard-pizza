@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { toast } from "sonner";
 import { ChevronDown, Loader2, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,12 +15,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@/components/shared/searchable-select";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
@@ -167,6 +165,27 @@ export function PartUsagePanel({
   const netCost = useMemo(
     () => (netQuantity != null && unitCost != null ? netQuantity * unitCost : null),
     [netQuantity, unitCost]
+  );
+
+  const locationOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      locations.map((loc) => ({
+        value: String(loc.id),
+        label: loc.name,
+        hint: loc.code ?? undefined,
+      })),
+    [locations]
+  );
+
+  // Order is load-bearing: the issue's own technicians sort first. Array.filter
+  // is order-preserving, so the sort survives the search box.
+  const payerOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      sortAttachedFirst(technicians, issue).map((tech) => ({
+        value: String(tech.id),
+        label: tech.name,
+      })),
+    [technicians, issue]
   );
 
   /** Advisory only — the 422 is what actually decides. */
@@ -426,30 +445,19 @@ export function PartUsagePanel({
           <Label className="text-xs text-muted-foreground">
             Which shelf did they come off? <span className="text-destructive">*</span>
           </Label>
-          <Select
+          <SearchableSelect
+            options={locationOptions}
             value={issueDraft.partStorageLocationId || undefined}
-            onValueChange={(v) => patch({ partStorageLocationId: v })}
+            onChange={(v) => patch({ partStorageLocationId: v })}
             disabled={isSubmitting}
-          >
-            <SelectTrigger
-              className={cn(
-                "h-8 text-sm",
-                fieldErrors.storage_location_id && "border-destructive"
-              )}
-            >
-              <SelectValue placeholder="Select a location" />
-            </SelectTrigger>
-            <SelectContent>
-              {locations.map((loc) => (
-                <SelectItem key={loc.id} value={String(loc.id)}>
-                  {loc.name}
-                  {loc.code && (
-                    <span className="ms-1.5 text-xs text-muted-foreground">{loc.code}</span>
-                  )}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder="Select a location"
+            searchPlaceholder="Search locations…"
+            emptyText="No locations found."
+            className={cn(
+              "h-8 text-sm",
+              fieldErrors.storage_location_id && "border-destructive"
+            )}
+          />
           <FieldError message={fieldErrors.storage_location_id} />
           {overdrawn && (
             <p className="text-[11px] text-red-600 dark:text-red-400">
@@ -467,8 +475,8 @@ export function PartUsagePanel({
             Not enough stock
           </p>
           <p className="text-[11px] text-destructive/90 tabular-nums">
-            Requested {shortfall.requested.toFixed(2)} · Available{" "}
-            {shortfall.available.toFixed(2)} · Short by {shortfall.shortBy.toFixed(2)}
+            Requested {fmtFixed(shortfall.requested, 2)} · Available{" "}
+            {fmtFixed(shortfall.available, 2)} · Short by {fmtFixed(shortfall.shortBy, 2)}
           </p>
           <p className="text-[11px] text-muted-foreground">
             Nothing was saved — {partName} is still where it was.
@@ -481,7 +489,7 @@ export function PartUsagePanel({
               className="h-6 text-[11px]"
               onClick={() => patch({ partQuantity: String(shortfall.available) })}
             >
-              Use {shortfall.available.toFixed(2)}
+              Use {fmtFixed(shortfall.available, 2)}
             </Button>
           )}
         </div>
@@ -521,27 +529,19 @@ export function PartUsagePanel({
               to issue.technicians the way the attendance panel is: the payer
               need not be an attached tech, and in bulk mode the dummy issue has
               no technicians at all, which would render an empty dropdown. */}
-          <Select
+          <SearchableSelect
+            options={payerOptions}
             value={issueDraft.partPaidByTechnicianId || undefined}
-            onValueChange={(v) => patch({ partPaidByTechnicianId: v })}
+            onChange={(v) => patch({ partPaidByTechnicianId: v })}
             disabled={isSubmitting}
-          >
-            <SelectTrigger
-              className={cn(
-                "h-8 text-sm",
-                fieldErrors.paid_by_technician_id && "border-destructive"
-              )}
-            >
-              <SelectValue placeholder="Select technician" />
-            </SelectTrigger>
-            <SelectContent>
-              {sortAttachedFirst(technicians, issue).map((tech) => (
-                <SelectItem key={tech.id} value={String(tech.id)}>
-                  {tech.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder="Select technician"
+            searchPlaceholder="Search technicians…"
+            emptyText="No technicians found."
+            className={cn(
+              "h-8 text-sm",
+              fieldErrors.paid_by_technician_id && "border-destructive"
+            )}
+          />
           <FieldError message={fieldErrors.paid_by_technician_id} />
         </div>
       )}
@@ -575,27 +575,19 @@ export function PartUsagePanel({
             </div>
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Returned to</Label>
-              <Select
+              <SearchableSelect
+                options={locationOptions}
                 value={issueDraft.partReturnedToStorageLocationId || undefined}
-                onValueChange={(v) => patch({ partReturnedToStorageLocationId: v })}
+                onChange={(v) => patch({ partReturnedToStorageLocationId: v })}
                 disabled={isSubmitting}
-              >
-                <SelectTrigger
-                  className={cn(
-                    "h-8 text-sm",
-                    fieldErrors.returned_to_storage_location_id && "border-destructive"
-                  )}
-                >
-                  <SelectValue placeholder="Select a location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={String(loc.id)}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select a location"
+                searchPlaceholder="Search locations…"
+                emptyText="No locations found."
+                className={cn(
+                  "h-8 text-sm",
+                  fieldErrors.returned_to_storage_location_id && "border-destructive"
+                )}
+              />
               <FieldError message={fieldErrors.returned_to_storage_location_id} />
             </div>
           </div>

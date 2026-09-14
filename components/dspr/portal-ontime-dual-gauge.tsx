@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -144,13 +145,13 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                    {portal.put_into_portal_percent.toFixed(1)}%
+                    {fmtFixed(portal.put_into_portal_percent, 1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
                   <p className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {portal.in_portal_on_time_percent.toFixed(1)}%
+                    {fmtFixed(portal.in_portal_on_time_percent, 1)}%
                   </p>
                 </div>
               </div>
@@ -160,13 +161,13 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {dialogWtdAvg.put_into_portal_percent.toFixed(1)}%
+                    {fmtFixed(dialogWtdAvg.put_into_portal_percent, 1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
                   <p className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%
+                    {fmtFixed(dialogWtdAvg.in_portal_on_time_percent, 1)}%
                   </p>
                 </div>
               </div>
@@ -176,21 +177,21 @@ export function PortalOnTimeDualGauge({ portal, className }: Props) {
             rows={[
               {
                 label: "Put Into Portal %",
-                daily: `${portal.put_into_portal_percent.toFixed(1)}%`,
-                wtd: `${dialogWtdAvg.put_into_portal_percent.toFixed(1)}%`,
+                daily: `${fmtFixed(portal.put_into_portal_percent, 1)}%`,
+                wtd: `${fmtFixed(dialogWtdAvg.put_into_portal_percent, 1)}%`,
                 dailyNum: portal.put_into_portal_percent,
                 wtdNum: dialogWtdAvg.put_into_portal_percent,
                 higherIsBetter: true,
-                wtdSum: showSum ? `${dialogWtdSum.put_into_portal_percent.toFixed(1)}%` : undefined,
+                wtdSum: showSum ? `${fmtFixed(dialogWtdSum.put_into_portal_percent, 1)}%` : undefined,
               },
               {
                 label: "On-Time %",
-                daily: `${portal.in_portal_on_time_percent.toFixed(1)}%`,
-                wtd: `${dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%`,
+                daily: `${fmtFixed(portal.in_portal_on_time_percent, 1)}%`,
+                wtd: `${fmtFixed(dialogWtdAvg.in_portal_on_time_percent, 1)}%`,
                 dailyNum: portal.in_portal_on_time_percent,
                 wtdNum: dialogWtdAvg.in_portal_on_time_percent,
                 higherIsBetter: true,
-                wtdSum: showSum ? `${dialogWtdSum.in_portal_on_time_percent.toFixed(1)}%` : undefined,
+                wtdSum: showSum ? `${fmtFixed(dialogWtdSum.in_portal_on_time_percent, 1)}%` : undefined,
               },
               {
                 label: "Eligible Orders",

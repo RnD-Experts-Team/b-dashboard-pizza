@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Tooltip,
@@ -304,7 +305,7 @@ export function HnrCard({
             daily={
               <div className="space-y-2">
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                  {dailyHnr.hnr_promise_met_percent.toFixed(1)}%
+                  {fmtFixed(dailyHnr.hnr_promise_met_percent, 1)}%
                 </p>
                 <p className="text-[10px] text-muted-foreground">Promise Met</p>
                 <div className="flex gap-3 mt-2">
@@ -317,7 +318,7 @@ export function HnrCard({
             wtd={
               <div className="space-y-2">
                 <p className="text-2xl font-bold text-primary tabular-nums">
-                  {avgHnr.hnr_promise_met_percent.toFixed(1)}%
+                  {fmtFixed(avgHnr.hnr_promise_met_percent, 1)}%
                 </p>
                 <p className="text-[10px] text-muted-foreground">Promise Met{showSum ? " (Avg)" : ""}</p>
                 <div className="flex gap-3 mt-2">
@@ -332,12 +333,12 @@ export function HnrCard({
             rows={[
               {
                 label: "Promise Met %",
-                daily: `${dailyHnr.hnr_promise_met_percent.toFixed(1)}%`,
-                wtd: `${avgHnr.hnr_promise_met_percent.toFixed(1)}%`,
+                daily: `${fmtFixed(dailyHnr.hnr_promise_met_percent, 1)}%`,
+                wtd: `${fmtFixed(avgHnr.hnr_promise_met_percent, 1)}%`,
                 dailyNum: dailyHnr.hnr_promise_met_percent,
                 wtdNum: avgHnr.hnr_promise_met_percent,
                 higherIsBetter: true,
-                wtdSum: showSum ? `${sumHnr.hnr_promise_met_percent.toFixed(1)}%` : undefined,
+                wtdSum: showSum ? `${fmtFixed(sumHnr.hnr_promise_met_percent, 1)}%` : undefined,
               },
               {
                 label: "Transactions",

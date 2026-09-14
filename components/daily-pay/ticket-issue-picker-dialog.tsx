@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, CheckSquare, Square, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import {
   Dialog,
   DialogContent,
@@ -42,18 +43,6 @@ interface TicketIssuePickerDialogProps {
   disabledIssueIds?: number[];
   onClose: () => void;
   onConfirm: (issueIds: number[]) => void;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
 }
 
 /**
@@ -244,7 +233,7 @@ export function TicketIssuePickerDialog({
                         <td className="px-3 py-2 font-mono">{ticket.id}</td>
                         <td className="px-3 py-2">{ticket.storeId ?? ticket.otherStore ?? "Other"}</td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {formatDate(ticket.createdAt)}
+                          {formatTimestamp(ticket.createdAt, "MMM d, yyyy")}
                         </td>
                         <td className="px-3 py-2 text-end">{ticket.issueCount}</td>
                       </tr>

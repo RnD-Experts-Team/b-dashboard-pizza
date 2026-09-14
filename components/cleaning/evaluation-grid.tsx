@@ -4,9 +4,11 @@ import { Fragment, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
+  Ban,
   BellRing,
   ChevronDown,
   ClipboardList,
+  Clock,
   Info,
   Loader2,
   Lock,
@@ -41,6 +43,10 @@ import type {
   ChartCell,
   MissingCell,
   PeriodType,
+  AllocationCopyRequest,
+  AllocationCopyResponse,
+  AllocationRemoveRequest,
+  AllocationRemoveResponse,
 } from "@/types/cleaning.types";
 import {
   VALUE_ACCENT,
@@ -55,6 +61,8 @@ import {
 import { PeriodPicker } from "./period-picker";
 import { GradeItemDialog, type GradeTarget } from "./grade-item-dialog";
 import { AllocateWeightDialog, type AllocateTarget } from "./allocate-weight-dialog";
+import { CopyAllocationDialog, type CopyTarget } from "./copy-allocation-dialog";
+import { RemoveAllocationDialog, type RemoveTarget } from "./remove-allocation-dialog";
 import { CleaningSettingsDialog } from "./cleaning-settings-dialog";
 
 const EMPTY_CELL = { value: "empty" as ItemValue, weight: 1, note: null, photos: [] };
@@ -210,6 +218,17 @@ interface Props {
     amounts: { targetTaskId: number; amount: number }[]
   ) => Promise<void>;
   onDeleteAllocation: (storeId: number, sourceTaskId: number) => Promise<void>;
+  /** Preview (`dry_run: true`) then apply (`dry_run: false`) a copy of one
+   *  store's whole saved split to other stores (guide §3). */
+  onCopyAllocation: (payload: AllocationCopyRequest) => Promise<AllocationCopyResponse>;
+  /** Same preview-then-apply flow for clearing splits off many stores at
+   *  once — the undo for a copy (remove-button guide). */
+  onRemoveAllocations: (
+    payload: AllocationRemoveRequest
+  ) => Promise<AllocationRemoveResponse>;
+  /** Re-fetches the current period's grid — used after a completion-lock 422
+   *  (guide §2.1) to bring a stale cell back in sync with the server. */
+  onRefetchGrid: () => Promise<void>;
   /** Gated by the "cleaning specialist" permission (not Super Admin only —
    *  confirmed against the live permission registry). Omit/false hides the
    *  settings gear entirely rather than showing a control the backend
@@ -232,6 +251,9 @@ export function EvaluationGrid({
   onReopen,
   onAllocateWeight,
   onDeleteAllocation,
+  onCopyAllocation,
+  onRemoveAllocations,
+  onRefetchGrid,
   canManageSettings,
 }: Props) {
   const t = useTranslations("cleaningChart");
@@ -250,6 +272,8 @@ export function EvaluationGrid({
     null
   );
   const [allocateTarget, setAllocateTarget] = useState<AllocateTarget | null>(null);
+  const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null);
+  const [removeTargetStores, setRemoveTargetStores] = useState<RemoveTarget | null>(null);
   // Which stores' full grading detail is expanded — a Set so more than one
   // can be open at once (comparing two stores side by side, one under the
   // other, is a real use case). Column widths never depend on this: the
@@ -279,10 +303,34 @@ export function EvaluationGrid({
   };
 
   /** Click the chip: pass → fail → not_applicable → pass, starting at pass
-   *  for an ungraded cell. */
+   *  for an ungraded cell. Only ever called for a genuinely editable cell —
+   *  a completion-locked cell (guide §2, `evaluable === false`) renders no
+   *  click handler at all (see `renderChartChip`), so this never needs to
+   *  reason about locked states itself. */
   const cycleChart = (storeId: number, cell: ChartCell) => {
     const next: ChartVerdict = cell.verdict ? CHART_CYCLE[cell.verdict] : "pass";
-    void guard(`c-${storeId}-${cell.taskId}`, () => onSetChartCell(storeId, cell.taskId, next));
+    void guard(`c-${storeId}-${cell.taskId}`, async () => {
+      try {
+        await onSetChartCell(storeId, cell.taskId, next);
+      } catch (err) {
+        // The server is the final authority on the lock — a race (another
+        // auditor reopened the evaluation, the rule changed, or the deadline
+        // just passed) can still 422 even though the UI thought this cell
+        // was editable. Reload instead of just toasting: the client's state
+        // is behind (guide §2.1) — any of the three lock reasons applies.
+        if (
+          err instanceof CleaningError &&
+          (err.reason === "not_completed" ||
+            err.reason === "partially_completed" ||
+            err.reason === "period_not_finished")
+        ) {
+          toast.error(err.message);
+          await onRefetchGrid();
+          return;
+        }
+        throw err;
+      }
+    });
   };
 
   /** The small "×" affordance — a separate action from the cycle so a
@@ -368,10 +416,20 @@ export function EvaluationGrid({
     const savingKey = `c-${row.storeId}-${cell.taskId}`;
     const accent = cell.verdict ? VERDICT_ACCENT[cell.verdict] : null;
     const isAllocated = cell.allocatedFrom.length > 0;
+    // Two distinct locked states (guide §2), driven by the explicit
+    // `autoFailed` flag rather than re-deriving from `lockReason` strings:
+    //  - pending:  not yet due — verdict stays null, nothing failed.
+    //  - blocked:  deadline passed — verdict is "fail", auto_failed: true.
+    // They must not look the same, so each gets its own icon/color below.
+    const pendingLocked = cell.evaluable === false && !cell.autoFailed;
+    const blockedLocked = cell.evaluable === false && cell.autoFailed;
     // A historical cell was graded before this task became absent under the
     // current period rules — shown and still scored, but frozen: editing it
     // would silently change a report that already went out (guide §12).
-    const cellLocked = locked || cell.historical;
+    // Completion-locked cells (either state) are now fully read-only too —
+    // guide §2: "no verdict at all is allowed... render no buttons and
+    // attach no click handler," not a restricted cycle.
+    const cellLocked = locked || cell.historical || cell.evaluable === false;
     const baseTitle = isAllocated
       ? t("evaluation.cellWeightTitleAllocated", {
           name: cell.name,
@@ -380,7 +438,23 @@ export function EvaluationGrid({
           sources: cell.allocatedFrom.map((a) => a.name).join(", "),
         })
       : t("evaluation.cellWeightTitle", { name: cell.name, weight: cell.effectiveWeight });
-    const title = cell.historical ? `${baseTitle} — ${t("evaluation.historicalTitle")}` : baseTitle;
+    let title = cell.historical ? `${baseTitle} — ${t("evaluation.historicalTitle")}` : baseTitle;
+    // §6 / "do NOT show the counts on the grid cell": explain *why*, never a
+    // found/expected fraction — prefer done_by/last_done_at as evidence.
+    if (pendingLocked) {
+      title = `${title} — ${t("evaluation.pendingLockTitle")}`;
+    } else if (blockedLocked) {
+      const hasEvidence = cell.lastDoneAt != null || cell.doneBy.length > 0;
+      title =
+        cell.lockReason === "partially_completed" && hasEvidence
+          ? `${title} — ${t("evaluation.partiallyCompletedLockTitle", {
+              when: cell.lastDoneAt
+                ? new Date(cell.lastDoneAt).toLocaleDateString()
+                : t("evaluation.evidenceUnknownWhen"),
+              who: cell.doneBy.length > 0 ? cell.doneBy.join(", ") : t("evaluation.evidenceUnknownWho"),
+            })}`
+          : `${title} — ${t("evaluation.autoFailedLockTitle")}`;
+    }
     const allocatedTotal = isAllocated
       ? cell.allocatedFrom.reduce((sum, a) => sum + a.amount, 0)
       : 0;
@@ -394,6 +468,7 @@ export function EvaluationGrid({
           className={cn(
             "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-start transition-colors",
             cell.verdict && "pe-5",
+            cellLocked && "cursor-not-allowed",
             accent ? "border bg-card hover:bg-muted/60" : "hover:bg-muted/40",
             busy === savingKey && "opacity-50"
           )}
@@ -421,9 +496,19 @@ export function EvaluationGrid({
           >
             {isAllocated ? `${cell.baseWeight}+${allocatedTotal}` : cell.effectiveWeight}
           </span>
-          {cell.historical && (
-            <Lock className="h-2.5 w-2.5 shrink-0 text-slate-400" aria-hidden="true" />
+          {/* One icon slot, three distinct SHAPES rather than three colors —
+              a blocked cell is already red from `accent` (verdict: "fail"),
+              so stacking another red icon on top just reads as noise. Only
+              the amber Clock (pending — nothing has failed) earns its own
+              color; historical and blocked stay neutral slate and are told
+              apart by shape (Lock = frozen record, Ban = refused/read-only)
+              plus the tooltip, matching guide §2's "must not look the same"
+              without piling on color. */}
+          {pendingLocked && (
+            <Clock className="h-2.5 w-2.5 shrink-0 text-amber-500 dark:text-amber-400" aria-hidden="true" />
           )}
+          {cell.historical && <Lock className="h-2.5 w-2.5 shrink-0 text-slate-400" aria-hidden="true" />}
+          {blockedLocked && <Ban className="h-2.5 w-2.5 shrink-0 text-slate-400" aria-hidden="true" />}
           {accent && (
             <span className={cn("shrink-0 text-[10px] font-bold uppercase", accent.text)}>
               {VERDICT_SHORT[cell.verdict as ChartVerdict]}
@@ -598,6 +683,14 @@ export function EvaluationGrid({
           <Lock className="h-3 w-3 shrink-0 text-slate-400" />
           <span className="font-medium text-foreground/80">{t("evaluation.legendHistorical")}</span>
         </span>
+        <span className="flex items-center gap-1.5" title={t("evaluation.legendPendingExplain")}>
+          <Clock className="h-3 w-3 shrink-0 text-amber-500 dark:text-amber-400" />
+          <span className="font-medium text-foreground/80">{t("evaluation.legendPending")}</span>
+        </span>
+        <span className="flex items-center gap-1.5" title={t("evaluation.legendAutoFailExplain")}>
+          <Ban className="h-3 w-3 shrink-0 text-slate-400" />
+          <span className="font-medium text-foreground/80">{t("evaluation.legendAutoFail")}</span>
+        </span>
 
         <span className="hidden text-muted-foreground/80 sm:ms-auto sm:block">
           {t("evaluation.legendHint")}
@@ -741,7 +834,8 @@ export function EvaluationGrid({
                                 banner rather than plain text, so it reads as
                                 a status to act on, not a caption to skim past. */}
                             {((!locked && !row.isComplete && !unevaluated) ||
-                              monthlyAbsentTasks.length > 0) && (
+                              monthlyAbsentTasks.length > 0 ||
+                              (row.completionEnforced && row.tasksAutoFailed > 0)) && (
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
                                 {!locked && !row.isComplete && !unevaluated && (
                                   <span title={t("evaluation.completionHintExplain")}>
@@ -751,19 +845,47 @@ export function EvaluationGrid({
                                     })}
                                   </span>
                                 )}
+                                {row.completionEnforced && row.tasksAutoFailed > 0 && (
+                                  <span
+                                    className="inline-flex items-center gap-1 font-medium"
+                                    title={t("evaluation.autoFailedExplain", {
+                                      count: row.tasksNotCompleted,
+                                    })}
+                                  >
+                                    <Ban className="h-3 w-3 shrink-0" />
+                                    {t("evaluation.autoFailedBadge", { count: row.tasksAutoFailed })}
+                                  </span>
+                                )}
                                 {monthlyAbsentTasks.length > 0 && (
                                   <button
                                     type="button"
                                     title={t("evaluation.absentTasksLinkExplain")}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setAllocateTarget({ storeId: row.storeId, store: row.store, row });
+                                      setAllocateTarget({ storeId: row.storeId, store: row.store });
                                     }}
                                     className="font-medium underline-offset-2 hover:underline"
                                   >
                                     {t("evaluation.absentTasksLink", { count: monthlyAbsentTasks.length })}
                                   </button>
                                 )}
+                              </div>
+                            )}
+
+                            {/* Copy this store's saved weight split to other stores (guide §3) */}
+                            {row.allocations.length > 0 && (
+                              <div>
+                                <button
+                                  type="button"
+                                  title={t("evaluation.copyAllocationLinkExplain")}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCopyTarget({ storeId: row.storeId, store: row.store });
+                                  }}
+                                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                >
+                                  {t("evaluation.copyAllocationLink")}
+                                </button>
                               </div>
                             )}
 
@@ -973,9 +1095,57 @@ export function EvaluationGrid({
       {/* Allocate an absent task's weight across this period's in-play tasks */}
       <AllocateWeightDialog
         target={allocateTarget}
+        // Read fresh from `grid.rows` every render — not the row captured
+        // when the dialog opened — so a delete/allocate (both refetch the
+        // grid) shows up immediately instead of needing a reopen.
+        row={
+          allocateTarget
+            ? grid.rows.find((r) => r.storeId === allocateTarget.storeId) ?? null
+            : null
+        }
         onOpenChange={(o) => !o && setAllocateTarget(null)}
         onAllocate={onAllocateWeight}
         onDeleteAllocation={onDeleteAllocation}
+        onCopyToStores={(storeId, store) => {
+          setAllocateTarget(null);
+          setCopyTarget({ storeId, store });
+        }}
+        onRemoveFromStores={(storeId, store, task) => {
+          setAllocateTarget(null);
+          setRemoveTargetStores({ storeId, store, task });
+        }}
+      />
+
+      {/* Copy one store's whole saved weight split to other stores (guide §3) */}
+      <CopyAllocationDialog
+        sourceTarget={copyTarget}
+        periodType={periodType}
+        periodKey={periodKey}
+        stores={grid.rows
+          .filter((r) => r.storeId !== copyTarget?.storeId)
+          .map((r) => ({ storeId: r.storeId, store: r.store, finalizedAt: r.finalizedAt }))}
+        onOpenChange={(o) => !o && setCopyTarget(null)}
+        onCopy={onCopyAllocation}
+      />
+
+      {/* Clear saved splits off many stores at once — the undo for a copy.
+          Only stores that actually HAVE a split are offered (the rest would
+          just come back `nothing_to_remove`), and the store the auditor came
+          from IS included, unlike the copy picker. */}
+      <RemoveAllocationDialog
+        target={removeTargetStores}
+        periodType={periodType}
+        periodKey={periodKey}
+        stores={grid.rows
+          .map((r) => ({
+            storeId: r.storeId,
+            store: r.store,
+            finalizedAt: r.finalizedAt,
+            splitCount: new Set(r.allocations.map((a) => a.sourceTaskId)).size,
+          }))
+          .filter((s) => s.splitCount > 0)}
+        onOpenChange={(o) => !o && setRemoveTargetStores(null)}
+        onRemove={onRemoveAllocations}
       />
     </div>
   );

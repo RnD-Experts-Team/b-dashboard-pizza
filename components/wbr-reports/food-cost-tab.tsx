@@ -21,6 +21,7 @@ import {
   NUM,
 } from "./primitives";
 import { cn } from "@/lib/utils";
+import { fmtFixed } from "@/lib/utils/number-display";
 
 export function FoodCostTab({ data }: { data: WbrData }) {
   const { rows } = data;
@@ -53,7 +54,7 @@ export function FoodCostTab({ data }: { data: WbrData }) {
                     </td>
                     <td className={cn(TD, NUM)}>{fmt$(r.sales)}</td>
                     <td className={cn(TD, NUM)} style={style}>{gw.toFixed(2)}%</td>
-                    <td className={cn(TD, NUM)}>{r.wasteALTPct.toFixed(2)}%</td>
+                    <td className={cn(TD, NUM)}>{fmtFixed(r.wasteALTPct, 2)}%</td>
                     <td className={TD}>
                       <Chip tone={diff > 0 ? "bad" : "ok"}>{diff > 0 ? "+" : ""}{diff} pp</Chip>
                     </td>
@@ -121,7 +122,7 @@ export function FoodCostTab({ data }: { data: WbrData }) {
                       <StoreCell name={r.store.name} market={r.store.market} num={r.store.num} />
                     </td>
                     <td className={cn(TD, NUM)}>{fmt$(r.disputes.ddSales)}</td>
-                    <td className={cn(TD, NUM)}>${r.disputes.amount.toFixed(1)}</td>
+                    <td className={cn(TD, NUM)}>${fmtFixed(r.disputes.amount, 1)}</td>
                     <td className={cn(TD, NUM)}>${r.disputes.last4w}</td>
                     <td className={TD}><DataBar pct={(r.disputes.last4w / maxL4) * 100} /></td>
                   </tr>
@@ -158,12 +159,12 @@ export function FoodCostTab({ data }: { data: WbrData }) {
                       g.pct > g.target ? heat("amber", 12) : undefined;
                     return (
                       <td key={g.key} className={cn(TD, NUM)} style={style}>
-                        {g.pct > 0 ? "+" : ""}{g.pct.toFixed(1)}%
+                        {g.pct > 0 ? "+" : ""}{fmtFixed(g.pct, 1)}%
                       </td>
                     );
                   })}
                   <td className={cn(TD, NUM, "font-semibold")}>
-                    {r.portioning.totalPct > 0 ? "+" : ""}{r.portioning.totalPct.toFixed(2)}%
+                    {r.portioning.totalPct > 0 ? "+" : ""}{fmtFixed(r.portioning.totalPct, 2)}%
                   </td>
                 </tr>
               ))}

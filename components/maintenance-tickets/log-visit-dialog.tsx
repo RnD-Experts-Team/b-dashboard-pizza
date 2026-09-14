@@ -68,6 +68,19 @@ export function LogVisitDialog({
   const [formError, setFormError] = useState<string | null>(null);
 
   function patch(next: Partial<AttendanceFormValue>) {
+    // Issues are picked FOR a technician. Keeping them across a change would
+    // send those ids as ticket_issue_ids for a different person — either a
+    // confusing late 422, or worse a success booking a visit against issues
+    // they were never assigned. Only the ids clear; clocks, note and files are
+    // technician-independent and are the expensive part of the form.
+    if (
+      next.technicianId !== undefined &&
+      next.technicianId !== value.technicianId &&
+      issueIds.length > 0
+    ) {
+      setIssueIds([]);
+      toast.info("Issues cleared — they were picked for the previous technician.");
+    }
     setValue((prev) => ({ ...prev, ...next }));
     setFieldErrors((prev) => (Object.keys(prev).length ? {} : prev));
     setFormError(null);
@@ -149,7 +162,7 @@ export function LogVisitDialog({
                 size="sm"
                 className="h-8 w-full text-xs"
                 onClick={() => setPickerOpen(true)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !value.technicianId}
               >
                 Browse tickets…
               </Button>
@@ -169,7 +182,11 @@ export function LogVisitDialog({
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] text-muted-foreground">None selected yet.</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {value.technicianId
+                    ? "None selected yet."
+                    : "Pick a technician first — the list only shows issues assigned to them."}
+                </p>
               )}
               <FieldError message={fieldErrors.ticket_issue_ids} />
             </div>
@@ -193,6 +210,11 @@ export function LogVisitDialog({
         <IssuePickerDialog
           open
           storeNumber={storeNumber}
+          // Filter to the chosen technician's own issues. This dialog is
+          // unscoped and fetches globally, so the filter is navigation rather
+          // than restriction — unlike the ticket-scoped AttendancePanel, which
+          // deliberately does NOT filter (see its call site).
+          technicianId={value.technicianId ? Number(value.technicianId) : null}
           selectedIssueIds={issueIds}
           onClose={() => setPickerOpen(false)}
           onConfirm={(ids) => {

@@ -2008,9 +2008,13 @@
       "viewHistory": "View history",
       "undo": "Undo",
       "complete": "Complete",
-      "evaluateHint": "Set today's cleaning-chart verdict for this task",
+      "evaluateHint": "Set this task's cleaning-chart verdict for the selected date",
       "evaluatePass": "Pass",
       "evaluateFail": "Fail",
+      "lockedShortPending": "Waiting — not due yet",
+      "lockedExplainPending": "The store hasn't marked this complete yet, but the period is still open — nothing has failed. Grading unlocks once it's logged, or once the deadline passes.",
+      "lockedShortBlocked": "Locked — auto-failed",
+      "lockedExplainBlocked": "The store never marked this complete for this period, so it's read-only and was already failed automatically. No verdict can be entered here — open the Evaluation tab once it's logged to see it unlock.",
       "undoDialog": {
         "title": "Undo completion?",
         "description": "This reverts “{label}” back to pending for {date}. Any recorded photo, note, and employees will be removed."
@@ -2019,8 +2023,10 @@
         "reverted": "“{label}” reverted to pending.",
         "undoFailed": "Could not undo.",
         "evaluated": "“{label}” evaluated.",
+        "evaluateCleared": "“{label}” evaluation cleared.",
         "evaluateFailed": "Could not save the evaluation.",
-        "evaluateForbidden": "You don't have permission to evaluate tasks."
+        "evaluateForbidden": "You don't have permission to evaluate tasks.",
+        "noPeriodForWeek": "Couldn't work out which week this date belongs to — reload and try again."
       }
     },
     "tasks": {
@@ -2207,6 +2213,10 @@
       "legendAllocatedExplain": "This task's own weight, plus extra weight given to it from a task that isn't due this period (e.g. 3+2 = weight 3, plus 2 more allocated to it).",
       "legendNote": "has a note/photo",
       "legendHistorical": "locked (past period)",
+      "legendPending": "waiting (not due yet)",
+      "legendPendingExplain": "The store hasn't marked this complete yet, but the period is still open — nothing has failed, and it's read-only until it's logged or the deadline passes.",
+      "legendAutoFail": "auto-failed (not logged)",
+      "legendAutoFailExplain": "The store never marked this complete for this period — the system failed it automatically once the deadline passed. Fully read-only; it unlocks by itself once it's logged.",
       "noStores": {
         "title": "No stores to evaluate",
         "description": "Nothing to grade for this period yet."
@@ -2239,6 +2249,11 @@
       "cellWeightTitle": "{name} (weight {weight})",
       "cellWeightTitleAllocated": "{name} (weight {weight}, base {base} + allocated from {sources})",
       "historicalTitle": "Graded before this task became absent this period — locked so the sent report doesn't change",
+      "pendingLockTitle": "Waiting — not marked complete yet, period still open, nothing failed",
+      "autoFailedLockTitle": "Never marked complete for this period — auto-failed, read-only",
+      "partiallyCompletedLockTitle": "Not marked complete enough times this period (last done {when} by {who}) — auto-failed, read-only",
+      "evidenceUnknownWhen": "an earlier date",
+      "evidenceUnknownWho": "someone",
       "clearVerdictTitle": "Clear verdict",
       "hasNoteTitle": "Has a note or photo",
       "finalize": "Finalize",
@@ -2246,6 +2261,10 @@
       "reopen": "Reopen",
       "completionHint": "{graded}/{required} graded",
       "completionHintExplain": "Every inspection item and cleaning-chart task must be graded (Pass/Fail/Auto/N-A) before this store can be finalized.",
+      "autoFailedBadge": "{count, plural, one {⚠ # auto-failed} other {⚠ # auto-failed}}",
+      "autoFailedExplain": "{count, plural, one {# task wasn't logged done for this period, so it was auto-failed} other {# tasks weren't logged done for this period, so they were auto-failed}}",
+      "copyAllocationLink": "Copy split to other stores",
+      "copyAllocationLinkExplain": "Apply this store's whole saved weight split to other stores for this period.",
       "absentTasksLinkExplain": "These monthly tasks aren't due this specific week — click to give their weight to tasks that are due this week, instead of leaving it unused.",
       "noItems": "No inspection items yet — add one above to start grading.",
       "removeDialog": {
@@ -2308,6 +2327,11 @@
       "noAbsentTasks": "No absent tasks for this period — every assigned task is in play.",
       "currentSplits": "Current splits",
       "removeSplit": "Remove this split",
+      "removeSplitDialog": {
+        "title": "Remove this split?",
+        "description": "This removes “{task}”'s weight split — its weight becomes unallocated again until it's split across in-play tasks another way. This cannot be undone.",
+        "confirm": "Remove"
+      },
       "sourceLabel": "Absent task",
       "sourcePlaceholder": "Choose an absent task…",
       "sourceOption": "{name} — weight {weight} ({unallocated} unallocated)",
@@ -2322,7 +2346,68 @@
       "save": "Save split",
       "saved": "Weight from “{task}” allocated.",
       "deleted": "Allocation removed.",
-      "failed": "Could not save the allocation."
+      "failed": "Could not save the allocation.",
+      "copyToStores": "Copy to other stores",
+      "copyUnsavedWarning": "Save your changes first — copying uses what's saved, not what's on screen.",
+      "removeFromStores": "Remove from stores"
+    },
+    "removeAllocationDialog": {
+      "title": "Remove weight splits",
+      "description": "Clear saved weight splits from several stores at once — the undo for a copy.",
+      "clearsNotUndoWarning": "This clears, it does not undo: if a copy replaced a store's own distribution, removing will not bring the old one back. Stores whose evaluation is finalized are skipped.",
+      "onlyThisTask": "Only remove “{task}”",
+      "scopeAllSplits": "Every saved split these stores have for this period will be removed.",
+      "scopeSelectedTasks": "Only “{task}” will be removed — each store's other splits stay.",
+      "storesLabel": "{count, plural, one {# store selected} other {# stores selected}}",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "noStoresWithSplits": "No store has a saved split for this period.",
+      "splitCount": "{count, plural, one {# split} other {# splits}}",
+      "finalizedNote": "Finalized — reopen the evaluation first if this really needs to change.",
+      "maxStores": "You can select up to {max} stores at a time.",
+      "previewLabel": "Preview",
+      "resultLabel": "Result",
+      "staleNotice": "Selection changed — preview again",
+      "removedCount": "{count, plural, =0 {nothing removed} one {# split removed} other {# splits removed}}",
+      "splitDetail": "“{task}” — weight {amount} across {targets, plural, one {# task} other {# tasks}}",
+      "skipReasons": {
+        "evaluation_already_finalized": "Finalized — reopen it first if this really needs to change.",
+        "nothing_to_remove": "This store has no saved split for this period."
+      },
+      "close": "Close",
+      "preview": "Preview",
+      "removeNow": "Remove from {count, plural, one {# store} other {# stores}}",
+      "removed": "{count, plural, =0 {Nothing to remove.} one {# split removed.} other {# splits removed.}}",
+      "failed": "Could not remove the splits."
+    },
+    "copyAllocationDialog": {
+      "title": "Copy weight split",
+      "description": "Apply {store}'s whole saved weight split to other stores for this period.",
+      "wholeSplitWarning": "This copies the store's ENTIRE saved split, not just one task — every absent task's distribution is applied to each selected store.",
+      "targetStoresLabel": "{count, plural, one {# store selected} other {# stores selected}}",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "noOtherStores": "No other stores available.",
+      "finalizedNote": "Finalized — reopen the evaluation first if this really needs to change.",
+      "maxTargets": "You can select up to {max} stores at a time.",
+      "previewLabel": "Preview",
+      "resultLabel": "Result",
+      "staleNotice": "Selection changed — preview again",
+      "copiedCount": "{count, plural, one {# task copied} other {# tasks copied}}",
+      "replacesExistingWarning": "This replaces any split already saved for these tasks at this store.",
+      "skipReasons": {
+        "nothing_to_copy": "This store has no saved split to copy for this period.",
+        "evaluation_already_finalized": "Finalized — reopen it first if this really needs to change.",
+        "source_task_not_absent_here": "That task isn't absent for this store.",
+        "target_task_not_in_play": "A receiving task isn't gradable here.",
+        "split_does_not_match_weight": "The split doesn't add up to the task's weight.",
+        "store_not_visible": "This store isn't visible in this grid."
+      },
+      "close": "Close",
+      "preview": "Preview",
+      "copyNow": "Copy now",
+      "copied": "{count, plural, one {# task copied} other {# tasks copied}}.",
+      "failed": "Could not copy the allocation."
     },
     "settingsDialog": {
       "trigger": "Scoring settings",
@@ -2334,6 +2419,15 @@
       "sharesChartEnd": "Chart",
       "previewTitle": "Example",
       "previewBody": "A store scoring {itemScore}% on items and {chartScore}% on the chart would get a Final Score of {result}%.",
+      "requiresCompletionLabel": "Require task completion",
+      "requiresCompletionHint": "A task the store never logged as done is auto-failed and can't be passed until it's logged.",
+      "completionRuleLabel": "Completion rule",
+      "completionRule": {
+        "any": "Marked complete once",
+        "all": "Every occurrence",
+        "threshold": "Percentage threshold"
+      },
+      "completionThresholdLabel": "Threshold (%)",
       "close": "Close",
       "save": "Save",
       "saved": "Scoring settings saved.",

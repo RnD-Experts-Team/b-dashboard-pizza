@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Merge, Paperclip, Plus, Trash2, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@/components/shared/searchable-select";
 import { MoneyField } from "./daily-pay-num-field";
 import { DailyPayNoteList } from "./daily-pay-note-list";
 import { DailyPayLineFieldset } from "./daily-pay-line-fieldset";
@@ -79,6 +84,24 @@ export function DailyPayPaymentCard({
   // Prevention: a payee already on another payment cannot be picked again.
   // All of a payee's stores belong on the ONE payment.
   const takenPayeeIds = payeeIdsInUse(allPayments, index);
+  const payeeOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      technicians.map((t) => {
+        const taken = takenPayeeIds.has(t.id);
+        return {
+          value: String(t.id),
+          label: t.name,
+          // "already on this sheet" is the REASON the row is greyed, so it has
+          // to stay visible next to it rather than only in a tooltip.
+          hint:
+            [t.categoryName, taken ? "already on this sheet" : null]
+              .filter(Boolean)
+              .join(" · ") || undefined,
+          disabled: taken,
+        };
+      }),
+    [technicians, takenPayeeIds]
+  );
   const payeeId = toNum(payment.technicianId);
   const isDuplicate = payeeId != null && takenPayeeIds.has(payeeId);
 
@@ -115,37 +138,16 @@ export function DailyPayPaymentCard({
         <Label className="text-xs text-muted-foreground">
           Payee <span className="text-destructive">*</span>
         </Label>
-        <Select
+        <SearchableSelect
+          options={payeeOptions}
           value={payment.technicianId || undefined}
-          onValueChange={onRequestPayeeChange}
+          onChange={onRequestPayeeChange}
           disabled={disabled}
-        >
-          <SelectTrigger
-            className={cn("h-9 text-sm", err("technician_id") && "border-destructive")}
-          >
-            <SelectValue placeholder="Select payee" />
-          </SelectTrigger>
-          <SelectContent position="popper" style={{ maxHeight: "220px", overflowY: "auto" }}>
-            {technicians.map((t) => {
-              const taken = takenPayeeIds.has(t.id);
-              return (
-                <SelectItem key={t.id} value={String(t.id)} disabled={taken}>
-                  {t.name}
-                  {t.categoryName && (
-                    <span className="ms-1.5 text-xs text-muted-foreground">
-                      · {t.categoryName}
-                    </span>
-                  )}
-                  {taken && (
-                    <span className="ms-1.5 text-xs text-muted-foreground">
-                      · already on this sheet
-                    </span>
-                  )}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+          placeholder="Select payee"
+          searchPlaceholder="Search payees…"
+          emptyText="No technicians found."
+          className={cn("h-9 text-sm", err("technician_id") && "border-destructive")}
+        />
         {err("technician_id") ? (
           <div className="space-y-1">
             <p className="text-[11px] text-destructive">{err("technician_id")}</p>
@@ -191,7 +193,7 @@ export function DailyPayPaymentCard({
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent position="popper">
+              <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                 <SelectItem value="sumLines">Per-store labour</SelectItem>
                 <SelectItem value="lumpSum">One lump sum for all stores</SelectItem>
               </SelectContent>

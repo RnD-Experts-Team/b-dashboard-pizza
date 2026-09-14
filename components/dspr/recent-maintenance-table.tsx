@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { format } from "date-fns";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   maintenanceTicketsService,
@@ -363,7 +363,7 @@ export function RecentMaintenanceTable() {
                       </span>
                     </TableCell>
                     <TableCell className="py-1.5 px-3 text-[11px] text-muted-foreground text-right whitespace-nowrap">
-                      {format(new Date(ticket.createdAt), "MMM d, yyyy")}
+                      {formatTimestamp(ticket.createdAt, "MMM d, yyyy")}
                     </TableCell>
                   </TableRow>
                 ))}

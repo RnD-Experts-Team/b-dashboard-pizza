@@ -20,6 +20,7 @@ import {
   useChartBase,
 } from "./labor-chart";
 import { fmtNumber } from "./labor-format";
+import { formatDateOnly, parseDateOrNull } from "@/lib/utils/date-display";
 
 interface LaborHeadcountProps {
   headcount: LaborHeadcountData;
@@ -74,10 +75,11 @@ export function LaborHeadcount({ headcount, weekStart, weekEnd }: LaborHeadcount
   // "Start of week" is the carry-in count from the day before the business
   // week began — show that actual date so the two numbers read as two points
   // in time, not two unrelated totals.
-  const startDateLabel = weekStart
-    ? format(subDays(parseISO(weekStart), 1), "MMM d")
+  const weekStartDate = parseDateOrNull(weekStart);
+  const startDateLabel = weekStartDate
+    ? format(subDays(weekStartDate, 1), "MMM d")
     : null;
-  const endDateLabel = weekEnd ? format(parseISO(weekEnd), "MMM d") : null;
+  const endDateLabel = weekEnd ? formatDateOnly(weekEnd, "MMM d") : null;
 
   return (
     <LaborCard title="Headcount" icon={UsersRound} fillHeight>

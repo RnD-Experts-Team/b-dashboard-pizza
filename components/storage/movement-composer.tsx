@@ -56,6 +56,10 @@ import {
 } from "@/lib/storage/movement-builder";
 import { DateTimePicker, FieldError, Segmented } from "@/components/maintenance-tickets/form-bits";
 import { SearchCreateCombobox } from "@/components/maintenance-tickets/search-create-combobox";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@/components/shared/searchable-select";
 import type { CatalogPart, CatalogTechnician } from "@/types/maintenance-tickets.types";
 import type {
   PostableStockMovementType,
@@ -132,6 +136,10 @@ export function MovementComposer({
   /* ── On-hand hints for outbound lines ─────────────────────────────────── */
 
   const built = useMemo(() => buildMovementRequests(form), [form]);
+  const technicianOptions = useMemo<SearchableSelectOption[]>(
+    () => technicians.map((t) => ({ value: String(t.id), label: t.name })),
+    [technicians]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -300,7 +308,7 @@ export function MovementComposer({
                 <SelectTrigger className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent position="popper">
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   {POSTABLE_MOVEMENT_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {MOVEMENT_TYPE_LABELS[type]}
@@ -334,27 +342,19 @@ export function MovementComposer({
                 <Label className="text-xs text-muted-foreground">
                   Paid by <span className="text-destructive">*</span>
                 </Label>
-                <Select
+                <SearchableSelect
+                  options={technicianOptions}
                   value={form.paidByTechnicianId || undefined}
-                  onValueChange={(v) => patch({ paidByTechnicianId: v })}
+                  onChange={(v) => patch({ paidByTechnicianId: v })}
                   disabled={isSubmitting}
-                >
-                  <SelectTrigger
-                    className={cn(
-                      "h-9 text-sm",
-                      errors.paid_by_technician_id && "border-destructive"
-                    )}
-                  >
-                    <SelectValue placeholder="Select technician" />
-                  </SelectTrigger>
-                  <SelectContent position="popper">
-                    {technicians.map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)}>
-                        {t.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select technician"
+                  searchPlaceholder="Search technicians…"
+                  emptyText="No technicians found."
+                  className={cn(
+                    "h-9 text-sm",
+                    errors.paid_by_technician_id && "border-destructive"
+                  )}
+                />
                 <FieldError message={errors.paid_by_technician_id} />
               </div>
             )}
@@ -662,21 +662,28 @@ function LocationSelect({
   invalid?: boolean;
   disabled?: boolean;
 }) {
+  // Built here rather than by the caller: this renders on EVERY line row of a
+  // multi-line movement, and the catalog is the same object each time.
+  const options = useMemo<SearchableSelectOption[]>(
+    () =>
+      locations.map((l) => ({
+        value: String(l.id),
+        label: l.name,
+        hint: l.code ?? undefined,
+      })),
+    [locations]
+  );
+
   return (
-    <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className={cn("h-9 text-sm", invalid && "border-destructive")}>
-        <SelectValue placeholder="Select location" />
-      </SelectTrigger>
-      <SelectContent position="popper" style={{ maxHeight: "220px", overflowY: "auto" }}>
-        {locations.map((l) => (
-          <SelectItem key={l.id} value={String(l.id)}>
-            {l.name}
-            {l.code && (
-              <span className="ms-1.5 text-xs text-muted-foreground">{l.code}</span>
-            )}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect
+      options={options}
+      value={value || undefined}
+      onChange={onChange}
+      disabled={disabled}
+      placeholder="Select location"
+      searchPlaceholder="Search locations…"
+      emptyText="No locations found."
+      className={cn("h-9 text-sm", invalid && "border-destructive")}
+    />
   );
 }

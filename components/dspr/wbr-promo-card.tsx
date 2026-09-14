@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { cn } from "@/lib/utils";
 import { Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,7 +126,7 @@ export function WbrPromoCard({
               )}
             >
               ({week_over_week.promo_to_sales_pct_change >= 0 ? "+" : ""}
-              {week_over_week.promo_to_sales_pct_change.toFixed(2)} pts)
+              {fmtFixed(week_over_week.promo_to_sales_pct_change, 2)} pts)
             </span>
           </div>
 

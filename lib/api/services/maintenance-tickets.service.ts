@@ -72,8 +72,10 @@ import type {
   LaravelPaginationMeta,
   LaravelPaginationLinks,
   ApiTicketsAnalytics,
+  ApiTicketsAnalyticsDuration,
   ApiTicketsAnalyticsResponse,
   TicketsAnalytics,
+  TicketsAnalyticsDuration,
 } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -300,35 +302,48 @@ function transformTicket(raw: ApiTicket): Ticket {
   };
 }
 
+/**
+ * Analytics is ALL aggregates, and the API sends `null` — or omits a block
+ * entirely — whenever there is nothing to aggregate: no tickets, or a filter
+ * combination matching none.
+ *
+ * Every access below is therefore optional-chained. The transform is the one
+ * place API reality meets our types, so it guards here and hands the UI a
+ * shape that tells the truth, instead of every render site having to remember.
+ *
+ * Counts fall back to 0 (a count of nothing IS zero). AVERAGES fall back to
+ * null, never 0 — "no tickets" is not "zero tickets per week", and the panel
+ * renders an em dash for it.
+ */
 function transformTicketsAnalytics(raw: ApiTicketsAnalytics): TicketsAnalytics {
+  const dur = (d: ApiTicketsAnalyticsDuration | null | undefined): TicketsAnalyticsDuration => ({
+    avgSeconds: d?.avg_seconds ?? null,
+    avgHours: d?.avg_hours ?? null,
+    sampleSize: d?.sample_size ?? 0,
+  });
+
+  const week = raw.avg_tickets_per_week;
+
   return {
     issues: {
-      total: raw.issues.total,
-      statusBreakdown: raw.issues.status_breakdown.map((b) => ({
+      total: raw.issues?.total ?? 0,
+      statusBreakdown: (raw.issues?.status_breakdown ?? []).map((b) => ({
         status: b.status,
         label: b.label,
         count: b.count,
       })),
     },
     durations: {
-      pendingToNextStatus: {
-        avgSeconds: raw.durations.pending_to_next_status.avg_seconds,
-        avgHours: raw.durations.pending_to_next_status.avg_hours,
-        sampleSize: raw.durations.pending_to_next_status.sample_size,
-      },
-      timeToCompleteOrCancelled: {
-        avgSeconds: raw.durations.time_to_complete_or_cancelled.avg_seconds,
-        avgHours: raw.durations.time_to_complete_or_cancelled.avg_hours,
-        sampleSize: raw.durations.time_to_complete_or_cancelled.sample_size,
-      },
+      pendingToNextStatus: dur(raw.durations?.pending_to_next_status),
+      timeToCompleteOrCancelled: dur(raw.durations?.time_to_complete_or_cancelled),
     },
     avgTicketsPerWeek: {
-      value: raw.avg_tickets_per_week.value,
-      totalTickets: raw.avg_tickets_per_week.total_tickets,
-      weeksSpanned: raw.avg_tickets_per_week.weeks_spanned,
-      spanStart: raw.avg_tickets_per_week.span_start,
-      spanEnd: raw.avg_tickets_per_week.span_end,
-      weekStartsOn: raw.avg_tickets_per_week.week_starts_on,
+      value: week?.value ?? null,
+      totalTickets: week?.total_tickets ?? null,
+      weeksSpanned: week?.weeks_spanned ?? null,
+      spanStart: week?.span_start ?? null,
+      spanEnd: week?.span_end ?? null,
+      weekStartsOn: week?.week_starts_on ?? null,
     },
   };
 }

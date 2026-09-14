@@ -49,6 +49,24 @@ import type {
   ApiCleaningSettings,
   CleaningSettings,
   UpdateSettingsPayload,
+  AllocationCopyRequest,
+  ApiAllocationCopyResponse,
+  AllocationCopyResponse,
+  ApiAllocationCopySplit,
+  AllocationCopySplit,
+  ApiAllocationCopySkip,
+  AllocationCopySkip,
+  ApiAllocationCopyResult,
+  AllocationCopyResult,
+  AllocationRemoveRequest,
+  ApiAllocationRemoveResponse,
+  AllocationRemoveResponse,
+  ApiAllocationRemoveSplit,
+  AllocationRemoveSplit,
+  ApiAllocationRemoveSkip,
+  AllocationRemoveSkip,
+  ApiAllocationRemoveResult,
+  AllocationRemoveResult,
 } from "@/types/cleaning.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -76,18 +94,41 @@ export class CleaningError extends Error {
   /** Present on a 409 from POST /evaluations/finalize when cells are still
    *  ungraded — the exact cells, per the API, not just "incomplete". */
   readonly missing?: MissingCell[];
+  /** Present on a 422 from POST /evaluations when the cell is completion-
+   *  locked (guide §2) — `reason` is one of `period_not_finished` (locked,
+   *  not failed) / `not_completed` / `partially_completed` (locked AND
+   *  auto-failed), plus the counts that explain why. */
+  readonly reason?: string;
+  /** Occurrences already past their deadline — drives auto-fail. */
+  readonly completionExpected?: number;
+  readonly completionFound?: number;
+  /** Everything the period asks for — drives whether the cell is editable. */
+  readonly completionExpectedPeriod?: number;
+  readonly completionFoundPeriod?: number;
 
   constructor(
     message: string,
     code: CleaningErrorCode,
     fieldErrors?: Record<string, string[]>,
-    missing?: MissingCell[]
+    missing?: MissingCell[],
+    completionLock?: {
+      reason?: string;
+      completionExpected?: number;
+      completionFound?: number;
+      completionExpectedPeriod?: number;
+      completionFoundPeriod?: number;
+    }
   ) {
     super(message);
     this.name = "CleaningError";
     this.code = code;
     this.fieldErrors = fieldErrors;
     this.missing = missing;
+    this.reason = completionLock?.reason;
+    this.completionExpected = completionLock?.completionExpected;
+    this.completionFound = completionLock?.completionFound;
+    this.completionExpectedPeriod = completionLock?.completionExpectedPeriod;
+    this.completionFoundPeriod = completionLock?.completionFoundPeriod;
     this.retryable = ["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code);
   }
 }
@@ -188,9 +229,34 @@ function toCleaningError(err: unknown): CleaningError {
 
     // Extract Laravel-style upstream validation errors, if present.
     const upstream = data?.error?.details?.upstream as
-      | { errors?: Record<string, string[]>; message?: string; missing?: MissingCell[] }
+      | {
+          errors?: Record<string, string[]>;
+          message?: string;
+          missing?: MissingCell[];
+          reason?: string;
+          completion_expected?: number;
+          completion_found?: number;
+          completion_expected_period?: number;
+          completion_found_period?: number;
+        }
       | undefined;
     const fieldErrors = upstream?.errors;
+    // The completion-lock 422 (guide §2.1) may come through nested under
+    // `upstream` (like the 409's `missing`) or flat on the response body —
+    // check both rather than assuming one shape.
+    const flat = data as unknown as {
+      reason?: string;
+      completion_expected?: number;
+      completion_found?: number;
+      completion_expected_period?: number;
+      completion_found_period?: number;
+    };
+    const lockReason = upstream?.reason ?? flat?.reason;
+    const lockExpected = upstream?.completion_expected ?? flat?.completion_expected;
+    const lockFound = upstream?.completion_found ?? flat?.completion_found;
+    const lockExpectedPeriod =
+      upstream?.completion_expected_period ?? flat?.completion_expected_period;
+    const lockFoundPeriod = upstream?.completion_found_period ?? flat?.completion_found_period;
 
     if (status === 401 || serverCode === "UNAUTHORIZED" || serverCode === "NOT_AUTHENTICATED") {
       const msg = serverMessage || "";
@@ -215,7 +281,17 @@ function toCleaningError(err: unknown): CleaningError {
       return new CleaningError(
         upstream?.message || serverMessage || "Some fields are invalid.",
         "VALIDATION_ERROR",
-        fieldErrors
+        fieldErrors,
+        undefined,
+        lockReason
+          ? {
+              reason: lockReason,
+              completionExpected: lockExpected,
+              completionFound: lockFound,
+              completionExpectedPeriod: lockExpectedPeriod,
+              completionFoundPeriod: lockFoundPeriod,
+            }
+          : undefined
       );
     }
     if (status === 409) {
@@ -361,6 +437,23 @@ function transformChartCell(raw: ApiChartCell): ChartCell {
     note: raw.note ?? null,
     photos: raw.photos ?? [],
     historical: raw.historical ?? false,
+
+    verdictSource: raw.verdict_source ?? null,
+    completionExpected: raw.completion_expected ?? 0,
+    completionFound: raw.completion_found ?? 0,
+    completionExpectedPeriod: raw.completion_expected_period ?? 0,
+    completionFoundPeriod: raw.completion_found_period ?? 0,
+    completionPct: raw.completion_pct ?? 0,
+    completionStatus: raw.completion_status ?? "pending",
+    completionDone: raw.completion_done ?? false,
+    completionLate: raw.completion_late ?? false,
+    lastDoneAt: raw.last_done_at ?? null,
+    doneBy: raw.done_by ?? [],
+    // Default `true` (evaluable) when the field is absent — an older/mid-
+    // deploy API that doesn't send it yet must not lock every cell.
+    evaluable: raw.evaluable ?? true,
+    autoFailed: raw.auto_failed ?? false,
+    lockReason: raw.lock_reason ?? null,
   };
 }
 
@@ -457,6 +550,11 @@ function transformEvalRow(raw: ApiEvalRow): EvalRow {
 
     finalizedAt: raw.finalized_at ?? null,
     finalizedBy: raw.finalized_by ?? null,
+
+    completionEnforced: raw.completion_enforced ?? false,
+    tasksNotCompleted: raw.tasks_not_completed ?? 0,
+    tasksAutoFailed: raw.tasks_auto_failed ?? 0,
+    tasksInPlay: raw.tasks_in_play ?? 0,
   };
 }
 
@@ -513,6 +611,86 @@ function transformSettings(raw: ApiCleaningSettings): CleaningSettings {
     itemsShare,
     chartShare,
     explain: raw.explain ?? {},
+
+    chartRequiresCompletion: raw.chart_requires_completion ?? true,
+    completionRule: raw.completion_rule ?? "any",
+    completionThreshold: raw.completion_threshold ?? 100,
+  };
+}
+
+function transformAllocationCopySplit(raw: ApiAllocationCopySplit): AllocationCopySplit {
+  return {
+    sourceTaskId: raw.source_task_id,
+    name: raw.name,
+    targets: (raw.targets ?? []).map((t) => ({
+      targetTaskId: t.target_task_id,
+      amount: t.amount,
+    })),
+    replacesExisting: raw.replaces_existing ?? false,
+  };
+}
+
+function transformAllocationCopySkip(raw: ApiAllocationCopySkip): AllocationCopySkip {
+  return { reason: raw.reason, detail: raw.detail ?? null };
+}
+
+function transformAllocationCopyResult(raw: ApiAllocationCopyResult): AllocationCopyResult {
+  return {
+    storeId: raw.store_id,
+    store: raw.store,
+    copied: raw.copied ?? 0,
+    skipped: (raw.skipped ?? []).map(transformAllocationCopySkip),
+    splits: (raw.splits ?? []).map(transformAllocationCopySplit),
+  };
+}
+
+function transformAllocationRemoveSplit(raw: ApiAllocationRemoveSplit): AllocationRemoveSplit {
+  return {
+    sourceTaskId: raw.source_task_id,
+    name: raw.name,
+    amount: raw.amount,
+    targets: raw.targets,
+  };
+}
+
+function transformAllocationRemoveSkip(raw: ApiAllocationRemoveSkip): AllocationRemoveSkip {
+  return { reason: raw.reason, detail: raw.detail ?? null };
+}
+
+function transformAllocationRemoveResult(
+  raw: ApiAllocationRemoveResult
+): AllocationRemoveResult {
+  return {
+    storeId: raw.store_id,
+    store: raw.store,
+    removed: raw.removed ?? 0,
+    skipped: (raw.skipped ?? []).map(transformAllocationRemoveSkip),
+    splits: (raw.splits ?? []).map(transformAllocationRemoveSplit),
+  };
+}
+
+function transformAllocationRemove(
+  raw: ApiAllocationRemoveResponse
+): AllocationRemoveResponse {
+  return {
+    dryRun: raw.dry_run,
+    period: { periodType: raw.period.period_type, periodKey: raw.period.period_key },
+    scope: raw.scope,
+    results: (raw.results ?? []).map(transformAllocationRemoveResult),
+  };
+}
+
+function transformAllocationCopy(raw: ApiAllocationCopyResponse): AllocationCopyResponse {
+  return {
+    dryRun: raw.dry_run,
+    source: {
+      storeId: raw.source.store_id,
+      store: raw.source.store,
+      splits: raw.source.splits,
+      rows: raw.source.rows,
+    },
+    period: { periodType: raw.period.period_type, periodKey: raw.period.period_key },
+    results: (raw.results ?? []).map(transformAllocationCopyResult),
   };
 }
 
@@ -918,6 +1096,56 @@ export const cleaningService = {
         headers: authHeaders(),
         timeout: 15_000,
       });
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Copies the source store's WHOLE saved split to each target store
+   *  (guide §3) — always call with `dry_run: true` first to preview, since
+   *  it's a bulk write across stores and some legitimately can't take it. */
+  async copyAllocation(payload: AllocationCopyRequest): Promise<AllocationCopyResponse> {
+    try {
+      const res = await axios.post(
+        `/api/cleaning/evaluations/allocations/copy`,
+        {
+          source_store_id: payload.source_store_id,
+          target_store_ids: payload.target_store_ids,
+          period_type: payload.period_type,
+          period_key: payload.period_key,
+          dry_run: payload.dry_run ?? true,
+        },
+        { headers: { ...authHeaders(), "Content-Type": "application/json" }, timeout: 20_000 }
+      );
+      return transformAllocationCopy(unwrap<ApiAllocationCopyResponse>(res.data));
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Removes saved splits from up to 50 stores in one call — the undo for
+   *  `copyAllocation`. Omitting `source_task_ids` clears every split those
+   *  stores have for the period. Always preview with `dry_run: true` first:
+   *  it moves the chart score on every store it touches, and there is no
+   *  restore (remove-button guide §2-3). */
+  async removeAllocations(payload: AllocationRemoveRequest): Promise<AllocationRemoveResponse> {
+    try {
+      const res = await axios.post(
+        `/api/cleaning/evaluations/allocations/remove`,
+        {
+          store_ids: payload.store_ids,
+          period_type: payload.period_type,
+          period_key: payload.period_key,
+          // Omitted entirely (not sent as null/[]) when clearing everything —
+          // the API treats "absent" and "empty list" differently.
+          ...(payload.source_task_ids?.length
+            ? { source_task_ids: payload.source_task_ids }
+            : {}),
+          dry_run: payload.dry_run ?? true,
+        },
+        { headers: { ...authHeaders(), "Content-Type": "application/json" }, timeout: 20_000 }
+      );
+      return transformAllocationRemove(unwrap<ApiAllocationRemoveResponse>(res.data));
     } catch (err) {
       throw toCleaningError(err);
     }

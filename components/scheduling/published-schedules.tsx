@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -123,7 +124,7 @@ export function PublishedSchedules({
                   {schedule.shiftCount} shift{schedule.shiftCount !== 1 ? "s" : ""}
                 </span>
                 <span>·</span>
-                <span>{schedule.totalHours.toFixed(1)}h</span>
+                <span>{fmtFixed(schedule.totalHours, 1)}h</span>
                 <span>·</span>
                 <span>week of {formatIsoDate(schedule.weekStartDate, "MMM d")}</span>
                 {superseded && (

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { format } from "date-fns";
 import { Ban, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import {
   Table,
   TableBody,
@@ -146,7 +146,7 @@ function TicketRow({ ticket, onClick, onChanged, canCancelTicket = true }: Ticke
           {ticket.creator?.name ?? <span className="opacity-40">—</span>}
         </TableCell>
         <TableCell className="text-sm text-muted-foreground dark:text-white whitespace-nowrap">
-          {format(new Date(ticket.createdAt), "MMM d, yyyy")}
+          {formatTimestamp(ticket.createdAt, "MMM d, yyyy")}
         </TableCell>
         {canCancelTicket && (
           <TableCell>

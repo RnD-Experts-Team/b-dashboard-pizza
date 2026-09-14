@@ -119,6 +119,14 @@ export interface StockMovementLine {
 export interface StockMovement {
   id: number;
   type: EnumField;
+  /**
+   * WIRE SHAPE UNCONFIRMED. The client sends a naked local `YYYY-MM-DDTHH:mm`
+   * (see CreateStockMovementPayload), but what the API echoes back has never
+   * been checked — it may be date-only, RFC3339, or MySQL `Y-m-d H:i:s`.
+   *
+   * Render it through `formatWireDateTime`, which handles all three. NARROW
+   * THIS TYPE and switch to `formatTimestamp` the day the contract is confirmed.
+   */
   movedAt: string;
   paidBy: EnumField | null;
   paidByTechnicianId: number | null;
@@ -243,7 +251,15 @@ export interface CreateStockMovementLinePayload {
 }
 
 export interface CreateStockMovementPayload {
-  /** Local `YYYY-MM-DDTHH:mm`, matching the attendance-clock precedent. */
+  /**
+   * Local `YYYY-MM-DDTHH:mm` with NO offset — the server infers the zone.
+   *
+   * This deliberately does NOT match attendance, despite both using the same
+   * DateTimePicker: attendance converts to UTC RFC3339 via
+   * `toRfc3339OrUndefined` before sending. Same control, two wire contracts.
+   * Recorded as a known divergence rather than silently aligned, because
+   * changing it changes what gets persisted and needs a backend answer first.
+   */
   moved_at: string;
   type: PostableStockMovementType;
   paid_by?: StockPaidBy;

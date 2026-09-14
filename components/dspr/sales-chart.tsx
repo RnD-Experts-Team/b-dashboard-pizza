@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -433,7 +434,7 @@ export function SalesChart({
                         const color = laborColor(entry.percent);
                         return (
                           <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color }}>
-                            {entry.percent.toFixed(1)}%
+                            {fmtFixed(entry.percent, 1)}%
                           </td>
                         );
                       })()}

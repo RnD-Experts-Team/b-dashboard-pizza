@@ -1,7 +1,12 @@
 "use client";
 
 import { ListChecks, Paperclip, Trash2, X } from "lucide-react";
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from "@/components/shared/searchable-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +58,15 @@ export function DailyPayLineFieldset({
   issuePickerDisabledReason,
 }: DailyPayLineFieldsetProps) {
   const err = (field: string) => lineError(errors, paymentIndex, lineIndex, field);
+  const storeOptions = useMemo<SearchableSelectOption[]>(
+    () =>
+      stores.map((store) => ({
+        value: String(store.id),
+        label: store.storeNumber,
+        hint: store.name,
+      })),
+    [stores]
+  );
 
   return (
     <div
@@ -96,7 +110,7 @@ export function DailyPayLineFieldset({
             <SelectTrigger className="h-9 text-sm">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent position="popper">
+            <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
               <SelectItem value="store">System store</SelectItem>
               <SelectItem value="other">Other location</SelectItem>
             </SelectContent>
@@ -108,28 +122,16 @@ export function DailyPayLineFieldset({
             <Label className="text-xs text-muted-foreground">
               Store <span className="text-destructive">*</span>
             </Label>
-            <Select
+            <SearchableSelect
+              options={storeOptions}
               value={line.storeId || undefined}
-              onValueChange={(v) => onPatch({ storeId: v })}
+              onChange={(v) => onPatch({ storeId: v })}
               disabled={disabled}
-            >
-              <SelectTrigger
-                className={cn("h-9 text-sm", err("store_id") && "border-destructive")}
-              >
-                <SelectValue placeholder="Select store" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                style={{ maxHeight: "220px", overflowY: "auto" }}
-              >
-                {stores.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    {s.storeNumber}
-                    <span className="ms-1.5 text-xs text-muted-foreground">{s.name}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Select store"
+              searchPlaceholder="Search stores…"
+              emptyText="No stores found."
+              className={cn("h-9 text-sm", err("store_id") && "border-destructive")}
+            />
             {err("store_id") && (
               <p className="text-[11px] text-destructive">{err("store_id")}</p>
             )}

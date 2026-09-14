@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { useMemo, useState } from "react";
 import type { ApexOptions } from "apexcharts";
 import type { DsprSales } from "@/types/dspr.types";
@@ -249,7 +250,7 @@ export function V1SalesTrendCard({
                     <td className="px-3 py-2 text-right tabular-nums">{renderPct(vsLY)}</td>
                     {laborWeekToDateByDay && (
                       laborEntry && laborEntry.percent > 0
-                        ? <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: laborColor(laborEntry.percent) }}>{laborEntry.percent.toFixed(1)}%</td>
+                        ? <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: laborColor(laborEntry.percent) }}>{fmtFixed(laborEntry.percent, 1)}%</td>
                         : <td className="px-3 py-2 text-right tabular-nums text-zinc-300 dark:text-zinc-600">—</td>
                     )}
                   </tr>

@@ -6,6 +6,7 @@ import { CalendarIcon, Loader2, RefreshCw, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { formatDateOnly } from "@/lib/utils/date-display";
 import {
   Popover,
   PopoverContent,
@@ -87,9 +88,9 @@ export function LaborHeader({
       {weekStart && weekEnd && (
         <Badge variant="outline" className="gap-1 px-2.5 py-1 text-xs">
           <CalendarIcon className="h-3 w-3" />
-          Week of {format(parseISO(weekStart), "MMM d")}
+          Week of {formatDateOnly(weekStart, "MMM d")}
           <span className="text-muted-foreground">
-            → {format(parseISO(weekEnd), "MMM d")}
+            → {formatDateOnly(weekEnd, "MMM d")}
           </span>
         </Badge>
       )}

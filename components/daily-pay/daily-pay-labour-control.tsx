@@ -89,7 +89,7 @@ export function DailyPayLabourControl({
           <SelectTrigger className="h-9 text-sm">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent position="popper">
+          <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
             <SelectItem value="gather">{MODE_LABEL.gather}</SelectItem>
             <SelectItem value="hours">{MODE_LABEL.hours}</SelectItem>
             <SelectItem value="lumpSum">{MODE_LABEL.lumpSum}</SelectItem>

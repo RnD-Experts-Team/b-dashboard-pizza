@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { fmtFixed } from "@/lib/utils/number-display";
 import type { DebriefTypeSummaryEntry } from "@/types/employee-debrief.types";
 
 export function DebriefTypeSummary({ items }: { items: DebriefTypeSummaryEntry[] }) {
@@ -22,7 +23,7 @@ export function DebriefTypeSummary({ items }: { items: DebriefTypeSummaryEntry[]
             <span className="font-medium">{label}</span>
             <span className="tabular-nums">{entry.totalCount}</span>
             <span className="tabular-nums opacity-70">
-              ({entry.weeklyAverage.toFixed(2)}/wk)
+              ({fmtFixed(entry.weeklyAverage, 2)}/wk)
             </span>
           </Badge>
         );

@@ -495,13 +495,23 @@ export interface TicketsAnalytics {
     pendingToNextStatus: TicketsAnalyticsDuration;
     timeToCompleteOrCancelled: TicketsAnalyticsDuration;
   };
+  /**
+   * NULLABLE THROUGHOUT. Every figure here is an aggregate over the matched
+   * tickets, and the API sends `null` — not 0 — when there is nothing to
+   * average: no tickets at all, or a filter combination that matches none.
+   *
+   * `durations.*.avgHours` above already said so; `value` did not, claimed to
+   * be a plain `number`, and crashed the whole analytics panel on `.toFixed()`
+   * the first time a filter matched nothing. Rendering 0 would be a lie —
+   * "no tickets" is not "zero per week" — so these render as an em dash.
+   */
   avgTicketsPerWeek: {
-    value: number;
-    totalTickets: number;
-    weeksSpanned: number;
-    spanStart: string;
-    spanEnd: string;
-    weekStartsOn: string;
+    value: number | null;
+    totalTickets: number | null;
+    weeksSpanned: number | null;
+    spanStart: string | null;
+    spanEnd: string | null;
+    weekStartsOn: string | null;
   };
 }
 
@@ -1057,22 +1067,23 @@ export interface ApiTicketsAnalyticsDuration {
 }
 
 export interface ApiTicketsAnalytics {
-  issues: {
-    total: number;
-    status_breakdown: ApiTicketsAnalyticsStatusBreakdown[];
-  };
-  durations: {
-    pending_to_next_status: ApiTicketsAnalyticsDuration;
-    time_to_complete_or_cancelled: ApiTicketsAnalyticsDuration;
-  };
-  avg_tickets_per_week: {
-    value: number;
-    total_tickets: number;
-    weeks_spanned: number;
-    span_start: string;
-    span_end: string;
-    week_starts_on: string;
-  };
+  issues?: {
+    total?: number | null;
+    status_breakdown?: ApiTicketsAnalyticsStatusBreakdown[] | null;
+  } | null;
+  durations?: {
+    pending_to_next_status?: ApiTicketsAnalyticsDuration | null;
+    time_to_complete_or_cancelled?: ApiTicketsAnalyticsDuration | null;
+  } | null;
+  /** May be absent entirely, or present with null members — see TicketsAnalytics. */
+  avg_tickets_per_week?: {
+    value?: number | null;
+    total_tickets?: number | null;
+    weeks_spanned?: number | null;
+    span_start?: string | null;
+    span_end?: string | null;
+    week_starts_on?: string | null;
+  } | null;
 }
 
 /** Envelope returned by the dedicated GET /tickets/analytics and GET /stores/{store}/tickets/analytics endpoints */

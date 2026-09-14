@@ -18,6 +18,7 @@ import {
   NUM,
 } from "./primitives";
 import { cn } from "@/lib/utils";
+import { fmtFixed } from "@/lib/utils/number-display";
 
 const mins = (m: number) =>
   m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m` : `${m}m`;
@@ -100,7 +101,7 @@ export function OperationsTab({ data }: { data: WbrData }) {
                       <StoreCell name={r.store.name} market={r.store.market} num={r.store.num} />
                     </td>
                     <td className={cn(TD, NUM)}>{fmt$(r.deposit.physical)}</td>
-                    <td className={cn(TD, NUM)}>${r.deposit.cashTips.toFixed(2)}</td>
+                    <td className={cn(TD, NUM)}>${fmtFixed(r.deposit.cashTips, 2)}</td>
                     <td className={cn(TD, NUM)}>{fmt$(r.deposit.cashSales)}</td>
                     <td className={cn(TD, NUM)}>{fmt$(r.deposit.cashDrop)}</td>
                     <td className={cn(TD, NUM)}>{fmt$(r.deposit.bank)}</td>
@@ -230,7 +231,7 @@ export function OperationsTab({ data }: { data: WbrData }) {
                   <td className={TD}>{t.item}</td>
                   <td className={cn(TD, NUM)}>{t.qty}</td>
                   <td className={cn(TD, "text-[10px] text-muted-foreground")}>{t.unit}</td>
-                  <td className={cn(TD, NUM)}>${t.cost.toFixed(2)}</td>
+                  <td className={cn(TD, NUM)}>${fmtFixed(t.cost, 2)}</td>
                 </tr>
               ))}
             </tbody>

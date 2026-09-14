@@ -16,9 +16,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
 import { formatScorePct } from "./cleaning-ui";
-import type { CleaningSettings } from "@/types/cleaning.types";
+import type { ChartCompletionRule, CleaningSettings } from "@/types/cleaning.types";
 
 /**
  * Purely illustrative numbers for the live example below — never used to
@@ -53,6 +62,9 @@ export function CleaningSettingsDialog() {
   const [error, setError] = useState<CleaningError | null>(null);
   const [settings, setSettings] = useState<CleaningSettings | null>(null);
   const [itemsShare, setItemsShare] = useState(50);
+  const [requiresCompletion, setRequiresCompletion] = useState(true);
+  const [completionRule, setCompletionRule] = useState<ChartCompletionRule>("any");
+  const [completionThreshold, setCompletionThreshold] = useState("100");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -68,6 +80,9 @@ export function CleaningSettingsDialog() {
         // Belt-and-suspenders: `transformSettings` already guarantees a
         // finite number, but never let a slider render `NaN` either way.
         setItemsShare(Number.isFinite(s.itemsShare) ? s.itemsShare : 50);
+        setRequiresCompletion(s.chartRequiresCompletion);
+        setCompletionRule(s.completionRule);
+        setCompletionThreshold(String(s.completionThreshold));
       })
       .catch((err) => {
         if (!cancelled && err instanceof CleaningError) setError(err);
@@ -83,19 +98,32 @@ export function CleaningSettingsDialog() {
   const chartShare = 100 - itemsShare;
   const examplePreview =
     (EXAMPLE_ITEM_SCORE * itemsShare + EXAMPLE_CHART_SCORE * chartShare) / 100;
+  const parsedThreshold = Math.round(Number(completionThreshold));
+  const thresholdValid = Number.isFinite(parsedThreshold) && parsedThreshold >= 1 && parsedThreshold <= 100;
   const dirty =
     settings != null &&
-    (settings.scoreFormula !== "average" || itemsShare !== settings.itemsShare);
+    (settings.scoreFormula !== "average" ||
+      itemsShare !== settings.itemsShare ||
+      requiresCompletion !== settings.chartRequiresCompletion ||
+      completionRule !== settings.completionRule ||
+      (completionRule === "threshold" && parsedThreshold !== settings.completionThreshold));
 
   const handleSave = async () => {
+    if (completionRule === "threshold" && !thresholdValid) return;
     setSaving(true);
     try {
       const updated = await cleaningService.updateSettings({
         score_formula: "average",
         items_share: itemsShare,
         chart_share: chartShare,
+        chart_requires_completion: requiresCompletion,
+        completion_rule: completionRule,
+        completion_threshold: parsedThreshold,
       });
       setSettings(updated);
+      setRequiresCompletion(updated.chartRequiresCompletion);
+      setCompletionRule(updated.completionRule);
+      setCompletionThreshold(String(updated.completionThreshold));
       toast.success(t("saved"));
     } catch (err) {
       toast.error(err instanceof CleaningError ? err.message : t("failed"));
@@ -177,6 +205,63 @@ export function CleaningSettingsDialog() {
                 </p>
               </div>
             </div>
+
+            {/* Chart completion lock (guide §4) — the numeric threshold stays
+                DISABLED rather than hidden whenever it's irrelevant, so it's
+                still discoverable. */}
+            <div className="space-y-3 border-t pt-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-sm font-semibold">{t("requiresCompletionLabel")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("requiresCompletionHint")}</p>
+                </div>
+                <Switch
+                  checked={requiresCompletion}
+                  onCheckedChange={setRequiresCompletion}
+                  disabled={saving}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">{t("completionRuleLabel")}</Label>
+                <Select
+                  value={completionRule}
+                  onValueChange={(v) => setCompletionRule(v as ChartCompletionRule)}
+                  disabled={saving || !requiresCompletion}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">{t("completionRule.any")}</SelectItem>
+                    <SelectItem value="all">{t("completionRule.all")}</SelectItem>
+                    <SelectItem value="threshold">{t("completionRule.threshold")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="completion-threshold" className="text-xs">
+                  {t("completionThresholdLabel")}
+                </Label>
+                <Input
+                  id="completion-threshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={completionThreshold}
+                  onChange={(e) => setCompletionThreshold(e.target.value)}
+                  disabled={saving || !requiresCompletion || completionRule !== "threshold"}
+                  className="h-9 w-24"
+                />
+              </div>
+
+              {settings.explain.chart_requires_completion && (
+                <p className="text-xs text-muted-foreground">
+                  {settings.explain.chart_requires_completion}
+                </p>
+              )}
+            </div>
           </div>
         ) : null}
 
@@ -184,7 +269,15 @@ export function CleaningSettingsDialog() {
           <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
             {t("close")}
           </Button>
-          <Button onClick={handleSave} disabled={!settings || saving || !dirty}>
+          <Button
+            onClick={handleSave}
+            disabled={
+              !settings ||
+              saving ||
+              !dirty ||
+              (completionRule === "threshold" && !thresholdValid)
+            }
+          >
             {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
             {t("save")}
           </Button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -2084,7 +2085,7 @@ export function SchedulingManager() {
                   Total Hours
                 </p>
                 <p className="text-base sm:text-lg font-bold leading-tight">
-                  {stats.totalHours.toFixed(1)}h
+                  {fmtFixed(stats.totalHours, 1)}h
                 </p>
               </div>
             </CardContent>
@@ -2631,7 +2632,7 @@ export function SchedulingManager() {
                             {tmpl.shiftCount} shift{tmpl.shiftCount !== 1 ? "s" : ""}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            {tmpl.totalHours.toFixed(1)}h
+                            {fmtFixed(tmpl.totalHours, 1)}h
                           </span>
                           <span className="text-[10px] text-muted-foreground">
                             {formatTimestamp(tmpl.createdAt, "MMM d, yyyy")}

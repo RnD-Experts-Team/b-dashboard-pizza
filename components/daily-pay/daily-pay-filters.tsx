@@ -300,7 +300,7 @@ export function DailyPayFiltersBar({
                 <SelectTrigger className={cn("h-9 text-sm", filters.sort && "border-primary/40 bg-primary/5")}>
                   <SelectValue placeholder="Default" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="date">Workday date</SelectItem>
                   <SelectItem value="created_at">Created at</SelectItem>
@@ -324,7 +324,7 @@ export function DailyPayFiltersBar({
                 <SelectTrigger className={cn("h-9 text-sm", filters.dir && "border-primary/40 bg-primary/5")}>
                   <SelectValue placeholder="Default" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="desc">Newest first</SelectItem>
                   <SelectItem value="asc">Oldest first</SelectItem>
@@ -348,7 +348,7 @@ export function DailyPayFiltersBar({
                 <SelectTrigger className={cn("h-9 text-sm", filters.per_page != null && "border-primary/40 bg-primary/5")}>
                   <SelectValue placeholder="Default" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="15">15</SelectItem>

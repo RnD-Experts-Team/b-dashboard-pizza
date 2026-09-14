@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, MoreHorizontal, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatWireDateTime } from "@/lib/utils/date-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,14 +68,6 @@ import type {
 /*  paginated; on hand comes from GET /stock-balances.                       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function fmtMoved(iso: string): string {
-  try {
-    return format(new Date(iso), "MMM d, yyyy HH:mm");
-  } catch {
-    return iso;
-  }
-}
-
 function MovementRow({
   movement,
   page,
@@ -136,7 +128,7 @@ function MovementRow({
           </span>
         </td>
         <td className={cn(TD, "whitespace-nowrap text-muted-foreground")}>
-          {fmtMoved(movement.movedAt)}
+          {formatWireDateTime(movement.movedAt)}
         </td>
         <td className={TD}>
           {lines == null ? (

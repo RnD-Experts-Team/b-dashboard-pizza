@@ -1,8 +1,9 @@
 "use client";
 
-import { format } from "date-fns";
 import { CircleCheck, Clock3, Minus } from "lucide-react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { cn } from "@/lib/utils";
+import { formatDateOrTimestamp } from "@/lib/utils/date-display";
 import {
   ATTENDANCE_BUCKETS,
   ATTENDANCE_BUCKET_LABELS,
@@ -60,19 +61,6 @@ const STATUS_ICONS: Record<PaymentStatusValue, typeof Clock3> = {
 
 function isKnownStatus(value: string): value is PaymentStatusValue {
   return value === "unpaid" || value === "paid" || value === "not_payable";
-}
-
-/** Date-only safe. Copied from ticket-detail-sheet.tsx rather than exported
- *  out of a 4500-line file; keep the two in step if either changes. */
-function fmtClaimDate(iso: string): string {
-  try {
-    const d = /^\d{4}-\d{2}-\d{2}$/.test(iso.trim())
-      ? new Date(iso + "T00:00")
-      : new Date(iso);
-    return format(d, "MMM d");
-  } catch {
-    return iso;
-  }
 }
 
 interface PaymentStatusBadgeProps {
@@ -150,7 +138,7 @@ export function PaymentClaimList({
         const detail =
           kind === "part"
             ? claim.amount != null
-              ? `$${claim.amount.toFixed(2)}`
+              ? `$${fmtFixed(claim.amount, 2)}`
               : null
             : claimMinutesSummary(claim);
 
@@ -160,7 +148,7 @@ export function PaymentClaimList({
             className="text-[11px] text-muted-foreground tabular-nums"
           >
             <span className="font-medium text-foreground">
-              {fmtClaimDate(claim.date)}
+              {formatDateOrTimestamp(claim.date, "MMM d")}
             </span>
             {" · "}
             {payee}

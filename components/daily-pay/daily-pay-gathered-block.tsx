@@ -1,8 +1,8 @@
 "use client";
 
-import { format } from "date-fns";
 import { Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import { formatHours, formatMoney, payableHours } from "@/lib/daily-pay/money";
 import type { DailyPayGathered } from "@/types/daily-pay.types";
 
@@ -74,7 +74,7 @@ export function DailyPayGatheredBlock({
           <p className="flex items-center gap-1 text-[9px] text-muted-foreground">
             <User className="h-2.5 w-2.5" />
             {gathered.by?.name ?? "System"}
-            <span>· {formatGatheredAt(gathered.at)}</span>
+            <span>· {formatTimestamp(gathered.at, "MMM d, h:mm a")}</span>
           </p>
         )}
       </div>
@@ -115,9 +115,4 @@ export function DailyPayGatheredBlock({
       )}
     </div>
   );
-}
-
-function formatGatheredAt(value: string): string {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, h:mm a");
 }

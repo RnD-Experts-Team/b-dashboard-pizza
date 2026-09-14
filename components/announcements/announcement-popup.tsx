@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { X, AlertTriangle, Info, Wrench, Eye, Calendar, Pin } from "lucide-react";
-import { format } from "date-fns";
+import { formatDateOrTimestamp, formatTimestamp } from "@/lib/utils/date-display";
 
 const typeConfig: Record<
   AnnouncementType,
@@ -117,7 +117,7 @@ export function AnnouncementPopup() {
                 </Badge>
               )}
               <span className="text-xs text-muted-foreground ml-auto">
-                {format(new Date(current.created_at), "MMMM d, yyyy")}
+                {formatTimestamp(current.created_at, "MMMM d, yyyy")}
               </span>
             </div>
 
@@ -140,9 +140,9 @@ export function AnnouncementPopup() {
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5 shrink-0" />
                 <span>
-                  {format(new Date(current.starts_at), "MMMM d, yyyy")}
+                  {formatDateOrTimestamp(current.starts_at, "MMMM d, yyyy")}
                   {" – "}
-                  {format(new Date(current.ends_at), "MMMM d, yyyy")}
+                  {formatDateOrTimestamp(current.ends_at, "MMMM d, yyyy")}
                 </span>
               </div>
               <div className="flex items-center gap-2">

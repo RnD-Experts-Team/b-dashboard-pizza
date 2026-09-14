@@ -506,7 +506,7 @@ export function DailyPayEntryDialog({
             </div>
           )}
 
-          <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background/95 px-6 py-4 backdrop-blur">
+          <DialogFooter>
             <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>

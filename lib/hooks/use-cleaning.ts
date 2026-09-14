@@ -125,6 +125,8 @@ export function useCleaningEvaluation() {
     updateInspectionItemWeight,
     allocateWeight,
     deleteAllocation,
+    copyAllocation,
+    removeAllocations,
     finalizeStore,
     reopenStore,
   } = useCleaningStore();
@@ -156,6 +158,8 @@ export function useCleaningEvaluation() {
     updateInspectionItemWeight,
     allocateWeight,
     deleteAllocation,
+    copyAllocation,
+    removeAllocations,
     finalizeStore,
     reopenStore,
   };

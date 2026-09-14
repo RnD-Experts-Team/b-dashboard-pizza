@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { fmtFixed } from "@/lib/utils/number-display";
 import type { NetworkStatus } from "@/lib/hooks/use-network-status";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -156,7 +157,7 @@ export function NetworkBadge({ status, iconOnly = false, className }: NetworkBad
   }[level];
 
   const parts: string[] = [label];
-  if (status.downlink !== undefined) parts.push(`${status.downlink.toFixed(1)} Mbps`);
+  if (status.downlink !== undefined) parts.push(`${fmtFixed(status.downlink, 1)} Mbps`);
   if (status.rtt !== undefined) parts.push(`${status.rtt}ms RTT`);
   const tooltip = status.online ? parts.join(" · ") : "No internet connection";
 

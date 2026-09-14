@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -29,6 +28,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateOnly, formatTimestamp } from "@/lib/utils/date-display";
 import { dailyPayService, DailyPayError } from "@/lib/api/services/daily-pay.service";
 import { entryTotal, formatMoney } from "@/lib/daily-pay/money";
 import { parseRevisionSnapshot, snapshotVersionLabel } from "@/lib/daily-pay/revision-snapshot";
@@ -41,23 +41,6 @@ import type { DailyPayStoreOption } from "@/lib/hooks/use-daily-pay";
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-/** Formats a plain "YYYY-MM-DD" workday date without shifting to a UTC day boundary. */
-function formatDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!match) {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy");
-  }
-  const [, y, m, d] = match;
-  const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, yyyy");
-}
-
-function formatDateTime(value: string): string {
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? value : format(d, "MMM d, yyyy 'at' h:mm a");
-}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Revision row                                                            */
@@ -89,7 +72,7 @@ function RevisionRow({
         </span>
         <span className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">
-            {formatDateTime(revision.createdAt)}
+            {formatTimestamp(revision.createdAt, "MMM d, yyyy 'at' h:mm a")}
           </span>
           <ChevronDown
             className={cn(
@@ -200,7 +183,7 @@ export function DailyPayDetailSheet({
           </SheetTitle>
           <SheetDescription>
             {entry
-              ? `Workday ${formatDate(entry.date)}`
+              ? `Workday ${formatDateOnly(entry.date)}`
               : "End-of-day technician payment record."}
           </SheetDescription>
         </SheetHeader>
@@ -234,7 +217,7 @@ export function DailyPayDetailSheet({
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-muted-foreground">Created</p>
-                  <p className="font-medium">{formatDateTime(entry.createdAt)}</p>
+                  <p className="font-medium">{formatTimestamp(entry.createdAt, "MMM d, yyyy 'at' h:mm a")}</p>
                 </div>
                 <div className="space-y-0.5">
                   <p className="text-muted-foreground">Entry total</p>

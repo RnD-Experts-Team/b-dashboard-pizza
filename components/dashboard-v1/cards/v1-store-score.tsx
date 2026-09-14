@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { format } from "date-fns";
 import { Star, TrendingUp, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -194,7 +195,7 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
                 {d.label}
                 {d.actual_percent != null && (
                   <span className="ml-0.5 text-[8px] text-muted-foreground/60">
-                    ({d.actual_percent.toFixed(1)}%)
+                    ({fmtFixed(d.actual_percent, 1)}%)
                   </span>
                 )}
               </span>
@@ -206,7 +207,7 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
                 />
               </div>
               <span className={cn("w-11 text-right text-[9px] tabular-nums font-semibold shrink-0", isPerfect ? "text-emerald-600 dark:text-emerald-400" : SCORE_TEXT[c])}>
-                {d.score % 1 === 0 ? d.score : d.score.toFixed(1)}/{d.max % 1 === 0 ? d.max : d.max.toFixed(1)}
+                {d.score % 1 === 0 ? d.score : fmtFixed(d.score, 1)}/{d.max % 1 === 0 ? d.max : fmtFixed(d.max, 1)}
               </span>
             </div>
           );

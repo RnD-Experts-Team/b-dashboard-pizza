@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { SpeedometerGauge, type SpeedZone } from "@/components/dspr/speedometer-gauge";
 import {
   WtdComparisonDialog,
@@ -219,7 +220,7 @@ export function V1HnrCard({
               daily={
                 <div className="space-y-2">
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                    {dailyHnr.hnr_promise_met_percent.toFixed(1)}%
+                    {fmtFixed(dailyHnr.hnr_promise_met_percent, 1)}%
                   </p>
                   <p className="text-[10px] text-muted-foreground">Promise Met</p>
                   <div className="flex gap-3 mt-2">
@@ -232,7 +233,7 @@ export function V1HnrCard({
               wtd={
                 <div className="space-y-2">
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {avg.hnr_promise_met_percent.toFixed(1)}%
+                    {fmtFixed(avg.hnr_promise_met_percent, 1)}%
                   </p>
                   <p className="text-[10px] text-muted-foreground">Promise Met{showSum ? " (Avg)" : ""}</p>
                   <div className="flex gap-3 mt-2">
@@ -245,7 +246,7 @@ export function V1HnrCard({
             />
             <ComparisonTable
               rows={[
-                { label: "Promise Met %", daily: `${dailyHnr.hnr_promise_met_percent.toFixed(1)}%`, wtd: `${avg.hnr_promise_met_percent.toFixed(1)}%`, dailyNum: dailyHnr.hnr_promise_met_percent, wtdNum: avg.hnr_promise_met_percent, higherIsBetter: true, wtdSum: showSum ? `${sumHnrResolved.hnr_promise_met_percent.toFixed(1)}%` : undefined },
+                { label: "Promise Met %", daily: `${fmtFixed(dailyHnr.hnr_promise_met_percent, 1)}%`, wtd: `${fmtFixed(avg.hnr_promise_met_percent, 1)}%`, dailyNum: dailyHnr.hnr_promise_met_percent, wtdNum: avg.hnr_promise_met_percent, higherIsBetter: true, wtdSum: showSum ? `${fmtFixed(sumHnrResolved.hnr_promise_met_percent, 1)}%` : undefined },
                 { label: "Transactions", daily: `${dailyHnr.hnr_transactions}`, wtd: `${avg.hnr_transactions}`, dailyNum: dailyHnr.hnr_transactions, wtdNum: avg.hnr_transactions, higherIsBetter: true, wtdSum: showSum ? `${sumHnrResolved.hnr_transactions}` : undefined },
                 { label: "Promises Kept", daily: `${dailyHnr.hnr_promise_met}`, wtd: `${avg.hnr_promise_met}`, dailyNum: dailyHnr.hnr_promise_met, wtdNum: avg.hnr_promise_met, higherIsBetter: true, wtdSum: showSum ? `${sumHnrResolved.hnr_promise_met}` : undefined },
                 { label: "Broken Promises", daily: `${dailyHnr.hnr_broken_promises}`, wtd: `${avg.hnr_broken_promises}`, dailyNum: dailyHnr.hnr_broken_promises, wtdNum: avg.hnr_broken_promises, higherIsBetter: false, wtdSum: showSum ? `${sumHnrResolved.hnr_broken_promises}` : undefined },

@@ -17,6 +17,7 @@ import {
   NUM,
 } from "./primitives";
 import { cn } from "@/lib/utils";
+import { fmtFixed } from "@/lib/utils/number-display";
 
 const fmt2 = (n: number) =>
   "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -130,8 +131,8 @@ export function PeopleTab({ data }: { data: WbrData }) {
                         <td className={cn(TD, "font-semibold")}>{e.store.name}</td>
                         <td className={TD}>{e.name}</td>
                         <td className={cn(TD, "text-[10px] text-muted-foreground")}>{e.position}</td>
-                        <td className={cn(TD, NUM, e.hours > 70 && "font-semibold text-red-600 dark:text-red-400")}>{e.hours.toFixed(1)}</td>
-                        <td className={cn(TD, NUM)}>${e.hourlyPay.toFixed(2)}</td>
+                        <td className={cn(TD, NUM, e.hours > 70 && "font-semibold text-red-600 dark:text-red-400")}>{fmtFixed(e.hours, 1)}</td>
+                        <td className={cn(TD, NUM)}>${fmtFixed(e.hourlyPay, 2)}</td>
                         <td className={cn(TD, NUM)}>{fmt2(e.grossPay)}</td>
                       </tr>
                     ))}
@@ -162,7 +163,7 @@ export function PeopleTab({ data }: { data: WbrData }) {
                   style={{ left: `${Math.min(100, (25 / maxLabor) * 100)}%` }}
                 />
               </span>
-              <span className="w-12 shrink-0 text-end text-[12.5px] tabular-nums">{r.laborPct.toFixed(1)}%</span>
+              <span className="w-12 shrink-0 text-end text-[12.5px] tabular-nums">{fmtFixed(r.laborPct, 1)}%</span>
             </div>
           ))}
           <p className="text-[11px] text-muted-foreground">Vertical line marks the 25% labor target.</p>
@@ -233,7 +234,7 @@ export function PeopleTab({ data }: { data: WbrData }) {
                       <td className={cn(TD, "font-semibold")}>{m.store.name}</td>
                       <td className={TD}>{m.smName}</td>
                       <td className={TD}>{m.desc}</td>
-                      <td className={cn(TD, NUM)}>${m.amount.toFixed(2)}</td>
+                      <td className={cn(TD, NUM)}>${fmtFixed(m.amount, 2)}</td>
                     </tr>
                   ))
                 ) : (

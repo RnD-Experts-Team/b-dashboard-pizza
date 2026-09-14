@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -323,7 +324,7 @@ export function LaborGauge({
                           className="text-[11px] font-semibold tabular-nums w-12 text-right"
                           style={{ color }}
                         >
-                          {entry.percent.toFixed(1)}%
+                          {fmtFixed(entry.percent, 1)}%
                         </span>
                         {entry.value !== 0 && (
                           <span className="text-[9px] text-muted-foreground w-16 text-right tabular-nums hidden sm:block">
@@ -388,7 +389,7 @@ export function LaborGauge({
                       </span>
                       {entry.total_hours > 0 && (
                         <span className="text-[12px] font-semibold text-foreground w-16 text-right tabular-nums hidden sm:block">
-                          {entry.total_hours.toFixed(1)} hrs
+                          {fmtFixed(entry.total_hours, 1)} hrs
                         </span>
                       )}
                       {label && entry.labor != null && (
