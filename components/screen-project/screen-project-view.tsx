@@ -39,6 +39,10 @@ interface ScreenState {
   stationVideoInput:  string;
   stationAudioOutput: string;
   stationFullscreen:  boolean;
+  /** Level (0..1) of the supervisor's voice out of the station's own speakers */
+  stationSpeakerVolume: number;
+  /** Level (0..1) of media-library video playing on the station screen */
+  stationMediaVolume:   number;
   stationDevices:     StationStateMsg | null;
 }
 
@@ -277,6 +281,10 @@ export function ScreenProjectView() {
           stationVideoInput:  "",
           stationAudioOutput: "",
           stationFullscreen:  false,
+          // Defaults reproduce the previous hard-coded behaviour: voice at full
+          // volume on the station, media silent.
+          stationSpeakerVolume: 1,
+          stationMediaVolume:   0,
           stationDevices:     null,
         };
       });
@@ -545,6 +553,17 @@ export function ScreenProjectView() {
         stationAudioInput:  kind === "audioinput"  ? deviceId : prev[roomName].stationAudioInput,
         stationVideoInput:  kind === "videoinput"  ? deviceId : prev[roomName].stationVideoInput,
         stationAudioOutput: kind === "audiooutput" ? deviceId : prev[roomName].stationAudioOutput,
+      },
+    }));
+  }, []);
+
+  const handleStationVolumeChange = useCallback((roomName: string, target: "speaker" | "media", level: number) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: {
+        ...prev[roomName],
+        stationSpeakerVolume: target === "speaker" ? level : prev[roomName].stationSpeakerVolume,
+        stationMediaVolume:   target === "media"   ? level : prev[roomName].stationMediaVolume,
       },
     }));
   }, []);
@@ -1015,10 +1034,13 @@ export function ScreenProjectView() {
                   stationVideoInput={screenStates[s.room_name]?.stationVideoInput ?? ""}
                   stationAudioOutput={screenStates[s.room_name]?.stationAudioOutput ?? ""}
                   stationFullscreen={screenStates[s.room_name]?.stationFullscreen ?? false}
+                  stationSpeakerVolume={screenStates[s.room_name]?.stationSpeakerVolume ?? 1}
+                  stationMediaVolume={screenStates[s.room_name]?.stationMediaVolume ?? 0}
                   onToggleStationMic={() => handleToggleStationMic(s.room_name)}
                   onToggleStationCam={() => handleToggleStationCam(s.room_name)}
                   onToggleStationFullscreen={() => handleToggleStationFullscreen(s.room_name)}
                   onStationDeviceChange={(kind, deviceId) => handleStationDeviceChange(s.room_name, kind, deviceId)}
+                  onStationVolumeChange={(target, level) => handleStationVolumeChange(s.room_name, target, level)}
                   onStationStateReceived={(state) => handleStationStateReceived(s.room_name, state)}
                 />
               </motion.div>
