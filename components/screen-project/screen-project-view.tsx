@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut, Check } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut, Check, Maximize, Minimize } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -143,6 +143,7 @@ export function ScreenProjectView() {
   const localStreamRef = useRef<MediaStream | null>(null);
   const micButtonRef = useRef<HTMLButtonElement>(null);
   const camButtonRef = useRef<HTMLButtonElement>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
 
   /** Measured dimensions of the tile container — drives responsive layout math. */
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -207,6 +208,11 @@ export function ScreenProjectView() {
   const [sideScroll, setSideScroll] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const [sessionExited, setSessionExited] = useState(false);
+  /**
+   * Local viewer fullscreen — distinct from `ScreenState.stationFullscreen`,
+   * which is a remote command telling a station device to go fullscreen.
+   */
+  const [isViewerFullscreen, setIsViewerFullscreen] = useState(false);
 
   /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = view selector, "station-select" = station checklist before connecting */
   const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select" | "station-select">(() => {
@@ -281,12 +287,14 @@ export function ScreenProjectView() {
   // Reset side-panel scroll when the stations list changes
   useEffect(() => { setSideScroll(0); }, [nonDriveThruStations]);
 
-  // "M"/"C" shortcuts: focus the mic/camera button (doesn't toggle it — a
-  // focused native <button> already responds to Enter/Space with a click).
+  // "M"/"C"/"F" shortcuts: focus the mic/camera/fullscreen button (doesn't
+  // toggle it — a focused native <button> already responds to Enter/Space
+  // with a click).
   useEffect(() => {
     const targets: Record<string, React.RefObject<HTMLButtonElement | null>> = {
       m: micButtonRef,
       c: camButtonRef,
+      f: fullscreenButtonRef,
     };
     const onKey = (e: KeyboardEvent) => {
       const target = targets[e.key.toLowerCase()];
@@ -300,6 +308,48 @@ export function ScreenProjectView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /**
+   * Viewer fullscreen.
+   *
+   * We fullscreen `document.documentElement` rather than the view wrapper so
+   * that Radix portals (StationsDialog, tooltips) — which mount on
+   * document.body — stay inside the fullscreen element and remain visible.
+   * The wrapper then gets a `fixed inset-0` takeover so the tiles actually
+   * fill the screen instead of just sitting in a taller dashboard.
+   *
+   * The CSS state flips regardless of whether the API call resolves, so a
+   * browser that refuses fullscreen still gets a full-viewport takeover.
+   */
+  const exitViewerFullscreen = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setIsViewerFullscreen(false);
+  }, []);
+
+  const handleToggleViewerFullscreen = useCallback(() => {
+    if (isViewerFullscreen) {
+      exitViewerFullscreen();
+    } else {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      setIsViewerFullscreen(true);
+    }
+  }, [isViewerFullscreen, exitViewerFullscreen]);
+
+  // Esc (or F11) leaves native fullscreen without telling React — without this
+  // the CSS takeover would stay stuck covering the app.
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setIsViewerFullscreen(false);
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Leave fullscreen on unmount, so navigating away doesn't strand the rest of
+  // the dashboard in fullscreen.
+  useEffect(() => () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }, []);
 
   /**
@@ -902,7 +952,12 @@ export function ScreenProjectView() {
 
   /* ── Main view ──────────────────────────────────────────────────── */
   return (
-    <div className="relative flex h-full flex-col gap-3">
+    <div
+      className={cn(
+        "relative flex flex-col gap-3",
+        isViewerFullscreen ? "fixed inset-0 z-50 bg-background p-3" : "h-full",
+      )}
+    >
       {/*
        * Single tile area — ALL ScreenTile instances live here permanently.
        * Clicking a side tile only changes `mainId` state. Each tile's
@@ -1210,6 +1265,27 @@ export function ScreenProjectView() {
 
           <div className="w-px h-5 bg-white/10 mx-1" />
 
+          {/* Fullscreen button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                ref={fullscreenButtonRef}
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-white/50 hover:text-white hover:bg-white/10 rounded-xl"
+                onClick={handleToggleViewerFullscreen}
+                aria-label={isViewerFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isViewerFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {isViewerFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            </TooltipContent>
+          </Tooltip>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
           {/* Guide button */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1243,6 +1319,7 @@ export function ScreenProjectView() {
                   // here — clear it explicitly so a later navigate-away
                   // doesn't find stale entries and hand off to PiP anyway.
                   liveRoomsRef.current.clear();
+                  exitViewerFullscreen();
                   setSessionExited(true);
                 }}
                 aria-label="Exit session"
