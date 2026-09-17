@@ -395,6 +395,7 @@ export function ScreenProjectView() {
 
   const handleSwap = useCallback(
     (id: string) => {
+      setMyVideoOff(true); // always turn camera off before navigating to another screen
       if (swapTimerRef.current) clearTimeout(swapTimerRef.current);
       setFadingIds(new Set([id, mainId]));
       swapTimerRef.current = setTimeout(() => {
