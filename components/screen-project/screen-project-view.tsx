@@ -60,6 +60,19 @@ const MOB_SIDE_W = 144; // w-36
 const PANEL_GAP = 12;
 /** Container width at which the desktop (side-column) layout activates */
 const LG_BREAKPOINT = 1024;
+/** Tablet width — below this the drag-to-resize affordances are hidden (too fiddly on a phone) */
+const TABLET_BREAKPOINT = 768;
+/** PiP self-view base size (px) — the size it sits at before any resize */
+const SELF_VIEW_W = 144; // w-36
+const SELF_VIEW_H = 96;  // h-24
+/** How far the self-view can be dragged open, as a multiple of its base size */
+const SELF_VIEW_MAX_SCALE = 2;
+/**
+ * How narrow the main tile can be dragged, as a fraction of its full width.
+ * Full width is the maximum; narrowing it hands the reclaimed space to the
+ * side column so the mini screens grow. 0.85 = it can give up at most 15%.
+ */
+const MIN_MAIN_WIDTH_SCALE = 0.85;
 
 interface TileRect {
   top: number;
@@ -74,6 +87,8 @@ interface TileRect {
  *
  * @param isMain      true for the featured tile
  * @param sideIndex   0-based index among non-main tiles  (-1 when isMain)
+ * @param deskSideW   desktop side-column width — grows as the user narrows the main tile
+ * @param deskSideH   desktop side-tile height, kept in proportion to deskSideW
  */
 function computeTileRect(
   isMain: boolean,
@@ -82,11 +97,13 @@ function computeTileRect(
   containerH: number,
   hasSidePanel: boolean,
   sideScroll: number,
+  deskSideW: number,
+  deskSideH: number,
 ): TileRect {
   const isLg = containerW >= LG_BREAKPOINT;
   if (isMain) {
     if (isLg) {
-      const reservedW = hasSidePanel ? DESK_SIDE_W + PANEL_GAP : 0;
+      const reservedW = hasSidePanel ? deskSideW + PANEL_GAP : 0;
       return { top: 0, left: 0, width: containerW - reservedW, height: containerH };
     } else {
       const reservedH = hasSidePanel ? MOB_SIDE_H + PANEL_GAP : 0;
@@ -95,10 +112,10 @@ function computeTileRect(
   } else {
     if (isLg) {
       return {
-        top: sideIndex * (DESK_SIDE_H + PANEL_GAP) - sideScroll,
-        left: containerW - DESK_SIDE_W,
-        width: DESK_SIDE_W,
-        height: DESK_SIDE_H,
+        top: sideIndex * (deskSideH + PANEL_GAP) - sideScroll,
+        left: containerW - deskSideW,
+        width: deskSideW,
+        height: deskSideH,
       };
     } else {
       return {
@@ -208,6 +225,10 @@ export function ScreenProjectView() {
   const [myVideoOff, setMyVideoOff] = useState(true);
   const [myScreenShareEnabled, setMyScreenShareEnabled] = useState(false);
   const [myCamVisible, setMyCamVisible] = useState(false);
+  /** Self-view size multiplier, 1 = base size, capped at SELF_VIEW_MAX_SCALE. */
+  const [selfViewScale, setSelfViewScale] = useState(1);
+  /** Main-tile width as a fraction of its full width — 1 = widest, floored at MIN_MAIN_WIDTH_SCALE. */
+  const [mainWidthScale, setMainWidthScale] = useState(1);
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -425,12 +446,28 @@ export function ScreenProjectView() {
 
   // Side-panel virtual scroll limits
   const isLg = containerSize.width >= LG_BREAKPOINT;
+  /** Drag-to-resize affordances are tablet-and-up only — too fiddly on a phone. */
+  const isTabletUp = containerSize.width >= TABLET_BREAKPOINT;
+  /** Below tablet the self-view always sits at its base size, so it can never get stuck enlarged. */
+  const effectiveSelfViewScale = isTabletUp ? selfViewScale : 1;
   // Reset scroll when layout mode flips (desktop ↔ mobile)
   useEffect(() => { setSideScroll(0); }, [isLg]);
+
+  /**
+   * Desktop split. The main tile is at its maximum when mainWidthScale is 1;
+   * narrowing it hands every reclaimed pixel to the side column, so the mini
+   * screens grow. Side-tile height tracks the width so they keep their shape.
+   */
+  const fullMainW = Math.max(0, containerSize.width - DESK_SIDE_W - PANEL_GAP);
+  const deskSideW = hasSidePanel
+    ? Math.round(containerSize.width - PANEL_GAP - fullMainW * mainWidthScale)
+    : DESK_SIDE_W;
+  const deskSideH = Math.round(deskSideW * (DESK_SIDE_H / DESK_SIDE_W));
+
   const sideTileCount = Math.max(0, visibleStations.length - 1);
   const sideContentLen =
     sideTileCount > 0
-      ? sideTileCount * (isLg ? DESK_SIDE_H : MOB_SIDE_W) +
+      ? sideTileCount * (isLg ? deskSideH : MOB_SIDE_W) +
         (sideTileCount - 1) * PANEL_GAP
       : 0;
   const maxSideScroll = Math.max(
@@ -464,6 +501,62 @@ export function ScreenProjectView() {
     },
     [mainId],
   );
+
+  /**
+   * Drag-to-resize the self-view from its top-right corner.
+   *
+   * Runs on the CAPTURE phase and stops propagation so framer-motion's drag
+   * gesture — whose listener sits on the parent motion.div — never starts;
+   * otherwise grabbing the handle would move the PiP instead of resizing it.
+   * All the work therefore happens here, since stopping propagation during
+   * capture means the bubble-phase handlers never run.
+   *
+   * The PiP is anchored bottom-left, so growing it naturally expands up and to
+   * the right from a fixed corner — no position compensation needed.
+   */
+  const startSelfViewResize = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startScale = selfViewScale;
+    const onMove = (ev: PointerEvent) => {
+      // Right and up both grow it; averaging the two axes keeps a diagonal
+      // drag feeling natural while the aspect ratio stays locked.
+      const delta = ((ev.clientX - startX) + (startY - ev.clientY)) / 2;
+      const next = startScale + delta / SELF_VIEW_W;
+      setSelfViewScale(Math.min(SELF_VIEW_MAX_SCALE, Math.max(1, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [selfViewScale]);
+
+  /**
+   * Drag the divider between the main tile and the side column. Dragging left
+   * narrows the main tile and widens the mini screens; full width is the
+   * maximum and MIN_MAIN_WIDTH_SCALE the floor, so the main tile can never be
+   * squeezed to nothing.
+   */
+  const startMainWidthResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startScale = mainWidthScale;
+    const onMove = (ev: PointerEvent) => {
+      if (fullMainW <= 0) return;
+      const next = startScale + (ev.clientX - startX) / fullMainW;
+      setMainWidthScale(Math.min(1, Math.max(MIN_MAIN_WIDTH_SCALE, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [mainWidthScale, fullMainW]);
 
   const handleToggleVideo = useCallback((id: string) => {
     setScreenStates((prev) => ({
@@ -583,7 +676,7 @@ export function ScreenProjectView() {
       const rect = target.getBoundingClientRect();
       const inSidePanel =
         containerSize.width >= LG_BREAKPOINT
-          ? e.clientX - rect.left >= containerSize.width - DESK_SIDE_W
+          ? e.clientX - rect.left >= containerSize.width - deskSideW
           : e.clientY - rect.top >= containerSize.height - MOB_SIDE_H;
       if (!inSidePanel) return;
       e.preventDefault();
@@ -591,7 +684,7 @@ export function ScreenProjectView() {
         Math.max(0, Math.min(maxSideScroll, prev + e.deltaY)),
       );
     },
-    [hasSidePanel, maxSideScroll, containerSize],
+    [hasSidePanel, maxSideScroll, containerSize, deskSideW],
   );
 
   // Attach a non-passive wheel listener so preventDefault() actually works.
@@ -993,6 +1086,8 @@ export function ScreenProjectView() {
               containerSize.height,
               hasSidePanel,
               clampedSideScroll,
+              deskSideW,
+              deskSideH,
             );
             return (
               <motion.div
@@ -1047,13 +1142,28 @@ export function ScreenProjectView() {
             );
           })}
 
+        {/* Main/side split divider — drag left to shrink the main tile and grow the mini screens */}
+        {!sessionExited && hasSidePanel && isLg && containerSize.width > 0 && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize main screen"
+            title="Drag to resize the main screen"
+            onPointerDown={startMainWidthResize}
+            className="group absolute inset-y-0 z-30 flex cursor-col-resize items-center justify-center"
+            style={{ left: containerSize.width - deskSideW - PANEL_GAP, width: PANEL_GAP }}
+          >
+            <div className="h-10 w-1 rounded-full bg-white/25 transition-colors group-hover:bg-white/60" />
+          </div>
+        )}
+
         {/* Side-panel scroll arrows */}
         {!sessionExited && hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
           isLg ? (
             <>
               {canScrollBack && (
                 <button
-                  onClick={() => setSideScroll((p) => Math.max(0, p - (DESK_SIDE_H + PANEL_GAP)))}
+                  onClick={() => setSideScroll((p) => Math.max(0, p - (deskSideH + PANEL_GAP)))}
                   className="absolute top-2 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
                   aria-label="Scroll side panel up"
                 >
@@ -1062,7 +1172,7 @@ export function ScreenProjectView() {
               )}
               {canScrollFwd && (
                 <button
-                  onClick={() => setSideScroll((p) => Math.min(maxSideScroll, p + (DESK_SIDE_H + PANEL_GAP)))}
+                  onClick={() => setSideScroll((p) => Math.min(maxSideScroll, p + (deskSideH + PANEL_GAP)))}
                   className="absolute bottom-2 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
                   aria-label="Scroll side panel down"
                 >
@@ -1107,28 +1217,43 @@ export function ScreenProjectView() {
             !myCamVisible && "pointer-events-none",
           )}
         >
-          <div className="relative w-36 h-24 rounded-lg overflow-hidden ring-2 ring-white/30 shadow-xl bg-neutral-800">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className={cn(
-                "absolute inset-0 h-full w-full object-cover scale-x-[-1]",
-                myVideoOff && "hidden",
+          <div
+            className="relative rounded-lg ring-2 ring-white/30 shadow-xl bg-neutral-800"
+            style={{ width: SELF_VIEW_W * effectiveSelfViewScale, height: SELF_VIEW_H * effectiveSelfViewScale }}
+          >
+            <div className="absolute inset-0 overflow-hidden rounded-lg">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={cn(
+                  "absolute inset-0 h-full w-full object-cover scale-x-[-1]",
+                  myVideoOff && "hidden",
+                )}
+              />
+              {myVideoOff && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-neutral-800">
+                  <UserCircle2 className="h-8 w-8 text-white/40" />
+                  <span className="text-[0.6rem] text-white/40">Camera off</span>
+                </div>
               )}
-            />
-            {myVideoOff && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-neutral-800">
-                <UserCircle2 className="h-8 w-8 text-white/40" />
-                <span className="text-[0.6rem] text-white/40">Camera off</span>
-              </div>
-            )}
-            {myMicMuted && (
-              <div className="absolute top-1 right-1 rounded bg-black/60 p-0.5">
-                <MicOff className="h-2.5 w-2.5 text-white" />
-              </div>
-            )}
+              {myMicMuted && (
+                <div className="absolute top-1 left-1 rounded bg-black/60 p-0.5">
+                  <MicOff className="h-2.5 w-2.5 text-white" />
+                </div>
+              )}
+            </div>
+            {/* Resize grip — drag out from the top-right corner to enlarge (tablet and up) */}
+            {isTabletUp && <button
+              type="button"
+              onPointerDownCapture={startSelfViewResize}
+              title="Drag to resize self view"
+              aria-label="Drag to resize self view"
+              className="absolute -top-1.5 -right-1.5 flex h-4 w-4 cursor-nesw-resize items-center justify-center rounded-full bg-black/70 text-white/60 ring-1 ring-white/30 transition-colors hover:bg-black/90 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <ChevronUp className="h-2.5 w-2.5 rotate-45" />
+            </button>}
           </div>
         </motion.div>}
       </div>
