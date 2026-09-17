@@ -88,14 +88,18 @@ function parseAuthUserStores(): StoreOption[] {
       }>;
     };
 
-    return (parsed.stores ?? [])
-      .map((entry) => {
-        const store = entry.store;
-        const resolvedId = String(store?.store_id ?? store?.id ?? "").trim();
-        const resolvedName = store?.name?.trim() || resolvedId;
-        return { id: resolvedId, name: resolvedName };
-      })
-      .filter((s) => s.id.length > 0);
+    // The auth payload can list the same store more than once (one entry per
+    // role/assignment), so dedupe by id — duplicates break both the React keys
+    // and Radix Select, which requires unique item values.
+    const byId = new Map<string, StoreOption>();
+    for (const entry of parsed.stores ?? []) {
+      const store = entry.store;
+      const resolvedId = String(store?.store_id ?? store?.id ?? "").trim();
+      if (!resolvedId) continue;
+      if (byId.has(resolvedId)) continue;
+      byId.set(resolvedId, { id: resolvedId, name: store?.name?.trim() || resolvedId });
+    }
+    return Array.from(byId.values());
   } catch {
     return [];
   }
@@ -118,6 +122,9 @@ const FAB_W = 108;    // approximate FAB button width in px
 const FAB_H = 44;     // FAB button height in px
 const EDGE = 8;       // minimum gap from each screen edge
 const PANEL_GAP = 10; // gap between the FAB and its popup panel (desktop)
+// How long after a child sheet/dialog closes the panel ignores dismiss requests,
+// so the focus hand-back from the closing overlay doesn't take the panel with it.
+const OVERLAY_CLOSE_GRACE_MS = 500;
 const BOTTOM_NAV_GAP = 10; // required clearance above the mobile bottom nav bar
 
 /**
@@ -164,6 +171,13 @@ export function FloatingDebriefButton() {
 
   const hasDragged = useRef(false);
   const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
+
+  // Closing a sheet/dialog that was launched from the panel hands focus back to
+  // the page, which Radix reads as an interaction outside the popover and would
+  // otherwise dismiss the panel too. Track whether such an overlay is open (or
+  // just closed) and swallow the popover's close request in that window.
+  const childOverlayOpen = useRef(false);
+  const childOverlayClosedAt = useRef(0);
 
   const { canAccessRoute, hasAnyRole, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
@@ -228,6 +242,21 @@ export function FloatingDebriefButton() {
     isSubmitting: isBulkSubmitting,
     error: bulkSubmitError,
   } = useSetDueKeysBulk();
+
+  // Only real overlays (portalled above the panel) count here — the cleaning
+  // "complete task" form renders inline inside the panel, so it must not block
+  // the panel's own dismiss.
+  const anyChildOverlayOpen =
+    dueKeySheetOpen || fillAllSheetOpen || cleaningUndoTarget != null;
+
+  useEffect(() => {
+    if (anyChildOverlayOpen) {
+      childOverlayOpen.current = true;
+    } else if (childOverlayOpen.current) {
+      childOverlayOpen.current = false;
+      childOverlayClosedAt.current = Date.now();
+    }
+  }, [anyChildOverlayOpen]);
 
   const selectedStoreName = useMemo(
     () => stores.find((s) => s.id === selectedStoreId)?.name ?? null,
@@ -429,6 +458,21 @@ export function FloatingDebriefButton() {
     setDueKeySheetOpen(true);
   };
 
+  // Position of the item currently shown in the sheet within the visible list, so the
+  // sheet can step to the previous/next debrief item without being closed first.
+  const dueKeySheetIndex = useMemo(() => {
+    if (!dueKeySheetItem) return -1;
+    return activeItems.findIndex((i) => i.keyId === dueKeySheetItem.keyId);
+  }, [activeItems, dueKeySheetItem]);
+
+  const handleDueKeySheetNavigate = (direction: -1 | 1) => {
+    if (dueKeySheetIndex < 0) return;
+    const next = activeItems[dueKeySheetIndex + direction];
+    if (!next) return;
+    clearDueKeyError();
+    setDueKeySheetItem(next);
+  };
+
   const handleSubmitDueKeyValue = async (
     payload: DueKeyValuePayload,
     mode: "created" | "updated" | "deactivated"
@@ -445,7 +489,7 @@ export function FloatingDebriefButton() {
     else if (mode === "deactivated") toast.success("Key value deactivated.");
     else if (corrected) toast.success("Value corrected — previous value kept in history.");
     else toast.success("Key value updated.");
-    // Keep the sheet open so the correction + history are shown; refresh the list in the background.
+    // The sheet closes itself on success; refresh the list behind it in the background.
     refetchDueKeys();
     return result;
   };
@@ -1038,6 +1082,15 @@ export function FloatingDebriefButton() {
               hasDragged.current = false;
               return;
             }
+            // A sheet/dialog opened from the panel is on top: ignore the dismiss
+            // it triggers on open and the focus hand-back it triggers on close.
+            if (
+              !next &&
+              (childOverlayOpen.current ||
+                Date.now() - childOverlayClosedAt.current < OVERLAY_CLOSE_GRACE_MS)
+            ) {
+              return;
+            }
             setIsOpen(next);
           }}
         >
@@ -1074,6 +1127,16 @@ export function FloatingDebriefButton() {
           isSubmitting={isDueKeySubmitting}
           submitError={dueKeySubmitError}
           onSubmit={handleSubmitDueKeyValue}
+          onNavigate={handleDueKeySheetNavigate}
+          canNavigatePrev={dueKeySheetIndex > 0}
+          canNavigateNext={
+            dueKeySheetIndex >= 0 && dueKeySheetIndex < activeItems.length - 1
+          }
+          position={
+            dueKeySheetIndex >= 0
+              ? { index: dueKeySheetIndex + 1, total: activeItems.length }
+              : null
+          }
         />
       )}
 

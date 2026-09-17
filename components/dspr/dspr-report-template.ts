@@ -3,11 +3,11 @@ import type { DsprResponse, DsprGoalMetric } from "@/types/dspr.types";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  buildDsprReportHtml — renders the "PNE PIZZA / DAILY STORE PERFORMANCE"
- *  Focus-on-the-Five one-pager as a self-contained HTML document string.
+ *  Focus-on-the-Four one-pager as a self-contained HTML document string.
  *
- *  All five metrics use DAILY values for the selected date. Goals come from
- *  goal_metrics (matched by name); Customer Service comes from
- *  store_score.details. Anything missing renders "No data" in small font —
+ *  All four metrics use DAILY values for the selected date. Goals come from
+ *  goal_metrics (matched by name), falling back to a week-to-date average
+ *  where one exists. Anything missing renders "No data" in small font —
  *  no values are fabricated. See the plan file for the full data mapping.
  * ────────────────────────────────────────────────────────────────────────── */
 
@@ -15,19 +15,62 @@ type MetricColor = "green" | "blue" | "purple" | "orange" | "red";
 
 /**
  * Where a card's comparison baseline came from:
- *  - "goal"     — a real target from goal_metrics / store_score
+ *  - "goal"     — a real target from goal_metrics
  *  - "fallback" — no real goal; comparing against a real historical baseline
- *                 (week-to-date average, or "goals on track" for Store Score)
+ *                 (week-to-date average, or this week's other days for sales)
  *  - "none"     — nothing to compare against at all
  */
 type ComparisonMode = "goal" | "fallback" | "none";
+
+/* ── Inline icons (lucide geometry) ──────────────────────────────────────────
+ *  These were Font Awesome webfont glyphs, which html2canvas does not
+ *  rasterize — every icon came out as an empty colored circle in the PNG.
+ *  Inline SVG renders reliably, but html2canvas rasterizes each <svg> in
+ *  isolation, so `currentColor` never resolves: each icon must be handed an
+ *  explicit color rather than inheriting one from its parent. */
+const ICON_PATHS = {
+  dollarSign: `<line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>`,
+  monitor: `<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>`,
+  clock: `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+  target: `<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>`,
+  trophy: `<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>`,
+  zap: `<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>`,
+  activity: `<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>`,
+  info: `<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
+  hand: `<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>`,
+  arrowUp: `<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>`,
+} as const;
+
+type IconName = keyof typeof ICON_PATHS;
+
+/** Same map, injected into the report document's own script (see DOCUMENT). */
+const ICON_PATHS_JSON = JSON.stringify(ICON_PATHS).replace(/</g, "\\u003c");
+
+/** Stroke icon with a hard-coded color (see the ICON_PATHS note above). */
+function svgIcon(name: IconName, color: string, size: number): string {
+  return (
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}"` +
+    ` stroke-width="2" stroke-linecap="round" stroke-linejoin="round"` +
+    ` xmlns="http://www.w3.org/2000/svg">${ICON_PATHS[name]}</svg>`
+  );
+}
+
+/** Solid star — the small accent beside each panel heading. */
+function starIcon(color: string, size: number): string {
+  return (
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}"` +
+    ` xmlns="http://www.w3.org/2000/svg">` +
+    `<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
+  );
+}
 
 /** One card's worth of injected data. `null` fields render as "No data". */
 interface ReportMetric {
   key: string;
   num: number;
   title: string;
-  icon: string;
+  /** Icon name — the in-document script renders it at the size each slot needs. */
+  icon: IconName;
   color: MetricColor;
   /** Formatted headline value (e.g. "$767.51" or "71.88%"), or null. */
   value: string | null;
@@ -44,7 +87,7 @@ interface ReportMetric {
   bottomValue: number | null;
   /** Small heading shown above the gauge/delta value (e.g. "% OF GOAL", "VS WTD AVG"). */
   bottomSubLabel: string;
-  banner: { icon: string; big: string; small: string };
+  banner: { icon: IconName; big: string; small: string };
 }
 
 interface ReportData {
@@ -90,23 +133,23 @@ function esc(s: string): string {
 function bannerFor(
   status: "met" | "close" | "behind" | "nodata",
   mode: "goal" | "fallback",
-): { icon: string; big: string; small: string } {
+): { icon: IconName; big: string; small: string } {
   if (status === "nodata") {
-    return { icon: "fa-solid fa-circle-info", big: "NO DATA", small: "NOT AVAILABLE TODAY" };
+    return { icon: "info", big: "NO DATA", small: "NOT AVAILABLE TODAY" };
   }
   if (status === "met") {
-    return { icon: "fa-solid fa-trophy", big: "GREAT JOB!", small: "KEEP IT UP!" };
+    return { icon: "trophy", big: "GREAT JOB!", small: "KEEP IT UP!" };
   }
   if (mode === "goal") {
     if (status === "close") {
-      return { icon: "fa-solid fa-bolt", big: "ALMOST THERE!", small: "PUSH TO THE GOAL!" };
+      return { icon: "zap", big: "ALMOST THERE!", small: "PUSH TO THE GOAL!" };
     }
-    return { icon: "fa-solid fa-bullseye", big: "FOCUS AREA", small: "LET'S HIT THAT TARGET!" };
+    return { icon: "target", big: "FOCUS AREA", small: "LET'S HIT THAT TARGET!" };
   }
   if (status === "close") {
-    return { icon: "fa-solid fa-bolt", big: "ALMOST THERE!", small: "CLOSE TO YOUR AVERAGE!" };
+    return { icon: "zap", big: "ALMOST THERE!", small: "CLOSE TO YOUR AVERAGE!" };
   }
-  return { icon: "fa-solid fa-chart-line", big: "BELOW AVERAGE", small: "LET'S BOUNCE BACK!" };
+  return { icon: "activity", big: "BELOW AVERAGE", small: "LET'S BOUNCE BACK!" };
 }
 
 /** Status comparing an actual value to a baseline (goal or fallback), same units. */
@@ -129,10 +172,8 @@ function weekAverage(map: Record<string, number> | undefined, excludeDate?: stri
 
 /* ── Metric builders ────────────────────────────────────────────────────────── */
 
-const fmtScore = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(1));
-
 function buildMetrics(data: DsprResponse): ReportMetric[] {
-  const { sales, day, goal_metrics, store_score, filtering } = data;
+  const { sales, day, goal_metrics, filtering } = data;
 
   /* (1) Total Sales — daily value = that day's total.
    * Goal = weekly goal / 7. Fallback = average of this week's other days,
@@ -157,8 +198,6 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
       ? (dailySales / salesBaseline) * 100
       : null;
   const salesStatus = pctStatus(dailySales, salesBaseline);
-  const salesHasRealGoal = salesMode === "goal";
-  const salesMetRealGoal = salesHasRealGoal && salesStatus === "met";
 
   /* (2) Put Into Portal — daily. Fallback = week-to-date average. */
   const portalVal = day?.portal?.put_into_portal_percent ?? null;
@@ -170,8 +209,6 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
   const portalBaseline = portalGoal ?? portalWtdAvg;
   const portalMode: ComparisonMode = portalGoal != null ? "goal" : portalWtdAvg != null ? "fallback" : "none";
   const portalStatus = pctStatus(portalVal, portalBaseline);
-  const portalHasRealGoal = portalMode === "goal";
-  const portalMetRealGoal = portalHasRealGoal && portalStatus === "met";
 
   /* (3) In Portal On Time — daily. Fallback = week-to-date average. */
   const onTimeVal = day?.portal?.in_portal_on_time_percent ?? null;
@@ -183,8 +220,6 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
   const onTimeBaseline = onTimeGoal ?? onTimeWtdAvg;
   const onTimeMode: ComparisonMode = onTimeGoal != null ? "goal" : onTimeWtdAvg != null ? "fallback" : "none";
   const onTimeStatus = pctStatus(onTimeVal, onTimeBaseline);
-  const onTimeHasRealGoal = onTimeMode === "goal";
-  const onTimeMetRealGoal = onTimeHasRealGoal && onTimeStatus === "met";
 
   /* (4) HNR Promise Met — daily. Fallback = week-to-date average. */
   const hnrVal = day?.hnr?.hnr_promise_met_percent ?? null;
@@ -193,38 +228,13 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
   const hnrBaseline = hnrGoal ?? hnrWtdAvg;
   const hnrMode: ComparisonMode = hnrGoal != null ? "goal" : hnrWtdAvg != null ? "fallback" : "none";
   const hnrStatus = pctStatus(hnrVal, hnrBaseline);
-  const hnrHasRealGoal = hnrMode === "goal";
-  const hnrMetRealGoal = hnrHasRealGoal && hnrStatus === "met";
-
-  /* (5) Store Score — overall store_score.score out of its max points.
-   * Fallback (no store_score): "Goals On Track" tally across the 4 metrics
-   * above that have a real goal — never invents a score. */
-  const scoreMax = store_score
-    ? store_score.details?.reduce((s, d) => s + d.max, 0) || 100
-    : null;
-  const scoreVal = store_score?.score ?? null;
-
-  const realGoalFlags = [salesHasRealGoal, portalHasRealGoal, onTimeHasRealGoal, hnrHasRealGoal];
-  const metGoalFlags = [salesMetRealGoal, portalMetRealGoal, onTimeMetRealGoal, hnrMetRealGoal];
-  const hasGoalCount = realGoalFlags.filter(Boolean).length;
-  const metGoalCount = metGoalFlags.filter((m, i) => realGoalFlags[i] && m).length;
-  const onTrackPct = hasGoalCount > 0 ? (metGoalCount / hasGoalCount) * 100 : null;
-
-  const scorePct =
-    scoreVal != null && scoreMax != null && scoreMax > 0 ? (scoreVal / scoreMax) * 100 : null;
-
-  const scoreHasRealScore = scoreVal != null && scoreMax != null;
-  const scoreMode: ComparisonMode = scoreHasRealScore ? "goal" : hasGoalCount > 0 ? "fallback" : "none";
-  const scoreStatus = scoreHasRealScore
-    ? pctStatus(scoreVal, scoreMax)
-    : pctStatus(onTrackPct, onTrackPct != null ? 100 : null);
 
   return [
     {
       key: "sales",
       num: 1,
       title: "1. TOTAL SALES",
-      icon: "fa-solid fa-dollar-sign",
+      icon: "dollarSign",
       color: "green",
       ringLabel: "TOTAL SALES",
       value: dailySales != null ? fmtMoney2(dailySales) : null,
@@ -237,44 +247,10 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
       banner: bannerFor(salesStatus, salesMode === "fallback" ? "fallback" : "goal"),
     },
     {
-      key: "score",
-      num: 2,
-      title: scoreHasRealScore
-        ? store_score?.label
-          ? `2. STORE SCORE — ${store_score.label.toUpperCase()}`
-          : "2. STORE SCORE"
-        : hasGoalCount > 0
-          ? "2. GOALS ON TRACK"
-          : "2. STORE SCORE",
-      icon: "fa-solid fa-star",
-      color: "blue",
-      ringLabel: scoreHasRealScore ? "STORE SCORE" : "GOALS ON TRACK",
-      value: scoreHasRealScore ? fmtScore(scoreVal as number) : hasGoalCount > 0 ? String(metGoalCount) : null,
-      rawValue: scoreHasRealScore
-        ? scorePct != null
-          ? Math.min(scorePct, 100)
-          : null
-        : onTrackPct != null
-          ? Math.min(onTrackPct, 100)
-          : null,
-      goalLabel: "OUT OF",
-      goal: scoreHasRealScore
-        ? scoreMax != null
-          ? `${fmtScore(scoreMax)} PTS`
-          : null
-        : hasGoalCount > 0
-          ? `${hasGoalCount} GOALS`
-          : null,
-      bottomType: "gauge",
-      bottomValue: scoreHasRealScore ? scorePct : onTrackPct,
-      bottomSubLabel: scoreHasRealScore ? "% OF MAX" : "% ON TRACK",
-      banner: bannerFor(scoreStatus, scoreMode === "fallback" ? "fallback" : "goal"),
-    },
-    {
       key: "portal",
-      num: 3,
-      title: "3. PUT INTO PORTAL",
-      icon: "fa-solid fa-display",
+      num: 2,
+      title: "2. PUT INTO PORTAL",
+      icon: "monitor",
       color: "purple",
       ringLabel: "PUT INTO PORTAL",
       value: portalVal != null ? fmtPct2(portalVal) : null,
@@ -288,9 +264,9 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
     },
     {
       key: "ontime",
-      num: 4,
-      title: "4. IN PORTAL ON TIME",
-      icon: "fa-regular fa-clock",
+      num: 3,
+      title: "3. IN PORTAL ON TIME",
+      icon: "clock",
       color: "orange",
       ringLabel: "IN PORTAL ON TIME",
       value: onTimeVal != null ? fmtPct2(onTimeVal) : null,
@@ -304,9 +280,9 @@ function buildMetrics(data: DsprResponse): ReportMetric[] {
     },
     {
       key: "hnr",
-      num: 5,
-      title: "5. HNR PROMISE MET %",
-      icon: "fa-solid fa-bullseye",
+      num: 4,
+      title: "4. HNR PROMISE MET %",
+      icon: "target",
       color: "red",
       ringLabel: "HNR PROMISE MET %",
       value: hnrVal != null ? fmtPct2(hnrVal) : null,
@@ -354,7 +330,6 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=Permanent+Marker&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
   :root {
@@ -505,7 +480,7 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 
   .metrics {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 0;
     padding: 18px 22px 0;
     background: var(--section-bg);
@@ -632,7 +607,7 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 
   .banners {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     padding: 14px 22px 22px;
     margin: 0 18px;
@@ -651,7 +626,7 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
     min-height: 78px;
   }
 
-  .banner i { font-size: 26px; flex-shrink: 0; }
+  .banner svg { flex-shrink: 0; }
 
   .banner-text {
     font-family: 'Oswald', sans-serif;
@@ -695,7 +670,7 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
     color: var(--orange-icon);
     margin-bottom: 14px;
   }
-  .panel-header .fa-star { color: var(--orange-icon); }
+  .panel-header svg { flex-shrink: 0; }
 
   .motivation-heading {
     font-family: 'Permanent Marker', cursive;
@@ -726,15 +701,15 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 
   .hands {
     margin-top: 16px;
-    text-align: center;
-    color: #f5c6a8;
-    font-size: 26px;
-    letter-spacing: 6px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
   }
 
   .scorecard-icons {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     justify-items: center;
     margin-bottom: 16px;
@@ -754,7 +729,7 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 
   .scorecard-rings {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 10px;
     justify-items: center;
   }
@@ -804,11 +779,11 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
     align-items: center;
     gap: 14px;
   }
-  .footer i.fa-trophy { color: var(--orange-icon); font-size: 22px; }
+  .footer svg { flex-shrink: 0; }
   .footer .accent { color: var(--orange-icon); }
 
   @media (max-width: 980px) {
-    .metrics, .banners { grid-template-columns: repeat(3, 1fr); }
+    .metrics, .banners { grid-template-columns: repeat(2, 1fr); }
     .bottom-grid { grid-template-columns: 1fr; }
     .title-row { grid-template-columns: 1fr; }
     .title-row h1 { font-size: 38px; }
@@ -857,7 +832,7 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 
     <div class="panel">
       <div class="panel-header">
-        <i class="fas fa-star"></i><span>STORE MOTIVATION</span>
+        ${starIcon("#E8651F", 16)}<span>STORE MOTIVATION</span>
       </div>
       <div class="motivation-heading">Great Teamwork<br>Drives Great Results!</div>
       <div class="motivation-sub">
@@ -866,16 +841,13 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
       </div>
       <div class="motivation-cta">WE WIN TOGETHER!</div>
       <div class="hands">
-        <i class="far fa-hand-paper"></i>
-        <i class="far fa-hand-paper"></i>
-        <i class="far fa-hand-paper"></i>
-        <i class="far fa-hand-paper"></i>
+        ${svgIcon("hand", "#f0b48c", 26).repeat(4)}
       </div>
     </div>
 
     <div class="panel">
       <div class="panel-header" style="justify-content:center;">
-        <i class="fas fa-star"></i><span>TODAY'S SCORECARD SUMMARY</span>
+        ${starIcon("#E8651F", 16)}<span>TODAY'S SCORECARD SUMMARY</span>
       </div>
       <div class="scorecard-icons" id="scorecardIcons"></div>
       <div class="scorecard-rings" id="scorecardRings"></div>
@@ -883,8 +855,8 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
   </div>
 
   <div class="footer">
-    <i class="fas fa-trophy"></i>
-    <span>CHAMPIONS <span class="accent">FOCUS ON THE FIVE.</span> WIN EVERY DAY!</span>
+    ${svgIcon("trophy", "#E8651F", 24)}
+    <span>CHAMPIONS <span class="accent">FOCUS ON THE FOUR.</span> WIN EVERY DAY!</span>
   </div>
 </div>
 
@@ -892,6 +864,17 @@ const DOCUMENT = (reportJson: string): string => `<!DOCTYPE html>
 /* ---------- INJECTED DATA ---------- */
 const REPORT = ${reportJson};
 const metrics = REPORT.metrics;
+
+/* ---------- ICONS ----------
+ * Same lucide paths as the server side. Each icon is built with an explicit
+ * color because html2canvas rasterizes every <svg> on its own, where an
+ * inherited \`currentColor\` would resolve to black. */
+const ICON_PATHS = ${ICON_PATHS_JSON};
+function svgIcon(name, color, size) {
+  return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="' + color +
+    '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">' +
+    ICON_PATHS[name] + '</svg>';
+}
 
 /* ---------- HEADER ---------- */
 document.getElementById('storeId').textContent = REPORT.storeId;
@@ -920,7 +903,7 @@ metrics.forEach(m => {
     } else if (m.bottomValue >= 0) {
       bottomHtml =
         '<div class="metric-trend-label">' + m.bottomSubLabel + '</div>' +
-        '<div class="trend-up">UP ' + m.bottomValue.toFixed(2) + '% <i class="fa-solid fa-arrow-up"></i></div>';
+        '<div class="trend-up">UP ' + m.bottomValue.toFixed(2) + '% ' + svgIcon('arrowUp', '#2E9F45', 18) + '</div>';
     } else {
       bottomHtml =
         '<div class="metric-sub-label">' + m.bottomSubLabel + '</div>' +
@@ -933,7 +916,7 @@ metrics.forEach(m => {
 
   metricsEl.insertAdjacentHTML('beforeend',
     '<div class="metric">' +
-      '<div class="metric-icon ic-' + m.color + '"><i class="' + m.icon + '"></i></div>' +
+      '<div class="metric-icon ic-' + m.color + '">' + svgIcon(m.icon, '#ffffff', 38) + '</div>' +
       '<div class="metric-title t-' + m.color + '">' + m.title + '</div>' +
       '<div class="metric-value">' + valueHtml + '</div>' +
       '<div class="metric-sub-label">' + m.goalLabel + '</div>' +
@@ -949,7 +932,7 @@ metrics.forEach(m => {
   const cls = isNoData ? 'b-gray' : 'b-' + m.color;
   bannersEl.insertAdjacentHTML('beforeend',
     '<div class="banner ' + cls + '">' +
-      '<i class="' + m.banner.icon + '"></i>' +
+      svgIcon(m.banner.icon, '#ffffff', 26) +
       '<div class="banner-text">' +
         '<div>' + m.banner.big + '</div>' +
         '<div style="font-weight:600; opacity:.95; margin-top:3px;">' + m.banner.small + '</div>' +
@@ -961,7 +944,7 @@ metrics.forEach(m => {
 const iconsEl = document.getElementById('scorecardIcons');
 metrics.forEach(m => {
   iconsEl.insertAdjacentHTML('beforeend',
-    '<div class="mini-icon ic-' + m.color + '"><i class="' + m.icon + '"></i></div>');
+    '<div class="mini-icon ic-' + m.color + '">' + svgIcon(m.icon, '#ffffff', 26) + '</div>');
 });
 
 /* ---------- SCORECARD RINGS ---------- */

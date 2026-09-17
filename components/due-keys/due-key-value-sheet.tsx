@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Clock, History, Paperclip, Pencil, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  History,
+  Paperclip,
+  Pencil,
+  X,
+} from "lucide-react";
 import type { DueKeyItem, DueKeyValue, DueKeyValuePayload } from "@/types/due-key.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +48,12 @@ interface DueKeyValueSheetProps {
     payload: DueKeyValuePayload,
     mode: "created" | "updated" | "deactivated"
   ) => Promise<DueKeyValue | null>;
+  /** Step to the previous (-1) / next (+1) debrief item in the list behind the sheet. */
+  onNavigate?: (direction: -1 | 1) => void;
+  canNavigatePrev?: boolean;
+  canNavigateNext?: boolean;
+  /** 1-based position of the open item within the list, for the "3 / 12" counter. */
+  position?: { index: number; total: number } | null;
 }
 
 function normalizeValueForInput(
@@ -69,6 +84,10 @@ export function DueKeyValueSheet({
   isSubmitting,
   submitError,
   onSubmit,
+  onNavigate,
+  canNavigatePrev = false,
+  canNavigateNext = false,
+  position = null,
 }: DueKeyValueSheetProps) {
   const [textValue, setTextValue] = useState("");
   const [numberValue, setNumberValue] = useState("");
@@ -82,7 +101,22 @@ export function DueKeyValueSheet({
   const [savedValue, setSavedValue] = useState<DueKeyValue | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [fullHistoryOpen, setFullHistoryOpen] = useState(false);
+  const [navDirection, setNavDirection] = useState<-1 | 1>(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Remounting on this key replays the slide/fade below, so stepping through the
+  // list visibly moves rather than silently swapping the text in place.
+  const itemAnimKey = `${item?.keyId ?? "none"}-${date}`;
+  const itemAnimClass = cn(
+    "animate-in fade-in duration-300 ease-out",
+    navDirection === 1 ? "slide-in-from-right-6" : "slide-in-from-left-6"
+  );
+
+  const handleNavigate = (direction: -1 | 1) => {
+    if (!onNavigate) return;
+    setNavDirection(direction);
+    onNavigate(direction);
+  };
 
   // The current value the sheet displays: freshly-saved value takes precedence over the
   // value that came from the daily grid, so the history + correction show immediately.
@@ -242,30 +276,72 @@ export function DueKeyValueSheet({
       submitMode
     );
     if (result) {
-      // Show the fresh current value + whatever it just superseded, without closing the sheet.
+      // Close the sheet on a successful submit. Only this sheet closes — the floating
+      // debrief panel behind it stays open so the next item is one click away.
       setSavedValue(result);
       setIsEditing(false);
       setAttachments([]);
-      setHistoryOpen((result.mistakenVersions?.length ?? 0) > 0);
+      setHistoryOpen(false);
+      onOpenChange(false);
     }
   };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full p-0 sm:max-w-xl">
-        <SheetHeader className="border-b pb-3">
-          <SheetTitle className="text-base leading-snug">
-            {item ? item.label : "Select a debrief item"}
-          </SheetTitle>
-          <SheetDescription>
-            {item ? `Debrief Value · Key #${item.keyId}` : "Select a debrief key"}
-          </SheetDescription>
+        <SheetHeader className="border-b pb-3 pe-10">
+          <div className="flex items-start gap-2">
+            <div key={itemAnimKey} className={cn("min-w-0 flex-1 space-y-1.5", itemAnimClass)}>
+              <SheetTitle className="text-base leading-snug">
+                {item ? item.label : "Select a debrief item"}
+              </SheetTitle>
+              <SheetDescription>
+                {item ? `Debrief Value · Key #${item.keyId}` : "Select a debrief key"}
+              </SheetDescription>
+            </div>
+            {onNavigate && (
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={!canNavigatePrev || isSubmitting}
+                  onClick={() => handleNavigate(-1)}
+                  aria-label="Previous debrief item"
+                  title="Previous debrief item"
+                >
+                  <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
+                </Button>
+                {position && (
+                  <span className="px-0.5 text-[11px] tabular-nums text-muted-foreground">
+                    {position.index}/{position.total}
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-7 w-7"
+                  disabled={!canNavigateNext || isSubmitting}
+                  onClick={() => handleNavigate(1)}
+                  aria-label="Next debrief item"
+                  title="Next debrief item"
+                >
+                  <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+                </Button>
+              </div>
+            )}
+          </div>
         </SheetHeader>
 
         {item ? (
           !showEditForm ? (
             /* ── Read-only detail view for filled keys ── */
-            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4">
+            <div
+              key={itemAnimKey}
+              className={cn("flex-1 min-h-0 space-y-4 overflow-y-auto p-4", itemAnimClass)}
+            >
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
@@ -438,7 +514,10 @@ export function DueKeyValueSheet({
             </div>
           ) : (
             /* ── Edit form (unfilled keys, or edit mode for filled keys) ── */
-            <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4">
+            <div
+              key={itemAnimKey}
+              className={cn("flex-1 min-h-0 space-y-4 overflow-y-auto p-4", itemAnimClass)}
+            >
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-primary/10 px-3 py-1.5 text-lg font-bold text-primary">
