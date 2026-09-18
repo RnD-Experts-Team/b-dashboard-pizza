@@ -36,7 +36,7 @@ import { IssueStatusHistory } from "@/components/maintenance-tickets/issue-statu
 import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
 import { TicketRail } from "@/components/maintenance-tickets/ticket-rail";
 import { useIssueBasketStore } from "@/lib/store/issue-basket.store";
-import { usePayBasketStore } from "@/lib/store/pay-basket.store";
+import { payeeOf, usePayBasketStore } from "@/lib/store/pay-basket.store";
 import { useVisitBasketStore } from "@/lib/store/visit-basket.store";
 import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-panel";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -355,9 +355,6 @@ function IssueCard({
   const visitItems = useVisitBasketStore((s) => s.items);
   const toggleVisit = useVisitBasketStore((s) => s.toggle);
   const onThisVisit = visitItems.some((i) => i.issueId === issue.id);
-  /** The payee, when the issue already knows. One technician is the common
-   *  case; with several we leave it blank rather than guess which one is owed. */
-  const soleTechnician = issue.technicians.length === 1 ? issue.technicians[0] : null;
 
   return (
     /*
@@ -384,8 +381,10 @@ function IssueCard({
                 issueId: issue.id,
                 ticketId,
                 storeId,
+                otherStore,
                 title,
                 storeLabel: storeId,
+                ...payeeOf(issue.technicians),
               })
             }
             aria-label={inBasket ? `Take ${title} out of the basket` : `Pick up ${title}`}
@@ -418,8 +417,7 @@ function IssueCard({
                 storeId: storeId || null,
                 otherStore,
                 title,
-                technicianId: soleTechnician?.id ?? null,
-                technicianName: soleTechnician?.name ?? null,
+                ...payeeOf(issue.technicians),
               })
             }
             aria-pressed={markedForPay}

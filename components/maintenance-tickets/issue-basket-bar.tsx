@@ -135,10 +135,12 @@ export function IssueBasketBar({
         issueId: item.issueId,
         ticketId: item.ticketId,
         storeId: item.storeId || null,
-        otherStore: null,
+        otherStore: item.otherStore,
         title: item.title,
-        technicianId: null,
-        technicianName: null,
+        // Forwarded, not reset. Hard-coding null here was why bulk-sent work
+        // arrived on the sheet with nobody to pay.
+        technicianId: item.technicianId,
+        technicianName: item.technicianName,
       });
     }
     toast.success(
@@ -153,7 +155,7 @@ export function IssueBasketBar({
         issueId: item.issueId,
         ticketId: item.ticketId,
         storeId: item.storeId || null,
-        otherStore: null,
+        otherStore: item.otherStore,
         title: item.title,
       });
     }

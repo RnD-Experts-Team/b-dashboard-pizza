@@ -302,6 +302,7 @@ function transformTicket(raw: ApiTicket): Ticket {
       title: i.display_title ?? i.catalog_issue?.title ?? i.title ?? `Issue #${i.id}`,
       status: i.status ? transformEnumField(i.status) : null,
       priority: i.priority ? transformEnumField(i.priority) : null,
+      technicians: (i.technicians ?? []).map((t) => ({ id: t.id, name: t.name })),
     })),
     issueTitles: (raw.issues ?? [])
       .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)

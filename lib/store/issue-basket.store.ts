@@ -26,9 +26,16 @@ export interface BasketIssue {
   ticketId: number;
   /** store_number -- the route key writes bind on, not the numeric id. */
   storeId: string;
+  /** Free-text location for a ticket with no replicated store. Carried so
+   *  tipping the basket into pay does not lose where the work was. */
+  otherStore: string | null;
   title: string;
   /** Shown in the basket so a ticket with four similar issues is still legible. */
   storeLabel: string;
+  /** Who is owed, when the issue has exactly one technician. Carried so the
+   *  pay basket gets a payee from here too, not only from the ticket page. */
+  technicianId: number | null;
+  technicianName: string | null;
 }
 
 interface IssueBasketState {

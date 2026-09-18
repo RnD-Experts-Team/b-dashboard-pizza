@@ -42,14 +42,21 @@ export interface BasketGroup {
 
 /**
  * @param groups  From `usePayBasketStore.groupForSheet()`.
+ * @param stores  The store list the form's select is built from. Needed
+ *                because the basket carries the STORE NUMBER (what tickets
+ *                and routes bind on) while the line select is keyed by the
+ *                internal numeric id -- so without this translation the
+ *                prefilled store matched no option and showed blank.
  * @param date    The workday. Defaults to today; the caller should let the user
  *                change it, because a visit is often entered the morning after.
  */
 export function entryFormFromBasket(
   groups: BasketGroup[],
+  stores: ReadonlyArray<{ id: number; storeNumber: string }>,
   date: string = todayIso()
 ): EntryFormState {
   const base = emptyEntryFormState();
+  const idByNumber = new Map(stores.map((s) => [s.storeNumber, String(s.id)]));
 
   const payments: PaymentForm[] = groups.map((group) => {
     const payment = emptyPayment();
@@ -60,12 +67,17 @@ export function entryFormFromBasket(
 
     payment.lines = group.stores.map((store) => {
       const line: LineForm = emptyLine();
-      if (store.storeId) {
+      const resolved = store.storeId ? idByNumber.get(store.storeId) : undefined;
+      if (resolved) {
         line.locationKind = "store";
-        line.storeId = store.storeId;
+        line.storeId = resolved;
       } else {
+        // No replicated store, OR a store number the select does not offer
+        // (retired, or not in this user's list). Either way the location is
+        // kept as text rather than silently dropped -- a blank store on a pay
+        // line is a question, a wrong one is somebody else's money.
         line.locationKind = "other";
-        line.otherStore = store.otherStore ?? "";
+        line.otherStore = store.otherStore ?? store.storeId ?? "";
       }
       line.ticketIssueIds = store.issueIds;
       // Hours deliberately left empty. Sending any value marks the line

@@ -188,7 +188,7 @@ function DailyPayPageInner() {
    */
   function handleStartSheetFromBasket() {
     setEditId(null);
-    setSeededState(entryFormFromBasket(groupForSheet()));
+    setSeededState(entryFormFromBasket(groupForSheet(), stores));
     setDialogOpen(true);
   }
 

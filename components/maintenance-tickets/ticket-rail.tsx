@@ -11,7 +11,7 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import { useIssueBasketStore } from "@/lib/store/issue-basket.store";
-import { usePayBasketStore } from "@/lib/store/pay-basket.store";
+import { payeeOf, usePayBasketStore } from "@/lib/store/pay-basket.store";
 import { StatusChip } from "./ticket-chips";
 import type { IssueStatus, Ticket, TicketsFilters } from "@/types/maintenance-tickets.types";
 
@@ -219,8 +219,10 @@ function RailRow({
           issueId: issue.id,
           ticketId: ticket.id,
           storeId: ticket.storeId ?? "",
+          otherStore: ticket.otherStore,
           title: issue.title,
           storeLabel: where,
+          ...payeeOf(issue.technicians),
         });
       }
     }
@@ -236,8 +238,9 @@ function RailRow({
           storeId: ticket.storeId ?? null,
           otherStore: ticket.otherStore,
           title: issue.title,
-          technicianId: null,
-          technicianName: null,
+          // The index sends who is on each issue; this used to hard-code
+          // null, so everything picked from here landed on one blank payee.
+          ...payeeOf(issue.technicians),
         });
       }
     }

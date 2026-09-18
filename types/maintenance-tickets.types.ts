@@ -481,6 +481,12 @@ export interface TicketIssueSummary {
   title: string;
   status: EnumField | null;
   priority: EnumField | null;
+  /**
+   * Who is on it. The index already sends these; dropping them here was why
+   * anything put in the pay basket from the rail arrived with no payee, and
+   * the same person's work split across a "known" and an "unknown" payment.
+   */
+  technicians: Array<{ id: number; name: string }>;
 }
 
 export interface Ticket {
@@ -1174,6 +1180,7 @@ export interface ApiTicket {
     catalog_issue?: { title?: string | null } | null;
     status?: ApiEnumField | null;
     priority?: ApiEnumField | null;
+    technicians?: Array<{ id: number; name: string }> | null;
   }>;
   created_at: string;
   updated_at: string;

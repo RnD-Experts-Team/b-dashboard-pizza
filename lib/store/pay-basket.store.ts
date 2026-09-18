@@ -24,6 +24,22 @@ import { persist, createJSONStorage } from "zustand/middleware";
  * backend is the upgrade if more than one person ever shares the job.
  */
 
+/**
+ * The payee an issue implies, when it implies exactly one.
+ *
+ * One technician attached means we know who is owed. Several means we do not
+ * -- and guessing the first would put one person's money on another's sheet,
+ * which is worse than a blank the form then asks about. Every producer that
+ * puts work in the basket runs through this, so the rule lives in one place.
+ */
+export function payeeOf(
+  technicians: ReadonlyArray<{ id: number; name: string }>
+): { technicianId: number | null; technicianName: string | null } {
+  return technicians.length === 1
+    ? { technicianId: technicians[0].id, technicianName: technicians[0].name }
+    : { technicianId: null, technicianName: null };
+}
+
 export interface PayBasketItem {
   issueId: number;
   ticketId: number;
