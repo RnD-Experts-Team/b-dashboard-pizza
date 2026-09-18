@@ -477,6 +477,36 @@ function IssueCard({
       {/* Never collapsed. Every action on screen, always. The one PRIMARY
           section in the card, because it is what you opened the ticket to do. */}
       <PageSection rank="primary" accent={3} icon={Wrench} title="What you can do">
+        {/*
+          THE FORM COMES FIRST, ABOVE THE BUTTONS.
+
+          It used to render underneath the grid, which is ten buttons and two
+          headings tall -- so pressing one put the thing you were about to fill
+          in most of a screen below the thing you just pressed, and opening it
+          from the Hours section put it further still. Whatever is open belongs
+          at the top of this section, where the section header already is.
+        */}
+        <ActionPanelSlot activeAction={activeAction}>
+          <IssueActionHost
+            action={activeAction}
+            issue={issue}
+            storeId={storeId}
+            ticketId={ticketId}
+            technicians={technicians}
+            ticketIssues={issues}
+            storeNumber={storeId || null}
+            issueDraft={issueDraft}
+            onPatchDraft={(patch) => patchIssueDraft(issue.id, patch)}
+            onClearDraftFields={(keys) => clearIssueDraftFields(issue.id, keys)}
+            liveAttendance={liveEntryNow}
+            onClose={() => {
+              setLiveAttendance(null);
+              setActiveAction(null);
+            }}
+            onSuccess={onChanged}
+          />
+        </ActionPanelSlot>
+
         <IssueActionGrid
           issue={issue}
           activeAction={activeAction}
@@ -487,29 +517,6 @@ function IssueCard({
             setActiveAction(action);
           }}
         />
-
-        {activeAction && (
-          <div className="mt-3">
-        <IssueActionHost
-          action={activeAction}
-          issue={issue}
-          storeId={storeId}
-          ticketId={ticketId}
-          technicians={technicians}
-          ticketIssues={issues}
-          storeNumber={storeId || null}
-          issueDraft={issueDraft}
-          onPatchDraft={(patch) => patchIssueDraft(issue.id, patch)}
-          onClearDraftFields={(keys) => clearIssueDraftFields(issue.id, keys)}
-          liveAttendance={liveEntryNow}
-          onClose={() => {
-            setLiveAttendance(null);
-            setActiveAction(null);
-          }}
-          onSuccess={onChanged}
-        />
-          </div>
-        )}
       </PageSection>
 
       <PageSection rank="secondary" icon={Paperclip} title="Notes and files">
@@ -529,6 +536,52 @@ function IssueCard({
       </PageSection>
       </SectionGroup>
     </section>
+  );
+}
+
+/**
+ * Where whatever action is open gets rendered.
+ *
+ * Two jobs, both about not losing the user:
+ *
+ *  1. It sits ABOVE the button grid, so the form is adjacent to the section
+ *     heading rather than below ten buttons.
+ *  2. It scrolls itself into view when the action changes -- `block: "nearest"`,
+ *     so a panel already on screen does not jump. Opening one from the Hours
+ *     section is a short deliberate move to a marked panel, not a hunt.
+ *
+ * The accent bar is the same one the section header carries, so the panel reads
+ * as part of what you just pressed rather than as something that appeared.
+ */
+function ActionPanelSlot({
+  activeAction,
+  children,
+}: {
+  activeAction: IssueActionId | null;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!activeAction) return;
+    // rAF, not a bare call: the panel mounts in this same commit and has no
+    // height yet when the effect runs, so scrolling now would aim at a
+    // zero-height box and land short.
+    const frame = requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeAction]);
+
+  if (!activeAction) return null;
+
+  return (
+    <div
+      ref={ref}
+      className="mb-4 scroll-mt-4 rounded-lg border border-s-2 border-s-primary bg-background p-3"
+    >
+      {children}
+    </div>
   );
 }
 

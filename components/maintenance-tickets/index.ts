@@ -8,7 +8,8 @@ export { CreateTicketDialog } from "./create-ticket-dialog";
 export { CatalogManagementDialog } from "./catalog-management-dialog";
 
 /* ── v2 additions ───────────────────────────────────────────────────────── */
-export { AttendancePanel, AttendanceFields } from "./attendance-panel";
+export { AttendancePanel } from "./attendance-panel";
+export { AttendanceStream } from "./attendance-stream";
 export { PartUsagePanel } from "./part-usage-panel";
 export { IssuePickerDialog } from "./issue-picker-dialog";
 export { AttendanceDurationsStrip } from "./attendance-durations-strip";
@@ -33,6 +34,5 @@ export { StatusChip, PriorityChip } from "./ticket-chips";
 export { DatePicker, TimePicker } from "./form-bits";
 
 /* ── round two ──────────────────────────────────────────────────────────── */
-export { TicketPreviewSheet } from "./ticket-preview-sheet";
 export { TicketRail } from "./ticket-rail";
 export { VisitBasketPanel } from "./visit-basket-panel";

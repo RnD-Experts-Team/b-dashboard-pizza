@@ -254,8 +254,18 @@ export function V1MaintenanceCard({
         </table>
       </V1Card>
 
+      {/*
+        Detail sheet — opens when a row is clicked. READ-ONLY here, unlike the
+        maintenance tickets page.
+
+        A ticket on a dashboard is a quick showcase: you glance to see whether
+        something needs you, and go back. Acting on one belongs on the tickets
+        page — offering half the controls here as well would only split one
+        habit across two screens.
+      */}
       {sheetOpen && storeId && (
         <TicketDetailSheet
+          readOnly
           open={sheetOpen}
           ticketId={selectedTicketId}
           storeId={storeId}

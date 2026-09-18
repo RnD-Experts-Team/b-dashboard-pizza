@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AttendanceTimeline } from "./attendance-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,13 +26,13 @@ import { getTicketsFieldErrors, isCancelled } from "@/lib/api/maintenance-ticket
 import {
   ATTENDANCE_BUCKETS,
   ATTENDANCE_BUCKET_LABELS,
-  computeAttendancePreview,
   formatMinutes,
   parseAttendanceWarning,
   type AttendancePairInput,
 } from "@/lib/maintenance-tickets/attendance-durations";
-import { DateTimePicker, FieldError } from "./form-bits";
+import { FieldError } from "./form-bits";
 import { AttendanceStream } from "./attendance-stream";
+import { AttendanceDurationsStrip } from "./attendance-durations-strip";
 import { PasteFileZone } from "./paste-file-zone";
 import { IssuePickerDialog } from "./issue-picker-dialog";
 import type { IssueDraft } from "@/lib/hooks/use-ticket-draft";
@@ -127,227 +126,6 @@ export function buildAttendancePayload(
   }
   // A note with an empty body is a 422, so files with no note go top-level.
   return { payload, topLevelFiles: files.length ? files : undefined };
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Clock rows                                                               */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-interface ClockRowDef {
-  label: string;
-  startKey: keyof AttendancePairInput;
-  endKey: keyof AttendancePairInput;
-  startLabel: string;
-  endLabel: string;
-}
-
-/**
- * Four fixed rows. Any subset may be filled — that is the deliberate API
- * design, and the live preview flags a half-filled pair before the save
- * rather than blocking it.
- *
- * Travel gets "Travel start / Travel end" rather than Depart/Return, because
- * parts run already owns that pair and two "Depart" fields on one form is
- * unusable.
- */
-const CLOCK_ROWS: ClockRowDef[] = [
-  {
-    label: "Work clock",
-    startKey: "startClock",
-    endKey: "endClock",
-    startLabel: "Clock in",
-    endLabel: "Clock out",
-  },
-  {
-    label: "Travel",
-    startKey: "startTravel",
-    endKey: "endTravel",
-    startLabel: "Travel start",
-    endLabel: "Travel end",
-  },
-  {
-    label: "Break",
-    startKey: "startBreak",
-    endKey: "endBreak",
-    startLabel: "Break start",
-    endLabel: "Break end",
-  },
-  {
-    label: "Parts run",
-    startKey: "startPartsRun",
-    endKey: "endPartsRun",
-    startLabel: "Depart",
-    endLabel: "Return",
-  },
-];
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Shared field block                                                       */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-interface AttendanceFieldsProps {
-  /**
-   * Offered as "Moving to another store". Omitted where there is nowhere to
-   * hand off to (a single-store form), which is why it is optional rather than
-   * a no-op default -- the button should not appear at all in that case.
-   */
-  onMoveToAnotherStore?: (closeCurrent: Partial<AttendanceFormValue>) => void;
-  value: AttendanceFormValue;
-  onChange: (patch: Partial<AttendanceFormValue>) => void;
-  technicians: CatalogTechnician[];
-  files: File[];
-  onFilesChange: (files: File[]) => void;
-  fieldErrors?: Record<string, string>;
-  disabled?: boolean;
-  /** Slot for the issue picker, which differs between the two callers. */
-  children?: React.ReactNode;
-}
-
-/**
- * The form itself, with no submit. Shared so the ticket-scoped panel and the
- * global "Log visit" dialog render identical UI and only their submit differs.
- */
-export function AttendanceFields({
-  value,
-  onChange,
-  technicians,
-  files,
-  onFilesChange,
-  fieldErrors = {},
-  disabled,
-  children,
-  onMoveToAnotherStore,
-}: AttendanceFieldsProps) {
-  const preview = useMemo(() => computeAttendancePreview(value), [value]);
-  const technicianOptions = useMemo<SearchableSelectOption[]>(
-    () =>
-      technicians
-        .filter((tech) => !tech.deletedAt)
-        .map((tech) => ({
-          value: String(tech.id),
-          label: tech.name,
-          hint: tech.categoryName ?? undefined,
-        })),
-    [technicians]
-  );
-  const hasAnyTime = ATTENDANCE_BUCKETS.some((b) => preview.minutes[b] > 0);
-  const showPreview = hasAnyTime || preview.warnings.length > 0;
-
-  return (
-    <div className="space-y-3">
-      {/* Technician */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">
-          Technician <span className="text-destructive">*</span>
-        </Label>
-        <SearchableSelect
-          options={technicianOptions}
-          value={value.technicianId || undefined}
-          onChange={(v) => onChange({ technicianId: v })}
-          disabled={disabled}
-          placeholder="Select technician"
-          searchPlaceholder="Search technicians…"
-          emptyText="No technicians found."
-          className={cn("h-8 text-sm", fieldErrors.technician_id && "border-destructive")}
-        />
-        <FieldError message={fieldErrors.technician_id} />
-      </div>
-
-      {children}
-
-      {/*
-        The visit itself, as a timeline rather than eight fields.
-
-        This used to be four rows of paired pickers, all on screen from the
-        start. That reads as data entry, and the person who designed the system
-        said it confused everyone including him -- because the job is not
-        filling a form, it is narrating a day while it happens: he clocked in,
-        he drove, he arrived, he went for parts, he came back, he went on break.
-
-        The fields are unchanged. Only the way in is.
-      */}
-      <AttendanceTimeline
-        value={value}
-        onChange={(patch) => onChange(patch as Partial<AttendanceFormValue>)}
-        onMoveToAnotherStore={onMoveToAnotherStore}
-        disabled={disabled}
-      />
-
-      {/* Errors for the clock fields still surface, keyed the same way the 422
-          mapper writes them. */}
-      {CLOCK_ROWS.map((row) => {
-        const message = fieldErrors[row.startKey] ?? fieldErrors[row.endKey];
-        return message ? <FieldError key={row.label} message={message} /> : null;
-      })}
-
-      {/* Live preview. The caption is load-bearing: it is what stops anyone
-          treating this as authoritative. The read-only card always renders the
-          server's own durations, never this. */}
-      {showPreview && (
-        <div className="space-y-2 rounded-md border border-dashed bg-muted/40 p-2.5">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Preview — the server recalculates on save
-          </p>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
-            {ATTENDANCE_BUCKETS.map((bucket) => (
-              <div key={bucket} className="min-w-0 space-y-0.5">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {ATTENDANCE_BUCKET_LABELS[bucket]}
-                </p>
-                <p
-                  className={cn(
-                    "text-[11px] tabular-nums",
-                    preview.minutes[bucket] > 0 ? "font-medium" : "text-muted-foreground"
-                  )}
-                >
-                  {preview.minutes[bucket] > 0 ? formatMinutes(preview.minutes[bucket]) : "—"}
-                </p>
-                {bucket === "work" && (
-                  <p className="text-[9px] leading-tight text-muted-foreground">
-                    net of break, travel and parts run
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-          {preview.warnings.length > 0 && (
-            <div className="flex flex-wrap gap-1 border-t pt-2">
-              {preview.warnings.map((raw) => {
-                const w = parseAttendanceWarning(raw);
-                return (
-                  <span
-                    key={raw}
-                    title={w.raw}
-                    className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:bg-amber-500/20 dark:text-amber-400"
-                  >
-                    {w.label}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Note, sent WITH the entry rather than as a follow-up */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Note</Label>
-        <Textarea
-          className="min-h-14 resize-none text-sm"
-          placeholder="Where you drove, what you did…"
-          value={value.noteBody}
-          onChange={(e) => onChange({ noteBody: e.target.value })}
-          disabled={disabled}
-        />
-        <FieldError message={fieldErrors["notes.0.body"]} />
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Attachments</Label>
-        <PasteFileZone files={files} onChange={onFilesChange} />
-      </div>
-    </div>
-  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -571,6 +349,25 @@ const FORM_TO_DRAFT: Record<keyof AttendanceFormValue, keyof IssueDraft> = {
   noteBody: "attendanceNoteBody",
 };
 
+/**
+ * Which create-payload field each first event fills.
+ *
+ * Creating a session and recording its first event are ONE request: the create
+ * endpoint still accepts the eight clock fields and turns them into events, so
+ * there is no window in which an empty session exists because a second call
+ * failed.
+ */
+export const FIRST_EVENT_FIELD: Record<AttendanceEventKind, keyof AttendanceFormValue> = {
+  clock_in: "startClock",
+  clock_out: "endClock",
+  travel_start: "startTravel",
+  travel_end: "endTravel",
+  break_start: "startBreak",
+  break_end: "endBreak",
+  parts_run_start: "startPartsRun",
+  parts_run_end: "endPartsRun",
+};
+
 export function AttendancePanel({
   issue,
   storeId,
@@ -590,6 +387,20 @@ export function AttendancePanel({
   const [files, setFiles] = useState<File[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
+
+  /**
+   * The session being recorded into, as the SERVER last described it.
+   *
+   * Every write returns the whole session, so this is the freshest account of
+   * it -- fresher than waiting for the page to refetch. Null until the first
+   * event creates one; reset when the panel is pointed somewhere else.
+   */
+  const [session, setSession] = useState<TicketIssueAttendance | null>(null);
+  const active = session ?? liveEntry;
+
+  useEffect(() => {
+    setSession(null);
+  }, [liveEntry?.id]);
 
   // Cross-ticket picks stay LOCAL, not in the draft: drafts are keyed by this
   // issue and cached for 7 days, and a stale pick at a long-closed ticket is
@@ -621,49 +432,71 @@ export function AttendancePanel({
     setFormError(null);
   }
 
-  async function handleSubmit() {
-    if (!value.technicianId) {
-      setFieldErrors({ technician_id: "Technician is required." });
+  /**
+   * Record one thing that happened.
+   *
+   * Before the session exists this CREATES it, mapping the event onto the
+   * create payload's matching clock field; afterwards it appends. Either way it
+   * is one press and one request, and the server hands back the whole session.
+   *
+   * THE POINT OF ALL OF THIS: a clock-in used to be a form you filled in and
+   * saved, after which the only thing the API would allow was marking it wrong.
+   * Adding "he set off at 08:30" meant flagging the record and retyping it.
+   */
+  async function record(kind: AttendanceEventKind, at: string) {
+    if (!value.technicianId && !active) {
+      setFieldErrors({ technician_id: "Say who this is for first." });
       return;
     }
 
-    setIsSubmitting(true);
     setFormError(null);
-    try {
-      // ATTENDANCE ONLY. createPartUsage, assignIssues and createDiagnosis
-      // still require every issue to belong to the ticket and must keep using
-      // `issueIds ?? [issue.id]`.
-      //
-      // The Set is load-bearing: appendDeep emits one ticket_issue_ids[] per
-      // element, so a duplicate id would go over the wire twice.
-      const ticketIssueIds = Array.from(
-        new Set([...baseIssueIds, ...sameTicketExtras, ...crossTicketExtras])
-      );
+    setFieldErrors({});
 
-      const { payload, topLevelFiles } = buildAttendancePayload(value, ticketIssueIds, files);
-      await maintenanceTicketsService.createAttendanceEntry(
+    try {
+      if (!active) {
+        // The Set is load-bearing: appendDeep emits one ticket_issue_ids[] per
+        // element, so a duplicate id would go over the wire twice.
+        const ticketIssueIds = Array.from(
+          new Set([...baseIssueIds, ...sameTicketExtras, ...crossTicketExtras])
+        );
+
+        const seeded: AttendanceFormValue = { ...value, [FIRST_EVENT_FIELD[kind]]: at };
+        const { payload, topLevelFiles } = buildAttendancePayload(seeded, ticketIssueIds, files);
+        const created = await maintenanceTicketsService.createAttendanceEntry(
+          storeId,
+          ticketId,
+          payload,
+          topLevelFiles
+        );
+
+        setSession(created);
+        onClearDraftFields(DRAFT_KEYS);
+        setFiles([]);
+
+        const extras = ticketIssueIds.length - baseIssueIds.length;
+        toast.success(
+          extras > 0
+            ? `Started, counting toward ${ticketIssueIds.length} issues.`
+            : "Started."
+        );
+        onSuccess();
+        return;
+      }
+
+      const next = await maintenanceTicketsService.createAttendanceEvent(
         storeId,
         ticketId,
-        payload,
-        topLevelFiles
+        active.id,
+        { kind, at }
       );
+      setSession(next);
 
-      onClearDraftFields(DRAFT_KEYS);
-      setFiles([]);
-      setSameTicketExtras([]);
-      setCrossTicketExtras([]);
-
-      // Name what was actually saved — the "Shared with" map on the read-only
-      // card is built from THIS ticket's issues only and will under-report a
-      // cross-ticket entry, so this toast is the honest record of it.
-      const extras = ticketIssueIds.length - baseIssueIds.length;
-      toast.success(
-        extras > 0
-          ? `Attendance saved for ${ticketIssueIds.length} issues`
-          : "Attendance saved successfully"
-      );
+      // A clock_in on a closed session opens a NEW one upstream, so say which
+      // it landed on rather than letting it look like nothing happened.
+      if (next.id !== active.id) {
+        toast.success("Started a new session — the last one was already closed.");
+      }
       onSuccess();
-      onClose();
     } catch (err) {
       if (isCancelled(err)) return;
       if (err instanceof MaintenanceTicketsError) {
@@ -671,145 +504,122 @@ export function AttendancePanel({
         if (Object.keys(fields).length) setFieldErrors(fields);
         setFormError(err.message);
       }
-      toast.error(
-        err instanceof MaintenanceTicketsError ? err.message : "Something went wrong."
-      );
-    } finally {
-      setIsSubmitting(false);
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not record that.");
     }
   }
 
-  /*
-   * LIVE MODE. Adding to a session that already exists.
-   *
-   * There is no form and no save button, because there is nothing to save: each
-   * press writes one event and the server hands back the whole session. That is
-   * the whole point of the change -- the previous shape had no update path at
-   * all, so adding "he set off at 08:30" to a saved clock-in meant flagging the
-   * record wrong and typing it again.
-   *
-   * onSuccess() after every write, so the ticket's read-only copy of this
-   * stream stays honest rather than drifting until something else reloads.
-   */
-  if (liveEntry) {
-    const isPaid = liveEntry.payment?.status.value === "paid";
-
-    const record = async (kind: AttendanceEventKind, at: string) => {
-      try {
-        const session = await maintenanceTicketsService.createAttendanceEvent(
-          storeId,
-          ticketId,
-          liveEntry.id,
-          { kind, at }
-        );
-        // A clock_in on an open session opens a NEW one upstream, so say which
-        // it landed on rather than letting it look like nothing happened.
-        toast.success(
-          session.id === liveEntry.id
-            ? "Recorded."
-            : "Started a new session — the last one was already closed."
-        );
-        onSuccess();
-      } catch (err) {
-        if (isCancelled(err)) return;
-        toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not record that.");
-      }
-    };
-
-    const correct = async (event: AttendanceEvent, at: string) => {
-      try {
+  async function correct(event: AttendanceEvent, at: string) {
+    if (!active) return;
+    try {
+      setSession(
         await maintenanceTicketsService.updateAttendanceEvent(
-          storeId, ticketId, liveEntry.id, event.id, at
-        );
-        onSuccess();
-      } catch (err) {
-        if (isCancelled(err)) return;
-        // The 422 for an already-paid session explains the alternative. Show
-        // the server's sentence rather than replacing it with a generic one.
-        toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not change that.");
-      }
-    };
-
-    const strike = async (event: AttendanceEvent) => {
-      try {
-        await maintenanceTicketsService.markAttendanceEventMistaken(
-          storeId, ticketId, liveEntry.id, event.id
-        );
-        toast.success(`${event.label} marked as a mistake. It stays on the record, struck through.`);
-        onSuccess();
-      } catch (err) {
-        if (isCancelled(err)) return;
-        toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not do that.");
-      }
-    };
-
-    return (
-      <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {liveEntry.technician?.name ?? `Technician #${liveEntry.technicianId}`}
-          </p>
-          {isPaid && (
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-              on a pay sheet — times are fixed
-            </span>
-          )}
-        </div>
-
-        <AttendanceStream
-          events={liveEntry.events}
-          isPaid={isPaid}
-          onRecord={record}
-          onCorrect={correct}
-          onStrike={strike}
-        />
-
-        <div className="flex justify-end">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Done
-          </Button>
-        </div>
-      </div>
-    );
+          storeId, ticketId, active.id, event.id, at
+        )
+      );
+      onSuccess();
+    } catch (err) {
+      if (isCancelled(err)) return;
+      // The 422 for an already-paid session explains the alternative. Show the
+      // server's sentence rather than replacing it with a generic one.
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not change that.");
+    }
   }
 
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Add Attendance
-      </p>
+  async function strike(event: AttendanceEvent) {
+    if (!active) return;
+    try {
+      setSession(
+        await maintenanceTicketsService.markAttendanceEventMistaken(
+          storeId, ticketId, active.id, event.id
+        )
+      );
+      toast.success(`${event.label} marked as a mistake. It stays on the record, struck through.`);
+      onSuccess();
+    } catch (err) {
+      if (isCancelled(err)) return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not do that.");
+    }
+  }
 
-      <AttendanceFields
-        value={value}
-        onChange={patch}
-        technicians={visibleTechnicians}
-        files={files}
-        onFilesChange={setFiles}
-        fieldErrors={fieldErrors}
-        disabled={isSubmitting}
-      >
-        <CrossIssueSection
-          baseIssueIds={baseIssueIds}
-          ticketIssues={ticketIssues}
-          sameTicketExtras={sameTicketExtras}
-          onSameTicketExtras={setSameTicketExtras}
-          crossTicketExtras={crossTicketExtras}
-          onCrossTicketExtras={setCrossTicketExtras}
-          storeNumber={storeNumber}
-          disabled={isSubmitting}
-        />
-      </AttendanceFields>
+  const isPaid = active?.payment?.status.value === "paid";
+
+  /*
+   * ONE SURFACE, whether the session exists yet or not.
+   *
+   * It used to be two: an eight-field form behind "Log hours", and the event
+   * stream only once something had been saved. Which meant the entire change
+   * was invisible from the one button anybody actually presses.
+   *
+   * Who it is for is asked ONCE, before anything is recorded, and then stops
+   * being a question -- a session belongs to one technician, so leaving the
+   * picker there afterwards would be offering a choice that does nothing.
+   */
+  return (
+    <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {active ? (active.technician?.name ?? `Technician #${active.technicianId}`) : "Log hours"}
+        </p>
+        {isPaid && (
+          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            on a pay sheet — times are fixed
+          </span>
+        )}
+      </div>
+
+      {!active && (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">
+              Who <span className="text-destructive">*</span>
+            </Label>
+            <SearchableSelect
+              options={visibleTechnicians.map((t) => ({
+                value: String(t.id),
+                label: t.name,
+                hint: t.categoryName ?? undefined,
+              }))}
+              value={value.technicianId || undefined}
+              onChange={(v) => patch({ technicianId: v })}
+              placeholder="Select technician"
+              searchPlaceholder="Search technicians…"
+              emptyText="No technicians found."
+              className="h-9 text-sm"
+            />
+            {fieldErrors.technician_id && <FieldError message={fieldErrors.technician_id} />}
+          </div>
+
+          <CrossIssueSection
+            baseIssueIds={baseIssueIds}
+            ticketIssues={ticketIssues}
+            sameTicketExtras={sameTicketExtras}
+            onSameTicketExtras={setSameTicketExtras}
+            crossTicketExtras={crossTicketExtras}
+            onCrossTicketExtras={setCrossTicketExtras}
+            storeNumber={storeNumber}
+            disabled={isSubmitting}
+          />
+        </div>
+      )}
+
+      <AttendanceStream
+        events={active?.events ?? []}
+        isPaid={isPaid}
+        onRecord={record}
+        onCorrect={correct}
+        onStrike={strike}
+      />
+
+      {/* The server's own net figures, once there is something to total. The
+          read-only card always renders THESE, never a client-side preview. */}
+      {active && <AttendanceDurationsStrip durations={active.durations} />}
 
       {fieldErrors.ticket_issue_ids && <FieldError message={fieldErrors.ticket_issue_ids} />}
       {formError && <p className="text-xs text-destructive">{formError}</p>}
 
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
-          Cancel
-        </Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !value.technicianId}>
-          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
-          Save
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          {active ? "Done" : "Cancel"}
         </Button>
       </div>
     </div>

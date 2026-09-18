@@ -812,11 +812,23 @@ function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
 /**
  * One attendance session's URL.
  *
- * Built in one place because four calls share it, and a typo in one of them
+ * Built in one place because three calls share it, and a typo in one of them
  * would be a 404 with no obvious cause.
+ *
+ * NULL STORE OR TICKET GIVES THE UNSCOPED URL. A visit covering issues on
+ * several tickets has no one ticket its URL could honestly name -- which is
+ * why the create endpoint has an unscoped variant too. Only the path differs
+ * between the two, so switching it here beats three more near-identical
+ * methods that could drift apart.
  */
-const ATT_BASE = (storeId: string, ticketId: number, attendanceId: number) =>
-  `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}`;
+const ATT_BASE = (
+  storeId: string | null,
+  ticketId: number | null,
+  attendanceId: number
+) =>
+  storeId && ticketId
+    ? `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}`
+    : `/api/maintenance-tickets/attendance-entries/${attendanceId}`;
 
 export const entityPaths = {
   ticket: (store: string, ticket: number) =>
@@ -1680,8 +1692,8 @@ export const maintenanceTicketsService = {
    * the one it was given.
    */
   async createAttendanceEvent(
-    storeId: string,
-    ticketId: number,
+    storeId: string | null,
+    ticketId: number | null,
     attendanceId: number,
     payload: CreateAttendanceEventPayload
   ): Promise<TicketIssueAttendance> {
@@ -1704,8 +1716,8 @@ export const maintenanceTicketsService = {
    * was paid on. The message says so, so surface it rather than replacing it.
    */
   async updateAttendanceEvent(
-    storeId: string,
-    ticketId: number,
+    storeId: string | null,
+    ticketId: number | null,
     attendanceId: number,
     eventId: number,
     at: string
@@ -1724,8 +1736,8 @@ export const maintenanceTicketsService = {
   /** Strike one event. It stays in the ledger, struck through, and stops
    *  counting -- the same flag every other record here uses. */
   async markAttendanceEventMistaken(
-    storeId: string,
-    ticketId: number,
+    storeId: string | null,
+    ticketId: number | null,
     attendanceId: number,
     eventId: number
   ): Promise<TicketIssueAttendance> {

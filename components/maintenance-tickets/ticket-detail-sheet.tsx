@@ -111,6 +111,7 @@ import type {
   NoteType,
 } from "@/types/maintenance-tickets.types";
 import { EntityNotesAttachments } from "./entity-extras";
+import { AttendanceStream } from "./attendance-stream";
 import { NotesList } from "./notes-list";
 import { SearchCreateCombobox } from "./search-create-combobox";
 import { AttendancePanel } from "./attendance-panel";
@@ -2684,64 +2685,29 @@ function IssueNode({
                               </div>
                             );
                           })()}
-                          {/* Break section — 2-column */}
-                          {(item.startBreak || item.endBreak) && (() => {
-                            const dur = (item.startBreak && item.endBreak) ? calcDuration(item.startBreak, item.endBreak) : null;
-                            return (
-                              <div className="space-y-1.5 ps-3 border-s">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Break</p>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  {item.startBreak && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Start</span>
-                                      <span className="font-medium">{formatTimestamp(item.startBreak, "MMM d, yyyy HH:mm")}</span>
-                                    </div>
-                                  )}
-                                  {item.endBreak && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">End</span>
-                                      <span className="font-medium">{formatTimestamp(item.endBreak, "MMM d, yyyy HH:mm")}</span>
-                                    </div>
-                                  )}
-                                  {dur && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Span (gross)</span>
-                                      <span className="font-semibold text-sm">{dur}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                          {/* Parts run section — 2-column */}
-                          {(item.startPartsRun || item.endPartsRun) && (() => {
-                            const dur = (item.startPartsRun && item.endPartsRun) ? calcDuration(item.startPartsRun, item.endPartsRun) : null;
-                            return (
-                              <div className="space-y-1.5 ps-3 border-s">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Parts Run</p>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  {item.startPartsRun && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Depart</span>
-                                      <span className="font-medium">{formatTimestamp(item.startPartsRun, "MMM d, yyyy HH:mm")}</span>
-                                    </div>
-                                  )}
-                                  {item.endPartsRun && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Return</span>
-                                      <span className="font-medium">{formatTimestamp(item.endPartsRun, "MMM d, yyyy HH:mm")}</span>
-                                    </div>
-                                  )}
-                                  {dur && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Span (gross)</span>
-                                      <span className="font-semibold text-sm">{dur}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
+                          {/*
+                            Everything else that happened, as a stream.
+
+                            This was two fixed blocks -- Break and Parts Run --
+                            each able to show exactly ONE of its kind, because
+                            one of each was all the four column pairs could
+                            hold. A session can now hold as many breaks and
+                            parts runs as the day actually had, so a pair of
+                            fixed blocks would show the first and quietly drop
+                            the rest.
+
+                            Read-only: no callbacks are passed, and that is
+                            what makes it so. Recording belongs on the tickets
+                            page.
+                          */}
+                          {item.events.length > 0 && (
+                            <div className="space-y-1.5 ps-3 border-s">
+                              <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">
+                                What happened
+                              </p>
+                              <AttendanceStream events={item.events} />
+                            </div>
+                          )}
                           {isShared && sharedWithIds.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1 text-xs">
                               <span className="text-muted-foreground">Shared with:</span>
@@ -3408,6 +3374,7 @@ function MobileTicketSwitcher({ tickets, activeId, onSelect }: MobileSwitcherPro
 /* ────────────────────────────────────────────────────────────────────────── */
 
 interface RightPanelProps {
+  readOnly?: boolean;
   activeTicketId: number | null;
   /** The full ticket object for `activeTicketId`, resolved from an accumulated
    * cache so it stays available even after the navigator pages away from the
@@ -3426,6 +3393,7 @@ function RightPanel({
   activeTicketId,
   activeTicket,
   storeId,
+  readOnly = false,
   technicians,
   issuesResponse,
   isLoading,
@@ -3445,10 +3413,13 @@ function RightPanel({
   // storePermissions is keyed by numeric internal id (e.g. "48"), not the
   // human-readable store id (e.g. "03795-00001"). Resolve it via overviewStores.
   const storeNumericId = overviewStores.find((s) => s.storeId === storeId)?.id ?? storeId;
-  const canActOnIssues      = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/technicians",                                storeId: storeNumericId });
-  const canAddFinalNote     = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/final-note",                                storeId: storeNumericId });
-  const canAddEntityNotes   = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",     storeId: storeNumericId });
-  const canMarkMistakenPerm = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken", storeId: storeNumericId });
+  // `!readOnly &&` on every one, in this one place: a read-only sheet must
+  // never grow an action surface because somebody added a control and checked
+  // only the permission.
+  const canActOnIssues      = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/technicians",                                storeId: storeNumericId });
+  const canAddFinalNote     = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/final-note",                                storeId: storeNumericId });
+  const canAddEntityNotes   = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",     storeId: storeNumericId });
+  const canMarkMistakenPerm = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken", storeId: storeNumericId });
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
@@ -4235,6 +4206,15 @@ export interface TicketDetailSheetProps {
   open: boolean;
   ticketId: number | null;
   storeId: string;
+  /**
+   * Reading only -- no actions, no selection, no note composing.
+   *
+   * This is how the dashboards open it. A ticket on DSPR or Dashboard V1 is a
+   * quick showcase: you glance at what is going on and go back. Acting on one
+   * belongs on the maintenance tickets page, and offering half the controls
+   * here as well would only split one habit across two screens.
+   */
+  readOnly?: boolean;
   tickets: Ticket[];
   technicians: CatalogTechnician[];
   filters?: TicketsFilters;
@@ -4266,6 +4246,7 @@ export function TicketDetailSheet({
   isPageLoading,
   onNextPage,
   onPreviousPage,
+  readOnly = false,
 }: TicketDetailSheetProps) {
   const [activeTicketId, setActiveTicketId] = useState<number | null>(ticketId);
   const [search, setSearch] = useState("");
@@ -4391,6 +4372,7 @@ export function TicketDetailSheet({
         {/* 2-pane layout */}
         <div className="flex flex-1 overflow-hidden">
           <RightPanel
+          readOnly={readOnly}
             activeTicketId={activeTicketId}
             activeTicket={activeTicket}
             storeId={effectiveStoreId}

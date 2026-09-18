@@ -235,43 +235,57 @@ export function AttendanceStream({
               />
             </div>
           ) : (
-            <div className="flex flex-col gap-1.5">
+            /*
+              One SEGMENTED control per step, wrapping.
+
+              It was a stacked row per step with two loose buttons -- eight
+              controls in a column, which read as a list to get through rather
+              than a choice to make. Joined, each step is one thing with two
+              ways to commit it, and the row wraps to however much width there
+              is instead of always being four rows tall.
+            */
+            <div className="flex flex-wrap gap-2">
               {steps.map((step) => {
                 const Icon = ICONS[step.kind] ?? Clock;
                 const key = `record-${step.kind}`;
 
                 return (
-                  <div key={step.kind} className="flex items-center gap-1.5">
+                  <div
+                    key={step.kind}
+                    className="inline-flex items-stretch overflow-hidden rounded-md border bg-card"
+                  >
                     {/* Live: one press, stamped now. */}
-                    <Button
+                    <button
                       type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 justify-start gap-1.5 text-xs"
                       disabled={busy !== null}
                       onClick={() =>
                         void run(key, () => onRecord?.(step.kind, nowForInput()) ?? Promise.resolve())
                       }
+                      className="inline-flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
                     >
                       {busy === key ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <Icon className="h-3.5 w-3.5" />
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                       )}
-                      {step.label} · now
-                    </Button>
+                      {step.label}
+                    </button>
 
-                    {/* Writing up yesterday. Same weight, not a hidden fallback. */}
-                    <Button
+                    {/*
+                      Writing up yesterday. Same control, same height, divided
+                      rather than demoted -- the coordinator is not the
+                      technician, and recording a visit after the fact is not
+                      the exception that should cost extra.
+                    */}
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-muted-foreground"
                       disabled={busy !== null}
+                      title={`Record ${step.label.toLowerCase()} at a time you type`}
                       onClick={() => setPending({ step, at: nowForInput() })}
+                      className="inline-flex h-9 items-center border-s px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
                     >
                       at a time…
-                    </Button>
+                    </button>
                   </div>
                 );
               })}
