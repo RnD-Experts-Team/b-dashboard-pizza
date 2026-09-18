@@ -28,13 +28,17 @@ import {
 import {
   EVENT_STEPS,
   formatSpan,
+  isNotToday,
   isOnTheClock,
   nextEventKinds,
   nowForInput,
   orderedEvents,
   spanClosedBy,
+  toLocalInput,
+  toWire,
   type EventStep,
 } from "@/lib/maintenance-tickets/attendance-events";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import type { AttendanceEvent, AttendanceEventKind } from "@/types/maintenance-tickets.types";
 
 /**
@@ -132,8 +136,12 @@ export function AttendanceStream({
                 {/* The server's own label, so the two sides cannot disagree
                     about what a kind is called. */}
                 <span className="text-sm">{event.label}</span>
+                {/* Local time, from the UTC the server sent. Slicing the digits
+                    out of the ISO string showed UTC as if it were local. The day
+                    is added only when it is not today, so a write-up of
+                    yesterday reads as yesterday. */}
                 <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                  {event.at.slice(11, 16)}
+                  {formatTimestamp(event.at, isNotToday(event.at) ? "d MMM HH:mm" : "HH:mm")}
                 </span>
 
                 {duration && <span className="text-xs text-muted-foreground">({duration})</span>}
@@ -163,12 +171,12 @@ export function AttendanceStream({
                   <div className="ms-auto flex items-center gap-1">
                     {isEditing ? (
                       <InlineTime
-                        initial={event.at.slice(0, 16)}
+                        initial={toLocalInput(event.at)}
                         busy={busy === `edit-${event.id}`}
                         onCancel={() => setEditing(null)}
                         onConfirm={(at) =>
                           run(`edit-${event.id}`, async () => {
-                            await onCorrect?.(event, at);
+                            await onCorrect?.(event, toWire(at));
                             setEditing(null);
                           })
                         }
@@ -228,7 +236,7 @@ export function AttendanceStream({
                 onCancel={() => setPending(null)}
                 onConfirm={(at) =>
                   run("pending", async () => {
-                    await onRecord?.(pending.step.kind, at);
+                    await onRecord?.(pending.step.kind, toWire(at));
                     setPending(null);
                   })
                 }
@@ -259,7 +267,7 @@ export function AttendanceStream({
                       type="button"
                       disabled={busy !== null}
                       onClick={() =>
-                        void run(key, () => onRecord?.(step.kind, nowForInput()) ?? Promise.resolve())
+                        void run(key, () => onRecord?.(step.kind, toWire(nowForInput())) ?? Promise.resolve())
                       }
                       className="inline-flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
                     >

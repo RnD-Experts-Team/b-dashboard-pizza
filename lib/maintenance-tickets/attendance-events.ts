@@ -150,6 +150,35 @@ export function nowForInput(date: Date = new Date()): string {
   );
 }
 
+/**
+ * THE TWO SIDES OF A TIMESTAMP, and why mixing them was the bug.
+ *
+ * The picker holds a LOCAL, offset-free `YYYY-MM-DDTHH:mm`. The server stores
+ * and returns UTC ISO (`...Z`), and its own timezone is UTC. Every crossing
+ * between the two has to convert, and the stream did neither: it sliced UTC
+ * digits out for display and sent local digits raw -- so an 08:00 press stored
+ * as 08:00 UTC, while the first event (which went through the create payload's
+ * converter) stored correctly. One session, two clocks, hours apart.
+ */
+
+/** UTC ISO from the server -> what the picker holds, in the browser's zone. */
+export function toLocalInput(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso.slice(0, 16) : nowForInput(d);
+}
+
+/** What the picker holds -> what the server is sent. Idempotent on ISO input,
+ *  so a value that is already on the wire passes through unchanged. */
+export function toWire(local: string): string {
+  const d = new Date(local);
+  return Number.isNaN(d.getTime()) ? local : d.toISOString();
+}
+
+/** The event's local calendar day differs from today's -- worth saying. */
+export function isNotToday(iso: string): boolean {
+  return toLocalInput(iso).slice(0, 10) !== nowForInput().slice(0, 10);
+}
+
 /** Minutes between two timestamps, or null when either is missing or the pair
  *  is inverted. Inverted is not an error here — upstream reports it as a
  *  warning and counts it as zero — so we mirror that and show nothing. */

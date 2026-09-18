@@ -42,7 +42,6 @@ import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-
 import { Checkbox } from "@/components/ui/checkbox";
 import { entityPaths } from "@/lib/api/services/maintenance-tickets.service";
 import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
-import { isOnTheClock } from "@/lib/maintenance-tickets/attendance-events";
 import type { CorrectionSeed } from "@/lib/maintenance-tickets/corrections";
 import type {
   Ticket,
@@ -312,8 +311,11 @@ function IssueCard({
    * out, not struck. Usually zero or one; more than one means two technicians
    * are on the clock for the same issue at once.
    */
+  // Read off the server's cached clock window, not off the events: those two
+  // columns exist precisely to answer "is this open", and they are present on
+  // every listing whether or not the events relation was loaded with it.
   const openAttendanceEntries = issue.attendanceEntries.filter(
-    (e) => !e.mistaken && isOnTheClock(e.events)
+    (e) => !e.mistaken && e.startClock != null && e.endClock == null
   );
   const { getIssueDraft, patchIssueDraft, clearIssueDraftFields } = useTicketDraft(storeId, ticketId);
   const issueDraft = getIssueDraft(issue.id) ?? EMPTY_ISSUE_DRAFT;
