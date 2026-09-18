@@ -2,16 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { formatTimestamp } from "@/lib/utils/date-display";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
-import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 import {
   Card,
   CardContent,
@@ -111,6 +110,7 @@ function TicketsSkeleton() {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export function RecentMaintenanceTable() {
+  const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || "en";
   const { selectedStore } = useSelectedStoreStore();
@@ -124,10 +124,6 @@ export function RecentMaintenanceTable() {
   const abortRef = useRef<AbortController | null>(null);
 
   // ── Detail sheet ─────────────────────────────────────────────────────
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
-  const techLoadedRef = useRef(false);
 
   // ── Create dialog ────────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = useState(false);
@@ -168,19 +164,19 @@ export function RecentMaintenanceTable() {
   }, [fetchTickets]);
 
   // ── Open detail sheet ────────────────────────────────────────────────
-  async function handleRowClick(ticket: Ticket) {
-    setSelectedTicketId(ticket.id);
-    setSheetOpen(true);
-    // Lazy-load technicians on first open
-    if (!techLoadedRef.current) {
-      techLoadedRef.current = true;
-      try {
-        const techs = await maintenanceTicketsService.getCatalogTechnicians();
-        setTechnicians(techs);
-      } catch {
-        // Sheet works fine without technicians for read-only viewing
-      }
-    }
+  /**
+   * Opens the ticket on its own page.
+   *
+   * This used to open the 75vw detail sheet. Everything that shows a ticket now
+   * goes to the same place -- two ways to view one thing is how a UI stops
+   * being learnable, and the page can be linked, bookmarked and refreshed.
+   *
+   * It no longer needs to lazy-load technicians either: the page loads its own
+   * catalog for the store the ticket turns out to be in, which this card cannot
+   * know before opening it.
+   */
+  function handleRowClick(ticket: Ticket) {
+    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}`);
   }
 
   // ── Open create dialog ───────────────────────────────────────────────
@@ -374,16 +370,6 @@ export function RecentMaintenanceTable() {
       </Card>
 
       {/* Detail sheet — opens when a row is clicked */}
-      {sheetOpen && storeId && (
-        <TicketDetailSheet
-          open={sheetOpen}
-          ticketId={selectedTicketId}
-          storeId={storeId}
-          tickets={tickets}
-          technicians={technicians}
-          onClose={() => { setSheetOpen(false); setSelectedTicketId(null); }}
-        />
-      )}
 
       {/* Create dialog */}
       <CreateTicketDialog

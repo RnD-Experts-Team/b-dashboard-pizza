@@ -45,7 +45,12 @@ export async function GET(
   // minus pagination (analytics is not paginated).
   const forwardParams = new URLSearchParams();
 
+  // This is an allowlist, and anything missing from it is dropped SILENTLY --
+  // the request still succeeds, it just quietly ignores the filter. Add new
+  // scalar params here in the same commit that adds them to buildFilterParams,
+  // or the filter will appear to work and do nothing.
   const SCALAR_KEYS = [
+    "q", "assigned_from", "assigned_to", "include_analytics",
     "created_from", "created_to", "changed_from", "changed_to",
     "part_cost_single_gt", "part_cost_total_gt",
     "trashed", "sort", "dir",

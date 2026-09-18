@@ -15,6 +15,7 @@ import type {
   StorageLocationRef,
   TicketsListResponse,
   TicketIssuesResponse,
+  TicketWithIssuesResponse,
   CatalogIssue,
   CatalogTechnician,
   CatalogCategory,
@@ -333,6 +334,13 @@ function transformTicketsAnalytics(raw: ApiTicketsAnalytics): TicketsAnalytics {
         count: b.count,
       })),
     },
+    // `?? null`, never `?? 0`. An older backend omits `attention` entirely, and
+    // rendering 0 would claim nothing is overdue when we simply weren't told.
+    attention: {
+      overdue: raw.attention?.overdue ?? null,
+      stuck: raw.attention?.stuck ?? null,
+      asOf: raw.attention?.as_of ?? null,
+    },
     durations: {
       pendingToNextStatus: dur(raw.durations?.pending_to_next_status),
       timeToCompleteOrCancelled: dur(raw.durations?.time_to_complete_or_cancelled),
@@ -492,6 +500,12 @@ function attendanceRequestBody(
 
 function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   const p = new URLSearchParams();
+  // Trimmed, and omitted when empty: a bare `?q=` is a no-op server-side, but
+  // sending it puts a meaningless key in the shareable URL.
+  const q = filters.q?.trim();
+  if (q) p.set("q", q);
+  if (filters.assigned_from) p.set("assigned_from", filters.assigned_from);
+  if (filters.assigned_to)   p.set("assigned_to",   filters.assigned_to);
   (filters.statuses ?? []).forEach((v) => v && p.append("statuses[]", v));
   (filters.priorities ?? []).forEach((v) => v && p.append("priorities[]", v));
   (filters.assigned_priorities ?? []).forEach((v) => v && p.append("assigned_priorities[]", v));
@@ -924,6 +938,39 @@ export const maintenanceTicketsService = {
         }
       );
       return { data: res.data.data.map(transformIssue) };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * The same listing, without needing to know the store.
+   *
+   * Prefer getTicketIssues when a store is in hand -- that is the canonical
+   * route. This exists because a ticket created with `otherStore` has a null
+   * store_id and cannot bind inside upstream's /stores/{store}/... group, so
+   * those tickets have no other way to be read. It is also what lets the
+   * ticket page be a clean /maintenance-tickets/{id} URL rather than one that
+   * smuggles a store the ticket may not have.
+   */
+  async getTicketIssuesById(
+    ticketId: number,
+    signal?: AbortSignal
+  ): Promise<TicketWithIssuesResponse> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<ApiTicketIssuesResponse & { ticket: ApiTicket }>(
+        `/api/maintenance-tickets/tickets/${ticketId}/issues`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          timeout: 15_000,
+          signal,
+        }
+      );
+      return {
+        data: res.data.data.map(transformIssue),
+        ticket: transformTicket(res.data.ticket),
+      };
     } catch (err) {
       return handleAxiosError(err);
     }

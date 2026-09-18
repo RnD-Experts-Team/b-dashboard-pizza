@@ -4,6 +4,7 @@ import { storageService } from "@/lib/api/services/storage.service";
 import type {
   StockBalanceFilters,
   StockBalanceListResponse,
+  PartStockTotalListResponse,
   StockMovementFilters,
   StockMovementListResponse,
   StorageErrorState,
@@ -25,6 +26,10 @@ import type {
 
 let _movementsCtrl: AbortController | null = null;
 let _balancesCtrl: AbortController | null = null;
+// Its own controller: the per-part totals and the per-pair balances are two
+// different questions asked of the same endpoint, and paging one must never
+// cancel the other.
+let _partTotalsCtrl: AbortController | null = null;
 let _locationsCtrl: AbortController | null = null;
 
 function toErrorState(err: unknown): StorageErrorState {
@@ -47,6 +52,12 @@ interface StorageState {
   balancesLoading: boolean;
   balancesRefreshing: boolean;
   balancesError: StorageErrorState | null;
+  /** One row per part, totalled across locations -- the headline figure. */
+  partTotals: PartStockTotalListResponse | null;
+  partTotalsLoading: boolean;
+  partTotalsRefreshing: boolean;
+  partTotalsError: StorageErrorState | null;
+  partTotalFilters: StockBalanceFilters;
   balanceFilters: StockBalanceFilters;
 
   /* Locations */
@@ -58,6 +69,7 @@ interface StorageState {
 
   fetchMovements: (filters?: StockMovementFilters, page?: number) => Promise<void>;
   fetchBalances: (filters?: StockBalanceFilters, page?: number) => Promise<void>;
+  fetchPartTotals: (filters?: StockBalanceFilters, page?: number) => Promise<void>;
   fetchLocations: (filters?: StorageLocationFilters, page?: number) => Promise<void>;
   clearErrors: () => void;
   reset: () => void;
@@ -74,6 +86,13 @@ const INITIAL = {
   balancesLoading: false,
   balancesRefreshing: false,
   balancesError: null,
+  partTotals: null,
+  partTotalsLoading: false,
+  partTotalsRefreshing: false,
+  partTotalsError: null,
+  // Default ON: a list of parts we have none of is not what anyone opens this
+  // page to see. The checkbox is right there to turn it off.
+  partTotalFilters: { non_zero: true },
   // non_zero on by default: a shelf that netted back to nothing is noise.
   balanceFilters: { non_zero: true, per_page: 50 } as StockBalanceFilters,
 
@@ -139,6 +158,34 @@ export const useStorageStore = create<StorageState>()((set, get) => ({
         balancesError: toErrorState(err),
         balancesLoading: false,
         balancesRefreshing: false,
+      });
+    }
+  },
+
+  async fetchPartTotals(filters, page = 1) {
+    _partTotalsCtrl?.abort();
+    const controller = new AbortController();
+    _partTotalsCtrl = controller;
+
+    const next = { ...(filters ?? get().partTotalFilters), page };
+    const hasExisting = get().partTotals !== null;
+    set({
+      partTotalsLoading: !hasExisting,
+      partTotalsRefreshing: hasExisting,
+      partTotalsError: null,
+      partTotalFilters: next,
+    });
+
+    try {
+      const result = await storageService.getPartStockTotals(next, controller.signal);
+      if (controller.signal.aborted || _partTotalsCtrl !== controller) return;
+      set({ partTotals: result, partTotalsLoading: false, partTotalsRefreshing: false });
+    } catch (err) {
+      if (controller.signal.aborted || _partTotalsCtrl !== controller) return;
+      set({
+        partTotalsError: toErrorState(err),
+        partTotalsLoading: false,
+        partTotalsRefreshing: false,
       });
     }
   },

@@ -28,10 +28,27 @@ import type { DailyPayGathered } from "@/types/daily-pay.types";
 /*  toggle-group primitive and that directory is Core.                        */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/*
+ * Plain words. The mechanism was already explicit here -- the author had
+ * understood that an ambiguous control silently changes what somebody gets
+ * paid -- but the words were the system's, not the job's. "Override hours" is
+ * a database concept; "type the hours in myself" is what the person is doing.
+ */
 const MODE_LABEL: Record<LineLabourMode, string> = {
-  gather: "Gathered from attendance",
-  hours: "Override hours",
-  lumpSum: "Lump sum",
+  gather: "Use the hours that were logged",
+  hours: "Type the hours in myself",
+  lumpSum: "A fixed amount instead",
+};
+
+/** Said under the picker, because the consequence is the part that bites:
+ *  typing hours stops the line ever updating again, and a fixed amount means
+ *  the hours are not used at all. */
+const MODE_CONSEQUENCE: Record<LineLabourMode, string> = {
+  gather:
+    "Taken from the attendance recorded against these jobs, and kept up to date if more is logged.",
+  hours:
+    "Recalculating will leave this line alone from now on. Switch back to the logged hours to undo that.",
+  lumpSum: "An agreed price. The hours and the rate are not used at all.",
 };
 
 interface DailyPayLabourControlProps {
@@ -80,7 +97,7 @@ export function DailyPayLabourControl({
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Labour</Label>
+        <Label className="text-xs text-muted-foreground">How this store is paid</Label>
         <Select
           value={mode}
           onValueChange={(v) => onModeChange(v as LineLabourMode)}
@@ -95,6 +112,9 @@ export function DailyPayLabourControl({
             <SelectItem value="lumpSum">{MODE_LABEL.lumpSum}</SelectItem>
           </SelectContent>
         </Select>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          {MODE_CONSEQUENCE[mode]}
+        </p>
       </div>
 
       {mode === "lumpSum" ? (
@@ -107,7 +127,7 @@ export function DailyPayLabourControl({
             onChange={onLumpSumChange}
             disabled={disabled}
             error={lumpSumError}
-            hint="Replaces hourly labour for this line."
+            hint="Paid instead of the hours, not on top of them."
             required
           />
         </div>

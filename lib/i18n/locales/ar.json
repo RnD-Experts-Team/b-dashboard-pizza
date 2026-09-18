@@ -1190,18 +1190,6 @@
     "title": "تذاكر الصيانة",
     "description": "تتبع وإدارة تذاكر الصيانة لفرعك.",
     "refresh": "تحديث",
-    "groupBy": {
-      "label": "تجميع حسب",
-      "none": "بدون تجميع",
-      "status": "الحالة",
-      "priority": "الأولوية",
-      "technician": "الفني (الحضور)",
-      "part": "القطعة",
-      "assigned_technician": "الفني المعيّن",
-      "pay": "إدخال الراتب",
-      "warranty": "الضمان",
-      "diagnosis": "استكشاف الأخطاء"
-    },
     "common": {
       "cancel": "إلغاء",
       "save": "حفظ",

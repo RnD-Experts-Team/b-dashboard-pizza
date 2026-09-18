@@ -491,6 +491,26 @@ export interface TicketsAnalytics {
     total: number;
     statusBreakdown: TicketsAnalyticsStatusBreakdown[];
   };
+  /**
+   * How many issues need looking at, over the same filtered set.
+   *
+   *   overdue -- a non-terminal issue whose LATEST assignment is dated before
+   *              `asOf`. Counts the plan slipping, not a missed SLA: this
+   *              system has no due dates.
+   *   stuck   -- an issue sitting in `waiting`.
+   *
+   * Both are null when the backend did not send them, and null renders as an
+   * em dash rather than 0 -- "we don't know" is not "none", the same rule
+   * avgTicketsPerWeek already follows.
+   *
+   * `asOf` exists because "in the past" is relative to the SERVER's date. Do
+   * not recompute overdue against the browser's clock.
+   */
+  attention: {
+    overdue: number | null;
+    stuck: number | null;
+    asOf: string | null;
+  };
   durations: {
     pendingToNextStatus: TicketsAnalyticsDuration;
     timeToCompleteOrCancelled: TicketsAnalyticsDuration;
@@ -684,7 +704,38 @@ export interface ChangeAssignmentTechniciansPayload {
 /*  Filters                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * What GET /tickets/{ticket}/issues returns: the issues, AND the ticket.
+ *
+ * The store-scoped twin does not need to send the ticket -- that URL already
+ * said which store it was. This one has no store segment by design, so the
+ * ticket rides along; without it a page reached by link has no way to learn the
+ * `store_number` that every subsequent write binds on.
+ */
+export interface TicketWithIssuesResponse {
+  data: TicketIssue[];
+  ticket: Ticket;
+}
+
 export interface TicketsFilters {
+  /**
+   * Free text across the ticket id (exact), the store number, the ticket's
+   * other_store, and its issues' title and description. ANDs with every other
+   * filter -- it narrows, it never widens.
+   *
+   * Note a digit string matches BOTH the ticket id and any store number
+   * containing those digits. Both readings are wanted: you type "412" for a
+   * ticket and "3795" for a store.
+   */
+  q?: string;
+  /**
+   * Tickets carrying an issue SCHEDULED in this window (non-mistaken
+   * assignments only). This is what answers "what is on for today" --
+   * created_from cannot, because a ticket raised in March is routinely worked
+   * in September.
+   */
+  assigned_from?: string;
+  assigned_to?: string;
   statuses?: TicketStatus[];
   priorities?: Priority[];
   /** Matches tickets with an issue whose independently-set assigned_priority is one of these. */
@@ -1070,6 +1121,15 @@ export interface ApiTicketsAnalytics {
   issues?: {
     total?: number | null;
     status_breakdown?: ApiTicketsAnalyticsStatusBreakdown[] | null;
+  } | null;
+  /**
+   * Rides along on ?include_analytics=1 so the counts never cost a second
+   * request. Optional because an older backend will not send it.
+   */
+  attention?: {
+    overdue?: number | null;
+    stuck?: number | null;
+    as_of?: string | null;
   } | null;
   durations?: {
     pending_to_next_status?: ApiTicketsAnalyticsDuration | null;

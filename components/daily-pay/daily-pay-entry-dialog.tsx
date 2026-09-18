@@ -79,6 +79,14 @@ interface DailyPayEntryDialogProps {
   entryId: number | null;
   stores: DailyPayStoreOption[];
   technicians: CatalogTechnician[];
+  /**
+   * Create mode only: open already filled in from the pay basket.
+   *
+   * Nothing is saved by this -- the form is populated and the coordinator
+   * reviews it, the same discipline as everywhere else here. Ignored in edit
+   * mode, where the server's own record is the only sane starting point.
+   */
+  initialState?: EntryFormState | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -88,6 +96,7 @@ export function DailyPayEntryDialog({
   entryId,
   stores,
   technicians,
+  initialState,
   onClose,
   onSuccess,
 }: DailyPayEntryDialogProps) {
@@ -197,7 +206,11 @@ export function DailyPayEntryDialog({
     if (!open) return;
 
     if (!isEdit) {
-      setState(emptyEntryFormState());
+      // A seeded state wins on create. It carries the payees, the store lines
+      // and the linked issues from the basket -- and deliberately no hours,
+      // because any value sent marks the line overridden upstream and stops the
+      // gather filling it from the attendance already logged.
+      setState(initialState ?? emptyEntryFormState());
       setErrors(EMPTY_FORM_ERRORS);
       setPrefillError(null);
       setConflict(null);
@@ -208,7 +221,7 @@ export function DailyPayEntryDialog({
     const ctrl = new AbortController();
     void loadEntry(entryId as number, ctrl.signal);
     return () => ctrl.abort();
-  }, [open, entryId, isEdit, loadEntry]);
+  }, [open, entryId, isEdit, loadEntry, initialState]);
 
   /* ── Setters ──────────────────────────────────────────────────────────── */
 

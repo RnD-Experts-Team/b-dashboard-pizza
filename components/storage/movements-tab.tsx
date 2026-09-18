@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, ChevronDown, MoreHorizontal, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { plainMovementLabel } from "@/lib/storage/stock-actions";
 import { formatWireDateTime } from "@/lib/utils/date-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -110,7 +111,9 @@ function MovementRow({
         </td>
         <td className={TD}>
           <span className="flex flex-wrap items-center gap-1.5">
-            <span className={cn("font-medium", strike)}>{movement.type.label}</span>
+            <span className={cn("font-medium", strike)} title={movement.type.label}>
+              {plainMovementLabel(movement.type.value)}
+            </span>
             {movement.mistaken && (
               <Badge
                 variant="outline"

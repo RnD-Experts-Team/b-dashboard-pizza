@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeftRight, Lock, RefreshCw, Scale, Warehouse, type LucideIcon } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Lock, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { StorageKpis } from "@/components/storage/storage-kpis";
+import { PartStockList } from "@/components/storage/part-stock-list";
+import { StorageSkeleton, StorageErrorCard } from "@/components/storage/storage-shared";
 import { BalancesTab } from "@/components/storage/balances-tab";
 import { MovementsTab } from "@/components/storage/movements-tab";
 import { LocationsTab } from "@/components/storage/locations-tab";
@@ -25,7 +26,18 @@ import { useAuth } from "@/lib/auth/use-auth";
 /*  only flash.                                                              */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-type StorageTabId = "balances" | "movements" | "locations";
+/*
+ * ONE PAGE, NO TABS.
+ *
+ * This was three tabs -- Balances, Movements, Locations -- and the landing tab
+ * was read-only, so recording anything began with finding the right tab first.
+ * Tabs hide things, and the rule for this whole feature is that nothing the
+ * coordinator needs should be hidden.
+ *
+ * So it reads top to bottom in the order the questions get asked: what have we
+ * got, what happened, and (folded away, because four of them change about once
+ * a year) where we keep it.
+ */
 
 export default function StoragePage() {
   const { canAccessRoute } = useAuth();
@@ -67,6 +79,12 @@ export default function StoragePage() {
     balancesError,
     balanceFilters,
     fetchBalances,
+    partTotals,
+    partTotalsLoading,
+    partTotalsRefreshing,
+    partTotalsError,
+    partTotalFilters,
+    fetchPartTotals,
     locations,
     locationsLoading,
     locationsError,
@@ -81,41 +99,21 @@ export default function StoragePage() {
     refetchAfterWrite,
   } = useStorage();
 
-  const [activeTab, setActiveTab] = useState<StorageTabId>("balances");
   const [negativeOnly, setNegativeOnly] = useState(false);
+  /** The per-shelf ledger view, folded away by default: the totals above answer
+   *  the usual question, and this answers "which shelf" when it comes up. */
+  const [showByLocation, setShowByLocation] = useState(false);
+  /** Four locations that change about once a year do not earn permanent space. */
+  const [showLocations, setShowLocations] = useState(false);
 
-  const visibleTabs = useMemo(() => {
-    const defs: {
-      id: StorageTabId;
-      label: string;
-      icon: LucideIcon;
-      visible: boolean;
-    }[] = [
-      // Balances first: it answers "what do we have", and it is the read-only
-      // surface that proves the whole pipe end to end.
-      { id: "balances", label: "Balances", icon: Scale, visible: canViewBalances },
-      {
-        id: "movements",
-        label: "Movements",
-        icon: ArrowLeftRight,
-        visible: canViewMovements,
-      },
-      { id: "locations", label: "Locations", icon: Warehouse, visible: canViewLocations },
-    ];
-    return defs.filter((d) => d.visible);
-  }, [canViewBalances, canViewMovements, canViewLocations]);
-
-  useEffect(() => {
-    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeTab)) {
-      setActiveTab(visibleTabs[0].id);
-    }
-  }, [visibleTabs, activeTab]);
+  /** Nothing at all is permitted -- distinct from "permitted but empty". */
+  const hasAnyAccess = canViewBalances || canViewMovements || canViewLocations;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Storage & Stock"
-        description="Locations, the stock movement ledger, and on-hand balances."
+        title="Storage"
+        description="What we have, where it is, and everything that has gone in or out."
       >
         <Button variant="outline" size="sm" onClick={refetchAll} disabled={isRefreshing}>
           <RefreshCw className={cn("me-2 h-4 w-4", isRefreshing && "animate-spin")} />
@@ -123,7 +121,7 @@ export default function StoragePage() {
         </Button>
       </PageHeader>
 
-      {visibleTabs.length === 0 ? (
+      {!hasAnyAccess ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <div className="space-y-1">
@@ -137,72 +135,126 @@ export default function StoragePage() {
       ) : (
         <>
           <StorageKpis
-            trackedPairs={balances?.meta.total ?? null}
+            trackedPairs={partTotals?.meta.total ?? null}
             locationCount={locations?.meta.total ?? null}
             movementCount={movements?.meta.total ?? null}
             negatives={negativeScan?.rows ?? null}
             scanned={negativeScan?.scanned}
             scanTotal={negativeScan?.total}
-            isLoading={balancesLoading && !balances}
+            isLoading={partTotalsLoading && !partTotals}
             onNegativesClick={() => {
+              // Negatives live per shelf, not per part -- a part can be fine
+              // overall and still be short somewhere -- so this opens the
+              // per-location view rather than filtering the totals.
               setNegativeOnly(true);
-              setActiveTab("balances");
+              setShowByLocation(true);
             }}
           />
 
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as StorageTabId)}
-            className="w-full"
-          >
-            <div className="-mx-1 overflow-x-auto px-1">
-              <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
-                {visibleTabs.map((tab) => (
-                  <TabsTrigger
-                    key={tab.id}
-                    value={tab.id}
-                    className="gap-2 whitespace-nowrap"
-                  >
-                    <tab.icon className="h-4 w-4" />
-                    <span>{tab.label}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </div>
+          {/* WHAT WE HAVE. One row per part, totalled across every location,
+              which is the number people came here for and the one the old
+              layout never showed. */}
+          {canViewBalances && (
+            <section className="space-y-3">
+              <h2 className="font-heading text-sm font-semibold">What we have</h2>
 
-            {canViewBalances && (
-              <TabsContent value="balances" className="mt-4">
-                <BalancesTab
-                  data={balances}
-                  isLoading={balancesLoading}
-                  error={balancesError}
-                  filters={balanceFilters}
-                  onFiltersChange={(f, page) => fetchBalances(f, page)}
-                  negativeOnly={negativeOnly}
-                  onNegativeOnlyChange={setNegativeOnly}
+              {partTotalsError && !partTotals ? (
+                <StorageErrorCard
+                  error={partTotalsError}
+                  onRetry={() => fetchPartTotals(partTotalFilters, partTotalFilters.page ?? 1)}
                 />
-              </TabsContent>
-            )}
-
-            {canViewMovements && (
-              <TabsContent value="movements" className="mt-4">
-                <MovementsTab
-                  data={movements}
-                  isLoading={movementsLoading}
-                  error={movementsError}
-                  filters={movementFilters}
-                  onFiltersChange={(f, page) => fetchMovements(f, page)}
-                  parts={parts}
-                  allLocations={allLocations}
-                  liveLocations={liveLocations}
-                  canCreate={canCreateMovement}
-                  onChanged={refetchAfterWrite}
+              ) : partTotalsLoading && !partTotals ? (
+                <StorageSkeleton />
+              ) : (
+                <PartStockList
+                  data={partTotals}
+                  isLoading={partTotalsLoading}
+                  isRefreshing={partTotalsRefreshing}
+                  page={partTotalFilters.page ?? 1}
+                  onPageChange={(page) => fetchPartTotals(partTotalFilters, page)}
+                  hideEmpty={Boolean(partTotalFilters.non_zero)}
+                  onHideEmptyChange={(value) =>
+                    fetchPartTotals({ ...partTotalFilters, non_zero: value }, 1)
+                  }
                 />
-              </TabsContent>
-            )}
+              )}
 
-            {canViewLocations && (
-              <TabsContent value="locations" className="mt-4">
+              {/* The per-shelf view, one press away. Folded rather than gone:
+                  "which shelf" is a real question, just not the first one. */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowByLocation((v) => !v)}
+                  aria-expanded={showByLocation}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {showByLocation ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3" />
+                  )}
+                  Show it shelf by shelf
+                </button>
+                {showByLocation && (
+                  <div className="mt-3">
+                    <BalancesTab
+                      data={balances}
+                      isLoading={balancesLoading}
+                      error={balancesError}
+                      filters={balanceFilters}
+                      onFiltersChange={(f, page) => fetchBalances(f, page)}
+                      negativeOnly={negativeOnly}
+                      onNegativeOnlyChange={setNegativeOnly}
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* WHAT HAPPENED. The ledger, and the buttons that add to it. */}
+          {canViewMovements && (
+            <section className="space-y-3">
+              <h2 className="font-heading text-sm font-semibold">What has gone in and out</h2>
+              <MovementsTab
+                data={movements}
+                isLoading={movementsLoading}
+                error={movementsError}
+                filters={movementFilters}
+                onFiltersChange={(f, page) => fetchMovements(f, page)}
+                parts={parts}
+                allLocations={allLocations}
+                liveLocations={liveLocations}
+                canCreate={canCreateMovement}
+                onChanged={refetchAfterWrite}
+              />
+            </section>
+          )}
+
+          {/* WHERE WE KEEP IT. Folded: about four of these, changing about once
+              a year. It is settings, sitting on the page rather than behind a
+              tab so it can still be found. */}
+          {canViewLocations && (
+            <section className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowLocations((v) => !v)}
+                aria-expanded={showLocations}
+                className="flex items-center gap-1.5 font-heading text-sm font-semibold transition-colors hover:text-muted-foreground"
+              >
+                {showLocations ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+                Where we keep things
+                {locations?.meta.total != null && (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({locations.meta.total})
+                  </span>
+                )}
+              </button>
+              {showLocations && (
                 <LocationsTab
                   data={locations}
                   isLoading={locationsLoading}
@@ -212,9 +264,10 @@ export default function StoragePage() {
                   canManage={canManageLocations}
                   onChanged={() => fetchLocations(locationFilters, locationFilters.page ?? 1)}
                 />
-              </TabsContent>
-            )}
-          </Tabs>
+              )}
+            </section>
+          )}
+
         </>
       )}
     </div>

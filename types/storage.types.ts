@@ -209,11 +209,82 @@ export interface StockMovementFilters {
   per_page?: number;
 }
 
+/**
+ * One row per PART, with the total across every location.
+ *
+ * The per-(part, location) listing is the honest shape of the data, but it
+ * means a part on four shelves appears four times and "how many do we have" is
+ * nowhere on screen. This cannot be derived on the client: the endpoint
+ * paginates, so summing a page is not summing a part.
+ */
+export interface PartStockTotal {
+  partId: number;
+  part: StockPartRef | null;
+  /** Across every location. Identical to Part::onHand() upstream, by construction. */
+  onHand: number;
+  /**
+   * What that stock cost, from the FIFO layers.
+   *
+   * NULL means "not computed", never "worth nothing" -- an older backend does
+   * not send it. Render an em dash, not a zero.
+   */
+  value: number | null;
+  averageUnitCost: number | null;
+  /**
+   * How much of `onHand` we have NO recorded price for. That stock contributes
+   * ZERO to `value`, so a non-zero figure here means the value is an
+   * understatement -- and saying so is the difference between a number that is
+   * incomplete and one that is wrong.
+   */
+  unknownCostQuantity: number | null;
+  /** How many shelves it sits on. */
+  locationCount: number;
+  /** The breakdown behind the total. `[]` when loaded and empty; the API always
+   *  sends it for this shape, so there is no "not loaded" case here. */
+  locations: PartStockLocation[];
+  updatedAt: string | null;
+}
+
+export interface PartStockLocation {
+  storageLocationId: number;
+  storageLocation: StockLocationRef | null;
+  /** CAN BE NEGATIVE, same as the ungrouped listing. Never clamp it. */
+  onHand: number;
+}
+
+export interface ApiPartStockTotal {
+  part_id: number;
+  part?: ApiStockPartRef | null;
+  quantity: string;
+  value?: string | null;
+  average_unit_cost?: string | null;
+  unknown_cost_quantity?: string | null;
+  location_count: number;
+  locations?: Array<{
+    storage_location_id: number;
+    storage_location?: ApiStockLocationRef | null;
+    quantity: string;
+  }> | null;
+  updated_at?: string | null;
+}
+
+export interface PartStockTotalListResponse {
+  data: PartStockTotal[];
+  links: LaravelPaginationLinks;
+  meta: LaravelPaginationMeta;
+}
+
 export interface StockBalanceFilters {
   part_ids?: number[];
   storage_location_ids?: number[];
-  /** Hides pairs that netted back to ZERO. Does NOT hide negatives. */
+  /**
+   * Hides pairs that netted back to ZERO. Does NOT hide negatives.
+   * With group_by=part it applies to the TOTAL instead: a part that is +5 on
+   * one shelf and -5 on another has nothing, and hides.
+   */
   non_zero?: boolean;
+  /** "part" rolls the pairs up into one row per part. */
+  group_by?: "part";
   page?: number;
   per_page?: number;
 }
@@ -351,7 +422,11 @@ export interface ApiStockBalance {
   part?: ApiStockPartRef | null;
   storage_location_id: number;
   storage_location?: ApiStockLocationRef | null;
-  on_hand: string;
+  // The wire field is `quantity`, NOT `on_hand` -- see StockService::presentBalance().
+  // This mirror used to declare `on_hand`, which made the transform read undefined
+  // and render every balance as 0 with TypeScript unable to see it. Do not rename.
+  quantity: string;
+  updated_at: string;
 }
 
 /**

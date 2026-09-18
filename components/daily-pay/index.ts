@@ -21,3 +21,9 @@ export { DailyPayLineDetailCard } from "./daily-pay-line-detail-card";
 export { DailyPayWarningsPanel } from "./daily-pay-warnings-panel";
 export { DailyPayGatheredBlock } from "./daily-pay-gathered-block";
 export { DailyPayRevisionViewer } from "./daily-pay-revision-viewer";
+
+/* ── v3: making the money legible ───────────────────────────────────────── */
+export { DailyPayBreakdown } from "./daily-pay-breakdown";
+export { PayShapePicker, OverriddenByFixedAmount } from "./pay-shape-picker";
+export { HoursSourceBadge, HoursSourceNote } from "./hours-source-badge";
+export { PayBasketPanel } from "./pay-basket-panel";

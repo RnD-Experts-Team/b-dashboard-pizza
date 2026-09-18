@@ -9,6 +9,9 @@ import { parseDirection } from "@/lib/storage/movement-types";
 import type {
   ApiPaginatedResponse,
   ApiStockBalance,
+  ApiPartStockTotal,
+  PartStockTotal,
+  PartStockTotalListResponse,
   ApiStockLocationRef,
   ApiStockMovement,
   ApiStockMovementLine,
@@ -267,7 +270,33 @@ function transformBalance(raw: ApiStockBalance): StockBalance {
     storageLocation: transformLocationRef(raw.storage_location),
     // NOT clamped. A negative is the trace of a reversal applied after the
     // stock was consumed, and it is a real signal that needs surfacing.
-    onHand: safeDecimal(raw.on_hand, 0),
+    onHand: safeDecimal(raw.quantity, 0),
+  };
+}
+
+function transformPartTotal(raw: ApiPartStockTotal): PartStockTotal {
+  return {
+    partId: raw.part_id,
+    part: transformPartRef(raw.part),
+    // Same guard as the ungrouped transform: a missing field must not render
+    // as a confident 0. `quantity` is the wire name -- NOT `on_hand`, which
+    // does not exist upstream and cost this feature every number on screen.
+    onHand: safeDecimal(raw.quantity, 0),
+    // optionalDecimal, NOT safeDecimal: a missing value must stay null so the
+    // UI renders an em dash. safeDecimal's 0 fallback is right for a quantity
+    // (a shelf really can hold none) and wrong for a value we were not told.
+    value: optionalDecimal(raw.value),
+    averageUnitCost: optionalDecimal(raw.average_unit_cost),
+    unknownCostQuantity: optionalDecimal(raw.unknown_cost_quantity),
+    locationCount: raw.location_count ?? 0,
+    // `[]` not null: this shape always sends the breakdown, so an empty array
+    // genuinely means "on no shelf", not "not loaded".
+    locations: (raw.locations ?? []).map((l) => ({
+      storageLocationId: l.storage_location_id,
+      storageLocation: transformLocationRef(l.storage_location),
+      onHand: safeDecimal(l.quantity, 0),
+    })),
+    updatedAt: raw.updated_at ?? null,
   };
 }
 
@@ -304,6 +333,9 @@ export function buildStockBalanceParams(f: StockBalanceFilters): URLSearchParams
   // Hides pairs that netted back to ZERO. It does NOT hide negatives — see
   // the Balances tab, where "negative only" is kept independent of this.
   if (f.non_zero) p.set("non_zero", "1");
+  // Rolls the (part, location) pairs up into one row per part. non_zero then
+  // applies to the total rather than to each pair.
+  if (f.group_by) p.set("group_by", f.group_by);
   if (f.page) p.set("page", String(f.page));
   if (f.per_page) p.set("per_page", String(f.per_page));
   return p;
@@ -524,6 +556,31 @@ export const storageService = {
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformBalance), meta, links };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * On hand per PART, totalled across locations, with the breakdown.
+   *
+   * Same endpoint, ?group_by=part. Use this wherever the question is "do we
+   * have any" -- which is nearly everywhere a human is asking. The ungrouped
+   * call above answers "which shelf", which is a different question.
+   */
+  async getPartStockTotals(
+    filters?: StockBalanceFilters,
+    signal?: AbortSignal
+  ): Promise<PartStockTotalListResponse> {
+    const token = requireToken();
+    const qs = buildStockBalanceParams({ ...(filters ?? {}), group_by: "part" }).toString();
+    try {
+      const res = await axios.get<ApiPaginatedResponse<ApiPartStockTotal>>(
+        `${BASE}/stock-balances${qs ? `?${qs}` : ""}`,
+        { headers: authHeaders(token), timeout: 15_000, signal }
+      );
+      const { meta, links } = transformPagination(res.data);
+      return { data: (res.data.data ?? []).map(transformPartTotal), meta, links };
     } catch (err) {
       return handleAxiosError(err);
     }

@@ -19,6 +19,7 @@ import {
   type SearchableSelectOption,
 } from "@/components/shared/searchable-select";
 import { MoneyField } from "./daily-pay-num-field";
+import { PayShapePicker } from "./pay-shape-picker";
 import { DailyPayNoteList } from "./daily-pay-note-list";
 import { DailyPayLineFieldset } from "./daily-pay-line-fieldset";
 import { DailyPayWarningsPanel } from "./daily-pay-warnings-panel";
@@ -183,21 +184,22 @@ export function DailyPayPaymentCard({
         </p>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Labour basis</Label>
-            <Select
-              value={payment.labourMode}
-              onValueChange={(v) => onPatch({ labourMode: v as PaymentLabourMode })}
+          {/*
+            HOW IS THIS ONE PAID? Asked as two buttons rather than a dropdown of
+            two jargon phrases, because it is the fork that decides what every
+            field below means -- and because there are genuinely two processes
+            here: our own technicians by the hour, and outside companies at an
+            agreed price. They shared one form, and that is how a lump sum came
+            to silently switch off hours that stayed on screen looking live.
+          */}
+          <div className="sm:col-span-2">
+            <PayShapePicker
+              value={payment.labourMode === "lumpSum" ? "fixed" : "hourly"}
+              onChange={(shape) =>
+                onPatch({ labourMode: (shape === "fixed" ? "lumpSum" : "sumLines") as PaymentLabourMode })
+              }
               disabled={disabled}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
-                <SelectItem value="sumLines">Per-store labour</SelectItem>
-                <SelectItem value="lumpSum">One lump sum for all stores</SelectItem>
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           {payment.labourMode === "lumpSum" ? (
@@ -207,7 +209,7 @@ export function DailyPayPaymentCard({
               onChange={(lumpSum) => onPatch({ lumpSum })}
               disabled={disabled}
               error={err("lump_sum")}
-              hint="Replaces the labour on every store line."
+              hint="Paid instead of the hours on every store, not on top of them."
               required
             />
           ) : (
@@ -217,7 +219,7 @@ export function DailyPayPaymentCard({
               onChange={(hourlyPaymentRate) => onPatch({ hourlyPaymentRate })}
               disabled={disabled}
               error={err("hourly_payment_rate")}
-              hint="Used by any store line without its own rate."
+              hint="Used for any store that does not set its own rate."
             />
           )}
 

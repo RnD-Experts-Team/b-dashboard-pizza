@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ClipboardList, ExternalLink, Loader2, Plus } from "lucide-react";
 
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -10,7 +10,7 @@ import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
 
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
@@ -25,7 +25,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
-import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1MaintenanceCard — Dashboard V1, category "quality", period "D".
@@ -65,6 +64,7 @@ export function V1MaintenanceCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
+  const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
@@ -77,10 +77,6 @@ export function V1MaintenanceCard({
   const abortRef = useRef<AbortController | null>(null);
 
   // Sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
-  const techLoadedRef = useRef(false);
 
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
@@ -120,18 +116,19 @@ export function V1MaintenanceCard({
     return () => abortRef.current?.abort();
   }, [fetchTickets]);
 
-  async function handleRowClick(ticket: Ticket) {
-    setSelectedTicketId(ticket.id);
-    setSheetOpen(true);
-    if (!techLoadedRef.current) {
-      techLoadedRef.current = true;
-      try {
-        const techs = await maintenanceTicketsService.getCatalogTechnicians();
-        setTechnicians(techs);
-      } catch {
-        // Sheet works without technicians for read-only viewing
-      }
-    }
+  /**
+   * Opens the ticket on its own page.
+   *
+   * This used to open the 75vw detail sheet. Everything that shows a ticket now
+   * goes to the same place -- two ways to view one thing is how a UI stops
+   * being learnable, and the page can be linked, bookmarked and refreshed.
+   *
+   * It no longer needs to lazy-load technicians either: the page loads its own
+   * catalog for the store the ticket turns out to be in, which this card cannot
+   * know before opening it.
+   */
+  function handleRowClick(ticket: Ticket) {
+    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}`);
   }
 
   // Load issues before opening so the combobox is already populated.
@@ -254,19 +251,6 @@ export function V1MaintenanceCard({
         </table>
       </V1Card>
 
-      {sheetOpen && storeId && (
-        <TicketDetailSheet
-          open={sheetOpen}
-          ticketId={selectedTicketId}
-          storeId={storeId}
-          tickets={tickets}
-          technicians={technicians}
-          onClose={() => {
-            setSheetOpen(false);
-            setSelectedTicketId(null);
-          }}
-        />
-      )}
 
       <CreateTicketDialog
         open={createOpen}

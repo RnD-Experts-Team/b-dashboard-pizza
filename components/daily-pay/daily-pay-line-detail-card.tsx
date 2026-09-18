@@ -2,6 +2,7 @@
 
 import { Paperclip, Receipt, StickyNote, Store, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { HoursSourceBadge } from "./hours-source-badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DailyPayGatheredBlock } from "./daily-pay-gathered-block";
 import {
@@ -149,11 +150,11 @@ export function DailyPayLineDetailCard({
             value={
               <span className="flex items-center gap-1.5">
                 {formatHours(hours)}
-                {line.hoursOverridden && (
-                  <Badge variant="outline" className="h-4 px-1 text-[9px] font-normal">
-                    Overridden
-                  </Badge>
-                )}
+                {/* Says which it is either way, not just when overridden.
+                    "Overridden" alone left the normal case unlabelled, so
+                    there was no way to tell "these track the attendance" from
+                    "nobody has looked at this". */}
+                <HoursSourceBadge line={line} />
               </span>
             }
             hint={

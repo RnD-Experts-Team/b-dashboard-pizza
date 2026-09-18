@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AttendanceTimeline } from "./attendance-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -181,6 +182,12 @@ const CLOCK_ROWS: ClockRowDef[] = [
 /* ────────────────────────────────────────────────────────────────────────── */
 
 interface AttendanceFieldsProps {
+  /**
+   * Offered as "Moving to another store". Omitted where there is nowhere to
+   * hand off to (a single-store form), which is why it is optional rather than
+   * a no-op default -- the button should not appear at all in that case.
+   */
+  onMoveToAnotherStore?: (closeCurrent: Partial<AttendanceFormValue>) => void;
   value: AttendanceFormValue;
   onChange: (patch: Partial<AttendanceFormValue>) => void;
   technicians: CatalogTechnician[];
@@ -205,6 +212,7 @@ export function AttendanceFields({
   fieldErrors = {},
   disabled,
   children,
+  onMoveToAnotherStore,
 }: AttendanceFieldsProps) {
   const preview = useMemo(() => computeAttendancePreview(value), [value]);
   const technicianOptions = useMemo<SearchableSelectOption[]>(
@@ -243,31 +251,30 @@ export function AttendanceFields({
 
       {children}
 
-      {/* The four clock pairs */}
-      <div className="space-y-2.5">
-        {CLOCK_ROWS.map((row) => (
-          <div key={row.label} className="space-y-1">
-            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {row.label}
-            </p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <DateTimePicker
-                value={value[row.startKey]}
-                onChange={(v) => onChange({ [row.startKey]: v } as Partial<AttendanceFormValue>)}
-                placeholder={row.startLabel}
-                disabled={disabled}
-              />
-              <DateTimePicker
-                value={value[row.endKey]}
-                onChange={(v) => onChange({ [row.endKey]: v } as Partial<AttendanceFormValue>)}
-                placeholder={row.endLabel}
-                disabled={disabled}
-              />
-            </div>
-            <FieldError message={fieldErrors[row.startKey] ?? fieldErrors[row.endKey]} />
-          </div>
-        ))}
-      </div>
+      {/*
+        The visit itself, as a timeline rather than eight fields.
+
+        This used to be four rows of paired pickers, all on screen from the
+        start. That reads as data entry, and the person who designed the system
+        said it confused everyone including him -- because the job is not
+        filling a form, it is narrating a day while it happens: he clocked in,
+        he drove, he arrived, he went for parts, he came back, he went on break.
+
+        The fields are unchanged. Only the way in is.
+      */}
+      <AttendanceTimeline
+        value={value}
+        onChange={(patch) => onChange(patch as Partial<AttendanceFormValue>)}
+        onMoveToAnotherStore={onMoveToAnotherStore}
+        disabled={disabled}
+      />
+
+      {/* Errors for the clock fields still surface, keyed the same way the 422
+          mapper writes them. */}
+      {CLOCK_ROWS.map((row) => {
+        const message = fieldErrors[row.startKey] ?? fieldErrors[row.endKey];
+        return message ? <FieldError key={row.label} message={message} /> : null;
+      })}
 
       {/* Live preview. The caption is load-bearing: it is what stops anyone
           treating this as authoritative. The read-only card always renders the

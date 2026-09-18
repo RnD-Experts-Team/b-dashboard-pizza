@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useMemo, useState } from "react";
+import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,18 +15,30 @@ import {
   TicketsFiltersBar,
   TicketsAnalyticsPanel,
   CreateTicketDialog,
-  TicketDetailSheet,
   CatalogManagementDialog,
 } from "@/components/maintenance-tickets";
 import { LogVisitDialog } from "@/components/maintenance-tickets/log-visit-dialog";
+import { TicketsSearch } from "@/components/maintenance-tickets/tickets-search";
+import { TicketsAttentionChips } from "@/components/maintenance-tickets/tickets-attention-chips";
+import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
+import {
+  parseFiltersFromUrl,
+  buildUrlFromFilters,
+} from "@/lib/maintenance-tickets/filters-url";
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
 import { useAuth } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
-import type { Ticket } from "@/types/maintenance-tickets.types";
+import type { Ticket, TicketsFilters } from "@/types/maintenance-tickets.types";
 
-export default function MaintenanceTicketsPage() {
+function MaintenanceTicketsPageInner() {
   const t = useTranslations("maintenanceTickets");
+  const router = useRouter();
+  const pathname = usePathname();
+  const routeParams = useParams();
+  const locale = (routeParams?.locale as string) ?? "en";
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
   const { canAccessRoute } = useAuth();
   const { overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
@@ -137,10 +150,53 @@ export default function MaintenanceTicketsPage() {
     analyticsError,
   } = useMaintenanceTickets({ storeId: hookStoreId });
 
+  // ─── URL <-> filters ──────────────────────────────────────────────────────
+  /**
+   * The URL is the shareable record of what the list is showing. Daily Pay
+   * already works this way; tickets did not, so a filtered view could not be
+   * linked, bookmarked, or survive a refresh -- and "look at this one" is the
+   * single most common thing the coordinator needs to say to someone else.
+   *
+   * Read once on mount only. Making this track `search` on every change would
+   * fight the store, which is still the owner of the live filter state; the URL
+   * here is a mirror that happens to be readable at load time.
+   */
+  const urlSeeded = useRef(false);
+  useEffect(() => {
+    if (urlSeeded.current) return;
+    urlSeeded.current = true;
+
+    const parsed = parseFiltersFromUrl(new URLSearchParams(search));
+    // Nothing in the URL means nothing to restore -- and crucially, no extra
+    // request on top of the one the hook already fires on mount.
+    if (Object.keys(parsed).length === 0) return;
+
+    applyFilters(parsed);
+    if (parsed.page && parsed.page > 1) goToPage(parsed.page);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Apply a filter change AND record it in the URL. Every filter entry point
+   *  on this page goes through here, so there is one writer. */
+  const applyFiltersAndSync = useCallback(
+    (next: TicketsFilters) => {
+      applyFilters(next);
+      const qs = buildUrlFromFilters(next);
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [applyFilters, router, pathname]
+  );
+
+  const handleSearchChange = useCallback(
+    (q: string) => {
+      // A new search always starts at page 1; keeping the old page would land
+      // on an empty page of a smaller result set.
+      applyFiltersAndSync({ ...filters, q: q || undefined, page: 1 });
+    },
+    [applyFiltersAndSync, filters]
+  );
+
   // ─── Dialog / sheet state ─────────────────────────────────────────────────
-  const [detailTicketId, setDetailTicketId] = useState<number | null>(null);
-  const [detailStoreId, setDetailStoreId] = useState<string>("");
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [logVisitOpen, setLogVisitOpen] = useState(false);
@@ -162,14 +218,16 @@ export default function MaintenanceTicketsPage() {
     }
   }
 
+  /**
+   * Opens the ticket on its own page instead of the 75vw sheet.
+   *
+   * The sheet was the reason everything inside it had to be collapsed -- there
+   * was no room -- and it could not be linked, bookmarked, or survive a
+   * refresh. Navigating costs a back-press; the rail on the ticket page carries
+   * the surrounding tickets so working a queue does not need one.
+   */
   function handleTicketClick(ticket: Ticket) {
-    setDetailTicketId(ticket.id);
-    setDetailStoreId(ticket.storeId ?? "");
-    setSheetOpen(true);
-  }
-
-  function handleSheetClose() {
-    setSheetOpen(false);
+    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}`);
   }
 
   function handleMutationSuccess() {
@@ -190,7 +248,6 @@ export default function MaintenanceTicketsPage() {
    */
   const catalogStoreId =
     activeStoreId ||
-    detailStoreId ||
     activeStores[0]?.storeId ||
     activeStores[0]?.id ||
     undefined;
@@ -211,11 +268,43 @@ export default function MaintenanceTicketsPage() {
         </Button>
       </PageHeader>
 
+      {/* Search — the primary way in. Put above the filter panel because it is
+          what the coordinator reaches for first: they remember the store, the
+          technician, or "the fryer thing", never the ticket id. */}
+      {hasSelection && (
+        <TicketsSearch
+          value={filters.q ?? ""}
+          onChange={handleSearchChange}
+          isSearching={isLoading || isRefreshing}
+        />
+      )}
+
+      {/* What needs me — plain counts the backend already computed over this
+          same filtered set, each one a toggle. No extra request. */}
+      {hasSelection && (
+        <TicketsAttentionChips
+          analytics={analytics}
+          filters={filters}
+          onFiltersChange={applyFiltersAndSync}
+          isLoading={analyticsLoading}
+          disabled={isLoading}
+        />
+      )}
+
+      {/* The basket follows you here from the ticket pages, so a trip picked up
+          across several tickets can be booked or logged in one go. Renders
+          nothing when empty. */}
+      <IssueBasketBar
+        technicians={catalogTechnicians}
+        onLogVisit={canLogVisit ? () => setLogVisitOpen(true) : undefined}
+        onChanged={handleMutationSuccess}
+      />
+
       {/* Filters bar — always shown once a selection is initialised */}
       {hasSelection && (
         <TicketsFiltersBar
           filters={filters}
-          onFiltersChange={applyFilters}
+          onFiltersChange={applyFiltersAndSync}
           onCreateClick={() => setCreateOpen(true)}
           onCatalogClick={() => setCatalogOpen(true)}
           canAccessCatalog={canAccessCatalog}
@@ -282,23 +371,6 @@ export default function MaintenanceTicketsPage() {
         onSuccess={handleMutationSuccess}
       />
 
-      {/* Ticket detail sheet */}
-      <TicketDetailSheet
-        open={sheetOpen}
-        ticketId={detailTicketId}
-        storeId={detailStoreId || activeStoreId || ""}
-        technicians={catalogTechnicians}
-        tickets={data?.data ?? []}
-        filters={filters}
-        onFiltersChange={applyFilters}
-        onClose={handleSheetClose}
-        currentPage={currentPage}
-        totalPages={data?.meta.lastPage}
-        isPageLoading={isLoading || isRefreshing}
-        onNextPage={() => goToPage(currentPage + 1)}
-        onPreviousPage={() => goToPage(currentPage - 1)}
-      />
-
       {/* Log a visit — one attendance entry across any number of tickets */}
       <LogVisitDialog
         open={logVisitOpen}
@@ -316,5 +388,17 @@ export default function MaintenanceTicketsPage() {
         storeId={catalogStoreId}
       />
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary to avoid opting the whole route
+ * into client-side rendering -- same wrapper Daily Pay uses for the same reason.
+ */
+export default function MaintenanceTicketsPage() {
+  return (
+    <Suspense fallback={<TicketsSkeleton />}>
+      <MaintenanceTicketsPageInner />
+    </Suspense>
   );
 }

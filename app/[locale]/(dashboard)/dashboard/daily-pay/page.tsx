@@ -6,6 +6,10 @@ import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
+import { PayBasketPanel } from "@/components/daily-pay/pay-basket-panel";
+import { usePayBasketStore } from "@/lib/store/pay-basket.store";
+import { entryFormFromBasket } from "@/lib/daily-pay/from-basket";
+import type { EntryFormState } from "@/lib/daily-pay/entry-form-state";
 import {
   DailyPaySkeleton,
   DailyPayEmptyState,
@@ -131,6 +135,10 @@ function DailyPayPageInner() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /** Set when the dialog was opened from the pay basket, so it opens filled in. */
+  const [seededState, setSeededState] = useState<EntryFormState | null>(null);
+  const groupForSheet = usePayBasketStore((s) => s.groupForSheet);
+  const clearPayBasket = usePayBasketStore((s) => s.clear);
   const [editId, setEditId] = useState<number | null>(null);
 
   // ── URL writers ─────────────────────────────────────────────────────────
@@ -165,7 +173,32 @@ function DailyPayPageInner() {
 
   function handleCreate() {
     setEditId(null);
+    // An empty sheet: nothing was collected, so nothing is assumed.
+    setSeededState(null);
     setDialogOpen(true);
+  }
+
+  /**
+   * Opens the dialog filled in from the pay basket.
+   *
+   * The basket is cleared only once the sheet actually saves -- clearing on
+   * open would lose the collected work if the coordinator closed the dialog to
+   * go and check something, which is exactly when they would.
+   */
+  function handleStartSheetFromBasket() {
+    setEditId(null);
+    setSeededState(entryFormFromBasket(groupForSheet()));
+    setDialogOpen(true);
+  }
+
+  function handleDialogSuccess() {
+    // Saved: the collected work is now on a real sheet, so the staging area has
+    // done its job.
+    if (seededState) {
+      clearPayBasket();
+      setSeededState(null);
+    }
+    refetch();
   }
 
   function handleEdit(entry: DailyPayEntry) {
@@ -199,6 +232,9 @@ function DailyPayPageInner() {
           Refresh
         </Button>
       </PageHeader>
+
+      {/* Work marked for payment from the tickets. Renders nothing when empty. */}
+      <PayBasketPanel onStartSheet={handleStartSheetFromBasket} disabled={isLoading} />
 
       <DailyPayFiltersBar
         filters={filters}
@@ -247,11 +283,12 @@ function DailyPayPageInner() {
       {/* Create / edit dialog */}
       <DailyPayEntryDialog
         open={dialogOpen}
+        initialState={seededState}
         entryId={editId}
         stores={stores}
         technicians={technicians}
         onClose={() => setDialogOpen(false)}
-        onSuccess={handleSuccess}
+        onSuccess={handleDialogSuccess}
       />
     </div>
   );

@@ -1190,18 +1190,6 @@
     "title": "Maintenance Tickets",
     "description": "Track and manage maintenance tickets for your store.",
     "refresh": "Refresh",
-    "groupBy": {
-      "label": "Group by",
-      "none": "No grouping",
-      "status": "Status",
-      "priority": "Priority",
-      "technician": "Technician (Attendance)",
-      "part": "Part",
-      "assigned_technician": "Assigned Technician",
-      "pay": "Pay Entry",
-      "warranty": "Warranty",
-      "diagnosis": "Troubleshooting"
-    },
     "common": {
       "cancel": "Cancel",
       "save": "Save",
