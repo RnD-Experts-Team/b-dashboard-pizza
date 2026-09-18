@@ -10,3 +10,5 @@ export {
   SignedQty,
   PaginationBar,
 } from "./storage-shared";
+export { PartStockList } from "./part-stock-list";
+export { LocationSlots } from "./location-slots";

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { ClipboardList, ExternalLink, Loader2, Plus } from "lucide-react";
 
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -24,6 +24,7 @@ import { fmtDate, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { TicketPreviewSheet } from "@/components/maintenance-tickets/ticket-preview-sheet";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -64,7 +65,6 @@ export function V1MaintenanceCard({
   span?: 1 | 2 | 3;
   className?: string;
 }) {
-  const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
@@ -76,9 +76,11 @@ export function V1MaintenanceCard({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Sheet state
+  // ── Preview sheet ────────────────────────────────────────────────────
 
   // Create dialog state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewId, setPreviewId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -117,18 +119,17 @@ export function V1MaintenanceCard({
   }, [fetchTickets]);
 
   /**
-   * Opens the ticket on its own page.
+   * Opens a read-only preview, not the full page.
    *
-   * This used to open the 75vw detail sheet. Everything that shows a ticket now
-   * goes to the same place -- two ways to view one thing is how a UI stops
-   * being learnable, and the page can be linked, bookmarked and refreshed.
-   *
-   * It no longer needs to lazy-load technicians either: the page loads its own
-   * catalog for the store the ticket turns out to be in, which this card cannot
-   * know before opening it.
+   * This card is a showcase: you glance to see whether something needs you. It
+   * briefly navigated to the ticket page instead, which threw away the glance
+   * and made you find your way back. The preview carries the list of tickets
+   * alongside, so you can walk them without closing it, and links out to the
+   * page for anything you actually want to change.
    */
   function handleRowClick(ticket: Ticket) {
-    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}`);
+    setPreviewId(ticket.id);
+    setPreviewOpen(true);
   }
 
   // Load issues before opening so the combobox is already populated.
@@ -251,6 +252,16 @@ export function V1MaintenanceCard({
         </table>
       </V1Card>
 
+
+      <TicketPreviewSheet
+        open={previewOpen}
+        ticketId={previewId}
+        tickets={tickets}
+        onClose={() => {
+          setPreviewOpen(false);
+          setPreviewId(null);
+        }}
+      />
 
       <CreateTicketDialog
         open={createOpen}

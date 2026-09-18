@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LocationSlots } from "./location-slots";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -369,7 +370,11 @@ export function LocationsTab({
                       {expanded === location.id && (
                         <tr key={`${location.id}-detail`}>
                           <td colSpan={4} className="border-t bg-muted/20 p-3">
-                            <EntityNotesAttachments
+                            {/* Where inside this location things sit. The whole point of
+                      the location row expanding. */}
+                  <LocationSlots locationId={location.id} canManage={canManage} />
+
+                  <EntityNotesAttachments
                               entityPath={entityPaths.storageLocation(location.id)}
                               notes={location.notes ?? []}
                               attachments={location.attachments ?? []}

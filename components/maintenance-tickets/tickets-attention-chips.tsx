@@ -9,11 +9,20 @@ import type { IssueStatus, TicketsAnalytics, TicketsFilters } from "@/types/main
 /**
  * The "what needs me" row.
  *
- * Every figure here is a plain fact the backend already computed over the SAME
- * filtered set the list is showing -- it rides along on ?include_analytics=1,
- * so this row costs no extra request. Nothing here is a judgement about
- * urgency: this system has no due dates and no SLA, so "overdue" means only
- * that a date the coordinator themselves picked has passed.
+ * THE NUMBERS HOLD STILL. They come from `baseAnalytics`, which is computed
+ * over the store's whole set and is never narrowed by the chips. Reading them
+ * off the scoped `analytics` meant pressing one chip rescoped the counts
+ * feeding all the others, and they read 0 -- which looks like "there is nothing
+ * waiting" when it actually means "nothing waiting ALSO matches what you just
+ * pressed". A map you navigate by has to stay still while you navigate.
+ *
+ * The chip you pressed additionally shows how many of its own are currently on
+ * screen, as "7 of 12" -- so the filtering is visible without the other numbers
+ * moving.
+ *
+ * Nothing here is a judgement about urgency: this system has no due dates and
+ * no SLA, so "overdue" means only that a date the coordinator themselves picked
+ * has passed.
  *
  * Each chip is a toggle. Pressing it narrows the list; pressing it again
  * restores. That is the whole interaction -- no menu, no Apply.
@@ -31,6 +40,9 @@ interface Chip {
   label: string;
   hint: string;
   count: number | null;
+  /** How many of `count` the current filters are showing. Rendered only while
+   *  this chip is the active one. */
+  shown: number | null;
   icon: typeof CalendarClock;
   /** Colour only where it carries meaning -- overdue is the one that is bad. */
   tone?: "warning";
@@ -51,6 +63,9 @@ function withoutKeys(f: TicketsFilters, keys: Array<keyof TicketsFilters>): Tick
 }
 
 interface TicketsAttentionChipsProps {
+  /** Unnarrowed by the chips. THE source of every count shown here. */
+  baseAnalytics: TicketsAnalytics | null;
+  /** Narrowed by whatever is filtered. Used ONLY for the "of N" on the active chip. */
   analytics: TicketsAnalytics | null;
   filters: TicketsFilters;
   onFiltersChange: (filters: TicketsFilters) => void;
@@ -60,6 +75,7 @@ interface TicketsAttentionChipsProps {
 }
 
 export function TicketsAttentionChips({
+  baseAnalytics,
   analytics,
   filters,
   onFiltersChange,
@@ -76,7 +92,15 @@ export function TicketsAttentionChips({
     return todayForApi(d);
   }, []);
 
+  /** Off the UNNARROWED figures, always. */
   const pendingCount = useMemo(() => {
+    const row = baseAnalytics?.issues.statusBreakdown.find((b) => b.status === "pending");
+    return row?.count ?? null;
+  }, [baseAnalytics]);
+
+  /** The same figure over what is currently on screen -- only ever rendered on
+   *  the chip that is doing the narrowing. */
+  const shownPendingCount = useMemo(() => {
     const row = analytics?.issues.statusBreakdown.find((b) => b.status === "pending");
     return row?.count ?? null;
   }, [analytics]);
@@ -89,6 +113,7 @@ export function TicketsAttentionChips({
       // No count: "how many are scheduled today" is a different query from the
       // one the list just ran, and inventing a number here would be a guess.
       count: null,
+      shown: null,
       icon: CalendarClock,
       isActive: (f) => f.assigned_from === today && f.assigned_to === today,
       apply: (f) => ({ ...withoutKeys(f, ["assigned_from", "assigned_to", "issue_statuses"]), assigned_from: today, assigned_to: today }),
@@ -98,7 +123,8 @@ export function TicketsAttentionChips({
       id: "overdue",
       label: "Date has passed",
       hint: "Still open, and the day you booked has already gone by",
-      count: analytics?.attention.overdue ?? null,
+      count: baseAnalytics?.attention.overdue ?? null,
+      shown: analytics?.attention.overdue ?? null,
       icon: AlarmClock,
       tone: "warning",
       isActive: (f) => f.assigned_to === yesterday && sameSet(f.issue_statuses, LIVE_STATUSES),
@@ -109,7 +135,8 @@ export function TicketsAttentionChips({
       id: "waiting",
       label: "Waiting",
       hint: "Paused on purpose -- parts, access, or the branch",
-      count: analytics?.attention.stuck ?? null,
+      count: baseAnalytics?.attention.stuck ?? null,
+      shown: analytics?.attention.stuck ?? null,
       icon: PauseCircle,
       isActive: (f) => sameSet(f.issue_statuses, ["waiting"]),
       apply: (f) => ({ ...withoutKeys(f, ["assigned_from", "assigned_to"]), issue_statuses: ["waiting"] }),
@@ -120,6 +147,7 @@ export function TicketsAttentionChips({
       label: "Nobody booked yet",
       hint: "Reported, but no technician and no date",
       count: pendingCount,
+      shown: shownPendingCount,
       icon: Inbox,
       isActive: (f) => sameSet(f.issue_statuses, ["pending"]),
       apply: (f) => ({ ...withoutKeys(f, ["assigned_from", "assigned_to"]), issue_statuses: ["pending"] }),
@@ -171,7 +199,11 @@ export function TicketsAttentionChips({
                     : "bg-muted text-foreground"
                 )}
               >
-                {chip.count}
+                {/* "7 of 12" only on the chip doing the narrowing, and only
+                    when the two genuinely differ -- otherwise it is noise. */}
+                {active && chip.shown != null && chip.shown !== chip.count
+                  ? `${chip.shown} of ${chip.count}`
+                  : chip.count}
               </span>
             )}
             {/* A dash, not a zero. Before the first analytics response lands we
@@ -183,9 +215,9 @@ export function TicketsAttentionChips({
         );
       })}
 
-      {analytics?.attention.asOf && (
+      {baseAnalytics?.attention.asOf && (
         <span className="text-[11px] text-muted-foreground">
-          as of {analytics.attention.asOf}
+          as of {baseAnalytics.attention.asOf}
         </span>
       )}
     </div>

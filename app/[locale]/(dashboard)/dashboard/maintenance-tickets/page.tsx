@@ -17,10 +17,10 @@ import {
   CreateTicketDialog,
   CatalogManagementDialog,
 } from "@/components/maintenance-tickets";
-import { LogVisitDialog } from "@/components/maintenance-tickets/log-visit-dialog";
 import { TicketsSearch } from "@/components/maintenance-tickets/tickets-search";
 import { TicketsAttentionChips } from "@/components/maintenance-tickets/tickets-attention-chips";
 import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
+import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-panel";
 import {
   parseFiltersFromUrl,
   buildUrlFromFilters,
@@ -54,14 +54,6 @@ function MaintenanceTicketsPageInner() {
     service: "Maintenance",
     method: "POST",
     path: "/stores/placeholder/tickets/placeholder/cancel",
-  });
-
-  /** Logging a visit posts to the GLOBAL attendance endpoint, not a
-   *  ticket-scoped one — hence no storeId on the probe. */
-  const canLogVisit = canAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/attendance-entries",
   });
 
   /** True when the current user may fetch all stores via GET /tickets */
@@ -146,6 +138,8 @@ function MaintenanceTicketsPageInner() {
     catalogTechnicians,
     reloadCatalog,
     analytics,
+    baseAnalytics,
+    baseAnalyticsLoading,
     analyticsLoading,
     analyticsError,
   } = useMaintenanceTickets({ storeId: hookStoreId });
@@ -199,7 +193,6 @@ function MaintenanceTicketsPageInner() {
   // ─── Dialog / sheet state ─────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const [logVisitOpen, setLogVisitOpen] = useState(false);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   /** Called only when the user clicks Apply in the store filter — not per checkbox click. */
@@ -283,10 +276,11 @@ function MaintenanceTicketsPageInner() {
           same filtered set, each one a toggle. No extra request. */}
       {hasSelection && (
         <TicketsAttentionChips
+          baseAnalytics={baseAnalytics}
           analytics={analytics}
           filters={filters}
           onFiltersChange={applyFiltersAndSync}
-          isLoading={analyticsLoading}
+          isLoading={baseAnalyticsLoading}
           disabled={isLoading}
         />
       )}
@@ -296,9 +290,12 @@ function MaintenanceTicketsPageInner() {
           nothing when empty. */}
       <IssueBasketBar
         technicians={catalogTechnicians}
-        onLogVisit={canLogVisit ? () => setLogVisitOpen(true) : undefined}
         onChanged={handleMutationSuccess}
       />
+
+      {/* Where a collected visit gets logged. This is what the Log visit button
+          became -- same capability, without having to find the issues again. */}
+      <VisitBasketPanel technicians={catalogTechnicians} onLogged={handleMutationSuccess} />
 
       {/* Filters bar — always shown once a selection is initialised */}
       {hasSelection && (
@@ -314,8 +311,6 @@ function MaintenanceTicketsPageInner() {
           selectedStoreIds={pageStoreSelection ?? []}
           onStoreApply={handleStoreApply}
           loadedCreators={(data?.data ?? []).map((ticket) => ticket.creator)}
-          canLogVisit={canLogVisit}
-          onLogVisitClick={() => setLogVisitOpen(true)}
         />
       )}
 
@@ -323,7 +318,7 @@ function MaintenanceTicketsPageInner() {
       {hasSelection && (
         <TicketsAnalyticsPanel
           analytics={analytics}
-          isLoading={analyticsLoading}
+          isLoading={baseAnalyticsLoading}
           error={analyticsError}
         />
       )}
@@ -369,15 +364,6 @@ function MaintenanceTicketsPageInner() {
         stores={!isStoreMode ? activeStores : undefined}
         onClose={() => setCreateOpen(false)}
         onSuccess={handleMutationSuccess}
-      />
-
-      {/* Log a visit — one attendance entry across any number of tickets */}
-      <LogVisitDialog
-        open={logVisitOpen}
-        technicians={catalogTechnicians}
-        storeNumber={activeStoreId ?? null}
-        onClose={() => setLogVisitOpen(false)}
-        onSuccess={refetch}
       />
 
       {/* Catalog management dialog */}

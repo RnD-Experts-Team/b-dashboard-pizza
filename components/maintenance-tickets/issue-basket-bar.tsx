@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Loader2, ShoppingBasket, X, UserPlus, Flag, Clock } from "lucide-react";
+import { Clock, Flag, Loader2, ShoppingBasket, UserPlus, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,17 +18,23 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import { useIssueBasketStore } from "@/lib/store/issue-basket.store";
+import { usePayBasketStore } from "@/lib/store/pay-basket.store";
+import { useVisitBasketStore } from "@/lib/store/visit-basket.store";
 import { DatePicker, TimePicker } from "./form-bits";
 import type { CatalogTechnician, IssueStatus } from "@/types/maintenance-tickets.types";
 
 /**
  * Acts on everything in the basket at once.
  *
- * The three bulk jobs the coordinator actually has, and nothing else: book
- * somebody, move statuses, and log one visit. Each is a single upstream request
- * covering every issue in the basket, because those endpoints already take many
- * ids -- creating an assignment even flips each issue to `assigned` and records
- * an audit row per issue in the same transaction.
+ * Two of these WRITE: booking somebody and moving statuses. Each is a single
+ * upstream request covering every issue in the basket, because those endpoints
+ * already take many ids -- creating an assignment even flips each issue to
+ * `assigned` and records an audit row per issue in the same transaction.
+ *
+ * The other two MOVE, they do not write: "Pay for these" and "Add to a visit"
+ * tip the selection into the pay basket and the visit basket, where each gets
+ * finished and reviewed. Money and hours are never written by a button press on
+ * a selection -- you see what you are about to record first.
  *
  * Renders nothing when the basket is empty, so it costs no screen space until
  * there is something to do.
@@ -45,8 +51,6 @@ const BULK_STATUSES: { value: IssueStatus; label: string }[] = [
 
 interface IssueBasketBarProps {
   technicians: CatalogTechnician[];
-  /** Opens the existing cross-ticket visit dialog with the basket preloaded. */
-  onLogVisit?: () => void;
   /** Refetch whatever is on screen after a bulk write. */
   onChanged?: () => void;
   className?: string;
@@ -54,13 +58,14 @@ interface IssueBasketBarProps {
 
 export function IssueBasketBar({
   technicians,
-  onLogVisit,
   onChanged,
   className,
 }: IssueBasketBarProps) {
   const items = useIssueBasketStore((s) => s.items);
   const remove = useIssueBasketStore((s) => s.remove);
   const clear = useIssueBasketStore((s) => s.clear);
+  const addToPay = usePayBasketStore((s) => s.add);
+  const addToVisit = useVisitBasketStore((s) => s.add);
 
   const [mode, setMode] = useState<Mode>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,10 +126,54 @@ export function IssueBasketBar({
     }
   }
 
+  /** Tips the selection into the pay basket. The work basket empties, because
+   *  the issues have moved on to the next stage rather than being in two
+   *  places at once. */
+  function sendToPay() {
+    for (const item of items) {
+      addToPay({
+        issueId: item.issueId,
+        ticketId: item.ticketId,
+        storeId: item.storeId || null,
+        otherStore: null,
+        title: item.title,
+        technicianId: null,
+        technicianName: null,
+      });
+    }
+    toast.success(
+      `${items.length === 1 ? "1 job" : `${items.length} jobs`} marked for payment. Finish the sheet on Daily Pay.`
+    );
+    clear();
+  }
+
+  function sendToVisit() {
+    for (const item of items) {
+      addToVisit({
+        issueId: item.issueId,
+        ticketId: item.ticketId,
+        storeId: item.storeId || null,
+        otherStore: null,
+        title: item.title,
+      });
+    }
+    toast.success(
+      `${items.length === 1 ? "1 job" : `${items.length} jobs`} added to the visit. Log the hours when you are ready.`
+    );
+    clear();
+  }
+
   const canAssign = techIds.length > 0 && Boolean(date);
 
+  // Its own identity, distinct from the pay basket's -- they are different
+  // collections doing different jobs and must not look alike.
   return (
-    <div className={cn("rounded-lg border border-primary/40 bg-primary/5 p-3", className)}>
+    <div
+      className={cn(
+        "rounded-xl border border-s-2 border-s-[var(--color-chart-3)] bg-card p-3 shadow-sm",
+        className
+      )}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <ShoppingBasket className="h-4 w-4 text-primary" aria-hidden="true" />
         <span className="text-sm font-medium">
@@ -154,12 +203,17 @@ export function IssueBasketBar({
             <Flag className="me-1.5 h-3.5 w-3.5" />
             Change the status
           </Button>
-          {onLogVisit && (
-            <Button size="sm" variant="outline" onClick={onLogVisit} disabled={isSubmitting}>
-              <Clock className="me-1.5 h-3.5 w-3.5" />
-              Log one visit
-            </Button>
-          )}
+          {/* These two hand the selection to another basket rather than
+              writing anything. The work basket is a transient selection; the
+              other two are staging areas you review before committing. */}
+          <Button size="sm" variant="outline" onClick={sendToPay} disabled={isSubmitting}>
+            <Wallet className="me-1.5 h-3.5 w-3.5" />
+            Pay for these
+          </Button>
+          <Button size="sm" variant="outline" onClick={sendToVisit} disabled={isSubmitting}>
+            <Clock className="me-1.5 h-3.5 w-3.5" />
+            Add to a visit
+          </Button>
           <Button size="sm" variant="ghost" onClick={clear} disabled={isSubmitting}>
             Empty
           </Button>

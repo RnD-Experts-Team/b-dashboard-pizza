@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { formatTimestamp } from "@/lib/utils/date-display";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
@@ -10,6 +10,7 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
+import { TicketPreviewSheet } from "@/components/maintenance-tickets/ticket-preview-sheet";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
 import {
   Card,
@@ -110,7 +111,6 @@ function TicketsSkeleton() {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export function RecentMaintenanceTable() {
-  const router = useRouter();
   const params = useParams();
   const locale = (params?.locale as string) || "en";
   const { selectedStore } = useSelectedStoreStore();
@@ -123,9 +123,11 @@ export function RecentMaintenanceTable() {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Detail sheet ─────────────────────────────────────────────────────
+  // ── Preview sheet ────────────────────────────────────────────────────
 
   // ── Create dialog ────────────────────────────────────────────────────
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewId, setPreviewId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -165,18 +167,17 @@ export function RecentMaintenanceTable() {
 
   // ── Open detail sheet ────────────────────────────────────────────────
   /**
-   * Opens the ticket on its own page.
+   * Opens a read-only preview, not the full page.
    *
-   * This used to open the 75vw detail sheet. Everything that shows a ticket now
-   * goes to the same place -- two ways to view one thing is how a UI stops
-   * being learnable, and the page can be linked, bookmarked and refreshed.
-   *
-   * It no longer needs to lazy-load technicians either: the page loads its own
-   * catalog for the store the ticket turns out to be in, which this card cannot
-   * know before opening it.
+   * This card is a showcase: you glance to see whether something needs you. It
+   * briefly navigated to the ticket page instead, which threw away the glance
+   * and made you find your way back. The preview carries the list of tickets
+   * alongside, so you can walk them without closing it, and links out to the
+   * page for anything you actually want to change.
    */
   function handleRowClick(ticket: Ticket) {
-    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}`);
+    setPreviewId(ticket.id);
+    setPreviewOpen(true);
   }
 
   // ── Open create dialog ───────────────────────────────────────────────
@@ -369,9 +370,18 @@ export function RecentMaintenanceTable() {
         </CardContent>
       </Card>
 
-      {/* Detail sheet — opens when a row is clicked */}
 
       {/* Create dialog */}
+      <TicketPreviewSheet
+        open={previewOpen}
+        ticketId={previewId}
+        tickets={tickets}
+        onClose={() => {
+          setPreviewOpen(false);
+          setPreviewId(null);
+        }}
+      />
+
       <CreateTicketDialog
         open={createOpen}
         storeId={storeId}

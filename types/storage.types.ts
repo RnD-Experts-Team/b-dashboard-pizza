@@ -158,6 +158,8 @@ export interface StockBalance {
   part: StockPartRef | null;
   storageLocationId: number;
   storageLocation: StockLocationRef | null;
+  /** Where inside that location it sits. Null means nobody has said. */
+  storageSlot: StorageSlot | null;
   /**
    * CAN BE NEGATIVE — only ever as the trace of a reversal applied after the
    * stock had already been consumed. Render it; never clamp to zero. It is a
@@ -248,6 +250,9 @@ export interface PartStockTotal {
 export interface PartStockLocation {
   storageLocationId: number;
   storageLocation: StockLocationRef | null;
+  /** Where inside that location it sits. Null means nobody has said -- which is
+   *  not the same as "nowhere", so render it as unknown rather than a blank. */
+  storageSlot: StorageSlot | null;
   /** CAN BE NEGATIVE, same as the ungrouped listing. Never clamp it. */
   onHand: number;
 }
@@ -263,6 +268,7 @@ export interface ApiPartStockTotal {
   locations?: Array<{
     storage_location_id: number;
     storage_location?: ApiStockLocationRef | null;
+    storage_slot?: ApiStorageSlot | null;
     quantity: string;
   }> | null;
   updated_at?: string | null;
@@ -287,6 +293,37 @@ export interface StockBalanceFilters {
   group_by?: "part";
   page?: number;
   per_page?: number;
+}
+
+/**
+ * A named place inside a storage location -- a shelf, a bay, a drawer.
+ *
+ * NOT a stock dimension. Quantities stay per (part, location); a slot records
+ * where a part LIVES, so you can walk over and pick it up. Each location
+ * defines its own, so a van and a depot need not share a vocabulary.
+ */
+export interface StorageSlot {
+  id: number;
+  storageLocationId: number;
+  name: string;
+  code: string | null;
+  sortOrder: number;
+  deletedAt: string | null;
+}
+
+export interface ApiStorageSlot {
+  id: number;
+  storage_location_id: number;
+  name: string;
+  code?: string | null;
+  sort_order?: number | null;
+  deleted_at?: string | null;
+}
+
+export interface CreateStorageSlotPayload {
+  name: string;
+  code?: string;
+  sort_order?: number;
 }
 
 export interface StorageLocationFilters {
@@ -422,6 +459,7 @@ export interface ApiStockBalance {
   part?: ApiStockPartRef | null;
   storage_location_id: number;
   storage_location?: ApiStockLocationRef | null;
+  storage_slot?: ApiStorageSlot | null;
   // The wire field is `quantity`, NOT `on_hand` -- see StockService::presentBalance().
   // This mirror used to declare `on_hand`, which made the transform read undefined
   // and render every balance as 0 with TypeScript unable to see it. Do not rename.

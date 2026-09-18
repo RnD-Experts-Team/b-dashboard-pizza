@@ -47,11 +47,20 @@ export function PartStockList({
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
-  const rows = (data?.data ?? []).filter((row) =>
-    search
-      ? (row.part?.name ?? "").toLowerCase().includes(search.toLowerCase())
-      : true
-  );
+  const rows = (data?.data ?? []).filter((row) => {
+    if (!search) return true;
+    const needle = search.toLowerCase();
+    // Searches the slot too -- "which shelf was that on" is exactly as common a
+    // question as "have we got any", and both start from this box.
+    return (
+      (row.part?.name ?? "").toLowerCase().includes(needle) ||
+      row.locations.some(
+        (loc) =>
+          (loc.storageSlot?.name ?? "").toLowerCase().includes(needle) ||
+          (loc.storageLocation?.name ?? "").toLowerCase().includes(needle)
+      )
+    );
+  });
 
   function toggle(partId: number) {
     setExpanded((prev) => {
@@ -68,9 +77,9 @@ export function PartStockList({
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Find a part on this page…"
+          placeholder="Find a part, a shelf, or a location…"
           className="h-9 max-w-xs text-sm"
-          aria-label="Find a part on this page"
+          aria-label="Find a part, a shelf, or a location on this page"
         />
         <div className="flex items-center gap-2">
           <Checkbox
@@ -208,11 +217,21 @@ function PartRow({
           )}
         </td>
         <td className={cn(TD, "text-muted-foreground")}>
-          {row.locationCount === 0
-            ? "—"
-            : row.locationCount === 1
-              ? (row.locations[0]?.storageLocation?.name ?? "1 place")
-              : `${row.locationCount} places`}
+          {row.locationCount === 0 ? (
+            "—"
+          ) : row.locationCount === 1 ? (
+            <span className="flex flex-wrap items-center gap-1">
+              <span>{row.locations[0]?.storageLocation?.name ?? "1 place"}</span>
+              {/* The whole point of slots: at a glance, where to walk to. */}
+              {row.locations[0]?.storageSlot && (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-foreground">
+                  {row.locations[0].storageSlot.name}
+                </span>
+              )}
+            </span>
+          ) : (
+            `${row.locationCount} places`
+          )}
         </td>
       </tr>
 
@@ -225,8 +244,18 @@ function PartRow({
                   key={loc.storageLocationId}
                   className="flex items-center justify-between gap-4 text-xs"
                 >
-                  <span className="text-muted-foreground">
+                  <span className="min-w-0 text-muted-foreground">
                     {loc.storageLocation?.name ?? `Location #${loc.storageLocationId}`}
+                    {/* Where exactly, when somebody has said. A blank is not
+                        "nowhere" -- it is "nobody has told us", which is worth
+                        distinguishing so it can be filled in. */}
+                    {loc.storageSlot ? (
+                      <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-foreground">
+                        {loc.storageSlot.name}
+                      </span>
+                    ) : (
+                      <span className="ms-1.5 text-[10px] opacity-60">shelf not recorded</span>
+                    )}
                   </span>
                   <span
                     className={cn(

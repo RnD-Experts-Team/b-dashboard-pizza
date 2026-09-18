@@ -294,6 +294,14 @@ function transformTicket(raw: ApiTicket): Ticket {
     attachments: (raw.attachments ?? []).map(transformAttachment),
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     issueCount: raw.issues_count ?? raw.issues?.length ?? 0,
+    // The list already eager-loads these upstream, so carrying them costs
+    // nothing and lets the rail put a ticket in a basket without opening it.
+    issues: (raw.issues ?? []).map((i) => ({
+      id: i.id,
+      title: i.display_title ?? i.catalog_issue?.title ?? i.title ?? `Issue #${i.id}`,
+      status: i.status ? transformEnumField(i.status) : null,
+      priority: i.priority ? transformEnumField(i.priority) : null,
+    })),
     issueTitles: (raw.issues ?? [])
       .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)
       .filter((t): t is string => !!t),

@@ -31,8 +31,26 @@ interface MaintenanceTicketsState {
   analyticsLoading: boolean;
   analyticsError: TicketsErrorState | null;
 
+  /**
+   * The same figures, over the store's WHOLE set -- deliberately not narrowed
+   * by whatever is currently filtered.
+   *
+   * The attention chips are a map you navigate by, so their numbers have to
+   * hold still. Reading them off `analytics` meant pressing one chip rescoped
+   * the counts feeding all the others, and they read 0 -- which looks like
+   * "there is nothing waiting" when it means "nothing waiting ALSO matches the
+   * filter you just applied".
+   *
+   * Scoped by store and by the search box only. A search is the user narrowing
+   * what they are looking at on purpose; a chip is them asking a question about
+   * the whole set.
+   */
+  baseAnalytics: TicketsAnalytics | null;
+  baseAnalyticsLoading: boolean;
+
   fetchTickets: (storeId?: string, filters?: TicketsFilters, page?: number) => Promise<void>;
   fetchAnalytics: (storeId?: string, filters?: TicketsFilters) => Promise<void>;
+  fetchBaseAnalytics: (storeId?: string) => Promise<void>;
   setMode: (mode: "store" | "global") => void;
   setScopedStoreIds: (ids: string[] | null) => void;
   goToPage: (page: number) => void;
@@ -49,6 +67,10 @@ let _abortController: AbortController | null = null;
 // Separate controller so pagination (which only touches fetchTickets) never
 // cancels an in-flight analytics request, and vice versa.
 let _analyticsAbortController: AbortController | null = null;
+// And a third, because the base counts are a SECOND analytics request. Sharing
+// the one above would mean each call aborted the other and whichever lost the
+// race would silently never arrive.
+let _baseAnalyticsAbortController: AbortController | null = null;
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Store                                                                   */
@@ -69,6 +91,8 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
     analytics: null,
     analyticsLoading: false,
     analyticsError: null,
+    baseAnalytics: null,
+    baseAnalyticsLoading: false,
 
     fetchTickets: async (storeId?: string, filters?: TicketsFilters, page = 1) => {
       // Cancel any in-flight request
@@ -137,6 +161,55 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
           };
         }
         set({ error: errorState, isLoading: false, isRefreshing: false });
+      }
+    },
+
+    /**
+     * The chips' stable numbers.
+     *
+     * Same endpoint, but sent WITHOUT the filter set -- only the store scope and
+     * the search box. Its own abort controller and its own slot, so it and the
+     * scoped request cannot cancel or overwrite each other.
+     *
+     * No error slot on purpose: if this fails the chips render an em dash and
+     * the page carries on. It is a navigation aid, not the content.
+     */
+    fetchBaseAnalytics: async (storeId?: string) => {
+      if (_baseAnalyticsAbortController) _baseAnalyticsAbortController.abort();
+      const controller = new AbortController();
+      _baseAnalyticsAbortController = controller;
+
+      const mode = get().mode;
+      if (mode === "store" && !storeId) {
+        set({ baseAnalytics: null, baseAnalyticsLoading: false });
+        return;
+      }
+
+      const scopedStoreIds = get().scopedStoreIds;
+      const q = get().filters.q;
+      const baseFilters: TicketsFilters = {
+        ...(q ? { q } : {}),
+        ...(mode === "global" && scopedStoreIds?.length ? { stores: scopedStoreIds } : {}),
+      };
+
+      set({ baseAnalyticsLoading: true });
+
+      try {
+        const result =
+          mode === "global"
+            ? await maintenanceTicketsService.getGlobalTicketsAnalytics(baseFilters, controller.signal)
+            : await maintenanceTicketsService.getTicketsAnalytics(
+                storeId as string,
+                baseFilters,
+                controller.signal
+              );
+
+        if (controller.signal.aborted || _baseAnalyticsAbortController !== controller) return;
+
+        set({ baseAnalytics: result, baseAnalyticsLoading: false });
+      } catch {
+        if (controller.signal.aborted || _baseAnalyticsAbortController !== controller) return;
+        set({ baseAnalyticsLoading: false });
       }
     },
 
@@ -224,14 +297,22 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
     },
 
     setFilters: (filters: TicketsFilters) => {
-      const { mode, lastStoreId, fetchTickets, fetchAnalytics } = get();
+      const { mode, lastStoreId, fetchTickets, fetchAnalytics, fetchBaseAnalytics } = get();
+      // The base counts are scoped by the search box and nothing else, so they
+      // only need refetching when THAT changed. A chip press must not move them
+      // -- that is the whole point of keeping them in a separate slot.
+      const searchChanged = (get().filters.q ?? "") !== (filters.q ?? "");
+
       set({ filters });
+
       if (mode === "global") {
         fetchTickets(undefined, filters, 1);
         fetchAnalytics(undefined, filters);
+        if (searchChanged) fetchBaseAnalytics(undefined);
       } else if (lastStoreId) {
         fetchTickets(lastStoreId, filters, 1);
         fetchAnalytics(lastStoreId, filters);
+        if (searchChanged) fetchBaseAnalytics(lastStoreId);
       }
     },
 
@@ -240,6 +321,7 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
     reset: () => {
       if (_abortController) _abortController.abort();
       if (_analyticsAbortController) _analyticsAbortController.abort();
+      if (_baseAnalyticsAbortController) _baseAnalyticsAbortController.abort();
       set({
         data: null,
         isLoading: false,
@@ -251,6 +333,8 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
         lastStoreId: null,
         scopedStoreIds: null,
         analytics: null,
+        baseAnalytics: null,
+        baseAnalyticsLoading: false,
         analyticsLoading: false,
         analyticsError: null,
       });

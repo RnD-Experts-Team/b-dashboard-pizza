@@ -2,10 +2,11 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, SlidersHorizontal, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
+import { PageSection, SectionBreak, SectionGroup } from "@/components/shared/page-section";
 import { PayBasketPanel } from "@/components/daily-pay/pay-basket-panel";
 import { usePayBasketStore } from "@/lib/store/pay-basket.store";
 import { entryFormFromBasket } from "@/lib/daily-pay/from-basket";
@@ -233,18 +234,33 @@ function DailyPayPageInner() {
         </Button>
       </PageHeader>
 
-      {/* Work marked for payment from the tickets. Renders nothing when empty. */}
-      <PayBasketPanel onStartSheet={handleStartSheetFromBasket} disabled={isLoading} />
+      {/*
+        GROUP OF TWO, then the break, then the sheets.
 
-      <DailyPayFiltersBar
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        onCreateClick={handleCreate}
-        stores={stores}
-        technicians={technicians}
-        filledByOptions={filledByOptions}
-        disabled={isLoading}
-      />
+        Note this page has three blocks, not five -- the grouping is 2-then-1
+        rather than 2-then-3. The count is not the point; the ASYMMETRY is. An
+        even alternation would look the same from everywhere and tell you
+        nothing, which is the state we are leaving.
+      */}
+      <SectionGroup>
+        {/* Work marked for payment from the tickets. Renders nothing when
+            empty, so on most days this section is simply absent. */}
+        <PayBasketPanel onStartSheet={handleStartSheetFromBasket} disabled={isLoading} />
+
+        <PageSection rank="secondary" icon={SlidersHorizontal} title="Narrow it down">
+          <DailyPayFiltersBar
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onCreateClick={handleCreate}
+            stores={stores}
+            technicians={technicians}
+            filledByOptions={filledByOptions}
+            disabled={isLoading}
+          />
+        </PageSection>
+      </SectionGroup>
+
+      <SectionBreak />
 
       {/* Loading skeleton (first load) */}
       {isLoading && !data && <DailyPaySkeleton />}
@@ -257,16 +273,18 @@ function DailyPayPageInner() {
       {/* Empty */}
       {!isLoading && !error && data && data.data.length === 0 && <DailyPayEmptyState />}
 
-      {/* Table */}
+      {/* The sheets themselves -- the one PRIMARY block on the page. */}
       {data && data.data.length > 0 && (
-        <DailyPayTable
-          data={data}
-          isRefreshing={isRefreshing}
-          currentPage={currentPage}
-          onPageChange={handlePageChange}
-          onRowClick={handleRowClick}
-          onEdit={handleEdit}
-        />
+        <PageSection rank="primary" accent={5} icon={Wallet} title="Pay sheets">
+          <DailyPayTable
+            data={data}
+            isRefreshing={isRefreshing}
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            onRowClick={handleRowClick}
+            onEdit={handleEdit}
+          />
+        </PageSection>
       )}
 
       {/* Detail sheet */}

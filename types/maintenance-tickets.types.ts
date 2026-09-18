@@ -426,6 +426,14 @@ export interface TicketIssue {
   updatedAt: string;
 }
 
+/** The slim issue shape the ticket LIST carries. */
+export interface TicketIssueSummary {
+  id: number;
+  title: string;
+  status: EnumField | null;
+  priority: EnumField | null;
+}
+
 export interface Ticket {
   id: number;
   storeId: string | null;
@@ -437,6 +445,17 @@ export interface Ticket {
   attachments: TicketAttachment[];
   creator: UserRef | null;
   issueCount: number;
+  /**
+   * The issues themselves, as far as the LIST endpoint reports them.
+   *
+   * Enough to tick a ticket into a basket without opening it -- a basket holds
+   * issues, and the rail only knows tickets. The index already eager-loads
+   * `ticketIssues`, so this costs nothing extra.
+   *
+   * `[]` when the API sent none. Do not confuse with the full `TicketIssue`
+   * from the detail endpoint, which carries the whole history.
+   */
+  issues: TicketIssueSummary[];
   /** Issue titles from the list response (may be empty if API doesn't include them). */
   issueTitles: string[];
   createdAt: string;
@@ -1078,7 +1097,14 @@ export interface ApiTicket {
   attachments?: ApiTicketAttachment[];
   creator?: { id: number; name: string; email: string } | null;
   issues_count?: number;
-  issues?: Array<{ id: number; display_title?: string | null; title?: string | null; catalog_issue?: { title?: string | null } | null }>;
+  issues?: Array<{
+    id: number;
+    display_title?: string | null;
+    title?: string | null;
+    catalog_issue?: { title?: string | null } | null;
+    status?: ApiEnumField | null;
+    priority?: ApiEnumField | null;
+  }>;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

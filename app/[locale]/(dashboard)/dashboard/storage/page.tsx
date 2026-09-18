@@ -1,10 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Lock, RefreshCw } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChevronDown,
+  ChevronRight,
+  Lock,
+  Package,
+  RefreshCw,
+  Warehouse,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
+import { PageSection, SectionBreak, SectionGroup } from "@/components/shared/page-section";
 import { StorageKpis } from "@/components/storage/storage-kpis";
 import { PartStockList } from "@/components/storage/part-stock-list";
 import { StorageSkeleton, StorageErrorCard } from "@/components/storage/storage-shared";
@@ -151,12 +160,14 @@ export default function StoragePage() {
             }}
           />
 
-          {/* WHAT WE HAVE. One row per part, totalled across every location,
-              which is the number people came here for and the one the old
-              layout never showed. */}
+          {/*
+            GROUP OF TWO: what we have, and what has moved. The two questions
+            you come to this page with. Both PRIMARY, each with its own accent,
+            so they are told apart at a glance rather than read.
+          */}
+          <SectionGroup>
           {canViewBalances && (
-            <section className="space-y-3">
-              <h2 className="font-heading text-sm font-semibold">What we have</h2>
+            <PageSection rank="primary" accent={1} icon={Package} title="What we have">
 
               {partTotalsError && !partTotals ? (
                 <StorageErrorCard
@@ -209,13 +220,17 @@ export default function StoragePage() {
                   </div>
                 )}
               </div>
-            </section>
+            </PageSection>
           )}
 
           {/* WHAT HAPPENED. The ledger, and the buttons that add to it. */}
           {canViewMovements && (
-            <section className="space-y-3">
-              <h2 className="font-heading text-sm font-semibold">What has gone in and out</h2>
+            <PageSection
+              rank="primary"
+              accent={2}
+              icon={ArrowLeftRight}
+              title="What has gone in and out"
+            >
               <MovementsTab
                 data={movements}
                 isLoading={movementsLoading}
@@ -228,28 +243,37 @@ export default function StoragePage() {
                 canCreate={canCreateMovement}
                 onChanged={refetchAfterWrite}
               />
-            </section>
+            </PageSection>
           )}
+          </SectionGroup>
 
-          {/* WHERE WE KEEP IT. Folded: about four of these, changing about once
-              a year. It is settings, sitting on the page rather than behind a
-              tab so it can still be found. */}
+          {/* THE BREAK. Everything above is what you came for; everything below
+              is housekeeping. Landing anywhere on this page, which side of this
+              line you are on tells you which. */}
+          <SectionBreak />
+
+
+          {/* WHERE WE KEEP IT. TERTIARY: about four of these, changing about
+              once a year. It is settings, sitting on the page rather than
+              behind a tab so it can still be found -- but it does not compete
+              with the two sections above. */}
           {canViewLocations && (
-            <section className="space-y-3">
+            <PageSection rank="tertiary">
               <button
                 type="button"
                 onClick={() => setShowLocations((v) => !v)}
                 aria-expanded={showLocations}
-                className="flex items-center gap-1.5 font-heading text-sm font-semibold transition-colors hover:text-muted-foreground"
+                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
               >
                 {showLocations ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
+                  <ChevronDown className="h-3 w-3" />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
+                  <ChevronRight className="h-3 w-3" />
                 )}
+                <Warehouse className="h-3 w-3" aria-hidden="true" />
                 Where we keep things
                 {locations?.meta.total != null && (
-                  <span className="text-xs font-normal text-muted-foreground">
+                  <span className="font-normal normal-case tracking-normal">
                     ({locations.meta.total})
                   </span>
                 )}
@@ -265,7 +289,7 @@ export default function StoragePage() {
                   onChanged={() => fetchLocations(locationFilters, locationFilters.page ?? 1)}
                 />
               )}
-            </section>
+            </PageSection>
           )}
 
         </>

@@ -33,8 +33,15 @@ export function PayBasketPanel({ onStartSheet, disabled, className }: PayBasketP
 
   const summary = describeBasket(items);
 
+  // Its own identity. This wrapper used to be byte-identical to the ticket
+  // basket's, so the two read as the same component on two pages.
   return (
-    <div className={cn("rounded-lg border border-primary/40 bg-primary/5 p-3", className)}>
+    <div
+      className={cn(
+        "rounded-xl border border-s-2 border-s-[var(--color-chart-4)] bg-card p-3 shadow-sm",
+        className
+      )}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
         <span className="text-sm font-medium">

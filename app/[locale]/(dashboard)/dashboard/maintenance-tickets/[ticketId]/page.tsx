@@ -1,19 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, RefreshCw, Store as StoreIcon, Hash, ChevronRight, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  ClipboardList,
+  Clock,
+  Hash,
+  History,
+  Paperclip,
+  RefreshCw,
+  Store as StoreIcon,
+  Wallet,
+  Wrench,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
+import { PageSection, SectionBreak, SectionGroup } from "@/components/shared/page-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import { useMaintenanceTicketsCatalogStore } from "@/lib/store/maintenance-tickets-catalog.store";
-import { useMaintenanceTicketsStore } from "@/lib/store/maintenance-tickets.store";
 import { useTicketDraft, EMPTY_ISSUE_DRAFT } from "@/lib/hooks/use-ticket-draft";
 import { TicketsErrorCard } from "@/components/maintenance-tickets/tickets-error";
 import { StatusChip, PriorityChip } from "@/components/maintenance-tickets/ticket-chips";
@@ -23,8 +34,11 @@ import { IssueRecordList } from "@/components/maintenance-tickets/issue-record-l
 import { EntityNotesAttachments } from "@/components/maintenance-tickets/entity-extras";
 import { IssueStatusHistory } from "@/components/maintenance-tickets/issue-status-history";
 import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
+import { TicketRail } from "@/components/maintenance-tickets/ticket-rail";
 import { useIssueBasketStore } from "@/lib/store/issue-basket.store";
 import { usePayBasketStore } from "@/lib/store/pay-basket.store";
+import { useVisitBasketStore } from "@/lib/store/visit-basket.store";
+import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-panel";
 import { Checkbox } from "@/components/ui/checkbox";
 import { entityPaths } from "@/lib/api/services/maintenance-tickets.service";
 import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
@@ -60,10 +74,6 @@ export default function TicketPage() {
   const [error, setError] = useState<TicketsErrorState | null>(null);
 
   const { technicians, loadCatalog } = useMaintenanceTicketsCatalogStore();
-  /** The surrounding tickets, when the user arrived from the list. Populated
-   *  only in that case -- fetching the whole list to draw a rail on a page
-   *  reached by link would cost a request nobody asked for. */
-  const listData = useMaintenanceTicketsStore((s) => s.data);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -116,8 +126,6 @@ export default function TicketPage() {
   useEffect(() => {
     if (storeNumber) loadCatalog(storeNumber);
   }, [storeNumber, loadCatalog]);
-
-  const railTickets = useMemo(() => listData?.data ?? [], [listData]);
 
   if (!Number.isFinite(ticketId)) {
     return (
@@ -173,8 +181,12 @@ export default function TicketPage() {
           >
             <TicketSummary ticket={ticket} issueCount={issues.length} />
 
-            {/* Renders nothing until something is picked up. */}
+            {/* Each renders nothing until something is put in it. Three
+                different collections doing three different jobs, so each has
+                its own accent rather than all three looking alike. */}
             <IssueBasketBar technicians={technicians} onChanged={() => void load("refresh")} />
+            <VisitBasketPanel technicians={technicians} onLogged={() => void load("refresh")} />
+            <PayBasketPeek locale={locale} />
 
             {issues.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
@@ -202,11 +214,37 @@ export default function TicketPage() {
             ))}
           </div>
 
-          {railTickets.length > 1 && (
-            <TicketRail locale={locale} tickets={railTickets} activeId={ticket.id} />
-          )}
+          {/* Fetches its own list, so a pasted link shows it too. */}
+          <TicketRail locale={locale} activeId={ticket.id} storeId={storeNumber || undefined} />
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A one-line reminder that work is waiting on a pay sheet.
+ *
+ * The pay basket lives on the Daily Pay page; from here it was invisible, so
+ * you could mark six things and forget. Not a second control surface -- it
+ * says how much is there and links to where it gets finished.
+ */
+function PayBasketPeek({ locale }: { locale: string }) {
+  const items = usePayBasketStore((s) => s.items);
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[var(--color-chart-4)]/10 px-3 py-2 text-xs">
+      <Wallet className="h-3.5 w-3.5 text-[var(--color-chart-4)]" aria-hidden="true" />
+      <span>
+        {items.length === 1 ? "1 job is" : `${items.length} jobs are`} waiting on a pay sheet
+      </span>
+      <Link
+        href={`/${locale}/dashboard/daily-pay`}
+        className="ms-auto text-[var(--color-chart-4)] hover:underline"
+      >
+        Go and make it
+      </Link>
     </div>
   );
 }
@@ -277,13 +315,29 @@ function IssueCard({
   const payItems = usePayBasketStore((s) => s.items);
   const togglePay = usePayBasketStore((s) => s.toggle);
   const markedForPay = payItems.some((i) => i.issueId === issue.id);
+
+  const visitItems = useVisitBasketStore((s) => s.items);
+  const toggleVisit = useVisitBasketStore((s) => s.toggle);
+  const onThisVisit = visitItems.some((i) => i.issueId === issue.id);
   /** The payee, when the issue already knows. One technician is the common
    *  case; with several we leave it blank rather than guess which one is owed. */
   const soleTechnician = issue.technicians.length === 1 ? issue.technicians[0] : null;
 
   return (
-    <section className="space-y-4 rounded-lg border bg-card p-4">
-      <header className="space-y-2">
+    /*
+      The 2-then-3 inside one issue.
+
+        identity + what's been recorded     <- what this is
+        ------------------------------ break
+        what you can do + notes + history   <- what you do about it
+
+      Scrolling a ticket with four issues on it, the break tells you which half
+      of an issue you are in without reading anything.
+    */
+    <section className="rounded-xl border bg-card p-4">
+      {/* Identity. The card's own head, so it carries the rule rather than
+          being a section of its own. */}
+      <header className="space-y-2 border-b pb-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Pick it up to act on it together with issues from other tickets --
               one booking, one visit, one status change across the lot. */}
@@ -344,6 +398,32 @@ function IssueCard({
             <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
             {markedForPay ? "Marked for payment" : "Pay for this"}
           </button>
+
+          {/* The same gesture for hours. Deliberately identical in shape to the
+              button beside it -- one thing to learn, used twice. */}
+          <button
+            type="button"
+            onClick={() =>
+              toggleVisit({
+                issueId: issue.id,
+                ticketId,
+                storeId: storeId || null,
+                otherStore,
+                title,
+              })
+            }
+            aria-pressed={onThisVisit}
+            title="Adds it to the visit. Nothing is saved until you log the hours."
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+              onThisVisit
+                ? "border-[var(--color-chart-2)] bg-[var(--color-chart-2)]/10 text-foreground"
+                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+            )}
+          >
+            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+            {onThisVisit ? "On this visit" : "Add to visit"}
+          </button>
         </div>
         {issue.description && (
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">{issue.description}</p>
@@ -355,18 +435,28 @@ function IssueCard({
         )}
       </header>
 
-      <IssueRecordList
-        issue={issue}
-        storeId={storeId}
-        ticketId={ticketId}
-        onCorrect={handleCorrect}
-        onChanged={onChanged}
-      />
+      <SectionGroup className="mt-3">
+        <PageSection rank="secondary" icon={ClipboardList} title="What has been recorded">
+          <IssueRecordList
+            issue={issue}
+            storeId={storeId}
+            ticketId={ticketId}
+            onCorrect={handleCorrect}
+            onChanged={onChanged}
+          />
+        </PageSection>
+      </SectionGroup>
 
-      {/* Never collapsed. Every action on screen, always. */}
-      <IssueActionGrid issue={issue} activeAction={activeAction} onSelect={setActiveAction} />
+      <SectionBreak />
 
-      {activeAction && (
+      <SectionGroup>
+      {/* Never collapsed. Every action on screen, always. The one PRIMARY
+          section in the card, because it is what you opened the ticket to do. */}
+      <PageSection rank="primary" accent={3} icon={Wrench} title="What you can do">
+        <IssueActionGrid issue={issue} activeAction={activeAction} onSelect={setActiveAction} />
+
+        {activeAction && (
+          <div className="mt-3">
         <IssueActionHost
           action={activeAction}
           issue={issue}
@@ -381,56 +471,27 @@ function IssueCard({
           onClose={() => setActiveAction(null)}
           onSuccess={onChanged}
         />
-      )}
+          </div>
+        )}
+      </PageSection>
 
-      <EntityNotesAttachments
-        entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
-        notes={issue.notes}
-        attachments={issue.attachments}
-        onSuccess={onChanged}
-        allowNoteType={false}
-      />
+      <PageSection rank="secondary" icon={Paperclip} title="Notes and files">
+        <EntityNotesAttachments
+          entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
+          notes={issue.notes}
+          attachments={issue.attachments}
+          onSuccess={onChanged}
+          allowNoteType={false}
+        />
+      </PageSection>
 
-      <IssueStatusHistory changes={issue.statusChanges} />
+      {/* TERTIARY: reference, not work. Borderless and tinted so it reads as
+          the floor of the card rather than another thing to act on. */}
+      <PageSection rank="tertiary" icon={History}>
+        <IssueStatusHistory changes={issue.statusChanges} />
+      </PageSection>
+      </SectionGroup>
     </section>
-  );
-}
-
-function TicketRail({
-  locale,
-  tickets,
-  activeId,
-}: {
-  locale: string;
-  tickets: Ticket[];
-  activeId: number;
-}) {
-  return (
-    <aside className="hidden w-56 shrink-0 lg:block">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Nearby tickets
-      </p>
-      <nav className="space-y-1">
-        {tickets.map((t) => (
-          <Link
-            key={t.id}
-            href={`/${locale}/dashboard/maintenance-tickets/${t.id}`}
-            className={cn(
-              "flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs transition-colors",
-              t.id === activeId
-                ? "border-primary bg-primary/10 text-foreground"
-                : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
-            )}
-          >
-            <span className="tabular-nums">#{t.id}</span>
-            <span className="truncate">
-              {t.otherStore ?? t.storeId ?? "—"}
-            </span>
-            {t.id !== activeId && <ChevronRight className="ms-auto h-3 w-3 shrink-0" />}
-          </Link>
-        ))}
-      </nav>
-    </aside>
   );
 }
 

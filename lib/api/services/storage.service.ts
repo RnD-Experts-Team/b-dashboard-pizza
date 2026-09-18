@@ -10,6 +10,9 @@ import type {
   ApiPaginatedResponse,
   ApiStockBalance,
   ApiPartStockTotal,
+  ApiStorageSlot,
+  StorageSlot,
+  CreateStorageSlotPayload,
   PartStockTotal,
   PartStockTotalListResponse,
   ApiStockLocationRef,
@@ -268,9 +271,24 @@ function transformBalance(raw: ApiStockBalance): StockBalance {
     part: transformPartRef(raw.part),
     storageLocationId: raw.storage_location_id,
     storageLocation: transformLocationRef(raw.storage_location),
+    storageSlot: transformSlot(raw.storage_slot),
     // NOT clamped. A negative is the trace of a reversal applied after the
     // stock was consumed, and it is a real signal that needs surfacing.
     onHand: safeDecimal(raw.quantity, 0),
+  };
+}
+
+function transformSlot(raw: ApiStorageSlot | null | undefined): StorageSlot | null {
+  // null means "nobody has said which shelf", which is a real and different
+  // answer from any placeholder we could invent. Keep it null.
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    storageLocationId: raw.storage_location_id,
+    name: raw.name,
+    code: raw.code ?? null,
+    sortOrder: raw.sort_order ?? 0,
+    deletedAt: raw.deleted_at ?? null,
   };
 }
 
@@ -294,6 +312,7 @@ function transformPartTotal(raw: ApiPartStockTotal): PartStockTotal {
     locations: (raw.locations ?? []).map((l) => ({
       storageLocationId: l.storage_location_id,
       storageLocation: transformLocationRef(l.storage_location),
+      storageSlot: transformSlot(l.storage_slot),
       onHand: safeDecimal(l.quantity, 0),
     })),
     updatedAt: raw.updated_at ?? null,
@@ -581,6 +600,76 @@ export const storageService = {
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformPartTotal), meta, links };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /* ── Slots ───────────────────────────────────────────────────────────── */
+
+  /** The named places inside one location. */
+  async getStorageSlots(
+    locationId: number,
+    signal?: AbortSignal
+  ): Promise<StorageSlot[]> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: ApiStorageSlot[] }>(
+        `${BASE}/storage-locations/${locationId}/slots`,
+        { headers: authHeaders(token), timeout: 15_000, signal }
+      );
+      return (res.data.data ?? [])
+        .map(transformSlot)
+        .filter((s): s is StorageSlot => s !== null);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async createStorageSlot(
+    locationId: number,
+    payload: CreateStorageSlotPayload
+  ): Promise<StorageSlot> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiStorageSlot }>(
+        `${BASE}/storage-locations/${locationId}/slots`,
+        payload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformSlot(res.data.data) as StorageSlot;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Slots are editable, unlike locations -- a mislabelled shelf is not worth
+   *  retiring and recreating. */
+  async updateStorageSlot(
+    locationId: number,
+    slotId: number,
+    payload: CreateStorageSlotPayload
+  ): Promise<StorageSlot> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiStorageSlot }>(
+        `${BASE}/storage-locations/${locationId}/slots/${slotId}`,
+        payload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformSlot(res.data.data) as StorageSlot;
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async deleteStorageSlot(locationId: number, slotId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`${BASE}/storage-locations/${locationId}/slots/${slotId}`, {
+        headers: authHeaders(token),
+        timeout: 15_000,
+      });
     } catch (err) {
       return handleAxiosError(err);
     }
