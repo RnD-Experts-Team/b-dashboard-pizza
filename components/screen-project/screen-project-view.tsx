@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut, Check, Maximize, Minimize } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, MonitorOff, HelpCircle, LogOut, Check, Maximize, Minimize } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { useScreenProjectSelectionStore } from "@/lib/store/screen-project-selec
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PageGuide } from "@/components/shared/page-guide";
 import { createScreenProjectGuideSteps } from "./screen-project-guide-config";
 
@@ -223,7 +224,17 @@ export function ScreenProjectView() {
 
   const [myMicMuted, setMyMicMuted] = useState(true);
   const [myVideoOff, setMyVideoOff] = useState(true);
-  const [myScreenShareEnabled, setMyScreenShareEnabled] = useState(false);
+  /**
+   * room_name of the station the screen share is pinned to, or null.
+   * The share stays with the station it started on, so switching the main
+   * screen never disturbs it (and never triggers a fresh browser picker).
+   */
+  const [sharingRoomId, setSharingRoomId] = useState<string | null>(null);
+  /** True while the browser's share picker is open, so the control can't be double-fired. */
+  const [sharePending, setSharePending] = useState(false);
+  /** Mirror of sharingRoomId, so async reports from a tile can be matched against the latest value. */
+  const sharingRoomIdRef = useRef<string | null>(null);
+  sharingRoomIdRef.current = sharingRoomId;
   const [myCamVisible, setMyCamVisible] = useState(false);
   /** Self-view size multiplier, 1 = base size, capped at SELF_VIEW_MAX_SCALE. */
   const [selfViewScale, setSelfViewScale] = useState(1);
@@ -440,6 +451,22 @@ export function ScreenProjectView() {
       ? nonDriveThruStations.filter((s) => selectedStationIds.includes(s.id))
       : nonDriveThruStations;
 
+  /** The station currently receiving the screen share, if it's still on screen. */
+  const sharingStation = sharingRoomId
+    ? visibleStations.find((s) => s.room_name === sharingRoomId) ?? null
+    : null;
+  /** Name of the station currently in the main slot — the default share target. */
+  const mainStationName = visibleStations.find((s) => s.room_name === mainId)?.name ?? null;
+
+  // Drop the share if the station it was pinned to is no longer on screen
+  // (deselected or deleted), so it can't keep running with no way to stop it.
+  useEffect(() => {
+    if (sharingRoomId && !sharingStation) {
+      setSharingRoomId(null);
+      setSharePending(false);
+    }
+  }, [sharingRoomId, sharingStation]);
+
   const hasSidePanel = visibleStations.length > 1;
   const anyAudioEnabled = visibleStations.some((s) => screenStates[s.room_name]?.audioEnabled);
   const anyMyCamEnabled = visibleStations.some((s) => screenStates[s.room_name]?.myCamEnabled);
@@ -597,12 +624,33 @@ export function ScreenProjectView() {
     }));
   }, []);
 
-  const handleToggleScreenShare = useCallback(() => {
-    setMyScreenShareEnabled((prev) => {
-      const next = !prev;
-      if (next) setMyVideoOff(true); // turn camera off when screen share starts
-      return next;
-    });
+  /** Start (or move) the share on a given station. */
+  const handleStartShare = useCallback((roomName: string) => {
+    setSharePending(true);
+    setSharingRoomId(roomName);
+  }, []);
+
+  const handleStopShare = useCallback(() => {
+    setSharePending(false);
+    setSharingRoomId(null);
+  }, []);
+
+  /** The share is really publishing now — only then take the camera down. */
+  const handleShareStarted = useCallback(() => {
+    setSharePending(false);
+    setMyVideoOff(true); // camera and screen share are mutually exclusive
+  }, []);
+
+  /**
+   * The share failed to start, was cancelled in the picker, or ended on its own.
+   * Only clear when the report belongs to the station we currently believe is
+   * sharing — while moving a share, the old station's teardown arrives after
+   * the new one is already pinned and must not wipe it out.
+   */
+  const handleShareStopped = useCallback((roomName: string) => {
+    if (sharingRoomIdRef.current !== roomName) return; // stale teardown from a station we already moved off
+    setSharingRoomId(null);
+    setSharePending(false);
   }, []);
 
   const handleCamToAllToggle = useCallback(() => {
@@ -1105,8 +1153,9 @@ export function ScreenProjectView() {
                   myMicEnabled={!myMicMuted && (broadcastToAll || s.isMain)}
                   myCamEnabled={!myVideoOff && (s.isMain || (screenStates[s.room_name]?.myCamEnabled ?? false))}
                   onToggleMyCam={!s.isMain ? () => handleToggleMyCam(s.room_name) : undefined}
-                  myScreenShareEnabled={s.isMain ? myScreenShareEnabled : undefined}
-                  onToggleMyScreenShare={s.isMain ? handleToggleScreenShare : undefined}
+                  myScreenShareEnabled={s.room_name === sharingRoomId}
+                  onScreenShareStarted={handleShareStarted}
+                  onScreenShareStopped={() => handleShareStopped(s.room_name)}
                   onClick={!s.isMain ? () => handleSwap(s.room_name) : undefined}
                   isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
                   isAudioEnabled={screenStates[s.room_name]?.audioEnabled ?? false}
@@ -1304,7 +1353,12 @@ export function ScreenProjectView() {
           {/* Camera toggle */}
           <button
             ref={camButtonRef}
-            onClick={() => setMyVideoOff((v) => !v)}
+            onClick={() => {
+              // Camera and screen share are mutually exclusive — viewers only ever
+              // see the share, so leaving both on streams the camera invisibly.
+              if (myVideoOff) handleStopShare();
+              setMyVideoOff((v) => !v);
+            }}
             title={myVideoOff ? "Turn on camera" : "Turn off camera"}
             aria-label={myVideoOff ? "Turn on camera" : "Turn off camera"}
             className={cn(
@@ -1335,6 +1389,56 @@ export function ScreenProjectView() {
           >
             <UserCircle2 className="h-4 w-4" />
           </button>
+
+          {/* Screen share — pinned to one station, named so it's always clear where it's going */}
+          {sharingStation ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  disabled={sharePending}
+                  title={`Sharing your screen to ${sharingStation.name}`}
+                  aria-label={`Sharing your screen to ${sharingStation.name}`}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-red-500/20 px-2.5 text-red-400 transition-all duration-150 hover:bg-red-500/30 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Monitor className="h-4 w-4 shrink-0" />
+                  <span className="max-w-24 truncate text-xs">
+                    {sharePending ? "Starting…" : sharingStation.name}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="center" className="w-56 border-white/10 bg-neutral-900 p-1 text-white">
+                <p className="px-2 py-1.5 text-[0.65rem] uppercase tracking-wide text-white/50">
+                  Sharing to {sharingStation.name}
+                </p>
+                {mainStationName && sharingRoomId !== mainId && (
+                  <button
+                    onClick={() => handleStartShare(mainId)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
+                  >
+                    <Monitor className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Share to {mainStationName} instead</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleStopShare}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10"
+                >
+                  <MonitorOff className="h-3.5 w-3.5 shrink-0" />
+                  Stop sharing
+                </button>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <button
+              onClick={() => mainId && handleStartShare(mainId)}
+              disabled={sharePending || !mainId}
+              title={mainStationName ? `Share your screen to ${mainStationName}` : "Share your screen"}
+              aria-label="Share your screen"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-white/50 transition-all duration-150 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Monitor className="h-4 w-4" />
+            </button>
+          )}
 
           <div className="w-px h-5 bg-white/10 mx-1" />
 
@@ -1467,6 +1571,7 @@ export function ScreenProjectView() {
                   // doesn't find stale entries and hand off to PiP anyway.
                   liveRoomsRef.current.clear();
                   exitViewerFullscreen();
+                  handleStopShare();
                   setSessionExited(true);
                 }}
                 aria-label="Exit session"
@@ -1504,6 +1609,7 @@ export function ScreenProjectView() {
               onClick={() => {
                 setSessionExited(false);
                 setBroadcastToAll(false);
+                handleStopShare(); // otherwise the old share flag pops a picker on reconnect
                 setSelectedStationIds([]);
                 setActiveTokenType(null);
                 setViewMode("station-select");

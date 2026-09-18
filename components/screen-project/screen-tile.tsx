@@ -11,7 +11,7 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent, DisconnectReason } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -123,8 +123,10 @@ export interface ScreenTileProps {
   onToggleMyCam?: () => void;
   /** Whether the supervisor's screen share should be published into this room */
   myScreenShareEnabled?: boolean;
-  /** Toggle the supervisor's screen share for this room (main tile only) */
-  onToggleMyScreenShare?: () => void;
+  /** Fired once the share is actually publishing in this room */
+  onScreenShareStarted?: () => void;
+  /** Fired when the share failed to start, was cancelled, or ended on its own */
+  onScreenShareStopped?: () => void;
   /** 0-1 local volume gain */
   volume?: number;
   onVolumeChange?: (v: number) => void;
@@ -238,7 +240,8 @@ interface InnerProps {
   onToggleAudio: () => void;
   onToggleMyCam?: () => void;
   myScreenShareEnabled?: boolean;
-  onToggleMyScreenShare?: () => void;
+  onScreenShareStarted?: () => void;
+  onScreenShareStopped?: () => void;
   volume: number;
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
@@ -331,7 +334,8 @@ function ScreenTileInner({
   onToggleAudio,
   onToggleMyCam,
   myScreenShareEnabled,
-  onToggleMyScreenShare,
+  onScreenShareStarted,
+  onScreenShareStopped,
   volume,
   onVolumeChange,
   videoQuality,
@@ -553,13 +557,59 @@ function ScreenTileInner({
     room.localParticipant.setCameraEnabled(myCamEnabled).catch(() => {});
   }, [myCamEnabled, connectionState, room]);
 
-  // Publish / unpublish supervisor's screen share (main tile only)
+  /**
+   * Publish / unpublish the supervisor's screen share for the station this
+   * share is pinned to.
+   *
+   * Tracks what has actually been applied so the effect only reacts to a
+   * change of intent. Without that, every reconnect would re-run the enable
+   * path and pop a fresh browser picker with no user gesture behind it.
+   * Failures (most often the user cancelling the picker, which rejects with
+   * NotAllowedError) are reported upward so the UI can follow reality instead
+   * of an optimistic guess.
+   */
+  const appliedShareRef = useRef(false);
+  // The parent passes fresh closures every render; hold them in refs so the
+  // effects below don't re-run (and the event listener doesn't re-subscribe)
+  // on every parent render.
+  const onShareStartedRef = useRef(onScreenShareStarted);
+  onShareStartedRef.current = onScreenShareStarted;
+  const onShareStoppedRef = useRef(onScreenShareStopped);
+  onShareStoppedRef.current = onScreenShareStopped;
+
   useEffect(() => {
-    if (connectionState !== ConnectionState.Connected) return;
+    if (connectionState !== ConnectionState.Connected) {
+      if (appliedShareRef.current) {
+        appliedShareRef.current = false;
+        onShareStoppedRef.current?.();
+      }
+      return;
+    }
+    const want = !!myScreenShareEnabled;
+    if (want === appliedShareRef.current) return;
+    appliedShareRef.current = want;
     room.localParticipant
-      .setScreenShareEnabled(!!myScreenShareEnabled, { audio: true })
-      .catch(() => {});
+      .setScreenShareEnabled(want, { audio: true })
+      .then(() => { if (want) onShareStartedRef.current?.(); })
+      .catch(() => {
+        appliedShareRef.current = false;
+        if (want) onShareStoppedRef.current?.();
+      });
   }, [myScreenShareEnabled, connectionState, room]);
+
+  // The browser's own "Stop sharing" bar ends the track without going through
+  // our button. LiveKit already unpublishes it for us and emits this event, so
+  // we only need to report it up — calling setScreenShareEnabled(false) here
+  // would be redundant.
+  useEffect(() => {
+    const onUnpublished = (pub: { source: Track.Source }) => {
+      if (pub.source !== Track.Source.ScreenShare) return;
+      appliedShareRef.current = false;
+      onShareStoppedRef.current?.();
+    };
+    room.on(RoomEvent.LocalTrackUnpublished, onUnpublished);
+    return () => { room.off(RoomEvent.LocalTrackUnpublished, onUnpublished); };
+  }, [room]);
 
   // Request the appropriate simulcast layer from the server
   useEffect(() => {
@@ -1259,26 +1309,6 @@ function ScreenTileInner({
             )}
           </Button>
 
-          {/* Screen share toggle — main tile only */}
-          {isMain && onToggleMyScreenShare && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={myScreenShareEnabled ? "Stop sharing screen" : "Share screen"}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleMyScreenShare();
-              }}
-              className={cn(
-                "h-8 shrink-0 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
-                myScreenShareEnabled && "text-red-400 hover:text-red-300",
-              )}
-            >
-              <Monitor className="h-3.5 w-3.5" />
-              <span>{myScreenShareEnabled ? "Stop Share" : "Share Screen"}</span>
-            </Button>
-          )}
-
           {/* My camera toggle — bottom-right: controls whether supervisor's cam is sent to THIS room (side tiles only) */}
           {!isMain && onToggleMyCam && (
             <Button
@@ -1544,7 +1574,8 @@ export function ScreenTile({
   onToggleAudio,
   onToggleMyCam,
   myScreenShareEnabled,
-  onToggleMyScreenShare,
+  onScreenShareStarted,
+  onScreenShareStopped,
   volume = 1,
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
@@ -1681,7 +1712,8 @@ export function ScreenTile({
         onToggleAudio={onToggleAudio}
         onToggleMyCam={onToggleMyCam}
         myScreenShareEnabled={myScreenShareEnabled}
-        onToggleMyScreenShare={onToggleMyScreenShare}
+        onScreenShareStarted={onScreenShareStarted}
+        onScreenShareStopped={onScreenShareStopped}
         volume={volume}
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}
