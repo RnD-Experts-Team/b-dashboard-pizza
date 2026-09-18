@@ -2502,6 +2502,16 @@
       "retry": "Try again"
     }
   },
+  "notepad": {
+    "tab": "Notepad",
+    "title": "Notepad",
+    "placeholder": "Write anything here — reminders, handover notes, follow-ups…",
+    "hint": "Saved on this device only. Not shared with anyone.",
+    "saved": "Saved",
+    "clear": "Clear",
+    "clearConfirm": "Confirm clear?",
+    "charCount": "{count} / {max}"
+  },
   "breakTimer": {
     "trigger": "Break timer",
     "title": "Break Timer",
