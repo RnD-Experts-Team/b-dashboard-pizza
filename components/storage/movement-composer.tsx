@@ -2,8 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Calculator,
+  Loader2,
+  PackageMinus,
+  PackagePlus,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { STOCK_ACTIONS, type StockActionId } from "@/lib/storage/stock-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,9 +49,6 @@ import {
 } from "@/lib/api/maintenance-tickets-errors";
 import {
   FIXED_DIRECTION,
-  MOVEMENT_TYPE_HINTS,
-  MOVEMENT_TYPE_LABELS,
-  POSTABLE_MOVEMENT_TYPES,
   directionLabel,
   isTransferType,
 } from "@/lib/storage/movement-types";
@@ -68,6 +77,16 @@ import type {
   StorageLocation,
 } from "@/types/storage.types";
 
+/** Icons for the plain-language actions. Kept here rather than in
+ *  lib/storage/stock-actions.ts so that module stays free of React. */
+const STOCK_ACTION_ICONS: Record<StockActionId, LucideIcon> = {
+  received: PackagePlus,
+  usedOnJob: PackageMinus,
+  cameBack: Undo2,
+  movedBetween: ArrowLeftRight,
+  fixCount: Calculator,
+};
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Record a stock movement                                                  */
 /*                                                                            */
@@ -75,7 +94,7 @@ import type {
 /*  who paid.                                                                */
 /*                                                                            */
 /*  `reversal` is absent from the type list AND unrepresentable in the form   */
-/*  state, because POSTABLE_MOVEMENT_TYPES is derived from a Record keyed by  */
+/*  state, because the action list is derived from a Record keyed by           */
 /*  PostableStockMovementType, which excludes it.                            */
 /* ────────────────────────────────────────────────────────────────────────── */
 
@@ -296,32 +315,57 @@ export function MovementComposer({
               <FieldError message={errors.moved_at} />
             </div>
 
-            <div className="space-y-1">
+            {/*
+              WHAT HAPPENED, in the words a person would use.
+
+              This was a dropdown of seven enum values -- purchase, draw,
+              return, transfer_in, transfer_out, adjustment, initial_count --
+              plus, for adjustments, a separate +1/-1 direction control that was
+              the most confusing thing on the page. Nobody walks into a store
+              room thinking "transfer_out".
+
+              The five buttons map one-to-one onto those types. The vocabulary
+              underneath is unchanged and `lib/storage/movement-types.ts` is
+              still the only place a direction is decided -- this just stops the
+              jargon reaching the screen.
+            */}
+            <div className="space-y-1 sm:col-span-2">
               <Label className="text-xs text-muted-foreground">
-                Type <span className="text-destructive">*</span>
+                What happened <span className="text-destructive">*</span>
               </Label>
-              <Select
-                value={form.type}
-                onValueChange={(v) => changeType(v as PostableStockMovementType)}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
-                  {POSTABLE_MOVEMENT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {MOVEMENT_TYPE_LABELS[type]}
-                      <span className="ms-1.5 text-xs text-muted-foreground">
-                        {fixedChip(type)}
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                {STOCK_ACTIONS.map((action) => {
+                  const Icon = STOCK_ACTION_ICONS[action.id];
+                  const isActive = action.movementType === form.type;
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      disabled={isSubmitting}
+                      aria-pressed={isActive}
+                      onClick={() =>
+                        action.movementType &&
+                        changeType(action.movementType as PostableStockMovementType)
+                      }
+                      className={cn(
+                        "flex h-full flex-col items-start gap-0.5 rounded-lg border p-2.5 text-start transition-colors",
+                        isActive
+                          ? "border-primary bg-primary/10"
+                          : "bg-card hover:border-primary/50 hover:bg-accent",
+                        isSubmitting && "cursor-not-allowed opacity-50"
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5 text-sm font-medium">
+                        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        {action.label}
                       </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                {MOVEMENT_TYPE_HINTS[form.type]}
-              </p>
+                      <span className="text-[11px] leading-snug text-muted-foreground">
+                        {action.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -643,11 +687,6 @@ export function MovementComposer({
   );
 }
 
-function fixedChip(type: PostableStockMovementType): string {
-  const d = FIXED_DIRECTION[type];
-  if (d === null) return "per line";
-  return d === 1 ? "+ in" : "− out";
-}
 
 function LocationSelect({
   value,

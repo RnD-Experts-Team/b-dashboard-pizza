@@ -137,3 +137,82 @@ export function DateTimePicker({
     </Popover>
   );
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Date-only and time-only pickers                                         */
+/*                                                                          */
+/*  Moved out of ticket-detail-sheet.tsx, where they were module-private     */
+/*  alongside a third copy of DateTimePicker. `text-left` became `text-start` */
+/*  on the way in: the rest of this app is RTL-ready and those two were the   */
+/*  only physical-direction classes left in the feature.                    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/** Shadcn date picker — Calendar in a Popover */
+export function DatePicker({ value, onChange, placeholder, className }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = value ? new Date(value + "T00:00") : undefined;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("h-8 w-full justify-start text-start text-sm font-normal gap-2", !value && "text-muted-foreground", className)}
+        >
+          <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {value ? format(new Date(value + "T00:00"), "MMM d, yyyy") : <span>{placeholder ?? "Pick a date"}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(d) => { if (d) { onChange(format(d, "yyyy-MM-dd")); setOpen(false); } }}
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Shadcn time picker — Popover with time Input */
+export function TimePicker({ value, onChange, placeholder, className }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn("h-8 w-full justify-start text-start text-sm font-normal gap-2", !value && "text-muted-foreground", className)}
+        >
+          <ClockIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {value || <span>{placeholder ?? "Pick a time"}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-3 space-y-2" align="start">
+        <p className="text-xs font-medium text-muted-foreground">Select time</p>
+        <Input
+          type="time"
+          className="h-8 text-sm [color-scheme:light] dark:[color-scheme:dark]"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoFocus
+        />
+        <Button size="sm" className="w-full h-7 text-xs" onClick={() => setOpen(false)}>Done</Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// (The sheet's own third copy of DateTimePicker came along with this move
+//  and was deleted here -- the exported one above is byte-for-byte the same
+//  component, and three implementations of one picker was the problem.)

@@ -9,6 +9,18 @@ import { parseDirection } from "@/lib/storage/movement-types";
 import type {
   ApiPaginatedResponse,
   ApiStockBalance,
+  ApiStockPlaceLine,
+  ApiStoragePlaceLevel,
+  ApiStoragePlaceValue,
+  CreateStoragePlaceLevelPayload,
+  CreateStoragePlaceValuePayload,
+  SetStockPlacePayload,
+  StockPlaceLine,
+  StoragePlaceLevel,
+  StoragePlaceValue,
+  ApiPartStockTotal,
+  PartStockTotal,
+  PartStockTotalListResponse,
   ApiStockLocationRef,
   ApiStockMovement,
   ApiStockMovementLine,
@@ -261,13 +273,85 @@ function transformMovement(raw: ApiStockMovement): StockMovement {
 
 function transformBalance(raw: ApiStockBalance): StockBalance {
   return {
+    id: raw.id,
     partId: raw.part_id,
     part: transformPartRef(raw.part),
     storageLocationId: raw.storage_location_id,
     storageLocation: transformLocationRef(raw.storage_location),
+    place: transformPlace(raw.place),
     // NOT clamped. A negative is the trace of a reversal applied after the
     // stock was consumed, and it is a real signal that needs surfacing.
-    onHand: safeDecimal(raw.on_hand, 0),
+    onHand: safeDecimal(raw.quantity, 0),
+  };
+}
+
+/**
+ * The address, kept in the order the server sent it.
+ *
+ * DO NOT SORT THIS. The order is the address -- "C / 8 / 5" only means
+ * shelf-row-column because the backend ordered it by the location's own level
+ * order, and re-sorting here by anything else would quietly rewrite what the
+ * address says.
+ *
+ * `[]` is a real answer meaning nobody has said, distinct from "nowhere".
+ */
+function transformPlace(raw: ApiStockPlaceLine[] | null | undefined): StockPlaceLine[] {
+  return (raw ?? []).map((line) => ({
+    levelId: line.level_id,
+    level: line.level,
+    valueId: line.value_id,
+    value: line.value,
+  }));
+}
+
+function transformPlaceLevel(raw: ApiStoragePlaceLevel): StoragePlaceLevel {
+  return {
+    id: raw.id,
+    storageLocationId: raw.storage_location_id,
+    name: raw.name,
+    sortOrder: raw.sort_order ?? 0,
+    // null, not []: "we did not ask for the values" and "this level has none
+    // declared yet" are different, and only one of them is worth a prompt.
+    values: raw.values ? raw.values.map(transformPlaceValue) : null,
+    deletedAt: raw.deleted_at ?? null,
+  };
+}
+
+function transformPlaceValue(raw: ApiStoragePlaceValue): StoragePlaceValue {
+  return {
+    id: raw.id,
+    storagePlaceLevelId: raw.storage_place_level_id,
+    value: raw.value,
+    sortOrder: raw.sort_order ?? 0,
+    deletedAt: raw.deleted_at ?? null,
+  };
+}
+
+function transformPartTotal(raw: ApiPartStockTotal): PartStockTotal {
+  return {
+    partId: raw.part_id,
+    part: transformPartRef(raw.part),
+    // Same guard as the ungrouped transform: a missing field must not render
+    // as a confident 0. `quantity` is the wire name -- NOT `on_hand`, which
+    // does not exist upstream and cost this feature every number on screen.
+    onHand: safeDecimal(raw.quantity, 0),
+    // optionalDecimal, NOT safeDecimal: a missing value must stay null so the
+    // UI renders an em dash. safeDecimal's 0 fallback is right for a quantity
+    // (a shelf really can hold none) and wrong for a value we were not told.
+    value: optionalDecimal(raw.value),
+    averageUnitCost: optionalDecimal(raw.average_unit_cost),
+    unknownCostQuantity: optionalDecimal(raw.unknown_cost_quantity),
+    locationCount: raw.location_count ?? 0,
+    // `[]` not null: this shape always sends the breakdown, so an empty array
+    // genuinely means "on no shelf", not "not loaded".
+    locations: (raw.locations ?? []).map((l) => ({
+      stockBalanceId: l.id ?? null,
+      storageLocationId: l.storage_location_id,
+      storageLocation: transformLocationRef(l.storage_location),
+      place: transformPlace(l.place),
+      onHand: safeDecimal(l.quantity, 0),
+    })),
+    updatedAt: raw.updated_at ?? null,
   };
 }
 
@@ -304,6 +388,9 @@ export function buildStockBalanceParams(f: StockBalanceFilters): URLSearchParams
   // Hides pairs that netted back to ZERO. It does NOT hide negatives — see
   // the Balances tab, where "negative only" is kept independent of this.
   if (f.non_zero) p.set("non_zero", "1");
+  // Rolls the (part, location) pairs up into one row per part. non_zero then
+  // applies to the total rather than to each pair.
+  if (f.group_by) p.set("group_by", f.group_by);
   if (f.page) p.set("page", String(f.page));
   if (f.per_page) p.set("per_page", String(f.per_page));
   return p;
@@ -524,6 +611,189 @@ export const storageService = {
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformBalance), meta, links };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * On hand per PART, totalled across locations, with the breakdown.
+   *
+   * Same endpoint, ?group_by=part. Use this wherever the question is "do we
+   * have any" -- which is nearly everywhere a human is asking. The ungrouped
+   * call above answers "which shelf", which is a different question.
+   */
+  async getPartStockTotals(
+    filters?: StockBalanceFilters,
+    signal?: AbortSignal
+  ): Promise<PartStockTotalListResponse> {
+    const token = requireToken();
+    const qs = buildStockBalanceParams({ ...(filters ?? {}), group_by: "part" }).toString();
+    try {
+      const res = await axios.get<ApiPaginatedResponse<ApiPartStockTotal>>(
+        `${BASE}/stock-balances${qs ? `?${qs}` : ""}`,
+        { headers: authHeaders(token), timeout: 15_000, signal }
+      );
+      const { meta, links } = transformPagination(res.data);
+      return { data: (res.data.data ?? []).map(transformPartTotal), meta, links };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /* ── Place levels & values ───────────────────────────────────────────── */
+
+  /**
+   * How one location addresses the space inside it, with each level's declared
+   * values.
+   *
+   * Paths are `place-levels`, not `slots`. The parameter names upstream are
+   * load-bearing: Laravel resolves a scoped binding's relation from the
+   * parameter name, and the slots endpoints this replaces 500'd on every PATCH
+   * and DELETE because `{storageSlot}` did not match `slots()`.
+   */
+  async getPlaceLevels(
+    locationId: number,
+    signal?: AbortSignal
+  ): Promise<StoragePlaceLevel[]> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: ApiStoragePlaceLevel[] }>(
+        `${BASE}/storage-locations/${locationId}/place-levels`,
+        { headers: authHeaders(token), timeout: 15_000, signal }
+      );
+      return (res.data.data ?? []).map(transformPlaceLevel);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async createPlaceLevel(
+    locationId: number,
+    payload: CreateStoragePlaceLevelPayload
+  ): Promise<StoragePlaceLevel> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiStoragePlaceLevel }>(
+        `${BASE}/storage-locations/${locationId}/place-levels`,
+        payload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformPlaceLevel(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Levels are editable, unlike locations -- a mislabelled level is not worth
+   *  retiring and recreating along with all of its values. */
+  async updatePlaceLevel(
+    locationId: number,
+    levelId: number,
+    payload: CreateStoragePlaceLevelPayload
+  ): Promise<StoragePlaceLevel> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiStoragePlaceLevel }>(
+        `${BASE}/storage-locations/${locationId}/place-levels/${levelId}`,
+        payload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformPlaceLevel(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Retires the level, its values, AND the addresses that used them. Nothing
+   *  is left pointing at something that will never be shown again. */
+  async deletePlaceLevel(locationId: number, levelId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`${BASE}/storage-locations/${locationId}/place-levels/${levelId}`, {
+        headers: authHeaders(token),
+        timeout: 15_000,
+      });
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async createPlaceValue(
+    locationId: number,
+    levelId: number,
+    payload: CreateStoragePlaceValuePayload
+  ): Promise<StoragePlaceValue> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiStoragePlaceValue }>(
+        `${BASE}/storage-locations/${locationId}/place-levels/${levelId}/values`,
+        payload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformPlaceValue(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async updatePlaceValue(
+    locationId: number,
+    levelId: number,
+    valueId: number,
+    payload: CreateStoragePlaceValuePayload
+  ): Promise<StoragePlaceValue> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiStoragePlaceValue }>(
+        `${BASE}/storage-locations/${locationId}/place-levels/${levelId}/values/${valueId}`,
+        payload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformPlaceValue(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async deletePlaceValue(
+    locationId: number,
+    levelId: number,
+    valueId: number
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(
+        `${BASE}/storage-locations/${locationId}/place-levels/${levelId}/values/${valueId}`,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * Say where a part sits inside its location.
+   *
+   * THE COMPLETE ADDRESS, every time. A level left out of `valueIds` is
+   * cleared, and `[]` clears the lot -- which is the honest way to say "we no
+   * longer know", different from never having said.
+   *
+   * This is the write path the slot feature never had: it could name shelves
+   * and display them, and nothing could ever put a part on one.
+   */
+  async setStockBalancePlace(
+    balanceId: number,
+    valueIds: number[]
+  ): Promise<StockPlaceLine[]> {
+    const token = requireToken();
+    try {
+      const res = await axios.put<{ data: ApiStockPlaceLine[] }>(
+        `${BASE}/stock-balances/${balanceId}/place`,
+        { place_value_ids: valueIds } satisfies SetStockPlacePayload,
+        { headers: authHeaders(token), timeout: 15_000 }
+      );
+      return transformPlace(res.data.data);
     } catch (err) {
       return handleAxiosError(err);
     }

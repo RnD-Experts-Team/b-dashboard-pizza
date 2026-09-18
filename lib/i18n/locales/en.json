@@ -1187,9 +1187,6 @@
     }
   },
   "maintenanceTickets": {
-    "title": "Maintenance Tickets",
-    "description": "Track and manage maintenance tickets for your store.",
-    "refresh": "Refresh",
     "groupBy": {
       "label": "Group by",
       "none": "No grouping",
@@ -1202,6 +1199,9 @@
       "warranty": "Warranty",
       "diagnosis": "Troubleshooting"
     },
+    "title": "Maintenance Tickets",
+    "description": "Track and manage maintenance tickets for your store.",
+    "refresh": "Refresh",
     "common": {
       "cancel": "Cancel",
       "save": "Save",

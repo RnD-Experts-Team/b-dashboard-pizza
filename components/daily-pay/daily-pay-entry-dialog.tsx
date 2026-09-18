@@ -79,6 +79,14 @@ interface DailyPayEntryDialogProps {
   entryId: number | null;
   stores: DailyPayStoreOption[];
   technicians: CatalogTechnician[];
+  /**
+   * Create mode only: open already filled in from the pay basket.
+   *
+   * Nothing is saved by this -- the form is populated and the coordinator
+   * reviews it, the same discipline as everywhere else here. Ignored in edit
+   * mode, where the server's own record is the only sane starting point.
+   */
+  initialState?: EntryFormState | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -88,6 +96,7 @@ export function DailyPayEntryDialog({
   entryId,
   stores,
   technicians,
+  initialState,
   onClose,
   onSuccess,
 }: DailyPayEntryDialogProps) {
@@ -197,7 +206,11 @@ export function DailyPayEntryDialog({
     if (!open) return;
 
     if (!isEdit) {
-      setState(emptyEntryFormState());
+      // A seeded state wins on create. It carries the payees, the store lines
+      // and the linked issues from the basket -- and deliberately no hours,
+      // because any value sent marks the line overridden upstream and stops the
+      // gather filling it from the attendance already logged.
+      setState(initialState ?? emptyEntryFormState());
       setErrors(EMPTY_FORM_ERRORS);
       setPrefillError(null);
       setConflict(null);
@@ -208,7 +221,7 @@ export function DailyPayEntryDialog({
     const ctrl = new AbortController();
     void loadEntry(entryId as number, ctrl.signal);
     return () => ctrl.abort();
-  }, [open, entryId, isEdit, loadEntry]);
+  }, [open, entryId, isEdit, loadEntry, initialState]);
 
   /* ── Setters ──────────────────────────────────────────────────────────── */
 
@@ -390,7 +403,7 @@ export function DailyPayEntryDialog({
           ) : prefillError ? (
             <div className="py-8 text-center text-sm text-destructive">{prefillError}</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Lost-race banner. Deliberately does NOT close the dialog or
                   discard state — the user's edits are still in the form. */}
               {conflict && (
@@ -439,8 +452,14 @@ export function DailyPayEntryDialog({
 
               <Separator />
 
-              {/* Payments */}
-              <div className="space-y-3">
+              {/*
+                space-y-6 BETWEEN payments, against the space-y-5 between groups
+                inside one. It was 12px out here and 20px in there, which is the
+                hierarchy upside down: the boundary between two different
+                people's money was the tightest gap in the form, so four
+                payments read as one wall of fields.
+              */}
+              <div className="space-y-6">
                 {state.payments.map((payment, i) => (
                   <DailyPayPaymentCard
                     key={i}

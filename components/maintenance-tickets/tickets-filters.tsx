@@ -27,7 +27,6 @@ import {
   Search,
   CalendarDays,
   ArrowDownUp,
-  TimerReset,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus, PaymentStatusValue, UserRef } from "@/types/maintenance-tickets.types";
@@ -563,8 +562,6 @@ interface TicketsFiltersBarProps {
    */
   loadedCreators?: (UserRef | null)[];
   /** Opens the global "log a visit" dialog. Optional — hidden when absent. */
-  onLogVisitClick?: () => void;
-  canLogVisit?: boolean;
 }
 
 export function TicketsFiltersBar({
@@ -579,8 +576,6 @@ export function TicketsFiltersBar({
   selectedStoreIds,
   onStoreApply,
   loadedCreators,
-  onLogVisitClick,
-  canLogVisit,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -832,13 +827,7 @@ export function TicketsFiltersBar({
 
         {/* Right side actions */}
         <div className="ms-auto flex items-center gap-2">
-          {canLogVisit && onLogVisitClick && (
-            <Button variant="outline" size="sm" onClick={onLogVisitClick} disabled={disabled} className="h-9 gap-1.5">
-              <TimerReset className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Log visit</span>
-            </Button>
-          )}
-          {canAccessCatalog && (
+              {canAccessCatalog && (
             <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled} className="h-9 gap-1.5">
               <BookOpen className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t("filters.catalog")}</span>

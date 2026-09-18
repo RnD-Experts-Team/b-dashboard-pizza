@@ -107,6 +107,19 @@ export function PartUsagePanel({
   const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(true);
   const [locations, setLocations] = useState<StorageLocationRef[]>([]);
+  /**
+   * On hand at the chosen shelf -- the advance warning that you are about to
+   * draw more than is there.
+   *
+   * This state and the warning below it existed from the start, but nothing
+   * ever fetched: both setOnHand calls passed null, so `overdrawn` could never
+   * become true and the warning was unreachable. A coordinator got no warning
+   * at all and found out from a 422 after submitting.
+   *
+   * `null` means "we do not know" and renders nothing. It must never be
+   * confused with a real 0, which is why the fetch below sets null on failure
+   * rather than falling back to zero.
+   */
   const [onHand, setOnHand] = useState<number | null>(null);
 
   const source = issueDraft.partSource as PartUsageSource | "";
@@ -115,6 +128,45 @@ export function PartUsagePanel({
   const quantity = asOptionalNumber(issueDraft.partQuantity);
   const unitCost = asOptionalNumber(issueDraft.partUnitCost);
   const returnedQuantity = asOptionalNumber(issueDraft.partReturnedQuantity);
+
+  /* ── On hand at the chosen location ───────────────────────────────────── */
+
+  const draftPartId = issueDraft.partId;
+  const draftLocationId = issueDraft.partStorageLocationId;
+
+  useEffect(() => {
+    // Only meaningful when taking stock OFF a shelf. A purchased part is not
+    // coming out of inventory, so there is nothing to be short of.
+    if (source !== "from_storage") {
+      setOnHand(null);
+      return;
+    }
+
+    const partId = asOptionalNumber(draftPartId);
+    const locationId = asOptionalNumber(draftLocationId);
+    if (partId == null || locationId == null) {
+      setOnHand(null);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    // Debounced: the part and the location are usually picked a second apart,
+    // and every request here makes the auth server verify the token.
+    const timer = setTimeout(() => {
+      storageService
+        .getOnHand(partId, locationId, ctrl.signal)
+        .then((value) => setOnHand(value))
+        // A failed lookup renders NOTHING. Never show 0 for "we don't know" --
+        // that would tell the coordinator the shelf is empty when we simply
+        // could not ask.
+        .catch(() => setOnHand(null));
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [source, draftPartId, draftLocationId]);
 
   /* ── Catalogs ─────────────────────────────────────────────────────────── */
 
@@ -355,7 +407,6 @@ export function PartUsagePanel({
           selectedId={asOptionalNumber(issueDraft.partId) ?? null}
           onSelect={(id) => {
             patch({ partId: id != null ? String(id) : "" });
-            setOnHand(null);
           }}
           onCreate={createCatalogPart}
           placeholder="Search parts or type to create a new one…"
@@ -432,7 +483,6 @@ export function PartUsagePanel({
           ]}
           onChange={(v) => {
             patch({ partSource: v });
-            setOnHand(null);
           }}
           disabled={isSubmitting}
         />
@@ -461,7 +511,7 @@ export function PartUsagePanel({
           <FieldError message={fieldErrors.storage_location_id} />
           {overdrawn && (
             <p className="text-[11px] text-red-600 dark:text-red-400">
-              On hand here: {onHand} — less than the quantity entered.
+              Only {onHand} on that shelf. Saving this will take it negative.
             </p>
           )}
         </div>
