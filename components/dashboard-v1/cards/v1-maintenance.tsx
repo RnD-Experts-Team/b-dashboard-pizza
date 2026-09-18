@@ -10,7 +10,7 @@ import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
 
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import {
@@ -24,8 +24,8 @@ import { fmtDate, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { TicketPreviewSheet } from "@/components/maintenance-tickets/ticket-preview-sheet";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
+import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1MaintenanceCard — Dashboard V1, category "quality", period "D".
@@ -76,11 +76,13 @@ export function V1MaintenanceCard({
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Preview sheet ────────────────────────────────────────────────────
+  // Sheet state
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
+  const techLoadedRef = useRef(false);
 
   // Create dialog state
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewId, setPreviewId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -118,18 +120,18 @@ export function V1MaintenanceCard({
     return () => abortRef.current?.abort();
   }, [fetchTickets]);
 
-  /**
-   * Opens a read-only preview, not the full page.
-   *
-   * This card is a showcase: you glance to see whether something needs you. It
-   * briefly navigated to the ticket page instead, which threw away the glance
-   * and made you find your way back. The preview carries the list of tickets
-   * alongside, so you can walk them without closing it, and links out to the
-   * page for anything you actually want to change.
-   */
-  function handleRowClick(ticket: Ticket) {
-    setPreviewId(ticket.id);
-    setPreviewOpen(true);
+  async function handleRowClick(ticket: Ticket) {
+    setSelectedTicketId(ticket.id);
+    setSheetOpen(true);
+    if (!techLoadedRef.current) {
+      techLoadedRef.current = true;
+      try {
+        const techs = await maintenanceTicketsService.getCatalogTechnicians();
+        setTechnicians(techs);
+      } catch {
+        // Sheet works without technicians for read-only viewing
+      }
+    }
   }
 
   // Load issues before opening so the combobox is already populated.
@@ -252,16 +254,19 @@ export function V1MaintenanceCard({
         </table>
       </V1Card>
 
-
-      <TicketPreviewSheet
-        open={previewOpen}
-        ticketId={previewId}
-        tickets={tickets}
-        onClose={() => {
-          setPreviewOpen(false);
-          setPreviewId(null);
-        }}
-      />
+      {sheetOpen && storeId && (
+        <TicketDetailSheet
+          open={sheetOpen}
+          ticketId={selectedTicketId}
+          storeId={storeId}
+          tickets={tickets}
+          technicians={technicians}
+          onClose={() => {
+            setSheetOpen(false);
+            setSelectedTicketId(null);
+          }}
+        />
+      )}
 
       <CreateTicketDialog
         open={createOpen}

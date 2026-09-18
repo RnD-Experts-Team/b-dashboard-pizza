@@ -9,9 +9,9 @@ import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
-import { TicketPreviewSheet } from "@/components/maintenance-tickets/ticket-preview-sheet";
+import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
+import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
 import {
   Card,
   CardContent,
@@ -123,11 +123,13 @@ export function RecentMaintenanceTable() {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── Preview sheet ────────────────────────────────────────────────────
+  // ── Detail sheet ─────────────────────────────────────────────────────
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
+  const techLoadedRef = useRef(false);
 
   // ── Create dialog ────────────────────────────────────────────────────
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewId, setPreviewId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -166,18 +168,19 @@ export function RecentMaintenanceTable() {
   }, [fetchTickets]);
 
   // ── Open detail sheet ────────────────────────────────────────────────
-  /**
-   * Opens a read-only preview, not the full page.
-   *
-   * This card is a showcase: you glance to see whether something needs you. It
-   * briefly navigated to the ticket page instead, which threw away the glance
-   * and made you find your way back. The preview carries the list of tickets
-   * alongside, so you can walk them without closing it, and links out to the
-   * page for anything you actually want to change.
-   */
-  function handleRowClick(ticket: Ticket) {
-    setPreviewId(ticket.id);
-    setPreviewOpen(true);
+  async function handleRowClick(ticket: Ticket) {
+    setSelectedTicketId(ticket.id);
+    setSheetOpen(true);
+    // Lazy-load technicians on first open
+    if (!techLoadedRef.current) {
+      techLoadedRef.current = true;
+      try {
+        const techs = await maintenanceTicketsService.getCatalogTechnicians();
+        setTechnicians(techs);
+      } catch {
+        // Sheet works fine without technicians for read-only viewing
+      }
+    }
   }
 
   // ── Open create dialog ───────────────────────────────────────────────
@@ -370,18 +373,19 @@ export function RecentMaintenanceTable() {
         </CardContent>
       </Card>
 
+      {/* Detail sheet — opens when a row is clicked */}
+      {sheetOpen && storeId && (
+        <TicketDetailSheet
+          open={sheetOpen}
+          ticketId={selectedTicketId}
+          storeId={storeId}
+          tickets={tickets}
+          technicians={technicians}
+          onClose={() => { setSheetOpen(false); setSelectedTicketId(null); }}
+        />
+      )}
 
       {/* Create dialog */}
-      <TicketPreviewSheet
-        open={previewOpen}
-        ticketId={previewId}
-        tickets={tickets}
-        onClose={() => {
-          setPreviewOpen(false);
-          setPreviewId(null);
-        }}
-      />
-
       <CreateTicketDialog
         open={createOpen}
         storeId={storeId}
