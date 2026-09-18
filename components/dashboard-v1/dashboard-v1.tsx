@@ -659,6 +659,7 @@ export function DashboardV1({
           upsellingScore={day.upselling_score}
           goalMetrics={goal_metrics}
           storeScore={store_score}
+          weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
           date={selectedDate}
           span={1}
         />

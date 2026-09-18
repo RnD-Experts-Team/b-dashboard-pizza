@@ -1080,6 +1080,7 @@ export function DsprDashboard({
           upsellingScore={day.upselling_score}
           goalMetrics={goal_metrics}
           storeScore={store_score}
+          weeklyLaborEntries={managerDashboard.weeklyLabor?.entries}
           date={selectedDate}
           className="lg:col-span-1"
         />
