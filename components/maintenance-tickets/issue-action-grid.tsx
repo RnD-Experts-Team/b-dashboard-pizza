@@ -40,10 +40,6 @@ import type { TicketIssue } from "@/types/maintenance-tickets.types";
  * the reason, never removed; each carries a plain-language line saying what it
  * actually does; and the likely next step is emphasised without being the only
  * one you can reach.
- *
- * What is left here is what CHANGES the issue -- move it along, and who is on
- * it. Writing down what happened moved to the record board, where the button
- * sits in the same square as the thing it writes.
  */
 
 const ICONS: Record<string, LucideIcon> = {
@@ -78,10 +74,7 @@ export function IssueActionGrid({
   className,
 }: IssueActionGridProps) {
   const suggested = suggestedAction(issue);
-  // The `records` group is gone from here on purpose: each of those five is now
-  // the add-button of its own square in IssueRecordBoard, beside the records it
-  // creates. Leaving them here as well would be the same five buttons twice.
-  const groups = actionsByGroup().filter(({ group }) => group !== "records");
+  const groups = actionsByGroup();
 
   return (
     <div className={cn("space-y-4", className)}>
