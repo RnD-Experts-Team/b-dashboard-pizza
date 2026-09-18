@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Merge, Paperclip, Plus, Trash2, User, X } from "lucide-react";
+import { Coins, Merge, Paperclip, Plus, Store, Trash2, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ import {
   type SearchableSelectOption,
 } from "@/components/shared/searchable-select";
 import { MoneyField } from "./daily-pay-num-field";
+import { PayShapePicker } from "./pay-shape-picker";
 import { DailyPayNoteList } from "./daily-pay-note-list";
 import { DailyPayLineFieldset } from "./daily-pay-line-fieldset";
+import { PayFieldset, PayFoldout } from "./daily-pay-fieldset";
 import { DailyPayWarningsPanel } from "./daily-pay-warnings-panel";
 import {
   emptyLine,
@@ -109,12 +111,14 @@ export function DailyPayPaymentCard({
     <div
       ref={cardRef}
       className={cn(
-        "space-y-3 rounded-lg border border-s-2 border-s-primary bg-card p-4",
+        // space-y-5 between groups, space-y-3 inside one. Five short questions
+        // rather than one long undifferentiated form.
+        "space-y-5 rounded-lg border border-s-2 border-s-primary bg-card p-4",
         hasError && "border-destructive/60 border-s-destructive"
       )}
       onFocus={onFocusPayment}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b pb-3">
         <h4 className="flex items-center gap-1.5 text-sm font-semibold">
           <User className="h-3.5 w-3.5 text-muted-foreground" />
           Payment {index + 1}
@@ -133,7 +137,8 @@ export function DailyPayPaymentCard({
         )}
       </div>
 
-      {/* Payee */}
+      {/* 1. WHO IS PAID. */}
+      <PayFieldset legend="Who is paid" icon={User}>
       <div className="space-y-1">
         <Label className="text-xs text-muted-foreground">
           Payee <span className="text-destructive">*</span>
@@ -169,35 +174,39 @@ export function DailyPayPaymentCard({
             )}
           </div>
         ) : (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
             A company is a technician named after the company. All their stores go on this
             one payment.
           </p>
         )}
       </div>
+      </PayFieldset>
 
-      {/* Payment-level money — not attributable to any one store */}
-      <div className="space-y-3 rounded-md bg-muted/40 p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Payment level — not tied to one store
-        </p>
-
+      {/* 2. HOW THEY ARE PAID. The fork that decides what every field below
+          means, so it gets a group of its own rather than sharing one with the
+          gas money. */}
+      <PayFieldset
+        legend="How this one is paid"
+        icon={Coins}
+        hint="Not tied to any one store — this covers the whole payment."
+      >
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Labour basis</Label>
-            <Select
-              value={payment.labourMode}
-              onValueChange={(v) => onPatch({ labourMode: v as PaymentLabourMode })}
+          {/*
+            HOW IS THIS ONE PAID? Asked as two buttons rather than a dropdown of
+            two jargon phrases, because it is the fork that decides what every
+            field below means -- and because there are genuinely two processes
+            here: our own technicians by the hour, and outside companies at an
+            agreed price. They shared one form, and that is how a lump sum came
+            to silently switch off hours that stayed on screen looking live.
+          */}
+          <div className="sm:col-span-2">
+            <PayShapePicker
+              value={payment.labourMode === "lumpSum" ? "fixed" : "hourly"}
+              onChange={(shape) =>
+                onPatch({ labourMode: (shape === "fixed" ? "lumpSum" : "sumLines") as PaymentLabourMode })
+              }
               disabled={disabled}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
-                <SelectItem value="sumLines">Per-store labour</SelectItem>
-                <SelectItem value="lumpSum">One lump sum for all stores</SelectItem>
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           {payment.labourMode === "lumpSum" ? (
@@ -207,7 +216,7 @@ export function DailyPayPaymentCard({
               onChange={(lumpSum) => onPatch({ lumpSum })}
               disabled={disabled}
               error={err("lump_sum")}
-              hint="Replaces the labour on every store line."
+              hint="Paid instead of the hours on every store, not on top of them."
               required
             />
           ) : (
@@ -217,29 +226,44 @@ export function DailyPayPaymentCard({
               onChange={(hourlyPaymentRate) => onPatch({ hourlyPaymentRate })}
               disabled={disabled}
               error={err("hourly_payment_rate")}
-              hint="Used by any store line without its own rate."
+              hint="Used for any store that does not set its own rate."
             />
           )}
 
-          <MoneyField
-            label="Gas"
-            value={payment.gas}
-            onChange={(gas) => onPatch({ gas })}
-            disabled={disabled}
-            error={err("gas")}
-            hint="Fuel not attributable to one store."
-          />
-          <MoneyField
-            label="Additional owed"
-            value={payment.moneyOwed}
-            onChange={(moneyOwed) => onPatch({ moneyOwed })}
-            disabled={disabled}
-            error={err("money_owed")}
-            hint="An extra amount on top — not a total."
-          />
         </div>
 
-        {/* Payment-level attachments, e.g. proof of transfer */}
+        {/* Money that rides along with the labour but is not labour. Its own
+            sub-group, because "what is the rate" and "how much fuel" are two
+            different questions and they were sitting in one four-cell grid. */}
+        <PayFieldset legend="On top of the labour" tone="quiet">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MoneyField
+              label="Gas"
+              value={payment.gas}
+              onChange={(gas) => onPatch({ gas })}
+              disabled={disabled}
+              error={err("gas")}
+              hint="Fuel not attributable to one store."
+            />
+            <MoneyField
+              label="Additional owed"
+              value={payment.moneyOwed}
+              onChange={(moneyOwed) => onPatch({ moneyOwed })}
+              disabled={disabled}
+              error={err("money_owed")}
+              hint="An extra amount on top — not a total."
+            />
+          </div>
+        </PayFieldset>
+
+        {/* 4. THE PAPERWORK. Optional, and used on a minority of payments, so
+            it is folded -- with its count on the tab, so a payment that does
+            carry a transfer receipt still says so while closed. */}
+        <PayFoldout
+          label="Attachments and notes"
+          icon={Paperclip}
+          count={payment.files.length + payment.notes.length}
+        >
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Paperclip className="h-3.5 w-3.5" />
@@ -283,14 +307,16 @@ export function DailyPayPaymentCard({
           disabled={disabled}
           label="No payment notes."
         />
-      </div>
+        </PayFoldout>
+      </PayFieldset>
 
       <DailyPayWarningsPanel warnings={warnings} />
 
-      {/* Store lines */}
-      <div className="space-y-2">
+      {/* 5. THE STORES. */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <Store className="h-3.5 w-3.5" aria-hidden="true" />
             Stores ({payment.lines.length})
           </p>
           {payeeId == null && (

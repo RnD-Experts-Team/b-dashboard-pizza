@@ -4,6 +4,7 @@ import { Paperclip, StickyNote, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DailyPayGatheredBlock } from "./daily-pay-gathered-block";
+import { DailyPayBreakdown } from "./daily-pay-breakdown";
 import { DailyPayWarningsPanel } from "./daily-pay-warnings-panel";
 import { DailyPayLineDetailCard } from "./daily-pay-line-detail-card";
 import { formatMoney, formatRate, paymentTotalPreview } from "@/lib/daily-pay/money";
@@ -65,21 +66,13 @@ export function DailyPayPaymentDetailCard({
             Total amount
           </p>
           <p className="text-xl font-semibold tabular-nums">{formatMoney(total)}</p>
-          {/* lines_total is a BREAKDOWN, never the payable figure — it excludes
-              payment-level gas, additional owed and lump sum. */}
-          {payment.linesTotal != null && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <p className="cursor-help text-[11px] tabular-nums text-muted-foreground">
-                  Per-store subtotal {formatMoney(payment.linesTotal)}
-                </p>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-64">
-                Sum of the store lines; excludes payment-level gas, additional owed and lump
-                sum. Not the payable figure.
-              </TooltipContent>
-            </Tooltip>
-          )}
+          {/*
+            `linesTotal` used to sit here as a second figure with a tooltip
+            explaining that it is not the payable one. Two totals side by side
+            invite the wrong one to be read, and a tooltip is something you have
+            to discover. The breakdown below now accounts for every part of the
+            figure above, in words, so the subtotal has nothing left to explain.
+          */}
         </div>
       </div>
 
@@ -117,6 +110,11 @@ export function DailyPayPaymentDetailCard({
           />
         )}
       </div>
+
+      {/* How that number was reached. Every figure on this card appears in it,
+          and the ones that do not count -- break time, and anything a fixed
+          amount has replaced -- appear struck through with the reason. */}
+      <DailyPayBreakdown payment={payment} />
 
       <DailyPayWarningsPanel warnings={payment.aggregationWarnings} />
 

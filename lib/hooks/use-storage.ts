@@ -31,6 +31,12 @@ export function useStorage() {
     balancesLoading,
     balancesRefreshing,
     balancesError,
+    partTotals,
+    partTotalsLoading,
+    partTotalsRefreshing,
+    partTotalsError,
+    partTotalFilters,
+    fetchPartTotals,
     balanceFilters,
     locations,
     locationsLoading,
@@ -118,6 +124,7 @@ export function useStorage() {
   /* ── Initial loads ────────────────────────────────────────────────────── */
 
   useEffect(() => {
+    void fetchPartTotals();
     void fetchBalances();
     void fetchMovements();
     void fetchLocations();
@@ -126,6 +133,7 @@ export function useStorage() {
   }, []);
 
   const refetchAll = useCallback(() => {
+    void fetchPartTotals(partTotalFilters, partTotalFilters.page ?? 1);
     void fetchBalances(balanceFilters, balanceFilters.page ?? 1);
     void fetchMovements(movementFilters, movementFilters.page ?? 1);
     void fetchLocations(locationFilters, locationFilters.page ?? 1);
@@ -133,23 +141,41 @@ export function useStorage() {
     loadReference();
   }, [
     fetchBalances,
+    fetchPartTotals,
     fetchMovements,
     fetchLocations,
     balanceFilters,
+    partTotalFilters,
     movementFilters,
     locationFilters,
     loadNegativeScan,
     loadReference,
   ]);
 
-  /** Called after any write: movements and balances always move together. */
+  /**
+   * Called after any write: movements and stock always move together.
+   *
+   * Both shapes of the balance are refreshed, because both are on screen at
+   * once now -- the per-part totals at the top and the ledger below. Locations
+   * are deliberately left alone; they do not change when stock does.
+   */
   const refetchAfterWrite = useCallback(() => {
     void fetchMovements(movementFilters, movementFilters.page ?? 1);
+    void fetchPartTotals(partTotalFilters, partTotalFilters.page ?? 1);
     void fetchBalances(balanceFilters, balanceFilters.page ?? 1);
     loadNegativeScan();
-  }, [fetchMovements, fetchBalances, movementFilters, balanceFilters, loadNegativeScan]);
+  }, [
+    fetchMovements,
+    fetchPartTotals,
+    fetchBalances,
+    movementFilters,
+    partTotalFilters,
+    balanceFilters,
+    loadNegativeScan,
+  ]);
 
-  const isRefreshing = movementsRefreshing || balancesRefreshing || locationsRefreshing;
+  const isRefreshing =
+    movementsRefreshing || balancesRefreshing || partTotalsRefreshing || locationsRefreshing;
 
   return {
     // Movements
@@ -163,6 +189,12 @@ export function useStorage() {
     balances,
     balancesLoading,
     balancesError,
+    partTotals,
+    partTotalsLoading,
+    partTotalsRefreshing,
+    partTotalsError,
+    partTotalFilters,
+    fetchPartTotals,
     balanceFilters,
     fetchBalances,
 

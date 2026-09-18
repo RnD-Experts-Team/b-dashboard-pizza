@@ -15,6 +15,7 @@ import type {
   StorageLocationRef,
   TicketsListResponse,
   TicketIssuesResponse,
+  TicketWithIssuesResponse,
   CatalogIssue,
   CatalogTechnician,
   CatalogCategory,
@@ -31,6 +32,7 @@ import type {
   CreateNotePayload,
   CreateDiagnosisPayload,
   CreateAttendanceEntryPayload,
+  CreateAttendanceEventPayload,
   CreatePartUsagePayload,
   CreatePayEntryPayload,
   CreateWarrantyPayload,
@@ -293,6 +295,15 @@ function transformTicket(raw: ApiTicket): Ticket {
     attachments: (raw.attachments ?? []).map(transformAttachment),
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     issueCount: raw.issues_count ?? raw.issues?.length ?? 0,
+    // The list already eager-loads these upstream, so carrying them costs
+    // nothing and lets the rail put a ticket in a basket without opening it.
+    issues: (raw.issues ?? []).map((i) => ({
+      id: i.id,
+      title: i.display_title ?? i.catalog_issue?.title ?? i.title ?? `Issue #${i.id}`,
+      status: i.status ? transformEnumField(i.status) : null,
+      priority: i.priority ? transformEnumField(i.priority) : null,
+      technicians: (i.technicians ?? []).map((t) => ({ id: t.id, name: t.name })),
+    })),
     issueTitles: (raw.issues ?? [])
       .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)
       .filter((t): t is string => !!t),
@@ -332,6 +343,13 @@ function transformTicketsAnalytics(raw: ApiTicketsAnalytics): TicketsAnalytics {
         label: b.label,
         count: b.count,
       })),
+    },
+    // `?? null`, never `?? 0`. An older backend omits `attention` entirely, and
+    // rendering 0 would claim nothing is overdue when we simply weren't told.
+    attention: {
+      overdue: raw.attention?.overdue ?? null,
+      stuck: raw.attention?.stuck ?? null,
+      asOf: raw.attention?.as_of ?? null,
     },
     durations: {
       pendingToNextStatus: dur(raw.durations?.pending_to_next_status),
@@ -492,6 +510,12 @@ function attendanceRequestBody(
 
 function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   const p = new URLSearchParams();
+  // Trimmed, and omitted when empty: a bare `?q=` is a no-op server-side, but
+  // sending it puts a meaningless key in the shareable URL.
+  const q = filters.q?.trim();
+  if (q) p.set("q", q);
+  if (filters.assigned_from) p.set("assigned_from", filters.assigned_from);
+  if (filters.assigned_to)   p.set("assigned_to",   filters.assigned_to);
   (filters.statuses ?? []).forEach((v) => v && p.append("statuses[]", v));
   (filters.priorities ?? []).forEach((v) => v && p.append("priorities[]", v));
   (filters.assigned_priorities ?? []).forEach((v) => v && p.append("assigned_priorities[]", v));
@@ -663,12 +687,18 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
     technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
     startClock: raw.start_clock,
     endClock: raw.end_clock,
-    startBreak: raw.start_break,
-    endBreak: raw.end_break,
-    startPartsRun: raw.start_parts_run,
-    endPartsRun: raw.end_parts_run,
-    startTravel: raw.start_travel ?? null,
-    endTravel: raw.end_travel ?? null,
+    // Kept in the order the server sent it -- oldest first, by the time each
+    // thing happened rather than the order it was typed in.
+    events: (raw.events ?? []).map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      label: e.label,
+      bucket: e.bucket,
+      opens: e.opens,
+      paid: e.paid,
+      at: e.at,
+      mistaken: e.mistaken,
+    })),
     durations: transformDurations(raw.durations),
     payment: transformPaymentBlock(raw.payment),
     attachments: (raw.attachments ?? []).map(transformAttachment),
@@ -780,6 +810,27 @@ function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
  * Builds the relative entity path passed to `addNote` / `addAttachments`.
  * Each value is the path WITHOUT the `/notes` or `/attachments` suffix.
  */
+/**
+ * One attendance session's URL.
+ *
+ * Built in one place because three calls share it, and a typo in one of them
+ * would be a 404 with no obvious cause.
+ *
+ * NULL STORE OR TICKET GIVES THE UNSCOPED URL. A visit covering issues on
+ * several tickets has no one ticket its URL could honestly name -- which is
+ * why the create endpoint has an unscoped variant too. Only the path differs
+ * between the two, so switching it here beats three more near-identical
+ * methods that could drift apart.
+ */
+const ATT_BASE = (
+  storeId: string | null,
+  ticketId: number | null,
+  attendanceId: number
+) =>
+  storeId && ticketId
+    ? `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}`
+    : `/api/maintenance-tickets/attendance-entries/${attendanceId}`;
+
 export const entityPaths = {
   ticket: (store: string, ticket: number) =>
     `/stores/${encodeURIComponent(store)}/tickets/${ticket}`,
@@ -924,6 +975,39 @@ export const maintenanceTicketsService = {
         }
       );
       return { data: res.data.data.map(transformIssue) };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * The same listing, without needing to know the store.
+   *
+   * Prefer getTicketIssues when a store is in hand -- that is the canonical
+   * route. This exists because a ticket created with `otherStore` has a null
+   * store_id and cannot bind inside upstream's /stores/{store}/... group, so
+   * those tickets have no other way to be read. It is also what lets the
+   * ticket page be a clean /maintenance-tickets/{id} URL rather than one that
+   * smuggles a store the ticket may not have.
+   */
+  async getTicketIssuesById(
+    ticketId: number,
+    signal?: AbortSignal
+  ): Promise<TicketWithIssuesResponse> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<ApiTicketIssuesResponse & { ticket: ApiTicket }>(
+        `/api/maintenance-tickets/tickets/${ticketId}/issues`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          timeout: 15_000,
+          signal,
+        }
+      );
+      return {
+        data: res.data.data.map(transformIssue),
+        ticket: transformTicket(res.data.ticket),
+      };
     } catch (err) {
       return handleAxiosError(err);
     }
@@ -1585,6 +1669,87 @@ export const maintenanceTicketsService = {
         {},
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
       );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Attendance events ─────────────────────────────────────────────────── */
+
+  /*
+   * Attendance is an append-only event ledger. Each call below writes ONE
+   * thing that happened and gets the whole session back, so the UI never has
+   * to guess what the server made of it.
+   *
+   * This is what the old shape had no room for: after creating an entry, the
+   * only mutation in the entire API was "mistaken = true", so adding a travel
+   * start to a saved clock-in meant flagging the record wrong and retyping it.
+   */
+
+  /**
+   * Record one thing that happened.
+   *
+   * A `clock_in` on an already-open session opens a NEW session server-side and
+   * returns that one -- coming back to a store later is a second visit. So the
+   * caller must use the returned session's id rather than assuming it wrote to
+   * the one it was given.
+   */
+  async createAttendanceEvent(
+    storeId: string | null,
+    ticketId: number | null,
+    attendanceId: number,
+    payload: CreateAttendanceEventPayload
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * Correct when something happened.
+   *
+   * Refused with a 422 once a pay sheet has claimed the session: you can fix
+   * what nobody has been paid against, but not quietly rewrite what somebody
+   * was paid on. The message says so, so surface it rather than replacing it.
+   */
+  async updateAttendanceEvent(
+    storeId: string | null,
+    ticketId: number | null,
+    attendanceId: number,
+    eventId: number,
+    at: string
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}`,
+        { at },
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Strike one event. It stays in the ledger, struck through, and stops
+   *  counting -- the same flag every other record here uses. */
+  async markAttendanceEventMistaken(
+    storeId: string | null,
+    ticketId: number | null,
+    attendanceId: number,
+    eventId: number
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
     } catch (err) { return handleAxiosError(err); }
   },
 

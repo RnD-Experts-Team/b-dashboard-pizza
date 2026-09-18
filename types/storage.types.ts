@@ -158,6 +158,11 @@ export interface StockBalance {
   part: StockPartRef | null;
   storageLocationId: number;
   storageLocation: StockLocationRef | null;
+  /** The row's own id, needed to set its address. */
+  id: number;
+  /** Where inside that location it sits, level by level. EMPTY means nobody has
+   *  said -- not "nowhere". */
+  place: StockPlaceLine[];
   /**
    * CAN BE NEGATIVE — only ever as the trace of a reversal applied after the
    * stock had already been consumed. Render it; never clamp to zero. It is a
@@ -209,13 +214,186 @@ export interface StockMovementFilters {
   per_page?: number;
 }
 
+/**
+ * One row per PART, with the total across every location.
+ *
+ * The per-(part, location) listing is the honest shape of the data, but it
+ * means a part on four shelves appears four times and "how many do we have" is
+ * nowhere on screen. This cannot be derived on the client: the endpoint
+ * paginates, so summing a page is not summing a part.
+ */
+export interface PartStockTotal {
+  partId: number;
+  part: StockPartRef | null;
+  /** Across every location. Identical to Part::onHand() upstream, by construction. */
+  onHand: number;
+  /**
+   * What that stock cost, from the FIFO layers.
+   *
+   * NULL means "not computed", never "worth nothing" -- an older backend does
+   * not send it. Render an em dash, not a zero.
+   */
+  value: number | null;
+  averageUnitCost: number | null;
+  /**
+   * How much of `onHand` we have NO recorded price for. That stock contributes
+   * ZERO to `value`, so a non-zero figure here means the value is an
+   * understatement -- and saying so is the difference between a number that is
+   * incomplete and one that is wrong.
+   */
+  unknownCostQuantity: number | null;
+  /** How many shelves it sits on. */
+  locationCount: number;
+  /** The breakdown behind the total. `[]` when loaded and empty; the API always
+   *  sends it for this shape, so there is no "not loaded" case here. */
+  locations: PartStockLocation[];
+  updatedAt: string | null;
+}
+
+export interface PartStockLocation {
+  storageLocationId: number;
+  storageLocation: StockLocationRef | null;
+  /** The balance row's id, so the address can be set straight from the stock
+   *  list -- which is where tagging actually happens. */
+  stockBalanceId: number | null;
+  /** Where inside that location it sits, level by level. EMPTY means nobody has
+   *  said -- which is not the same as "nowhere", so render it as unknown rather
+   *  than as a blank. */
+  place: StockPlaceLine[];
+  /** CAN BE NEGATIVE, same as the ungrouped listing. Never clamp it. */
+  onHand: number;
+}
+
+export interface ApiPartStockTotal {
+  part_id: number;
+  part?: ApiStockPartRef | null;
+  quantity: string;
+  value?: string | null;
+  average_unit_cost?: string | null;
+  unknown_cost_quantity?: string | null;
+  location_count: number;
+  locations?: Array<{
+    id?: number | null;
+    storage_location_id: number;
+    storage_location?: ApiStockLocationRef | null;
+    place?: ApiStockPlaceLine[] | null;
+    quantity: string;
+  }> | null;
+  updated_at?: string | null;
+}
+
+export interface PartStockTotalListResponse {
+  data: PartStockTotal[];
+  links: LaravelPaginationLinks;
+  meta: LaravelPaginationMeta;
+}
+
 export interface StockBalanceFilters {
   part_ids?: number[];
   storage_location_ids?: number[];
-  /** Hides pairs that netted back to ZERO. Does NOT hide negatives. */
+  /**
+   * Hides pairs that netted back to ZERO. Does NOT hide negatives.
+   * With group_by=part it applies to the TOTAL instead: a part that is +5 on
+   * one shelf and -5 on another has nothing, and hides.
+   */
   non_zero?: boolean;
+  /** "part" rolls the pairs up into one row per part. */
+  group_by?: "part";
   page?: number;
   per_page?: number;
+}
+
+/**
+ * How a location addresses the space inside it.
+ *
+ * A location answers "Storage A". Its LEVELS -- Shelf, Row, Column, Section, as
+ * many as it wants -- and the VALUES declared on each answer "shelf C, row 8,
+ * column 5". A part carries at most one value per level and every level is
+ * optional, so a thing that lives in a column and nothing else says exactly
+ * that.
+ *
+ * NOT a stock dimension. Quantities stay per (part, location); this records
+ * where a part LIVES, so you can walk over and pick it up.
+ *
+ * Values are DECLARED rather than typed freehand, which is the only thing that
+ * makes "what is on Shelf C?" answerable -- "C", "c" and "Shelf C" cannot
+ * become three shelves. The picker lets a new value be declared inline, so
+ * tagging onto a brand-new shelf is still one flow rather than two.
+ */
+export interface StoragePlaceLevel {
+  id: number;
+  storageLocationId: number;
+  name: string;
+  sortOrder: number;
+  /** NULL when the API did not load them -- which is not the same as a level
+   *  with no values declared yet. */
+  values: StoragePlaceValue[] | null;
+  deletedAt: string | null;
+}
+
+export interface StoragePlaceValue {
+  id: number;
+  storagePlaceLevelId: number;
+  value: string;
+  sortOrder: number;
+  deletedAt: string | null;
+}
+
+export interface ApiStoragePlaceLevel {
+  id: number;
+  storage_location_id: number;
+  name: string;
+  sort_order?: number | null;
+  values?: ApiStoragePlaceValue[] | null;
+  deleted_at?: string | null;
+}
+
+export interface ApiStoragePlaceValue {
+  id: number;
+  storage_place_level_id: number;
+  value: string;
+  sort_order?: number | null;
+  deleted_at?: string | null;
+}
+
+export interface CreateStoragePlaceLevelPayload {
+  name: string;
+  sort_order?: number;
+}
+
+export interface CreateStoragePlaceValuePayload {
+  value: string;
+  sort_order?: number;
+}
+
+/**
+ * One line of a part's address, as the API renders it.
+ *
+ * An ORDERED LIST rather than a map, because the order is the address: "C / 8 /
+ * 5" only means shelf-row-column if it comes out that way every time. The
+ * backend sorts by the location's own level order.
+ *
+ * An EMPTY array means nobody has said. That is a real answer and a different
+ * one from "nowhere", so it must not be rendered as a dash.
+ */
+export interface StockPlaceLine {
+  levelId: number;
+  level: string;
+  valueId: number;
+  value: string;
+}
+
+export interface ApiStockPlaceLine {
+  level_id: number;
+  level: string;
+  value_id: number;
+  value: string;
+}
+
+export interface SetStockPlacePayload {
+  /** The COMPLETE address. A level left out is cleared -- a part has one
+   *  address per location, so a partial update has nothing to mean. */
+  place_value_ids: number[];
 }
 
 export interface StorageLocationFilters {
@@ -347,11 +525,17 @@ export interface ApiStockMovement {
 }
 
 export interface ApiStockBalance {
+  id: number;
   part_id: number;
   part?: ApiStockPartRef | null;
   storage_location_id: number;
   storage_location?: ApiStockLocationRef | null;
-  on_hand: string;
+  place?: ApiStockPlaceLine[] | null;
+  // The wire field is `quantity`, NOT `on_hand` -- see StockService::presentBalance().
+  // This mirror used to declare `on_hand`, which made the transform read undefined
+  // and render every balance as 0 with TypeScript unable to see it. Do not rename.
+  quantity: string;
+  updated_at: string;
 }
 
 /**

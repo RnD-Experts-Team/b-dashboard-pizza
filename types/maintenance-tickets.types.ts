@@ -271,21 +271,70 @@ export interface TicketIssueDiagnosis {
   createdAt: string;
 }
 
-/** Technician time-tracking entry for one or more ticket issues. */
+/**
+ * The eight things that can happen on the clock.
+ *
+ * The coordinator's vocabulary, not the database's: these are what somebody
+ * says out loud on the phone. Travel and parts-run are paid; break is not.
+ */
+export type AttendanceEventKind =
+  | "clock_in"
+  | "clock_out"
+  | "travel_start"
+  | "travel_end"
+  | "break_start"
+  | "break_end"
+  | "parts_run_start"
+  | "parts_run_end";
+
+/**
+ * One thing that happened during a session.
+ *
+ * Each is its own record. Adding "he set off at 08:30" to a session saved an
+ * hour ago is an insert -- where before it meant flagging the whole entry
+ * wrong and typing it all again, because the API had no update path at all.
+ *
+ * `label`, `bucket`, `opens` and `paid` come from the server rather than being
+ * derived here, so the two sides can never disagree about what a kind means.
+ */
+export interface AttendanceEvent {
+  id: number;
+  kind: AttendanceEventKind;
+  /** What a coordinator would say out loud — "Started driving". */
+  label: string;
+  bucket: "work" | "travel" | "break" | "parts_run";
+  opens: boolean;
+  paid: boolean;
+  at: string;
+  /** Struck but still in the ledger. Render it; do not hide it. */
+  mistaken: boolean;
+}
+
+/**
+ * One technician's SESSION — one clock-in to one clock-out — over one or more
+ * ticket issues.
+ *
+ * A session can now hold as many breaks, travels and parts runs as the day
+ * actually had. It used to hold exactly one of each, because it was four fixed
+ * column pairs, so a second break needed a second entry that then read as a
+ * second visit.
+ */
 export interface TicketIssueAttendance {
   id: number;
   ticketIssueId: number;
   technicianId: number;
   technician: { id: number; name: string } | null;
+  /**
+   * The clock window, cached server-side from the events.
+   *
+   * `endClock` of null means the session is still OPEN — somebody is on the
+   * clock right now. That is a normal state and warns about nothing; it used to
+   * emit `incomplete_pair:work`.
+   */
   startClock: string | null;
   endClock: string | null;
-  startBreak: string | null;
-  endBreak: string | null;
-  startPartsRun: string | null;
-  endPartsRun: string | null;
-  /** Travel clocks. Any subset of the four pairs may be set — deliberate. */
-  startTravel: string | null;
-  endTravel: string | null;
+  /** Everything that happened, oldest first, struck ones included. */
+  events: AttendanceEvent[];
   /** Server-computed; null only when the API predates the durations block. */
   durations: AttendanceDurations | null;
   /** Null when the payment claims were not loaded. */
@@ -426,6 +475,20 @@ export interface TicketIssue {
   updatedAt: string;
 }
 
+/** The slim issue shape the ticket LIST carries. */
+export interface TicketIssueSummary {
+  id: number;
+  title: string;
+  status: EnumField | null;
+  priority: EnumField | null;
+  /**
+   * Who is on it. The index already sends these; dropping them here was why
+   * anything put in the pay basket from the rail arrived with no payee, and
+   * the same person's work split across a "known" and an "unknown" payment.
+   */
+  technicians: Array<{ id: number; name: string }>;
+}
+
 export interface Ticket {
   id: number;
   storeId: string | null;
@@ -437,6 +500,17 @@ export interface Ticket {
   attachments: TicketAttachment[];
   creator: UserRef | null;
   issueCount: number;
+  /**
+   * The issues themselves, as far as the LIST endpoint reports them.
+   *
+   * Enough to tick a ticket into a basket without opening it -- a basket holds
+   * issues, and the rail only knows tickets. The index already eager-loads
+   * `ticketIssues`, so this costs nothing extra.
+   *
+   * `[]` when the API sent none. Do not confuse with the full `TicketIssue`
+   * from the detail endpoint, which carries the whole history.
+   */
+  issues: TicketIssueSummary[];
   /** Issue titles from the list response (may be empty if API doesn't include them). */
   issueTitles: string[];
   createdAt: string;
@@ -490,6 +564,26 @@ export interface TicketsAnalytics {
   issues: {
     total: number;
     statusBreakdown: TicketsAnalyticsStatusBreakdown[];
+  };
+  /**
+   * How many issues need looking at, over the same filtered set.
+   *
+   *   overdue -- a non-terminal issue whose LATEST assignment is dated before
+   *              `asOf`. Counts the plan slipping, not a missed SLA: this
+   *              system has no due dates.
+   *   stuck   -- an issue sitting in `waiting`.
+   *
+   * Both are null when the backend did not send them, and null renders as an
+   * em dash rather than 0 -- "we don't know" is not "none", the same rule
+   * avgTicketsPerWeek already follows.
+   *
+   * `asOf` exists because "in the past" is relative to the SERVER's date. Do
+   * not recompute overdue against the browser's clock.
+   */
+  attention: {
+    overdue: number | null;
+    stuck: number | null;
+    asOf: string | null;
   };
   durations: {
     pendingToNextStatus: TicketsAnalyticsDuration;
@@ -599,6 +693,20 @@ export interface InlineNotePayload {
   files?: File[];
 }
 
+/**
+ * One event appended to a saved session.
+ *
+ * Separate from CreateAttendanceEntryPayload, which still carries the eight
+ * clock fields: creation converts them into events server-side, which is what
+ * let the existing form keep working while the ledger went in underneath it.
+ */
+export interface CreateAttendanceEventPayload {
+  kind: AttendanceEventKind;
+  /** REQUIRED. An event with no time is not an event — "has not clocked out
+   *  yet" is said by the absence of a clock_out, not by a null. */
+  at: string;
+}
+
 export interface CreateAttendanceEntryPayload {
   /**
    * ATTENDANCE ONLY: the nested endpoint now accepts issues belonging to OTHER
@@ -684,7 +792,38 @@ export interface ChangeAssignmentTechniciansPayload {
 /*  Filters                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * What GET /tickets/{ticket}/issues returns: the issues, AND the ticket.
+ *
+ * The store-scoped twin does not need to send the ticket -- that URL already
+ * said which store it was. This one has no store segment by design, so the
+ * ticket rides along; without it a page reached by link has no way to learn the
+ * `store_number` that every subsequent write binds on.
+ */
+export interface TicketWithIssuesResponse {
+  data: TicketIssue[];
+  ticket: Ticket;
+}
+
 export interface TicketsFilters {
+  /**
+   * Free text across the ticket id (exact), the store number, the ticket's
+   * other_store, and its issues' title and description. ANDs with every other
+   * filter -- it narrows, it never widens.
+   *
+   * Note a digit string matches BOTH the ticket id and any store number
+   * containing those digits. Both readings are wanted: you type "412" for a
+   * ticket and "3795" for a store.
+   */
+  q?: string;
+  /**
+   * Tickets carrying an issue SCHEDULED in this window (non-mistaken
+   * assignments only). This is what answers "what is on for today" --
+   * created_from cannot, because a ticket raised in March is routinely worked
+   * in September.
+   */
+  assigned_from?: string;
+  assigned_to?: string;
   statuses?: TicketStatus[];
   priorities?: Priority[];
   /** Matches tickets with an issue whose independently-set assigned_priority is one of these. */
@@ -887,6 +1026,17 @@ export interface ApiStorageLocationRef {
   code?: string | null;
 }
 
+export interface ApiAttendanceEvent {
+  id: number;
+  kind: AttendanceEventKind;
+  label: string;
+  bucket: "work" | "travel" | "break" | "parts_run";
+  opens: boolean;
+  paid: boolean;
+  at: string;
+  mistaken: boolean;
+}
+
 export interface ApiTicketIssueAttendance {
   id: number;
   ticket_issue_id: number;
@@ -894,12 +1044,8 @@ export interface ApiTicketIssueAttendance {
   technician: { id: number; name: string } | null;
   start_clock: string | null;
   end_clock: string | null;
-  start_break: string | null;
-  end_break: string | null;
-  start_parts_run: string | null;
-  end_parts_run: string | null;
-  start_travel?: string | null;
-  end_travel?: string | null;
+  /** Null when the relation was not loaded — not the same as "no events". */
+  events?: ApiAttendanceEvent[] | null;
   durations?: ApiAttendanceDurations | null;
   payment?: ApiRecordPaymentBlock | null;
   attachments: ApiTicketAttachment[];
@@ -1027,7 +1173,15 @@ export interface ApiTicket {
   attachments?: ApiTicketAttachment[];
   creator?: { id: number; name: string; email: string } | null;
   issues_count?: number;
-  issues?: Array<{ id: number; display_title?: string | null; title?: string | null; catalog_issue?: { title?: string | null } | null }>;
+  issues?: Array<{
+    id: number;
+    display_title?: string | null;
+    title?: string | null;
+    catalog_issue?: { title?: string | null } | null;
+    status?: ApiEnumField | null;
+    priority?: ApiEnumField | null;
+    technicians?: Array<{ id: number; name: string }> | null;
+  }>;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -1070,6 +1224,15 @@ export interface ApiTicketsAnalytics {
   issues?: {
     total?: number | null;
     status_breakdown?: ApiTicketsAnalyticsStatusBreakdown[] | null;
+  } | null;
+  /**
+   * Rides along on ?include_analytics=1 so the counts never cost a second
+   * request. Optional because an older backend will not send it.
+   */
+  attention?: {
+    overdue?: number | null;
+    stuck?: number | null;
+    as_of?: string | null;
   } | null;
   durations?: {
     pending_to_next_status?: ApiTicketsAnalyticsDuration | null;
