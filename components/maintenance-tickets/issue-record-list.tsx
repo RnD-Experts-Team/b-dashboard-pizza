@@ -1,11 +1,13 @@
 "use client";
 
-import { Clock, Package, Stethoscope, ShieldCheck, Wallet } from "lucide-react";
+import { Clock, Package, Plus, Stethoscope, ShieldCheck, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtFixed } from "@/lib/utils/number-display";
 import { formatDateOrTimestamp, formatTimestamp } from "@/lib/utils/date-display";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { AttendanceDurationsStrip } from "./attendance-durations-strip";
+import { AttendanceStream } from "./attendance-stream";
+import { isOnTheClock } from "@/lib/maintenance-tickets/attendance-events";
 import { PaymentStatusBadge } from "./payment-status-badge";
 import { RecordCorrectionMenu } from "./record-correction-menu";
 import {
@@ -16,7 +18,10 @@ import {
   seedFromWarranty,
   type CorrectionSeed,
 } from "@/lib/maintenance-tickets/corrections";
-import type { TicketIssue } from "@/types/maintenance-tickets.types";
+import type {
+  TicketIssue,
+  TicketIssueAttendance,
+} from "@/types/maintenance-tickets.types";
 
 /**
  * What has already been written down on an issue.
@@ -32,6 +37,9 @@ interface IssueRecordListProps {
   storeId: string;
   ticketId: number;
   onCorrect: (seed: CorrectionSeed) => void;
+  /** Opens the recording panel on one existing session. Absent means the
+   *  stream is shown but nothing here can write to it. */
+  onRecordAttendance?: (entry: TicketIssueAttendance) => void;
   onChanged: () => void;
   className?: string;
 }
@@ -41,6 +49,7 @@ export function IssueRecordList({
   storeId,
   ticketId,
   onCorrect,
+  onRecordAttendance,
   onChanged,
   className,
 }: IssueRecordListProps) {
@@ -70,19 +79,50 @@ export function IssueRecordList({
         <Section icon={Clock} title="Hours">
           {issue.attendanceEntries.map((entry) => (
             <Row key={entry.id} isMistaken={entry.mistaken}>
-              <div className="min-w-0 flex-1 space-y-1">
+              <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-medium">
                     {entry.technician?.name ?? `Technician #${entry.technicianId}`}
                   </span>
                   {entry.payment && <PaymentStatusBadge status={entry.payment.status} />}
+                  {/* An open session is somebody working right now, not a
+                      missing value. Worth saying on the page rather than only
+                      inside the panel. */}
+                  {isOnTheClock(entry.events) && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground no-underline!">
+                      <Clock className="h-3 w-3" aria-hidden="true" />
+                      on the clock
+                    </span>
+                  )}
                 </div>
+
                 <p className="text-[11px] text-muted-foreground">
                   {entry.startClock ? formatTimestamp(entry.startClock) : "no clock-in"}
                   {" → "}
                   {entry.endClock ? formatTimestamp(entry.endClock) : "still on the clock"}
                 </p>
+
+                {/*
+                  The same stream the panel uses, handed no callbacks, which is
+                  what makes it read-only -- there is no second copy of this
+                  markup to drift out of step with the one you record into.
+                */}
+                {entry.events.length > 0 && (
+                  <AttendanceStream events={entry.events} className="pt-0.5" />
+                )}
+
                 <AttendanceDurationsStrip durations={entry.durations} />
+
+                {onRecordAttendance && !entry.mistaken && (
+                  <button
+                    type="button"
+                    onClick={() => onRecordAttendance(entry)}
+                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground no-underline!"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" />
+                    Record what happened next
+                  </button>
+                )}
               </div>
               <RecordCorrectionMenu
                 kind="attendance"

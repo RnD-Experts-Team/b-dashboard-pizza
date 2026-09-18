@@ -19,7 +19,11 @@ import { AttendancePanel } from "./attendance-panel";
 import { PartUsagePanel } from "./part-usage-panel";
 import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
 import type { IssueDraft } from "@/lib/hooks/use-ticket-draft";
-import type { CatalogTechnician, TicketIssue } from "@/types/maintenance-tickets.types";
+import type {
+  CatalogTechnician,
+  TicketIssue,
+  TicketIssueAttendance,
+} from "@/types/maintenance-tickets.types";
 
 /**
  * Renders whichever action panel is currently chosen.
@@ -40,6 +44,9 @@ export interface IssueActionHostProps {
   ticketIssues?: TicketIssue[];
   /** Scopes attendance's other-tickets search. Null searches unscoped. */
   storeNumber?: string | null;
+  /** An existing attendance session to add to, instead of starting a new one.
+   *  Set when "Record what happened next" was pressed on that session. */
+  liveAttendance?: TicketIssueAttendance | null;
   issueDraft: IssueDraft;
   onPatchDraft: (patch: Partial<IssueDraft>) => void;
   onClearDraftFields: (keys: Array<keyof IssueDraft>) => void;
@@ -55,6 +62,7 @@ export function IssueActionHost({
   technicians,
   ticketIssues,
   storeNumber,
+  liveAttendance = null,
   issueDraft,
   onPatchDraft,
   onClearDraftFields,
@@ -103,6 +111,7 @@ export function IssueActionHost({
           technicians={technicians}
           ticketIssues={ticketIssues}
           storeNumber={storeNumber}
+          liveEntry={liveAttendance}
         />
       );
     case "part":

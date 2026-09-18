@@ -32,6 +32,7 @@ import type {
   CreateNotePayload,
   CreateDiagnosisPayload,
   CreateAttendanceEntryPayload,
+  CreateAttendanceEventPayload,
   CreatePartUsagePayload,
   CreatePayEntryPayload,
   CreateWarrantyPayload,
@@ -685,12 +686,18 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
     technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
     startClock: raw.start_clock,
     endClock: raw.end_clock,
-    startBreak: raw.start_break,
-    endBreak: raw.end_break,
-    startPartsRun: raw.start_parts_run,
-    endPartsRun: raw.end_parts_run,
-    startTravel: raw.start_travel ?? null,
-    endTravel: raw.end_travel ?? null,
+    // Kept in the order the server sent it -- oldest first, by the time each
+    // thing happened rather than the order it was typed in.
+    events: (raw.events ?? []).map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      label: e.label,
+      bucket: e.bucket,
+      opens: e.opens,
+      paid: e.paid,
+      at: e.at,
+      mistaken: e.mistaken,
+    })),
     durations: transformDurations(raw.durations),
     payment: transformPaymentBlock(raw.payment),
     attachments: (raw.attachments ?? []).map(transformAttachment),
@@ -802,6 +809,15 @@ function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
  * Builds the relative entity path passed to `addNote` / `addAttachments`.
  * Each value is the path WITHOUT the `/notes` or `/attachments` suffix.
  */
+/**
+ * One attendance session's URL.
+ *
+ * Built in one place because four calls share it, and a typo in one of them
+ * would be a 404 with no obvious cause.
+ */
+const ATT_BASE = (storeId: string, ticketId: number, attendanceId: number) =>
+  `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}`;
+
 export const entityPaths = {
   ticket: (store: string, ticket: number) =>
     `/stores/${encodeURIComponent(store)}/tickets/${ticket}`,
@@ -1640,6 +1656,87 @@ export const maintenanceTicketsService = {
         {},
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
       );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Attendance events ─────────────────────────────────────────────────── */
+
+  /*
+   * Attendance is an append-only event ledger. Each call below writes ONE
+   * thing that happened and gets the whole session back, so the UI never has
+   * to guess what the server made of it.
+   *
+   * This is what the old shape had no room for: after creating an entry, the
+   * only mutation in the entire API was "mistaken = true", so adding a travel
+   * start to a saved clock-in meant flagging the record wrong and retyping it.
+   */
+
+  /**
+   * Record one thing that happened.
+   *
+   * A `clock_in` on an already-open session opens a NEW session server-side and
+   * returns that one -- coming back to a store later is a second visit. So the
+   * caller must use the returned session's id rather than assuming it wrote to
+   * the one it was given.
+   */
+  async createAttendanceEvent(
+    storeId: string,
+    ticketId: number,
+    attendanceId: number,
+    payload: CreateAttendanceEventPayload
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * Correct when something happened.
+   *
+   * Refused with a 422 once a pay sheet has claimed the session: you can fix
+   * what nobody has been paid against, but not quietly rewrite what somebody
+   * was paid on. The message says so, so surface it rather than replacing it.
+   */
+  async updateAttendanceEvent(
+    storeId: string,
+    ticketId: number,
+    attendanceId: number,
+    eventId: number,
+    at: string
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}`,
+        { at },
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Strike one event. It stays in the ledger, struck through, and stops
+   *  counting -- the same flag every other record here uses. */
+  async markAttendanceEventMistaken(
+    storeId: string,
+    ticketId: number,
+    attendanceId: number,
+    eventId: number
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
     } catch (err) { return handleAxiosError(err); }
   },
 

@@ -25,7 +25,7 @@ export { TicketsSearch } from "./tickets-search";
 export { TicketsAttentionChips } from "./tickets-attention-chips";
 export { IssueActionGrid } from "./issue-action-grid";
 export { IssueActionHost } from "./issue-action-host";
-export { IssueRecordBoard } from "./issue-record-board";
+export { IssueRecordList } from "./issue-record-list";
 export { IssueStatusHistory } from "./issue-status-history";
 export { IssueBasketBar } from "./issue-basket-bar";
 export { RecordCorrectionMenu } from "./record-correction-menu";

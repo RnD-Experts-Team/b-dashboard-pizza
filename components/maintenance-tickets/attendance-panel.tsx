@@ -33,13 +33,17 @@ import {
   type AttendancePairInput,
 } from "@/lib/maintenance-tickets/attendance-durations";
 import { DateTimePicker, FieldError } from "./form-bits";
+import { AttendanceStream } from "./attendance-stream";
 import { PasteFileZone } from "./paste-file-zone";
 import { IssuePickerDialog } from "./issue-picker-dialog";
 import type { IssueDraft } from "@/lib/hooks/use-ticket-draft";
 import type {
+  AttendanceEvent,
+  AttendanceEventKind,
   CatalogTechnician,
   CreateAttendanceEntryPayload,
   TicketIssue,
+  TicketIssueAttendance,
 } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -502,6 +506,15 @@ export interface AttendancePanelProps {
   issue: TicketIssue;
   storeId: string;
   ticketId: number;
+  /**
+   * An existing session to add to, rather than starting a new one.
+   *
+   * When present the panel is in LIVE mode: every press writes an event
+   * immediately and there is no save step. When absent it is the create form,
+   * which still posts the eight clock fields in one go -- the API still accepts
+   * them and turns them into events, which is what let this migrate in halves.
+   */
+  liveEntry?: TicketIssueAttendance | null;
   /** The FULL list — narrowing happens inside, so it can be widened again. */
   technicians: CatalogTechnician[];
   issueIds?: number[];
@@ -562,6 +575,7 @@ export function AttendancePanel({
   issue,
   storeId,
   ticketId,
+  liveEntry = null,
   technicians,
   issueIds,
   ticketIssues,
@@ -663,6 +677,100 @@ export function AttendancePanel({
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  /*
+   * LIVE MODE. Adding to a session that already exists.
+   *
+   * There is no form and no save button, because there is nothing to save: each
+   * press writes one event and the server hands back the whole session. That is
+   * the whole point of the change -- the previous shape had no update path at
+   * all, so adding "he set off at 08:30" to a saved clock-in meant flagging the
+   * record wrong and typing it again.
+   *
+   * onSuccess() after every write, so the ticket's read-only copy of this
+   * stream stays honest rather than drifting until something else reloads.
+   */
+  if (liveEntry) {
+    const isPaid = liveEntry.payment?.status.value === "paid";
+
+    const record = async (kind: AttendanceEventKind, at: string) => {
+      try {
+        const session = await maintenanceTicketsService.createAttendanceEvent(
+          storeId,
+          ticketId,
+          liveEntry.id,
+          { kind, at }
+        );
+        // A clock_in on an open session opens a NEW one upstream, so say which
+        // it landed on rather than letting it look like nothing happened.
+        toast.success(
+          session.id === liveEntry.id
+            ? "Recorded."
+            : "Started a new session — the last one was already closed."
+        );
+        onSuccess();
+      } catch (err) {
+        if (isCancelled(err)) return;
+        toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not record that.");
+      }
+    };
+
+    const correct = async (event: AttendanceEvent, at: string) => {
+      try {
+        await maintenanceTicketsService.updateAttendanceEvent(
+          storeId, ticketId, liveEntry.id, event.id, at
+        );
+        onSuccess();
+      } catch (err) {
+        if (isCancelled(err)) return;
+        // The 422 for an already-paid session explains the alternative. Show
+        // the server's sentence rather than replacing it with a generic one.
+        toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not change that.");
+      }
+    };
+
+    const strike = async (event: AttendanceEvent) => {
+      try {
+        await maintenanceTicketsService.markAttendanceEventMistaken(
+          storeId, ticketId, liveEntry.id, event.id
+        );
+        toast.success(`${event.label} marked as a mistake. It stays on the record, struck through.`);
+        onSuccess();
+      } catch (err) {
+        if (isCancelled(err)) return;
+        toast.error(err instanceof MaintenanceTicketsError ? err.message : "Could not do that.");
+      }
+    };
+
+    return (
+      <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {liveEntry.technician?.name ?? `Technician #${liveEntry.technicianId}`}
+          </p>
+          {isPaid && (
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              on a pay sheet — times are fixed
+            </span>
+          )}
+        </div>
+
+        <AttendanceStream
+          events={liveEntry.events}
+          isPaid={isPaid}
+          onRecord={record}
+          onCorrect={correct}
+          onStrike={strike}
+        />
+
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

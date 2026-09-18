@@ -188,6 +188,7 @@ export default function StoragePage() {
                   isRefreshing={partTotalsRefreshing}
                   page={partTotalFilters.page ?? 1}
                   onPageChange={(page) => fetchPartTotals(partTotalFilters, page)}
+                  canSetPlace={canManageLocations}
                   hideEmpty={Boolean(partTotalFilters.non_zero)}
                   onHideEmptyChange={(value) =>
                     fetchPartTotals({ ...partTotalFilters, non_zero: value }, 1)

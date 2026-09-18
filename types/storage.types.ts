@@ -158,8 +158,11 @@ export interface StockBalance {
   part: StockPartRef | null;
   storageLocationId: number;
   storageLocation: StockLocationRef | null;
-  /** Where inside that location it sits. Null means nobody has said. */
-  storageSlot: StorageSlot | null;
+  /** The row's own id, needed to set its address. */
+  id: number;
+  /** Where inside that location it sits, level by level. EMPTY means nobody has
+   *  said -- not "nowhere". */
+  place: StockPlaceLine[];
   /**
    * CAN BE NEGATIVE — only ever as the trace of a reversal applied after the
    * stock had already been consumed. Render it; never clamp to zero. It is a
@@ -250,9 +253,13 @@ export interface PartStockTotal {
 export interface PartStockLocation {
   storageLocationId: number;
   storageLocation: StockLocationRef | null;
-  /** Where inside that location it sits. Null means nobody has said -- which is
-   *  not the same as "nowhere", so render it as unknown rather than a blank. */
-  storageSlot: StorageSlot | null;
+  /** The balance row's id, so the address can be set straight from the stock
+   *  list -- which is where tagging actually happens. */
+  stockBalanceId: number | null;
+  /** Where inside that location it sits, level by level. EMPTY means nobody has
+   *  said -- which is not the same as "nowhere", so render it as unknown rather
+   *  than as a blank. */
+  place: StockPlaceLine[];
   /** CAN BE NEGATIVE, same as the ungrouped listing. Never clamp it. */
   onHand: number;
 }
@@ -266,9 +273,10 @@ export interface ApiPartStockTotal {
   unknown_cost_quantity?: string | null;
   location_count: number;
   locations?: Array<{
+    id?: number | null;
     storage_location_id: number;
     storage_location?: ApiStockLocationRef | null;
-    storage_slot?: ApiStorageSlot | null;
+    place?: ApiStockPlaceLine[] | null;
     quantity: string;
   }> | null;
   updated_at?: string | null;
@@ -296,34 +304,96 @@ export interface StockBalanceFilters {
 }
 
 /**
- * A named place inside a storage location -- a shelf, a bay, a drawer.
+ * How a location addresses the space inside it.
  *
- * NOT a stock dimension. Quantities stay per (part, location); a slot records
- * where a part LIVES, so you can walk over and pick it up. Each location
- * defines its own, so a van and a depot need not share a vocabulary.
+ * A location answers "Storage A". Its LEVELS -- Shelf, Row, Column, Section, as
+ * many as it wants -- and the VALUES declared on each answer "shelf C, row 8,
+ * column 5". A part carries at most one value per level and every level is
+ * optional, so a thing that lives in a column and nothing else says exactly
+ * that.
+ *
+ * NOT a stock dimension. Quantities stay per (part, location); this records
+ * where a part LIVES, so you can walk over and pick it up.
+ *
+ * Values are DECLARED rather than typed freehand, which is the only thing that
+ * makes "what is on Shelf C?" answerable -- "C", "c" and "Shelf C" cannot
+ * become three shelves. The picker lets a new value be declared inline, so
+ * tagging onto a brand-new shelf is still one flow rather than two.
  */
-export interface StorageSlot {
+export interface StoragePlaceLevel {
   id: number;
   storageLocationId: number;
   name: string;
-  code: string | null;
+  sortOrder: number;
+  /** NULL when the API did not load them -- which is not the same as a level
+   *  with no values declared yet. */
+  values: StoragePlaceValue[] | null;
+  deletedAt: string | null;
+}
+
+export interface StoragePlaceValue {
+  id: number;
+  storagePlaceLevelId: number;
+  value: string;
   sortOrder: number;
   deletedAt: string | null;
 }
 
-export interface ApiStorageSlot {
+export interface ApiStoragePlaceLevel {
   id: number;
   storage_location_id: number;
   name: string;
-  code?: string | null;
+  sort_order?: number | null;
+  values?: ApiStoragePlaceValue[] | null;
+  deleted_at?: string | null;
+}
+
+export interface ApiStoragePlaceValue {
+  id: number;
+  storage_place_level_id: number;
+  value: string;
   sort_order?: number | null;
   deleted_at?: string | null;
 }
 
-export interface CreateStorageSlotPayload {
+export interface CreateStoragePlaceLevelPayload {
   name: string;
-  code?: string;
   sort_order?: number;
+}
+
+export interface CreateStoragePlaceValuePayload {
+  value: string;
+  sort_order?: number;
+}
+
+/**
+ * One line of a part's address, as the API renders it.
+ *
+ * An ORDERED LIST rather than a map, because the order is the address: "C / 8 /
+ * 5" only means shelf-row-column if it comes out that way every time. The
+ * backend sorts by the location's own level order.
+ *
+ * An EMPTY array means nobody has said. That is a real answer and a different
+ * one from "nowhere", so it must not be rendered as a dash.
+ */
+export interface StockPlaceLine {
+  levelId: number;
+  level: string;
+  valueId: number;
+  value: string;
+}
+
+export interface ApiStockPlaceLine {
+  level_id: number;
+  level: string;
+  value_id: number;
+  value: string;
+}
+
+export interface SetStockPlacePayload {
+  /** The COMPLETE address. A level left out is cleared -- a part has one
+   *  address per location, so a partial update has nothing to mean. */
+  place_value_ids: number[];
 }
 
 export interface StorageLocationFilters {
@@ -455,11 +525,12 @@ export interface ApiStockMovement {
 }
 
 export interface ApiStockBalance {
+  id: number;
   part_id: number;
   part?: ApiStockPartRef | null;
   storage_location_id: number;
   storage_location?: ApiStockLocationRef | null;
-  storage_slot?: ApiStorageSlot | null;
+  place?: ApiStockPlaceLine[] | null;
   // The wire field is `quantity`, NOT `on_hand` -- see StockService::presentBalance().
   // This mirror used to declare `on_hand`, which made the transform read undefined
   // and render every balance as 0 with TypeScript unable to see it. Do not rename.

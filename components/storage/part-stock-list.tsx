@@ -1,13 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Package } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { StorageEmptyState, PaginationBar, TBL, TH, TD } from "./storage-shared";
-import type { PartStockTotal, PartStockTotalListResponse } from "@/types/storage.types";
+import { PlacePickerDialog } from "./place-picker-dialog";
+import type {
+  PartStockTotal,
+  PartStockTotalListResponse,
+  StockPlaceLine,
+} from "@/types/storage.types";
+
+/** What the picker needs to address one (part, location) row. */
+interface PlaceTarget {
+  balanceId: number;
+  locationId: number;
+  locationName: string;
+  partName: string;
+  current: StockPlaceLine[];
+}
 
 /**
  * What we have, one row per part.
@@ -31,6 +45,10 @@ interface PartStockListProps {
   /** Server-side: hides parts whose total has netted back to nothing. */
   hideEmpty: boolean;
   onHideEmptyChange: (value: boolean) => void;
+  /** Whether this user may say where things are. Same permission as managing
+   *  the locations themselves -- laying a place out and filling it in are one
+   *  job done by one person. */
+  canSetPlace: boolean;
   className?: string;
 }
 
@@ -42,8 +60,20 @@ export function PartStockList({
   onPageChange,
   hideEmpty,
   onHideEmptyChange,
+  canSetPlace,
   className,
 }: PartStockListProps) {
+  /** Which row the picker is open on. */
+  const [target, setTarget] = useState<PlaceTarget | null>(null);
+  /**
+   * Addresses saved since this page was fetched, by balance id.
+   *
+   * Kept locally rather than refetching the whole page: tagging a shelf changes
+   * one cell, and throwing away the list and the scroll position to learn
+   * something we were just told would be a worse trade than a small override
+   * map. It is dropped the moment the page refetches for any real reason.
+   */
+  const [saved, setSaved] = useState<Record<number, StockPlaceLine[]>>({});
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
@@ -56,8 +86,15 @@ export function PartStockList({
       (row.part?.name ?? "").toLowerCase().includes(needle) ||
       row.locations.some(
         (loc) =>
-          (loc.storageSlot?.name ?? "").toLowerCase().includes(needle) ||
-          (loc.storageLocation?.name ?? "").toLowerCase().includes(needle)
+          (loc.storageLocation?.name ?? "").toLowerCase().includes(needle) ||
+          // Searches the address too, level name included, so both "shelf" and
+          // "C" find it -- "which shelf was that on" is exactly as common a
+          // question as "have we got any", and both start from this box.
+          loc.place.some(
+            (line) =>
+              line.value.toLowerCase().includes(needle) ||
+              line.level.toLowerCase().includes(needle)
+          )
       )
     );
   });
@@ -128,6 +165,9 @@ export function PartStockList({
                   row={row}
                   isExpanded={expanded.has(row.partId)}
                   onToggle={() => toggle(row.partId)}
+                  canSetPlace={canSetPlace}
+                  saved={saved}
+                  onSetPlace={setTarget}
                 />
               ))}
             </tbody>
@@ -143,6 +183,20 @@ export function PartStockList({
           disabled={isLoading || isRefreshing}
         />
       )}
+
+      {target && (
+        <PlacePickerDialog
+          open
+          onOpenChange={(open) => !open && setTarget(null)}
+          balanceId={target.balanceId}
+          locationId={target.locationId}
+          locationName={target.locationName}
+          partName={target.partName}
+          current={target.current}
+          canManage={canSetPlace}
+          onSaved={(place) => setSaved((prev) => ({ ...prev, [target.balanceId]: place }))}
+        />
+      )}
     </div>
   );
 }
@@ -151,11 +205,20 @@ function PartRow({
   row,
   isExpanded,
   onToggle,
+  canSetPlace,
+  saved,
+  onSetPlace,
 }: {
   row: PartStockTotal;
   isExpanded: boolean;
   onToggle: () => void;
+  canSetPlace: boolean;
+  saved: Record<number, StockPlaceLine[]>;
+  onSetPlace: (target: PlaceTarget) => void;
 }) {
+  /** What the server said, unless this session has since changed it. */
+  const placeOf = (loc: PartStockTotal["locations"][number]) =>
+    (loc.stockBalanceId != null ? saved[loc.stockBalanceId] : undefined) ?? loc.place;
   const isNegative = row.onHand < 0;
   const canExpand = row.locations.length > 0;
   const hasUnpricedStock = (row.unknownCostQuantity ?? 0) > 0;
@@ -219,18 +282,24 @@ function PartRow({
         <td className={cn(TD, "text-muted-foreground")}>
           {row.locationCount === 0 ? (
             "—"
-          ) : row.locationCount === 1 ? (
-            <span className="flex flex-wrap items-center gap-1">
-              <span>{row.locations[0]?.storageLocation?.name ?? "1 place"}</span>
-              {/* The whole point of slots: at a glance, where to walk to. */}
-              {row.locations[0]?.storageSlot && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-foreground">
-                  {row.locations[0].storageSlot.name}
-                </span>
+          ) : (
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span>
+                {row.locationCount === 1
+                  ? (row.locations[0]?.storageLocation?.name ?? "1 place")
+                  : `${row.locationCount} places`}
+              </span>
+              {/*
+                The address shows even when the part is in SEVERAL locations --
+                it used to collapse to a bare "3 places", which threw away the
+                one thing this column exists to answer. With several, the first
+                is shown and the rest are behind the expander.
+              */}
+              <PlaceChips place={row.locations[0] ? placeOf(row.locations[0]) : []} />
+              {row.locationCount > 1 && (
+                <span className="text-[10px] opacity-60">and {row.locationCount - 1} more</span>
               )}
             </span>
-          ) : (
-            `${row.locationCount} places`
           )}
         </td>
       </tr>
@@ -244,17 +313,36 @@ function PartRow({
                   key={loc.storageLocationId}
                   className="flex items-center justify-between gap-4 text-xs"
                 >
-                  <span className="min-w-0 text-muted-foreground">
+                  <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-muted-foreground">
                     {loc.storageLocation?.name ?? `Location #${loc.storageLocationId}`}
-                    {/* Where exactly, when somebody has said. A blank is not
-                        "nowhere" -- it is "nobody has told us", which is worth
-                        distinguishing so it can be filled in. */}
-                    {loc.storageSlot ? (
-                      <span className="ms-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-foreground">
-                        {loc.storageSlot.name}
-                      </span>
-                    ) : (
-                      <span className="ms-1.5 text-[10px] opacity-60">shelf not recorded</span>
+                    <PlaceChips place={placeOf(loc)} />
+
+                    {/*
+                      THE CONTROL THAT DID NOT EXIST. Shelves could be named and
+                      displayed, and nothing anywhere could put a part on one --
+                      so the "not recorded" branch was the only one a real
+                      balance could take. Tagging lives here, on the stock list,
+                      because retagging after a tidy-up is not a stock movement
+                      and has no honest home in the movement composer.
+                    */}
+                    {canSetPlace && loc.stockBalanceId != null && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSetPlace({
+                            balanceId: loc.stockBalanceId!,
+                            locationId: loc.storageLocationId,
+                            locationName:
+                              loc.storageLocation?.name ?? `Location #${loc.storageLocationId}`,
+                            partName: row.part?.name ?? `Part #${row.partId}`,
+                            current: placeOf(loc),
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <MapPin className="h-3 w-3" aria-hidden="true" />
+                        {placeOf(loc).length > 0 ? "change" : "say where"}
+                      </button>
                     )}
                   </span>
                   <span
@@ -272,5 +360,37 @@ function PartRow({
         </tr>
       )}
     </>
+  );
+}
+
+
+/**
+ * An address as chips -- "C  8  5".
+ *
+ * An EMPTY address prints "where not recorded" rather than nothing, because
+ * "nobody has told us" is a real answer and a different one from "nowhere". A
+ * blank cell would read as the latter, and would also hide the fact that it is
+ * one click from being fixed.
+ */
+function PlaceChips({ place }: { place: StockPlaceLine[] }) {
+  if (place.length === 0) {
+    return <span className="text-[10px] opacity-60">where not recorded</span>;
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {place.map((line) => (
+        <span
+          key={line.levelId}
+          // The level name is in the title rather than on screen: the values
+          // are what you scan for, and "Shelf C Row 8 Column 5" is three times
+          // the width of "C 8 5" for the same information.
+          title={`${line.level}: ${line.value}`}
+          className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground"
+        >
+          {line.value}
+        </span>
+      ))}
+    </span>
   );
 }

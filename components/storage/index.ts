@@ -11,4 +11,5 @@ export {
   PaginationBar,
 } from "./storage-shared";
 export { PartStockList } from "./part-stock-list";
-export { LocationSlots } from "./location-slots";
+export { LocationPlaces } from "./location-places";
+export { PlacePickerDialog } from "./place-picker-dialog";

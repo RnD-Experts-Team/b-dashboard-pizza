@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LocationSlots } from "./location-slots";
+import { LocationPlaces } from "./location-places";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -379,7 +379,7 @@ export function LocationsTab({
                                 shelves, and the paperwork -- so there is a rule
                                 between them. Stacked flush they read as one
                                 block and neither had a beginning. */}
-                            <LocationSlots locationId={location.id} canManage={canManage} />
+                            <LocationPlaces locationId={location.id} canManage={canManage} />
 
                             <EntityNotesAttachments
                               className="mt-5 border-t pt-4"

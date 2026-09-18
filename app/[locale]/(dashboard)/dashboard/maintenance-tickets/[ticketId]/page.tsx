@@ -45,6 +45,7 @@ import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
 import type { CorrectionSeed } from "@/lib/maintenance-tickets/corrections";
 import type {
   Ticket,
+  TicketIssueAttendance,
   TicketIssue,
   TicketsErrorState,
 } from "@/types/maintenance-tickets.types";
@@ -292,6 +293,14 @@ function IssueCard({
   onChanged: () => void;
 }) {
   const [activeAction, setActiveAction] = useState<IssueActionId | null>(null);
+  /**
+   * The attendance session the panel is adding to, when it was opened from a
+   * recorded one rather than from "Log hours".
+   *
+   * Cleared whenever the action changes, so pressing "Log hours" afterwards
+   * starts a new session rather than silently continuing the last one.
+   */
+  const [liveAttendance, setLiveAttendance] = useState<TicketIssueAttendance | null>(null);
   const { getIssueDraft, patchIssueDraft, clearIssueDraftFields } = useTicketDraft(storeId, ticketId);
   const issueDraft = getIssueDraft(issue.id) ?? EMPTY_ISSUE_DRAFT;
 
@@ -307,6 +316,17 @@ function IssueCard({
   );
 
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
+
+  /**
+   * The live session, re-read from the freshly loaded issue each render.
+   *
+   * Holding the object from when the panel opened would leave the stream
+   * showing the state before the last event landed -- every press writes, and
+   * the refetch is what proves it.
+   */
+  const liveEntryNow = liveAttendance
+    ? (issue.attendanceEntries.find((e) => e.id === liveAttendance.id) ?? liveAttendance)
+    : null;
 
   const basketItems = useIssueBasketStore((s) => s.items);
   const toggleBasket = useIssueBasketStore((s) => s.toggle);
@@ -442,6 +462,10 @@ function IssueCard({
             storeId={storeId}
             ticketId={ticketId}
             onCorrect={handleCorrect}
+            onRecordAttendance={(entry) => {
+              setLiveAttendance(entry);
+              setActiveAction("attendance");
+            }}
             onChanged={onChanged}
           />
         </PageSection>
@@ -453,7 +477,16 @@ function IssueCard({
       {/* Never collapsed. Every action on screen, always. The one PRIMARY
           section in the card, because it is what you opened the ticket to do. */}
       <PageSection rank="primary" accent={3} icon={Wrench} title="What you can do">
-        <IssueActionGrid issue={issue} activeAction={activeAction} onSelect={setActiveAction} />
+        <IssueActionGrid
+          issue={issue}
+          activeAction={activeAction}
+          onSelect={(action) => {
+            // A fresh press of "Log hours" means a NEW session. Without this,
+            // it would keep adding to whichever one was last opened.
+            setLiveAttendance(null);
+            setActiveAction(action);
+          }}
+        />
 
         {activeAction && (
           <div className="mt-3">
@@ -468,7 +501,11 @@ function IssueCard({
           issueDraft={issueDraft}
           onPatchDraft={(patch) => patchIssueDraft(issue.id, patch)}
           onClearDraftFields={(keys) => clearIssueDraftFields(issue.id, keys)}
-          onClose={() => setActiveAction(null)}
+          liveAttendance={liveEntryNow}
+          onClose={() => {
+            setLiveAttendance(null);
+            setActiveAction(null);
+          }}
           onSuccess={onChanged}
         />
           </div>

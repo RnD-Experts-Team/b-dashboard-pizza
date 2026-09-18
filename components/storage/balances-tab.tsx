@@ -64,7 +64,14 @@ export function BalancesTab({
       out = out.filter(
         (b) =>
           (b.part?.name ?? "").toLowerCase().includes(q) ||
-          (b.storageLocation?.name ?? "").toLowerCase().includes(q)
+          (b.storageLocation?.name ?? "").toLowerCase().includes(q) ||
+          // The address too, level name included, so "shelf" and "C" both find
+          // it -- same rule as the totals list, so one habit works on both.
+          b.place.some(
+            (line) =>
+              line.value.toLowerCase().includes(q) ||
+              line.level.toLowerCase().includes(q)
+          )
       );
     }
     return out;
@@ -148,6 +155,27 @@ export function BalancesTab({
                             >
                               {b.storageLocation.code}
                             </Badge>
+                          )}
+                          {/*
+                            The address. This view is the one the page labels
+                            "show it shelf by shelf" and it was the only one not
+                            rendering a shelf -- the data arrived, was
+                            transformed, and got dropped on the floor here.
+                          */}
+                          {b.place.length > 0 ? (
+                            b.place.map((line) => (
+                              <span
+                                key={line.levelId}
+                                title={`${line.level}: ${line.value}`}
+                                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground"
+                              >
+                                {line.value}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground opacity-60">
+                              where not recorded
+                            </span>
                           )}
                         </span>
                       </td>

@@ -54,19 +54,35 @@ function numText(value: number | string | null | undefined): string {
   return String(value);
 }
 
+/**
+ * Read a session back into the form that made it.
+ *
+ * MOSTLY OBSOLETE NOW, and deliberately kept. Attendance is an event ledger:
+ * a wrong time is corrected in place on the event, and a thing that never
+ * happened is struck on the event -- neither needs the whole record retyped,
+ * which is what this existed for.
+ *
+ * What it still serves is duplicating a session onto a different technician or
+ * a different set of issues, so it seeds the form from the FIRST event of each
+ * kind. That is lossy for a session with two breaks, and honestly so: the form
+ * has one field per kind, and a copy cannot carry what it has nowhere to put.
+ */
 export function seedFromAttendance(entry: TicketIssueAttendance): CorrectionSeed {
+  const firstAt = (kind: string) =>
+    entry.events.find((e) => e.kind === kind && !e.mistaken)?.at ?? null;
+
   return {
     action: "attendance",
     patch: {
       attendanceTechnicianId: numText(entry.technicianId),
       attendanceStartClock: toLocalInput(entry.startClock),
       attendanceEndClock: toLocalInput(entry.endClock),
-      attendanceStartBreak: toLocalInput(entry.startBreak),
-      attendanceEndBreak: toLocalInput(entry.endBreak),
-      attendanceStartPartsRun: toLocalInput(entry.startPartsRun),
-      attendanceEndPartsRun: toLocalInput(entry.endPartsRun),
-      attendanceStartTravel: toLocalInput(entry.startTravel),
-      attendanceEndTravel: toLocalInput(entry.endTravel),
+      attendanceStartBreak: toLocalInput(firstAt("break_start")),
+      attendanceEndBreak: toLocalInput(firstAt("break_end")),
+      attendanceStartPartsRun: toLocalInput(firstAt("parts_run_start")),
+      attendanceEndPartsRun: toLocalInput(firstAt("parts_run_end")),
+      attendanceStartTravel: toLocalInput(firstAt("travel_start")),
+      attendanceEndTravel: toLocalInput(firstAt("travel_end")),
       // Deliberately not carried over. A note explains the entry that was
       // wrong; repeating it on the replacement would restate a mistake as fact.
       attendanceNoteBody: "",
