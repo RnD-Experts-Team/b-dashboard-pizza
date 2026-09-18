@@ -102,6 +102,33 @@ export interface PageSectionProps {
   className?: string;
   /** For `aria-labelledby` on the section. */
   id?: string;
+  /**
+   * Lets the header fold the body away. OPT-IN and OFF by default, so every
+   * existing `PageSection` on every other page renders exactly as before --
+   * this exists for the ticket page, where a ticket carrying several issues
+   * means several of these stacked, and not every one is what you came for.
+   */
+  collapsible?: boolean;
+  /** Only read once, on mount -- this is uncontrolled by default. The section
+   *  keeps its own open/closed state across re-renders (issue refetches do not
+   *  reset it, as long as the caller keeps the same React key), and nothing
+   *  outside needs to know or steer it. Default true: the first thing you see
+   *  is unchanged from a non-collapsible section. Ignored once `open` is
+   *  passed -- see below. */
+  defaultOpen?: boolean;
+  /**
+   * Switches the section to CONTROLLED: the caller owns open/closed instead of
+   * `PageSection` tracking it internally.
+   *
+   * Needed the moment something OUTSIDE the section has to be able to force it
+   * back open -- the ticket page's action panel can be triggered from a
+   * button that lives in a DIFFERENT section, and if the panel's own section
+   * were left collapsed the newly-opened form would render inside `hidden`
+   * content, invisible. An internal-only toggle can never reach across
+   * sections like that; a controlled one can.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function PageSection({
@@ -114,9 +141,18 @@ export function PageSection({
   children,
   className,
   id,
+  collapsible = false,
+  defaultOpen = true,
+  open: controlledOpen,
+  onOpenChange,
 }: PageSectionProps) {
   const isPrimary = rank === "primary";
   const hasHeader = Boolean(title || action);
+  const isControlled = controlledOpen !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const toggle = () => (isControlled ? onOpenChange?.(!open) : setUncontrolledOpen((v) => !v));
+  const bodyId = React.useId();
 
   return (
     <section
@@ -133,19 +169,62 @@ export function PageSection({
             "flex flex-wrap items-center gap-2",
             // Only the primary earns a rule under its header. Putting one on
             // every rank would flatten the hierarchy again.
-            isPrimary ? "mb-3 border-b pb-2.5" : "mb-2"
+            isPrimary ? "mb-3 border-b pb-2.5" : "mb-2",
+            // The rule only belongs to an OPEN primary -- closed, there is
+            // nothing under it to separate from.
+            collapsible && isPrimary && !open && "mb-0 border-b-0 pb-0"
           )}
         >
-          {Icon && isPrimary && (
-            <span className={cn("flex h-6 w-6 items-center justify-center rounded-md", ACCENT_ICON[accent])}>
-              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-            </span>
-          )}
-          {Icon && !isPrimary && (
-            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          )}
+          {collapsible ? (
+            // The standard disclosure pattern: a heading WRAPS the button,
+            // rather than the button replacing the heading. `contents` takes
+            // the <h2> out of layout entirely (it does not become a flex
+            // item, so it cannot disturb the row), while keeping it in the
+            // DOM -- so a screen reader jumping page-to-page by heading still
+            // lands on "What you can do" the same way it would on a plain
+            // section. `action`, if any, stays OUTSIDE the button -- nesting
+            // it inside would be an invalid button-in-button and would make
+            // it unreachable by itself.
+            <h2 className="contents">
+              <button
+                type="button"
+                onClick={toggle}
+                aria-expanded={open}
+                aria-controls={bodyId}
+                className="-m-1 flex min-w-0 items-center gap-2 rounded-md p-1 text-start transition-colors hover:bg-accent/60"
+              >
+                <ChevronRight
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                    open && "rotate-90"
+                  )}
+                  aria-hidden="true"
+                />
+                {Icon && isPrimary && (
+                  <span className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md", ACCENT_ICON[accent])}>
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                )}
+                {Icon && !isPrimary && (
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                )}
+                {title && <span className={RANK_TITLE[rank]}>{title}</span>}
+              </button>
+            </h2>
+          ) : (
+            <>
+              {Icon && isPrimary && (
+                <span className={cn("flex h-6 w-6 items-center justify-center rounded-md", ACCENT_ICON[accent])}>
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              )}
+              {Icon && !isPrimary && (
+                <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              )}
 
-          {title && <h2 className={RANK_TITLE[rank]}>{title}</h2>}
+              {title && <h2 className={RANK_TITLE[rank]}>{title}</h2>}
+            </>
+          )}
 
           {description && (
             <span className="text-xs text-muted-foreground">{description}</span>
@@ -155,7 +234,19 @@ export function PageSection({
         </div>
       )}
 
-      {children}
+      {collapsible ? (
+        // No height animation. Animating an auto-height box needs either a JS
+        // measure-then-set dance or a max-height hack, and both add latency a
+        // plain display toggle does not have -- "fast" means the response is
+        // instant, not that it is animated. Kept MOUNTED rather than removed,
+        // so a section you are not looking at right now does not lose
+        // whatever was open inside it, and reopening costs nothing.
+        <div id={bodyId} className={cn(!open && "hidden")}>
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </section>
   );
 }
