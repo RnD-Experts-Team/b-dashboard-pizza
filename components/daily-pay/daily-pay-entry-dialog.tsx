@@ -403,7 +403,7 @@ export function DailyPayEntryDialog({
           ) : prefillError ? (
             <div className="py-8 text-center text-sm text-destructive">{prefillError}</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Lost-race banner. Deliberately does NOT close the dialog or
                   discard state — the user's edits are still in the form. */}
               {conflict && (
@@ -452,8 +452,14 @@ export function DailyPayEntryDialog({
 
               <Separator />
 
-              {/* Payments */}
-              <div className="space-y-3">
+              {/*
+                space-y-6 BETWEEN payments, against the space-y-5 between groups
+                inside one. It was 12px out here and 20px in there, which is the
+                hierarchy upside down: the boundary between two different
+                people's money was the tightest gap in the form, so four
+                payments read as one wall of fields.
+              */}
+              <div className="space-y-6">
                 {state.payments.map((payment, i) => (
                   <DailyPayPaymentCard
                     key={i}

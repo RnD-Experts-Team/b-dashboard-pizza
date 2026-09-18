@@ -13,7 +13,12 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
-import { PageSection, SectionBreak, SectionGroup } from "@/components/shared/page-section";
+import {
+  PageSection,
+  SectionBreak,
+  SectionDisclosure,
+  SectionGroup,
+} from "@/components/shared/page-section";
 import { StorageKpis } from "@/components/storage/storage-kpis";
 import { PartStockList } from "@/components/storage/part-stock-list";
 import { StorageSkeleton, StorageErrorCard } from "@/components/storage/storage-shared";
@@ -191,35 +196,27 @@ export default function StoragePage() {
               )}
 
               {/* The per-shelf view, one press away. Folded rather than gone:
-                  "which shelf" is a real question, just not the first one. */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowByLocation((v) => !v)}
-                  aria-expanded={showByLocation}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {showByLocation ? (
-                    <ChevronDown className="h-3 w-3" />
-                  ) : (
-                    <ChevronRight className="h-3 w-3" />
-                  )}
-                  Show it shelf by shelf
-                </button>
-                {showByLocation && (
-                  <div className="mt-3">
-                    <BalancesTab
-                      data={balances}
-                      isLoading={balancesLoading}
-                      error={balancesError}
-                      filters={balanceFilters}
-                      onFiltersChange={(f, page) => fetchBalances(f, page)}
-                      negativeOnly={negativeOnly}
-                      onNegativeOnlyChange={setNegativeOnly}
-                    />
-                  </div>
-                )}
-              </div>
+                  "which shelf" is a real question, just not the first one.
+
+                  It sits on its own rule with real space above it, because
+                  pressed straight against the table it read as the table's
+                  last row rather than as a control. */}
+              <SectionDisclosure
+                open={showByLocation}
+                onToggle={() => setShowByLocation((v) => !v)}
+                icon={Warehouse}
+                label="Show it shelf by shelf"
+              >
+                <BalancesTab
+                  data={balances}
+                  isLoading={balancesLoading}
+                  error={balancesError}
+                  filters={balanceFilters}
+                  onFiltersChange={(f, page) => fetchBalances(f, page)}
+                  negativeOnly={negativeOnly}
+                  onNegativeOnlyChange={setNegativeOnly}
+                />
+              </SectionDisclosure>
             </PageSection>
           )}
 
@@ -259,21 +256,26 @@ export default function StoragePage() {
               with the two sections above. */}
           {canViewLocations && (
             <PageSection rank="tertiary">
+              {/* The header IS the toggle. Quiet, but bounded -- the dashed
+                  edge of the tertiary shell gives it a visible start and end,
+                  which a bare `bg-muted/20` never did. */}
               <button
                 type="button"
                 onClick={() => setShowLocations((v) => !v)}
                 aria-expanded={showLocations}
-                className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                className="-m-1 flex h-9 w-full items-center gap-2 rounded-md p-1 text-start transition-colors hover:bg-accent"
               >
                 {showLocations ? (
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 )}
-                <Warehouse className="h-3 w-3" aria-hidden="true" />
-                Where we keep things
+                <Warehouse className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Where we keep things
+                </span>
                 {locations?.meta.total != null && (
-                  <span className="font-normal normal-case tracking-normal">
+                  <span className="text-xs text-muted-foreground">
                     ({locations.meta.total})
                   </span>
                 )}
@@ -287,6 +289,7 @@ export default function StoragePage() {
                   onFiltersChange={(f, page) => fetchLocations(f, page)}
                   canManage={canManageLocations}
                   onChanged={() => fetchLocations(locationFilters, locationFilters.page ?? 1)}
+                  className="mt-3 border-t pt-3"
                 />
               )}
             </PageSection>

@@ -194,6 +194,7 @@ interface LocationsTabProps {
   onFiltersChange: (filters: StorageLocationFilters, page?: number) => void;
   canManage: boolean;
   onChanged: () => void;
+  className?: string;
 }
 
 export function LocationsTab({
@@ -204,6 +205,7 @@ export function LocationsTab({
   onFiltersChange,
   canManage,
   onChanged,
+  className,
 }: LocationsTabProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -251,7 +253,7 @@ export function LocationsTab({
   const rows = data?.data ?? [];
 
   return (
-    <div className="space-y-3">
+    <div className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Checkbox
@@ -369,12 +371,18 @@ export function LocationsTab({
                       </tr>
                       {expanded === location.id && (
                         <tr key={`${location.id}-detail`}>
-                          <td colSpan={4} className="border-t bg-muted/20 p-3">
+                          <td colSpan={4} className="border-t bg-muted/20 p-4">
                             {/* Where inside this location things sit. The whole point of
-                      the location row expanding. */}
-                  <LocationSlots locationId={location.id} canManage={canManage} />
+                                the location row expanding.
 
-                  <EntityNotesAttachments
+                                Two unrelated things live in this cell -- the
+                                shelves, and the paperwork -- so there is a rule
+                                between them. Stacked flush they read as one
+                                block and neither had a beginning. */}
+                            <LocationSlots locationId={location.id} canManage={canManage} />
+
+                            <EntityNotesAttachments
+                              className="mt-5 border-t pt-4"
                               entityPath={entityPaths.storageLocation(location.id)}
                               notes={location.notes ?? []}
                               attachments={location.attachments ?? []}

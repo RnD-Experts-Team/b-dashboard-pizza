@@ -21,6 +21,7 @@ import {
 import { MoneyField } from "./daily-pay-num-field";
 import { DailyPayLabourControl } from "./daily-pay-labour-control";
 import { DailyPayNoteList } from "./daily-pay-note-list";
+import { PayFieldset, PayFoldout } from "./daily-pay-fieldset";
 import type { LineForm, LineLocationKind } from "@/lib/daily-pay/entry-form-state";
 import type { DailyPayFormErrors } from "@/lib/daily-pay/field-errors";
 import { lineError } from "@/lib/daily-pay/field-errors";
@@ -70,11 +71,14 @@ export function DailyPayLineFieldset({
 
   return (
     <div
-      className="space-y-3 rounded-md border bg-muted/30 p-3"
+      // space-y-4 between the groups below, which each carry their own
+      // internal 12px. Everything was 12px before, so the location, the hours,
+      // the money and the paperwork all ran together into one column.
+      className="space-y-4 rounded-md border bg-muted/30 p-3.5"
       onFocus={onFocusCapture}
     >
-      <div className="flex items-center justify-between">
-        <h5 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-between border-b pb-2.5">
+        <h5 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Store {lineIndex + 1}
         </h5>
         {canRemove && (
@@ -92,6 +96,7 @@ export function DailyPayLineFieldset({
       </div>
 
       {/* Location: a replicated store OR a free-text location. */}
+      <PayFieldset legend="Where" tone="quiet" className="border-t-0 pt-0">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Location type</Label>
@@ -158,7 +163,9 @@ export function DailyPayLineFieldset({
           </div>
         )}
       </div>
+      </PayFieldset>
 
+      <PayFieldset legend="Hours and rate" tone="quiet">
       <DailyPayLabourControl
         mode={line.labourMode}
         onModeChange={(labourMode) => onPatch({ labourMode })}
@@ -174,7 +181,9 @@ export function DailyPayLineFieldset({
         lumpSumError={err("lump_sum")}
         rateError={err("hourly_payment_rate")}
       />
+      </PayFieldset>
 
+      <PayFieldset legend="On top of the labour" tone="quiet">
       <div className="grid gap-3 sm:grid-cols-2">
         <MoneyField
           label="Gas"
@@ -193,8 +202,13 @@ export function DailyPayLineFieldset({
           hint="An extra amount on top — not a total."
         />
       </div>
+      </PayFieldset>
 
-      {/* Linked ticket issues — the payee must already be assigned to each. */}
+      {/* Linked ticket issues -- the payee must already be assigned to each.
+          NOT folded, unlike the files and notes below it: this is what the
+          hours gather from, so hiding it would hide the reason a store line
+          came out at zero. */}
+      <PayFieldset legend="Linked ticket issues" tone="quiet">
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">
           Linked ticket issues (optional)
@@ -238,8 +252,16 @@ export function DailyPayLineFieldset({
           <p className="text-[11px] text-destructive">{err("ticket_issue_ids")}</p>
         )}
       </div>
+      </PayFieldset>
 
-      {/* Files */}
+      {/* Files and notes: optional, and on most store lines empty. Folded,
+          with the count on the tab so a line that does carry one still says so
+          without being opened. */}
+      <PayFoldout
+        label="Attachments and notes"
+        icon={Paperclip}
+        count={line.files.length + line.notes.length}
+      >
       <div className="space-y-1.5">
         <Label className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
@@ -286,6 +308,7 @@ export function DailyPayLineFieldset({
         disabled={disabled}
         label="No notes on this store."
       />
+      </PayFoldout>
     </div>
   );
 }

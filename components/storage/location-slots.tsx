@@ -127,7 +127,9 @@ export function LocationSlots({ locationId, canManage, className }: LocationSlot
   }
 
   return (
-    <div className={cn("space-y-2", className)}>
+    // space-y-3, not space-y-2: a heading, a list of chips and an input are
+    // three different things, and at 8px they stacked into one grey smear.
+    <div className={cn("space-y-3", className)}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         Places inside it
       </p>
@@ -137,13 +139,13 @@ export function LocationSlots({ locationId, canManage, className }: LocationSlot
       )}
 
       {!isLoading && slots.length === 0 && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="max-w-prose text-xs leading-relaxed text-muted-foreground">
           Nothing named yet. Add a shelf, a bay, a drawer — whatever you call it — so parts can
           say where exactly they are.
         </p>
       )}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {slots.map((slot) =>
           editingId === slot.id ? (
             <span key={slot.id} className="inline-flex items-center gap-1">
@@ -179,9 +181,12 @@ export function LocationSlots({ locationId, canManage, className }: LocationSlot
           ) : (
             <span
               key={slot.id}
-              className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs"
+              // A 28px-tall chip with its name given room to breathe, and a
+              // 1.5 gap before the two icon buttons so the name is not pressed
+              // up against a delete control.
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border bg-card ps-2.5 pe-1.5 text-xs"
             >
-              {slot.name}
+              <span className="font-medium">{slot.name}</span>
               {canManage && (
                 <>
                   <button
@@ -216,7 +221,7 @@ export function LocationSlots({ locationId, canManage, className }: LocationSlot
       </div>
 
       {canManage && (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 pt-1">
           <Input
             value={adding}
             onChange={(e) => setAdding(e.target.value)}

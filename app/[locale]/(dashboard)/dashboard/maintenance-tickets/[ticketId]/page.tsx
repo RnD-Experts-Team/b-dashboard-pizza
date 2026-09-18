@@ -30,7 +30,7 @@ import { TicketsErrorCard } from "@/components/maintenance-tickets/tickets-error
 import { StatusChip, PriorityChip } from "@/components/maintenance-tickets/ticket-chips";
 import { IssueActionGrid } from "@/components/maintenance-tickets/issue-action-grid";
 import { IssueActionHost } from "@/components/maintenance-tickets/issue-action-host";
-import { IssueRecordList } from "@/components/maintenance-tickets/issue-record-list";
+import { IssueRecordBoard } from "@/components/maintenance-tickets/issue-record-board";
 import { EntityNotesAttachments } from "@/components/maintenance-tickets/entity-extras";
 import { IssueStatusHistory } from "@/components/maintenance-tickets/issue-status-history";
 import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
@@ -41,7 +41,29 @@ import { useVisitBasketStore } from "@/lib/store/visit-basket.store";
 import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-panel";
 import { Checkbox } from "@/components/ui/checkbox";
 import { entityPaths } from "@/lib/api/services/maintenance-tickets.service";
-import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
+import {
+  suggestedAction,
+  type IssueActionId,
+} from "@/lib/maintenance-tickets/issue-actions";
+
+/**
+ * The five actions the record board owns.
+ *
+ * Both the board and the action grid write to one `activeAction`, so exactly
+ * one form is ever open on an issue -- but each must only render the host for
+ * its own actions, or opening "Log hours" would draw the form twice.
+ */
+const RECORD_ACTIONS = new Set<IssueActionId>([
+  "attendance",
+  "part",
+  "diagnosis",
+  "warranty",
+  "pay",
+]);
+
+function isRecordAction(action: IssueActionId | null): action is IssueActionId {
+  return action != null && RECORD_ACTIONS.has(action);
+}
 import type { CorrectionSeed } from "@/lib/maintenance-tickets/corrections";
 import type {
   Ticket,
@@ -308,6 +330,10 @@ function IssueCard({
 
   const title = issue.issueTitle ?? issue.otherTitle ?? `Issue #${issue.id}`;
 
+  /** Computed once here rather than in both children, so the record board and
+   *  the action grid can never disagree about what the next step is. */
+  const suggested = suggestedAction(issue);
+
   const basketItems = useIssueBasketStore((s) => s.items);
   const toggleBasket = useIssueBasketStore((s) => s.toggle);
   const inBasket = basketItems.some((i) => i.issueId === issue.id);
@@ -435,27 +461,60 @@ function IssueCard({
         )}
       </header>
 
-      <SectionGroup className="mt-3">
-        <PageSection rank="secondary" icon={ClipboardList} title="What has been recorded">
-          <IssueRecordList
+      <SectionGroup className="mt-4">
+        {/*
+          PRIMARY, and first. Five squares that never move and never disappear,
+          each with the button that adds to it. Looking for the parts used means
+          looking at the same square every time, on every issue, on every
+          ticket -- which is the entire point.
+        */}
+        <PageSection rank="primary" accent={1} icon={ClipboardList} title="What has been recorded">
+          <IssueRecordBoard
             issue={issue}
             storeId={storeId}
             ticketId={ticketId}
+            activeAction={activeAction}
+            suggested={suggested}
+            onAdd={setActiveAction}
             onCorrect={handleCorrect}
             onChanged={onChanged}
           />
+
+          {/* The form for whichever square is open. It renders HERE, full
+              width, rather than inside the square: a square is about 320px
+              wide and these forms have a dozen fields. The open square carries
+              a ring, so which square this belongs to is never a guess. */}
+          {isRecordAction(activeAction) && (
+            <div className="mt-4 rounded-lg border border-s-2 border-s-primary bg-background p-3">
+              <IssueActionHost
+                action={activeAction}
+                issue={issue}
+                storeId={storeId}
+                ticketId={ticketId}
+                technicians={technicians}
+                ticketIssues={issues}
+                storeNumber={storeId || null}
+                issueDraft={issueDraft}
+                onPatchDraft={(patch) => patchIssueDraft(issue.id, patch)}
+                onClearDraftFields={(keys) => clearIssueDraftFields(issue.id, keys)}
+                onClose={() => setActiveAction(null)}
+                onSuccess={onChanged}
+              />
+            </div>
+          )}
         </PageSection>
       </SectionGroup>
 
       <SectionBreak />
 
       <SectionGroup>
-      {/* Never collapsed. Every action on screen, always. The one PRIMARY
-          section in the card, because it is what you opened the ticket to do. */}
+      {/* Never collapsed. Every action on screen, always. What is left after the
+          record board took the five "write down what happened" ones: moving the
+          issue along, and who is on it. */}
       <PageSection rank="primary" accent={3} icon={Wrench} title="What you can do">
         <IssueActionGrid issue={issue} activeAction={activeAction} onSelect={setActiveAction} />
 
-        {activeAction && (
+        {activeAction && !isRecordAction(activeAction) && (
           <div className="mt-3">
         <IssueActionHost
           action={activeAction}
