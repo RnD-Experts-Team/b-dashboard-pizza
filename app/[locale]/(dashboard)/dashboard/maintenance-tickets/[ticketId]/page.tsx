@@ -294,6 +294,30 @@ function IssueCard({
 }) {
   const [activeAction, setActiveAction] = useState<IssueActionId | null>(null);
   /**
+   * Whether "What you can do" is expanded. Controlled, not left to the
+   * section's own internal toggle -- see `openAction` below for why.
+   */
+  const [actionsOpen, setActionsOpen] = useState(true);
+
+  /**
+   * Every path that opens a panel goes through here rather than calling
+   * `setActiveAction` directly -- one choke point, so a future caller cannot
+   * forget it. "What you can do" is collapsible now, and its panel can be
+   * triggered from a button that lives in a DIFFERENT section (Correct this,
+   * Record what happened next). Setting `activeAction` alone would render the
+   * form inside a section that might still be collapsed -- open where the
+   * button was, invisible where the form is. Setting both in the same handler
+   * keeps them in one render, so the panel's own scroll-into-view (in
+   * `ActionPanelSlot`) always finds it already visible.
+   *
+   * Closing (`action === null`) never force-collapses the section back --
+   * that would undo a fold the user chose on purpose.
+   */
+  function openAction(action: IssueActionId | null) {
+    if (action) setActionsOpen(true);
+    setActiveAction(action);
+  }
+  /**
    * The attendance session the panel is adding to.
    *
    * THIS WAS THE BUG. The comment that used to sit here said pressing "Log
@@ -325,9 +349,14 @@ function IssueCard({
   const handleCorrect = useCallback(
     (seed: CorrectionSeed) => {
       patchIssueDraft(issue.id, seed.patch);
-      setActiveAction(seed.action);
+      openAction(seed.action);
       onChanged();
     },
+    // openAction is intentionally excluded: it is a plain function that only
+    // ever calls the two stable useState setters, so a render-old reference
+    // to it behaves identically to a fresh one -- there is nothing here for a
+    // dependency to go stale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [issue.id, patchIssueDraft, onChanged]
   );
 
@@ -470,7 +499,16 @@ function IssueCard({
       </header>
 
       <SectionGroup className="mt-3">
-        <PageSection rank="secondary" icon={ClipboardList} title="What has been recorded">
+        {/* Collapsible: a ticket with several issues stacks several of these,
+            and the record list is the one you are least likely to need open
+            for every issue at once. Starts open, so nothing looks different
+            until you actually fold one away. */}
+        <PageSection
+          rank="secondary"
+          icon={ClipboardList}
+          title="What has been recorded"
+          collapsible
+        >
           <IssueRecordList
             issue={issue}
             storeId={storeId}
@@ -478,7 +516,7 @@ function IssueCard({
             onCorrect={handleCorrect}
             onRecordAttendance={(entry) => {
               setLiveAttendance(entry);
-              setActiveAction("attendance");
+              openAction("attendance");
             }}
             onChanged={onChanged}
           />
@@ -488,9 +526,20 @@ function IssueCard({
       <SectionBreak />
 
       <SectionGroup>
-      {/* Never collapsed. Every action on screen, always. The one PRIMARY
-          section in the card, because it is what you opened the ticket to do. */}
-      <PageSection rank="primary" accent={3} icon={Wrench} title="What you can do">
+      {/* Collapsible, same as "What has been recorded" -- a ticket with
+          several issues means several of these too, and folding away the
+          ones you are not acting on right now is worth more than always
+          showing all of them. Still starts open: a ticket with one issue
+          looks exactly as it always has. */}
+      <PageSection
+        rank="primary"
+        accent={3}
+        icon={Wrench}
+        title="What you can do"
+        collapsible
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+      >
         {/*
           THE FORM COMES FIRST, ABOVE THE BUTTONS.
 
@@ -537,7 +586,7 @@ function IssueCard({
                 ? openAttendanceEntries[0]
                 : null
             );
-            setActiveAction(action);
+            openAction(action);
           }}
         />
       </PageSection>
