@@ -42,6 +42,7 @@ import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-
 import { Checkbox } from "@/components/ui/checkbox";
 import { entityPaths } from "@/lib/api/services/maintenance-tickets.service";
 import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
+import { isOnTheClock } from "@/lib/maintenance-tickets/attendance-events";
 import type { CorrectionSeed } from "@/lib/maintenance-tickets/corrections";
 import type {
   Ticket,
@@ -294,13 +295,26 @@ function IssueCard({
 }) {
   const [activeAction, setActiveAction] = useState<IssueActionId | null>(null);
   /**
-   * The attendance session the panel is adding to, when it was opened from a
-   * recorded one rather than from "Log hours".
+   * The attendance session the panel is adding to.
    *
-   * Cleared whenever the action changes, so pressing "Log hours" afterwards
-   * starts a new session rather than silently continuing the last one.
+   * THIS WAS THE BUG. The comment that used to sit here said pressing "Log
+   * hours" should always start a NEW session -- so a technician who was
+   * already clocked in, with "left to get parts" already on the record, got
+   * asked to clock in again the moment you pressed Log hours a second time.
+   * "Done" does not close the session upstream; it only closes the panel. The
+   * session stays open until a clock_out is actually recorded, and pressing
+   * Log hours has to find that and continue it, not bury it under a new one.
    */
   const [liveAttendance, setLiveAttendance] = useState<TicketIssueAttendance | null>(null);
+
+  /**
+   * This issue's sessions that are still open -- clocked in, not yet clocked
+   * out, not struck. Usually zero or one; more than one means two technicians
+   * are on the clock for the same issue at once.
+   */
+  const openAttendanceEntries = issue.attendanceEntries.filter(
+    (e) => !e.mistaken && isOnTheClock(e.events)
+  );
   const { getIssueDraft, patchIssueDraft, clearIssueDraftFields } = useTicketDraft(storeId, ticketId);
   const issueDraft = getIssueDraft(issue.id) ?? EMPTY_ISSUE_DRAFT;
 
@@ -499,6 +513,7 @@ function IssueCard({
             onPatchDraft={(patch) => patchIssueDraft(issue.id, patch)}
             onClearDraftFields={(keys) => clearIssueDraftFields(issue.id, keys)}
             liveAttendance={liveEntryNow}
+            attendanceOpenSessions={openAttendanceEntries}
             onClose={() => {
               setLiveAttendance(null);
               setActiveAction(null);
@@ -511,9 +526,17 @@ function IssueCard({
           issue={issue}
           activeAction={activeAction}
           onSelect={(action) => {
-            // A fresh press of "Log hours" means a NEW session. Without this,
-            // it would keep adding to whichever one was last opened.
-            setLiveAttendance(null);
+            // A fresh press of "Log hours" continues whatever is already
+            // open, when that is unambiguous -- one open session is by far
+            // the common case, and re-asking "who" would just discard the
+            // "left to get parts" that is already sitting on the record.
+            // Two technicians on the clock at once is genuinely ambiguous;
+            // the panel itself offers those as a pick rather than guessing.
+            setLiveAttendance(
+              action === "attendance" && openAttendanceEntries.length === 1
+                ? openAttendanceEntries[0]
+                : null
+            );
             setActiveAction(action);
           }}
         />

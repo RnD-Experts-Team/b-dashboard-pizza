@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -293,6 +293,14 @@ export interface AttendancePanelProps {
    * them and turns them into events, which is what let this migrate in halves.
    */
   liveEntry?: TicketIssueAttendance | null;
+  /**
+   * Other sessions on this issue that are still open.
+   *
+   * Shown as a pick above the "who" question when `liveEntry` is null because
+   * more than one was open and the caller could not guess which one you meant
+   * -- so this asks rather than starting a new session on top of them.
+   */
+  openEntries?: TicketIssueAttendance[];
   /** The FULL list — narrowing happens inside, so it can be widened again. */
   technicians: CatalogTechnician[];
   issueIds?: number[];
@@ -373,6 +381,7 @@ export function AttendancePanel({
   storeId,
   ticketId,
   liveEntry = null,
+  openEntries = [],
   technicians,
   issueIds,
   ticketIssues,
@@ -397,6 +406,14 @@ export function AttendancePanel({
    */
   const [session, setSession] = useState<TicketIssueAttendance | null>(null);
   const active = session ?? liveEntry;
+
+  /** Picks one of the offered open sessions to continue, instead of typing a
+   *  fresh "who" and starting a session on top of it. No request -- the panel
+   *  already has everything it needs, the same as when `liveEntry` arrives
+   *  pre-selected. */
+  function adopt(entry: TicketIssueAttendance) {
+    setSession(entry);
+  }
 
   useEffect(() => {
     setSession(null);
@@ -566,6 +583,29 @@ export function AttendancePanel({
           </span>
         )}
       </div>
+
+      {!active && openEntries.length > 0 && (
+        <div className="space-y-1.5 rounded-md border border-dashed p-2">
+          <p className="text-[11px] font-medium text-muted-foreground">
+            {openEntries.length === 1
+              ? "Already on the clock for this issue"
+              : `${openEntries.length} people already on the clock for this issue`}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {openEntries.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => adopt(entry)}
+                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs transition-colors hover:bg-accent"
+              >
+                <Clock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+                Continue {entry.technician?.name ?? `Technician #${entry.technicianId}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!active && (
         <div className="space-y-3">

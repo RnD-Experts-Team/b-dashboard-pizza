@@ -45,8 +45,13 @@ export interface IssueActionHostProps {
   /** Scopes attendance's other-tickets search. Null searches unscoped. */
   storeNumber?: string | null;
   /** An existing attendance session to add to, instead of starting a new one.
-   *  Set when "Record what happened next" was pressed on that session. */
+   *  Set when "Record what happened next" was pressed on that session, or when
+   *  "Log hours" was pressed and exactly one session on this issue was open. */
   liveAttendance?: TicketIssueAttendance | null;
+  /** Every session on this issue that is still open. When `liveAttendance` is
+   *  null because more than one was open, the panel offers these as a pick
+   *  rather than starting a session on top of them. */
+  attendanceOpenSessions?: TicketIssueAttendance[];
   issueDraft: IssueDraft;
   onPatchDraft: (patch: Partial<IssueDraft>) => void;
   onClearDraftFields: (keys: Array<keyof IssueDraft>) => void;
@@ -63,6 +68,7 @@ export function IssueActionHost({
   ticketIssues,
   storeNumber,
   liveAttendance = null,
+  attendanceOpenSessions,
   issueDraft,
   onPatchDraft,
   onClearDraftFields,
@@ -112,6 +118,7 @@ export function IssueActionHost({
           ticketIssues={ticketIssues}
           storeNumber={storeNumber}
           liveEntry={liveAttendance}
+          openEntries={attendanceOpenSessions}
         />
       );
     case "part":
