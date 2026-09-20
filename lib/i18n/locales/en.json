@@ -2558,5 +2558,115 @@
       "title": "Reset quick links",
       "description": "This will restore the default quick links based on your permissions."
     }
+  },
+  "topbarTools": {
+    "expand": "Show tools",
+    "collapse": "Hide tools",
+    "lockedOnBreak": "Stays open while a break is running"
+  },
+  "storePassport": {
+    "trigger": "Store passport",
+    "subtitle": "Everything about this store in one place.",
+    "placeholderNote": "Placeholder data — this passport is not wired to the backend yet.",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "reveal": "Reveal",
+    "hide": "Hide",
+    "hideAll": "Hide all",
+    "yes": "Yes",
+    "no": "No",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "hours": "Hours",
+      "team": "Team",
+      "facilities": "Facilities",
+      "access": "Access"
+    },
+    "sections": {
+      "identity": "Identity",
+      "contact": "Contact",
+      "management": "Management",
+      "headcount": "Headcount",
+      "capacity": "Capacity & equipment",
+      "services": "Services"
+    },
+    "fields": {
+      "name": "Store name",
+      "code": "Store code",
+      "internalId": "Internal ID",
+      "franchisee": "Franchisee",
+      "legalEntity": "Legal entity",
+      "openedOn": "Opened",
+      "address": "Address",
+      "phone": "Phone",
+      "email": "Email",
+      "timezone": "Time zone",
+      "generalManager": "General manager",
+      "areaManager": "Area manager",
+      "assistantManagers": "Assistant managers",
+      "seating": "Seating",
+      "posTerminals": "POS terminals",
+      "ovens": "Ovens",
+      "makeLines": "Make lines",
+      "parkingSpaces": "Parking spaces",
+      "deliveryRadius": "Delivery radius",
+      "driveThru": "Drive thru",
+      "dineIn": "Dine in"
+    },
+    "units": {
+      "miles": "{count} mi"
+    },
+    "roles": {
+      "shiftLeads": "Shift leads",
+      "cooks": "Cooks",
+      "drivers": "Drivers",
+      "csr": "CSR"
+    },
+    "hours": {
+      "openNow": "Open now",
+      "closedNow": "Closed now",
+      "day": "Day",
+      "open": "Opens",
+      "close": "Closes",
+      "holidayNote": "Holiday hours may differ — check with the area manager.",
+      "days": {
+        "sun": "Sunday",
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday"
+      }
+    },
+    "access": {
+      "warning": "Sensitive — anyone who can open this dialog can read these. Don't share them outside the store team, and change them when someone leaves.",
+      "sections": {
+        "websites": "Websites",
+        "alarm": "Alarm",
+        "registers": "Registers & safe"
+      },
+      "fields": {
+        "paychexUrl": "Paychex URL",
+        "paychexUser": "Paychex username",
+        "paychexPassword": "Paychex password",
+        "altametricsUrl": "Altametrics URL",
+        "altametricsUser": "Altametrics username",
+        "altametricsPassword": "Altametrics password",
+        "alarmProvider": "Alarm provider",
+        "alarmAccount": "Account number",
+        "alarmCode": "Alarm code",
+        "alarmDuressCode": "Duress code",
+        "alarmPhone": "Alarm line",
+        "managerOverride": "Manager override",
+        "register1": "Register 1",
+        "register2": "Register 2",
+        "safeCode": "Safe code"
+      }
+    }
   }
 }

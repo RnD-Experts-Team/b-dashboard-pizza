@@ -2557,5 +2557,115 @@
       "title": "إعادة تعيين الروابط السريعة",
       "description": "سيؤدي هذا إلى استعادة الروابط السريعة الافتراضية بناءً على صلاحياتك."
     }
+  },
+  "topbarTools": {
+    "expand": "إظهار الأدوات",
+    "collapse": "إخفاء الأدوات",
+    "lockedOnBreak": "تبقى مفتوحة أثناء الاستراحة"
+  },
+  "storePassport": {
+    "trigger": "بطاقة المتجر",
+    "subtitle": "كل ما يخص هذا المتجر في مكان واحد.",
+    "placeholderNote": "بيانات مبدئية — لم يتم ربط هذه البطاقة بالخادم بعد.",
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "reveal": "إظهار",
+    "hide": "إخفاء",
+    "hideAll": "إخفاء الكل",
+    "yes": "نعم",
+    "no": "لا",
+    "status": {
+      "active": "نشط",
+      "inactive": "غير نشط"
+    },
+    "tabs": {
+      "overview": "نظرة عامة",
+      "hours": "ساعات العمل",
+      "team": "الفريق",
+      "facilities": "المرافق",
+      "access": "بيانات الدخول"
+    },
+    "sections": {
+      "identity": "الهوية",
+      "contact": "بيانات التواصل",
+      "management": "الإدارة",
+      "headcount": "عدد الموظفين",
+      "capacity": "السعة والمعدات",
+      "services": "الخدمات"
+    },
+    "fields": {
+      "name": "اسم المتجر",
+      "code": "رمز المتجر",
+      "internalId": "المعرّف الداخلي",
+      "franchisee": "صاحب الامتياز",
+      "legalEntity": "الكيان القانوني",
+      "openedOn": "تاريخ الافتتاح",
+      "address": "العنوان",
+      "phone": "الهاتف",
+      "email": "البريد الإلكتروني",
+      "timezone": "المنطقة الزمنية",
+      "generalManager": "المدير العام",
+      "areaManager": "مدير المنطقة",
+      "assistantManagers": "المدراء المساعدون",
+      "seating": "المقاعد",
+      "posTerminals": "أجهزة الكاشير",
+      "ovens": "الأفران",
+      "makeLines": "خطوط التحضير",
+      "parkingSpaces": "مواقف السيارات",
+      "deliveryRadius": "نطاق التوصيل",
+      "driveThru": "خدمة السيارات",
+      "dineIn": "تناول الطعام بالداخل"
+    },
+    "units": {
+      "miles": "{count} ميل"
+    },
+    "roles": {
+      "shiftLeads": "مشرفو الورديات",
+      "cooks": "الطهاة",
+      "drivers": "السائقون",
+      "csr": "خدمة العملاء"
+    },
+    "hours": {
+      "openNow": "مفتوح الآن",
+      "closedNow": "مغلق الآن",
+      "day": "اليوم",
+      "open": "الفتح",
+      "close": "الإغلاق",
+      "holidayNote": "قد تختلف ساعات العمل في العطلات — راجع مدير المنطقة.",
+      "days": {
+        "sun": "الأحد",
+        "mon": "الاثنين",
+        "tue": "الثلاثاء",
+        "wed": "الأربعاء",
+        "thu": "الخميس",
+        "fri": "الجمعة",
+        "sat": "السبت"
+      }
+    },
+    "access": {
+      "warning": "معلومات حساسة — يمكن لأي شخص يفتح هذه النافذة الاطلاع عليها. لا تشاركها خارج فريق المتجر، وقم بتغييرها عند مغادرة أي موظف.",
+      "sections": {
+        "websites": "المواقع",
+        "alarm": "نظام الإنذار",
+        "registers": "الكاشير والخزنة"
+      },
+      "fields": {
+        "paychexUrl": "رابط Paychex",
+        "paychexUser": "اسم مستخدم Paychex",
+        "paychexPassword": "كلمة مرور Paychex",
+        "altametricsUrl": "رابط Altametrics",
+        "altametricsUser": "اسم مستخدم Altametrics",
+        "altametricsPassword": "كلمة مرور Altametrics",
+        "alarmProvider": "مزود الإنذار",
+        "alarmAccount": "رقم الحساب",
+        "alarmCode": "رمز الإنذار",
+        "alarmDuressCode": "رمز الطوارئ",
+        "alarmPhone": "خط الإنذار",
+        "managerOverride": "رمز تجاوز المدير",
+        "register1": "الكاشير 1",
+        "register2": "الكاشير 2",
+        "safeCode": "رمز الخزنة"
+      }
+    }
   }
 }
