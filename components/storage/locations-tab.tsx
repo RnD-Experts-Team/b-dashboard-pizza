@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -305,7 +305,7 @@ export function LocationsTab({
                 {rows.map((location) => {
                   const retired = location.deletedAt != null;
                   return (
-                    <>
+                    <Fragment key={location.id}>
                       <tr
                         key={location.id}
                         className={cn(
@@ -393,7 +393,7 @@ export function LocationsTab({
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>
