@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
-import { PhotoPicker } from "./photo-picker";
+import { MAX_PHOTOS, PhotoPicker } from "./photo-picker";
 import type { DueItem } from "@/types/cleaning.types";
 
 const ACTIVE_STATUSES = ["hired", "rehired"];
@@ -118,11 +118,16 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
         .filter((f): f is File => f != null);
       if (pasted.length > 0) {
         e.preventDefault();
-        setPhotos((prev) => [...prev, ...pasted]);
-        toast.success(t("toasts.pasted"));
+        setPhotos((prev) => {
+          const room = Math.max(0, MAX_PHOTOS - prev.length);
+          if (pasted.length > room) toast.warning(t("toasts.maxReached", { max: MAX_PHOTOS }));
+          if (room === 0) return prev;
+          toast.success(t("toasts.pasted"));
+          return [...prev, ...pasted.slice(0, room)];
+        });
       }
     },
-    []
+    [t]
   );
 
   const handleSubmit = async () => {

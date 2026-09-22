@@ -14,6 +14,7 @@ import {
   Link2Off,
   Loader2,
   PackageCheck,
+  Search,
   X,
   ZoomIn,
 } from "lucide-react";
@@ -43,6 +44,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { usePublicInventoryLink } from "@/lib/hooks/use-public-inventory";
+import { sortByReferenceOrder } from "@/lib/inventory/public-count-order";
 import type { PublicLinkItem, PublicSubmitItem } from "@/types/inventory.types";
 
 type Counts = Record<number, { u1: string; u2: string; u3: string }>;
@@ -64,6 +66,8 @@ const T: Record<
     filterByCategory: string;
     allCategories: string;
     uncategorized: string;
+    searchPlaceholder: string;
+    noSearchResults: string;
   }
 > = {
   en: {
@@ -81,6 +85,8 @@ const T: Record<
     filterByCategory: "Filter by category",
     allCategories: "All",
     uncategorized: "Uncategorized",
+    searchPlaceholder: "Search items…",
+    noSearchResults: "No items match your search.",
   },
   ar: {
     inventoryCount: "جرد المخزون",
@@ -97,6 +103,8 @@ const T: Record<
     filterByCategory: "تصفية حسب الفئة",
     allCategories: "الكل",
     uncategorized: "غير مصنّف",
+    searchPlaceholder: "بحث عن عنصر…",
+    noSearchResults: "لا توجد عناصر مطابقة لبحثك.",
   },
   es: {
     inventoryCount: "Conteo de Inventario",
@@ -114,6 +122,8 @@ const T: Record<
     filterByCategory: "Filtrar por categoría",
     allCategories: "Todos",
     uncategorized: "Sin categoría",
+    searchPlaceholder: "Buscar artículos…",
+    noSearchResults: "Ningún artículo coincide con tu búsqueda.",
   },
 };
 
@@ -311,6 +321,23 @@ export function PublicCountForm({ token }: { token: string }) {
   const [lightboxItem, setLightboxItem] = useState<PublicLinkItem | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+  const [search, setSearch] = useState("");
+
+  // Items in the reference order the company's paper/Cognito inventory form
+  // uses for this link's type — see public-count-order.ts for why that order
+  // can't be derived from any field already on the item.
+  const orderedItems = useMemo(
+    () => (link ? sortByReferenceOrder(link.items, link.type) : []),
+    [link]
+  );
+
+  const matchesSearch = (item: PublicLinkItem) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      item.name.toLowerCase().includes(q) || item.ultimatrix_id.toLowerCase().includes(q)
+    );
+  };
 
   // Unique categories across all items, plus an "uncategorized" bucket if any
   // item has no tags. Built from whatever the link already returned — there's
@@ -319,7 +346,7 @@ export function PublicCountForm({ token }: { token: string }) {
     if (!link) return { tags: [] as { id: number; name: string }[], hasUncategorized: false };
     const byId = new Map<number, { id: number; name: string }>();
     let hasUncategorized = false;
-    for (const item of link.items) {
+    for (const item of orderedItems) {
       if (item.tags.length === 0) hasUncategorized = true;
       for (const tag of item.tags) byId.set(tag.id, tag);
     }
@@ -327,7 +354,7 @@ export function PublicCountForm({ token }: { token: string }) {
       tags: Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name)),
       hasUncategorized,
     };
-  }, [link]);
+  }, [link, orderedItems]);
 
   // Items sliced into per-category sections (a tagged item can appear in more
   // than one section) instead of one flat list — the dropdown then just picks
@@ -337,17 +364,17 @@ export function PublicCountForm({ token }: { token: string }) {
     const tagSections = categories.tags.map((tag) => ({
       key: tag.id as CategoryFilter,
       label: tag.name,
-      items: link.items.filter((i) => i.tags.some((t) => t.id === tag.id)),
+      items: orderedItems.filter((i) => i.tags.some((t) => t.id === tag.id)),
     }));
     if (categories.hasUncategorized) {
       tagSections.push({
         key: "uncategorized" as CategoryFilter,
         label: T[link.lang].uncategorized,
-        items: link.items.filter((i) => i.tags.length === 0),
+        items: orderedItems.filter((i) => i.tags.length === 0),
       });
     }
     return tagSections;
-  }, [link, categories]);
+  }, [link, categories, orderedItems]);
 
   const setCount = (
     itemId: number,
@@ -556,6 +583,12 @@ export function PublicCountForm({ token }: { token: string }) {
   if (!link) return null;
 
   const total = link.items.length;
+  const noSearchMatches =
+    total > 0 &&
+    search.trim() !== "" &&
+    (sections.length > 0
+      ? sections.every((section) => section.items.filter(matchesSearch).length === 0)
+      : orderedItems.filter(matchesSearch).length === 0);
 
   // A true flex column filling the fixed-height <main>: header and submit bar are
   // shrink-0; the item list is the only scrollable region (flex-1 + min-h-0).
@@ -602,24 +635,35 @@ export function PublicCountForm({ token }: { token: string }) {
         )}
       </header>
 
-      {/* Category filter — a dropdown that picks which section(s) below are
-          visible; sections are never unmounted, so typed counts survive
-          switching the filter. */}
-      {sections.length > 0 && (
+      {/* Search + category filter, side by side: search takes the remaining
+          width, the category dropdown stays a fixed compact width (its value
+          text line-clamps, so long category names just truncate). */}
+      {(total > 0 || sections.length > 0) && (
         <div
-          className="shrink-0 border-b bg-background/95 px-4 py-2.5"
+          className="flex shrink-0 items-center gap-2 border-b bg-background/95 px-4 py-2.5"
           dir={link.lang === "ar" ? "rtl" : undefined}
         >
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {T[link.lang].filterByCategory}
-          </p>
+          {total > 0 && (
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={T[link.lang].searchPlaceholder}
+                className="h-9 ps-8"
+              />
+            </div>
+          )}
           <Select
             value={String(activeCategory)}
             onValueChange={(v) =>
               setActiveCategory(v === "all" || v === "uncategorized" ? v : Number(v))
             }
           >
-            <SelectTrigger className="h-9 w-full">
+            <SelectTrigger
+              className="h-9 w-32 shrink-0"
+              aria-label={T[link.lang].filterByCategory}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -651,28 +695,34 @@ export function PublicCountForm({ token }: { token: string }) {
             <p className="py-10 text-center text-sm text-muted-foreground">
               {T[link.lang].noItems}
             </p>
+          ) : noSearchMatches ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              {T[link.lang].noSearchResults}
+            </p>
           ) : (
             <div dir={link.lang === "ar" ? "rtl" : undefined} className="space-y-5">
               {sections.length > 0 ? (
                 sections.map((section) => {
-                  const visible = activeCategory === "all" || activeCategory === section.key;
+                  const categoryVisible =
+                    activeCategory === "all" || activeCategory === section.key;
+                  const items = section.items.filter(matchesSearch);
                   return (
                     <div
                       key={String(section.key)}
-                      className={cn("space-y-3", !visible && "hidden")}
+                      className={cn("space-y-3", (!categoryVisible || items.length === 0) && "hidden")}
                     >
                       <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {section.label}
-                        <span className="ms-1.5 text-muted-foreground/60">
-                          ({section.items.length})
-                        </span>
+                        <span className="ms-1.5 text-muted-foreground/60">({items.length})</span>
                       </h2>
-                      {section.items.map((item) => renderItemCard(item))}
+                      {items.map((item) => renderItemCard(item))}
                     </div>
                   );
                 })
               ) : (
-                <div className="space-y-3">{link.items.map((item) => renderItemCard(item))}</div>
+                <div className="space-y-3">
+                  {orderedItems.filter(matchesSearch).map((item) => renderItemCard(item))}
+                </div>
               )}
             </div>
           )}

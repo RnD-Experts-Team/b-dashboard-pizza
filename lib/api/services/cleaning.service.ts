@@ -1194,7 +1194,9 @@ export const cleaningService = {
       const res = await axios.get<ApiEvaluationGrid>(`/api/cleaning/reports/data`, {
         params: { period_type: periodType, period_key: periodKey },
         headers: authHeaders(),
-        timeout: 15_000,
+        // Matches downloadCsv's timeout below — same report query underneath,
+        // and 15s was proven too tight for it (that's why CSV already uses 60s).
+        timeout: 60_000,
         signal,
       });
       return transformGrid(res.data);
