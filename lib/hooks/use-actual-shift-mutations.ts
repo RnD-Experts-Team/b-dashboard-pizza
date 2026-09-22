@@ -9,7 +9,11 @@ import {
   parseSchedulingError,
   type SchedulingError,
 } from "@/lib/scheduling/errors";
-import type { ActualShift, Shift } from "@/types/scheduling.types";
+import type {
+  ActualShift,
+  ActualShiftSegment,
+  Shift,
+} from "@/types/scheduling.types";
 
 /**
  * Recording what actually happened, as opposed to what was planned.
@@ -106,6 +110,24 @@ export interface UseActualShiftMutationsResult {
    */
   markReviewed: (actual: ActualShift) => Promise<boolean>;
   deleteActual: (actual: ActualShift) => Promise<boolean>;
+  /**
+   * Fold other shifts from the same day into this one.
+   *
+   * For when the 60-minute grouping rule guessed wrong and split what was
+   * really a single shift. Nothing reaches TCP — the punches are unchanged,
+   * just counted once — so this is fast and cannot fail upstream.
+   */
+  mergeActuals: (into: ActualShift, others: ActualShift[]) => Promise<boolean>;
+  /**
+   * Move some of this shift's punches out into a shift of their own.
+   *
+   * For the opposite mistake: two genuinely separate shifts in a day, rolled
+   * up as one. Takes segment rows, not the shift.
+   */
+  splitActual: (
+    actual: ActualShift,
+    segments: ActualShiftSegment[],
+  ) => Promise<boolean>;
   isSubmitting: boolean;
   error: SchedulingError | null;
   clearError: () => void;
@@ -254,6 +276,38 @@ export function useActualShiftMutations({
     [run, storeId],
   );
 
+  const mergeActuals = useCallback(
+    (into: ActualShift, others: ActualShift[]) =>
+      run(
+        () =>
+          schedulingService.mergeActualShifts(
+            storeId!,
+            into.id,
+            others.map((a) => a.id),
+          ),
+        "Could not merge these shifts.",
+        others.length === 1
+          ? "Merged into one shift"
+          : `Merged ${others.length + 1} shifts into one`,
+      ),
+    [run, storeId],
+  );
+
+  const splitActual = useCallback(
+    (actual: ActualShift, segments: ActualShiftSegment[]) =>
+      run(
+        () =>
+          schedulingService.splitActualShift(
+            storeId!,
+            actual.id,
+            segments.map((seg) => seg.id),
+          ),
+        "Could not split this shift.",
+        "Split into two shifts",
+      ),
+    [run, storeId],
+  );
+
   const deleteActual = useCallback(
     (actual: ActualShift) =>
       run(
@@ -277,6 +331,8 @@ export function useActualShiftMutations({
     agreeClockIn,
     markReviewed,
     deleteActual,
+    mergeActuals,
+    splitActual,
     isSubmitting,
     error,
     clearError: () => setError(null),

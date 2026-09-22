@@ -1,20 +1,16 @@
 "use client";
 
-import { AlertTriangle, Check, UserX } from "lucide-react";
+import { AlertTriangle, Check, Clock, UserX } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  MATCH_TOLERANCE_MINUTES,
-  formatTime,
-} from "@/lib/scheduling/constants";
+import { formatTime } from "@/lib/scheduling/constants";
 import {
   formatDurationDelta,
   shiftEdgeOffsets,
-  workedAsPlanned,
 } from "@/lib/scheduling/utils";
 import {
   SHIFT_ACCENT,
@@ -22,6 +18,7 @@ import {
   SHIFT_RAIL_BASE,
   type ShiftTone,
 } from "@/lib/scheduling/accents";
+import { ShiftSegments } from "./shift-segments";
 import {
   ShiftTooltipBody,
   ShiftTooltipHeader,
@@ -56,7 +53,13 @@ interface ComparisonShiftCardProps {
   actual?: ActualShift;
 }
 
-type Outcome = "match" | "differs" | "absent" | "unplanned" | "not-recorded";
+type Outcome =
+  | "match"
+  | "differs"
+  | "absent"
+  | "unplanned"
+  | "not-recorded"
+  | "in-progress";
 
 /**
  * Outcomes mapped onto the three shared tones.
@@ -76,6 +79,11 @@ const OUTCOME: Record<
   absent: { tone: "critical", icon: UserX },
   unplanned: { tone: "info", icon: AlertTriangle },
   "not-recorded": { tone: "neutral", dashed: true, icon: null },
+  /**
+   * Still on the clock. Neutral on purpose — an unfinished shift is not a
+   * problem, and there is nothing to compare it against until it ends.
+   */
+  "in-progress": { tone: "neutral", icon: Clock },
 };
 
 /** "+7m" / "−4m" / "on time" — one edge against the plan. */
@@ -127,10 +135,19 @@ export function ComparisonShiftCard({
   let outcome: Outcome;
   if (!plannedShift) outcome = "unplanned";
   else if (!actual) outcome = "not-recorded";
-  else if (actual.status === "absent") outcome = "absent";
-  // Not equality: a time clock almost never reproduces the plan to the minute,
-  // and calling every two-minute punch a discrepancy buried the real ones.
-  else outcome = workedAsPlanned(plannedShift, actual) ? "match" : "differs";
+  else if (actual.reviewState === "absent") outcome = "absent";
+  // Judging a shift nobody has finished is not possible and not useful: there
+  // is no end punch to compare, and the hours keep climbing.
+  else if (actual.isOpen) outcome = "in-progress";
+  /*
+   * The server's comparison, not our own.
+   *
+   * This card used to re-compare the times itself with a ten-minute tolerance,
+   * which put it at odds with `needs_attention` and with the Actual view. It
+   * also only ever looked at times — the server compares the label too, so a
+   * shift renamed after the fact now shows up here, as it should.
+   */
+  else outcome = actual.timeVariance === "matches" ? "match" : "differs";
 
   const spec = OUTCOME[outcome];
   const accent = SHIFT_ACCENT[spec.tone];
@@ -145,7 +162,11 @@ export function ComparisonShiftCard({
    * stop adding up for the reader.
    */
   const compared =
-    plannedShift && actual && outcome !== "absent" && outcome !== "unplanned"
+    plannedShift &&
+    actual &&
+    outcome !== "absent" &&
+    outcome !== "unplanned" &&
+    outcome !== "in-progress"
       ? {
           delta: formatDurationDelta(
             plannedShift.durationMinutes,
@@ -157,7 +178,8 @@ export function ComparisonShiftCard({
 
   const delta = compared?.delta ?? null;
   const offsets = compared?.offsets ?? null;
-  const shifted = !!offsets && (offsets.start !== 0 || offsets.end !== 0);
+  const shifted =
+    !!offsets && (offsets.start !== 0 || (offsets.end ?? 0) !== 0);
 
   return (
     <Tooltip>
@@ -213,9 +235,11 @@ export function ComparisonShiftCard({
           >
             {!actual
               ? "Not recorded"
-              : actual.status === "absent"
+              : actual.reviewState === "absent"
                 ? "No show"
-                : `${formatTime(actual.startTime)}–${formatTime(actual.endTime)}`}
+                : actual.isOpen
+                  ? `${formatTime(actual.startTime)}– in progress`
+                  : `${formatTime(actual.startTime)}–${formatTime(actual.endTime)}`}
           </Row>
 
           {delta && (
@@ -228,20 +252,29 @@ export function ComparisonShiftCard({
               {delta}
             </p>
           )}
+
+          {/*
+            Without this, a shift with a break in it reads 9:00–5:00 against a
+            9:00–5:00 plan and then shows −30m, with nothing on the card to say
+            where the half hour went. Actual explains it; Compare is where the
+            week gets checked before payroll, so it has more need of it, not
+            less.
+          */}
+          {actual && <ShiftSegments segments={actual.segments} />}
         </div>
       </TooltipTrigger>
 
       <TooltipContent side="top" className="max-w-60 text-xs">
         <ShiftTooltipHeader
           time={
-            actual && actual.status !== "absent"
+            actual && actual.reviewState !== "absent"
               ? `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`
               : plannedShift
                 ? `${formatTime(plannedShift.startTime)} – ${formatTime(plannedShift.endTime)}`
                 : "—"
           }
           hours={
-            actual && actual.status !== "absent"
+            actual && actual.reviewState !== "absent"
               ? actual.durationMinutes / 60
               : plannedShift
                 ? plannedShift.durationMinutes / 60
@@ -254,6 +287,7 @@ export function ComparisonShiftCard({
           {outcome === "absent" && "Did not attend"}
           {outcome === "unplanned" && "Worked without a planned shift"}
           {outcome === "not-recorded" && "Not reviewed yet"}
+          {outcome === "in-progress" && "On the clock now"}
         </ShiftTooltipStatus>
 
         <ShiftTooltipBody>
@@ -265,7 +299,7 @@ export function ComparisonShiftCard({
           <ShiftTooltipRow label="Actual">
             {!actual
               ? "Nothing recorded"
-              : actual.status === "absent"
+              : actual.reviewState === "absent"
                 ? "Did not work"
                 : `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`}
           </ShiftTooltipRow>
@@ -279,7 +313,8 @@ export function ComparisonShiftCard({
           */}
           {shifted && offsets && (
             <ShiftTooltipRow label="Clocked">
-              in {offsetLabel(offsets.start)} · out {offsetLabel(offsets.end)}
+              in {offsetLabel(offsets.start)}
+              {offsets.end !== null && <> · out {offsetLabel(offsets.end)}</>}
             </ShiftTooltipRow>
           )}
           {actual?.note && (
@@ -287,16 +322,16 @@ export function ComparisonShiftCard({
           )}
         </ShiftTooltipBody>
 
-        {outcome === "match" && shifted && (
-          <ShiftTooltipHint>
-            Within {MATCH_TOLERANCE_MINUTES} minutes of the plan, so it counts
-            as worked as planned.
-          </ShiftTooltipHint>
-        )}
-
         {outcome === "not-recorded" && (
           <ShiftTooltipHint>
             Switch to the Actual view to record what happened.
+          </ShiftTooltipHint>
+        )}
+
+        {outcome === "in-progress" && (
+          <ShiftTooltipHint>
+            Still being worked, so there is nothing to compare yet. The hours
+            shown are what has been worked so far.
           </ShiftTooltipHint>
         )}
       </TooltipContent>

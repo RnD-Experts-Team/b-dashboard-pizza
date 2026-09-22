@@ -22,7 +22,11 @@ import type {
   ActualShiftSource,
   ActualReviewState,
   ActualTimeVariance,
-  ActualShiftStatus,
+  ActualShiftSegment,
+  SegmentOrigin,
+  ClockSegment,
+  ClockStatus,
+  OnTheClockEntry,
   AvailabilityRule,
   AvailabilitySource,
   BulkOperation,
@@ -124,13 +128,12 @@ const SHIFT_TYPES: readonly ShiftType[] = [
 ];
 const SYNC_STATUSES: readonly ShiftSyncStatus[] = ["synced", "pending", "parked"];
 const ORIGINS: readonly ShiftOrigin[] = ["operations", "humanity", "reconciler"];
-const ACTUAL_STATUSES: readonly ActualShiftStatus[] = [
-  "confirmed",
-  "modified",
-  "absent",
-  "added",
-];
 const ACTUAL_SOURCES: readonly ActualShiftSource[] = ["manual", "timeclock"];
+const SEGMENT_ORIGINS: readonly SegmentOrigin[] = [
+  "punch",
+  "manual",
+  "discovered",
+];
 const TIME_VARIANCES: readonly ActualTimeVariance[] = [
   "matches",
   "differs",
@@ -289,6 +292,29 @@ export function adaptShift(raw: unknown): Shift {
   };
 }
 
+/**
+ * One clock-in→clock-out pair.
+ *
+ * `time_in` / `time_out` are store-local wall clock with no offset. They are
+ * kept verbatim: handing `"2026-08-06 09:00:00"` to `new Date()` reads it as
+ * UTC in some engines and as local in others, which is the same trap the
+ * date-only fields carry. Slice the time out of it for display instead.
+ */
+export function adaptActualSegment(raw: unknown): ActualShiftSegment {
+  const s = rec(raw);
+  return {
+    id: id(s.id),
+    workSegmentId: id(s.work_segment_id),
+    timeIn: str(s.time_in),
+    timeOut: strOrNull(s.time_out),
+    durationMinutes: s.duration_minutes == null ? null : num(s.duration_minutes),
+    isOpen: bool(s.is_open),
+    hasMissedPunch: bool(s.has_missed_punch),
+    origin: oneOf(s.origin, SEGMENT_ORIGINS, "discovered"),
+    note: strOrNull(s.note) ?? undefined,
+  };
+}
+
 export function adaptActualShift(raw: unknown): ActualShift {
   const a = rec(raw);
   return {
@@ -297,27 +323,83 @@ export function adaptActualShift(raw: unknown): ActualShift {
     dayIndex: num(a.day_index),
     shiftDate: str(a.shift_date),
     startTime: str(a.start_time),
-    endTime: str(a.end_time),
+    /**
+     * Null while the person is on the clock — NOT the empty string.
+     *
+     * `str()` would turn null into `""`, which is worse than useless: it
+     * satisfies a `string` type, sails through every guard in `formatTime`, and
+     * renders the literal text "NaN:undefined AM" on the card.
+     */
+    endTime: strOrNull(a.end_time),
     durationMinutes: num(a.duration_minutes),
+    isOpen: bool(a.is_open),
     label: str(a.label),
     type: oneOf(a.type, SHIFT_TYPES, "custom"),
-    // Derived server-side; read it, never assert it.
-    status: oneOf(a.status, ACTUAL_STATUSES, "modified"),
     /**
-     * Left undefined when the field is absent rather than defaulted: a default
-     * would either hide genuinely unreviewed punches or flag every older record
-     * as needing review. Absent means "this response predates the split", and
-     * callers fall back to `status`.
+     * The two halves of the old `status`, which the server no longer sends.
+     *
+     * Both are defaulted rather than left undefined now that the shim is gone
+     * and there is nothing to fall back to. The defaults pick the harmless
+     * direction in each case: `matches` says nothing is wrong, and `unreviewed`
+     * declines to claim a human approved something.
      */
-    timeVariance: a.time_variance
-      ? oneOf(a.time_variance, TIME_VARIANCES, "matches")
-      : undefined,
-    reviewState: a.review_state
-      ? oneOf(a.review_state, REVIEW_STATES, "worked")
-      : undefined,
+    timeVariance: oneOf(a.time_variance, TIME_VARIANCES, "matches"),
+    reviewState: oneOf(a.review_state, REVIEW_STATES, "unreviewed"),
+    needsAttention: bool(a.needs_attention),
+    groupingPinned: bool(a.grouping_pinned),
+    segments: arr(a.segments).map(adaptActualSegment),
     plannedShiftId: strOrNull(a.planned_shift_id) ?? undefined,
     note: strOrNull(a.note) ?? undefined,
     source: oneOf(a.source, ACTUAL_SOURCES, "manual"),
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Clocking                                                                 */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/** The live punch shape. See `ClockSegment` on why it is not the stored one. */
+export function adaptClockSegment(raw: unknown): ClockSegment {
+  const c = rec(raw);
+  return {
+    workSegmentId: id(c.work_segment_id),
+    tcpEmployeeId: id(c.tcp_employee_id),
+    jobCodeId: id(c.job_code_id),
+    timeIn: str(c.time_in),
+    timeOut: strOrNull(c.time_out),
+    actualTimeIn: strOrNull(c.actual_time_in),
+    actualTimeOut: strOrNull(c.actual_time_out),
+    isOpen: bool(c.is_open),
+    hasMissedPunch: bool(c.has_missed_punch),
+    origin: oneOf(c.origin, SEGMENT_ORIGINS, "punch"),
+  };
+}
+
+export function adaptOnTheClock(raw: unknown): OnTheClockEntry {
+  const e = rec(raw);
+  return {
+    employeeId: id(e.employee_id),
+    employeeName: str(e.employee_name),
+    // Kept verbatim. Unlike every other time in this file it DOES carry an
+    // offset, so it is the one safe to hand to a date library.
+    since: str(e.since),
+    minutesSoFar: num(e.minutes_so_far),
+    segment: e.segment ? adaptClockSegment(e.segment) : null,
+  };
+}
+
+export function adaptClockStatus(raw: unknown): ClockStatus {
+  const c = rec(raw);
+  return {
+    employeeId: id(c.employee_id),
+    /**
+     * Defaults to TRUE when absent, which is the forgiving direction: a false
+     * default would tell every store their staff are not set up for clocking
+     * the moment the field went missing.
+     */
+    linkedToTcp: bool(c.linked_to_tcp, true),
+    clockedIn: bool(c.clocked_in),
+    segment: c.segment ? adaptClockSegment(c.segment) : null,
   };
 }
 

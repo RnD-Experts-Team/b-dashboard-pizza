@@ -103,9 +103,27 @@ export function ScheduleErrorAlert({
           </ul>
         )}
 
+        {/*
+          What the upstream system actually said.
+          Smaller and dimmer than the headline on purpose: it is usually a
+          sentence written for an engineer, and a manager should be able to skip
+          it without feeling they have missed the point. But it is often the
+          only part that names the real obstacle, so it cannot be dropped.
+        */}
+        {error.detail && (
+          <p className="text-xs opacity-80">{error.detail}</p>
+        )}
+
         {error.retryAfterSeconds != null && (
           <p className="text-xs opacity-80">
             Try again in about {formatRetryWait(error.retryAfterSeconds)}.
+          </p>
+        )}
+
+        {/* For a support ticket. Quiet enough to ignore, present enough to quote. */}
+        {error.requestId && (
+          <p className="font-mono text-[10px] opacity-60">
+            Reference {error.requestId}
           </p>
         )}
 

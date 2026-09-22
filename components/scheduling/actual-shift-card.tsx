@@ -3,6 +3,7 @@
 import {
   Check,
   Pencil,
+  Scissors,
   Trash2,
   UserPlus,
   UserX,
@@ -16,20 +17,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  MATCH_TOLERANCE_MINUTES,
-  formatTime,
-} from "@/lib/scheduling/constants";
-import { formatDurationDelta, workedAsPlanned } from "@/lib/scheduling/utils";
+import { formatTime, formatWorkedEnd } from "@/lib/scheduling/constants";
+import { formatDurationDelta } from "@/lib/scheduling/utils";
 import {
   SHIFT_ACCENT,
   SHIFT_CARD_SURFACE,
   SHIFT_RAIL_BASE,
+  type ShiftTone,
 } from "@/lib/scheduling/accents";
 import {
   PENDING_CARD_CLASS,
   ShiftPendingOverlay,
 } from "./shift-pending";
+import { ShiftSegments } from "./shift-segments";
 import {
   ShiftTooltipBody,
   ShiftTooltipHeader,
@@ -54,6 +54,15 @@ interface ActualShiftCardProps {
    * literally said so. That is a dialog round-trip to say "yes, that's fine".
    */
   onMarkReviewed?: (actual: ActualShift) => void;
+  /**
+   * Regroup the day — split these punches apart, or fold another shift in.
+   *
+   * Offered only when there is something to regroup: more than one punch
+   * behind this shift, or another shift recorded the same day.
+   */
+  onAdjust?: (actual: ActualShift) => void;
+  /** True when the same person has another recorded shift that day. */
+  hasSameDayActuals?: boolean;
   /** An action on this record is in flight. */
   isPending?: boolean;
 }
@@ -65,6 +74,8 @@ export function ActualShiftCard({
   onEdit,
   onDelete,
   onMarkReviewed,
+  onAdjust,
+  hasSameDayActuals,
   isPending,
 }: ActualShiftCardProps) {
 
@@ -126,7 +137,7 @@ export function ActualShiftCard({
   }
 
   // Absent — no-show marker
-  if (actual.status === "absent") {
+  if (actual.reviewState === "absent") {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -197,44 +208,67 @@ export function ActualShiftCard({
 
   // Confirmed / modified / added — solid worked-shift card
   const hours = actual.durationMinutes / 60;
-  const isAdded = actual.status === "added";
+  const isAdded = actual.timeVariance === "unplanned";
   /**
-   * The server's `status` flags ANY difference from the plan, down to the
-   * minute — a punch two minutes early reads exactly like one two hours off.
-   * Compare already applies a tolerance on top of that signal so a time clock's
-   * ordinary drift does not get treated as a discrepancy; this card had not,
-   * so the identical shift disagreed between the two views. Same helper, same
-   * ten minutes, so a shift is either worked-as-planned everywhere or nowhere.
+   * The server's verdict, taken as given.
+   *
+   * The grid used to soften this with a ten-minute tolerance, which meant a
+   * two-minute punch showed a green card while the very same shift sat in the
+   * Needs attention list — the colour and the filter contradicting each other
+   * on screen. Whatever the server calls a difference, so do we. Note it
+   * compares the LABEL as well as the times, so a renamed shift counts.
    */
-  const withinTolerance = !!plannedShift && workedAsPlanned(plannedShift, actual);
-  const isModified = actual.status === "modified" && !withinTolerance;
+  const isModified = !actual.isOpen && actual.timeVariance === "differs";
   const delta = plannedShift
     ? formatDurationDelta(plannedShift.durationMinutes, actual.durationMinutes)
     : null;
-  /**
-   * Nobody has looked at this yet.
-   *
-   * `status` cannot say this — an unreviewed punch and a manager-confirmed one
-   * both read as `confirmed`. It matters most for a punch with NO planned shift
-   * behind it, which otherwise renders as settled coverage even though it is
-   * untouched. Undefined on responses predating the field, so this simply does
-   * not fire there.
-   */
   const needsReview = actual.reviewState === "unreviewed";
   /**
-   * "Worked as planned" is the expected outcome, so it gets no rail at all.
-   * Only a change (attention) or unplanned cover (info) is worth marking —
-   * and anything still unreviewed outranks both.
+   * Still on the clock, and past the server's cap for how long that can go on.
+   *
+   * A running shift is the one case the server leaves unflagged, so attention
+   * on an open shift can only mean the clock-out never came. The hours stop
+   * accruing at the cap; the shift never invents an end, because only a real
+   * punch can close it.
    */
-  const tone = needsReview
-    ? "attention"
-    : isModified
-      ? "attention"
+  const neverClockedOut = actual.isOpen && actual.needsAttention;
+  /**
+   * Signed off, and then the hours moved underneath them.
+   *
+   * TCP is the system of record: if a supervisor voids a punch there, the
+   * duration drops here and the row resurfaces. The manager's verdict is
+   * deliberately preserved — this says the verdict now covers different hours
+   * than the ones they saw, which is the one `needs_attention` reason nothing
+   * else on the card would show.
+   */
+  const changedSinceReview =
+    actual.reviewState === "worked" &&
+    actual.needsAttention &&
+    // Only when nothing else already explains the flag. Hours that differ from
+    // the plan are "time changed", which says more and says it plainly; this is
+    // for the case where the shift still matches and was flagged anyway.
+    !isModified &&
+    !isAdded;
+  /**
+   * Green means the hours match the plan — the same thing it means in Compare,
+   * so one shift never reads two ways depending on which tab you opened.
+   *
+   * An unreviewed but unremarkable punch is green too, and says "Recorded"
+   * rather than "Worked as planned". It used to go amber, which lit a clean
+   * week of clock-ins end to end and left the one shift that actually needed
+   * looking at nothing to stand out from; whether anybody has signed it off is
+   * a separate question, answered by the caption and by the attention filter.
+   */
+  const tone: ShiftTone = neverClockedOut
+    ? // Sixteen hours on the clock is not a running shift, it is a mistake.
+      "attention"
+    : actual.isOpen
+      ? "neutral"
       : isAdded
         ? "info"
-        // Reviewed and matching the plan: the one outcome worth confirming at a
-        // glance, and previously indistinguishable from an empty cell.
-        : "success";
+        : isModified || changedSinceReview
+          ? "attention"
+          : "success";
   const accent = SHIFT_ACCENT[tone];
 
   return (
@@ -257,7 +291,7 @@ export function ActualShiftCard({
               "Looks right" — one call, no dialog. Only on something nobody has
               looked at yet; a reviewed record has nothing left to accept.
             */}
-            {needsReview && onMarkReviewed && (
+            {needsReview && !actual.isOpen && onMarkReviewed && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -280,6 +314,20 @@ export function ActualShiftCard({
             >
               <Pencil className="h-3.5 w-3.5" />
             </Button>
+            {onAdjust && (actual.segments.length > 1 || hasSameDayActuals) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md text-white hover:text-white hover:bg-white/20"
+                aria-label="Split or merge this shift"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAdjust(actual);
+                }}
+              >
+                <Scissors className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -304,7 +352,19 @@ export function ActualShiftCard({
             being flagged is the shift's state.
           */}
           <div className="flex items-center gap-1 font-semibold leading-tight text-foreground">
-            {isModified ? (
+            {actual.isOpen ? (
+              // A quiet pulse, not a colour — `accents.ts` reserves the palette
+              // for outcomes, and a shift still running is not an outcome.
+              <span
+                aria-hidden
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                  neverClockedOut
+                    ? "bg-amber-500"
+                    : "animate-pulse bg-emerald-500",
+                )}
+              />
+            ) : isModified || changedSinceReview ? (
               <Pencil className={cn("h-3 w-3 shrink-0", accent.text)} />
             ) : isAdded ? (
               <UserPlus className={cn("h-3 w-3 shrink-0", accent.text)} />
@@ -312,7 +372,7 @@ export function ActualShiftCard({
               <Check className={cn("h-3 w-3 shrink-0", accent.text)} />
             )}
             <span className="truncate">
-              {formatTime(actual.startTime)} - {formatTime(actual.endTime)}
+              {formatTime(actual.startTime)} - {formatWorkedEnd(actual.endTime, actual.isOpen)}
             </span>
           </div>
           <p
@@ -324,13 +384,19 @@ export function ActualShiftCard({
             )}
           >
             <span className="truncate">
-              {needsReview
-                ? "Needs review"
-                : isAdded
-                  ? "Added coverage"
-                  : isModified
-                    ? "Time changed"
-                    : "Worked as planned"}
+              {neverClockedOut
+                ? "Never clocked out"
+                : actual.isOpen
+                  ? "On the clock now"
+                  : isAdded
+                    ? "Added coverage"
+                    : isModified
+                      ? "Time changed"
+                      : changedSinceReview
+                        ? "Hours changed since review"
+                        : actual.reviewState === "worked"
+                          ? "Worked as planned"
+                          : "Recorded"}
             </span>
             {/*
               Where this record came from. A clock-in is evidence; a manual
@@ -354,7 +420,7 @@ export function ActualShiftCard({
             identically to one worked to the minute, and the row's own hours
             total stops looking like it agrees with the card.
           */}
-          {delta && !needsReview && (
+          {delta && !actual.isOpen && (
             <p
               className={cn(
                 "mt-0.5 text-end text-[9px] font-semibold tabular-nums leading-none",
@@ -364,21 +430,30 @@ export function ActualShiftCard({
               {delta}
             </p>
           )}
+
+          {/* Only draws itself when there is more than one punch behind this. */}
+          <ShiftSegments segments={actual.segments} />
         </div>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-60 text-xs">
         <ShiftTooltipHeader
-          time={`${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`}
+          time={`${formatTime(actual.startTime)} – ${formatWorkedEnd(actual.endTime, actual.isOpen)}`}
           hours={hours}
         />
         <ShiftTooltipStatus tone={tone}>
-          {needsReview
-            ? "Needs review"
-            : isAdded
-              ? "Worked without being planned"
-              : isModified
-                ? "Time changed"
-                : "Worked as planned"}
+          {neverClockedOut
+            ? "Never clocked out"
+            : actual.isOpen
+              ? "On the clock now"
+              : isAdded
+                ? "Worked without being planned"
+                : isModified
+                  ? "Time changed"
+                  : changedSinceReview
+                    ? "The hours changed since this was reviewed"
+                    : actual.reviewState === "worked"
+                      ? "Worked as planned"
+                      : "Recorded, not yet reviewed"}
         </ShiftTooltipStatus>
 
         <ShiftTooltipBody>
@@ -401,18 +476,26 @@ export function ActualShiftCard({
           )}
         </ShiftTooltipBody>
 
-        {needsReview && (
+        {neverClockedOut && (
+          <ShiftTooltipHint>
+            The hours stopped counting at the cap. Only a real punch, or a
+            correction on the time clock itself, can close this.
+          </ShiftTooltipHint>
+        )}
+
+        {changedSinceReview && (
+          <ShiftTooltipHint>
+            Your verdict was kept, but it no longer covers these hours. Worth a
+            second look.
+          </ShiftTooltipHint>
+        )}
+
+        {needsReview && !actual.isOpen && (
           <ShiftTooltipHint>
             Tick to accept it, or edit to correct the times.
           </ShiftTooltipHint>
         )}
 
-        {!needsReview && withinTolerance && delta && (
-          <ShiftTooltipHint>
-            Within {MATCH_TOLERANCE_MINUTES} minutes of the plan, so it counts
-            as worked as planned.
-          </ShiftTooltipHint>
-        )}
       </TooltipContent>
     </Tooltip>
   );

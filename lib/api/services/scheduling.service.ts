@@ -183,6 +183,73 @@ export const schedulingService = {
     return data;
   },
 
+  /* ── Clocking (TCP Manager+) ───────────────────────────────────────────
+   * Punches are written to TCP and read back; TCP is the system of record for
+   * worked time. Writes count against an account-wide budget of 2500 calls a
+   * day, so exhaustion is an ordinary operating condition rather than a fault
+   * — see `TCP_DAILY_QUOTA_EXHAUSTED`.
+   */
+
+  /**
+   * Everyone on the clock at this store right now.
+   *
+   * One local query and no vendor call, so it is safe to poll. It used to take
+   * a TCP request per employee against that daily budget, which is why the
+   * question could not be answered at all before.
+   */
+  async getOnTheClock(storeId: string, signal?: AbortSignal) {
+    const { data } = await axios.get<DataEnvelope<unknown>>(
+      `${base(storeId)}/on-the-clock`,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
+    );
+    return data.data;
+  },
+
+  /**
+   * Punch in. Omit `at` to punch now.
+   *
+   * Supplying `at` makes it a correction, which is always verified against TCP
+   * rather than answered from local state, so it is slower and can fail
+   * upstream where a plain punch would not.
+   */
+  async clockIn(
+    storeId: string,
+    employeeId: string,
+    body: { at?: string; position_label?: string } = {},
+  ) {
+    const { data } = await axios.post<DataEnvelope<unknown>>(
+      `${base(storeId)}/employees/${encodeURIComponent(employeeId)}/clock-in`,
+      body,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  async clockOut(
+    storeId: string,
+    employeeId: string,
+    body: { at?: string; position_label?: string } = {},
+  ) {
+    const { data } = await axios.post<DataEnvelope<unknown>>(
+      `${base(storeId)}/employees/${encodeURIComponent(employeeId)}/clock-out`,
+      body,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  async getClockStatus(
+    storeId: string,
+    employeeId: string,
+    signal?: AbortSignal,
+  ) {
+    const { data } = await axios.get<DataEnvelope<unknown>>(
+      `${base(storeId)}/employees/${encodeURIComponent(employeeId)}/clock-status`,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
+    );
+    return data.data;
+  },
+
   /* ── Actual shifts ───────────────────────────────────────────────────────
    * Local to OperationsPizza and never pushed to Humanity: worked time lives in
    * the payroll system, shifts live in Humanity, and these record the gap.
@@ -215,6 +282,49 @@ export const schedulingService = {
     const { data } = await axios.post<DataEnvelope<unknown>>(
       `${base(storeId)}/actual-shifts/${encodeURIComponent(actualId)}`,
       payload,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  /**
+   * "These were really one shift."
+   *
+   * Overrules the 60-minute grouping rule and pins the decision, so the next
+   * sync leaves it alone. The other shifts are absorbed and cease to exist —
+   * refetch rather than patching them out locally. Writes nothing to TCP: the
+   * hours are the same punches counted once, so this cannot fail upstream.
+   */
+  async mergeActualShifts(
+    storeId: string,
+    actualId: string,
+    actualShiftIds: string[],
+  ) {
+    const { data } = await axios.post<DataEnvelope<unknown>>(
+      `${base(storeId)}/actual-shifts/${encodeURIComponent(actualId)}/merge`,
+      { actual_shift_ids: actualShiftIds },
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  /**
+   * "This was really two shifts."
+   *
+   * Takes OUR segment row ids — `shift.segments[].id`, never `work_segment_id`.
+   * The source shift keeps the segments that were not moved and its duration
+   * and end time both change, so the caller must refetch rather than trusting
+   * what it already holds. Moving every segment is refused (`INVALID_SPLIT`),
+   * since it would leave the source with nothing.
+   */
+  async splitActualShift(
+    storeId: string,
+    actualId: string,
+    segmentIds: string[],
+  ) {
+    const { data } = await axios.post<DataEnvelope<unknown>>(
+      `${base(storeId)}/actual-shifts/${encodeURIComponent(actualId)}/split`,
+      { segment_ids: segmentIds },
       { headers: buildHeaders(), timeout: TIMEOUT_MS },
     );
     return data.data;

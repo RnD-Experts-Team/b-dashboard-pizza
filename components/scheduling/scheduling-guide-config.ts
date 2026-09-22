@@ -6,6 +6,7 @@ import {
   GitCompare,
   Info,
   ListChecks,
+  Radio,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -130,7 +131,8 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
         "A shift marked C was recorded by the time clock",
         "Tick to accept it, pencil to correct the times, bin to remove it",
         "A clock-in on a day you planned is shown under that plan, waiting for you to agree",
-        "A planned shift with nothing recorded against it yet has a dashed outline",
+        "A shift someone is working right now shows a pulsing dot and no end time",
+        "Use \"Needs attention\" in the toolbar to work through only the shifts worth checking",
       ],
       placement: "top",
     },
@@ -145,8 +147,8 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
       description:
         "Plan on top, what was recorded underneath, in every cell. This is where you check a week before it goes to payroll.",
       bullets: [
-        "Someone a few minutes early or late still counts as worked as planned — the difference is shown beside it",
-        "More than ten minutes out and the shift is flagged for you to look at",
+        "Any difference from the plan is flagged, and the size of it is shown beside the shift",
+        "Hover a shift to see how far off each end was — \"in −4m · out +8m\"",
         "Nothing can be changed from here — use Planned or Actual for that",
         "Hover over any cell for the full breakdown",
       ],
@@ -163,11 +165,11 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
       description:
         "Every shift carries a thin coloured bar down its leading edge. That bar is the whole colour system, and it means the same thing in all three views. This button opens the key whenever you need it.",
       bullets: [
-        "Green — worked as planned",
-        "Amber — worth a look: the times changed, the shift is still waiting for you to review it, or it lands on someone's time off",
+        "Green — the hours match the plan",
+        "Amber — worth a look: the hours differ from the plan, they changed after you signed them off, or the shift lands on someone's time off",
         "Red — a problem: a no-show, or two shifts overlapping",
         "Purple — worked without being planned",
-        "No bar at all — nothing to flag",
+        "No bar at all — nothing to flag, including a shift still being worked",
         "A C beside a shift means the time clock recorded it, not you",
       ],
       placement: "bottom",
@@ -189,6 +191,23 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
       placement: "bottom",
     },
     view: PLANNED,
+  },
+
+  {
+    step: {
+      id: "sched-on-the-clock",
+      icon: Radio,
+      title: "Who is working right now",
+      description:
+        "Everyone punched in at the store this minute, however they punched — through this app, a clock on the wall, or the time-clock system itself.",
+      bullets: [
+        "Clock someone in or out from here",
+        "It keeps itself up to date while the list is open",
+        "A shift appears in Actual the moment someone clocks in, and fills in as they work",
+      ],
+      placement: "bottom",
+    },
+    view: ACTUAL,
   },
 
   {

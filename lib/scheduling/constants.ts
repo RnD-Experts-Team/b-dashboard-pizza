@@ -66,21 +66,36 @@ export const EMPLOYEE_COLORS: Record<string, { bg: string; border: string; text:
  */
 export const DEFAULT_OVERTIME_THRESHOLD = 40;
 
-/**
- * How far a recorded time may sit from the plan and still count as "as planned".
- *
- * Actuals come off a time clock, so an exact match is the exception — people
- * punch in a few minutes early and out a few minutes late every single shift.
- * Comparing on equality made almost every cell in the Compare view amber, which
- * left nothing to notice: if everything is flagged, nothing is.
- *
- * Applied to each edge separately rather than to the total, so a shift worked
- * an hour late cannot pass by being an hour long either way.
- */
-export const MATCH_TOLERANCE_MINUTES = 10;
 
-/** Format 24h time string to 12h display */
-export function formatTime(time: string): string {
+/**
+ * The closing half of a worked time range.
+ *
+ * A shift on the clock has no end — the backend deliberately sends `null`
+ * rather than "now", because a time that crept forward on every refresh would
+ * make a running shift look finished. Say so in words instead of showing a
+ * dash, which reads as missing data rather than as still happening.
+ */
+export function formatWorkedEnd(
+  endTime: string | null,
+  isOpen?: boolean,
+): string {
+  return isOpen || endTime === null ? "in progress" : formatTime(endTime);
+}
+
+/**
+ * Format a 24h "HH:mm" string for display.
+ *
+ * Accepts null because an actual shift's `endTime` is null while somebody is on
+ * the clock, and because the failure mode of not accepting it was silent: the
+ * empty string parses to `NaN`, misses all three guards below, and renders the
+ * literal text "NaN:undefined AM" on the card. An em dash is the honest output
+ * for "no time", and every call site gets it without having to remember.
+ *
+ * Callers that can distinguish WHY there is no time should say so themselves —
+ * "in progress" reads better than "—" on a running shift.
+ */
+export function formatTime(time: string | null | undefined): string {
+  if (!time) return "—";
   const [hStr, mStr] = time.split(":");
   let h = parseInt(hStr, 10);
   const m = mStr;

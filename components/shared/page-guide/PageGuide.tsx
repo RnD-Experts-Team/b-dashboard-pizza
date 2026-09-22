@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Copy, Check, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { scrollAncestorsToTop } from "@/lib/scroll";
 import type { GuideStep } from "./types";
 
 interface PageGuideProps {
@@ -75,27 +76,6 @@ const SETTLE_POLL_MS = 60;
 const SETTLE_STABLE_READS = 2;
 /** Give up waiting and measure anyway — a scroll should never take this long. */
 const SETTLE_TIMEOUT_MS = 1400;
-
-/**
- * Scroll every scrollable ancestor of `el` back to its top, plus the window.
- *
- * Used by the intro step so reopening the guide returns to the top of the page
- * instead of leaving the reader parked wherever the last tour ended.
- */
-function scrollAncestorsToTop(el: Element | null) {
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  let node = el?.parentElement ?? null;
-  while (node) {
-    const overflowY = getComputedStyle(node).overflowY;
-    if (
-      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
-      node.scrollHeight > node.clientHeight
-    ) {
-      node.scrollTo({ top: 0, behavior: "smooth" });
-    }
-    node = node.parentElement;
-  }
-}
 
 // â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
