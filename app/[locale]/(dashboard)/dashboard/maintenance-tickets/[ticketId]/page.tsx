@@ -25,6 +25,7 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import { useMaintenanceTicketsCatalogStore } from "@/lib/store/maintenance-tickets-catalog.store";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { useTicketDraft, EMPTY_ISSUE_DRAFT } from "@/lib/hooks/use-ticket-draft";
 import { TicketsErrorCard } from "@/components/maintenance-tickets/tickets-error";
 import { StatusChip, PriorityChip } from "@/components/maintenance-tickets/ticket-chips";
@@ -90,6 +91,7 @@ function TicketPageInner() {
   const [error, setError] = useState<TicketsErrorState | null>(null);
 
   const { technicians, loadCatalog } = useMaintenanceTicketsCatalogStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -142,6 +144,37 @@ function TicketPageInner() {
    * would be a number, and every write from this page would 404.
    */
   const storeNumber = ticket?.storeId ?? "";
+
+  /*
+   * Can this user write to this ticket at all?
+   *
+   * The sheet this page replaced asked exactly these questions and the page
+   * did not carry them over, so every action button rendered for everyone and
+   * only failed on the click, with a 403. One representative endpoint per
+   * surface, same as the sheet: every issue action is `mos`, so `technicians`
+   * stands for the lot.
+   *
+   * storePermissions is keyed by the store's numeric internal id (see
+   * getGeneralOverview), not the human "03795-00001" -- resolve it through
+   * overviewStores or a scoped rule finds an empty permission set and denies.
+   */
+  const storeNumericId =
+    overviewStores.find((s) => s.storeId === storeNumber)?.id ?? storeNumber;
+  /*
+   * Asked under BOTH keys on purpose. getGeneralOverview builds
+   * storePermissions keyed by the numeric id; normalizeAuthPermissions, the
+   * login fallback, keys the same map by the human code. Picking one and
+   * being wrong does not error -- it finds an empty permission set and denies,
+   * which would quietly strip the page for somebody who does have access.
+   */
+  const canWrite = (path: string) =>
+    [storeNumericId, storeNumber].some((storeId) =>
+      canAccessRoute({ service: "Maintenance", method: "POST", path, storeId })
+    );
+  const canActOnIssues = canWrite("/stores/placeholder/tickets/placeholder/technicians");
+  const canAddNotes = canWrite(
+    "/stores/placeholder/tickets/placeholder/issues/placeholder/notes"
+  );
 
   useEffect(() => {
     if (storeNumber) loadCatalog(storeNumber);
@@ -204,8 +237,12 @@ function TicketPageInner() {
             {/* Each renders nothing until something is put in it. Three
                 different collections doing three different jobs, so each has
                 its own accent rather than all three looking alike. */}
-            <IssueBasketBar technicians={technicians} onChanged={() => void load("refresh")} />
-            <VisitBasketPanel technicians={technicians} onLogged={() => void load("refresh")} />
+            {canActOnIssues && (
+              <>
+                <IssueBasketBar technicians={technicians} onChanged={() => void load("refresh")} />
+                <VisitBasketPanel technicians={technicians} onLogged={() => void load("refresh")} />
+              </>
+            )}
             <PayBasketPeek locale={locale} />
 
             {issues.length === 0 && (
@@ -229,6 +266,8 @@ function TicketPageInner() {
                 otherStore={ticket.otherStore}
                 ticketId={ticket.id}
                 technicians={technicians}
+                canAct={canActOnIssues}
+                canAddNotes={canAddNotes}
                 onChanged={() => void load("refresh")}
               />
             ))}
@@ -313,6 +352,8 @@ function IssueCard({
   otherStore,
   ticketId,
   technicians,
+  canAct,
+  canAddNotes,
   onChanged,
 }: {
   issue: TicketIssue;
@@ -321,6 +362,9 @@ function IssueCard({
   otherStore: string | null;
   ticketId: number;
   technicians: ReturnType<typeof useMaintenanceTicketsCatalogStore.getState>["technicians"];
+  /** May this user change the issue at all? Every write surface hangs off it. */
+  canAct: boolean;
+  canAddNotes: boolean;
   onChanged: () => void;
 }) {
   const [activeAction, setActiveAction] = useState<IssueActionId | null>(null);
@@ -434,6 +478,7 @@ function IssueCard({
         <div className="flex flex-wrap items-center gap-2">
           {/* Pick it up to act on it together with issues from other tickets --
               one booking, one visit, one status change across the lot. */}
+          {canAct && (
           <Checkbox
             checked={inBasket}
             onCheckedChange={() =>
@@ -449,6 +494,7 @@ function IssueCard({
             }
             aria-label={inBasket ? `Take ${title} out of the basket` : `Pick up ${title}`}
           />
+          )}
           <h2 className="font-heading text-base font-semibold">{title}</h2>
           <StatusChip value={issue.status.value} label={issue.status.label} />
           <PriorityChip value={issue.priority.value} label={issue.priority.label} />
@@ -544,11 +590,16 @@ function IssueCard({
             issue={issue}
             storeId={storeId}
             ticketId={ticketId}
+            canAct={canAct}
             onCorrect={handleCorrect}
-            onRecordAttendance={(entry) => {
-              setLiveAttendance(entry);
-              openAction("attendance");
-            }}
+            onRecordAttendance={
+              canAct
+                ? (entry) => {
+                    setLiveAttendance(entry);
+                    openAction("attendance");
+                  }
+                : undefined
+            }
             onChanged={onChanged}
           />
         </PageSection>
@@ -562,6 +613,21 @@ function IssueCard({
           ones you are not acting on right now is worth more than always
           showing all of them. Still starts open: a ticket with one issue
           looks exactly as it always has. */}
+      {/*
+        WHOLE SECTION, NOT BUTTON BY BUTTON.
+
+        issue-actions.ts rule 1 is that nothing inside the grid is ever
+        removed -- an action that cannot apply right now is greyed WITH the
+        reason, because a coordinator who remembers a button and cannot find
+        it concludes the app is broken. That rule is about the STATE of an
+        issue, and it still holds: this either renders whole or not at all.
+
+        A permission is a different question. Every issue action is `mos`, so
+        a reports-view user can do none of them, and fifteen permanently dead
+        buttons is not a reason -- it is noise on a page they can only read.
+        The sheet this replaced hid the same surface the same way.
+      */}
+      {canAct && (
       <PageSection
         rank="primary"
         accent={3}
@@ -621,6 +687,7 @@ function IssueCard({
           }}
         />
       </PageSection>
+      )}
 
       <PageSection rank="secondary" icon={Paperclip} title="Notes and files">
         <EntityNotesAttachments
@@ -629,6 +696,7 @@ function IssueCard({
           attachments={issue.attachments}
           onSuccess={onChanged}
           allowNoteType={false}
+          canAdd={canAddNotes}
         />
       </PageSection>
 

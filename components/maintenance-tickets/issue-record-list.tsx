@@ -36,6 +36,11 @@ interface IssueRecordListProps {
   issue: TicketIssue;
   storeId: string;
   ticketId: number;
+  /**
+   * May this user correct what is written here? False strips the correction
+   * menus -- the records stay fully readable, which is the point of the list.
+   */
+  canAct?: boolean;
   onCorrect: (seed: CorrectionSeed) => void;
   /** Opens the recording panel on one existing session. Absent means the
    *  stream is shown but nothing here can write to it. */
@@ -48,6 +53,7 @@ export function IssueRecordList({
   issue,
   storeId,
   ticketId,
+  canAct = true,
   onCorrect,
   onRecordAttendance,
   onChanged,
@@ -124,17 +130,19 @@ export function IssueRecordList({
                   </button>
                 )}
               </div>
-              <RecordCorrectionMenu
-                kind="attendance"
-                isMistaken={entry.mistaken}
-                seed={seedFromAttendance(entry)}
-                onCorrect={onCorrect}
-                onMarkMistaken={() =>
-                  markAndRefresh(() =>
-                    maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, entry.id)
-                  )
-                }
-              />
+              {canAct && (
+                <RecordCorrectionMenu
+                  kind="attendance"
+                  isMistaken={entry.mistaken}
+                  seed={seedFromAttendance(entry)}
+                  onCorrect={onCorrect}
+                  onMarkMistaken={() =>
+                    markAndRefresh(() =>
+                      maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, entry.id)
+                    )
+                  }
+                />
+              )}
             </Row>
           ))}
         </Section>
@@ -162,17 +170,19 @@ export function IssueRecordList({
                   {usage.storageLocation ? ` · from ${usage.storageLocation.name}` : ""}
                 </p>
               </div>
-              <RecordCorrectionMenu
-                kind="part"
-                isMistaken={usage.mistaken}
-                seed={seedFromPartUsage(usage)}
-                onCorrect={onCorrect}
-                onMarkMistaken={() =>
-                  markAndRefresh(() =>
-                    maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, usage.id)
-                  )
-                }
-              />
+              {canAct && (
+                <RecordCorrectionMenu
+                  kind="part"
+                  isMistaken={usage.mistaken}
+                  seed={seedFromPartUsage(usage)}
+                  onCorrect={onCorrect}
+                  onMarkMistaken={() =>
+                    markAndRefresh(() =>
+                      maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, usage.id)
+                    )
+                  }
+                />
+              )}
             </Row>
           ))}
         </Section>
@@ -188,17 +198,19 @@ export function IssueRecordList({
                   {formatTimestamp(diagnosis.createdAt)}
                 </p>
               </div>
-              <RecordCorrectionMenu
-                kind="diagnosis"
-                isMistaken={diagnosis.mistaken}
-                seed={seedFromDiagnosis(diagnosis)}
-                onCorrect={onCorrect}
-                onMarkMistaken={() =>
-                  markAndRefresh(() =>
-                    maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, diagnosis.id)
-                  )
-                }
-              />
+              {canAct && (
+                <RecordCorrectionMenu
+                  kind="diagnosis"
+                  isMistaken={diagnosis.mistaken}
+                  seed={seedFromDiagnosis(diagnosis)}
+                  onCorrect={onCorrect}
+                  onMarkMistaken={() =>
+                    markAndRefresh(() =>
+                      maintenanceTicketsService.markDiagnosisMistaken(storeId, ticketId, diagnosis.id)
+                    )
+                  }
+                />
+              )}
             </Row>
           ))}
         </Section>
@@ -216,17 +228,19 @@ export function IssueRecordList({
                     : "no end date recorded"}
                 </p>
               </div>
-              <RecordCorrectionMenu
-                kind="warranty"
-                isMistaken={warranty.mistaken}
-                seed={seedFromWarranty(warranty)}
-                onCorrect={onCorrect}
-                onMarkMistaken={() =>
-                  markAndRefresh(() =>
-                    maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, warranty.id)
-                  )
-                }
-              />
+              {canAct && (
+                <RecordCorrectionMenu
+                  kind="warranty"
+                  isMistaken={warranty.mistaken}
+                  seed={seedFromWarranty(warranty)}
+                  onCorrect={onCorrect}
+                  onMarkMistaken={() =>
+                    markAndRefresh(() =>
+                      maintenanceTicketsService.markWarrantyMistaken(storeId, ticketId, warranty.id)
+                    )
+                  }
+                />
+              )}
             </Row>
           ))}
         </Section>
@@ -244,17 +258,19 @@ export function IssueRecordList({
                   base {fmtFixed(entry.basePay, 2)} · performance {fmtFixed(entry.performancePay, 2)}
                 </p>
               </div>
-              <RecordCorrectionMenu
-                kind="pay"
-                isMistaken={entry.mistaken}
-                seed={seedFromPayEntry(entry)}
-                onCorrect={onCorrect}
-                onMarkMistaken={() =>
-                  markAndRefresh(() =>
-                    maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, entry.id)
-                  )
-                }
-              />
+              {canAct && (
+                <RecordCorrectionMenu
+                  kind="pay"
+                  isMistaken={entry.mistaken}
+                  seed={seedFromPayEntry(entry)}
+                  onCorrect={onCorrect}
+                  onMarkMistaken={() =>
+                    markAndRefresh(() =>
+                      maintenanceTicketsService.markPayEntryMistaken(storeId, ticketId, entry.id)
+                    )
+                  }
+                />
+              )}
             </Row>
           ))}
         </Section>
