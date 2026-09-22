@@ -35,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { VALUE_ACCENT } from "./cleaning-ui";
-import { PhotoPicker } from "./photo-picker";
+import { MAX_PHOTOS, PhotoPicker } from "./photo-picker";
 import type { ItemCell, ItemValue } from "@/types/cleaning.types";
 
 const VERDICTS: ItemValue[] = ["pass", "fail", "auto_fail", "not_applicable", "empty"];
@@ -101,8 +101,13 @@ export function GradeItemDialog({
       .filter((f): f is File => f != null);
     if (pasted.length > 0) {
       e.preventDefault();
-      setImages((prev) => [...prev, ...pasted]);
-      toast.success(t("photoPasted"));
+      setImages((prev) => {
+        const room = Math.max(0, MAX_PHOTOS - prev.length);
+        if (pasted.length > room) toast.warning(t("photoMaxReached", { max: MAX_PHOTOS }));
+        if (room === 0) return prev;
+        toast.success(t("photoPasted"));
+        return [...prev, ...pasted.slice(0, room)];
+      });
     }
   };
 

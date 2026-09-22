@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolvePhotoUrl } from "./cleaning-ui";
 
+/** Upper bound on how many photos can be queued in one picker. */
+export const MAX_PHOTOS = 15;
+
 /**
  * Multi-image picker shared by the Complete-task form and the Grade-item
  * dialog — both endpoints now take an array of files (`photos[]` / `images[]`).
@@ -54,9 +57,14 @@ export function PhotoPicker({
     };
   }, []);
 
-  const addFiles = (incoming: FileList | File[] | null) => {
+  /** Returns how many of `incoming` were actually added, after the cap. */
+  const addFiles = (incoming: FileList | File[] | null): number => {
     const next = Array.from(incoming ?? []).filter((f) => f.size > 0);
-    if (next.length > 0) onChange([...files, ...next]);
+    if (next.length === 0) return 0;
+    const room = Math.max(0, MAX_PHOTOS - files.length);
+    if (next.length > room) toast.warning(t("maxReached", { max: MAX_PHOTOS }));
+    if (room > 0) onChange([...files, ...next.slice(0, room)]);
+    return Math.min(next.length, room);
   };
 
   const removeAt = (index: number) => {
@@ -80,8 +88,7 @@ export function PhotoPicker({
       // pasting while focus is elsewhere, e.g. the note field) doesn't also
       // fire and add the same image twice.
       e.stopPropagation();
-      addFiles(pasted);
-      toast.success(t("pasted"));
+      if (addFiles(pasted) > 0) toast.success(t("pasted"));
     }
   };
 
@@ -138,12 +145,16 @@ export function PhotoPicker({
       <Button
         type="button"
         variant="outline"
-        disabled={disabled}
+        disabled={disabled || files.length >= MAX_PHOTOS}
         className={cn("w-full", required && files.length === 0 && "border-dashed")}
         onClick={() => inputRef.current?.click()}
       >
         <ImagePlus className="me-2 h-4 w-4" />
-        {files.length > 0 ? t("addMore") : t("choose")}
+        {files.length >= MAX_PHOTOS
+          ? t("maxReached", { max: MAX_PHOTOS })
+          : files.length > 0
+            ? t("addMore")
+            : t("choose")}
       </Button>
     </div>
   );

@@ -2173,6 +2173,7 @@
       "submit": "Complete",
       "toasts": {
         "pasted": "Image pasted.",
+        "maxReached": "You can add up to {max} photos.",
         "done": "“{label}” marked as done.",
         "failed": "Could not complete the task."
       }
@@ -2302,6 +2303,7 @@
       "photos": "Photos",
       "pasteHint": "Tip: press Ctrl+V (⌘V on Mac) anywhere in this dialog to paste a screenshot or copied image.",
       "photoPasted": "Photo pasted from clipboard.",
+      "photoMaxReached": "You can add up to {max} photos.",
       "cancel": "Cancel",
       "save": "Save",
       "saved": "“{item}” graded.",
@@ -2317,6 +2319,7 @@
     "photoPicker": {
       "choose": "Add photos",
       "addMore": "Add more",
+      "maxReached": "Up to {max} photos",
       "remove": "Remove {name}",
       "savedAlt": "Saved photo {n}",
       "pasted": "Photo pasted from clipboard."
