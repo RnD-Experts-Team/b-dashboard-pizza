@@ -26,6 +26,19 @@ import {
  * keeps its own error and never calls `onSetupError`.
  */
 
+/**
+ * Refusals that mean our picture of who is on the clock is wrong.
+ *
+ * `ALREADY_CLOCKED_IN` and `NOT_CLOCKED_IN` are the typed pair; the vendor
+ * also refuses a clock-out outright when its own records disagree, which
+ * arrives as a write failure rather than a state error.
+ */
+const CONTRADICTS_THE_BOARD: ReadonlySet<string> = new Set([
+  "ALREADY_CLOCKED_IN",
+  "NOT_CLOCKED_IN",
+  "TCP_WRITE_FAILED",
+]);
+
 interface UseClockPunchOptions {
   storeId: string | null;
   /** Called after a punch lands, so the board and the week can catch up. */
@@ -91,6 +104,13 @@ export function useClockPunch({
         if (parsed.code === "EMPLOYEE_NOT_IN_TCP") {
           setUnlinkedEmployeeIds((prev) => new Set([...prev, employeeId]));
         }
+        /*
+         * The time clock has just contradicted what the board is showing:
+         * somebody it lists as on the clock is not, or vice versa. Pull the
+         * board again so the row stops offering an action that cannot work —
+         * otherwise the only feedback is the same error on every press.
+         */
+        if (CONTRADICTS_THE_BOARD.has(parsed.code ?? "")) onPunched?.();
         setError(parsed);
         return false;
       } finally {

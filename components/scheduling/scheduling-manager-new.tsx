@@ -400,13 +400,11 @@ export function SchedulingManager() {
     refetchWeek: refetch,
     onSetupError: (code, message) => setWriteSetupError({ code, message }),
     onSuccess: (kind) => {
-      toast.success(
-        kind === "delete"
-          ? "Shift removed"
-          : kind === "update"
-            ? "Shift updated"
-            : "Shift added"
-      );
+      // Delete says so itself, because its toast carries the Undo action and
+      // needs the shift that was removed in order to offer it.
+      if (kind !== "delete") {
+        toast.success(kind === "update" ? "Shift updated" : "Shift added");
+      }
       if (kind !== "delete") {
         // Also covers the replay that fires once an employee finishes setup,
         // which does not run through the caller's promise chain.
@@ -485,6 +483,32 @@ export function SchedulingManager() {
     );
     return filteredEmployees.filter((e) => flagged.has(e.id)).length;
   }, [attentionOnly, actualShifts, filteredEmployees]);
+
+  /** How many shifts the server has flagged, for the filter's own badge. */
+  const attentionCount = useMemo(
+    () => actualShifts.filter((a) => a.needsAttention).length,
+    [actualShifts]
+  );
+
+  /**
+   * The week's counts are in motion and must not be read as fact.
+   *
+   * Covers the whole gap, not just the refetch: drafts clear the moment a batch
+   * is ACCEPTED, so from that instant until the new week lands the totals
+   * describe neither what was there before nor what is there now. Measured at
+   * about five seconds, every second of which used to read "0 shifts" beneath a
+   * dialog reporting success.
+   */
+  const weekIsSettling =
+    isRefetching ||
+    bulk.isStarting ||
+    // Still working. Once it finishes, `isRefetching` carries the rest — the
+    // dialog lingers a moment after that, and claiming to be busy underneath
+    // a result that has already landed is its own small lie.
+    (bulk.operation !== null &&
+      bulk.operation.status !== "completed" &&
+      bulk.operation.status !== "completed_with_errors" &&
+      bulk.operation.status !== "failed");
 
   /** "All" plus the store's mapped Humanity positions, from the payload. */
   const departmentOptions = useMemo(
@@ -752,11 +776,54 @@ export function SchedulingManager() {
       const shift = shifts.find((s) => s.id === assignmentId);
       if (!shift) return;
       const who = employeeLookup.get(shift.employeeId)?.name ?? "This employee";
-      void withPending([pendingShiftKey(shift.id)], () =>
-        mutations.deleteShift(shift.shiftId, {
+      void withPending([pendingShiftKey(shift.id)], async () => {
+        const removed = await mutations.deleteShift(shift.shiftId, {
           detail: `${who} · ${formatIsoDateWithWeekday(shift.shiftDate)} · ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`,
-        }),
-      );
+        });
+
+        /*
+         * Undo, because delete is one click on a hover icon sitting right
+         * beside edit and there is no confirmation in front of it.
+         *
+         * This re-creates the shift rather than resurrecting it — Humanity
+         * gives the new one its own id — so it restores the hours, not the
+         * row. Good enough for a misclick, which is what this is for.
+         */
+        if (removed) {
+          toast.success("Shift removed", {
+            action: {
+              label: "Undo",
+              onClick: () => {
+                void mutations.createShift(
+                  {
+                    // `shift_date`, not `day_index` — the single-shift endpoint
+                    // takes a real date, unlike the bulk one.
+                    employee_id: Number(shift.employeeId) || shift.employeeId,
+                    shift_date: shift.shiftDate,
+                    start_time: shift.startTime,
+                    end_time: shift.endTime,
+                    label: shift.label || undefined,
+                    shift_type: shift.type || undefined,
+                    note: shift.note || undefined,
+                    /*
+                     * Putting back what was just there, so the availability and
+                     * conflict guards have already been answered — by whoever
+                     * created it, or by the bulk path, which does not apply
+                     * them at all. Without this an undo can be refused for a
+                     * shift that existed a second earlier, which is not a
+                     * decision to re-open at the moment of a misclick.
+                     */
+                    force: true,
+                  },
+                  { employeeId: shift.employeeId, detail: `${who} · restored` }
+                );
+              },
+            },
+          });
+        }
+
+        return removed;
+      });
     },
     [shifts, employeeLookup, mutations, withPending]
   );
@@ -2027,12 +2094,29 @@ export function SchedulingManager() {
                   >
                     <AlertTriangle className="h-3.5 w-3.5" />
                     Needs attention
+                    {/*
+                      The count is the point of the filter: it answers "is there
+                      anything to do this week?" without switching the grid and
+                      finding it empty, which is why this stays off by default.
+                    */}
+                    {attentionCount > 0 && (
+                      <span
+                        className={cn(
+                          "ms-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                          attentionOnly
+                            ? "bg-primary-foreground/20"
+                            : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        )}
+                      >
+                        {attentionCount}
+                      </span>
+                    )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-56 text-xs">
-                  Show only shifts worth a look — a missed punch, a forgotten
-                  clock-out, hours that don&apos;t match the plan, or hours that
-                  changed after you signed them off.
+                  {attentionCount > 0
+                    ? `${attentionCount} shift${attentionCount === 1 ? "" : "s"} worth a look — a missed punch, a forgotten clock-out, hours that don't match the plan, or hours that changed after you signed them off.`
+                    : "Nothing needs a look this week. This filter shows missed punches, forgotten clock-outs, hours that don't match the plan, and hours that changed after you signed them off."}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -2234,7 +2318,18 @@ export function SchedulingManager() {
           `@2xl` (672px) is where four tiles clear ~150px each plus gaps.
         */}
         <div className="@container">
-        <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+        {/*
+          Dimmed while a refetch is in flight. These numbers go stale the moment
+          drafts are saved — the tiles read 0 shifts / 0.0h for the few seconds
+          before the new week lands — and a confident wrong total is worse than
+          a visibly pending one.
+        */}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-3 @2xl:grid-cols-4 transition-opacity",
+            weekIsSettling && "opacity-50"
+          )}
+        >
           <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -2411,8 +2506,23 @@ export function SchedulingManager() {
         {/* Quick actions footer */}
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <p>
-            {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled this
-            week
+            {/*
+              Drafts clear the moment the batch is accepted, but the shifts they
+              became only arrive with the refetch a few seconds later. Asserting
+              a count in that window told the manager "0 shifts" underneath a
+              dialog saying the save worked, which reads as lost work.
+            */}
+            {weekIsSettling ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Updating this week…
+              </span>
+            ) : (
+              <>
+                {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled
+                this week
+              </>
+            )}
           </p>
           {shifts.length > 0 && (
             <Button

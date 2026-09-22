@@ -268,11 +268,19 @@ export function AddShiftDialogNew({
               {SHIFT_PRESETS.map((preset, idx) => (
                 <Badge
                   key={idx}
+                  asChild
                   variant={activePreset === idx ? "default" : "outline"}
                   className="cursor-pointer text-xs px-2.5 py-1 transition-colors"
-                  onClick={() => handlePresetClick(idx)}
                 >
-                  {preset.label}
+                  {/* A real button: this is the main way a shift gets its times,
+                      and as a styled span it could not be tabbed to or announced. */}
+                  <button
+                    type="button"
+                    aria-pressed={activePreset === idx}
+                    onClick={() => handlePresetClick(idx)}
+                  >
+                    {preset.label}
+                  </button>
                 </Badge>
               ))}
             </div>

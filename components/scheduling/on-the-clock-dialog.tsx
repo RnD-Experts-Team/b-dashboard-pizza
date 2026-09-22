@@ -49,6 +49,19 @@ function punchClock(stamp: string): string {
   return formatTime(stamp.slice(11, 16));
 }
 
+/**
+ * The backend's `tcp.rollup.max_shift_hours`, past which a shift stops
+ * accruing and raises needs_attention. Mirrored rather than sent, so a change
+ * there needs a change here — but the alternative is a screen that counts
+ * hours nobody is being paid for.
+ */
+const MAX_SHIFT_MINUTES = 16 * 60;
+
+/** Somebody forgot to clock out, rather than somebody working a long day. */
+function isStale(minutesSoFar: number): boolean {
+  return minutesSoFar > MAX_SHIFT_MINUTES;
+}
+
 export function OnTheClockDialog({
   open,
   onOpenChange,
@@ -160,20 +173,40 @@ export function OnTheClockDialog({
                   >
                     <span
                       aria-hidden
-                      className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500"
+                      className={cn(
+                        "h-1.5 w-1.5 shrink-0 rounded-full",
+                        isStale(e.minutesSoFar)
+                          ? "bg-amber-500"
+                          : "animate-pulse bg-emerald-500"
+                      )}
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
                         {e.employeeName}
                       </p>
-                      <p className="text-[11px] text-muted-foreground tabular-nums">
+                      <p
+                        className={cn(
+                          "text-[11px] tabular-nums",
+                          isStale(e.minutesSoFar)
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-muted-foreground"
+                        )}
+                      >
                         {/*
                           `timeIn` to display and `minutesSoFar` for the
                           elapsed figure. `since` is the only UTC value in the
                           API and is not for reading off a screen.
                         */}
                         since {e.segment ? punchClock(e.segment.timeIn) : "—"} ·{" "}
-                        {formatMinutes(e.minutesSoFar)} so far
+                        {/*
+                          Past the cap the hours have stopped accruing, so the
+                          running total is no longer what anyone will be paid.
+                          Showing "21h 47m so far" invites reading it as a
+                          timesheet figure; this is a forgotten punch.
+                        */}
+                        {isStale(e.minutesSoFar)
+                          ? "never clocked out"
+                          : `${formatMinutes(e.minutesSoFar)} so far`}
                       </p>
                     </div>
                     <Button
