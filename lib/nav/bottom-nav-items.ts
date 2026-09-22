@@ -273,7 +273,7 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "manageRequests",
     requirements: (storeId) => [
       { service: "Hiring", method: "GET", path: "/v1/stores/*/requests", storeId },
-      { service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" },
+      { service: "Hiring", method: "GET", path: "/v1/shirt-milestones" },
     ],
     groupKey: "employeeManagement",
   },

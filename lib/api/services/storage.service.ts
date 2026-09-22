@@ -388,6 +388,9 @@ export function buildStockBalanceParams(f: StockBalanceFilters): URLSearchParams
   // Hides pairs that netted back to ZERO. It does NOT hide negatives — see
   // the Balances tab, where "negative only" is kept independent of this.
   if (f.non_zero) p.set("non_zero", "1");
+  // Only the shortages. Server-side on purpose: counting or listing negatives
+  // by filtering a loaded page is only ever true for that page.
+  if (f.negative_only) p.set("negative_only", "1");
   // Rolls the (part, location) pairs up into one row per part. non_zero then
   // applies to the total rather than to each pair.
   if (f.group_by) p.set("group_by", f.group_by);

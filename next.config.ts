@@ -68,6 +68,18 @@ const operationsOrigin =
   getApiDomain(operationsApiUrl) || "https://operationstesting.lcportal.cloud";
 const qaOrigin = getApiDomain(qaApiUrl) || "https://qatesting.lcportal.cloud/api";
 
+// Hiring backend (HiringPizza). Data/API calls are proxied through
+// app/api/v1/.../route.ts. Only the shirt-milestone catalog assets in /storage
+// go through the rewrite below. The template SVGs are FETCHED (not just shown
+// in an <img>) so the live shirt preview can inline and recolour them — which
+// connect-src 'self' would otherwise block, since the hiring host is not listed.
+const hiringApiUrl =
+  process.env.HIRING_API_URL ||
+  process.env.NEXT_PUBLIC_HIRING_API_URL ||
+  "https://hiring.lcportal.cloud/api";
+const hiringOrigin =
+  getApiDomain(hiringApiUrl) || "https://hiring.lcportal.cloud";
+
 const nextConfig: NextConfig = {
   // Security headers
   async headers() {
@@ -159,6 +171,15 @@ const nextConfig: NextConfig = {
         {
           source: "/operations-storage/:path*",
           destination: `${operationsOrigin}/storage/:path*`,
+        },
+        // Shirt-milestone catalog assets: /hiring-storage/shirt-templates/x.svg
+        // → {hiringOrigin}/storage/shirt-templates/x.svg
+        // Same-origin is load-bearing here, not just tidy: the preview fetch()es
+        // the template SVG to inline it, and connect-src does not list the
+        // hiring host (nor would the storage disk send CORS headers).
+        {
+          source: "/hiring-storage/:path*",
+          destination: `${hiringOrigin}/storage/:path*`,
         },
       ],
     };

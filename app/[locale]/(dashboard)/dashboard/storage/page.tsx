@@ -107,13 +107,12 @@ export default function StoragePage() {
     parts,
     allLocations,
     liveLocations,
-    negativeScan,
+    negativeCount,
     isRefreshing,
     refetchAll,
     refetchAfterWrite,
   } = useStorage();
 
-  const [negativeOnly, setNegativeOnly] = useState(false);
   /** The per-shelf ledger view, folded away by default: the totals above answer
    *  the usual question, and this answers "which shelf" when it comes up. */
   const [showByLocation, setShowByLocation] = useState(false);
@@ -152,15 +151,16 @@ export default function StoragePage() {
             trackedPairs={partTotals?.meta.total ?? null}
             locationCount={locations?.meta.total ?? null}
             movementCount={movements?.meta.total ?? null}
-            negatives={negativeScan?.rows ?? null}
-            scanned={negativeScan?.scanned}
-            scanTotal={negativeScan?.total}
+            negativeCount={negativeCount}
             isLoading={partTotalsLoading && !partTotals}
             onNegativesClick={() => {
               // Negatives live per shelf, not per part -- a part can be fine
               // overall and still be short somewhere -- so this opens the
               // per-location view rather than filtering the totals.
-              setNegativeOnly(true);
+              //
+              // The filter goes to the SERVER, so what opens is every negative
+              // there is, not the ones that happened to be on the loaded page.
+              fetchBalances({ ...balanceFilters, negative_only: true }, 1);
               setShowByLocation(true);
             }}
           />
@@ -214,8 +214,6 @@ export default function StoragePage() {
                   error={balancesError}
                   filters={balanceFilters}
                   onFiltersChange={(f, page) => fetchBalances(f, page)}
-                  negativeOnly={negativeOnly}
-                  onNegativeOnlyChange={setNegativeOnly}
                 />
               </SectionDisclosure>
             </PageSection>

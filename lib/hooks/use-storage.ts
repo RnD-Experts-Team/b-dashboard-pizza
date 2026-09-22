@@ -8,7 +8,7 @@ import {
 } from "@/lib/api/services/maintenance-tickets.service";
 import { storageService } from "@/lib/api/services/storage.service";
 import type { CatalogPart } from "@/types/maintenance-tickets.types";
-import type { StockBalance, StorageLocation } from "@/types/storage.types";
+import type { StorageLocation } from "@/types/storage.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Main hook for the Storage & Stock page                                   */
@@ -16,9 +16,6 @@ import type { StockBalance, StorageLocation } from "@/types/storage.types";
 /*  Owns the three list resources plus the reference data every tab needs     */
 /*  (parts, locations) for filters and the movement composer.                */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-/** Balances loaded purely to count negatives for the KPI strip. */
-const NEGATIVE_SCAN_PER_PAGE = 200;
 
 export function useStorage() {
   const {
@@ -90,28 +87,29 @@ export function useStorage() {
     [allLocations]
   );
 
-  /* ── Negative-balance scan, for the KPI strip ─────────────────────────── */
+  /* ── Negative-balance count, for the KPI strip ────────────────────────── */
 
-  const [negativeScan, setNegativeScan] = useState<{
-    rows: StockBalance[];
-    scanned: number;
-    total: number;
-  } | null>(null);
+  const [negativeCount, setNegativeCount] = useState<number | null>(null);
 
-  const loadNegativeScan = useCallback(() => {
+  /*
+   * The EXACT number of pairs below zero, not a sample of one.
+   *
+   * This used to load the first 200 balances and count the negatives in them,
+   * which meant the KPI and the list it opens could disagree: "3 negative", and
+   * then nothing on screen, because the shortages were on page four. `per_page:
+   * 1` because nothing here needs the rows -- `meta.total` is the answer, and
+   * the server does the filtering.
+   *
+   * Deliberately WITHOUT non_zero: that flag hides pairs that netted to ZERO,
+   * and conflating it with "negative" can hide the very rows being counted.
+   */
+  const loadNegativeCount = useCallback(() => {
     const ctrl = new AbortController();
     storageService
-      // Deliberately WITHOUT non_zero: that flag hides pairs that netted to
-      // ZERO, and conflating it with "negative" can hide the very rows this
-      // scan exists to count.
-      .getStockBalances({ per_page: NEGATIVE_SCAN_PER_PAGE }, ctrl.signal)
+      .getStockBalances({ negative_only: true, per_page: 1 }, ctrl.signal)
       .then((res) => {
         if (ctrl.signal.aborted) return;
-        setNegativeScan({
-          rows: res.data.filter((b) => b.onHand < 0),
-          scanned: res.data.length,
-          total: res.meta.total,
-        });
+        setNegativeCount(res.meta.total);
       })
       .catch((err) => {
         if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
@@ -119,7 +117,7 @@ export function useStorage() {
     return () => ctrl.abort();
   }, []);
 
-  useEffect(() => loadNegativeScan(), [loadNegativeScan]);
+  useEffect(() => loadNegativeCount(), [loadNegativeCount]);
 
   /* ── Initial loads ────────────────────────────────────────────────────── */
 
@@ -137,7 +135,7 @@ export function useStorage() {
     void fetchBalances(balanceFilters, balanceFilters.page ?? 1);
     void fetchMovements(movementFilters, movementFilters.page ?? 1);
     void fetchLocations(locationFilters, locationFilters.page ?? 1);
-    loadNegativeScan();
+    loadNegativeCount();
     loadReference();
   }, [
     fetchBalances,
@@ -148,7 +146,7 @@ export function useStorage() {
     partTotalFilters,
     movementFilters,
     locationFilters,
-    loadNegativeScan,
+    loadNegativeCount,
     loadReference,
   ]);
 
@@ -163,7 +161,7 @@ export function useStorage() {
     void fetchMovements(movementFilters, movementFilters.page ?? 1);
     void fetchPartTotals(partTotalFilters, partTotalFilters.page ?? 1);
     void fetchBalances(balanceFilters, balanceFilters.page ?? 1);
-    loadNegativeScan();
+    loadNegativeCount();
   }, [
     fetchMovements,
     fetchPartTotals,
@@ -171,7 +169,7 @@ export function useStorage() {
     movementFilters,
     partTotalFilters,
     balanceFilters,
-    loadNegativeScan,
+    loadNegativeCount,
   ]);
 
   const isRefreshing =
@@ -213,7 +211,7 @@ export function useStorage() {
     reloadReference: loadReference,
 
     // KPI
-    negativeScan,
+    negativeCount,
 
     // Shared
     isRefreshing,

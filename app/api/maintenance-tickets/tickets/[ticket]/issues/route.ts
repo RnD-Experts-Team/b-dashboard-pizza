@@ -16,5 +16,13 @@ export async function GET(
   const { ticket } = await params;
   if (!ticket) return errorJson("MISSING_PARAM", "ticket is required", 400);
 
-  return proxyGet(request, `${BASE_URL}/tickets/${encodeURIComponent(ticket)}/issues`);
+  // Forwarded for ?store_id: upstream ignores it, but pizzasys reads it to
+  // scope the rule to the ticket's store. Without it a reports-view user, whose
+  // permission is granted per store rather than globally, is denied here.
+  const qs = new URL(request.url).searchParams.toString();
+
+  return proxyGet(
+    request,
+    `${BASE_URL}/tickets/${encodeURIComponent(ticket)}/issues${qs ? `?${qs}` : ""}`
+  );
 }

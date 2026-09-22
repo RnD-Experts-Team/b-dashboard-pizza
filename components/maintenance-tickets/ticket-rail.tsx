@@ -265,7 +265,10 @@ function RailRow({
         />
 
         <Link
-          href={`/${locale}/dashboard/maintenance-tickets/${ticket.id}`}
+          // ?store carries the authorizer's scope, same as the list rows do.
+          href={`/${locale}/dashboard/maintenance-tickets/${ticket.id}${
+            ticket.storeId ? `?store=${encodeURIComponent(ticket.storeId)}` : ""
+          }`}
           className="min-w-0 flex-1"
         >
           <span className="flex items-center gap-1.5">

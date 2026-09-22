@@ -1,4 +1,3 @@
-import type { MilestoneGiftDetail } from "@/types/milestone-gift.types";
 
 export type AvailabilityNeeded = "weekday" | "weekends" | "open_availability";
 
@@ -432,7 +431,7 @@ export interface StoreRequestHiringDetail {
 
 export interface StoreRequest {
   id: number;
-  request_type: "hiring" | "separation" | "milestone_gift";
+  request_type: "hiring" | "separation";
   store_id: number;
   requested_by_user_id: number;
   requested_at: string;
@@ -440,7 +439,6 @@ export interface StoreRequest {
   latest_decision: StoreRequestLatestDecision | null;
   separation_request: StoreRequestSeparationDetail | null;
   hiring_request: StoreRequestHiringDetail | null;
-  milestone_gift_request: MilestoneGiftDetail | null;
 }
 
 export interface StoreRequestsResponse {
@@ -461,11 +459,11 @@ export interface StoreRequestsResponse {
 
 /* ------------------------------------------------------------------ */
 /*  Per-type paginated requests — GET /v1/requests, /v1/stores/{n}/requests */
-/*  Each request type (separation/hiring/milestone_gift) now paginates    */
+/*  Each request type (separation/hiring) now paginates                  */
 /*  independently: the response is keyed by type instead of one flat list. */
 /* ------------------------------------------------------------------ */
 
-export type StoreRequestType = "hiring" | "separation" | "milestone_gift";
+export type StoreRequestType = "hiring" | "separation";
 
 export interface RequestsPaginator {
   current_page: number;

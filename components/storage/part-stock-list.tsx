@@ -175,6 +175,16 @@ export function PartStockList({
         </div>
       )}
 
+      {/* Said next to the pagination bar, not only inside the empty state:
+          this is where someone wonders why a part they know exists is missing. */}
+      {search.trim() && data && rows.length > 0 && (
+        <p className="text-[11px] text-muted-foreground">
+          Showing {rows.length} of {data.data.length} parts on this page
+          {data.meta.total > data.data.length && ` (${data.meta.total} in total)`}.
+          The search box looks at the loaded page only.
+        </p>
+      )}
+
       {data && (
         <PaginationBar
           currentPage={page}

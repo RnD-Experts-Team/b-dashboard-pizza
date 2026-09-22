@@ -14,7 +14,7 @@ import {
   ExternalLink,
   KeyRound,
   Briefcase,
-  Gift,
+  Shirt,
   TrendingUp,
   UserMinus,
   SprayCan,
@@ -86,11 +86,11 @@ function parseCleaningActionUrl(
 const HIRING_SEGMENT_TO_TAB: Record<string, HiringActionTab> = {
   "hiring-requests": "hiring",
   "separation-requests": "separation",
-  "milestone-gift-requests": "milestone_gift",
+  "shirt-milestones": "shirt_milestones",
 };
 
 /**
- * Parse a hiring/separation/milestone-gift action URL into its tab, request id, and store number.
+ * Parse a hiring/separation/shirt-milestone action URL into its tab, target id, and store number.
  * e.g. /hiring/store/03795-00001/separation-requests/42
  */
 function parseHiringActionUrl(
@@ -125,8 +125,8 @@ function getTypeVisuals(type: string) {
   if (type.startsWith("hiring_request")) {
     return { Icon: Briefcase, bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400" };
   }
-  if (type.startsWith("milestone_gift_request")) {
-    return { Icon: Gift, bg: "bg-pink-500/10 text-pink-600 dark:text-pink-400" };
+  if (type.startsWith("shirt_milestone")) {
+    return { Icon: Shirt, bg: "bg-pink-500/10 text-pink-600 dark:text-pink-400" };
   }
   if (type.startsWith("employee_promoted")) {
     return { Icon: TrendingUp, bg: "bg-green-500/10 text-green-600 dark:text-green-400" };
@@ -206,7 +206,7 @@ export function NotificationItem({
   const isAnnouncementType = notification.type.startsWith("announcement");
   const isHiringType =
     notification.type.startsWith("hiring_request") ||
-    notification.type.startsWith("milestone_gift_request") ||
+    notification.type.startsWith("shirt_milestone") ||
     notification.type.startsWith("separation_request");
   const isEmployeeType = notification.type.startsWith("employee_promoted");
   const isCleaningType = notification.type.startsWith("cleaning_");

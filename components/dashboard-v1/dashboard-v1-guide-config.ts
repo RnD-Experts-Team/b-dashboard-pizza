@@ -58,7 +58,7 @@ export const DASHBOARD_V1_GUIDE_STEPS: GuideStep[] = [
       "Everything the system needs you to know, in one bell. The red badge counts unread items and updates in real time — no refresh needed.",
     bullets: [
       "Two tabs: All, and Unread with its own count",
-      "Notifications are color-coded by kind — debrief keys, announcements, hiring, separations, milestone gifts, promotions, cleaning",
+      "Notifications are color-coded by kind — debrief keys, announcements, hiring, separations, shirt milestones, promotions, cleaning",
       "Clicking one takes you straight to where it happened: the debrief key opens in place, hiring goes to the right request tab, cleaning opens that period's evaluation",
       "Hover an unread item for the ✓ to mark just that one read, or “Mark all as read” in the header",
       "The sidebar shows a matching unread dot on whichever page the notification points to",

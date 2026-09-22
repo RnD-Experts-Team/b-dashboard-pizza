@@ -297,6 +297,14 @@ export interface StockBalanceFilters {
    * one shelf and -5 on another has nothing, and hides.
    */
   non_zero?: boolean;
+  /**
+   * Keeps ONLY the pairs below zero -- the shortages. Independent of
+   * `non_zero`, which hides what netted to nothing: conflating the two would
+   * let "hide the empties" hide the shortages too.
+   * With group_by=part it applies to the TOTAL, so a part short on one shelf
+   * and long on another owes nothing and does not appear.
+   */
+  negative_only?: boolean;
   /** "part" rolls the pairs up into one row per part. */
   group_by?: "part";
   page?: number;

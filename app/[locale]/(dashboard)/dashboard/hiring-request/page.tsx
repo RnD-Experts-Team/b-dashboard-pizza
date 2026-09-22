@@ -27,7 +27,7 @@ import {
   AlertCircle,
   UserPlus,
   UserMinus,
-  Gift,
+  Shirt,
   MoreHorizontal,
   Pencil,
   ClipboardCheck,
@@ -38,7 +38,11 @@ import { EditHiringRequestDialog } from "@/components/hiring/edit-hiring-request
 import { HiringReviewDialog } from "@/components/hiring/hiring-review-dialog";
 import { HiringRequestSheet } from "@/components/hiring/hiring-request-sheet";
 import { SeparationRequestTab } from "@/components/hiring/separation-request-tab";
-import { MilestoneGiftTab } from "@/components/hiring/milestone-gift-tab";
+import { ShirtMilestonesTab } from "@/components/shirts";
+import {
+  canAccessShirtView,
+  canFulfilShirtMilestone,
+} from "@/lib/auth/shirt-access";
 import { hiringService } from "@/lib/api/services/hiring.service";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
@@ -125,13 +129,18 @@ export default function HiringRequestPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<import("@/types/hiring.types").StoreRequest | null>(null);
   const { selectedStore } = useSelectedStoreStore();
-  const { canAccessRoute, isSuperAdmin, overviewStores } = useAuthStore();
+  const { canAccessRoute, hasAnyRole, isSuperAdmin, overviewStores } = useAuthStore();
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateHiringRequest = canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/hiring-requests", storeId: effectiveStoreId });
-  // Not store-scoped: true means this user is a dedicated milestone-gift manager.
-  // canAccessRoute returns true for superadmins too (bypass), so gate on !isSuperAdmin()
-  // to keep superadmins in the full three-tab view.
-  const isMilestoneGiftManager = !isSuperAdmin() && canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" });
+  // True means this user only does HQ shirt fulfilment — no store queue to
+  // show them, so the page collapses to that single view rather than two tabs
+  // they would 403 on. canAccessRoute returns true for superadmins too
+  // (bypass), so gate on !isSuperAdmin() to keep them in the full three-tab view.
+  const shirtAuth = { canAccessRoute, hasAnyRole };
+  const isShirtFulfilmentOnly =
+    !isSuperAdmin() &&
+    canFulfilShirtMilestone(shirtAuth) &&
+    !canAccessShirtView("store_queue", shirtAuth, effectiveStoreId);
 
   /* Edit dialog */
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -186,7 +195,7 @@ export default function HiringRequestPage() {
     try { localStorage.setItem("store-filter:hiring-request", JSON.stringify(ids)); } catch {}
   }
 
-  // ── Deep-link from a hiring/separation/milestone-gift notification ─────
+  // ── Deep-link from a hiring/separation/shirt-milestone notification ────
   const pendingHiringAction = useHiringActionStore((s) => s.pendingHiringAction);
   const clearPendingHiringAction = useHiringActionStore((s) => s.clearPendingHiringAction);
   const [highlightedRequestId, setHighlightedRequestId] = useState<number | null>(null);
@@ -194,16 +203,16 @@ export default function HiringRequestPage() {
   const highlightTimeoutRef = useRef<number | null>(null);
 
   // Switch to the right tab whenever a pending action arrives. Only clears it
-  // here if the current view can't show that tab at all (e.g. a milestone-gift
-  // manager's single-tab view) — otherwise the owning tab consumes/clears it.
+  // here if the current view can't show that tab at all (e.g. the fulfilment-
+  // only single-tab view) — otherwise the owning tab consumes/clears it.
   useEffect(() => {
     if (!pendingHiringAction) return;
-    if (isMilestoneGiftManager && pendingHiringAction.tab !== "milestone_gift") {
+    if (isShirtFulfilmentOnly && pendingHiringAction.tab !== "shirt_milestones") {
       clearPendingHiringAction();
       return;
     }
     setActiveTab(pendingHiringAction.tab);
-  }, [pendingHiringAction, isMilestoneGiftManager, clearPendingHiringAction]);
+  }, [pendingHiringAction, isShirtFulfilmentOnly, clearPendingHiringAction]);
 
   // Effect A: apply the store filter for the Hiring tab, stash the target id locally
   useEffect(() => {
@@ -331,9 +340,9 @@ export default function HiringRequestPage() {
         description="Manage hiring and separation requests for your stores."
       />
 
-      {isMilestoneGiftManager ? (
-        /* ── Milestone-only view ── */
-        <MilestoneGiftTab active={true} fullAccess={true} />
+      {isShirtFulfilmentOnly ? (
+        /* ── Fulfilment-only view ── */
+        <ShirtMilestonesTab active solo initialView="fulfilment" />
       ) : (
         <>
         <Tabs
@@ -352,10 +361,10 @@ export default function HiringRequestPage() {
             <span className="hidden sm:inline">Separation Request</span>
             <span className="sm:hidden">Separation</span>
           </TabsTrigger>
-          <TabsTrigger value="milestone_gift" className="gap-2">
-            <Gift className="h-4 w-4" />
-            <span className="hidden sm:inline">Milestone Gift</span>
-            <span className="sm:hidden">Gift</span>
+          <TabsTrigger value="shirt_milestones" className="gap-2">
+            <Shirt className="h-4 w-4" />
+            <span className="hidden sm:inline">Shirt Milestones</span>
+            <span className="sm:hidden">Shirts</span>
           </TabsTrigger>
         </TabsList>
 
@@ -559,12 +568,11 @@ export default function HiringRequestPage() {
           />
         </TabsContent>
 
-        {/* ── Milestone Gift Tab ── */}
-        <TabsContent value="milestone_gift" className="mt-4" tabIndex={-1}>
-          <MilestoneGiftTab
-            active={activeTab === "milestone_gift"}
-            fullAccess={isSuperAdmin() || canAccessRoute({ service: "Hiring", method: "POST", path: "/v1/stores/*/milestone-gift-requests" })}
-          />
+        {/* ── Shirt Milestones Tab ── */}
+        <TabsContent value="shirt_milestones" className="mt-4" tabIndex={-1}>
+          {/* No fullAccess prop — the tab derives its own permissions from
+              lib/auth/shirt-access.ts. */}
+          <ShirtMilestonesTab active={activeTab === "shirt_milestones"} />
         </TabsContent>
       </Tabs>
 

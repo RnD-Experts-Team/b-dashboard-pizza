@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -62,11 +62,26 @@ import type {
  * because an "other store" ticket does not have one. The store arrives with the
  * response instead.
  */
-export default function TicketPage() {
+function TicketPageInner() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const locale = (params?.locale as string) ?? "en";
   const ticketId = Number(params?.ticketId);
+  /**
+   * The ticket's store, carried on the link that got us here.
+   *
+   * Not used to build the request path -- this page is deliberately
+   * /maintenance-tickets/{id} with no store in it, because an other-store
+   * ticket has none. It rides along in the query string so the AUTHORIZER can
+   * scope its rule to this store. `reports view` is granted per store, and a
+   * rule with nothing to scope to falls back to checking global permissions,
+   * which those users do not hold -- which is what made this page 403 for them.
+   *
+   * Absent on a bare deep link or an other-store ticket; the rule allows that
+   * and falls back, so the page still works for anyone holding it globally.
+   */
+  const storeFromLink = searchParams.get("store");
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [issues, setIssues] = useState<TicketIssue[]>([]);
@@ -90,7 +105,11 @@ export default function TicketPage() {
       else setIsRefreshing(true);
 
       try {
-        const res = await maintenanceTicketsService.getTicketIssuesById(ticketId, ctrl.signal);
+        const res = await maintenanceTicketsService.getTicketIssuesById(
+          ticketId,
+          storeFromLink,
+          ctrl.signal
+        );
         setTicket(res.ticket);
         setIssues(res.data);
         setError(null);
@@ -106,7 +125,7 @@ export default function TicketPage() {
         setIsRefreshing(false);
       }
     },
-    [ticketId]
+    [ticketId, storeFromLink]
   );
 
   useEffect(() => {
@@ -220,6 +239,18 @@ export default function TicketPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary to avoid opting the whole route
+ * into client-side rendering -- same wrapper the tickets list uses.
+ */
+export default function TicketPage() {
+  return (
+    <Suspense fallback={<TicketPageSkeleton />}>
+      <TicketPageInner />
+    </Suspense>
   );
 }
 

@@ -3,7 +3,6 @@
 import { Boxes, Scale, TriangleAlert, Warehouse } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { StockBalance } from "@/types/storage.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Storage KPI strip                                                        */
@@ -65,11 +64,11 @@ interface StorageKpisProps {
   trackedPairs: number | null;
   locationCount: number | null;
   movementCount: number | null;
-  /** Rows with a negative balance found in the scanned page. */
-  negatives: StockBalance[] | null;
-  /** How many pairs the scan actually looked at, and how many exist. */
-  scanned?: number;
-  scanTotal?: number;
+  /**
+   * How many (part, location) pairs are below zero -- ALL of them, counted by
+   * the server. Never a count of what one page happened to contain.
+   */
+  negativeCount: number | null;
   isLoading?: boolean;
   onNegativesClick?: () => void;
 }
@@ -78,21 +77,13 @@ export function StorageKpis({
   trackedPairs,
   locationCount,
   movementCount,
-  negatives,
-  scanned,
-  scanTotal,
+  negativeCount,
   isLoading,
   onNegativesClick,
 }: StorageKpisProps) {
   if (isLoading) {
     return <Skeleton className="h-24 w-full rounded-xl" />;
   }
-
-  const negativeCount = negatives?.length ?? 0;
-  // The API has no `negative` filter, so this count is page-bounded. Say so
-  // rather than implying it is the whole picture.
-  // TODO(backend): a `negative` filter on /stock-balances would make it exact.
-  const partial = scanned != null && scanTotal != null && scanTotal > scanned;
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -117,18 +108,10 @@ export function StorageKpis({
         <StatCell
           icon={TriangleAlert}
           label="Negative balances"
-          value={negatives == null ? "—" : String(negativeCount)}
-          tone={negativeCount > 0 ? "alert" : "default"}
-          onClick={negativeCount > 0 ? onNegativesClick : undefined}
-          hint={
-            negativeCount > 0
-              ? partial
-                ? `in the first ${scanned} of ${scanTotal} pairs — needs reconciling`
-                : "needs reconciling"
-              : partial
-                ? `none in the first ${scanned} of ${scanTotal} pairs`
-                : undefined
-          }
+          value={negativeCount == null ? "—" : String(negativeCount)}
+          tone={negativeCount != null && negativeCount > 0 ? "alert" : "default"}
+          onClick={negativeCount != null && negativeCount > 0 ? onNegativesClick : undefined}
+          hint={negativeCount != null && negativeCount > 0 ? "needs reconciling" : undefined}
         />
       </div>
     </div>

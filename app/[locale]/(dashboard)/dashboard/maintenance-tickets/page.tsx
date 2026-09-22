@@ -220,7 +220,11 @@ function MaintenanceTicketsPageInner() {
    * the surrounding tickets so working a queue does not need one.
    */
   function handleTicketClick(ticket: Ticket) {
-    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}`);
+    // The store rides along so the ticket page can tell the authorizer which
+    // store to scope to -- `reports view` is granted per store, and without it
+    // the read falls back to a global permission check those users fail.
+    const store = ticket.storeId ? `?store=${encodeURIComponent(ticket.storeId)}` : "";
+    router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}${store}`);
   }
 
   function handleMutationSuccess() {

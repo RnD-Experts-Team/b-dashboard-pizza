@@ -992,12 +992,19 @@ export const maintenanceTicketsService = {
    */
   async getTicketIssuesById(
     ticketId: number,
+    storeNumber?: string | null,
     signal?: AbortSignal
   ): Promise<TicketWithIssuesResponse> {
     const token = requireToken();
+    // Passed purely for authorization. Upstream's globalIndex(Ticket) ignores
+    // it; pizzasys reads it out of the query string to scope the rule to this
+    // ticket's store, which is what lets a reports-view user -- whose
+    // `reports view` is granted per store, not globally -- read the ticket at
+    // all. Omitted for an other-store ticket, which has no store to name.
+    const qs = storeNumber ? `?store_id=${encodeURIComponent(storeNumber)}` : "";
     try {
       const res = await axios.get<ApiTicketIssuesResponse & { ticket: ApiTicket }>(
-        `/api/maintenance-tickets/tickets/${ticketId}/issues`,
+        `/api/maintenance-tickets/tickets/${ticketId}/issues${qs}`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           timeout: 15_000,

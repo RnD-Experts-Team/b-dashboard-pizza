@@ -37,9 +37,6 @@ interface BalancesTabProps {
   error: StorageErrorState | null;
   filters: StockBalanceFilters;
   onFiltersChange: (filters: StockBalanceFilters, page?: number) => void;
-  /** Set by the KPI strip's "Negative balances" cell. */
-  negativeOnly: boolean;
-  onNegativeOnlyChange: (value: boolean) => void;
 }
 
 export function BalancesTab({
@@ -48,17 +45,14 @@ export function BalancesTab({
   error,
   filters,
   onFiltersChange,
-  negativeOnly,
-  onNegativeOnlyChange,
 }: BalancesTabProps) {
   const [search, setSearch] = useState("");
 
+  /** Server-side now, so it survives paging. Set here or by the KPI strip. */
+  const negativeOnly = filters.negative_only ?? false;
+
   const rows = useMemo(() => {
     let out = data?.data ?? [];
-    // Applied client-side over the loaded page, and deliberately INDEPENDENT
-    // of `non_zero`: that flag hides pairs that netted back to ZERO, not
-    // negatives, and conflating the two can hide the very rows being hunted.
-    if (negativeOnly) out = out.filter((b) => b.onHand < 0);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       out = out.filter(
@@ -75,7 +69,7 @@ export function BalancesTab({
       );
     }
     return out;
-  }, [data, negativeOnly, search]);
+  }, [data, search]);
 
   if (isLoading && !data) return <StorageSkeleton />;
   if (error && !data) {
@@ -106,7 +100,9 @@ export function BalancesTab({
         <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
           <Checkbox
             checked={negativeOnly}
-            onCheckedChange={(v) => onNegativeOnlyChange(v === true)}
+            onCheckedChange={(v) =>
+              onFiltersChange({ ...filters, negative_only: v === true }, 1)
+            }
           />
           Negative only
         </label>
@@ -114,10 +110,10 @@ export function BalancesTab({
 
       {rows.length === 0 ? (
         <StorageEmptyState
-          title={negativeOnly ? "No negative balances here" : "Nothing on hand yet"}
+          title={negativeOnly ? "Nothing has gone negative" : "Nothing on hand yet"}
           description={
             negativeOnly
-              ? "Nothing on this page has gone negative. Negatives appear when a reversal lands after the stock was already consumed."
+              ? "No part is short anywhere. Negatives appear when a reversal lands after the stock was already consumed."
               : "Balances appear once stock movements have been recorded against a part and a location."
           }
         />
@@ -198,11 +194,13 @@ export function BalancesTab({
             </table>
           </div>
 
-          {(search.trim() || negativeOnly) && data && (
+          {/* Only the SEARCH box is page-scoped now; "Negative only" is a
+              server filter and pages like any other. */}
+          {search.trim() && data && (
             <p className="text-[11px] text-muted-foreground">
               Showing {rows.length} of {data.data.length} rows on this page
               {data.meta.total > data.data.length && ` (${data.meta.total} in total)`}.
-              Filtering here applies to the loaded page only.
+              The search box looks at the loaded page only.
             </p>
           )}
 
