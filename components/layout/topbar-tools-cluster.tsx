@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { StorePassportButton } from "@/components/store-passport/store-passport-button";
 import { isOnBreak, useBreakTimerStore } from "@/lib/store/break-timer.store";
 import { cn } from "@/lib/utils";
@@ -86,12 +90,14 @@ export function TopbarToolsCluster() {
           open ? "grid-cols-[1fr] opacity-100" : "grid-cols-[0fr] opacity-0",
         )}
       >
-        <div className={overflowVisible ? "overflow-visible" : "overflow-hidden"}>
+        <div
+          className={overflowVisible ? "overflow-visible" : "overflow-hidden"}
+        >
           {/* `inert` while collapsed — opacity-0 alone would leave both
               buttons in the tab order and in the accessibility tree. */}
           <div className="flex items-center gap-1 pe-1" inert={!open}>
             <BreakTimerButton />
-            <StorePassportButton />
+            {/*     <StorePassportButton /> */}
           </div>
         </div>
       </div>
@@ -103,7 +109,9 @@ export function TopbarToolsCluster() {
             size="icon"
             aria-expanded={open}
             aria-controls="topbar-tools"
-            aria-label={locked ? t("lockedOnBreak") : open ? t("collapse") : t("expand")}
+            aria-label={
+              locked ? t("lockedOnBreak") : open ? t("collapse") : t("expand")
+            }
             // aria-disabled, not `disabled`: a disabled button swallows the
             // pointer events Radix needs, so the tooltip explaining *why* it
             // won't close would never appear.
