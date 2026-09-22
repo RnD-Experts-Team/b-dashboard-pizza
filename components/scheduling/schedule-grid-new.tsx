@@ -69,6 +69,17 @@ interface ScheduleGridProps {
   /** Accept a record as reviewed without changing it. */
   onMarkReviewed?: (actual: ActualShift) => void;
   /**
+   * Show only what the server flagged as warranting a look. Actual view only.
+   *
+   * The week's other two filters are applied by the SERVER, which narrows the
+   * roster and the shifts together. This one cannot be — `needs_attention` is
+   * per shift, not per person — so it has to drop the emptied rows itself or
+   * the grid fills with employees who have nothing in them.
+   */
+  attentionOnly?: boolean;
+  /** Open the split/merge dialog for a recorded shift. */
+  onAdjustActual?: (actual: ActualShift) => void;
+  /**
    * Namespaced ids with an action in flight. A set rather than a single id
    * because a grouped card covers a plan AND its punches at once.
    */
@@ -156,6 +167,8 @@ export function ScheduleGrid({
   onConfirmActual,
   onAgreeClockIn,
   onMarkReviewed,
+  attentionOnly,
+  onAdjustActual,
   pendingIds,
   onEditActual,
   onDeleteActual,
@@ -166,6 +179,7 @@ export function ScheduleGrid({
 }: ScheduleGridProps) {
   const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
   const isActualMode = scheduleMode === "actual" && !comparisonMode;
+  const attentionFilterOn = isActualMode && !!attentionOnly;
   const effectiveShifts = displayShifts ?? shifts;
 
   /**
@@ -208,13 +222,39 @@ export function ScheduleGrid({
   const addedActualMap = useMemo(() => {
     const map: Record<string, ActualShift[]> = {};
     for (const a of actualShifts) {
-      if (a.status !== "added" || a.plannedShiftId) continue;
+      // Not linked to a plan = ad-hoc coverage, which is exactly what belongs
+      // in a cell on its own. `timeVariance: "unplanned"` restates this, but
+      // the link is the field that decides where the card goes.
+      if (a.plannedShiftId) continue;
       const key = `${a.employeeId}-${a.dayIndex}`;
       if (!map[key]) map[key] = [];
       map[key].push(a);
     }
     return map;
   }, [actualShifts]);
+
+  /**
+   * The rows the filter leaves standing.
+   *
+   * An employee stays only if something of theirs is flagged. Applied to the
+   * ROW list rather than inside the cells so the grid never shows a name with
+   * seven empty days under it — which is what the server-side search and
+   * department filters avoid by narrowing the roster with the shifts.
+   */
+  const attentionEmployeeIds = useMemo(() => {
+    if (!attentionFilterOn) return null;
+    return new Set(
+      actualShifts.filter((a) => a.needsAttention).map((a) => a.employeeId),
+    );
+  }, [attentionFilterOn, actualShifts]);
+
+  const visibleEmployees = useMemo(
+    () =>
+      attentionEmployeeIds
+        ? employees.filter((e) => attentionEmployeeIds.has(e.id))
+        : employees,
+    [employees, attentionEmployeeIds],
+  );
 
   /**
    * Drafts are counted in every total below.
@@ -337,7 +377,7 @@ export function ScheduleGrid({
 
           {/* Employee rows */}
           <tbody>
-            {employees.map((emp) => {
+            {visibleEmployees.map((emp) => {
               const empHours = hoursMap[emp.id] ?? 0;
               const empShiftCount = shiftCountMap[emp.id] ?? 0;
               const isOvertime = overtimeEmpIds.has(emp.id);
@@ -404,9 +444,31 @@ export function ScheduleGrid({
                       pendingIds?.has(pendingShiftKey(id)) ?? false;
                     const isPendingActual = (id: string) =>
                       pendingIds?.has(pendingActualKey(id)) ?? false;
-                    const cellShifts = shiftMap[key] ?? [];
-                    const cellAddedActuals = addedActualMap[key] ?? [];
+                    /**
+                     * With the filter on, a cell keeps only what is flagged.
+                     *
+                     * Both halves have to be narrowed, not just the standalone
+                     * coverage: a planned shift earns its place in the filtered
+                     * view through the actual linked to it, so a plan whose
+                     * record is clean drops out with everything else.
+                     */
+                    const allCellShifts = shiftMap[key] ?? [];
+                    const cellShifts = attentionFilterOn
+                      ? allCellShifts.filter((sh) =>
+                          actualShifts.some(
+                            (a) =>
+                              a.plannedShiftId === sh.id && a.needsAttention,
+                          ),
+                        )
+                      : allCellShifts;
+                    const allCellAddedActuals = addedActualMap[key] ?? [];
+                    const cellAddedActuals = attentionFilterOn
+                      ? allCellAddedActuals.filter((a) => a.needsAttention)
+                      : allCellAddedActuals;
                     const cellDrafts = draftMap[key] ?? [];
+                    const cellActualCount = actualShifts.filter(
+                      (a) => a.employeeId === emp.id && a.dayIndex === dayIdx,
+                    ).length;
                     const empTimeOff = timeOff.find(
                       (t) => t.employeeId === emp.id && t.dayIndex === dayIdx
                     );
@@ -614,6 +676,8 @@ export function ScheduleGrid({
                                   onEdit={(s, a) => onEditActual?.(s, a)}
                                   onDelete={(a) => onDeleteActual?.(a)}
                                   onMarkReviewed={(a) => onMarkReviewed?.(a)}
+                                  onAdjust={(a) => onAdjustActual?.(a)}
+                                  hasSameDayActuals={cellActualCount > 1}
                                 />
                               ))}
                               {looseActuals.map((a) => (
@@ -625,6 +689,8 @@ export function ScheduleGrid({
                                   onDelete={(act) => onDeleteActual?.(act)}
                                   isPending={isPendingActual(a.id)}
                                   onMarkReviewed={(act) => onMarkReviewed?.(act)}
+                                  onAdjust={(act) => onAdjustActual?.(act)}
+                                  hasSameDayActuals={cellActualCount > 1}
                                 />
                               ))}
                               <Tooltip>

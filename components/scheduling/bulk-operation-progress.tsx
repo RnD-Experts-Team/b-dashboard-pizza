@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -55,16 +56,35 @@ interface BulkOperationProgressProps {
   isRetrying?: boolean;
 }
 
+/** Long enough to read "all 12 went through", short enough not to be in the way. */
+const CLEAN_SUCCESS_DISMISS_MS = 2_500;
+
 export function BulkOperationProgress({
   operation,
   onRetryFailed,
   onClose,
   isRetrying = false,
 }: BulkOperationProgressProps) {
+  const status = operation?.status;
+  const cleanSuccess = status === "completed";
+
+  /*
+   * A clean success closes itself.
+   *
+   * There is nothing to decide on it, and it covers the grid — the very thing
+   * the manager wants to look at once the week is saved. Anything with
+   * failures stays up, because that DOES need a decision.
+   */
+  useEffect(() => {
+    if (!cleanSuccess) return;
+    const timer = setTimeout(onClose, CLEAN_SUCCESS_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, [cleanSuccess, onClose]);
+
   if (!operation) return null;
 
-  const { status, total, succeeded, failed, progressPercent, items } = operation;
-  const terminal = isTerminal(status);
+  const { total, succeeded, failed, progressPercent, items } = operation;
+  const terminal = isTerminal(operation.status);
   const hasFailures = failed > 0;
 
   return (

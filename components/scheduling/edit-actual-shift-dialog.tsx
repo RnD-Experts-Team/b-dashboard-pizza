@@ -67,11 +67,23 @@ export function EditActualShiftDialog({
 
   const isAddCoverage = !plannedShift;
   const isNewCoverage = isAddCoverage && !editingActual;
+  /**
+   * They are on the clock right now, so there is no end time to correct.
+   *
+   * Only a real punch (or a correction in TCP) can close a segment, so letting
+   * a manager type an end here would either be overwritten by the next sync or
+   * would invent a clock-out that never happened.
+   */
+  const isRunning = !!editingActual?.isOpen;
 
   useEffect(() => {
-    if (editingActual && editingActual.status !== "absent") {
+    if (editingActual && editingActual.reviewState !== "absent") {
       setStartTime(editingActual.startTime);
-      setEndTime(editingActual.endTime);
+      // Null while they are still on the clock. Seeding "" would put an empty
+      // <input type="time"> on screen and POST `end_time: ""` if saved; the
+      // form is blocked in that case anyway (see `isRunning` below), so the
+      // plan's end is only here to keep the field showing something sane.
+      setEndTime(editingActual.endTime ?? plannedShift?.endTime ?? "");
       /**
        * A timeclock punch has `"label": null`, which the adapter turns into "".
        * That matched no option, so the Select rendered an empty box. Fall back
@@ -169,6 +181,7 @@ export function EditActualShiftDialog({
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
+                disabled={isRunning}
                 className="mt-1"
               />
             </div>
@@ -181,10 +194,18 @@ export function EditActualShiftDialog({
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
+                disabled={isRunning}
                 className="mt-1"
               />
             </div>
           </div>
+
+          {isRunning && (
+            <p className="rounded-md border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+              {employee.name} is still on the clock, so these times cannot be
+              edited yet. They will finish when the clock-out comes through.
+            </p>
+          )}
 
           {/* Shift label */}
           <div>
@@ -253,7 +274,9 @@ export function EditActualShiftDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>Save</Button>
+            <Button onClick={handleSubmit} disabled={isRunning}>
+              Save
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

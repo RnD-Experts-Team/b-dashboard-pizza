@@ -31,6 +31,7 @@ import {
   ClipboardCheck,
   GitCompare,
   HelpCircle,
+  Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +64,9 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleErrorAlert } from "./schedule-error-alert";
+import { useErrorAnnouncer } from "@/lib/hooks/use-error-announcer";
+import { AdjustShiftDialog } from "./adjust-shift-dialog";
+import { OnTheClockDialog } from "./on-the-clock-dialog";
 import { PageGuide, type GuideStep } from "@/components/shared/page-guide";
 import {
   SCHEDULING_GUIDE,
@@ -116,6 +120,7 @@ import {
   DEFAULT_OVERTIME_THRESHOLD,
   calcHours,
   formatTime,
+  formatWorkedEnd,
 } from "@/lib/scheduling/constants";
 
 /**
@@ -153,6 +158,7 @@ import type {
   AvailabilityRule,
   TimeOffEntry,
   ActualShift,
+  ActualShiftSegment,
 } from "@/types/scheduling.types";
 import {
   Dialog,
@@ -194,6 +200,22 @@ export function SchedulingManager() {
 
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState("All");
+  /**
+   * Show only the shifts the server flagged as warranting a look.
+   *
+   * Off by default, and deliberately so. The backend's handoff suggests
+   * defaulting a review grid to this, but this grid is the whole week's
+   * schedule rather than a queue — opening Actual on a clean week and finding
+   * it empty reads as missing data, not as nothing to do.
+   */
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  /** The shift whose split/merge dialog is open. */
+  const [adjustingActual, setAdjustingActual] = useState<ActualShift | null>(
+    null,
+  );
+  const [onTheClockOpen, setOnTheClockOpen] = useState(false);
+  /** The alert stack, so a new failure can scroll itself into view. */
+  const alertsRef = useRef<HTMLDivElement>(null);
 
   /**
    * One request serves all three views.
@@ -378,13 +400,11 @@ export function SchedulingManager() {
     refetchWeek: refetch,
     onSetupError: (code, message) => setWriteSetupError({ code, message }),
     onSuccess: (kind) => {
-      toast.success(
-        kind === "delete"
-          ? "Shift removed"
-          : kind === "update"
-            ? "Shift updated"
-            : "Shift added"
-      );
+      // Delete says so itself, because its toast carries the Undo action and
+      // needs the shift that was removed in order to offer it.
+      if (kind !== "delete") {
+        toast.success(kind === "update" ? "Shift updated" : "Shift added");
+      }
       if (kind !== "delete") {
         // Also covers the replay that fires once an employee finishes setup,
         // which does not run through the caller's promise chain.
@@ -448,6 +468,47 @@ export function SchedulingManager() {
    * a card with no row to sit on. Filtering again here would double-filter.
    */
   const filteredEmployees = employees;
+
+  /**
+   * How many rows are actually on screen.
+   *
+   * The badge below counts the roster, which the server already narrowed. The
+   * attention filter narrows it again on the client, so without this the badge
+   * would announce twelve employees above a grid showing two.
+   */
+  const visibleEmployeeCount = useMemo(() => {
+    if (!attentionOnly) return filteredEmployees.length;
+    const flagged = new Set(
+      actualShifts.filter((a) => a.needsAttention).map((a) => a.employeeId),
+    );
+    return filteredEmployees.filter((e) => flagged.has(e.id)).length;
+  }, [attentionOnly, actualShifts, filteredEmployees]);
+
+  /** How many shifts the server has flagged, for the filter's own badge. */
+  const attentionCount = useMemo(
+    () => actualShifts.filter((a) => a.needsAttention).length,
+    [actualShifts]
+  );
+
+  /**
+   * The week's counts are in motion and must not be read as fact.
+   *
+   * Covers the whole gap, not just the refetch: drafts clear the moment a batch
+   * is ACCEPTED, so from that instant until the new week lands the totals
+   * describe neither what was there before nor what is there now. Measured at
+   * about five seconds, every second of which used to read "0 shifts" beneath a
+   * dialog reporting success.
+   */
+  const weekIsSettling =
+    isRefetching ||
+    bulk.isStarting ||
+    // Still working. Once it finishes, `isRefetching` carries the rest — the
+    // dialog lingers a moment after that, and claiming to be busy underneath
+    // a result that has already landed is its own small lie.
+    (bulk.operation !== null &&
+      bulk.operation.status !== "completed" &&
+      bulk.operation.status !== "completed_with_errors" &&
+      bulk.operation.status !== "failed");
 
   /** "All" plus the store's mapped Humanity positions, from the payload. */
   const departmentOptions = useMemo(
@@ -552,6 +613,36 @@ export function SchedulingManager() {
     setScheduleMode(back.mode);
     setComparisonMode(back.comparison);
   }, []);
+
+  /**
+   * The one error the page is currently showing, in the order the stack draws
+   * them — and gated by exactly the conditions those alerts use, so nothing is
+   * announced that is not on screen, and nothing on screen goes unannounced.
+   */
+  const announcedError =
+    weekError ??
+    (bulk.error && !bulk.operation ? bulk.error : null) ??
+    actualMutations.error ??
+    availabilityMutations.error ??
+    (!shiftDialogOpen ? mutations.error : null) ??
+    (!publishedOpen ? published.error : null) ??
+    null;
+
+  useErrorAnnouncer(announcedError, alertsRef);
+
+  /**
+   * Is the grid showing the week we are actually in?
+   *
+   * The Today button and the live board both need this, and they must agree —
+   * a board offered on a week where Today is also offered would be answering
+   * about a different week than the one on screen.
+   */
+  const isCurrentWeek =
+    week.start === snapToWeekStart(todayIso(), week.weekStartDow);
+
+  useEffect(() => {
+    if (!isCurrentWeek) setOnTheClockOpen(false);
+  }, [isCurrentWeek]);
 
   const requestModeChange = useCallback(
     (targetIsPlanned: boolean, run: () => void) => {
@@ -685,11 +776,54 @@ export function SchedulingManager() {
       const shift = shifts.find((s) => s.id === assignmentId);
       if (!shift) return;
       const who = employeeLookup.get(shift.employeeId)?.name ?? "This employee";
-      void withPending([pendingShiftKey(shift.id)], () =>
-        mutations.deleteShift(shift.shiftId, {
+      void withPending([pendingShiftKey(shift.id)], async () => {
+        const removed = await mutations.deleteShift(shift.shiftId, {
           detail: `${who} · ${formatIsoDateWithWeekday(shift.shiftDate)} · ${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`,
-        }),
-      );
+        });
+
+        /*
+         * Undo, because delete is one click on a hover icon sitting right
+         * beside edit and there is no confirmation in front of it.
+         *
+         * This re-creates the shift rather than resurrecting it — Humanity
+         * gives the new one its own id — so it restores the hours, not the
+         * row. Good enough for a misclick, which is what this is for.
+         */
+        if (removed) {
+          toast.success("Shift removed", {
+            action: {
+              label: "Undo",
+              onClick: () => {
+                void mutations.createShift(
+                  {
+                    // `shift_date`, not `day_index` — the single-shift endpoint
+                    // takes a real date, unlike the bulk one.
+                    employee_id: Number(shift.employeeId) || shift.employeeId,
+                    shift_date: shift.shiftDate,
+                    start_time: shift.startTime,
+                    end_time: shift.endTime,
+                    label: shift.label || undefined,
+                    shift_type: shift.type || undefined,
+                    note: shift.note || undefined,
+                    /*
+                     * Putting back what was just there, so the availability and
+                     * conflict guards have already been answered — by whoever
+                     * created it, or by the bulk path, which does not apply
+                     * them at all. Without this an undo can be refused for a
+                     * shift that existed a second earlier, which is not a
+                     * decision to re-open at the moment of a misclick.
+                     */
+                    force: true,
+                  },
+                  { employeeId: shift.employeeId, detail: `${who} · restored` }
+                );
+              },
+            },
+          });
+        }
+
+        return removed;
+      });
     },
     [shifts, employeeLookup, mutations, withPending]
   );
@@ -1050,6 +1184,44 @@ export function SchedulingManager() {
   );
 
   /** Accept a record as reviewed, without opening anything. */
+  /**
+   * The rest of that person's day, so the dialog can offer them for merging.
+   *
+   * Read live rather than captured when the dialog opened — a refetch between
+   * opening and acting would otherwise leave stale options on screen.
+   */
+  const adjustSameDay = useMemo(
+    () =>
+      adjustingActual
+        ? actualShifts.filter(
+            (a) =>
+              a.employeeId === adjustingActual.employeeId &&
+              a.dayIndex === adjustingActual.dayIndex,
+          )
+        : [],
+    [adjustingActual, actualShifts],
+  );
+
+  const handleSplitActual = useCallback(
+    (actual: ActualShift, segments: ActualShiftSegment[]) => {
+      void withPending([pendingActualKey(actual.id)], () =>
+        actualMutations.splitActual(actual, segments),
+      );
+    },
+    [actualMutations, withPending],
+  );
+
+  const handleMergeActuals = useCallback(
+    (into: ActualShift, others: ActualShift[]) => {
+      // Every card involved should look busy — the others are about to vanish.
+      void withPending(
+        [into, ...others].map((a) => pendingActualKey(a.id)),
+        () => actualMutations.mergeActuals(into, others),
+      );
+    },
+    [actualMutations, withPending],
+  );
+
   const handleMarkReviewed = useCallback(
     (actual: ActualShift) => {
       void withPending([pendingActualKey(actual.id)], () =>
@@ -1599,6 +1771,13 @@ export function SchedulingManager() {
         {pageHeader}
 
         {/*
+          Every page-level failure, in one place so there is one thing to
+          scroll to. `useErrorAnnouncer` above watches the same set under the
+          same conditions — nothing here goes unannounced, and nothing is
+          announced that is not here.
+        */}
+        <div ref={alertsRef} className="scroll-mt-4 empty:hidden space-y-4">
+        {/*
           A bulk operation that never started. `operation` stays null in that
           case, so the progress dialog cannot report it — without this the
           manager confirms an action and sees nothing happen at all.
@@ -1677,6 +1856,7 @@ export function SchedulingManager() {
             compact
           />
         )}
+        </div>
 
         {/*
           Toolbar — two rows, each wrapping on its own.
@@ -1740,7 +1920,7 @@ export function SchedulingManager() {
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            {week.start !== snapToWeekStart(todayIso(), week.weekStartDow) && (
+            {!isCurrentWeek && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1855,6 +2035,27 @@ export function SchedulingManager() {
               </TooltipContent>
             </Tooltip>
 
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-sm"
+                  data-guide-id="sched-on-the-clock"
+                  disabled={!isCurrentWeek}
+                  onClick={() => setOnTheClockOpen(true)}
+                >
+                  <Radio className="h-3.5 w-3.5 text-muted-foreground" />
+                  On the clock
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-56 text-xs">
+                {isCurrentWeek
+                  ? "Who is punched in right now, and clock people in or out"
+                  : "Only while you're on this week — the board shows who is on the clock right now, which has nothing to do with the week you're browsing."}
+              </TooltipContent>
+            </Tooltip>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-1.5 text-sm">
@@ -1876,6 +2077,49 @@ export function SchedulingManager() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/*
+              Actual only: nothing else in the week carries this flag, and in
+              Compare the grid is read-only so there is nothing to work through.
+            */}
+            {scheduleMode === "actual" && !comparisonMode && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={attentionOnly ? "default" : "outline"}
+                    size="sm"
+                    className="h-8 gap-1.5 text-sm"
+                    data-guide-id="sched-attention"
+                    onClick={() => setAttentionOnly((v) => !v)}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Needs attention
+                    {/*
+                      The count is the point of the filter: it answers "is there
+                      anything to do this week?" without switching the grid and
+                      finding it empty, which is why this stays off by default.
+                    */}
+                    {attentionCount > 0 && (
+                      <span
+                        className={cn(
+                          "ms-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+                          attentionOnly
+                            ? "bg-primary-foreground/20"
+                            : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        )}
+                      >
+                        {attentionCount}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-56 text-xs">
+                  {attentionCount > 0
+                    ? `${attentionCount} shift${attentionCount === 1 ? "" : "s"} worth a look — a missed punch, a forgotten clock-out, hours that don't match the plan, or hours that changed after you signed them off.`
+                    : "Nothing needs a look this week. This filter shows missed punches, forgotten clock-outs, hours that don't match the plan, and hours that changed after you signed them off."}
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {/*
               Freshness, refresh and Actions travel together at the inline-end.
@@ -2074,7 +2318,18 @@ export function SchedulingManager() {
           `@2xl` (672px) is where four tiles clear ~150px each plus gaps.
         */}
         <div className="@container">
-        <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+        {/*
+          Dimmed while a refetch is in flight. These numbers go stale the moment
+          drafts are saved — the tiles read 0 shifts / 0.0h for the few seconds
+          before the new week lands — and a confident wrong total is worse than
+          a visibly pending one.
+        */}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-3 @2xl:grid-cols-4 transition-opacity",
+            weekIsSettling && "opacity-50"
+          )}
+        >
           <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -2167,7 +2422,7 @@ export function SchedulingManager() {
         )}
 
         {/* Active filters badge */}
-        {(search || department !== "All") && (
+        {(search || department !== "All" || attentionOnly) && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Showing:</span>
             {department !== "All" && (
@@ -2180,9 +2435,15 @@ export function SchedulingManager() {
                 &quot;{search}&quot;
               </Badge>
             )}
+            {attentionOnly && (
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <AlertTriangle className="h-3 w-3" />
+                Needs attention
+              </Badge>
+            )}
             <span className="text-xs text-muted-foreground">
-              ({filteredEmployees.length} employee
-              {filteredEmployees.length !== 1 ? "s" : ""})
+              ({visibleEmployeeCount} employee
+              {visibleEmployeeCount !== 1 ? "s" : ""})
             </span>
           </div>
         )}
@@ -2229,6 +2490,8 @@ export function SchedulingManager() {
             onConfirmActual={handleConfirmActualShift}
             onAgreeClockIn={handleAgreeClockIn}
             onMarkReviewed={handleMarkReviewed}
+            attentionOnly={attentionOnly}
+            onAdjustActual={setAdjustingActual}
             pendingIds={pendingIds}
             onEditActual={handleOpenActualDialog}
             onDeleteActual={handleDeleteActualShift}
@@ -2243,8 +2506,23 @@ export function SchedulingManager() {
         {/* Quick actions footer */}
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <p>
-            {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled this
-            week
+            {/*
+              Drafts clear the moment the batch is accepted, but the shifts they
+              became only arrive with the refetch a few seconds later. Asserting
+              a count in that window told the manager "0 shifts" underneath a
+              dialog saying the save worked, which reads as lost work.
+            */}
+            {weekIsSettling ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Updating this week…
+              </span>
+            ) : (
+              <>
+                {shifts.length} shift{shifts.length !== 1 ? "s" : ""} scheduled
+                this week
+              </>
+            )}
           </p>
           {shifts.length > 0 && (
             <Button
@@ -2446,14 +2724,21 @@ export function SchedulingManager() {
                     This removes the{" "}
                     <strong>
                       {formatTime(deletingActual.startTime)} –{" "}
-                      {formatTime(deletingActual.endTime)}
+                      {formatWorkedEnd(deletingActual.endTime, deletingActual.isOpen)}
                     </strong>{" "}
-                    record
-                    {deletingActual.source === "timeclock"
-                      ? " that the time clock produced"
-                      : ""}
-                    . Worked time feeds payroll, so this deletes it there too and
-                    cannot be undone.
+                    record. Worked time feeds payroll, so this deletes it there
+                    too and cannot be undone.
+                    {deletingActual.source === "timeclock" && (
+                      <>
+                        {" "}
+                        <strong>
+                          Somebody physically punched this on the time clock.
+                        </strong>{" "}
+                        Deleting it throws away the evidence of when they were
+                        here, and nothing on this page can put it back — only a
+                        real punch, or a correction made on the clock itself.
+                      </>
+                    )}
                   </>
                 )}
               </AlertDialogDescription>
@@ -2668,6 +2953,31 @@ export function SchedulingManager() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <OnTheClockDialog
+          open={onTheClockOpen}
+          onOpenChange={setOnTheClockOpen}
+          storeId={storeId}
+          employees={employees}
+          // A punch creates or closes an actual shift, so the week behind the
+          // dialog is already out of date by the time it returns.
+          onPunched={refetch}
+          onSuccess={(message) => toast.success(message)}
+        />
+
+        <AdjustShiftDialog
+          open={!!adjustingActual}
+          onOpenChange={(open) => !open && setAdjustingActual(null)}
+          actual={adjustingActual}
+          sameDay={adjustSameDay}
+          employeeName={
+            (adjustingActual &&
+              employeeLookup.get(adjustingActual.employeeId)?.name) ||
+            "This employee"
+          }
+          onSplit={handleSplitActual}
+          onMerge={handleMergeActuals}
+        />
 
         <PageGuide
           steps={guideSteps}

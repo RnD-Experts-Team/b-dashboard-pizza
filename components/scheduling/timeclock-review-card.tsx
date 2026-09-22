@@ -8,7 +8,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime } from "@/lib/scheduling/constants";
+import { formatTime, formatWorkedEnd } from "@/lib/scheduling/constants";
 import { formatDurationDelta } from "@/lib/scheduling/utils";
 import {
   SHIFT_ACCENT,
@@ -19,6 +19,7 @@ import {
   PENDING_CARD_CLASS,
   ShiftPendingOverlay,
 } from "./shift-pending";
+import { ShiftSegments } from "./shift-segments";
 import {
   ShiftTooltipBody,
   ShiftTooltipHeader,
@@ -87,9 +88,7 @@ export function TimeclockReviewCard({
    * Undefined on responses predating the field, in which case the card keeps
    * its previous behaviour and treats grouping itself as the signal.
    */
-  const needsReview = clockIns.some(
-    (a) => a.reviewState === "unreviewed" || a.reviewState === undefined,
-  );
+  const needsReview = clockIns.some((a) => a.reviewState === "unreviewed");
   const accent = SHIFT_ACCENT[needsReview ? "attention" : "neutral"];
 
   return (
@@ -120,9 +119,15 @@ export function TimeclockReviewCard({
 
           <span className="my-0.5 block h-px bg-border/50" />
 
-          {/* Each punch is separately editable — a lunch break produces two. */}
+          {/*
+            One row per recorded shift. Two rows means two genuinely separate
+            shifts that day — the backend rolls punches less than an hour apart
+            into ONE shift with several segments, which `ShiftSegments` breaks
+            out underneath rather than listing here as if they were unrelated.
+          */}
           {clockIns.map((a, i) => (
-            <div key={a.id} className="group/row flex items-baseline gap-1.5">
+            <div key={a.id} className="group/row">
+            <div className="flex items-baseline gap-1.5">
               <span className="w-6 shrink-0 text-[8px] font-bold uppercase leading-tight tracking-wider text-muted-foreground/70">
                 {i === 0 ? "In" : ""}
               </span>
@@ -132,7 +137,7 @@ export function TimeclockReviewCard({
                   accent.text,
                 )}
               >
-                {formatTime(a.startTime)}–{formatTime(a.endTime)}
+                {formatTime(a.startTime)}–{formatWorkedEnd(a.endTime, a.isOpen)}
               </span>
               {a.note && (
                 <StickyNote className="h-2.5 w-2.5 shrink-0 text-amber-500 dark:text-amber-400" />
@@ -164,6 +169,8 @@ export function TimeclockReviewCard({
                 </Button>
               </span>
             </div>
+            <ShiftSegments segments={a.segments} />
+            </div>
           ))}
 
           <div className="mt-0.5 flex items-center gap-1">
@@ -173,9 +180,11 @@ export function TimeclockReviewCard({
               {delta ? ` · ${delta}` : ""}
             </p>
             {/*
-              Offered only for a single punch. With two (a lunch break) there is
-              no honest single pair of times to accept — the span would silently
-              bill the break as worked — so those are resolved by editing.
+              Offered only when there is one recorded shift to accept. Two means
+              they came in twice that day, and there is no single pair of times
+              that honestly covers both — those are resolved one at a time by
+              editing. A shift with several PUNCHES is still one shift and is
+              still offered, because the server has already summed it.
             */}
             {onAgree && clockIns.length === 1 && (
               <Button
@@ -198,7 +207,7 @@ export function TimeclockReviewCard({
       <TooltipContent side="top" className="max-w-60 text-xs">
         <ShiftTooltipHeader
           time={clockIns
-            .map((a) => `${formatTime(a.startTime)} – ${formatTime(a.endTime)}`)
+            .map((a) => `${formatTime(a.startTime)} – ${formatWorkedEnd(a.endTime, a.isOpen)}`)
             .join(", ")}
           hours={workedMinutes / 60}
         />
@@ -221,7 +230,7 @@ export function TimeclockReviewCard({
         <ShiftTooltipHint>
           {clockIns.length === 1
             ? "Tick to accept these times, or edit them first if the clock got it wrong."
-            : "More than one punch, so there is no single pair of times to accept — edit or delete them individually."}
+            : "They came in more than once that day, so there is no single pair of times to accept — handle each one on its own."}
         </ShiftTooltipHint>
       </TooltipContent>
     </Tooltip>

@@ -121,6 +121,12 @@ export interface Shift {
   isPublished: boolean;
   syncStatus: ShiftSyncStatus;
   origin: ShiftOrigin;
+  /**
+   * Set only on a shift produced by `mergeActualShifts` from an OPEN actual —
+   * somebody is still on the clock, so `endTime` there is a placeholder rather
+   * than a recorded time. Never set on a planned shift.
+   */
+  isOpen?: boolean;
   department?: string | null;
   /** `null` while `syncStatus` is `pending` — an id only arrives once Humanity accepts. */
   humanityShiftId?: string | null;
@@ -131,25 +137,65 @@ export interface Shift {
 /*  Actual shifts (what really happened)                                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export type ActualShiftStatus = "confirmed" | "modified" | "absent" | "added";
-
 /**
  * How the recorded times compare with the plan. DERIVED server-side on every
- * write and by the TCP sync — never sent by a client.
+ * write and by the TCP sync — never sent by a client, and rejected if you do.
+ *
+ * Note the server compares LABEL as well as times, and applies no tolerance at
+ * all: a two-minute punch reads `differs`. The grid deliberately does not, so
+ * see `MATCH_TOLERANCE_MINUTES` before treating this as the display rule.
  */
 export type ActualTimeVariance = "matches" | "differs" | "unplanned";
 
 /**
  * The human verdict on a record. Only an explicit action sets it; no background
- * job touches it.
+ * job touches it — which is what stops a sync turning a manager's recorded
+ * no-show back into "worked as planned".
  *
- * `unreviewed` is the one thing `status` cannot express — a punch nobody has
- * looked at reads as `confirmed` there, indistinguishable from one a manager
- * has actually confirmed.
+ * This is the only half of the pair a client may write.
  */
 export type ActualReviewState = "unreviewed" | "worked" | "absent";
 
 export type ActualShiftSource = "manual" | "timeclock";
+
+/** Where a punch was made. */
+export type SegmentOrigin =
+  /** Through our own clock-in / clock-out buttons. */
+  | "punch"
+  /** A manager hand-entered these hours. */
+  | "manual"
+  /** The sync found it already in TCP — a physical clock, or TCP's own web app. */
+  | "discovered";
+
+/**
+ * One clock-in→clock-out pair inside an actual shift.
+ *
+ * A shift is a roll-up over these, because punching out and back in closes one
+ * segment and opens another — so a single shift arrives as two or more rows
+ * whenever somebody steps off the clock.
+ *
+ * NOT the same shape as the segment the clocking endpoints return; that one is
+ * a live view carrying TCP's own ids and the pre-rounding punch times. The two
+ * are deliberately separate types.
+ */
+export interface ActualShiftSegment {
+  /** OUR row id. This is what `/split` takes. */
+  id: string;
+  /** TCP's own id. Useful in a support ticket; never key on it. */
+  workSegmentId: string;
+  /** `"YYYY-MM-DD HH:MM:SS"`, store-local wall clock, NO offset. Never `new Date()` it. */
+  timeIn: string;
+  /** Same format. `null` means on the clock right now. */
+  timeOut: string | null;
+  /** `null` while open. */
+  durationMinutes: number | null;
+  isOpen: boolean;
+  /** TCP flagged this segment incomplete — the time is a system default, not a punch. */
+  hasMissedPunch: boolean;
+  origin: SegmentOrigin;
+  /** TCP's note. The manager's note is `note` on the shift itself. */
+  note?: string;
+}
 
 export interface ActualShift {
   id: string;
@@ -157,28 +203,109 @@ export interface ActualShift {
   dayIndex: number;
   shiftDate: string;
   startTime: string;
-  endTime: string;
-  /** Authoritative duration from the server — see `Shift.durationMinutes`. */
+  /**
+   * "HH:mm" 24h, or `null` when `isOpen` — the person is still on the clock.
+   *
+   * Deliberately not filled in with "now": that would make a running shift look
+   * finished with an end time that crept forward on every refresh.
+   */
+  endTime: string | null;
+  /**
+   * Authoritative duration from the server — see `Shift.durationMinutes`.
+   *
+   * The SUM OF THE SEGMENTS, not the span from first punch-in to last punch-out,
+   * so time spent off the clock is not paid and not counted. On an open shift it
+   * is the minutes worked so far.
+   */
   durationMinutes: number;
+  /** Somebody is on the clock; this shift has not finished. */
+  isOpen: boolean;
   label: string;
   type: ShiftType;
+  timeVariance: ActualTimeVariance;
+  reviewState: ActualReviewState;
   /**
-   * DERIVED SERVER-SIDE and never sent by the client. Same times as the plan
-   * gives `confirmed`; different gives `modified`; no planned counterpart gives
-   * `added`; the absent endpoint gives `absent`.
+   * The server's own verdict on whether this warrants a manager's look: a missed
+   * punch, a forgotten clock-out past the cap, a finished shift that does not
+   * match the plan, or hours that changed after somebody signed them off.
+   *
+   * Drives the review filter, NOT the card's colour — the two disagree because
+   * the server applies no tolerance. See `MATCH_TOLERANCE_MINUTES`.
    */
-  status: ActualShiftStatus;
-  /**
-   * `status` split into its two independent halves. Optional because a response
-   * predating the split omits them — absent means "unknown", and every caller
-   * falls back to `status`, which the server still computes from these two.
-   */
-  timeVariance?: ActualTimeVariance;
-  reviewState?: ActualReviewState;
-  /** The originating ASSIGNMENT id. Absent for ad-hoc `added` entries. */
+  needsAttention: boolean;
+  /** A manager merged or split this by hand, so automatic grouping leaves it alone. */
+  groupingPinned: boolean;
+  /** Always present, usually length 1. */
+  segments: ActualShiftSegment[];
+  /** The originating ASSIGNMENT id. Absent for ad-hoc coverage. */
   plannedShiftId?: string;
   note?: string;
   source?: ActualShiftSource;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Clocking (TCP Manager+)                                                  */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * A punch as the clocking endpoints report it.
+ *
+ * Not the same shape as `ActualShiftSegment`, and deliberately not shared with
+ * it: that one is the stored row and carries our id, its duration and the
+ * manager's note, while this is the live view and carries TCP's own ids and
+ * the pre-rounding punch times instead. One interface covering both would be
+ * mostly optional fields and would lose exactly the distinction that matters.
+ */
+export interface ClockSegment {
+  /** TCP's id for the punch. There is no row id here — nothing to address. */
+  workSegmentId: string;
+  tcpEmployeeId: string;
+  jobCodeId: string;
+  /** `"YYYY-MM-DD HH:MM:SS"`, store-local wall clock, NO offset. */
+  timeIn: string;
+  timeOut: string | null;
+  /**
+   * What the employee PHYSICALLY punched, before TCP applied its rounding.
+   *
+   * For settling a dispute, not for the grid — showing it next to the recorded
+   * time invites the question of which one is the real one, and the answer for
+   * pay purposes is always the rounded one.
+   */
+  actualTimeIn: string | null;
+  actualTimeOut: string | null;
+  isOpen: boolean;
+  hasMissedPunch: boolean;
+  origin: SegmentOrigin;
+}
+
+/** One person currently on the clock. */
+export interface OnTheClockEntry {
+  employeeId: string;
+  employeeName: string;
+  /**
+   * When they clocked in, as UTC with an offset.
+   *
+   * THE one UTC value in this API, sitting right next to `segment.timeIn`,
+   * which is local wall clock with no offset. Same instant, two notations: use
+   * this to compute elapsed time and `timeIn` to display it.
+   */
+  since: string;
+  minutesSoFar: number;
+  segment: ClockSegment | null;
+}
+
+export interface ClockStatus {
+  employeeId: string;
+  /**
+   * Whether TCP knows this person at all.
+   *
+   * `false` is NOT "clocked out" — no hours can be attributed to them until
+   * somebody links them, and punching would be refused. Say so plainly rather
+   * than showing an inviting clock-in button.
+   */
+  linkedToTcp: boolean;
+  clockedIn: boolean;
+  segment: ClockSegment | null;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -420,7 +547,12 @@ export type SchedulingErrorCode =
   | "TCP_WRITE_FAILED"
   | "TCP_RATE_LIMITED"
   | "TCP_DAILY_QUOTA_EXHAUSTED"
-  | "STORE_NOT_ALLOWLISTED";
+  | "STORE_NOT_ALLOWLISTED"
+  /* Punching in and out. Re-verified against TCP before being refused. */
+  | "ALREADY_CLOCKED_IN"
+  | "NOT_CLOCKED_IN"
+  /* A split that would leave the shift it came from with no punches at all. */
+  | "INVALID_SPLIT";
 
 /** The three 409s a manager may override by resending the identical payload with `force`. */
 export const FORCEABLE_ERROR_CODES: readonly SchedulingErrorCode[] = [

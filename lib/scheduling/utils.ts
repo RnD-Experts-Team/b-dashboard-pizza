@@ -5,7 +5,6 @@ import type {
   TimeOffEntry,
   ActualShift,
 } from "@/types/scheduling.types";
-import { MATCH_TOLERANCE_MINUTES } from "./constants";
 
 /** Convert "HH:mm" to total minutes from midnight */
 function toMinutes(time: string): number {
@@ -41,28 +40,17 @@ function signedOffsetMinutes(from: string, to: string): number {
  */
 export function shiftEdgeOffsets(
   planned: { startTime: string; endTime: string },
-  actual: { startTime: string; endTime: string },
-): { start: number; end: number } {
+  actual: { startTime: string; endTime: string | null },
+): { start: number; end: number | null } {
   return {
     start: signedOffsetMinutes(planned.startTime, actual.startTime),
-    end: signedOffsetMinutes(planned.endTime, actual.endTime),
+    // No end punch yet, so there is no offset to give — not "on time", and not
+    // zero either, both of which would read as a finished shift.
+    end:
+      actual.endTime === null
+        ? null
+        : signedOffsetMinutes(planned.endTime, actual.endTime),
   };
-}
-
-/**
- * Did this get worked as planned, allowing for time-clock drift?
- *
- * Both edges must be inside the tolerance. Checking the total instead would
- * pass a shift worked entirely in the wrong half of the day, which is the one
- * thing the Compare view exists to catch.
- */
-export function workedAsPlanned(
-  planned: { startTime: string; endTime: string },
-  actual: { startTime: string; endTime: string },
-  toleranceMinutes: number = MATCH_TOLERANCE_MINUTES,
-): boolean {
-  const { start, end } = shiftEdgeOffsets(planned, actual);
-  return Math.abs(start) <= toleranceMinutes && Math.abs(end) <= toleranceMinutes;
 }
 
 /**
@@ -79,11 +67,39 @@ export function formatDurationDelta(
 ): string | null {
   const diff = actualMinutes - plannedMinutes;
   if (diff === 0) return null;
-  const sign = diff > 0 ? "+" : "−";
-  const abs = Math.abs(diff);
+  return (diff > 0 ? "+" : "−") + formatMinutes(Math.abs(diff));
+}
+
+/** "20m" / "1h 05m". The unsigned half of `formatDurationDelta`. */
+export function formatMinutes(total: number): string {
+  const abs = Math.abs(Math.round(total));
   const h = Math.floor(abs / 60);
   const m = abs % 60;
-  return h > 0 ? `${sign}${h}h ${String(m).padStart(2, "0")}m` : `${sign}${m}m`;
+  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+
+/**
+ * Time between one segment's clock-out and the next one's clock-in.
+ *
+ * Off the clock and therefore unpaid, which is why a shift's duration is the
+ * sum of its segments rather than first-in to last-out. Surfaced so a card can
+ * say where the missing time went instead of leaving the reader to subtract.
+ */
+export function offClockMinutes(
+  segments: { timeIn: string; timeOut: string | null }[],
+): number {
+  let total = 0;
+  for (let i = 1; i < segments.length; i++) {
+    const prevOut = segments[i - 1].timeOut;
+    if (!prevOut) continue;
+    // Slice the clock out of "YYYY-MM-DD HH:MM:SS" — never parse it as a date.
+    let gap =
+      toMinutes(segments[i].timeIn.slice(11, 16)) -
+      toMinutes(prevOut.slice(11, 16));
+    if (gap < 0) gap += 1440; // the pair straddles midnight
+    total += gap;
+  }
+  return total;
 }
 
 /** Check if two time ranges overlap */
@@ -264,13 +280,20 @@ export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shif
   for (const shift of planned) {
     const linked = actualForPlanned(shift.id, actual);
     if (!linked) continue; // pending review — excluded
-    if (linked.status === "absent") continue; // no-show — excluded
+    if (linked.reviewState === "absent") continue; // no-show — excluded
     merged.push({
       ...shift,
       // Identity and sync state stay with the planned shift; times, label and
       // duration come from what actually happened.
       startTime: linked.startTime,
-      endTime: linked.endTime,
+      /**
+       * A running shift has no end yet. The plan's own end stands in purely so
+       * the row has a time to lay out against — nothing reads it as a record of
+       * when they left, and the hours below come from `durationMinutes`, which
+       * the server keeps correct as the shift grows.
+       */
+      endTime: linked.endTime ?? shift.endTime,
+      isOpen: linked.isOpen,
       durationMinutes: linked.durationMinutes,
       label: linked.label,
       type: linked.type,
@@ -279,7 +302,10 @@ export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shif
   }
 
   for (const a of actual) {
-    if (a.status === "added" && !a.plannedShiftId) {
+    // No link to a plan IS what makes it ad-hoc coverage — the server says the
+    // same thing again in `timeVariance: "unplanned"`, but the link is the
+    // field that actually decides where the card belongs.
+    if (!a.plannedShiftId) {
       merged.push({
         id: a.id,
         // Ad-hoc coverage has no planned shift behind it, so there is no
@@ -289,7 +315,9 @@ export function mergeActualShifts(planned: Shift[], actual: ActualShift[]): Shif
         dayIndex: a.dayIndex,
         shiftDate: a.shiftDate,
         startTime: a.startTime,
-        endTime: a.endTime,
+        // Placeholder for a shift still running — see the note above.
+        endTime: a.endTime ?? a.startTime,
+        isOpen: a.isOpen,
         durationMinutes: a.durationMinutes,
         label: a.label,
         type: a.type,

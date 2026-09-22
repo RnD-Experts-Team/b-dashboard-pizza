@@ -40,6 +40,18 @@ export interface SchedulingError {
   fieldErrors: Record<string, string[]>;
   /** Flattened validation messages, when a list is more useful than a map. */
   details: string[];
+  /**
+   * The upstream system's own words about what went wrong.
+   *
+   * On a `TCP_WRITE_FAILED` this is the only specific part — "This work segment
+   * would conflict with an existing segment on 2026-09-15T08:00:00" against a
+   * `message` of "The time clock system rejected this change." Show it, but
+   * never as the headline: `message` is the sentence written for a manager and
+   * this is the cause underneath it.
+   */
+  detail: string | null;
+  /** Meaningless to a manager, decisive in a support ticket. */
+  requestId: string | null;
   status: number | null;
   /** Seconds to wait, from a 503 `Retry-After` or an error payload. */
   retryAfterSeconds: number | null;
@@ -111,6 +123,8 @@ export function parseSchedulingError(
     message: fallback,
     fieldErrors: {},
     details: [],
+    detail: null,
+    requestId: null,
     status: null,
     retryAfterSeconds: null,
     isForceable: false,
@@ -190,6 +204,12 @@ export function parseSchedulingError(
     message,
     fieldErrors,
     details,
+    detail:
+      typeof errorObj?.detail === "string" && errorObj.detail.trim()
+        ? errorObj.detail.trim()
+        : null,
+    requestId:
+      typeof errorObj?.request_id === "string" ? errorObj.request_id : null,
     retryAfterSeconds: headerRetry ?? payloadRetry,
     isForceable: Boolean(
       code && FORCEABLE_ERROR_CODES.includes(code as SchedulingErrorCode)
@@ -229,6 +249,9 @@ export function errorCodeLabel(code: string | null): string | null {
     TCP_RATE_LIMITED: "Too many requests",
     TCP_DAILY_QUOTA_EXHAUSTED: "Daily limit reached",
     STORE_NOT_ALLOWLISTED: "Not enabled for this store",
+    ALREADY_CLOCKED_IN: "Already on the clock",
+    NOT_CLOCKED_IN: "Not on the clock",
+    INVALID_SPLIT: "Nothing would be left",
     TIMEOUT: "Timed out",
     UPSTREAM_ERROR: "Service unreachable",
     NOT_AUTHENTICATED: "Signed out",
