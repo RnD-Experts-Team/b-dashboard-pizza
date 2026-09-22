@@ -75,6 +75,19 @@ export const SHIRT_VIEW_RULES: Partial<Record<ShirtViewId, ShirtViewRule>> = {
   },
 };
 
+/**
+ * For sidebar.tsx and bottom-nav-items.ts, which take a plain CanAccessParams[]
+ * and cannot express rolesAny. Both gates are `.some(...)`, so adding this
+ * alongside the existing store-scoped requests rule is purely additive: store
+ * users keep matching on that one, and a fulfilment-only user gets the page
+ * via this one.
+ */
+export const SHIRT_NAV_REQUIREMENT: CanAccessParams = {
+  service: "Hiring",
+  method: "GET",
+  path: "/v1/shirt-milestones",
+};
+
 export interface ShirtAuth {
   canAccessRoute: (params: CanAccessParams) => boolean;
   hasAnyRole: (roles: string[]) => boolean;
@@ -143,19 +156,33 @@ export function canFulfilShirtMilestone(auth: ShirtAuth): boolean {
   );
 }
 
+/**
+ * Whether this user GENUINELY holds cross-store fulfilment access, as opposed
+ * to a super admin's blanket UI bypass. This is what picks the queue's data
+ * source: the cross-store endpoint, or a fan-out over the user's own stores.
+ *
+ * canAccessRoute() returns true for super admins no matter what the auth
+ * server would actually authorize, so using it here would point every super
+ * admin at the cross-store endpoint and hand them a 403 instead of the store
+ * queue that works today. hasAnyRole() does no such bypass — it is a literal
+ * role-name check — so a super admin only takes the cross-store path once they
+ * really hold the role.
+ *
+ * Access itself is still enforced server-side by the auth.token.store
+ * middleware, per route name. This only decides which endpoint to call.
+ */
+export function hasRealShirtFulfilmentAccess(auth: {
+  canAccessRoute: (params: CanAccessParams) => boolean;
+  hasAnyRole: (roles: string[]) => boolean;
+  isSuperAdmin: () => boolean;
+}): boolean {
+  if (auth.hasAnyRole([SHIRT_FULFILMENT_ROLE])) return true;
+  // A super admin without the role has no real grant to infer from.
+  if (auth.isSuperAdmin()) return false;
+  return auth.canAccessRoute(SHIRT_NAV_REQUIREMENT);
+}
+
 export function canManageShirtCatalog(auth: ShirtAuth): boolean {
   return canAccessShirtView("catalog_admin", auth);
 }
 
-/**
- * For sidebar.tsx and bottom-nav-items.ts, which take a plain CanAccessParams[]
- * and cannot express rolesAny. Both gates are `.some(...)`, so adding this
- * alongside the existing store-scoped requests rule is purely additive: store
- * users keep matching on that one, and a fulfilment-only user gets the page
- * via this one.
- */
-export const SHIRT_NAV_REQUIREMENT: CanAccessParams = {
-  service: "Hiring",
-  method: "GET",
-  path: "/v1/shirt-milestones",
-};

@@ -46,10 +46,15 @@ interface TicketRailProps {
   activeId: number;
   /** The store to scope to. Undefined fetches across stores. */
   storeId?: string;
+  /**
+   * May this user act on tickets? False leaves the rail as pure navigation --
+   * the baskets it feeds only exist to produce writes.
+   */
+  canAct?: boolean;
   className?: string;
 }
 
-export function TicketRail({ locale, activeId, storeId, className }: TicketRailProps) {
+export function TicketRail({ locale, activeId, storeId, canAct = true, className }: TicketRailProps) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +184,7 @@ export function TicketRail({ locale, activeId, storeId, className }: TicketRailP
                 ticket={ticket}
                 locale={locale}
                 isActive={ticket.id === activeId}
+                canAct={canAct}
               />
             ))}
           </div>
@@ -192,10 +198,12 @@ function RailRow({
   ticket,
   locale,
   isActive,
+  canAct,
 }: {
   ticket: Ticket;
   locale: string;
   isActive: boolean;
+  canAct: boolean;
 }) {
   const issueItems = useIssueBasketStore((s) => s.items);
   const toggleIssue = useIssueBasketStore((s) => s.toggle);
@@ -254,15 +262,19 @@ function RailRow({
       )}
     >
       <div className="flex items-start gap-2">
-        <Checkbox
-          checked={allInWork}
-          disabled={issueIds.length === 0}
-          onCheckedChange={toggleWholeTicket}
-          aria-label={
-            allInWork ? `Take ticket ${ticket.id} out of the basket` : `Pick up ticket ${ticket.id}`
-          }
-          className="mt-0.5"
-        />
+        {canAct && (
+          <Checkbox
+            checked={allInWork}
+            disabled={issueIds.length === 0}
+            onCheckedChange={toggleWholeTicket}
+            aria-label={
+              allInWork
+                ? `Take ticket ${ticket.id} out of the basket`
+                : `Pick up ticket ${ticket.id}`
+            }
+            className="mt-0.5"
+          />
+        )}
 
         <Link
           // ?store carries the authorizer's scope, same as the list rows do.
@@ -287,6 +299,7 @@ function RailRow({
         </Link>
       </div>
 
+      {canAct && (
       <button
         type="button"
         onClick={toggleWholeTicketForPay}
@@ -302,6 +315,7 @@ function RailRow({
       >
         {allInPay ? "Marked for payment" : "Pay for this"}
       </button>
+      )}
     </div>
   );
 }

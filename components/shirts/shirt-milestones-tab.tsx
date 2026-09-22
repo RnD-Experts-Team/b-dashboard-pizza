@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Palette, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StoreMultiSelect } from "@/components/hiring/store-multi-select";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -14,11 +13,11 @@ import {
   canFillShirtEntry,
   canFulfilShirtMilestone,
   canManageShirtCatalog,
+  hasRealShirtFulfilmentAccess,
 } from "@/lib/auth/shirt-access";
 import type { ShirtAction } from "@/lib/shirts/shirt-utils";
 import { ShirtEmptyState } from "@/components/shirts/shirt-ui";
-import { ShirtStoreQueue } from "@/components/shirts/shirt-store-queue";
-import { ShirtFulfilmentQueue } from "@/components/shirts/shirt-fulfilment-queue";
+import { ShirtQueue } from "@/components/shirts/shirt-queue";
 import { ShirtEntryDialog } from "@/components/shirts/shirt-entry-dialog";
 import { ShirtActionDialog } from "@/components/shirts/shirt-action-dialog";
 import type { ShirtActionMode } from "@/components/shirts/shirt-action-dialog";
@@ -29,29 +28,23 @@ import type { ShirtMilestone } from "@/types/shirt-milestone.types";
 
 const STORE_FILTER_KEY = "store-filter:shirt-milestones";
 
-export type ShirtViewKey = "store_queue" | "fulfilment";
-
 export interface ShirtMilestonesTabProps {
   active?: boolean;
-  initialView?: ShirtViewKey;
-  /** True when rendered on its own, outside the page's <Tabs>. */
-  solo?: boolean;
 }
 
 /**
- * The Shirt Milestones tab: a store queue, an HQ fulfilment queue, and the
- * dialogs both share.
+ * The Shirt Milestones tab: one queue plus the dialogs it drives.
  *
- * Which sub-views appear is derived here from lib/auth/shirt-access.ts rather
- * than passed in, so the page does not have to know the feature's permission
- * shape.
+ * There is deliberately no store-vs-fulfilment sub-view. Both are the same
+ * rows of the same entity; the only real differences are which endpoint can
+ * serve them and which actions the viewer may take, and those are settled by
+ * shirt-access.ts and by status x permission per row. Splitting them into
+ * tabs would have shown a switch to almost nobody (a super admin, or an
+ * Employee Obsession user who also manages stores) while making everyone else
+ * read a nested tab strip for a single list.
  */
-export function ShirtMilestonesTab({
-  active = true,
-  initialView,
-  solo = false,
-}: ShirtMilestonesTabProps) {
-  const { canAccessRoute, hasAnyRole, overviewStores } = useAuthStore();
+export function ShirtMilestonesTab({ active = true }: ShirtMilestonesTabProps) {
+  const { canAccessRoute, hasAnyRole, isSuperAdmin, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
 
@@ -61,18 +54,24 @@ export function ShirtMilestonesTab({
   );
 
   const canStoreQueue = canAccessShirtView("store_queue", shirtAuth, effectiveStoreId);
-  const canFulfil = canFulfilShirtMilestone(shirtAuth);
   const canFulfilmentView = canAccessShirtView("fulfilment", shirtAuth);
+  const canFulfil = canFulfilShirtMilestone(shirtAuth);
   const canFill = canFillShirtEntry(shirtAuth, effectiveStoreId);
   const canCreate = canCreateManualShirtMilestone(shirtAuth, effectiveStoreId);
   const canCatalog = canManageShirtCatalog(shirtAuth);
 
+  /* Which endpoint the queue reads. Deliberately NOT canFulfilmentView, which
+     a super admin passes by bypass — see hasRealShirtFulfilmentAccess. */
+  const crossStore = hasRealShirtFulfilmentAccess({
+    canAccessRoute,
+    hasAnyRole,
+    isSuperAdmin,
+  });
+
   const perms = useMemo(() => ({ canFill, canFulfil }), [canFill, canFulfil]);
 
-  const [view, setView] = useState<ShirtViewKey>(
-    initialView ?? (canStoreQueue ? "store_queue" : "fulfilment"),
-  );
-  const showViewSwitch = canStoreQueue && canFulfilmentView && !solo;
+  // Neither path available — say so rather than rendering an empty tab.
+  const noAccess = !canStoreQueue && !canFulfilmentView;
 
   /* ── Store filter ──────────────────────────────────────────────────────── */
 
@@ -114,6 +113,14 @@ export function ShirtMilestonesTab({
     } catch {}
   }, []);
 
+  const storeOptions = useMemo(
+    () =>
+      (overviewStores ?? []).flatMap((s) =>
+        s.storeId ? [{ storeId: s.storeId, name: s.name }] : [],
+      ),
+    [overviewStores],
+  );
+
   /* ── Deep link from a shirt_milestone_* notification ───────────────────── */
 
   const pendingHiringAction = useHiringActionStore((s) => s.pendingHiringAction);
@@ -124,24 +131,15 @@ export function ShirtMilestonesTab({
   const [highlightId, setHighlightId] = useState<number | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
   const [rows, setRows] = useState<ShirtMilestone[]>([]);
-  const [storeQueueLoaded, setStoreQueueLoaded] = useState(false);
+  const [queueLoaded, setQueueLoaded] = useState(false);
 
-  // Effect A: point the view at the right place and stash the target id.
+  // Effect A: narrow to the notification's store when it is one of ours, then
+  // stash the target id. A cross-store reader needs no narrowing to find it.
   useEffect(() => {
     if (!pendingHiringAction || pendingHiringAction.tab !== "shirt_milestones") return;
-
-    if (validStoreIds.has(pendingHiringAction.storeNumber) && canStoreQueue) {
-      setView("store_queue");
+    if (validStoreIds.has(pendingHiringAction.storeNumber)) {
       handleStoreApply([pendingHiringAction.storeNumber]);
-    } else if (canFulfilmentView) {
-      // An HQ user has no overviewStores entry for the store, so falling back
-      // to the fulfilment view is better than dropping the notification.
-      setView("fulfilment");
-    } else {
-      clearPendingHiringAction();
-      return;
     }
-
     setPendingHighlightId(pendingHiringAction.requestId);
     clearPendingHiringAction();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,7 +147,7 @@ export function ShirtMilestonesTab({
 
   // Effect B: once the rows land, ring the target row briefly.
   useEffect(() => {
-    if (pendingHighlightId === null || !storeQueueLoaded) return;
+    if (pendingHighlightId === null || !queueLoaded) return;
     const target = rows.find((r) => r.id === pendingHighlightId);
     setPendingHighlightId(null);
     if (!target) return;
@@ -162,7 +160,7 @@ export function ShirtMilestonesTab({
       setHighlightId(null);
       highlightTimeoutRef.current = null;
     }, 1500);
-  }, [rows, pendingHighlightId, storeQueueLoaded]);
+  }, [rows, pendingHighlightId, queueLoaded]);
 
   useEffect(
     () => () => {
@@ -198,13 +196,14 @@ export function ShirtMilestonesTab({
     open: boolean;
     storeNumber: string;
     employeeId: number | null;
-    employeeName?: string;
   }>({ open: false, storeNumber: "", employeeId: null });
 
   const [catalogOpen, setCatalogOpen] = useState(false);
 
   const handleAction = useCallback((action: ShirtAction, m: ShirtMilestone) => {
     if (action === "entry") {
+      // The entry endpoint is store-scoped; every row carries its store number,
+      // so this works identically from either data source.
       setEntryDialog({
         open: true,
         mode: "entry",
@@ -229,54 +228,11 @@ export function ShirtMilestonesTab({
     setSheetOpen(true);
   }, []);
 
-  const storeOptions = useMemo(
-    () =>
-      (overviewStores ?? []).flatMap((s) =>
-        s.storeId ? [{ storeId: s.storeId, name: s.name }] : [],
-      ),
-    [overviewStores],
-  );
-
-  // Neither view accessible — say so rather than rendering an empty tab. The
-  // store queue's fail-soft requirement makes this rare, but a user with no
-  // matching auth rule and no role would otherwise just see blank space.
-  const noAccess = !canStoreQueue && !canFulfilmentView;
-
-  const queues = (
-    <>
-      {canStoreQueue && (view === "store_queue" || !showViewSwitch) && (
-        <ShirtStoreQueue
-          active={active && view === "store_queue"}
-          storeNumbers={selectedStoreIds}
-          highlightId={highlightId}
-          perms={perms}
-          refreshToken={refreshToken}
-          onOpen={handleOpenSheet}
-          onAction={handleAction}
-          onViewHistory={handleViewHistory}
-          onLoadedChange={setStoreQueueLoaded}
-          onRowsChange={setRows}
-        />
-      )}
-      {canFulfilmentView && view === "fulfilment" && (
-        <ShirtFulfilmentQueue
-          active={active && view === "fulfilment"}
-          highlightId={highlightId}
-          perms={perms}
-          refreshToken={refreshToken}
-          onOpen={handleOpenSheet}
-          onAction={handleAction}
-          onViewHistory={handleViewHistory}
-        />
-      )}
-    </>
-  );
-
   return (
     <div className="flex flex-col gap-4">
       {/* Actions row */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {view === "store_queue" && canStoreQueue ? (
+        {storeOptions.length > 0 ? (
           <StoreMultiSelect
             stores={storeOptions}
             value={selectedStoreIds}
@@ -286,12 +242,7 @@ export function ShirtMilestonesTab({
           <span />
         )}
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={refresh}
-            aria-label="Refresh"
-          >
+          <Button variant="outline" size="icon" onClick={refresh} aria-label="Refresh">
             <RefreshCw className="h-4 w-4" />
           </Button>
           {canCatalog && (
@@ -301,7 +252,7 @@ export function ShirtMilestonesTab({
               <span className="sm:hidden">Catalog</span>
             </Button>
           )}
-          {canCreate && canStoreQueue && (
+          {canCreate && selectedStoreIds.length > 0 && (
             <Button
               onClick={() =>
                 setEntryDialog({
@@ -321,24 +272,21 @@ export function ShirtMilestonesTab({
       </div>
 
       {noAccess ? (
-        <ShirtEmptyState>
-          You do not have access to shirt milestones.
-        </ShirtEmptyState>
-      ) : showViewSwitch ? (
-        <Tabs value={view} onValueChange={(v) => setView(v as ShirtViewKey)}>
-          <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
-            <TabsTrigger value="store_queue">My Stores</TabsTrigger>
-            <TabsTrigger value="fulfilment">Fulfilment</TabsTrigger>
-          </TabsList>
-          <TabsContent value="store_queue" className="mt-4" tabIndex={-1}>
-            {view === "store_queue" && queues}
-          </TabsContent>
-          <TabsContent value="fulfilment" className="mt-4" tabIndex={-1}>
-            {view === "fulfilment" && queues}
-          </TabsContent>
-        </Tabs>
+        <ShirtEmptyState>You do not have access to shirt milestones.</ShirtEmptyState>
       ) : (
-        queues
+        <ShirtQueue
+          active={active}
+          storeNumbers={selectedStoreIds}
+          crossStore={crossStore}
+          highlightId={highlightId}
+          perms={perms}
+          refreshToken={refreshToken}
+          onOpen={handleOpenSheet}
+          onAction={handleAction}
+          onViewHistory={handleViewHistory}
+          onLoadedChange={setQueueLoaded}
+          onRowsChange={setRows}
+        />
       )}
 
       <ShirtMilestoneSheet
@@ -380,7 +328,6 @@ export function ShirtMilestonesTab({
         onOpenChange={(o) => setHistoryDialog((p) => ({ ...p, open: o }))}
         storeNumber={historyDialog.storeNumber}
         employeeId={historyDialog.employeeId}
-        employeeName={historyDialog.employeeName}
       />
 
       <ShirtCatalogDialog open={catalogOpen} onOpenChange={setCatalogOpen} />

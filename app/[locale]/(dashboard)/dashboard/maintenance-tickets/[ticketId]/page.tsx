@@ -241,9 +241,12 @@ function TicketPageInner() {
               <>
                 <IssueBasketBar technicians={technicians} onChanged={() => void load("refresh")} />
                 <VisitBasketPanel technicians={technicians} onLogged={() => void load("refresh")} />
+                {/* The baskets persist in localStorage, so this can outlive the
+                    session that filled it. Nothing to send them to Daily Pay
+                    for if they cannot make a sheet. */}
+                <PayBasketPeek locale={locale} />
               </>
             )}
-            <PayBasketPeek locale={locale} />
 
             {issues.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
@@ -274,7 +277,12 @@ function TicketPageInner() {
           </div>
 
           {/* Fetches its own list, so a pasted link shows it too. */}
-          <TicketRail locale={locale} activeId={ticket.id} storeId={storeNumber || undefined} />
+          <TicketRail
+            locale={locale}
+            activeId={ticket.id}
+            storeId={storeNumber || undefined}
+            canAct={canActOnIssues}
+          />
         </div>
       )}
     </div>
@@ -506,64 +514,70 @@ function IssueCard({
             />
           )}
 
-          {/*
-            Marks this job for payment without leaving the ticket.
+          {/* Both baskets exist to produce writes -- a pay sheet and a set of
+              logged hours. Nothing to collect them for if you cannot do either. */}
+          {canAct && (
+            <>
+            {/*
+              Marks this job for payment without leaving the ticket.
 
-            It does NOT write anything: it drops the issue into the pay basket,
-            which the Daily Pay page turns into a sheet you review. Making a pay
-            record from a button press on a ticket would be a silent write of
-            somebody's money.
-          */}
-          <button
-            type="button"
-            onClick={() =>
-              togglePay({
-                issueId: issue.id,
-                ticketId,
-                storeId: storeId || null,
-                otherStore,
-                title,
-                ...payeeOf(issue.technicians),
-              })
-            }
-            aria-pressed={markedForPay}
-            title="Adds it to the pay basket. Nothing is saved until you make the sheet."
-            className={cn(
-              "ms-auto inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-              markedForPay
-                ? "border-primary bg-primary/10 text-foreground"
-                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-            )}
-          >
-            <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
-            {markedForPay ? "Marked for payment" : "Pay for this"}
-          </button>
+              It does NOT write anything: it drops the issue into the pay basket,
+              which the Daily Pay page turns into a sheet you review. Making a pay
+              record from a button press on a ticket would be a silent write of
+              somebody's money.
+            */}
+            <button
+              type="button"
+              onClick={() =>
+                togglePay({
+                  issueId: issue.id,
+                  ticketId,
+                  storeId: storeId || null,
+                  otherStore,
+                  title,
+                  ...payeeOf(issue.technicians),
+                })
+              }
+              aria-pressed={markedForPay}
+              title="Adds it to the pay basket. Nothing is saved until you make the sheet."
+              className={cn(
+                "ms-auto inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                markedForPay
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+              {markedForPay ? "Marked for payment" : "Pay for this"}
+            </button>
 
-          {/* The same gesture for hours. Deliberately identical in shape to the
-              button beside it -- one thing to learn, used twice. */}
-          <button
-            type="button"
-            onClick={() =>
-              toggleVisit({
-                issueId: issue.id,
-                ticketId,
-                storeId: storeId || null,
-                otherStore,
-                title,
-              })
-            }
-            aria-pressed={onThisVisit}
-            title="Adds it to the visit. Nothing is saved until you log the hours."
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-              onThisVisit
-                ? "border-[var(--color-chart-2)] bg-[var(--color-chart-2)]/10 text-foreground"
-                : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
-            )}
-          >
-            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            {onThisVisit ? "On this visit" : "Add to visit"}
-          </button>
+            {/* The same gesture for hours. Deliberately identical in shape to the
+                button beside it -- one thing to learn, used twice. */}
+            <button
+              type="button"
+              onClick={() =>
+                toggleVisit({
+                  issueId: issue.id,
+                  ticketId,
+                  storeId: storeId || null,
+                  otherStore,
+                  title,
+                })
+              }
+              aria-pressed={onThisVisit}
+              title="Adds it to the visit. Nothing is saved until you log the hours."
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                onThisVisit
+                  ? "border-[var(--color-chart-2)] bg-[var(--color-chart-2)]/10 text-foreground"
+                  : "border-border text-muted-foreground hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+              {onThisVisit ? "On this visit" : "Add to visit"}
+            </button>
+            </>
+          )}
         </div>
         {issue.description && (
           <p className="whitespace-pre-wrap text-sm text-muted-foreground">{issue.description}</p>

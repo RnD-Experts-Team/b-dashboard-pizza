@@ -342,7 +342,7 @@ export default function HiringRequestPage() {
 
       {isShirtFulfilmentOnly ? (
         /* ── Fulfilment-only view ── */
-        <ShirtMilestonesTab active solo initialView="fulfilment" />
+        <ShirtMilestonesTab active />
       ) : (
         <>
         <Tabs
