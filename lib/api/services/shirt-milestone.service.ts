@@ -84,6 +84,31 @@ export const shirtMilestoneService = {
     return data;
   },
 
+  /**
+   * The queue across several stores in ONE call, oldest due date first —
+   * same pattern as hiringService.getRequests. Use this instead of fanning
+   * getStoreQueue out per store.
+   * GET /api/v1/store-shirt-milestones?storeIds[]=…
+   *
+   * `storeNumbers` are store NUMBERS; the backend requires at least one.
+   */
+  async getStoresQueue(
+    storeNumbers: string[],
+    filters: ShirtMilestoneFilters = {},
+    signal?: AbortSignal,
+  ): Promise<ShirtMilestonePaginator> {
+    const qs = buildQuery(filters);
+    const stores = storeNumbers
+      .map((sn) => `storeIds[]=${encodeURIComponent(sn)}`)
+      .join("&");
+    // No `.data.data` — raw paginator, same as the single-store queue.
+    const { data } = await axios.get<ShirtMilestonePaginator>(
+      `/api/v1/store-shirt-milestones${qs ? `${qs}&` : "?"}${stores}`,
+      { headers: buildHeaders(), timeout: 15_000, signal },
+    );
+    return data;
+  },
+
   /** GET /api/v1/stores/[storeNumber]/shirt-milestones/[id] */
   async getStoreMilestone(
     storeNumber: string,

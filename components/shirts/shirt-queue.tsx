@@ -45,7 +45,6 @@ import {
   milestoneMonthLabel,
   shirtActionsFor,
   shirtEmployeeName,
-  toPlainDate,
 } from "@/lib/shirts/shirt-utils";
 import type { ShirtAction } from "@/lib/shirts/shirt-utils";
 import {
@@ -72,23 +71,13 @@ const ACTION_MENU_LABEL: Record<ShirtAction, string> = {
   cancel: "Cancel Milestone",
 };
 
-/** Oldest due date first; rows with no due date sort last, as the API does. */
-function byDueDate(a: ShirtMilestone, b: ShirtMilestone): number {
-  const da = toPlainDate(a.due_date);
-  const db = toPlainDate(b.due_date);
-  if (da === db) return a.id - b.id;
-  if (da === null) return 1;
-  if (db === null) return -1;
-  return da < db ? -1 : 1;
-}
-
 export interface ShirtQueueProps {
   active: boolean;
-  /** The user's own store NUMBERS — the fan-out source and the default scope. */
+  /** The user's own store NUMBERS — the multi-store read's scope. */
   storeNumbers: string[];
   /**
    * True when this user genuinely holds cross-store fulfilment access, so the
-   * queue reads the single cross-store endpoint instead of fanning out.
+   * queue reads the every-store fulfilment endpoint instead of their own stores.
    */
   crossStore: boolean;
   highlightId: number | null;
@@ -110,12 +99,14 @@ export interface ShirtQueueProps {
  * of those are decided elsewhere (shirt-access.ts for the source, and
  * status x permission per row for the actions). So this is one component:
  *
- *   crossStore  -> GET /v1/shirt-milestones          (one call, every store)
- *   otherwise   -> GET /v1/stores/{n}/shirt-milestones, fanned out
+ *   crossStore  -> GET /v1/shirt-milestones                      (every store)
+ *   otherwise   -> GET /v1/store-shirt-milestones?storeIds[]=…   (the user's
+ *                  selected stores, one call — same as hiring/separation requests)
  *
- * If the cross-store call 403s — the fulfilment role not yet granted, or an
- * auth rule not registered — it falls back to the fan-out rather than showing
- * an empty table, and keeps the hint about where the grant lives.
+ * Both are a single request paginated by the server. If the cross-store call
+ * 403s — the fulfilment role not yet granted, or an auth rule not registered —
+ * it falls back to the user's own stores rather than showing an empty table,
+ * and keeps the hint about where the grant lives.
  */
 export function ShirtQueue({
   active,
@@ -136,7 +127,6 @@ export function ShirtQueue({
   const [error, setError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const [fellBack, setFellBack] = useState(false);
-  const [failedStores, setFailedStores] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [serverLastPage, setServerLastPage] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
@@ -166,9 +156,6 @@ export function ShirtQueue({
     [storeNumbers, extraStores],
   );
 
-  // Fan-out is one call per store, so only it needs client-side paging.
-  const fansOutOverManyStores = !readsCrossStore && storeNumbers.length > 1;
-
   const fetchData = useCallback(
     async (targetPage: number) => {
       if (!readsCrossStore && storeNumbers.length === 0) {
@@ -184,7 +171,6 @@ export function ShirtQueue({
 
       setIsLoading(true);
       setError(null);
-      setFailedStores([]);
 
       const filters = {
         ...(status !== "all" ? { status } : {}),
@@ -212,27 +198,16 @@ export function ShirtQueue({
           return;
         }
 
-        const results = await Promise.allSettled(
-          storeNumbers.map((sn) =>
-            shirtMilestoneService
-              .getStoreQueue(
-                sn,
-                { ...filters, ...(fansOutOverManyStores ? {} : { page: targetPage }) },
-                controller.signal,
-              )
-              .then((res) => ({ sn, res })),
-          ),
+        // One call for all of the user's selected stores — the backend sorts
+        // and paginates across them, same as the hiring/separation requests.
+        const res = await shirtMilestoneService.getStoresQueue(
+          storeNumbers,
+          { ...filters, page: targetPage },
+          controller.signal,
         );
-
-        if (controller.signal.aborted) return;
-
-        const ok = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-        // One store 403ing should not blank the whole table.
-        setFailedStores(storeNumbers.filter((sn) => !ok.some((o) => o.sn === sn)));
-        setRows(ok.flatMap((o) => o.res.data).sort(byDueDate));
-        setServerLastPage(fansOutOverManyStores ? 1 : (ok[0]?.res.last_page ?? 1));
-        setPage(fansOutOverManyStores ? targetPage : (ok[0]?.res.current_page ?? 1));
-        if (ok.length === 0) setError("Could not load the shirt milestone queue.");
+        setRows(res.data);
+        setServerLastPage(res.last_page);
+        setPage(res.current_page);
       } catch (err: unknown) {
         if (axios.isCancel(err)) return;
         if (readsCrossStore && axios.isAxiosError(err) && err.response?.status === 403) {
@@ -254,7 +229,6 @@ export function ShirtQueue({
       readsCrossStore,
       storeNumbers,
       scopedStores,
-      fansOutOverManyStores,
       status,
       source,
       debouncedSearch,
@@ -278,15 +252,7 @@ export function ShirtQueue({
     onRowsChange?.(rows);
   }, [rows, onRowsChange]);
 
-  const visibleRows = useMemo(() => {
-    if (!fansOutOverManyStores) return rows;
-    const start = (page - 1) * PER_PAGE;
-    return rows.slice(start, start + PER_PAGE);
-  }, [rows, page, fansOutOverManyStores]);
-
-  const lastPage = fansOutOverManyStores
-    ? Math.max(1, Math.ceil(rows.length / PER_PAGE))
-    : serverLastPage;
+  const lastPage = serverLastPage;
 
   const showStoreColumn = readsCrossStore || storeNumbers.length > 1;
   const hasFilters =
@@ -295,8 +261,7 @@ export function ShirtQueue({
     loadedOnce && !isLoading && !error && !forbidden && rows.length === 0;
 
   function goToPage(next: number) {
-    if (fansOutOverManyStores) setPage(next);
-    else fetchData(next);
+    fetchData(next);
   }
 
   function addStoreFilter() {
@@ -448,14 +413,6 @@ export function ShirtQueue({
         </Alert>
       )}
 
-      {failedStores.length > 0 && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Some stores could not be loaded</AlertTitle>
-          <AlertDescription>{failedStores.join(", ")}</AlertDescription>
-        </Alert>
-      )}
-
       {(!loadedOnce || isLoading) && (
         <ShirtQueueSkeleton
           columns={["Employee", "Store #", "Milestone", "Due", "Shirt", "Status"]}
@@ -469,7 +426,7 @@ export function ShirtQueue({
         <ShirtEmptyState>No milestones match the selected filters.</ShirtEmptyState>
       )}
 
-      {!isLoading && !error && visibleRows.length > 0 && (
+      {!isLoading && !error && rows.length > 0 && (
         <>
           <div className="rounded-lg border overflow-x-auto">
             <Table>
@@ -487,7 +444,7 @@ export function ShirtQueue({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleRows.map((m) => {
+                {rows.map((m) => {
                   const actions = shirtActionsFor(m.status, perms);
                   // One primary action inline, the rest in the menu. Reschedule
                   // is its own inline control in the Status cell.
