@@ -166,8 +166,9 @@ export function ShirtTemplateFormDialog({
         <DialogHeader>
           <DialogTitle>{template ? "Edit template" : "Add template"}</DialogTitle>
           <DialogDescription>
-            The shirt artwork. Recolourable paths must use fill=&quot;currentColor&quot;;
-            everything else keeps its own fill.
+            The shirt artwork. Its main fill colour is recoloured to the chosen
+            shirt colour; everything else keeps its own fill. To control exactly
+            which paths change, give them fill=&quot;currentColor&quot;.
           </DialogDescription>
         </DialogHeader>
 

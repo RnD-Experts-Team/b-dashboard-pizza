@@ -20,9 +20,64 @@ const SVG_CACHE = new Map<string, string>();
 
 /** Strip width/height off the root <svg> so the CSS below governs the box. */
 function normaliseSvg(markup: string): string {
-  return markup.replace(/<svg\b[^>]*>/i, (tag) =>
+  const sized = markup.replace(/<svg\b[^>]*>/i, (tag) =>
     tag.replace(/\s(width|height)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, ""),
   );
+  return ensureRecolourable(sized);
+}
+
+const NON_COLOURS = new Set(["none", "transparent", "currentcolor", "inherit"]);
+const SHAPE_TAG = /<(?:path|rect|circle|ellipse|polygon|polyline)\b[^>]*>/gi;
+const FILL_ATTR = /\sfill\s*=\s*["']([^"']+)["']/i;
+const FILL_DECL = /fill\s*:\s*([^;"'}]+)/i;
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Artwork exported from Illustrator, Figma or a stock site never uses
+ * currentColor — the body is a fixed fill like #E94720, so nothing responds to
+ * the colour picker. When the template has no currentColor at all, treat its
+ * dominant fill as the shirt body and swap that one colour for currentColor.
+ * Collars, seams and shading use other fills and stay put.
+ *
+ * "Dominant" is weighted by tag length, a cheap proxy for path complexity, so
+ * the big body path outweighs a scatter of small outline strokes. Templates
+ * that already use currentColor are left exactly as authored.
+ */
+function ensureRecolourable(markup: string): string {
+  if (/currentcolor/i.test(markup)) return markup;
+
+  const weights = new Map<string, number>();
+  const add = (raw: string | undefined, weight: number) => {
+    const colour = raw?.trim();
+    if (!colour || colour.startsWith("url(")) return;
+    if (NON_COLOURS.has(colour.toLowerCase())) return;
+    weights.set(colour, (weights.get(colour) ?? 0) + weight);
+  };
+
+  for (const tag of markup.match(SHAPE_TAG) ?? []) {
+    const style = tag.match(/\sstyle\s*=\s*["']([^"']*)["']/i)?.[1];
+    add(style?.match(FILL_DECL)?.[1] ?? tag.match(FILL_ATTR)?.[1], tag.length);
+  }
+  // Class-based exports (<style>.cls-1{fill:#fff}</style>) carry no fill on
+  // the shapes themselves — fall back to counting the stylesheet's rules.
+  if (weights.size === 0) {
+    for (const block of markup.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi) ?? []) {
+      for (const m of block.matchAll(/fill\s*:\s*([^;}]+)/gi)) add(m[1], 1);
+    }
+  }
+  if (weights.size === 0) return markup;
+
+  const body = [...weights.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const colour = escapeRegExp(body);
+  return markup
+    .replace(
+      new RegExp(`(\\sfill\\s*=\\s*["'])\\s*${colour}\\s*(["'])`, "gi"),
+      "$1currentColor$2",
+    )
+    .replace(new RegExp(`(fill\\s*:\\s*)${colour}(?=\\s*[;"'}])`, "gi"), "$1currentColor");
 }
 
 function parseViewBox(markup: string | null): [number, number, number, number] {
