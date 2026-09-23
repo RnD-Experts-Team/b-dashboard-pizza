@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { format } from "date-fns";
+
 import type { MaintenanceResponse } from "@/types/maintenance.types";
 import type { CanAccessParams } from "@/lib/auth/can-access";
 import { MaintenanceRequestDetailsSheet } from "@/components/maintenance/maintenance-request-details-sheet";
@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/use-auth";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import {
   CheckCircle2,
   Clock,
@@ -204,10 +205,7 @@ export function MaintenanceRequestsTable({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {format(
-                        new Date(request.submittedAt),
-                        "MMM dd, yyyy HH:mm"
-                      )}
+                      {formatTimestamp(request.submittedAt, "MMM dd, yyyy HH:mm")}
                     </TableCell>
                   </TableRow>
                 );
@@ -278,10 +276,7 @@ export function MaintenanceRequestsTable({
                       {t("columns.submittedAt")}
                     </span>
                     <span className="text-sm">
-                      {format(
-                        new Date(request.submittedAt),
-                        "MMM dd, yyyy HH:mm"
-                      )}
+                      {formatTimestamp(request.submittedAt, "MMM dd, yyyy HH:mm")}
                     </span>
                   </div>
                 </div>

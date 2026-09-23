@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, HelpCircle, LogOut, Check } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, MonitorOff, HelpCircle, LogOut, Check, Maximize, Minimize } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,9 +15,11 @@ import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { useSelectedStoreStore } from "@/lib/store";
 import { NetworkBadge } from "./network-badge";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
+import { useScreenProjectSelectionStore } from "@/lib/store/screen-project-selection.store";
 import { useCanAccessRoute } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PageGuide } from "@/components/shared/page-guide";
 import { createScreenProjectGuideSteps } from "./screen-project-guide-config";
 
@@ -38,6 +40,10 @@ interface ScreenState {
   stationVideoInput:  string;
   stationAudioOutput: string;
   stationFullscreen:  boolean;
+  /** Level (0..1) of the supervisor's voice out of the station's own speakers */
+  stationSpeakerVolume: number;
+  /** Level (0..1) of media-library video playing on the station screen */
+  stationMediaVolume:   number;
   stationDevices:     StationStateMsg | null;
 }
 
@@ -55,6 +61,19 @@ const MOB_SIDE_W = 144; // w-36
 const PANEL_GAP = 12;
 /** Container width at which the desktop (side-column) layout activates */
 const LG_BREAKPOINT = 1024;
+/** Tablet width — below this the drag-to-resize affordances are hidden (too fiddly on a phone) */
+const TABLET_BREAKPOINT = 768;
+/** PiP self-view base size (px) — the size it sits at before any resize */
+const SELF_VIEW_W = 144; // w-36
+const SELF_VIEW_H = 96;  // h-24
+/** How far the self-view can be dragged open, as a multiple of its base size */
+const SELF_VIEW_MAX_SCALE = 2;
+/**
+ * How narrow the main tile can be dragged, as a fraction of its full width.
+ * Full width is the maximum; narrowing it hands the reclaimed space to the
+ * side column so the mini screens grow. 0.85 = it can give up at most 15%.
+ */
+const MIN_MAIN_WIDTH_SCALE = 0.85;
 
 interface TileRect {
   top: number;
@@ -69,6 +88,8 @@ interface TileRect {
  *
  * @param isMain      true for the featured tile
  * @param sideIndex   0-based index among non-main tiles  (-1 when isMain)
+ * @param deskSideW   desktop side-column width — grows as the user narrows the main tile
+ * @param deskSideH   desktop side-tile height, kept in proportion to deskSideW
  */
 function computeTileRect(
   isMain: boolean,
@@ -77,11 +98,13 @@ function computeTileRect(
   containerH: number,
   hasSidePanel: boolean,
   sideScroll: number,
+  deskSideW: number,
+  deskSideH: number,
 ): TileRect {
   const isLg = containerW >= LG_BREAKPOINT;
   if (isMain) {
     if (isLg) {
-      const reservedW = hasSidePanel ? DESK_SIDE_W + PANEL_GAP : 0;
+      const reservedW = hasSidePanel ? deskSideW + PANEL_GAP : 0;
       return { top: 0, left: 0, width: containerW - reservedW, height: containerH };
     } else {
       const reservedH = hasSidePanel ? MOB_SIDE_H + PANEL_GAP : 0;
@@ -90,10 +113,10 @@ function computeTileRect(
   } else {
     if (isLg) {
       return {
-        top: sideIndex * (DESK_SIDE_H + PANEL_GAP) - sideScroll,
-        left: containerW - DESK_SIDE_W,
-        width: DESK_SIDE_W,
-        height: DESK_SIDE_H,
+        top: sideIndex * (deskSideH + PANEL_GAP) - sideScroll,
+        left: containerW - deskSideW,
+        width: deskSideW,
+        height: deskSideH,
       };
     } else {
       return {
@@ -140,6 +163,9 @@ export function ScreenProjectView() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const micButtonRef = useRef<HTMLButtonElement>(null);
+  const camButtonRef = useRef<HTMLButtonElement>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
 
   /** Measured dimensions of the tile container — drives responsive layout math. */
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -158,15 +184,30 @@ export function ScreenProjectView() {
   const closePiP = useScreenProjectPiPStore((s) => s.closePiP);
 
   /**
+   * One-time snapshot of a persisted station selection, read synchronously
+   * during the first render, so the state initializers just below can resume
+   * exactly where the user left off — regardless of whether they got back
+   * here via PiP, plain navigation, or a full page refresh — instead of
+   * resetting to the station-select stage. Ignored if it belongs to a
+   * different store or the user can't supervisor.
+   */
+  const [savedSelection] = useState(() => {
+    const saved = useScreenProjectSelectionStore.getState();
+    if (saved.storeId !== storeId || saved.selectedStationIds.length === 0 || !canSupervisor) return null;
+    return saved;
+  });
+
+  /**
    * Which token type to fetch — set once the user commits to a view.
    * null = user is on the select screen (no tokens needed yet).
    */
   const [activeTokenType, setActiveTokenType] = useState<"supervisor" | "observer" | null>(() => {
+    if (savedSelection) return "supervisor"; // resuming a persisted selection
     if (!canSupervisor && canObserver) return "observer"; // observer-only: fetch tokens immediately
     return null; // supervisor or both: wait until station selection is committed
   });
 
-  const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+  const [selectedStationIds, setSelectedStationIds] = useState<number[]>(() => savedSelection?.selectedStationIds ?? []);
 
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
     useScreenProject(activeTokenType, selectedStationIds.length ? selectedStationIds : undefined);
@@ -183,15 +224,35 @@ export function ScreenProjectView() {
 
   const [myMicMuted, setMyMicMuted] = useState(true);
   const [myVideoOff, setMyVideoOff] = useState(true);
-  const [myScreenShareEnabled, setMyScreenShareEnabled] = useState(false);
+  /**
+   * room_name of the station the screen share is pinned to, or null.
+   * The share stays with the station it started on, so switching the main
+   * screen never disturbs it (and never triggers a fresh browser picker).
+   */
+  const [sharingRoomId, setSharingRoomId] = useState<string | null>(null);
+  /** True while the browser's share picker is open, so the control can't be double-fired. */
+  const [sharePending, setSharePending] = useState(false);
+  /** Mirror of sharingRoomId, so async reports from a tile can be matched against the latest value. */
+  const sharingRoomIdRef = useRef<string | null>(null);
+  sharingRoomIdRef.current = sharingRoomId;
   const [myCamVisible, setMyCamVisible] = useState(false);
+  /** Self-view size multiplier, 1 = base size, capped at SELF_VIEW_MAX_SCALE. */
+  const [selfViewScale, setSelfViewScale] = useState(1);
+  /** Main-tile width as a fraction of its full width — 1 = widest, floored at MIN_MAIN_WIDTH_SCALE. */
+  const [mainWidthScale, setMainWidthScale] = useState(1);
   const [broadcastToAll, setBroadcastToAll] = useState(false);
   const [sideScroll, setSideScroll] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
   const [sessionExited, setSessionExited] = useState(false);
+  /**
+   * Local viewer fullscreen — distinct from `ScreenState.stationFullscreen`,
+   * which is a remote command telling a station device to go fullscreen.
+   */
+  const [isViewerFullscreen, setIsViewerFullscreen] = useState(false);
 
   /** "supervisor" = normal tile view, "observer" = station picker grid, "select" = view selector, "station-select" = station checklist before connecting */
   const [viewMode, setViewMode] = useState<"supervisor" | "observer" | "select" | "station-select">(() => {
+    if (savedSelection) return "supervisor"; // resuming a persisted selection
     if (canSupervisor && canObserver) return "select";
     if (!canSupervisor && canObserver) return "observer";
     return "station-select"; // supervisor-only: go to station selection before connecting
@@ -230,7 +291,13 @@ export function ScreenProjectView() {
     }
     setMainId((prev) => {
       const stillExists = nonDriveThruStations.some((s) => s.room_name === prev);
-      return stillExists ? prev : nonDriveThruStations[0].room_name;
+      if (stillExists) return prev;
+      // Prefer a station within the current selection so the main tile isn't
+      // filtered out of visibleStations by picking one outside it.
+      const preferred = selectedStationIds.length > 0
+        ? nonDriveThruStations.find((s) => selectedStationIds.includes(s.id))
+        : undefined;
+      return (preferred ?? nonDriveThruStations[0]).room_name;
     });
     setScreenStates((prev) => {
       const next: Record<string, ScreenState> = {};
@@ -246,15 +313,84 @@ export function ScreenProjectView() {
           stationVideoInput:  "",
           stationAudioOutput: "",
           stationFullscreen:  false,
+          // Defaults reproduce the previous hard-coded behaviour: voice at full
+          // volume on the station, media silent.
+          stationSpeakerVolume: 1,
+          stationMediaVolume:   0,
           stationDevices:     null,
         };
       });
       return next;
     });
-  }, [nonDriveThruStations]);
+  }, [nonDriveThruStations, selectedStationIds]);
 
   // Reset side-panel scroll when the stations list changes
   useEffect(() => { setSideScroll(0); }, [nonDriveThruStations]);
+
+  // "M"/"C"/"F" shortcuts: focus the mic/camera/fullscreen button (doesn't
+  // toggle it — a focused native <button> already responds to Enter/Space
+  // with a click).
+  useEffect(() => {
+    const targets: Record<string, React.RefObject<HTMLButtonElement | null>> = {
+      m: micButtonRef,
+      c: camButtonRef,
+      f: fullscreenButtonRef,
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const target = targets[e.key.toLowerCase()];
+      if (!target) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return; // don't hijack OS/browser shortcuts
+      const active = document.activeElement;
+      const typing = active instanceof HTMLElement &&
+        (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+      if (typing) return; // e.g. StationsDialog's search/password fields
+      target.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /**
+   * Viewer fullscreen.
+   *
+   * We fullscreen `document.documentElement` rather than the view wrapper so
+   * that Radix portals (StationsDialog, tooltips) — which mount on
+   * document.body — stay inside the fullscreen element and remain visible.
+   * The wrapper then gets a `fixed inset-0` takeover so the tiles actually
+   * fill the screen instead of just sitting in a taller dashboard.
+   *
+   * The CSS state flips regardless of whether the API call resolves, so a
+   * browser that refuses fullscreen still gets a full-viewport takeover.
+   */
+  const exitViewerFullscreen = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    setIsViewerFullscreen(false);
+  }, []);
+
+  const handleToggleViewerFullscreen = useCallback(() => {
+    if (isViewerFullscreen) {
+      exitViewerFullscreen();
+    } else {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      setIsViewerFullscreen(true);
+    }
+  }, [isViewerFullscreen, exitViewerFullscreen]);
+
+  // Esc (or F11) leaves native fullscreen without telling React — without this
+  // the CSS takeover would stay stuck covering the app.
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setIsViewerFullscreen(false);
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  // Leave fullscreen on unmount, so navigating away doesn't strand the rest of
+  // the dashboard in fullscreen.
+  useEffect(() => () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }, []);
 
   /**
    * PiP activation on route leave.
@@ -315,18 +451,50 @@ export function ScreenProjectView() {
       ? nonDriveThruStations.filter((s) => selectedStationIds.includes(s.id))
       : nonDriveThruStations;
 
+  /** The station currently receiving the screen share, if it's still on screen. */
+  const sharingStation = sharingRoomId
+    ? visibleStations.find((s) => s.room_name === sharingRoomId) ?? null
+    : null;
+  /** Name of the station currently in the main slot — the default share target. */
+  const mainStationName = visibleStations.find((s) => s.room_name === mainId)?.name ?? null;
+
+  // Drop the share if the station it was pinned to is no longer on screen
+  // (deselected or deleted), so it can't keep running with no way to stop it.
+  useEffect(() => {
+    if (sharingRoomId && !sharingStation) {
+      setSharingRoomId(null);
+      setSharePending(false);
+    }
+  }, [sharingRoomId, sharingStation]);
+
   const hasSidePanel = visibleStations.length > 1;
   const anyAudioEnabled = visibleStations.some((s) => screenStates[s.room_name]?.audioEnabled);
   const anyMyCamEnabled = visibleStations.some((s) => screenStates[s.room_name]?.myCamEnabled);
 
   // Side-panel virtual scroll limits
   const isLg = containerSize.width >= LG_BREAKPOINT;
+  /** Drag-to-resize affordances are tablet-and-up only — too fiddly on a phone. */
+  const isTabletUp = containerSize.width >= TABLET_BREAKPOINT;
+  /** Below tablet the self-view always sits at its base size, so it can never get stuck enlarged. */
+  const effectiveSelfViewScale = isTabletUp ? selfViewScale : 1;
   // Reset scroll when layout mode flips (desktop ↔ mobile)
   useEffect(() => { setSideScroll(0); }, [isLg]);
+
+  /**
+   * Desktop split. The main tile is at its maximum when mainWidthScale is 1;
+   * narrowing it hands every reclaimed pixel to the side column, so the mini
+   * screens grow. Side-tile height tracks the width so they keep their shape.
+   */
+  const fullMainW = Math.max(0, containerSize.width - DESK_SIDE_W - PANEL_GAP);
+  const deskSideW = hasSidePanel
+    ? Math.round(containerSize.width - PANEL_GAP - fullMainW * mainWidthScale)
+    : DESK_SIDE_W;
+  const deskSideH = Math.round(deskSideW * (DESK_SIDE_H / DESK_SIDE_W));
+
   const sideTileCount = Math.max(0, visibleStations.length - 1);
   const sideContentLen =
     sideTileCount > 0
-      ? sideTileCount * (isLg ? DESK_SIDE_H : MOB_SIDE_W) +
+      ? sideTileCount * (isLg ? deskSideH : MOB_SIDE_W) +
         (sideTileCount - 1) * PANEL_GAP
       : 0;
   const maxSideScroll = Math.max(
@@ -349,6 +517,7 @@ export function ScreenProjectView() {
 
   const handleSwap = useCallback(
     (id: string) => {
+      setMyVideoOff(true); // always turn camera off before navigating to another screen
       if (swapTimerRef.current) clearTimeout(swapTimerRef.current);
       setFadingIds(new Set([id, mainId]));
       swapTimerRef.current = setTimeout(() => {
@@ -359,6 +528,62 @@ export function ScreenProjectView() {
     },
     [mainId],
   );
+
+  /**
+   * Drag-to-resize the self-view from its top-right corner.
+   *
+   * Runs on the CAPTURE phase and stops propagation so framer-motion's drag
+   * gesture — whose listener sits on the parent motion.div — never starts;
+   * otherwise grabbing the handle would move the PiP instead of resizing it.
+   * All the work therefore happens here, since stopping propagation during
+   * capture means the bubble-phase handlers never run.
+   *
+   * The PiP is anchored bottom-left, so growing it naturally expands up and to
+   * the right from a fixed corner — no position compensation needed.
+   */
+  const startSelfViewResize = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startScale = selfViewScale;
+    const onMove = (ev: PointerEvent) => {
+      // Right and up both grow it; averaging the two axes keeps a diagonal
+      // drag feeling natural while the aspect ratio stays locked.
+      const delta = ((ev.clientX - startX) + (startY - ev.clientY)) / 2;
+      const next = startScale + delta / SELF_VIEW_W;
+      setSelfViewScale(Math.min(SELF_VIEW_MAX_SCALE, Math.max(1, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [selfViewScale]);
+
+  /**
+   * Drag the divider between the main tile and the side column. Dragging left
+   * narrows the main tile and widens the mini screens; full width is the
+   * maximum and MIN_MAIN_WIDTH_SCALE the floor, so the main tile can never be
+   * squeezed to nothing.
+   */
+  const startMainWidthResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startScale = mainWidthScale;
+    const onMove = (ev: PointerEvent) => {
+      if (fullMainW <= 0) return;
+      const next = startScale + (ev.clientX - startX) / fullMainW;
+      setMainWidthScale(Math.min(1, Math.max(MIN_MAIN_WIDTH_SCALE, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [mainWidthScale, fullMainW]);
 
   const handleToggleVideo = useCallback((id: string) => {
     setScreenStates((prev) => ({
@@ -399,12 +624,33 @@ export function ScreenProjectView() {
     }));
   }, []);
 
-  const handleToggleScreenShare = useCallback(() => {
-    setMyScreenShareEnabled((prev) => {
-      const next = !prev;
-      if (next) setMyVideoOff(true); // turn camera off when screen share starts
-      return next;
-    });
+  /** Start (or move) the share on a given station. */
+  const handleStartShare = useCallback((roomName: string) => {
+    setSharePending(true);
+    setSharingRoomId(roomName);
+  }, []);
+
+  const handleStopShare = useCallback(() => {
+    setSharePending(false);
+    setSharingRoomId(null);
+  }, []);
+
+  /** The share is really publishing now — only then take the camera down. */
+  const handleShareStarted = useCallback(() => {
+    setSharePending(false);
+    setMyVideoOff(true); // camera and screen share are mutually exclusive
+  }, []);
+
+  /**
+   * The share failed to start, was cancelled in the picker, or ended on its own.
+   * Only clear when the report belongs to the station we currently believe is
+   * sharing — while moving a share, the old station's teardown arrives after
+   * the new one is already pinned and must not wipe it out.
+   */
+  const handleShareStopped = useCallback((roomName: string) => {
+    if (sharingRoomIdRef.current !== roomName) return; // stale teardown from a station we already moved off
+    setSharingRoomId(null);
+    setSharePending(false);
   }, []);
 
   const handleCamToAllToggle = useCallback(() => {
@@ -452,6 +698,17 @@ export function ScreenProjectView() {
     }));
   }, []);
 
+  const handleStationVolumeChange = useCallback((roomName: string, target: "speaker" | "media", level: number) => {
+    setScreenStates((prev) => ({
+      ...prev,
+      [roomName]: {
+        ...prev[roomName],
+        stationSpeakerVolume: target === "speaker" ? level : prev[roomName].stationSpeakerVolume,
+        stationMediaVolume:   target === "media"   ? level : prev[roomName].stationMediaVolume,
+      },
+    }));
+  }, []);
+
   const handleStationStateReceived = useCallback((roomName: string, state: StationStateMsg) => {
     setScreenStates((prev) => ({
       ...prev,
@@ -467,7 +724,7 @@ export function ScreenProjectView() {
       const rect = target.getBoundingClientRect();
       const inSidePanel =
         containerSize.width >= LG_BREAKPOINT
-          ? e.clientX - rect.left >= containerSize.width - DESK_SIDE_W
+          ? e.clientX - rect.left >= containerSize.width - deskSideW
           : e.clientY - rect.top >= containerSize.height - MOB_SIDE_H;
       if (!inSidePanel) return;
       e.preventDefault();
@@ -475,7 +732,7 @@ export function ScreenProjectView() {
         Math.max(0, Math.min(maxSideScroll, prev + e.deltaY)),
       );
     },
-    [hasSidePanel, maxSideScroll, containerSize],
+    [hasSidePanel, maxSideScroll, containerSize, deskSideW],
   );
 
   // Attach a non-passive wheel listener so preventDefault() actually works.
@@ -658,6 +915,7 @@ export function ScreenProjectView() {
       if (selectedStationIds.length === 0) return;
       const firstSelected = nonDriveThruStations.find((s) => selectedStationIds.includes(s.id));
       if (firstSelected) setMainId(firstSelected.room_name);
+      useScreenProjectSelectionStore.getState().setSelection(storeId, selectedStationIds);
       setActiveTokenType("supervisor");
       setViewMode("supervisor");
     }
@@ -854,7 +1112,12 @@ export function ScreenProjectView() {
 
   /* ── Main view ──────────────────────────────────────────────────── */
   return (
-    <div className="relative flex h-full flex-col gap-3">
+    <div
+      className={cn(
+        "relative flex flex-col gap-3",
+        isViewerFullscreen ? "fixed inset-0 z-50 bg-background p-3" : "h-full",
+      )}
+    >
       {/*
        * Single tile area — ALL ScreenTile instances live here permanently.
        * Clicking a side tile only changes `mainId` state. Each tile's
@@ -871,6 +1134,8 @@ export function ScreenProjectView() {
               containerSize.height,
               hasSidePanel,
               clampedSideScroll,
+              deskSideW,
+              deskSideH,
             );
             return (
               <motion.div
@@ -888,8 +1153,9 @@ export function ScreenProjectView() {
                   myMicEnabled={!myMicMuted && (broadcastToAll || s.isMain)}
                   myCamEnabled={!myVideoOff && (s.isMain || (screenStates[s.room_name]?.myCamEnabled ?? false))}
                   onToggleMyCam={!s.isMain ? () => handleToggleMyCam(s.room_name) : undefined}
-                  myScreenShareEnabled={s.isMain ? myScreenShareEnabled : undefined}
-                  onToggleMyScreenShare={s.isMain ? handleToggleScreenShare : undefined}
+                  myScreenShareEnabled={s.room_name === sharingRoomId}
+                  onScreenShareStarted={handleShareStarted}
+                  onScreenShareStopped={() => handleShareStopped(s.room_name)}
                   onClick={!s.isMain ? () => handleSwap(s.room_name) : undefined}
                   isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
                   isAudioEnabled={screenStates[s.room_name]?.audioEnabled ?? false}
@@ -912,15 +1178,33 @@ export function ScreenProjectView() {
                   stationVideoInput={screenStates[s.room_name]?.stationVideoInput ?? ""}
                   stationAudioOutput={screenStates[s.room_name]?.stationAudioOutput ?? ""}
                   stationFullscreen={screenStates[s.room_name]?.stationFullscreen ?? false}
+                  stationSpeakerVolume={screenStates[s.room_name]?.stationSpeakerVolume ?? 1}
+                  stationMediaVolume={screenStates[s.room_name]?.stationMediaVolume ?? 0}
                   onToggleStationMic={() => handleToggleStationMic(s.room_name)}
                   onToggleStationCam={() => handleToggleStationCam(s.room_name)}
                   onToggleStationFullscreen={() => handleToggleStationFullscreen(s.room_name)}
                   onStationDeviceChange={(kind, deviceId) => handleStationDeviceChange(s.room_name, kind, deviceId)}
+                  onStationVolumeChange={(target, level) => handleStationVolumeChange(s.room_name, target, level)}
                   onStationStateReceived={(state) => handleStationStateReceived(s.room_name, state)}
                 />
               </motion.div>
             );
           })}
+
+        {/* Main/side split divider — drag left to shrink the main tile and grow the mini screens */}
+        {!sessionExited && hasSidePanel && isLg && containerSize.width > 0 && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize main screen"
+            title="Drag to resize the main screen"
+            onPointerDown={startMainWidthResize}
+            className="group absolute inset-y-0 z-30 flex cursor-col-resize items-center justify-center"
+            style={{ left: containerSize.width - deskSideW - PANEL_GAP, width: PANEL_GAP }}
+          >
+            <div className="h-10 w-1 rounded-full bg-white/25 transition-colors group-hover:bg-white/60" />
+          </div>
+        )}
 
         {/* Side-panel scroll arrows */}
         {!sessionExited && hasSidePanel && containerSize.width > 0 && maxSideScroll > 0 && (
@@ -928,7 +1212,7 @@ export function ScreenProjectView() {
             <>
               {canScrollBack && (
                 <button
-                  onClick={() => setSideScroll((p) => Math.max(0, p - (DESK_SIDE_H + PANEL_GAP)))}
+                  onClick={() => setSideScroll((p) => Math.max(0, p - (deskSideH + PANEL_GAP)))}
                   className="absolute top-2 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
                   aria-label="Scroll side panel up"
                 >
@@ -937,7 +1221,7 @@ export function ScreenProjectView() {
               )}
               {canScrollFwd && (
                 <button
-                  onClick={() => setSideScroll((p) => Math.min(maxSideScroll, p + (DESK_SIDE_H + PANEL_GAP)))}
+                  onClick={() => setSideScroll((p) => Math.min(maxSideScroll, p + (deskSideH + PANEL_GAP)))}
                   className="absolute bottom-2 right-2 z-30 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white/80 hover:bg-black/80 hover:text-white transition-colors"
                   aria-label="Scroll side panel down"
                 >
@@ -982,28 +1266,43 @@ export function ScreenProjectView() {
             !myCamVisible && "pointer-events-none",
           )}
         >
-          <div className="relative w-36 h-24 rounded-lg overflow-hidden ring-2 ring-white/30 shadow-xl bg-neutral-800">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className={cn(
-                "absolute inset-0 h-full w-full object-cover scale-x-[-1]",
-                myVideoOff && "hidden",
+          <div
+            className="relative rounded-lg ring-2 ring-white/30 shadow-xl bg-neutral-800"
+            style={{ width: SELF_VIEW_W * effectiveSelfViewScale, height: SELF_VIEW_H * effectiveSelfViewScale }}
+          >
+            <div className="absolute inset-0 overflow-hidden rounded-lg">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                muted
+                playsInline
+                className={cn(
+                  "absolute inset-0 h-full w-full object-cover scale-x-[-1]",
+                  myVideoOff && "hidden",
+                )}
+              />
+              {myVideoOff && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-neutral-800">
+                  <UserCircle2 className="h-8 w-8 text-white/40" />
+                  <span className="text-[0.6rem] text-white/40">Camera off</span>
+                </div>
               )}
-            />
-            {myVideoOff && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-neutral-800">
-                <UserCircle2 className="h-8 w-8 text-white/40" />
-                <span className="text-[0.6rem] text-white/40">Camera off</span>
-              </div>
-            )}
-            {myMicMuted && (
-              <div className="absolute top-1 right-1 rounded bg-black/60 p-0.5">
-                <MicOff className="h-2.5 w-2.5 text-white" />
-              </div>
-            )}
+              {myMicMuted && (
+                <div className="absolute top-1 left-1 rounded bg-black/60 p-0.5">
+                  <MicOff className="h-2.5 w-2.5 text-white" />
+                </div>
+              )}
+            </div>
+            {/* Resize grip — drag out from the top-right corner to enlarge (tablet and up) */}
+            {isTabletUp && <button
+              type="button"
+              onPointerDownCapture={startSelfViewResize}
+              title="Drag to resize self view"
+              aria-label="Drag to resize self view"
+              className="absolute -top-1.5 -right-1.5 flex h-4 w-4 cursor-nesw-resize items-center justify-center rounded-full bg-black/70 text-white/60 ring-1 ring-white/30 transition-colors hover:bg-black/90 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+            >
+              <ChevronUp className="h-2.5 w-2.5 rotate-45" />
+            </button>}
           </div>
         </motion.div>}
       </div>
@@ -1028,6 +1327,7 @@ export function ScreenProjectView() {
 
           {/* Mic toggle */}
           <button
+            ref={micButtonRef}
             onClick={() => {
               setMyMicMuted((v) => {
                 if (!v) setBroadcastToAll(false);
@@ -1038,6 +1338,7 @@ export function ScreenProjectView() {
             aria-label={myMicMuted ? "Unmute microphone" : "Mute microphone"}
             className={cn(
               "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              "outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900",
               myMicMuted
                 ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                 : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
@@ -1051,11 +1352,18 @@ export function ScreenProjectView() {
 
           {/* Camera toggle */}
           <button
-            onClick={() => setMyVideoOff((v) => !v)}
+            ref={camButtonRef}
+            onClick={() => {
+              // Camera and screen share are mutually exclusive — viewers only ever
+              // see the share, so leaving both on streams the camera invisibly.
+              if (myVideoOff) handleStopShare();
+              setMyVideoOff((v) => !v);
+            }}
             title={myVideoOff ? "Turn on camera" : "Turn off camera"}
             aria-label={myVideoOff ? "Turn on camera" : "Turn off camera"}
             className={cn(
               "relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-150",
+              "outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900",
               myVideoOff
                 ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
                 : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
@@ -1081,6 +1389,56 @@ export function ScreenProjectView() {
           >
             <UserCircle2 className="h-4 w-4" />
           </button>
+
+          {/* Screen share — pinned to one station, named so it's always clear where it's going */}
+          {sharingStation ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  disabled={sharePending}
+                  title={`Sharing your screen to ${sharingStation.name}`}
+                  aria-label={`Sharing your screen to ${sharingStation.name}`}
+                  className="flex h-9 items-center gap-1.5 rounded-xl bg-red-500/20 px-2.5 text-red-400 transition-all duration-150 hover:bg-red-500/30 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <Monitor className="h-4 w-4 shrink-0" />
+                  <span className="max-w-24 truncate text-xs">
+                    {sharePending ? "Starting…" : sharingStation.name}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="center" className="w-56 border-white/10 bg-neutral-900 p-1 text-white">
+                <p className="px-2 py-1.5 text-[0.65rem] uppercase tracking-wide text-white/50">
+                  Sharing to {sharingStation.name}
+                </p>
+                {mainStationName && sharingRoomId !== mainId && (
+                  <button
+                    onClick={() => handleStartShare(mainId)}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
+                  >
+                    <Monitor className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Share to {mainStationName} instead</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleStopShare}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10"
+                >
+                  <MonitorOff className="h-3.5 w-3.5 shrink-0" />
+                  Stop sharing
+                </button>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <button
+              onClick={() => mainId && handleStartShare(mainId)}
+              disabled={sharePending || !mainId}
+              title={mainStationName ? `Share your screen to ${mainStationName}` : "Share your screen"}
+              aria-label="Share your screen"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-white/50 transition-all duration-150 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-40"
+            >
+              <Monitor className="h-4 w-4" />
+            </button>
+          )}
 
           <div className="w-px h-5 bg-white/10 mx-1" />
 
@@ -1158,6 +1516,27 @@ export function ScreenProjectView() {
 
           <div className="w-px h-5 bg-white/10 mx-1" />
 
+          {/* Fullscreen button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                ref={fullscreenButtonRef}
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-white/50 hover:text-white hover:bg-white/10 rounded-xl"
+                onClick={handleToggleViewerFullscreen}
+                aria-label={isViewerFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isViewerFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {isViewerFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            </TooltipContent>
+          </Tooltip>
+
+          <div className="w-px h-5 bg-white/10 mx-1" />
+
           {/* Guide button */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1184,7 +1563,17 @@ export function ScreenProjectView() {
                 size="icon"
                 data-guide-id="sp-exit-session"
                 className="h-9 w-9 text-white/50 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
-                onClick={() => setSessionExited(true)}
+                onClick={() => {
+                  useScreenProjectSelectionStore.getState().clearSelection();
+                  // Tiles unmount right after this (rendered only while
+                  // !sessionExited) without ever reporting "not live" back
+                  // here — clear it explicitly so a later navigate-away
+                  // doesn't find stale entries and hand off to PiP anyway.
+                  liveRoomsRef.current.clear();
+                  exitViewerFullscreen();
+                  handleStopShare();
+                  setSessionExited(true);
+                }}
                 aria-label="Exit session"
               >
                 <LogOut className="h-4 w-4" />
@@ -1220,6 +1609,7 @@ export function ScreenProjectView() {
               onClick={() => {
                 setSessionExited(false);
                 setBroadcastToAll(false);
+                handleStopShare(); // otherwise the old share flag pops a picker on reconnect
                 setSelectedStationIds([]);
                 setActiveTokenType(null);
                 setViewMode("station-select");

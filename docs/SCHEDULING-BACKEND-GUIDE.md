@@ -1,3 +1,16 @@
+> **SUPERSEDED — do not build against this.**
+>
+> This was the spec the frontend team wrote *before* the backend existed, and it
+> predates the whole planned-vs-actual system (`ActualShift`, comparison mode),
+> the `note` field, and `sync_status`. It also describes `avatar` as a URL when
+> the code stores initials.
+>
+> The scheduling feature is now wired to the OperationsPizza API. The authority
+> is that service's own handoff documentation plus `lib/scheduling/adapters.ts`,
+> which is the single place the real payload shapes are written down.
+>
+> Kept for history only.
+
 # Scheduling Page: Backend Developer Guide
 
 ## Overview

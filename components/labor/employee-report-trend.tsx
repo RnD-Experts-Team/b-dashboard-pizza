@@ -25,6 +25,7 @@ import {
   useChartBase,
 } from "./labor-chart";
 import { fmtNumber } from "./labor-format";
+import { formatDateOnly } from "@/lib/utils/date-display";
 
 const TOTAL_KEY = "total";
 const UNTYPED_KEY = "untyped";
@@ -75,7 +76,7 @@ export function EmployeeReportTrendChart({
       markers: { size: 4, strokeWidth: 2, hover: { size: 6 } },
       xaxis: {
         ...base.xaxis,
-        categories: weeks.map((w) => format(parseISO(w.week_start), "MMM d")),
+        categories: weeks.map((w) => formatDateOnly(w.week_start, "MMM d")),
       },
       yaxis: {
         ...base.yaxis,

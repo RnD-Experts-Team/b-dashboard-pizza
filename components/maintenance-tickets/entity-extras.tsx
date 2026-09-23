@@ -272,6 +272,7 @@ function AddAttachmentForm({
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit() {
     if (files.length === 0) { setError("Select at least one file."); return; }
@@ -325,17 +326,27 @@ function AddAttachmentForm({
           </ul>
         </div>
       )}
-      {/* File picker — APPENDS to queue */}
-      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+      {/* File picker — APPENDS to queue.
+          The input is `hidden` and opened through a ref rather than by wrapping it
+          in a <label>. A merely *visually* hidden input is still focusable, and
+          clicking a label focuses it: the browser then scrolls it into view, which
+          shoves the `overflow-hidden` html/body of the app shell to a position the
+          user cannot scroll back from. */}
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        className="flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+      >
         <Paperclip className="h-3 w-3 shrink-0" />
         <span>Add more files…</span>
-        <Input
-          type="file"
-          multiple
-          className="sr-only"
-          onChange={handleFileInputChange}
-        />
-      </label>
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={handleFileInputChange}
+      />
       {error && <p className="text-[11px] text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onClose} disabled={isSubmitting}>Cancel</Button>

@@ -28,6 +28,7 @@ import {
   NUM,
 } from "./primitives";
 import { cn } from "@/lib/utils";
+import { fmtFixed } from "@/lib/utils/number-display";
 
 const CH_COLS: [keyof WbrData["totals"]["channels"], string][] = [
   ["register", "Register"],
@@ -72,7 +73,7 @@ export function SalesTab({ data }: { data: WbrData }) {
         />
         <Kpi
           label="Avg ticket"
-          value={`$${totals.avgTicket.toFixed(2)}`}
+          value={`$${fmtFixed(totals.avgTicket, 2)}`}
           delta={wow(totals.avgTicket, prevTotals.avgTicket)}
         />
         <Kpi label="Promo-to-sales" value={fmtPct(promoPct)} />
@@ -235,7 +236,7 @@ export function SalesTab({ data }: { data: WbrData }) {
                   <tr key={t.item}>
                     <td className={cn(TD, NUM, "text-muted-foreground")}>{i + 1}</td>
                     <td className={cn(TD, "font-semibold")}>{t.item}</td>
-                    <td className={cn(TD, NUM)}>${t.price.toFixed(2)}</td>
+                    <td className={cn(TD, NUM)}>${fmtFixed(t.price, 2)}</td>
                     <td className={cn(TD, NUM)}>{fmtNum(t.qty)}</td>
                     <td className={cn(TD, NUM)}>{fmt$(t.sales)}</td>
                     <td className={TD}>
@@ -274,7 +275,7 @@ export function SalesTab({ data }: { data: WbrData }) {
                       <StoreCell name={r.store.name} market={r.store.market} num={r.store.num} />
                     </td>
                     <td className={cn(TD, NUM)}>{fmt$(r.lto.sales)}</td>
-                    <td className={cn(TD, NUM)}>{r.lto.pctOfSales.toFixed(2)}%</td>
+                    <td className={cn(TD, NUM)}>{fmtFixed(r.lto.pctOfSales, 2)}%</td>
                     <td className={cn(TD, NUM)}>{r.lto.qty}</td>
                     <td className={cn(TD, NUM)}>{r.lto.inStoreQty}</td>
                     <td className={TD}><DeltaBadge value={r.lto.wowQty} /></td>

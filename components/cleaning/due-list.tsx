@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Camera, Check, History, Loader2, Undo2, X } from "lucide-react";
@@ -25,22 +25,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import type { ChartVerdict, DueItem } from "@/types/cleaning.types";
+import { CleaningError } from "@/lib/api/services/cleaning.service";
+import type { ChartLockReason, ChartVerdict, DueItem } from "@/types/cleaning.types";
 import { StatusPill } from "./cleaning-ui";
 import { CompleteTaskDialog } from "./complete-task-dialog";
 import { HistoryDrawer } from "./history-drawer";
-
-/**
- * A completion recorded for THIS period — the only history `/due` can prove on
- * its own. Deliberately does NOT treat "overdue" or `hasPhoto` as proof: an
- * overdue task may never have been completed at all, and photo metadata can
- * outlive a reverted completion. Everything else is verified against the
- * history endpoint (see the effect below).
- */
-function hasCompletionThisPeriod(item: DueItem): boolean {
-  return item.status === "done" || item.completionId != null;
-}
 
 interface Props {
   storeId: number;
@@ -55,10 +44,19 @@ interface Props {
   onUncomplete: (storeId: number, taskId: number, date: string) => Promise<void>;
   /** Cleaning-specialist only — shows the quick Pass/Fail evaluate shortcut. */
   canEvaluate?: boolean;
-  /** Sets this task's cleaning-chart verdict for the current evaluation period. */
-  onEvaluate?: (storeId: number, taskId: number, verdict: ChartVerdict) => Promise<void>;
+  /** Sets this task's cleaning-chart verdict for the current evaluation
+   *  period. `"empty"` clears it — sent when re-clicking the already-active
+   *  verdict, per the backend's "empty deletes" rule. */
+  onEvaluate?: (storeId: number, taskId: number, verdict: ChartVerdict | "empty") => Promise<void>;
   /** This task's existing chart verdict for the current period, if already graded. */
   evaluatedVerdicts?: Record<number, ChartVerdict>;
+  /** Cross-referenced from the Evaluation grid's own data for this store +
+   *  period (guide §1-2) — proactive knowledge of which tasks are currently
+   *  completion-locked, so the row can disable/explain BEFORE a doomed
+   *  click, not only after one. A task absent from this map is either
+   *  editable, or the grid hasn't loaded yet — `lockInfo` below covers that
+   *  gap reactively. */
+  lockedTaskReasons?: Record<number, ChartLockReason>;
 }
 
 export function DueList({
@@ -71,6 +69,7 @@ export function DueList({
   canEvaluate,
   onEvaluate,
   evaluatedVerdicts,
+  lockedTaskReasons,
 }: Props) {
   const t = useTranslations("cleaningChart");
   const [completeItem, setCompleteItem] = useState<DueItem | null>(null);
@@ -79,10 +78,44 @@ export function DueList({
   const [undoing, setUndoing] = useState<number | null>(null);
   const [evaluating, setEvaluating] = useState<number | null>(null);
   // Merged into `evaluatedVerdicts` so a just-clicked verdict shows instantly,
-  // without waiting on the evaluation grid to refetch.
-  const [localVerdicts, setLocalVerdicts] = useState<Record<number, ChartVerdict>>({});
-  const verdictFor = (taskId: number): ChartVerdict | undefined =>
-    localVerdicts[taskId] ?? evaluatedVerdicts?.[taskId];
+  // without waiting on the evaluation grid to refetch. Stores "empty" as its
+  // own entry (rather than deleting the key) so a just-cleared verdict
+  // overrides the still-stale `evaluatedVerdicts` value instead of falling
+  // back to it.
+  const [localVerdicts, setLocalVerdicts] = useState<Record<number, ChartVerdict | "empty">>({});
+  const verdictFor = (taskId: number): ChartVerdict | undefined => {
+    const local = localVerdicts[taskId];
+    if (local !== undefined) return local === "empty" ? undefined : local;
+    return evaluatedVerdicts?.[taskId];
+  };
+  /**
+   * This list has no completion-lock data up front (`GET /cleaning/due`
+   * doesn't carry `evaluable`/`completion_*` — that's Evaluation-grid-only,
+   * guide §1-2). So a lock can only be learned reactively, from the 422 any
+   * verdict attempt gets back — pass, fail, and clear are ALL refused on a
+   * locked cell (guide §2, no restricted cycle anymore). Once learned, keep
+   * it around so the row shows *why* instead of just letting every click
+   * fail silently-but-toasted, and so both buttons stay disabled instead of
+   * an infinite retry loop.
+   */
+  const [lockInfo, setLockInfo] = useState<
+    Record<number, { reason: "period_not_finished" | "not_completed" | "partially_completed" }>
+  >({});
+  // `items` is a fresh array every time the parent refetches the due list —
+  // including right after `onComplete` resolves. A `lockInfo` entry learned
+  // BEFORE that refetch might now be stale (the completion that would
+  // unlock it may be exactly what just landed), and since the buttons stay
+  // disabled while an entry exists, a stale one is a permanent dead end —
+  // nothing else ever gives the row a chance to find out it unlocked. Clear
+  // the cache on every refetch so the next click re-checks with the server
+  // instead of trusting a possibly-outdated "it was locked" memory.
+  useEffect(() => {
+    setLockInfo({});
+    // Optimistic verdicts are period-scoped, and changing the date can move
+    // the row into a different week — keeping them would show one week's
+    // verdict against another week's cell.
+    setLocalVerdicts({});
+  }, [items]);
   // Safety net: `canEvaluate` is a client-side guess based on cached auth-rule
   // data (see canEvaluateCleaning) and can be stale or wrong relative to the
   // backend's actual authorization. If the server ever comes back 403 on this
@@ -90,18 +123,50 @@ export function DueList({
   // instead of leaving a forbidden button clickable for the rest of the visit.
   const [evaluateForbidden, setEvaluateForbidden] = useState(false);
 
-  /** Quick chart toggle — no dialog, matching the grid's chart chips. */
-  const evaluate = async (item: DueItem, verdict: ChartVerdict) => {
+  /** Quick chart toggle — no dialog, matching the grid's chart chips.
+   *  Re-clicking the already-active verdict passes "empty" to clear it. */
+  const evaluate = async (item: DueItem, verdict: ChartVerdict | "empty") => {
     if (!onEvaluate) return;
     setEvaluating(item.taskId);
     try {
       await onEvaluate(storeId, item.taskId, verdict);
       setLocalVerdicts((prev) => ({ ...prev, [item.taskId]: verdict }));
-      toast.success(t("due.toasts.evaluated", { label: item.label }));
+      // A successful write means the server accepted it — whatever lock we'd
+      // learned about no longer applies (either it wasn't locked, or this
+      // was the Fail/N-A path locked cells still allow).
+      setLockInfo((prev) => {
+        if (!(item.taskId in prev)) return prev;
+        const next = { ...prev };
+        delete next[item.taskId];
+        return next;
+      });
+      toast.success(
+        verdict === "empty"
+          ? t("due.toasts.evaluateCleared", { label: item.label })
+          : t("due.toasts.evaluated", { label: item.label })
+      );
     } catch (err) {
       if (err instanceof CleaningError && err.code === "FORBIDDEN") {
         setEvaluateForbidden(true);
         toast.error(t("due.toasts.evaluateForbidden"));
+      } else if (
+        err instanceof CleaningError &&
+        (err.reason === "not_completed" ||
+          err.reason === "partially_completed" ||
+          err.reason === "period_not_finished")
+      ) {
+        // Guide §2.1: the message already names the task and says what to do
+        // instead — surface it, and remember which of the two lock families
+        // this is so the row keeps showing it after the toast fades, instead
+        // of leaving a mystery (and instead of retrying a click that's
+        // refused for EVERY verdict now, not just Pass).
+        setLockInfo((prev) => ({
+          ...prev,
+          [item.taskId]: {
+            reason: err.reason as "period_not_finished" | "not_completed" | "partially_completed",
+          },
+        }));
+        toast.error(err.message);
       } else {
         toast.error(err instanceof CleaningError ? err.message : t("due.toasts.evaluateFailed"));
       }
@@ -111,59 +176,13 @@ export function DueList({
   };
 
   /**
-   * Whether a task has completion history in EARLIER periods. `/due` only
-   * describes the current period, so tasks with nothing recorded *now* are
-   * verified against the history endpoint — that's what keeps a brand-new
-   * task from showing an empty History drawer.
+   * History is offered whenever the task was ever completed. `has_history`
+   * comes straight off the due item now — no per-task /history probe needed
+   * (that endpoint is the heaviest call in the module; it walks the
+   * recurrence rule to derive misses, so it's only called on demand when the
+   * user actually opens the History drawer, not to test whether it exists).
    */
-  const [pastHistory, setPastHistory] = useState<Record<string, boolean>>({});
-  /**
-   * Cache the in-flight PROMISE (not a "checked" flag). If the effect re-runs —
-   * React StrictMode double-invokes it in dev — the re-run re-subscribes to the
-   * SAME request instead of skipping it, so the result is never silently
-   * dropped by the first invocation's `alive = false` cleanup. Caching a plain
-   * "checked" boolean instead loses that guarantee and makes the button's
-   * visibility flaky (each row's outcome then depends on whichever effect
-   * invocation happened to still be "alive" when the request resolved).
-   */
-  const cacheRef = useRef<Map<string, Promise<boolean>>>(new Map());
-  const historyKey = (taskId: number) => `${storeId}:${taskId}`;
-
-  useEffect(() => {
-    // Tasks completed this period already prove history exists — skip those.
-    const toCheck = items.filter((i) => !hasCompletionThisPeriod(i));
-    if (toCheck.length === 0) return;
-
-    let alive = true;
-    for (const item of toCheck) {
-      const key = historyKey(item.taskId);
-      let request = cacheRef.current.get(key);
-      if (!request) {
-        request = cleaningService
-          .getHistory(storeId, item.taskId)
-          .then((rows) => rows.length > 0)
-          .catch((err) => {
-            if (process.env.NODE_ENV === "development") {
-              console.warn(`[cleaning] history check failed for task ${item.taskId}:`, err);
-            }
-            return false;
-          });
-        cacheRef.current.set(key, request);
-      }
-      request.then((has) => {
-        if (!alive) return;
-        setPastHistory((prev) => (prev[key] === has ? prev : { ...prev, [key]: has }));
-      });
-    }
-
-    return () => {
-      alive = false;
-    };
-  }, [items, storeId]);
-
-  /** History is offered only when we know a completion actually exists. */
-  const showHistory = (item: DueItem) =>
-    hasCompletionThisPeriod(item) || pastHistory[historyKey(item.taskId)] === true;
+  const showHistory = (item: DueItem) => item.hasHistory;
 
   const confirmUndo = async () => {
     const item = undoTarget;
@@ -171,15 +190,8 @@ export function DueList({
     setUndoing(item.taskId);
     try {
       await onUncomplete(storeId, item.taskId, date);
-      // That completion is gone — re-check whether any earlier history remains,
-      // so a task whose only record was just reverted stops offering History.
-      const key = historyKey(item.taskId);
-      cacheRef.current.delete(key);
-      setPastHistory((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      // onUncomplete refetches the due list, so hasHistory reflects the
+      // server's view again (unset once no completion remains at all).
       toast.success(t("due.toasts.reverted", { label: item.label }));
       setUndoTarget(null);
     } catch (err) {
@@ -214,6 +226,12 @@ export function DueList({
             ) : (
               items.map((item) => {
                 const verdict = verdictFor(item.taskId);
+                // Proactive (from the Evaluation grid's own data for this
+                // period) wins whenever it's available; the reactive 422-
+                // learned entry is only a fallback for when the grid hasn't
+                // loaded yet.
+                const lockReason = lockedTaskReasons?.[item.taskId] ?? lockInfo[item.taskId]?.reason;
+                const lock = lockReason ? { reason: lockReason } : undefined;
                 return (
                 <TableRow key={item.taskId}>
                   <TableCell className="max-w-[280px]">
@@ -284,13 +302,50 @@ export function DueList({
                       {/* Evaluate — cleaning-specialist only, always last so the
                           row reads left-to-right as "handle it, then grade it". */}
                       {canEvaluate && !evaluateForbidden && onEvaluate && (
-                        <div className="ms-1 flex items-center gap-1 border-s ps-2">
+                        <div className="ms-1 flex items-center gap-1.5 border-s ps-2">
+                          {/* Learned reactively from a 422 (this endpoint has
+                              no completion data up front) — once known, stop
+                              offering verdict clicks that will just 422
+                              again (guide §2: locked means no verdict at
+                              all, not just Pass), and show why instead of
+                              only a toast that's already faded. Amber =
+                              period still open, nothing failed yet; red =
+                              deadline passed, auto-failed. */}
+                          {lock && (
+                            <span
+                              className={cn(
+                                "text-[10px] font-medium",
+                                lock.reason === "period_not_finished"
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-red-600 dark:text-red-400"
+                              )}
+                              title={t(
+                                lock.reason === "period_not_finished"
+                                  ? "due.lockedExplainPending"
+                                  : "due.lockedExplainBlocked"
+                              )}
+                            >
+                              {t(
+                                lock.reason === "period_not_finished"
+                                  ? "due.lockedShortPending"
+                                  : "due.lockedShortBlocked"
+                              )}
+                            </span>
+                          )}
                           <Button
                             variant="outline"
                             size="icon"
-                            disabled={evaluating === item.taskId}
-                            onClick={() => void evaluate(item, "pass")}
-                            title={t("due.evaluatePass")}
+                            disabled={evaluating === item.taskId || lock != null}
+                            title={
+                              lock
+                                ? t(
+                                    lock.reason === "period_not_finished"
+                                      ? "due.lockedExplainPending"
+                                      : "due.lockedExplainBlocked"
+                                  )
+                                : t("due.evaluatePass")
+                            }
+                            onClick={() => void evaluate(item, verdict === "pass" ? "empty" : "pass")}
                             className={cn(
                               "h-8 w-8",
                               verdict === "pass"
@@ -303,9 +358,17 @@ export function DueList({
                           <Button
                             variant="outline"
                             size="icon"
-                            disabled={evaluating === item.taskId}
-                            onClick={() => void evaluate(item, "fail")}
-                            title={t("due.evaluateFail")}
+                            disabled={evaluating === item.taskId || lock != null}
+                            title={
+                              lock
+                                ? t(
+                                    lock.reason === "period_not_finished"
+                                      ? "due.lockedExplainPending"
+                                      : "due.lockedExplainBlocked"
+                                  )
+                                : t("due.evaluateFail")
+                            }
+                            onClick={() => void evaluate(item, verdict === "fail" ? "empty" : "fail")}
                             className={cn(
                               "h-8 w-8",
                               verdict === "fail"

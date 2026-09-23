@@ -116,6 +116,9 @@ export function DriveThruButton() {
   return (
     <>
       <Button
+        // data-guide-id: PageGuide spotlight target, used by the Dashboard V1
+        // tour. The tour drops this step when the button isn't rendered.
+        data-guide-id="topbar-drive-thru"
         variant="ghost"
         size="icon"
         className="relative"

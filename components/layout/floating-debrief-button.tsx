@@ -13,6 +13,7 @@ import {
   PenLine,
   RefreshCw,
   Sparkles,
+  StickyNote,
   Undo2,
   User,
   X,
@@ -41,6 +42,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateEmployeeDebriefForm } from "@/components/employee-debriefs/create-employee-debrief-form";
+import { DebriefNotepad } from "@/components/layout/debrief-notepad";
 import { DueKeyValueSheet } from "@/components/due-keys/due-key-value-sheet";
 import { FillAllKeysSheet } from "@/components/due-keys/fill-all-keys-sheet";
 import { CompleteTaskForm, StatusPill, formatDate } from "@/components/cleaning";
@@ -52,6 +54,7 @@ import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
+import type { DebriefPanelTab } from "@/lib/store/debrief-action.store";
 import { useFabPositionStore } from "@/lib/store/fab-position.store";
 import { canAccessCleaningTab } from "@/lib/auth/cleaning-access";
 import { playSfx } from "@/lib/uisfx/play";
@@ -88,14 +91,18 @@ function parseAuthUserStores(): StoreOption[] {
       }>;
     };
 
-    return (parsed.stores ?? [])
-      .map((entry) => {
-        const store = entry.store;
-        const resolvedId = String(store?.store_id ?? store?.id ?? "").trim();
-        const resolvedName = store?.name?.trim() || resolvedId;
-        return { id: resolvedId, name: resolvedName };
-      })
-      .filter((s) => s.id.length > 0);
+    // The auth payload can list the same store more than once (one entry per
+    // role/assignment), so dedupe by id — duplicates break both the React keys
+    // and Radix Select, which requires unique item values.
+    const byId = new Map<string, StoreOption>();
+    for (const entry of parsed.stores ?? []) {
+      const store = entry.store;
+      const resolvedId = String(store?.store_id ?? store?.id ?? "").trim();
+      if (!resolvedId) continue;
+      if (byId.has(resolvedId)) continue;
+      byId.set(resolvedId, { id: resolvedId, name: store?.name?.trim() || resolvedId });
+    }
+    return Array.from(byId.values());
   } catch {
     return [];
   }
@@ -118,6 +125,32 @@ const FAB_W = 108;    // approximate FAB button width in px
 const FAB_H = 44;     // FAB button height in px
 const EDGE = 8;       // minimum gap from each screen edge
 const PANEL_GAP = 10; // gap between the FAB and its popup panel (desktop)
+// How long after a child sheet/dialog closes the panel ignores dismiss requests,
+// so the focus hand-back from the closing overlay doesn't take the panel with it.
+const OVERLAY_CLOSE_GRACE_MS = 500;
+const BOTTOM_NAV_GAP = 10; // required clearance above the mobile bottom nav bar
+
+/**
+ * Shared tab-button class. `flex-1 min-w-0` keeps all four tabs on one row and
+ * lets the labels truncate on narrow panels — the bar itself never scrolls, so
+ * it can't pick up the stray vertical scrollbar that `overflow-x` implies.
+ */
+const TAB_CLASS =
+  "flex-auto min-w-0 flex items-center justify-center gap-1 px-1.5 py-2.5 text-[11px] font-medium transition-colors border-b-2 -mb-px";
+
+/**
+ * Extra bottom clearance so the FAB never rests on top of the mobile bottom
+ * nav bar (components/layout/bottom-nav.tsx, id="bottom-nav-bar"). Measures
+ * the bar's live rendered height (incl. its safe-area padding) rather than a
+ * hardcoded guess — returns 0 when the bar isn't mounted (desktop widths, or
+ * the mobileBottomNav feature disabled).
+ */
+function getBottomNavClearance(): number {
+  if (typeof document === "undefined") return 0;
+  const bar = document.getElementById("bottom-nav-bar");
+  if (!bar) return 0;
+  return bar.getBoundingClientRect().height + BOTTOM_NAV_GAP;
+}
 
 export function FloatingDebriefButton() {
   const pathname = usePathname();
@@ -127,10 +160,10 @@ export function FloatingDebriefButton() {
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const [activeNav, setActiveNav] = useState<"debrief" | "due-keys" | "cleaning-chart">(
-    "debrief"
-  );
+  const [activeNav, setActiveNav] = useState<DebriefPanelTab>("debrief");
   const [isMobile, setIsMobile] = useState(false);
+
+  const tNotepad = useTranslations("notepad");
 
   // ── Cleaning Chart state ───────────────────────────────────────────────
   const t = useTranslations("cleaningChart");
@@ -149,6 +182,13 @@ export function FloatingDebriefButton() {
 
   const hasDragged = useRef(false);
   const dragOrigin = useRef<{ px: number; py: number; ex: number; ey: number } | null>(null);
+
+  // Closing a sheet/dialog that was launched from the panel hands focus back to
+  // the page, which Radix reads as an interaction outside the popover and would
+  // otherwise dismiss the panel too. Track whether such an overlay is open (or
+  // just closed) and swallow the popover's close request in that window.
+  const childOverlayOpen = useRef(false);
+  const childOverlayClosedAt = useRef(0);
 
   const { canAccessRoute, hasAnyRole, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
@@ -214,6 +254,21 @@ export function FloatingDebriefButton() {
     error: bulkSubmitError,
   } = useSetDueKeysBulk();
 
+  // Only real overlays (portalled above the panel) count here — the cleaning
+  // "complete task" form renders inline inside the panel, so it must not block
+  // the panel's own dismiss.
+  const anyChildOverlayOpen =
+    dueKeySheetOpen || fillAllSheetOpen || cleaningUndoTarget != null;
+
+  useEffect(() => {
+    if (anyChildOverlayOpen) {
+      childOverlayOpen.current = true;
+    } else if (childOverlayOpen.current) {
+      childOverlayOpen.current = false;
+      childOverlayClosedAt.current = Date.now();
+    }
+  }, [anyChildOverlayOpen]);
+
   const selectedStoreName = useMemo(
     () => stores.find((s) => s.id === selectedStoreId)?.name ?? null,
     [stores, selectedStoreId]
@@ -266,7 +321,7 @@ export function FloatingDebriefButton() {
     check();
     setPos({
       x: window.innerWidth - FAB_W - EDGE,
-      y: window.innerHeight - FAB_H - EDGE,
+      y: window.innerHeight - FAB_H - EDGE - getBottomNavClearance(),
     });
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -304,7 +359,10 @@ export function FloatingDebriefButton() {
         if (!prev) return prev;
         return {
           x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, prev.x)),
-          y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, prev.y)),
+          y: Math.max(
+            EDGE,
+            Math.min(window.innerHeight - FAB_H - EDGE - getBottomNavClearance(), prev.y)
+          ),
         };
       });
     };
@@ -383,7 +441,13 @@ export function FloatingDebriefButton() {
     if (!hasDragged.current) return;
     setPos({
       x: Math.max(EDGE, Math.min(window.innerWidth - FAB_W - EDGE, dragOrigin.current.ex + dx)),
-      y: Math.max(EDGE, Math.min(window.innerHeight - FAB_H - EDGE, dragOrigin.current.ey + dy)),
+      y: Math.max(
+        EDGE,
+        Math.min(
+          window.innerHeight - FAB_H - EDGE - getBottomNavClearance(),
+          dragOrigin.current.ey + dy
+        )
+      ),
     });
   }
 
@@ -405,6 +469,21 @@ export function FloatingDebriefButton() {
     setDueKeySheetOpen(true);
   };
 
+  // Position of the item currently shown in the sheet within the visible list, so the
+  // sheet can step to the previous/next debrief item without being closed first.
+  const dueKeySheetIndex = useMemo(() => {
+    if (!dueKeySheetItem) return -1;
+    return activeItems.findIndex((i) => i.keyId === dueKeySheetItem.keyId);
+  }, [activeItems, dueKeySheetItem]);
+
+  const handleDueKeySheetNavigate = (direction: -1 | 1) => {
+    if (dueKeySheetIndex < 0) return;
+    const next = activeItems[dueKeySheetIndex + direction];
+    if (!next) return;
+    clearDueKeyError();
+    setDueKeySheetItem(next);
+  };
+
   const handleSubmitDueKeyValue = async (
     payload: DueKeyValuePayload,
     mode: "created" | "updated" | "deactivated"
@@ -421,7 +500,7 @@ export function FloatingDebriefButton() {
     else if (mode === "deactivated") toast.success("Key value deactivated.");
     else if (corrected) toast.success("Value corrected — previous value kept in history.");
     else toast.success("Key value updated.");
-    // Keep the sheet open so the correction + history are shown; refresh the list in the background.
+    // The sheet closes itself on success; refresh the list behind it in the background.
     refetchDueKeys();
     return result;
   };
@@ -461,8 +540,8 @@ export function FloatingDebriefButton() {
       <div className="shrink-0 bg-background px-4 pt-4 pb-3 border-b border-gray-100/60 dark:border-gray-800/60 rounded-t-2xl">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">Store Notes</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Employee Debrief notes &amp; Debrief values</p>
+            <h3 className="text-xs font-semibold text-foreground">Store Notes</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Employee Debrief notes &amp; Debrief values</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Select
@@ -470,7 +549,7 @@ export function FloatingDebriefButton() {
               onValueChange={(v) => setSelectedStoreId(v || null)}
               disabled={stores.length === 0}
             >
-              <SelectTrigger className="h-7 text-xs w-auto max-w-36 sm:max-w-40 rounded-full bg-muted/60 hover:bg-muted border-0 px-3 shadow-none font-medium gap-1.5 focus:ring-0 focus:ring-offset-0">
+              <SelectTrigger className="h-7 text-[11px] w-auto max-w-36 sm:max-w-40 rounded-full bg-muted/60 hover:bg-muted border-0 px-3 shadow-none font-medium gap-1.5 focus:ring-0 focus:ring-offset-0">
                 <SelectValue
                   placeholder={stores.length === 0 ? "No stores" : "Select store"}
                 />
@@ -505,29 +584,29 @@ export function FloatingDebriefButton() {
           type="button"
           onClick={() => setActiveNav("debrief")}
           className={cn(
-            "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px",
+            TAB_CLASS,
             activeNav === "debrief"
               ? "border-foreground text-foreground"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          <PenLine className="h-3.5 w-3.5" />
-          Employee Debrief
+          <PenLine className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Employee Debrief</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveNav("due-keys")}
           className={cn(
-            "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px",
+            TAB_CLASS,
             activeNav === "due-keys"
               ? "border-foreground text-foreground"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          <Database className="h-3.5 w-3.5" />
-          Debrief
+          <Database className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Debrief</span>
           {unfilledItems.length > 0 && (
-            <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
+            <span className="ms-0.5 shrink-0 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[9px] font-semibold px-1.5 py-0.5 leading-none">
               {unfilledItems.length}
             </span>
           )}
@@ -537,31 +616,51 @@ export function FloatingDebriefButton() {
             type="button"
             onClick={() => setActiveNav("cleaning-chart")}
             className={cn(
-              "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px",
+              TAB_CLASS,
               activeNav === "cleaning-chart"
                 ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            <Sparkles className="h-3.5 w-3.5" />
-            {t("page.title")}
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{t("page.title")}</span>
             {cleaningPendingCount > 0 && (
-              <span className="ml-0.5 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[10px] font-semibold px-1.5 py-0.5 leading-none">
+              <span className="ms-0.5 shrink-0 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400 text-[9px] font-semibold px-1.5 py-0.5 leading-none">
                 {cleaningPendingCount}
               </span>
             )}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setActiveNav("notepad")}
+          className={cn(
+            TAB_CLASS,
+            activeNav === "notepad"
+              ? "border-foreground text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <StickyNote className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{tNotepad("tab")}</span>
+        </button>
       </div>
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+        {/* Keyed on the active tab so switching remounts this wrapper and
+            replays the fade. A pure opacity animation on purpose — a slide or
+            zoom would grow the scroll area of the parent for a frame. */}
+        <div
+          key={activeNav}
+          className="animate-in fade-in-0 duration-200 ease-out motion-reduce:animate-none"
+        >
         {/* ── Debrief Section ─────────────────────────────────────── */}
         {activeNav === "debrief" && (
         <div className="py-4">
           <div className="flex items-center gap-2 mb-3 px-4">
             <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+            <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
               Employee Debrief
               {selectedStoreName && (
                 <span className="normal-case tracking-normal font-normal text-muted-foreground ml-1">({selectedStoreName})</span>
@@ -595,7 +694,7 @@ export function FloatingDebriefButton() {
         <div className="py-4">
           <div className="flex items-center gap-2 mb-3 px-4">
             <Database className="h-3.5 w-3.5 text-muted-foreground" />
-            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+            <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
               Debrief
               {selectedStoreName && (
                 <span className="normal-case tracking-normal font-normal text-muted-foreground ml-1">({selectedStoreName})</span>
@@ -607,20 +706,20 @@ export function FloatingDebriefButton() {
           <div className="px-4 pb-3 border-b border-gray-100/40 dark:border-gray-800/40">
             <div className="flex items-center gap-2 mb-1.5">
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">Date</Label>
+              <Label className="text-[11px] font-semibold text-foreground uppercase tracking-wide">Date</Label>
             </div>
             <Input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-8 text-xs border-gray-200/60 dark:border-gray-700/60"
+              className="h-8 text-[11px] border-gray-200/60 dark:border-gray-700/60"
             />
           </div>
 
           {/* Tag filter pills */}
           {(availableTags.length > 0 || selectedTagIds.length > 0) && (
             <div className="px-4 py-2.5 border-b border-gray-100/40 dark:border-gray-800/40">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
                 Filter by Tag
               </p>
               <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
@@ -628,7 +727,7 @@ export function FloatingDebriefButton() {
                   type="button"
                   onClick={() => setSelectedTagIds([])}
                   className={cn(
-                    "shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-colors border",
+                    "shrink-0 rounded-full px-3 py-1 text-[10px] font-medium transition-colors border",
                     selectedTagIds.length === 0
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-transparent text-muted-foreground border-gray-200/80 dark:border-gray-700/80 hover:border-gray-400 dark:hover:border-gray-500"
@@ -644,7 +743,7 @@ export function FloatingDebriefButton() {
                       type="button"
                       onClick={() => toggleTag(tag.id)}
                       className={cn(
-                        "shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-colors border",
+                        "shrink-0 rounded-full px-3 py-1 text-[10px] font-medium transition-colors border",
                         active
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-transparent text-muted-foreground border-gray-200/80 dark:border-gray-700/80 hover:border-gray-400 dark:hover:border-gray-500"
@@ -660,7 +759,7 @@ export function FloatingDebriefButton() {
 
           {/* Sub-header: stats + Fill All Keys */}
           <div className="px-4 py-2 border-b border-gray-100/40 dark:border-gray-800/40 flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {isDueKeysLoading || isDueKeysRefreshing ? (
                 <span className="inline-flex items-center gap-1.5">
                   <RefreshCw className="h-3 w-3 animate-spin" />
@@ -678,7 +777,7 @@ export function FloatingDebriefButton() {
             <Button
               variant="secondary"
               size="sm"
-              className="h-7 text-xs px-2.5"
+              className="h-7 text-[11px] px-2.5"
               onClick={() => setFillAllSheetOpen(true)}
               disabled={!selectedStoreId || isDueKeysLoading || unfilledItems.length === 0}
             >
@@ -699,11 +798,11 @@ export function FloatingDebriefButton() {
                 ))}
               </div>
             ) : !selectedStoreId ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              <div className="px-4 py-8 text-center text-[11px] text-muted-foreground">
                 Select a store to load debrief data.
               </div>
             ) : activeItems.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              <div className="px-4 py-8 text-center text-[11px] text-muted-foreground">
                 No debrief items for this date.
               </div>
             ) : (
@@ -715,16 +814,16 @@ export function FloatingDebriefButton() {
                     onClick={() => handleDueKeyRowClick(item)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors text-left"
                   >
-                    <span className="flex-1 min-w-0 text-xs font-medium truncate text-foreground">
+                    <span className="flex-1 min-w-0 text-[11px] font-medium truncate text-foreground">
                       {item.label}
                     </span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground font-mono bg-muted rounded px-1.5 py-0.5">
+                    <span className="shrink-0 text-[9px] text-muted-foreground font-mono bg-muted rounded px-1.5 py-0.5">
                       {item.dataType}
                     </span>
                     <Badge
                       variant="secondary"
                       className={cn(
-                        "shrink-0 text-[10px] h-5 px-1.5 border-0",
+                        "shrink-0 text-[9px] h-5 px-1.5 border-0",
                         item.filled
                           ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
                           : "bg-orange-500/15 text-orange-700 dark:text-orange-400 hover:bg-orange-500/15"
@@ -733,7 +832,7 @@ export function FloatingDebriefButton() {
                       {item.filled ? "Filled" : "Unfilled"}
                     </Badge>
                     {item.filled && (
-                      <span className="shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground max-w-24 truncate">
+                      <span className="shrink-0 flex items-center gap-1 text-[10px] text-muted-foreground max-w-24 truncate">
                         {item.value?.correctedFromId != null && (
                           <span
                             className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
@@ -756,7 +855,7 @@ export function FloatingDebriefButton() {
         <div className="py-4">
           <div className="flex items-center gap-2 mb-3 px-4">
             <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide">
+            <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
               {t("page.title")}
               {selectedStoreName && (
                 <span className="normal-case tracking-normal font-normal text-muted-foreground ml-1">({selectedStoreName})</span>
@@ -767,7 +866,7 @@ export function FloatingDebriefButton() {
           {cleaningCompleteItem && cleaningStore ? (
             /* ── Complete task — inline, same panel, no separate modal ── */
             <div className="px-4">
-              <p className="mb-3 truncate text-sm font-medium text-foreground">
+              <p className="mb-3 truncate text-xs font-medium text-foreground">
                 {t("completeDialog.title", { label: cleaningCompleteItem.label })}
               </p>
               <CompleteTaskForm
@@ -786,7 +885,7 @@ export function FloatingDebriefButton() {
           <div className="px-4 pb-3 border-b border-gray-100/40 dark:border-gray-800/40">
             <div className="flex items-center gap-2 mb-1.5">
               <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <Label className="text-xs font-semibold text-foreground uppercase tracking-wide">
+              <Label className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
                 {t("common.date")}
               </Label>
             </div>
@@ -794,13 +893,13 @@ export function FloatingDebriefButton() {
               type="date"
               value={cleaningDate}
               onChange={(e) => setCleaningDate(e.target.value)}
-              className="h-8 text-xs border-gray-200/60 dark:border-gray-700/60"
+              className="h-8 text-[11px] border-gray-200/60 dark:border-gray-700/60"
             />
           </div>
 
           {/* Sub-header: stats + Refresh + Open in Cleaning Chart */}
           <div className="px-4 py-2 border-b border-gray-100/40 dark:border-gray-800/40 flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {dueLoading ? (
                 <span className="inline-flex items-center gap-1.5">
                   <RefreshCw className="h-3 w-3 animate-spin" />
@@ -827,7 +926,7 @@ export function FloatingDebriefButton() {
               <Button
                 variant="secondary"
                 size="sm"
-                className="h-7 text-xs px-2.5 gap-1.5"
+                className="h-7 text-[11px] px-2.5 gap-1.5"
                 onClick={() => router.push(`/${locale}/dashboard/cleaning-chart`)}
               >
                 {t("page.openFull")}
@@ -839,7 +938,7 @@ export function FloatingDebriefButton() {
           {/* Due tasks list */}
           <div>
             {!cleaningStore ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              <div className="px-4 py-8 text-center text-[11px] text-muted-foreground">
                 {t("page.noStoreDescription")}
               </div>
             ) : dueLoading && !dueData ? (
@@ -855,11 +954,11 @@ export function FloatingDebriefButton() {
                 ))}
               </div>
             ) : dueError && !dueData ? (
-              <div className="px-4 py-8 text-center text-xs text-destructive">
+              <div className="px-4 py-8 text-center text-[11px] text-destructive">
                 {dueError.message}
               </div>
             ) : cleaningItems.length === 0 ? (
-              <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+              <div className="px-4 py-8 text-center text-[11px] text-muted-foreground">
                 {t("due.table.empty", { date: cleaningDate })}
               </div>
             ) : (
@@ -871,18 +970,18 @@ export function FloatingDebriefButton() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-medium text-foreground">
+                        <span className="truncate text-xs font-medium text-foreground">
                           {item.label}
                         </span>
                         {item.hasPhoto && (
                           <Camera className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
                       </div>
-                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
                         {t(`frequency.${item.frequency}`)} · {item.period[0]} → {item.period[1]}
                       </p>
                       {item.doneBy.length > 0 && (
-                        <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                           <User className="h-3 w-3 shrink-0" />
                           <span className="truncate text-foreground">
                             {item.doneBy.join(", ")}
@@ -895,7 +994,7 @@ export function FloatingDebriefButton() {
                         </p>
                       )}
                       {item.note && (
-                        <p className="mt-1 truncate text-[11px] italic text-muted-foreground">
+                        <p className="mt-1 truncate text-[10px] italic text-muted-foreground">
                           “{item.note}”
                         </p>
                       )}
@@ -906,7 +1005,7 @@ export function FloatingDebriefButton() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 px-2 text-xs"
+                          className="h-7 px-2 text-[11px]"
                           onClick={() => setCleaningUndoTarget(item)}
                           disabled={cleaningUndoing === item.taskId}
                         >
@@ -916,7 +1015,7 @@ export function FloatingDebriefButton() {
                       ) : (
                         <Button
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-7 text-[11px]"
                           onClick={() => setCleaningCompleteItem(item)}
                         >
                           {t("due.complete")}
@@ -932,6 +1031,23 @@ export function FloatingDebriefButton() {
           )}
         </div>
         )}
+
+        {/* ── Notepad Section ──────────────────────────────────────── */}
+        {activeNav === "notepad" && (
+        <div className="py-4">
+          {/* Deliberately no store name here — this pad is global, not per store. */}
+          <div className="flex items-center gap-2 mb-3 px-4">
+            <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
+            <h4 className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
+              {tNotepad("title")}
+            </h4>
+          </div>
+          <div className="px-4">
+            <DebriefNotepad />
+          </div>
+        </div>
+        )}
+        </div>
       </div>
     </>
   );
@@ -942,7 +1058,7 @@ export function FloatingDebriefButton() {
       <Button
         className={cn(
           "gap-2 rounded-full",
-          "h-11 px-4 sm:px-5 text-sm font-medium shadow-lg",
+          "h-11 px-4 sm:px-5 text-xs font-medium shadow-lg",
           "transition-all duration-300 ease-in-out",
           "cursor-grab active:cursor-grabbing select-none touch-none",
           "border",
@@ -956,7 +1072,7 @@ export function FloatingDebriefButton() {
         <span className="hidden xs:inline sm:inline">Debrief</span>
       </Button>
       {!isOpen && unfilledItems.length > 0 && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white leading-none pointer-events-none">
+        <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold text-white leading-none pointer-events-none">
           {unfilledItems.length}
         </span>
       )}
@@ -978,7 +1094,9 @@ export function FloatingDebriefButton() {
         <div
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 flex flex-col",
-            "max-h-[88vh] rounded-t-2xl",
+            /* Fixed height, not min/max — the panel must not resize between
+               tabs. Overflow is handled by the tab-content scroll area. */
+            "h-[80vh] rounded-t-2xl",
             "bg-background shadow-2xl",
             "border-t border-x border-gray-200/60 dark:border-gray-700/60",
           )}
@@ -1014,6 +1132,15 @@ export function FloatingDebriefButton() {
               hasDragged.current = false;
               return;
             }
+            // A sheet/dialog opened from the panel is on top: ignore the dismiss
+            // it triggers on open and the focus hand-back it triggers on close.
+            if (
+              !next &&
+              (childOverlayOpen.current ||
+                Date.now() - childOverlayClosedAt.current < OVERLAY_CLOSE_GRACE_MS)
+            ) {
+              return;
+            }
             setIsOpen(next);
           }}
         >
@@ -1032,7 +1159,9 @@ export function FloatingDebriefButton() {
             side="top"
             align="start"
             sideOffset={PANEL_GAP}
-            className="flex w-120 max-h-[80vh] flex-col rounded-2xl border-gray-200/60 bg-background p-0 shadow-2xl dark:border-gray-700/60"
+            /* Fixed height, not min/max — the panel must not resize between
+               tabs. min() keeps it inside short viewports. */
+            className="flex w-120 h-[min(520px,80vh)] flex-col rounded-2xl border-gray-200/60 bg-background p-0 shadow-2xl dark:border-gray-700/60"
           >
             {panelContent}
           </PopoverContent>
@@ -1050,6 +1179,16 @@ export function FloatingDebriefButton() {
           isSubmitting={isDueKeySubmitting}
           submitError={dueKeySubmitError}
           onSubmit={handleSubmitDueKeyValue}
+          onNavigate={handleDueKeySheetNavigate}
+          canNavigatePrev={dueKeySheetIndex > 0}
+          canNavigateNext={
+            dueKeySheetIndex >= 0 && dueKeySheetIndex < activeItems.length - 1
+          }
+          position={
+            dueKeySheetIndex >= 0
+              ? { index: dueKeySheetIndex + 1, total: activeItems.length }
+              : null
+          }
         />
       )}
 

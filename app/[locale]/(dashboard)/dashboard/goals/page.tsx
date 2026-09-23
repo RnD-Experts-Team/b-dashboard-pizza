@@ -83,7 +83,12 @@ import type {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 function formatGoalDate(dateStr: string): string {
-  const d = new Date(dateStr);
+  // Parse the date-only portion as local calendar components (not UTC) so the
+  // displayed day doesn't shift with the viewer's timezone offset.
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  const d = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(dateStr);
   return isNaN(d.getTime()) ? dateStr : format(d, "MMM d, yyyy");
 }
 

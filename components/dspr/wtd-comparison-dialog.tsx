@@ -38,16 +38,24 @@ export function WtdComparisonDialog({
       <Dialog open={open} onOpenChange={(o) => { onOpenChange?.(o); if (!o) onClose?.(); }}>
         <DialogContent
           className={cn(
-            "overflow-y-auto max-h-[92vh] p-4 sm:p-6",
-            wide ? "sm:!w-[95vw] sm:!max-w-[50vw]" : "sm:!max-w-5xl",
+            "overflow-y-auto max-h-[92vh] w-[95vw] max-w-[95vw] p-4 sm:p-6",
+            // `wide` is meant to give this data-table-heavy dialog MORE room
+            // than the default, at every size — a flat `50vw` cap used to
+            // mean ~320px right at the `sm` breakpoint (the same breakpoint
+            // the 3-column summary grid switches on at), squeezing the cards
+            // far narrower than the non-wide dialog's fixed 5xl. Scale up
+            // progressively instead so it's never narrower than non-wide.
+            wide
+              ? "sm:!max-w-[90vw] md:!max-w-3xl lg:!max-w-5xl xl:!max-w-6xl"
+              : "sm:!max-w-5xl",
           )}
         >
-          <DialogHeader className="pb-3 border-b">
-            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+          <DialogHeader className="pb-3 border-b pe-6">
+            <DialogTitle className="flex flex-wrap items-center gap-2 text-sm font-semibold">
               {title}
               <Badge
                 variant="outline"
-                className="ms-1 gap-1 text-[9px] font-normal py-0 h-5"
+                className="gap-1 text-[9px] font-normal py-0 h-5"
               >
                 <Calendar className="h-2.5 w-2.5" />
                 {badgeText}

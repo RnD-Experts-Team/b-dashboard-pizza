@@ -302,6 +302,7 @@ export function CreateSeparationRequestDialog({
     selectedEmployeeId !== "" &&
     finalWorkingDay.trim() !== "" &&
     separationType !== "" &&
+    attachments.length > 0 &&
     (separationType !== "resignation" ||
       (resignationReason !== "" &&
         (resignationReason !== "other" || resignationReasonDetails.trim() !== ""))) &&
@@ -729,7 +730,9 @@ export function CreateSeparationRequestDialog({
 
             {/* ── Attachments ── */}
             <div className="space-y-2">
-              <Label>Attachments</Label>
+              <Label>
+                Attachments <span className="text-destructive">*</span>
+              </Label>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -769,6 +772,11 @@ export function CreateSeparationRequestDialog({
                     </li>
                   ))}
                 </ul>
+              )}
+              {attachments.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  At least one attachment is required.
+                </p>
               )}
             </div>
 

@@ -4,6 +4,7 @@ import { addDays, parseISO, format } from "date-fns";
 import { Phone } from "lucide-react";
 import type { PhoneAndAdjustedSales } from "@/types/dashboard-report.types";
 import { fmt$, fmtDate, WbrCardSkeleton } from "./wbr-format";
+import { parseDateOrNull } from "@/lib/utils/date-display";
 import {
   PeriodComparisonCard,
   type CmpGroup,
@@ -30,7 +31,8 @@ export function WbrPhoneSalesCard({
 
   const { filtering, week, period, quarter, year } = data;
   const quarterNum = Math.ceil(filtering.period_number / 3);
-  const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
+  const weekStartDate = parseDateOrNull(filtering.week_start);
+  const weekEnd = weekStartDate ? format(addDays(weekStartDate, 6), "MMM d") : "—";
 
   const groupsForMode = (mode: CmpMode): CmpGroup[] => [
     {

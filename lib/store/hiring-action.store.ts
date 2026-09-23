@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type HiringActionTab = "hiring" | "separation" | "milestone_gift";
+export type HiringActionTab = "hiring" | "separation" | "shirt_milestones";
 
 interface PendingHiringAction {
   tab: HiringActionTab;

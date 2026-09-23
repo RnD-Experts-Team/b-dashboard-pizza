@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { format } from "date-fns";
+import { formatDateOrTimestamp, formatTimestamp } from "@/lib/utils/date-display";
 import type { QAAuditsResponse } from "@/types/qa.types";
 import {
   Card,
@@ -112,13 +112,10 @@ export function QAAuditsTable({
                     {audit.user.email}
                   </TableCell>
                   <TableCell>
-                    {format(new Date(audit.date), "MMM dd, yyyy")}
+                    {formatDateOrTimestamp(audit.date, "MMM dd, yyyy")}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {format(
-                      new Date(audit.createdAt),
-                      "MMM dd, yyyy HH:mm"
-                    )}
+                    {formatTimestamp(audit.createdAt, "MMM dd, yyyy HH:mm")}
                   </TableCell>
                 </TableRow>
               ))}
@@ -142,7 +139,7 @@ export function QAAuditsTable({
                 </span>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Calendar className="h-3.5 w-3.5" />
-                  {format(new Date(audit.date), "MMM dd, yyyy")}
+                  {formatDateOrTimestamp(audit.date, "MMM dd, yyyy")}
                 </div>
               </div>
               <div className="space-y-2">
@@ -175,10 +172,7 @@ export function QAAuditsTable({
                     {t("columns.createdAt")}
                   </span>
                   <span className="text-sm">
-                    {format(
-                      new Date(audit.createdAt),
-                      "MMM dd, yyyy HH:mm"
-                    )}
+                    {formatTimestamp(audit.createdAt, "MMM dd, yyyy HH:mm")}
                   </span>
                 </div>
               </div>

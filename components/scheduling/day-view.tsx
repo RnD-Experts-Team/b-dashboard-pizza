@@ -1,5 +1,24 @@
 "use client";
 
+/**
+ * PARKED — not mounted anywhere. The week grid (`schedule-grid-new.tsx`) is the
+ * only live schedule view; the week/day/month switcher was removed when the
+ * scheduling feature was wired to the OperationsPizza backend.
+ *
+ * Kept on disk for future use. NOT wired to the API and not maintained beyond
+ * keeping it compiling. Known issues to fix if it is ever revived:
+ *  - `onDeleteShift` is declared in DayViewProps but never destructured, so
+ *    shift deletion is impossible here.
+ *  - `overtimeThreshold` is hardcoded to 40 when mounting EmployeeProfileDialog
+ *    instead of being threaded through from props.
+ *  - `week` is destructured but unused.
+ *
+ * The 9am–midnight time axis it relies on (GRID_START_HOUR / GRID_END_HOUR in
+ * lib/scheduling/constants.ts) is hardcoded, but store open/close hours are a
+ * per-store API setting — that would need threading through before this is
+ * accurate for a store that isn't 9am–midnight.
+ */
+
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -10,15 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import {
-  GRID_START_HOUR,
-  GRID_END_HOUR,
-  calcHours,
-  formatTime,
-  EMPLOYEE_COLORS,
-  getTimeLabels,
-  shiftToPosition,
-} from "@/lib/scheduling/data";
+import { EMPLOYEE_COLORS, GRID_END_HOUR, GRID_START_HOUR, calcHours, formatTime, getTimeLabels, shiftToPosition } from "@/lib/scheduling/constants";
 import type {
   ScheduleEmployee,
   Shift,

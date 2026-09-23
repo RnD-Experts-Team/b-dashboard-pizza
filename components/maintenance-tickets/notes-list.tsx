@@ -1,14 +1,10 @@
 "use client";
 
-import { format } from "date-fns";
 import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import type { TicketNote } from "@/types/maintenance-tickets.types";
 import { AttachmentGallery } from "./attachment-gallery";
-
-function fmtDateTime(iso: string) {
-  try { return format(new Date(iso), "MMM d, yyyy HH:mm"); } catch { return iso; }
-}
 
 /** Renders a stack of note cards (type badge, author, timestamp, body, files). */
 export function NotesList({
@@ -35,7 +31,7 @@ export function NotesList({
                 {note.creator.name}
               </span>
             )}
-            <span>{fmtDateTime(note.createdAt)}</span>
+            <span>{formatTimestamp(note.createdAt)}</span>
           </div>
           {note.body && <p className="text-xs text-foreground whitespace-pre-wrap break-words">{note.body}</p>}
           <AttachmentGallery attachments={note.attachments} />

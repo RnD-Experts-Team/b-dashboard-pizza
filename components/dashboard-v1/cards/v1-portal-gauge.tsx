@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { SpeedometerGauge } from "@/components/dspr/speedometer-gauge";
 import {
   PERFORMANCE_ZONES,
@@ -133,13 +134,13 @@ export function V1PortalGaugeCard({
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
                   <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
-                    {portal.put_into_portal_percent.toFixed(1)}%
+                    {fmtFixed(portal.put_into_portal_percent, 1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
                   <p className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {portal.in_portal_on_time_percent.toFixed(1)}%
+                    {fmtFixed(portal.in_portal_on_time_percent, 1)}%
                   </p>
                 </div>
               </div>
@@ -149,13 +150,13 @@ export function V1PortalGaugeCard({
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">Put Into Portal %</p>
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {dialogWtdAvg.put_into_portal_percent.toFixed(1)}%
+                    {fmtFixed(dialogWtdAvg.put_into_portal_percent, 1)}%
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-muted-foreground mb-0.5">On-Time %</p>
                   <p className="text-xl font-bold text-emerald-600 tabular-nums">
-                    {dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%
+                    {fmtFixed(dialogWtdAvg.in_portal_on_time_percent, 1)}%
                   </p>
                 </div>
               </div>
@@ -163,8 +164,8 @@ export function V1PortalGaugeCard({
           />
           <ComparisonTable
             rows={[
-              { label: "Put Into Portal %", daily: `${portal.put_into_portal_percent.toFixed(1)}%`, wtd: `${dialogWtdAvg.put_into_portal_percent.toFixed(1)}%`, dailyNum: portal.put_into_portal_percent, wtdNum: dialogWtdAvg.put_into_portal_percent, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.put_into_portal_percent.toFixed(1)}%` : undefined },
-              { label: "On-Time %", daily: `${portal.in_portal_on_time_percent.toFixed(1)}%`, wtd: `${dialogWtdAvg.in_portal_on_time_percent.toFixed(1)}%`, dailyNum: portal.in_portal_on_time_percent, wtdNum: dialogWtdAvg.in_portal_on_time_percent, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.in_portal_on_time_percent.toFixed(1)}%` : undefined },
+              { label: "Put Into Portal %", daily: `${fmtFixed(portal.put_into_portal_percent, 1)}%`, wtd: `${fmtFixed(dialogWtdAvg.put_into_portal_percent, 1)}%`, dailyNum: portal.put_into_portal_percent, wtdNum: dialogWtdAvg.put_into_portal_percent, higherIsBetter: true, wtdSum: showSum ? `${fmtFixed(dialogWtdSum.put_into_portal_percent, 1)}%` : undefined },
+              { label: "On-Time %", daily: `${fmtFixed(portal.in_portal_on_time_percent, 1)}%`, wtd: `${fmtFixed(dialogWtdAvg.in_portal_on_time_percent, 1)}%`, dailyNum: portal.in_portal_on_time_percent, wtdNum: dialogWtdAvg.in_portal_on_time_percent, higherIsBetter: true, wtdSum: showSum ? `${fmtFixed(dialogWtdSum.in_portal_on_time_percent, 1)}%` : undefined },
               { label: "Eligible Orders", daily: `${portal.portal_eligible_orders}`, wtd: `${dialogWtdAvg.portal_eligible_orders}`, dailyNum: portal.portal_eligible_orders, wtdNum: dialogWtdAvg.portal_eligible_orders, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.portal_eligible_orders}` : undefined },
               { label: "Used Orders", daily: `${portal.portal_used_orders}`, wtd: `${dialogWtdAvg.portal_used_orders}`, dailyNum: portal.portal_used_orders, wtdNum: dialogWtdAvg.portal_used_orders, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.portal_used_orders}` : undefined },
               { label: "On-Time Orders", daily: `${portal.portal_on_time_orders}`, wtd: `${dialogWtdAvg.portal_on_time_orders}`, dailyNum: portal.portal_on_time_orders, wtdNum: dialogWtdAvg.portal_on_time_orders, higherIsBetter: true, wtdSum: showSum ? `${dialogWtdSum.portal_on_time_orders}` : undefined },

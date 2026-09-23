@@ -7,7 +7,11 @@ interface PendingDebriefKey {
 }
 
 /** Tabs of the floating debrief panel, in its own `activeNav` order. */
-export type DebriefPanelTab = "debrief" | "due-keys" | "cleaning-chart";
+export type DebriefPanelTab =
+  | "debrief"
+  | "due-keys"
+  | "cleaning-chart"
+  | "notepad";
 
 /**
  * Outstanding-task counts published by the floating debrief button so other

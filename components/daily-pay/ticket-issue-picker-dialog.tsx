@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, CheckSquare, Square, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/utils/date-display";
 import {
   Dialog,
   DialogContent,
@@ -21,25 +22,27 @@ import type { Ticket, TicketIssue } from "@/types/maintenance-tickets.types";
 
 interface TicketIssuePickerDialogProps {
   open: boolean;
-  storeId: string;
-  /** Only issues assigned to this technician are shown. */
+  /**
+   * Narrows the ticket list to one store. Null for an `other_store` line,
+   * which has no store number to scope by — the picker then runs unscoped.
+   */
+  storeNumber: string | null;
+  /**
+   * Only issues assigned to this technician are shown. This is the PAYMENT's
+   * payee: the backend requires the payee to already be assigned to every
+   * issue a line names, so filtering here is the local enforcement of that.
+   */
   technicianId: number;
   technicianName: string;
   selectedIssueIds: number[];
+  /**
+   * Issues already selected on a SIBLING line of the same payment. Selecting
+   * one issue on two lines double-counts its hours and triggers the backend's
+   * `already_claimed_same_date` warning, so block it at the source.
+   */
+  disabledIssueIds?: number[];
   onClose: () => void;
   onConfirm: (issueIds: number[]) => void;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return iso;
-  }
 }
 
 /**
@@ -54,13 +57,15 @@ function isAssignedToTechnician(issue: TicketIssue, technicianId: number): boole
 
 export function TicketIssuePickerDialog({
   open,
-  storeId,
+  storeNumber,
   technicianId,
   technicianName,
   selectedIssueIds,
+  disabledIssueIds = [],
   onClose,
   onConfirm,
 }: TicketIssuePickerDialogProps) {
+  const blockedIds = new Set(disabledIssueIds);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoadingTickets, setIsLoadingTickets] = useState(false);
   const [ticketsError, setTicketsError] = useState<string | null>(null);
@@ -88,8 +93,18 @@ export function TicketIssuePickerDialog({
     setIsLoadingTickets(true);
     setTicketsError(null);
 
+    // Global index, optionally scoped by store number. One code path covers
+    // both a system-store line and an `other_store` line (which has no store
+    // number and so must search unscoped).
     maintenanceTicketsService
-      .getTickets(storeId, { per_page: 1000, technician_ids: [technicianId] }, ctrl.signal)
+      .getGlobalTickets(
+        {
+          per_page: 1000,
+          technician_ids: [technicianId],
+          ...(storeNumber ? { stores: [storeNumber] } : {}),
+        },
+        ctrl.signal
+      )
       .then((res) => {
         if (ctrl.signal.aborted) return;
         setTickets(res.data);
@@ -218,7 +233,7 @@ export function TicketIssuePickerDialog({
                         <td className="px-3 py-2 font-mono">{ticket.id}</td>
                         <td className="px-3 py-2">{ticket.storeId ?? ticket.otherStore ?? "Other"}</td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {formatDate(ticket.createdAt)}
+                          {formatTimestamp(ticket.createdAt, "MMM d, yyyy")}
                         </td>
                         <td className="px-3 py-2 text-end">{ticket.issueCount}</td>
                       </tr>
@@ -276,16 +291,28 @@ export function TicketIssuePickerDialog({
                   <tbody>
                     {visibleIssues.map((issue) => {
                       const checked = localSelected.has(issue.id);
+                      // Already on a sibling line of this payment — picking it
+                      // twice would double-count its hours.
+                      const blocked = !checked && blockedIds.has(issue.id);
                       const title =
                         issue.issueTitle ?? issue.otherTitle ?? "Untitled";
                       return (
                         <tr
                           key={issue.id}
+                          title={blocked ? "Already on another line of this payment" : undefined}
                           className={cn(
-                            "cursor-pointer border-b transition-colors last:border-0",
-                            checked ? "bg-primary/10" : "hover:bg-muted/50"
+                            "border-b transition-colors last:border-0",
+                            blocked
+                              ? "cursor-not-allowed opacity-50"
+                              : "cursor-pointer",
+                            checked
+                              ? "bg-primary/10"
+                              : !blocked && "hover:bg-muted/50"
                           )}
-                          onClick={() => toggleIssue(issue.id)}
+                          onClick={() => {
+                            if (blocked) return;
+                            toggleIssue(issue.id);
+                          }}
                         >
                           <td className="px-3 py-2 align-top">
                             {checked ? (

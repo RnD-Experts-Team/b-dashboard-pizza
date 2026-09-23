@@ -1,15 +1,21 @@
 import axios from "axios";
 import type {
   DailyPayEntry,
+  DailyPayGathered,
   DailyPayLine,
+  DailyPayPayment,
+  DailyPayAggregationWarning,
   DailyPayRevision,
   DailyPayTicketIssue,
   DailyPayListResponse,
   DailyPayEntryInput,
-  DailyPayLineInput,
+  DailyPayNoteInput,
   DailyPayFilters,
   ApiDailyPayEntry,
+  ApiDailyPayGathered,
   ApiDailyPayLine,
+  ApiDailyPayPayment,
+  ApiDailyPayAggregationWarning,
   ApiDailyPayRevision,
   ApiDailyPayTicketIssue,
   ApiDailyPayListResponse,
@@ -20,6 +26,7 @@ import type {
   ApiTicketAttachment,
   TicketNote,
   TicketAttachment,
+  UserRef,
   LaravelPaginationMeta,
   LaravelPaginationLinks,
 } from "@/types/maintenance-tickets.types";
@@ -34,6 +41,7 @@ export type DailyPayErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "VALIDATION_ERROR"
+  | "CONFLICT"
   | "RATE_LIMITED"
   | "TIMEOUT"
   | "NETWORK_ERROR"
@@ -45,16 +53,26 @@ export class DailyPayError extends Error {
   readonly code: DailyPayErrorCode;
   readonly retryable: boolean;
   readonly validationErrors?: Record<string, string[]>;
+  /**
+   * Present on 409 when the body carries the current server timestamp — lets
+   * the caller re-arm `expected_updated_at` without a second GET.
+   */
+  readonly serverUpdatedAt?: string | null;
 
   constructor(
     message: string,
     code: DailyPayErrorCode,
-    validationErrors?: Record<string, string[]>
+    validationErrors?: Record<string, string[]>,
+    serverUpdatedAt?: string | null
   ) {
     super(message);
     this.name = "DailyPayError";
     this.code = code;
     this.validationErrors = validationErrors;
+    this.serverUpdatedAt = serverUpdatedAt;
+    // CONFLICT is deliberately NOT retryable: a blind retry would clobber the
+    // other person's figures, which is the exact thing expected_updated_at
+    // exists to prevent.
     this.retryable = ["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code);
   }
 }
@@ -113,6 +131,15 @@ function handleAxiosError(err: unknown): never {
         data?.errors
       );
     }
+    // A stale edit — someone else saved since we last read the entry.
+    if (status === 409) {
+      throw new DailyPayError(
+        message || "This entry changed since you opened it.",
+        "CONFLICT",
+        undefined,
+        data?.data?.updated_at ?? data?.updated_at ?? null
+      );
+    }
     if (status === 429) throw new DailyPayError("Too many requests.", "RATE_LIMITED");
     if (status != null && status >= 500) {
       throw new DailyPayError("Server error. Please try again.", "SERVER_ERROR");
@@ -132,6 +159,26 @@ function parseDecimal(value: string | null | undefined): number | null {
   if (value == null) return null;
   const n = parseFloat(value);
   return Number.isNaN(n) ? null : n;
+}
+
+/**
+ * Maps a relation while PRESERVING the null-vs-empty distinction:
+ * null/undefined ⇒ null ("not loaded"), [] ⇒ [] ("loaded, nothing there").
+ *
+ * Used instead of `?? []` everywhere, because collapsing them shows "no notes"
+ * for a record whose notes simply were not requested.
+ */
+function mapRelation<R, T>(
+  raw: R[] | null | undefined,
+  fn: (r: R) => T
+): T[] | null {
+  return raw == null ? null : raw.map(fn);
+}
+
+function transformUserRef(
+  raw: { id: number; name: string; email?: string | null } | null | undefined
+): UserRef | null {
+  return raw ? { id: raw.id, name: raw.name, email: raw.email ?? null } : null;
 }
 
 function transformAttachment(raw: ApiTicketAttachment): TicketAttachment {
@@ -155,9 +202,7 @@ function transformNote(raw: ApiTicketNote): TicketNote {
     body: raw.body,
     attachments: (raw.attachments ?? []).map(transformAttachment),
     createdBy: raw.created_by ?? null,
-    creator: raw.creator
-      ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null }
-      : null,
+    creator: transformUserRef(raw.creator),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -177,28 +222,78 @@ function transformTicketIssue(raw: ApiDailyPayTicketIssue): DailyPayTicketIssue 
   };
 }
 
+function transformGathered(
+  raw: ApiDailyPayGathered | null | undefined
+): DailyPayGathered | null {
+  if (raw == null) return null;
+  return {
+    workHours: parseDecimal(raw.work_hours),
+    travelHours: parseDecimal(raw.travel_hours),
+    breakHours: parseDecimal(raw.break_hours),
+    partsRunHours: parseDecimal(raw.parts_run_hours),
+    reimbursableParts: parseDecimal(raw.reimbursable_parts),
+    at: raw.at,
+    by: transformUserRef(raw.by),
+  };
+}
+
+function transformWarning(
+  raw: ApiDailyPayAggregationWarning
+): DailyPayAggregationWarning {
+  return {
+    code: raw.code,
+    // Deliberately `?? {}` rather than null — unlike every other relation
+    // here — because callers read keys off this object.
+    context: raw.context ?? {},
+  };
+}
+
 function transformLine(raw: ApiDailyPayLine): DailyPayLine {
+  return {
+    id: raw.id,
+    dailyPayPaymentId: raw.daily_pay_payment_id,
+    storeId: raw.store_id,
+    store: raw.store ? { id: raw.store.id, storeNumber: raw.store.store_number } : null,
+    otherStore: raw.other_store,
+    totalWorkingHours: parseDecimal(raw.total_working_hours),
+    hoursOverridden: raw.hours_overridden ?? false,
+    lumpSum: parseDecimal(raw.lump_sum),
+    hourlyPaymentRate: parseDecimal(raw.hourly_payment_rate),
+    gas: parseDecimal(raw.gas),
+    moneyOwed: parseDecimal(raw.money_owed),
+    lineTotal: parseDecimal(raw.line_total),
+    gathered: transformGathered(raw.gathered),
+    ticketIssues: mapRelation(raw.ticket_issues, transformTicketIssue),
+    notes: mapRelation(raw.notes, transformNote),
+    attachments: mapRelation(raw.attachments, transformAttachment),
+    createdBy: raw.created_by ?? null,
+    creator: transformUserRef(raw.creator),
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+function transformPayment(raw: ApiDailyPayPayment): DailyPayPayment {
   return {
     id: raw.id,
     dailyPayEntryId: raw.daily_pay_entry_id,
     technicianId: raw.technician_id,
-    technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
-    storeId: raw.store_id,
-    store: raw.store ? { id: raw.store.id, storeNumber: raw.store.store_number } : null,
-    totalWorkingHours: parseDecimal(raw.total_working_hours),
-    gas: parseDecimal(raw.gas),
-    invoices: parseDecimal(raw.invoices),
-    hourlyPaymentRate: parseDecimal(raw.hourly_payment_rate),
-    moneyOwed: parseDecimal(raw.money_owed),
-    travelTime: parseDecimal(raw.travel_time),
-    totalBreakTime: parseDecimal(raw.total_break_time),
-    ticketIssues: (raw.ticket_issues ?? []).map(transformTicketIssue),
-    notes: (raw.notes ?? []).map(transformNote),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator
-      ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null }
+    technician: raw.technician
+      ? { id: raw.technician.id, name: raw.technician.name }
       : null,
+    hourlyPaymentRate: parseDecimal(raw.hourly_payment_rate),
+    gas: parseDecimal(raw.gas),
+    moneyOwed: parseDecimal(raw.money_owed),
+    lumpSum: parseDecimal(raw.lump_sum),
+    totalAmount: parseDecimal(raw.total_amount),
+    linesTotal: parseDecimal(raw.lines_total),
+    gathered: transformGathered(raw.gathered),
+    aggregationWarnings: mapRelation(raw.aggregation_warnings, transformWarning),
+    lines: mapRelation(raw.lines, transformLine),
+    notes: mapRelation(raw.notes, transformNote),
+    attachments: mapRelation(raw.attachments, transformAttachment),
+    createdBy: raw.created_by ?? null,
+    creator: transformUserRef(raw.creator),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -209,7 +304,9 @@ function transformRevision(raw: ApiDailyPayRevision): DailyPayRevision {
     id: raw.id,
     dailyPayEntryId: raw.daily_pay_entry_id,
     snapshot: raw.snapshot,
+    schemaVersion: raw.schema_version ?? null,
     editedBy: raw.edited_by,
+    editor: transformUserRef(raw.editor),
     createdAt: raw.created_at,
   };
 }
@@ -218,12 +315,11 @@ function transformEntry(raw: ApiDailyPayEntry): DailyPayEntry {
   return {
     id: raw.id,
     date: raw.date,
-    lines: (raw.lines ?? []).map(transformLine),
-    revisions: (raw.revisions ?? []).map(transformRevision),
+    payments: mapRelation(raw.payments, transformPayment),
+    totalAmount: parseDecimal(raw.total_amount),
+    revisions: mapRelation(raw.revisions, transformRevision),
     createdBy: raw.created_by ?? null,
-    creator: raw.creator
-      ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null }
-      : null,
+    creator: transformUserRef(raw.creator),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -278,88 +374,129 @@ function transformPagination(raw: ApiDailyPayListResponse): {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Payload → request body builders                                         */
+/*  Payload → request body builder                                          */
+/*                                                                            */
+/*  Always multipart. There is no JSON path, deliberately:                   */
+/*                                                                            */
+/*   - Two builders that must stay byte-identical in bracket semantics is the */
+/*     duplication that drifts, and drift here is INVISIBLE — a wrong index   */
+/*     produces a successful request with silently missing data, not an error.*/
+/*   - Nothing is gained: the proxy route forwards the raw body with the      */
+/*     incoming Content-Type, and Laravel validates dotted array keys the     */
+/*     same way for both encodings, so 422 keys are identical either way.     */
+/*   - Multipart cannot express `null`, which is a FEATURE here: it forces    */
+/*     omit-to-gather to be the only representable behaviour.                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/** True when the payload carries any File anywhere (line- or note-level). */
-function payloadHasFiles(payload: DailyPayEntryInput): boolean {
-  return payload.lines.some(
-    (line) =>
-      (line.files?.length ?? 0) > 0 ||
-      (line.notes ?? []).some((note) => (note.files?.length ?? 0) > 0)
-  );
-}
-
-/** Append a numeric line field only when it has a value. */
-function appendNumber(form: FormData, key: string, value: number | null | undefined) {
-  if (value == null || Number.isNaN(value)) return;
+/**
+ * Appends an optional money / rate field.
+ *
+ * Skips only null and undefined, so a legitimate 0 IS sent. A non-finite value
+ * THROWS rather than being silently dropped: for override fields a missing key
+ * changes the meaning (an intended override becomes a gather), so swallowing a
+ * malformed number would quietly pay the wrong amount.
+ */
+function appendMoney(
+  form: FormData,
+  key: string,
+  value: number | null | undefined
+): void {
+  if (value == null) return;
+  if (!Number.isFinite(value)) {
+    throw new DailyPayError(`Invalid number for ${key}.`, "VALIDATION_ERROR", {
+      [key]: ["Enter a valid number."],
+    });
+  }
   form.append(key, String(value));
 }
 
 /**
- * Builds multipart FormData using the bracket notation the API expects:
- *   lines[N][store_id], lines[N][files][], lines[N][notes][M][files][], …
+ * Appends a note list under `<prefix>[notes][k][…]`.
+ *
+ * Callers MUST pass an already-compacted array: indexes have to run
+ * contiguously from 0, or the server drops that note's files without erroring.
+ */
+function appendNotes(
+  form: FormData,
+  prefix: string,
+  notes: DailyPayNoteInput[] | undefined
+): void {
+  (notes ?? []).forEach((note, k) => {
+    form.append(`${prefix}[notes][${k}][body]`, note.body);
+    if (note.type) form.append(`${prefix}[notes][${k}][type]`, note.type);
+    (note.files ?? []).forEach((file) =>
+      form.append(`${prefix}[notes][${k}][files][]`, file)
+    );
+  });
+}
+
+/**
+ * Builds the multipart body using the bracket notation the API expects:
+ *   payments[i][technician_id]
+ *   payments[i][lines][j][store_id]
+ *   payments[i][lines][j][files][]
+ *   payments[i][lines][j][notes][k][files][]
+ *
+ * Every index comes from a forEach position and never from a filter applied
+ * afterwards — that is what guarantees contiguity.
  */
 function buildEntryFormData(payload: DailyPayEntryInput): FormData {
   const form = new FormData();
   form.append("date", payload.date);
+  if (payload.expectedUpdatedAt) {
+    form.append("expected_updated_at", payload.expectedUpdatedAt);
+  }
 
-  payload.lines.forEach((line, i) => {
-    const p = `lines[${i}]`;
-    form.append(`${p}[store_id]`, String(line.storeId));
-    form.append(`${p}[technician_id]`, String(line.technicianId));
-    appendNumber(form, `${p}[total_working_hours]`, line.totalWorkingHours);
-    appendNumber(form, `${p}[gas]`, line.gas);
-    appendNumber(form, `${p}[invoices]`, line.invoices);
-    appendNumber(form, `${p}[hourly_payment_rate]`, line.hourlyPaymentRate);
-    appendNumber(form, `${p}[money_owed]`, line.moneyOwed);
-    appendNumber(form, `${p}[travel_time]`, line.travelTime);
-    appendNumber(form, `${p}[total_break_time]`, line.totalBreakTime);
+  payload.payments.forEach((payment, i) => {
+    const p = `payments[${i}]`;
+    form.append(`${p}[technician_id]`, String(payment.technicianId));
+    appendMoney(form, `${p}[hourly_payment_rate]`, payment.hourlyPaymentRate);
+    appendMoney(form, `${p}[gas]`, payment.gas);
+    appendMoney(form, `${p}[money_owed]`, payment.moneyOwed);
+    // A payment lump sum replaces ALL of its lines' labour.
+    if (payment.labour.kind === "lumpSum") {
+      appendMoney(form, `${p}[lump_sum]`, payment.labour.lumpSum);
+    }
+    appendNotes(form, p, payment.notes);
+    (payment.files ?? []).forEach((file) => form.append(`${p}[files][]`, file));
 
-    (line.ticketIssueIds ?? []).forEach((id) =>
-      form.append(`${p}[ticket_issue_ids][]`, String(id))
-    );
+    payment.lines.forEach((line, j) => {
+      const l = `${p}[lines][${j}]`;
 
-    (line.notes ?? []).forEach((note, j) => {
-      form.append(`${p}[notes][${j}][body]`, note.body);
-      if (note.type) form.append(`${p}[notes][${j}][type]`, note.type);
-      (note.files ?? []).forEach((file) =>
-        form.append(`${p}[notes][${j}][files][]`, file)
+      // store_id XOR other_store — sending neither is a 422.
+      if (line.location.kind === "store") {
+        form.append(`${l}[store_id]`, String(line.location.storeId));
+      } else {
+        form.append(`${l}[other_store]`, line.location.otherStore);
+      }
+
+      (line.ticketIssueIds ?? []).forEach((id) =>
+        form.append(`${l}[ticket_issue_ids][]`, String(id))
       );
-    });
 
-    (line.files ?? []).forEach((file) => form.append(`${p}[files][]`, file));
+      // Labour: exactly one branch emits a key. "gather" emits NOTHING, which
+      // is how the backend is told to pull the hours from attendance.
+      if (line.labour.kind === "hours") {
+        // 0 is a legitimate override and MUST be sent — hence String() rather
+        // than appendMoney's null check being relied on for anything here.
+        form.append(`${l}[total_working_hours]`, String(line.labour.totalWorkingHours));
+      } else if (line.labour.kind === "lumpSum") {
+        appendMoney(form, `${l}[lump_sum]`, line.labour.lumpSum);
+      }
+
+      // A rate alongside a lump sum is meaningless — the lump sum replaces it.
+      if (line.labour.kind !== "lumpSum") {
+        appendMoney(form, `${l}[hourly_payment_rate]`, line.hourlyPaymentRate);
+      }
+      appendMoney(form, `${l}[gas]`, line.gas);
+      appendMoney(form, `${l}[money_owed]`, line.moneyOwed);
+
+      appendNotes(form, l, line.notes);
+      (line.files ?? []).forEach((file) => form.append(`${l}[files][]`, file));
+    });
   });
 
   return form;
-}
-
-/** Builds a plain JSON body (used when there are no file uploads). */
-function buildEntryJson(payload: DailyPayEntryInput): Record<string, unknown> {
-  return {
-    date: payload.date,
-    lines: payload.lines.map((line: DailyPayLineInput) => {
-      const out: Record<string, unknown> = {
-        store_id: line.storeId,
-        technician_id: line.technicianId,
-      };
-      if (line.totalWorkingHours != null) out.total_working_hours = line.totalWorkingHours;
-      if (line.gas != null) out.gas = line.gas;
-      if (line.invoices != null) out.invoices = line.invoices;
-      if (line.hourlyPaymentRate != null) out.hourly_payment_rate = line.hourlyPaymentRate;
-      if (line.moneyOwed != null) out.money_owed = line.moneyOwed;
-      if (line.travelTime != null) out.travel_time = line.travelTime;
-      if (line.totalBreakTime != null) out.total_break_time = line.totalBreakTime;
-      if (line.ticketIssueIds?.length) out.ticket_issue_ids = line.ticketIssueIds;
-      if (line.notes?.length) {
-        out.notes = line.notes.map((note) => ({
-          body: note.body,
-          ...(note.type ? { type: note.type } : {}),
-        }));
-      }
-      return out;
-    }),
-  };
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -367,6 +504,11 @@ function buildEntryJson(payload: DailyPayEntryInput): Record<string, unknown> {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 const BASE = "/api/daily-pay-entries";
+
+/** Multipart: let the browser set the boundary, so no Content-Type here. */
+function multipartHeaders(token: string) {
+  return { Authorization: `Bearer ${token}`, Accept: "application/json" };
+}
 
 export const dailyPayService = {
   /** Paginated list of daily pay entries with optional filters. */
@@ -381,7 +523,9 @@ export const dailyPayService = {
     if (filters?.date) params.date = filters.date;
     if (filters?.date_from) params.date_from = filters.date_from;
     if (filters?.date_to) params.date_to = filters.date_to;
-    if (filters?.filled_by) params.filled_by = filters.filled_by;
+    if (filters?.filled_by?.length) params.filled_by = filters.filled_by;
+    if (filters?.created_from) params.created_from = filters.created_from;
+    if (filters?.created_to) params.created_to = filters.created_to;
     if (filters?.sort) params.sort = filters.sort;
     if (filters?.dir) params.dir = filters.dir;
     if (filters?.per_page) params.per_page = filters.per_page;
@@ -406,13 +550,17 @@ export const dailyPayService = {
     }
   },
 
-  /** Full detail of a single entry (lines, notes, attachments, revisions). */
+  /**
+   * Full detail of a single entry: payments → lines → issues → notes →
+   * attachments, plus a gathered block at both levels, and revisions.
+   * Deeper than the list, hence the longer timeout.
+   */
   async getEntry(id: number, signal?: AbortSignal): Promise<DailyPayEntry> {
     const token = requireToken();
     try {
       const res = await axios.get<ApiDailyPayEntryResponse>(`${BASE}/${id}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        timeout: 15_000,
+        timeout: 30_000,
         signal,
       });
       return transformEntry(res.data.data);
@@ -424,16 +572,13 @@ export const dailyPayService = {
   /** Create a new daily pay entry. */
   async createEntry(payload: DailyPayEntryInput): Promise<DailyPayEntry> {
     const token = requireToken();
-    const hasFiles = payloadHasFiles(payload);
-    const body = hasFiles ? buildEntryFormData(payload) : buildEntryJson(payload);
+    const body = buildEntryFormData(payload);
     try {
       const res = await axios.post<ApiDailyPayEntryResponse>(BASE, body, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          ...(hasFiles ? {} : { "Content-Type": "application/json" }),
-        },
-        timeout: 30_000,
+        headers: multipartHeaders(token),
+        // Matches the proxy route's own 120s ceiling — a shorter client
+        // timeout would abort photo uploads that the proxy is still happy with.
+        timeout: 120_000,
       });
       return transformEntry(res.data.data);
     } catch (err) {
@@ -441,20 +586,55 @@ export const dailyPayService = {
     }
   },
 
-  /** Replace the full content of an existing entry (snapshots prior state). */
+  /**
+   * Replace the full content of an existing entry (snapshots prior state).
+   *
+   * Pass `expectedUpdatedAt` to get a CONFLICT instead of silently overwriting
+   * someone else's concurrent save.
+   */
   async editEntry(id: number, payload: DailyPayEntryInput): Promise<DailyPayEntry> {
     const token = requireToken();
-    const hasFiles = payloadHasFiles(payload);
-    const body = hasFiles ? buildEntryFormData(payload) : buildEntryJson(payload);
+    const body = buildEntryFormData(payload);
     try {
       const res = await axios.post<ApiDailyPayEntryResponse>(`${BASE}/${id}/edit`, body, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          ...(hasFiles ? {} : { "Content-Type": "application/json" }),
-        },
-        timeout: 30_000,
+        headers: multipartHeaders(token),
+        timeout: 120_000,
       });
+      return transformEntry(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /**
+   * Re-pull the frozen `gathered` figures (hours, reimbursable parts) from the
+   * attendance records.
+   *
+   * Idempotent, and deliberately leaves lines with `hoursOverridden: true`
+   * untouched — surface that in the UI or it reads as a broken button.
+   *
+   * Bumps the entry's `updated_at`, so a caller holding an
+   * `expectedUpdatedAt` must re-arm it from the result.
+   */
+  async recalculateEntry(id: number, signal?: AbortSignal): Promise<DailyPayEntry> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<ApiDailyPayEntryResponse>(
+        `${BASE}/${id}/recalculate`,
+        // The proxy route parses the body as JSON, so `{}` — not an empty body.
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 60_000,
+          signal,
+        }
+      );
+      // Defensive: if the endpoint ever answers 204 / no envelope, re-read.
+      if (!res.data?.data) return await this.getEntry(id, signal);
       return transformEntry(res.data.data);
     } catch (err) {
       return handleAxiosError(err);

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { toast } from "sonner";
 import {
   CalendarDays,
   ClipboardList,
@@ -19,14 +20,27 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useCleaningTasks, useCleaningEvaluation, todayIso } from "@/lib/hooks/use-cleaning";
+import { usePeriodOptions } from "@/lib/hooks/use-cleaning-periods";
 import { useCleaningStore } from "@/lib/store/cleaning.store";
 import { useCleaningActionStore } from "@/lib/store/cleaning-action.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
-import { canAccessCleaningTab, canEvaluateCleaning, type CleaningTabId } from "@/lib/auth/cleaning-access";
+import {
+  canAccessCleaningTab,
+  canEvaluateCleaning,
+  canReopenCleaningEvaluation,
+  canManageCleaningSettings,
+  type CleaningTabId,
+} from "@/lib/auth/cleaning-access";
 import { cleaningService, CleaningError } from "@/lib/api/services/cleaning.service";
-import { currentPeriodKey } from "@/lib/cleaning/period-options";
-import type { ChartVerdict, EvaluationGrid as Grid, DueStatus, PeriodType } from "@/types/cleaning.types";
+import type {
+  ChartCell,
+  ChartVerdict,
+  ChartLockReason,
+  EvaluationGrid as Grid,
+  DueStatus,
+  PeriodType,
+} from "@/types/cleaning.types";
 import {
   DueList,
   TasksList,
@@ -88,9 +102,15 @@ export default function CleaningChartPage() {
     if (visibleTabs.some((tab) => tab.id === "my-store")) {
       setActiveTab("my-store");
       void fetchGrid(pendingCleaningAction.periodType, pendingCleaningAction.periodKey);
+      toast.success(
+        t("page.openedFromNotification", {
+          store: pendingCleaningAction.store ?? t("page.openedFromNotificationFallbackStore"),
+          period: pendingCleaningAction.periodKey,
+        })
+      );
     }
     clearPendingCleaningAction();
-  }, [pendingCleaningAction, visibleTabs, fetchGrid, clearPendingCleaningAction]);
+  }, [pendingCleaningAction, visibleTabs, fetchGrid, clearPendingCleaningAction, t]);
 
   return (
     <div className="space-y-6">
@@ -117,7 +137,7 @@ export default function CleaningChartPage() {
               {visibleTabs.map((tab) => (
                 <TabsTrigger key={tab.id} value={tab.id} className="gap-2 whitespace-nowrap">
                   <tab.icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t(`tabs.${tab.labelKey}`)}</span>
+                  <span>{t(`tabs.${tab.labelKey}`)}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -143,40 +163,152 @@ function DueTab() {
   // storeService.getStores() which lists every company store regardless of role.
   const { overviewStores, canAccessRoute } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
-  const {
-    dueData,
-    dueLoading,
-    dueError,
-    fetchDue,
-    completeTask,
-    uncompleteTask,
-    setChartCell,
-  } = useCleaningStore();
+  const { dueData, dueLoading, dueError, fetchDue, setChartCell } = useCleaningStore();
 
   const [store, setStore] = useState<StoreOption | null>(null);
   const [date, setDate] = useState<string>(todayIso());
   const [status, setStatus] = useState<"all" | DueStatus>("all");
 
-  // Cleaning-specialist only. setChartCell reads the current evaluation
-  // period from the same shared store the Evaluation tab uses, so a Due-page
-  // toggle lands in the same grid the specialist is already grading.
   const canEvaluate = canEvaluateCleaning({ canAccessRoute });
 
-  // Cross-reference the evaluation grid (same shared period as the Evaluation
-  // tab) so a task that's already been graded this period shows it — without
-  // this, evaluating from Due gave no lasting sign it had taken effect.
-  const { grid: evalGrid } = useCleaningEvaluation();
-  const evaluatedVerdicts = useMemo(() => {
-    const map: Record<number, ChartVerdict> = {};
-    const row = store ? evalGrid?.rows.find((r) => r.storeId === store.id) : null;
-    if (!row) return map;
-    for (const cells of Object.values(row.chart)) {
-      for (const cell of cells) {
-        if (cell.verdict) map[cell.taskId] = cell.verdict;
+  /**
+   * A chart verdict belongs to a PERIOD, and which period is right depends on
+   * how often the task is due:
+   *
+   *  - daily / hourly → the `date` period for the day on screen, so each day
+   *    is its own cell (gradable once per day, and locked until the store
+   *    logs it that day).
+   *  - weekly / monthly → the `week` period containing that day. A monthly
+   *    task like "dough racks" spans weeks; pinning its verdict to one day
+   *    would hide it from the weekly grid where it's actually reviewed.
+   *
+   * A date key needs no server lookup — the key IS the date. A WEEK key does:
+   * its accounting-calendar numbering diverges from ISO weeks, so it always
+   * comes from the server's own period list (migration guide §4).
+   */
+  const { options: weekOptions } = usePeriodOptions("week");
+  const weekForDate = useMemo(
+    () => weekOptions.find((o) => date >= o.from && date <= o.to) ?? null,
+    [weekOptions, date]
+  );
+  const usesDatePeriod = useCallback(
+    (taskId: number) => {
+      const frequency = (dueData?.items ?? []).find((i) => i.taskId === taskId)?.frequency;
+      return frequency === "daily" || frequency === "hourly";
+    },
+    [dueData]
+  );
+
+  /**
+   * Both grids this page grades into — fetched here rather than read from the
+   * shared store, so browsing Due dates never hijacks the period the
+   * Evaluation tab is working in. They supply the already-graded verdicts and
+   * the completion locks (guide §1-2), so a row can disable and explain
+   * before a doomed click rather than after a 422.
+   */
+  const [dateGrid, setDateGrid] = useState<Grid | null>(null);
+  const [weekGrid, setWeekGrid] = useState<Grid | null>(null);
+  // Stepping through dates fires overlapping fetches; without this, a slow
+  // response for an earlier date can land last and show that day's locks
+  // under the current one.
+  const dueGridRequest = useRef(0);
+  const loadDueGrids = useCallback(async () => {
+    const token = ++dueGridRequest.current;
+    const [dateRes, weekRes] = await Promise.allSettled([
+      cleaningService.getEvaluations("date", date),
+      weekForDate
+        ? cleaningService.getEvaluations("week", weekForDate.key)
+        : Promise.resolve(null),
+    ]);
+    if (token !== dueGridRequest.current) return;
+    // Non-fatal on failure: the row falls back to reactive 422 detection.
+    setDateGrid(dateRes.status === "fulfilled" ? dateRes.value : null);
+    setWeekGrid(weekRes.status === "fulfilled" ? weekRes.value : null);
+  }, [date, weekForDate]);
+
+  useEffect(() => {
+    void loadDueGrids();
+  }, [loadDueGrids]);
+
+  // Completing/uncompleting is exactly what clears or creates a lock, so the
+  // grids this page reads its locks from have to be reloaded alongside the due
+  // list — otherwise the lock from a moment ago survives the completion that
+  // just cleared it.
+  const completeTaskAndRefreshLock = useCallback(
+    async (
+      storeId: number,
+      taskId: number,
+      payload: { date: string; employeeIds: number[]; note?: string; photos?: File[] }
+    ) => {
+      await useCleaningStore.getState().completeTask(storeId, taskId, payload);
+      await loadDueGrids();
+    },
+    [loadDueGrids]
+  );
+  const uncompleteTaskAndRefreshLock = useCallback(
+    async (storeId: number, taskId: number, date: string) => {
+      await useCleaningStore.getState().uncompleteTask(storeId, taskId, date);
+      await loadDueGrids();
+    },
+    [loadDueGrids]
+  );
+
+  const evaluateForTask = useCallback(
+    async (storeId: number, taskId: number, verdict: ChartVerdict | "empty") => {
+      const byDate = usesDatePeriod(taskId);
+      if (!byDate && !weekForDate) {
+        toast.error(t("due.toasts.noPeriodForWeek"));
+        return;
+      }
+      await setChartCell(
+        storeId,
+        taskId,
+        verdict,
+        byDate
+          ? { periodType: "date", periodKey: date }
+          : { periodType: "week", periodKey: weekForDate!.key }
+      );
+      await loadDueGrids();
+    },
+    [usesDatePeriod, weekForDate, date, setChartCell, loadDueGrids, t]
+  );
+
+  /** Reads each task from whichever grid actually holds its verdict. */
+  const cellsForThisStore = useMemo(() => {
+    const pick = (grid: Grid | null) =>
+      store ? grid?.rows.find((r) => r.storeId === store.id) ?? null : null;
+    const out: { taskId: number; cell: ChartCell }[] = [];
+    for (const [row, wantDate] of [
+      [pick(dateGrid), true],
+      [pick(weekGrid), false],
+    ] as const) {
+      if (!row) continue;
+      for (const cells of Object.values(row.chart)) {
+        for (const cell of cells) {
+          if (usesDatePeriod(cell.taskId) === wantDate) out.push({ taskId: cell.taskId, cell });
+        }
       }
     }
+    return out;
+  }, [dateGrid, weekGrid, store, usesDatePeriod]);
+
+  const evaluatedVerdicts = useMemo(() => {
+    const map: Record<number, ChartVerdict> = {};
+    for (const { taskId, cell } of cellsForThisStore) {
+      if (cell.verdict) map[taskId] = cell.verdict;
+    }
     return map;
-  }, [evalGrid, store]);
+  }, [cellsForThisStore]);
+  // Only entries for a currently-locked task are included; an absent entry
+  // means either the task is editable, or the grid hasn't loaded yet
+  // (DueList's own reactive fallback covers that gap).
+  const lockedTaskReasons = useMemo(() => {
+    const map: Record<number, ChartLockReason> = {};
+    for (const { taskId, cell } of cellsForThisStore) {
+      if (cell.evaluable === false && cell.lockReason) map[taskId] = cell.lockReason;
+    }
+    return map;
+  }, [cellsForThisStore]);
 
   const options: StoreOption[] = useMemo(
     () =>
@@ -260,16 +392,16 @@ function DueTab() {
             type="button"
             onClick={() => setStatus(statusTab.key)}
             className={cn(
-              "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors sm:flex-none",
+              "inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors sm:flex-none sm:px-3",
               status === statusTab.key
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {t(`due.${statusTab.labelKey}`)}
+            <span className="truncate">{t(`due.${statusTab.labelKey}`)}</span>
             <span
               className={cn(
-                "rounded-full px-1.5 text-xs tabular-nums",
+                "shrink-0 rounded-full px-1.5 text-xs tabular-nums",
                 status === statusTab.key ? "bg-muted" : "bg-muted/60"
               )}
             >
@@ -299,11 +431,12 @@ function DueTab() {
               storeCode={store.code}
               date={date}
               items={visibleItems}
-              onComplete={completeTask}
-              onUncomplete={uncompleteTask}
+              onComplete={completeTaskAndRefreshLock}
+              onUncomplete={uncompleteTaskAndRefreshLock}
               canEvaluate={canEvaluate}
-              onEvaluate={setChartCell}
+              onEvaluate={evaluateForTask}
               evaluatedVerdicts={evaluatedVerdicts}
+              lockedTaskReasons={lockedTaskReasons}
             />
           )}
         </>
@@ -348,6 +481,9 @@ function TasksTab() {
 /* ── Evaluation ── */
 function EvaluationTab() {
   const t = useTranslations("cleaningChart");
+  const { canAccessRoute } = useAuthStore();
+  const canReopen = canReopenCleaningEvaluation({ canAccessRoute });
+  const canManageSettings = canManageCleaningSettings({ canAccessRoute });
   const {
     grid,
     gridLoading,
@@ -359,8 +495,27 @@ function EvaluationTab() {
     setChartCell,
     addInspectionItem,
     removeInspectionItem,
+    updateInspectionItemWeight,
+    allocateWeight,
+    deleteAllocation,
+    copyAllocation,
+    removeAllocations,
     finalizeStore,
+    reopenStore,
   } = useCleaningEvaluation();
+
+  // Radix unmounts inactive tab content, so this remounts every time the
+  // Evaluation tab is opened — but the shared store still holds a grid and
+  // a resolved period, and `useCleaningEvaluation`'s own effect only fetches
+  // when there ISN'T a period yet. So nothing ever refetched: grading done
+  // on the Due tab (or by another auditor) stayed invisible until a manual
+  // page refresh. Fire once per open.
+  const refreshedOnOpen = useRef(false);
+  useEffect(() => {
+    if (refreshedOnOpen.current || !periodKey) return;
+    refreshedOnOpen.current = true;
+    void fetchGrid(periodType, periodKey);
+  }, [periodType, periodKey, fetchGrid]);
 
   if (gridLoading && !grid) return <EvaluationSkeleton />;
   if (gridError && !grid)
@@ -390,7 +545,16 @@ function EvaluationTab() {
       onSetChartCell={setChartCell}
       onAddItem={addInspectionItem}
       onRemoveItem={removeInspectionItem}
+      onUpdateItemWeight={updateInspectionItemWeight}
       onFinalize={finalizeStore}
+      canReopen={canReopen}
+      onReopen={reopenStore}
+      onAllocateWeight={allocateWeight}
+      onDeleteAllocation={deleteAllocation}
+      onCopyAllocation={copyAllocation}
+      onRemoveAllocations={removeAllocations}
+      onRefetchGrid={() => fetchGrid(periodType, periodKey)}
+      canManageSettings={canManageSettings}
     />
   );
 }
@@ -398,13 +562,18 @@ function EvaluationTab() {
 /* ── Reports (own fetch via /reports/data, own period — independent of Evaluation) ── */
 function ReportsTab() {
   const [periodType, setPeriodType] = useState<PeriodType>("week");
-  const [periodKey, setPeriodKey] = useState<string>(() => currentPeriodKey("week"));
+  // Empty until `PeriodPicker` resolves the server's current period for this
+  // type (see the migration guide §4 — never computed locally). The fetch
+  // effect below waits for a non-empty key before calling the API, since an
+  // empty `period_key` is rejected upstream with 422.
+  const [periodKey, setPeriodKey] = useState<string>("");
   const [grid, setGrid] = useState<Grid | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<CleaningError | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (!periodKey) return;
     // Cancellation flag: an aborted/stale request must NOT touch state, or its
     // .finally would flip `loading` off for the request that's still in flight
     // (which briefly showed "No report data").

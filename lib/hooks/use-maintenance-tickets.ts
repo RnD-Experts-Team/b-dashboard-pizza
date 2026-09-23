@@ -41,6 +41,9 @@ export function useMaintenanceTickets(options?: UseMaintenanceTicketsOptions) {
     analyticsLoading,
     analyticsError,
     fetchAnalytics,
+    baseAnalytics,
+    baseAnalyticsLoading,
+    fetchBaseAnalytics,
     setMode,
     setScopedStoreIds,
     goToPage,
@@ -63,13 +66,15 @@ export function useMaintenanceTickets(options?: UseMaintenanceTicketsOptions) {
     if (mode === "global") {
       fetchTickets(undefined, {}, 1);
       fetchAnalytics(undefined, {});
+      fetchBaseAnalytics(undefined);
     } else if (effectiveStoreId) {
       fetchTickets(effectiveStoreId, {}, 1);
       fetchAnalytics(effectiveStoreId, {});
+      fetchBaseAnalytics(effectiveStoreId);
     } else {
       reset();
     }
-  }, [mode, effectiveStoreId, fetchTickets, fetchAnalytics, reset]);
+  }, [mode, effectiveStoreId, fetchTickets, fetchAnalytics, fetchBaseAnalytics, reset]);
 
   // Load catalog on mount (and whenever the effective store changes)
   useEffect(() => {
@@ -80,11 +85,21 @@ export function useMaintenanceTickets(options?: UseMaintenanceTicketsOptions) {
     if (mode === "global") {
       fetchTickets(undefined, filters, currentPage);
       fetchAnalytics(undefined, filters);
+      fetchBaseAnalytics(undefined);
     } else if (effectiveStoreId) {
       fetchTickets(effectiveStoreId, filters, currentPage);
       fetchAnalytics(effectiveStoreId, filters);
+      fetchBaseAnalytics(effectiveStoreId);
     }
-  }, [mode, effectiveStoreId, fetchTickets, fetchAnalytics, filters, currentPage]);
+  }, [
+    mode,
+    effectiveStoreId,
+    fetchTickets,
+    fetchAnalytics,
+    fetchBaseAnalytics,
+    filters,
+    currentPage,
+  ]);
 
   const reloadCatalog = useCallback(() => {
     loadCatalog(effectiveStoreId ?? undefined);
@@ -117,6 +132,8 @@ export function useMaintenanceTickets(options?: UseMaintenanceTicketsOptions) {
     analytics,
     analyticsLoading,
     analyticsError,
+    baseAnalytics,
+    baseAnalyticsLoading,
 
     // Catalog
     catalogIssues,

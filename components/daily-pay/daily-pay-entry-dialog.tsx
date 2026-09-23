@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, X, Paperclip, StickyNote, ListChecks } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { Loader2, Plus, RefreshCw, TriangleAlert } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,135 +11,67 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { DatePicker } from "@/components/ui/date-picker";
+import { dailyPayService, DailyPayError } from "@/lib/api/services/daily-pay.service";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  emptyEntryFormState,
+  emptyPayment,
+  entryToFormState,
+  formStateToInput,
+  mergePaymentIntoFirstWithSamePayee,
+  patchLine,
+  patchPayment,
+  siblingIssueIds,
+  toNum,
+  validateFormState,
+  type EntryFormState,
+  type LineForm,
+  type PaymentForm,
+} from "@/lib/daily-pay/entry-form-state";
 import {
-  dailyPayService,
-  DailyPayError,
-} from "@/lib/api/services/daily-pay.service";
-import type {
-  DailyPayEntry,
-  DailyPayEntryInput,
-  DailyPayLineInput,
-} from "@/types/daily-pay.types";
+  EMPTY_FORM_ERRORS,
+  clearFieldError,
+  errorCount,
+  firstErroredPaymentIndex,
+  lineKey,
+  parseValidationErrors,
+  paymentKey,
+  type DailyPayFormErrors,
+} from "@/lib/daily-pay/field-errors";
+import { TicketIssuePickerDialog } from "./ticket-issue-picker-dialog";
+import { DailyPayPaymentCard } from "./daily-pay-payment-card";
+import type { DailyPayEntry } from "@/types/daily-pay.types";
 import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
 import type { DailyPayStoreOption } from "@/lib/hooks/use-daily-pay";
-import { TicketIssuePickerDialog } from "./ticket-issue-picker-dialog";
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Local form state (strings so number inputs can be empty)                */
+/*  Create / edit a daily pay entry                                          */
+/*                                                                            */
+/*  This file owns dialog chrome, form state, and submit. Every rule with     */
+/*  money consequences lives in lib/daily-pay/entry-form-state.ts, and the    */
+/*  fields themselves are in the payment-card / line-fieldset components.     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-interface NoteForm {
-  body: string;
-  type: string;
-  files: File[];
+/** Which scope receives pasted files. Focus bubbles, so the innermost wins. */
+interface PasteTarget {
+  paymentIndex: number;
+  /** Null ⇒ the payment itself rather than one of its lines. */
+  lineIndex: number | null;
 }
-
-interface LineForm {
-  storeId: string;
-  technicianId: string;
-  totalWorkingHours: string;
-  gas: string;
-  invoices: string;
-  hourlyPaymentRate: string;
-  moneyOwed: string;
-  travelTime: string;
-  totalBreakTime: string;
-  ticketIssueIds: number[];
-  notes: NoteForm[];
-  files: File[];
-}
-
-function emptyLine(): LineForm {
-  return {
-    storeId: "",
-    technicianId: "",
-    totalWorkingHours: "",
-    gas: "",
-    invoices: "",
-    hourlyPaymentRate: "",
-    moneyOwed: "",
-    travelTime: "",
-    totalBreakTime: "",
-    ticketIssueIds: [],
-    notes: [],
-    files: [],
-  };
-}
-
-function todayIso(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function toNum(value: string): number | null {
-  const t = value.trim();
-  if (!t) return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Numeric field                                                           */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-function NumField({
-  label,
-  value,
-  onChange,
-  prefix,
-  step = "0.01",
-  disabled,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  prefix?: string;
-  step?: string;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="relative">
-        {prefix && (
-          <span className="pointer-events-none absolute inset-y-0 start-2.5 flex items-center text-xs text-muted-foreground">
-            {prefix}
-          </span>
-        )}
-        <Input
-          type="number"
-          min="0"
-          step={step}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          className={cn("h-9 text-sm", prefix && "ps-6")}
-          placeholder="0"
-        />
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Dialog                                                                  */
-/* ────────────────────────────────────────────────────────────────────────── */
 
 interface DailyPayEntryDialogProps {
   open: boolean;
@@ -149,6 +79,14 @@ interface DailyPayEntryDialogProps {
   entryId: number | null;
   stores: DailyPayStoreOption[];
   technicians: CatalogTechnician[];
+  /**
+   * Create mode only: open already filled in from the pay basket.
+   *
+   * Nothing is saved by this -- the form is populated and the coordinator
+   * reviews it, the same discipline as everywhere else here. Ignored in edit
+   * mode, where the server's own record is the only sane starting point.
+   */
+  initialState?: EntryFormState | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -158,25 +96,44 @@ export function DailyPayEntryDialog({
   entryId,
   stores,
   technicians,
+  initialState,
   onClose,
   onSuccess,
 }: DailyPayEntryDialogProps) {
   const isEdit = entryId != null;
 
-  const [date, setDate] = useState(todayIso());
-  const [lines, setLines] = useState<LineForm[]>([emptyLine()]);
+  const [state, setState] = useState<EntryFormState>(emptyEntryFormState);
+  const [errors, setErrors] = useState<DailyPayFormErrors>(EMPTY_FORM_ERRORS);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPrefilling, setIsPrefilling] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [pickerLineIndex, setPickerLineIndex] = useState<number | null>(null);
-  const [pickerStoreId, setPickerStoreId] = useState<string>("");
+  /** Set when a save lost a race — the dialog stays open with edits intact. */
+  const [conflict, setConflict] = useState<{ message: string } | null>(null);
+  const [loadedEntry, setLoadedEntry] = useState<DailyPayEntry | null>(null);
 
-  // Tracks which line receives pasted files (updated onFocus of each line card).
-  const pasteTargetRef = useRef<number>(0);
+  const [picker, setPicker] = useState<{ paymentIndex: number; lineIndex: number } | null>(
+    null
+  );
+  /** Pending payee change that would invalidate already-linked issues. */
+  const [payeeChange, setPayeeChange] = useState<{
+    paymentIndex: number;
+    technicianId: string;
+    issueCount: number;
+  } | null>(null);
+  const [reloadConfirm, setReloadConfirm] = useState(false);
+
+  const pasteTargetRef = useRef<PasteTarget>({ paymentIndex: 0, lineIndex: null });
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  /* ── Paste-to-attach ──────────────────────────────────────────────────── */
+
+  // Suspended while any nested dialog is open, or a paste meant for a confirm
+  // dialog would silently attach a file to a line behind it.
+  const pasteSuspended =
+    isSubmitting || picker !== null || payeeChange !== null || reloadConfirm;
 
   useEffect(() => {
-    if (!open || isSubmitting || pickerLineIndex !== null) return;
+    if (!open || pasteSuspended) return;
 
     function handlePaste(e: ClipboardEvent) {
       const pastedFiles = Array.from(e.clipboardData?.items ?? [])
@@ -185,180 +142,183 @@ export function DailyPayEntryDialog({
         .filter((f): f is File => f !== null);
       if (pastedFiles.length === 0) return;
       e.preventDefault();
-      const idx = pasteTargetRef.current;
-      setLines((prev) =>
-        prev.map((l, i) =>
-          i === idx ? { ...l, files: [...l.files, ...pastedFiles] } : l
-        )
-      );
+
+      const { paymentIndex, lineIndex } = pasteTargetRef.current;
+      setState((prev) => {
+        const payment = prev.payments[paymentIndex];
+        if (!payment) return prev;
+        if (lineIndex == null) {
+          return {
+            ...prev,
+            payments: patchPayment(prev.payments, paymentIndex, {
+              files: [...payment.files, ...pastedFiles],
+            }),
+          };
+        }
+        const line = payment.lines[lineIndex];
+        if (!line) return prev;
+        return {
+          ...prev,
+          payments: patchLine(prev.payments, paymentIndex, lineIndex, {
+            files: [...line.files, ...pastedFiles],
+          }),
+        };
+      });
     }
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [open, isSubmitting, pickerLineIndex]);
+  }, [open, pasteSuspended]);
 
-  // Reset / prefill whenever the dialog opens.
+  /* ── Reset / prefill ──────────────────────────────────────────────────── */
+
+  const loadEntry = useCallback(
+    (id: number, signal?: AbortSignal) => {
+      setIsPrefilling(true);
+      setPrefillError(null);
+      setErrors(EMPTY_FORM_ERRORS);
+      setConflict(null);
+
+      return dailyPayService
+        .getEntry(id, signal)
+        .then((entry) => {
+          if (signal?.aborted) return;
+          setLoadedEntry(entry);
+          // expectedUpdatedAt comes from THIS read, never from a list row —
+          // a list row can be minutes stale and would cause spurious 409s.
+          setState(entryToFormState(entry));
+        })
+        .catch((err) => {
+          if (signal?.aborted) return;
+          if (err instanceof DailyPayError && err.code === "CANCELLED") return;
+          setPrefillError(
+            err instanceof DailyPayError ? err.message : "Failed to load entry."
+          );
+        })
+        .finally(() => {
+          if (!signal?.aborted) setIsPrefilling(false);
+        });
+    },
+    []
+  );
+
   useEffect(() => {
     if (!open) return;
 
     if (!isEdit) {
-      setDate(todayIso());
-      setLines([emptyLine()]);
-      setFormError(null);
+      // A seeded state wins on create. It carries the payees, the store lines
+      // and the linked issues from the basket -- and deliberately no hours,
+      // because any value sent marks the line overridden upstream and stops the
+      // gather filling it from the attendance already logged.
+      setState(initialState ?? emptyEntryFormState());
+      setErrors(EMPTY_FORM_ERRORS);
       setPrefillError(null);
+      setConflict(null);
+      setLoadedEntry(null);
       return;
     }
 
     const ctrl = new AbortController();
-    setIsPrefilling(true);
-    setPrefillError(null);
-    setFormError(null);
-
-    dailyPayService
-      .getEntry(entryId as number, ctrl.signal)
-      .then((entry: DailyPayEntry) => {
-        if (ctrl.signal.aborted) return;
-        setDate(entry.date);
-        setLines(
-          entry.lines.length
-            ? entry.lines.map((line) => ({
-                storeId: String(line.storeId),
-                technicianId: String(line.technicianId),
-                totalWorkingHours: line.totalWorkingHours?.toString() ?? "",
-                gas: line.gas?.toString() ?? "",
-                invoices: line.invoices?.toString() ?? "",
-                hourlyPaymentRate: line.hourlyPaymentRate?.toString() ?? "",
-                moneyOwed: line.moneyOwed?.toString() ?? "",
-                travelTime: line.travelTime?.toString() ?? "",
-                totalBreakTime: line.totalBreakTime?.toString() ?? "",
-                ticketIssueIds: line.ticketIssues.map((ti) => ti.id),
-                notes: line.notes.map((n) => ({
-                  body: n.body,
-                  type: n.type ?? "",
-                  files: [],
-                })),
-                files: [],
-              }))
-            : [emptyLine()]
-        );
-      })
-      .catch((err) => {
-        if (ctrl.signal.aborted) return;
-        if (err instanceof DailyPayError && err.code === "CANCELLED") return;
-        setPrefillError(
-          err instanceof DailyPayError ? err.message : "Failed to load entry."
-        );
-      })
-      .finally(() => {
-        if (!ctrl.signal.aborted) setIsPrefilling(false);
-      });
-
+    void loadEntry(entryId as number, ctrl.signal);
     return () => ctrl.abort();
-  }, [open, entryId, isEdit]);
+  }, [open, entryId, isEdit, loadEntry, initialState]);
 
-  function updateLine(index: number, patch: Partial<LineForm>) {
-    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+  /* ── Setters ──────────────────────────────────────────────────────────── */
+
+  function patchState(patch: Partial<EntryFormState>) {
+    setState((prev) => ({ ...prev, ...patch }));
   }
 
-  function addLine() {
-    setLines((prev) => [...prev, emptyLine()]);
-  }
-
-  function removeLine(index: number) {
-    setLines((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
-  }
-
-  function addNote(lineIndex: number) {
-    setLines((prev) =>
-      prev.map((l, i) =>
-        i === lineIndex ? { ...l, notes: [...l.notes, { body: "", type: "", files: [] }] } : l
+  function updatePayment(index: number, patch: Partial<PaymentForm>) {
+    setState((prev) => ({ ...prev, payments: patchPayment(prev.payments, index, patch) }));
+    // Clear the errors on whatever just changed, so red borders do not linger.
+    setErrors((prev) =>
+      Object.keys(patch).reduce(
+        (acc, key) => clearFieldError(acc, paymentKey(index, camelToSnake(key))),
+        prev
       )
     );
   }
 
-  function updateNote(lineIndex: number, noteIndex: number, patch: Partial<NoteForm>) {
-    setLines((prev) =>
-      prev.map((l, i) =>
-        i === lineIndex
-          ? {
-              ...l,
-              notes: l.notes.map((n, j) => (j === noteIndex ? { ...n, ...patch } : n)),
-            }
-          : l
+  function updateLine(paymentIndex: number, lineIndex: number, patch: Partial<LineForm>) {
+    setState((prev) => ({
+      ...prev,
+      payments: patchLine(prev.payments, paymentIndex, lineIndex, patch),
+    }));
+    setErrors((prev) =>
+      Object.keys(patch).reduce(
+        (acc, key) => clearFieldError(acc, lineKey(paymentIndex, lineIndex, camelToSnake(key))),
+        prev
       )
     );
   }
 
-  function removeNote(lineIndex: number, noteIndex: number) {
-    setLines((prev) =>
-      prev.map((l, i) =>
-        i === lineIndex
-          ? { ...l, notes: l.notes.filter((_, j) => j !== noteIndex) }
-          : l
-      )
-    );
+  function addPayment() {
+    patchState({ payments: [...state.payments, emptyPayment()] });
   }
 
-  function validate(): DailyPayEntryInput | null {
-    if (!date.trim()) {
-      setFormError("Workday date is required.");
-      return null;
+  function removePayment(index: number) {
+    if (state.payments.length === 1) return;
+    patchState({ payments: state.payments.filter((_, i) => i !== index) });
+  }
+
+  /**
+   * A payee change invalidates every issue already linked under that payment,
+   * because the backend requires the payee to be assigned to each one. Confirm
+   * before discarding them rather than letting the save 422.
+   */
+  function requestPayeeChange(paymentIndex: number, technicianId: string) {
+    const payment = state.payments[paymentIndex];
+    if (!payment) return;
+    const issueCount = payment.lines.reduce((n, l) => n + l.ticketIssueIds.length, 0);
+    if (issueCount > 0 && payment.technicianId && payment.technicianId !== technicianId) {
+      setPayeeChange({ paymentIndex, technicianId, issueCount });
+      return;
     }
-    if (lines.length === 0) {
-      setFormError("At least one line is required.");
-      return null;
-    }
+    updatePayment(paymentIndex, { technicianId });
+  }
 
-    const builtLines: DailyPayLineInput[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const storeId = toNum(line.storeId);
-      const technicianId = toNum(line.technicianId);
-      if (storeId == null) {
-        setFormError(`Line ${i + 1}: store is required.`);
-        return null;
-      }
-      if (technicianId == null) {
-        setFormError(`Line ${i + 1}: technician is required.`);
-        return null;
-      }
-
-      const ticketIssueIds = line.ticketIssueIds;
-
-      const notes = line.notes
-        .filter((n) => n.body.trim())
-        .map((n) => ({
-          body: n.body.trim(),
-          type: n.type.trim() || undefined,
-          files: n.files,
-        }));
-
-      builtLines.push({
-        storeId,
+  function applyPayeeChange() {
+    if (!payeeChange) return;
+    const { paymentIndex, technicianId } = payeeChange;
+    setState((prev) => ({
+      ...prev,
+      payments: patchPayment(prev.payments, paymentIndex, {
         technicianId,
-        totalWorkingHours: toNum(line.totalWorkingHours),
-        gas: toNum(line.gas),
-        invoices: toNum(line.invoices),
-        hourlyPaymentRate: toNum(line.hourlyPaymentRate),
-        moneyOwed: toNum(line.moneyOwed),
-        travelTime: toNum(line.travelTime),
-        totalBreakTime: toNum(line.totalBreakTime),
-        ticketIssueIds: ticketIssueIds.length ? ticketIssueIds : undefined,
-        notes: notes.length ? notes : undefined,
-        files: line.files.length ? line.files : undefined,
-      });
-    }
+        lines: (prev.payments[paymentIndex]?.lines ?? []).map((l) => ({
+          ...l,
+          ticketIssueIds: [],
+        })),
+      }),
+    }));
+    setPayeeChange(null);
+  }
 
-    return { date: date.trim(), lines: builtLines };
+  /* ── Submit ───────────────────────────────────────────────────────────── */
+
+  function scrollToFirstError(next: DailyPayFormErrors) {
+    const index = firstErroredPaymentIndex(next);
+    if (index == null) return;
+    // Without this, the red border sits below the fold of a scrolling dialog.
+    cardRefs.current
+      .get(index)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   async function handleSubmit() {
-    setFormError(null);
-    const payload = validate();
-    if (!payload) return;
+    const validation = validateFormState(state);
+    if (errorCount(validation) > 0) {
+      setErrors(validation);
+      toast.error(summaryMessage(validation));
+      requestAnimationFrame(() => scrollToFirstError(validation));
+      return;
+    }
 
+    setErrors(EMPTY_FORM_ERRORS);
+    setConflict(null);
     setIsSubmitting(true);
     try {
+      const payload = formStateToInput(state, { includeExpectedUpdatedAt: isEdit });
       if (isEdit) {
         await dailyPayService.editEntry(entryId as number, payload);
         toast.success("Daily pay entry updated.");
@@ -370,356 +330,294 @@ export function DailyPayEntryDialog({
       onClose();
     } catch (err) {
       if (err instanceof DailyPayError && err.code === "CANCELLED") return;
-      if (err instanceof DailyPayError && err.validationErrors) {
-        const first = Object.values(err.validationErrors)[0]?.[0];
-        toast.error(first || err.message);
-      } else {
-        toast.error(
-          err instanceof DailyPayError ? err.message : "Failed to save entry."
-        );
+
+      if (err instanceof DailyPayError && err.code === "CONFLICT") {
+        setConflict({ message: err.message });
+        // Re-arm from the server's own timestamp when it sent one, so
+        // "Save anyway" becomes one deliberate click rather than a loop.
+        if (err.serverUpdatedAt) {
+          patchState({ expectedUpdatedAt: err.serverUpdatedAt });
+        }
+        // The list behind the dialog is now stale either way.
+        onSuccess();
+        return;
       }
+
+      if (err instanceof DailyPayError && err.validationErrors) {
+        const parsed = parseValidationErrors(err.validationErrors);
+        setErrors(parsed);
+        toast.error(summaryMessage(parsed) || err.message);
+        requestAnimationFrame(() => scrollToFirstError(parsed));
+        return;
+      }
+
+      toast.error(err instanceof DailyPayError ? err.message : "Failed to save entry.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  /* ── Render ───────────────────────────────────────────────────────────── */
+
+  const pickerContext = useMemo(() => {
+    if (!picker) return null;
+    const payment = state.payments[picker.paymentIndex];
+    const line = payment?.lines[picker.lineIndex];
+    if (!payment || !line) return null;
+    const technicianId = toNum(payment.technicianId);
+    if (technicianId == null) return null;
+    return {
+      technicianId,
+      technicianName: technicians.find((t) => t.id === technicianId)?.name ?? "",
+      // Null for an `other_store` line: it has no store number, so the picker
+      // searches unscoped rather than showing nothing.
+      storeNumber:
+        line.locationKind === "store"
+          ? stores.find((s) => String(s.id) === line.storeId)?.storeNumber ?? null
+          : null,
+      selectedIssueIds: line.ticketIssueIds,
+      disabledIssueIds: siblingIssueIds(payment, picker.lineIndex),
+    };
+  }, [picker, state.payments, stores, technicians]);
+
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && !isSubmitting && onClose()}>
-      <DialogContent className="max-h-[90vh] w-[95vw] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? `Edit Daily Pay Entry #${entryId}` : "New Daily Pay Entry"}
-          </DialogTitle>
-          <DialogDescription>
-            One line per technician × store worked this day.
-            {isEdit &&
-              " Saving replaces the full entry; the previous state is kept as a revision."}
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(o) => !o && !isSubmitting && onClose()}>
+        <DialogContent className="max-h-[90vh] w-[95vw] overflow-y-auto sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              {isEdit ? `Edit Daily Pay Entry #${entryId}` : "New Daily Pay Entry"}
+            </DialogTitle>
+            <DialogDescription>
+              One payment per payee; one line per store they worked.
+              {isEdit &&
+                " Saving replaces the full entry; the previous state is kept as a revision."}
+            </DialogDescription>
+          </DialogHeader>
 
-        {isPrefilling ? (
-          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-            <Loader2 className="me-2 h-4 w-4 animate-spin" />
-            Loading entry…
-          </div>
-        ) : prefillError ? (
-          <div className="py-8 text-center text-sm text-destructive">{prefillError}</div>
-        ) : (
-          <div className="space-y-4">
-            {/* Date */}
-            <div className="space-y-1 sm:max-w-xs">
-              <Label className="text-sm">
-                Workday date <span className="text-destructive">*</span>
-              </Label>
-              <DatePicker value={date} onChange={setDate} disabled={isSubmitting} />
+          {isPrefilling ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              <Loader2 className="me-2 h-4 w-4 animate-spin" />
+              Loading entry…
             </div>
-
-            <Separator />
-
-            {/* Lines */}
-            <div className="space-y-3">
-              {lines.map((line, i) => (
-                <div
-                  key={i}
-                  className="rounded-lg border bg-card p-4 space-y-3"
-                  onFocus={() => { pasteTargetRef.current = i; }}
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-semibold">Line {i + 1}</h4>
-                    {lines.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeLine(i)}
-                        disabled={isSubmitting}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Store + technician */}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Store <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={line.storeId || undefined}
-                        onValueChange={(v) => updateLine(i, { storeId: v })}
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Select store" />
-                        </SelectTrigger>
-                        <SelectContent
-                          position="popper"
-                          style={{ maxHeight: "220px", overflowY: "auto" }}
-                        >
-                          {stores.map((s) => (
-                            <SelectItem key={s.id} value={String(s.id)}>
-                              {s.storeNumber}
-                              <span className="ms-1.5 text-xs text-muted-foreground">
-                                {s.name}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Technician <span className="text-destructive">*</span>
-                      </Label>
-                      <Select
-                        value={line.technicianId || undefined}
-                        onValueChange={(v) => updateLine(i, { technicianId: v })}
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger className="h-9 text-sm">
-                          <SelectValue placeholder="Select technician" />
-                        </SelectTrigger>
-                        <SelectContent
-                          position="popper"
-                          style={{ maxHeight: "220px", overflowY: "auto" }}
-                        >
-                          {technicians.map((t) => (
-                            <SelectItem key={t.id} value={String(t.id)}>
-                              {t.name}
-                              {t.categoryName && (
-                                <span className="ms-1.5 text-xs text-muted-foreground">
-                                  · {t.categoryName}
-                                </span>
-                              )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Numeric fields */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <NumField label="Working hours" value={line.totalWorkingHours} onChange={(v) => updateLine(i, { totalWorkingHours: v })} disabled={isSubmitting} />
-                    <NumField label="Break time" value={line.totalBreakTime} onChange={(v) => updateLine(i, { totalBreakTime: v })} disabled={isSubmitting} />
-                    <NumField label="Travel time" value={line.travelTime} onChange={(v) => updateLine(i, { travelTime: v })} disabled={isSubmitting} />
-                    <NumField label="Hourly rate" value={line.hourlyPaymentRate} onChange={(v) => updateLine(i, { hourlyPaymentRate: v })} prefix="$" disabled={isSubmitting} />
-                    <NumField label="Gas" value={line.gas} onChange={(v) => updateLine(i, { gas: v })} prefix="$" disabled={isSubmitting} />
-                    <NumField label="Invoices" value={line.invoices} onChange={(v) => updateLine(i, { invoices: v })} prefix="$" disabled={isSubmitting} />
-                    <NumField label="Money owed" value={line.moneyOwed} onChange={(v) => updateLine(i, { moneyOwed: v })} prefix="$" disabled={isSubmitting} />
-                  </div>
-
-                  {/* Linked ticket issues */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">
-                      Linked ticket issues (optional)
-                    </Label>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        type="button"
-                        className="h-8 gap-1.5 text-xs"
-                        disabled={isSubmitting || !line.storeId || !line.technicianId}
-                        title={
-                          !line.storeId
-                            ? "Select a store first"
-                            : !line.technicianId
-                              ? "Select a technician first"
-                              : undefined
-                        }
-                        onClick={() => {
-                          const storeNum =
-                            stores.find((s) => String(s.id) === line.storeId)
-                              ?.storeNumber ?? "";
-                          setPickerStoreId(storeNum);
-                          setPickerLineIndex(i);
-                        }}
-                      >
-                        <ListChecks className="h-3.5 w-3.5" />
-                        Browse tickets
-                      </Button>
-                      {line.ticketIssueIds.map((id) => (
-                        <Badge
-                          key={id}
-                          variant="secondary"
-                          className="gap-1 pe-1 text-xs"
-                        >
-                          #{id}
-                          <button
-                            type="button"
-                            className="ms-0.5 rounded-sm opacity-60 hover:opacity-100"
-                            onClick={() =>
-                              updateLine(i, {
-                                ticketIssueIds: line.ticketIssueIds.filter(
-                                  (x) => x !== id
-                                ),
-                              })
-                            }
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                      {line.ticketIssueIds.length === 0 && (
-                        <span className="text-[11px] text-muted-foreground">
-                          None selected
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Files */}
-                  <div className="space-y-1.5 rounded-md p-2 transition-colors hover:bg-muted/30">
-                    <Label className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <Paperclip className="h-3.5 w-3.5" />
-                        Attachments (optional)
-                      </span>
-                      <span className="text-[10px] opacity-60">Ctrl+V to paste</span>
-                    </Label>
-                    <Input
-                      type="file"
-                      multiple
-                      onChange={(e) =>
-                        updateLine(i, {
-                          files: [
-                            ...line.files,
-                            ...Array.from(e.target.files ?? []),
-                          ],
-                        })
-                      }
-                      disabled={isSubmitting}
-                      className="h-9 text-sm"
-                    />
-                    {line.files.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {line.files.map((f, fi) => (
-                          <span
-                            key={fi}
-                            className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs"
-                          >
-                            {f.name}
-                            <button
-                              type="button"
-                              className="ms-0.5 rounded-sm opacity-60 hover:opacity-100"
-                              onClick={() =>
-                                updateLine(i, {
-                                  files: line.files.filter((_, idx) => idx !== fi),
-                                })
-                              }
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Notes */}
-                  <div className="space-y-2">
-                    {line.notes.map((note, ni) => (
-                      <div key={ni} className="rounded-md border bg-muted/30 p-2.5 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                            <StickyNote className="h-3.5 w-3.5" />
-                            Note {ni + 1}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-1.5 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeNote(i, ni)}
-                            disabled={isSubmitting}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <Textarea
-                          value={note.body}
-                          onChange={(e) => updateNote(i, ni, { body: e.target.value })}
-                          placeholder="Note body…"
-                          disabled={isSubmitting}
-                          className="min-h-16 resize-none text-sm"
-                        />
-                        <Input
-                          type="file"
-                          multiple
-                          onChange={(e) =>
-                            updateNote(i, ni, { files: Array.from(e.target.files ?? []) })
-                          }
-                          disabled={isSubmitting}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    ))}
+          ) : prefillError ? (
+            <div className="py-8 text-center text-sm text-destructive">{prefillError}</div>
+          ) : (
+            <div className="space-y-5">
+              {/* Lost-race banner. Deliberately does NOT close the dialog or
+                  discard state — the user's edits are still in the form. */}
+              {conflict && (
+                <Alert className="border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/15">
+                  <TriangleAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <AlertTitle className="text-amber-800 dark:text-amber-300">
+                    Someone else changed this entry
+                  </AlertTitle>
+                  <AlertDescription className="space-y-2 text-amber-700 dark:text-amber-400/90">
+                    <p>
+                      {conflict.message} Your changes are still here. Reload to see their
+                      version, or save again to apply yours over it.
+                    </p>
                     <Button
+                      type="button"
                       variant="outline"
                       size="sm"
                       className="h-7 gap-1 text-xs"
-                      onClick={() => addNote(i)}
+                      onClick={() => setReloadConfirm(true)}
                       disabled={isSubmitting}
                     >
-                      <Plus className="h-3 w-3" />
-                      Add note
+                      <RefreshCw className="h-3 w-3" />
+                      Reload entry
                     </Button>
-                  </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Date */}
+              <div className="space-y-1 sm:max-w-xs">
+                <Label className="text-sm">
+                  Workday date <span className="text-destructive">*</span>
+                </Label>
+                <DatePicker
+                  value={state.date}
+                  onChange={(date) => {
+                    patchState({ date });
+                    setErrors((prev) => clearFieldError(prev, "date"));
+                  }}
+                  disabled={isSubmitting}
+                />
+                {errors.fields.date && (
+                  <p className="text-[11px] text-destructive">{errors.fields.date}</p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/*
+                space-y-6 BETWEEN payments, against the space-y-5 between groups
+                inside one. It was 12px out here and 20px in there, which is the
+                hierarchy upside down: the boundary between two different
+                people's money was the tightest gap in the form, so four
+                payments read as one wall of fields.
+              */}
+              <div className="space-y-6">
+                {state.payments.map((payment, i) => (
+                  <DailyPayPaymentCard
+                    key={i}
+                    payment={payment}
+                    index={i}
+                    allPayments={state.payments}
+                    stores={stores}
+                    technicians={technicians}
+                    errors={errors}
+                    disabled={isSubmitting}
+                    canRemove={state.payments.length > 1}
+                    warnings={loadedEntry?.payments?.[i]?.aggregationWarnings ?? null}
+                    onPatch={(patch) => updatePayment(i, patch)}
+                    onPatchLine={(lineIndex, patch) => updateLine(i, lineIndex, patch)}
+                    onRemove={() => removePayment(i)}
+                    onRequestPayeeChange={(technicianId) =>
+                      requestPayeeChange(i, technicianId)
+                    }
+                    onMergeIntoExisting={() =>
+                      patchState({
+                        payments: mergePaymentIntoFirstWithSamePayee(state.payments, i),
+                      })
+                    }
+                    onOpenIssuePicker={(lineIndex) =>
+                      setPicker({ paymentIndex: i, lineIndex })
+                    }
+                    onFocusPayment={() => {
+                      pasteTargetRef.current = { paymentIndex: i, lineIndex: null };
+                    }}
+                    onFocusLine={(lineIndex) => {
+                      pasteTargetRef.current = { paymentIndex: i, lineIndex };
+                    }}
+                    cardRef={(el) => {
+                      if (el) cardRefs.current.set(i, el);
+                      else cardRefs.current.delete(i);
+                    }}
+                  />
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5"
+                  onClick={addPayment}
+                  disabled={isSubmitting}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add payment
+                </Button>
+              </div>
+
+              {/* Anything the server said that did not match a field. */}
+              {errors.form.length > 0 && (
+                <div className="space-y-1">
+                  {errors.form.map((message, i) => (
+                    <p key={i} className="text-sm text-destructive">
+                      {message}
+                    </p>
+                  ))}
                 </div>
-              ))}
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full gap-1.5"
-                onClick={addLine}
-                disabled={isSubmitting}
-              >
-                <Plus className="h-4 w-4" />
-                Add line
-              </Button>
+              )}
             </div>
+          )}
 
-            {formError && (
-              <p className="text-sm text-destructive">{formError}</p>
-            )}
-          </div>
-        )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || isPrefilling || !!prefillError}
+            >
+              {isSubmitting && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
+              {isEdit ? "Save changes" : "Create entry"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        {pickerLineIndex !== null && (() => {
-          const pickerTechId = toNum(lines[pickerLineIndex]?.technicianId ?? "");
-          const pickerTech = technicians.find((t) => t.id === pickerTechId);
-          return (
-            <TicketIssuePickerDialog
-              open={pickerLineIndex !== null}
-              storeId={pickerStoreId}
-              technicianId={pickerTechId ?? 0}
-              technicianName={pickerTech?.name ?? ""}
-              selectedIssueIds={lines[pickerLineIndex]?.ticketIssueIds ?? []}
-              onClose={() => setPickerLineIndex(null)}
-              onConfirm={(ids) => {
-                updateLine(pickerLineIndex, { ticketIssueIds: ids });
-                setPickerLineIndex(null);
+      {/* Issue picker */}
+      {picker && pickerContext && (
+        <TicketIssuePickerDialog
+          open
+          storeNumber={pickerContext.storeNumber}
+          technicianId={pickerContext.technicianId}
+          technicianName={pickerContext.technicianName}
+          selectedIssueIds={pickerContext.selectedIssueIds}
+          disabledIssueIds={pickerContext.disabledIssueIds}
+          onClose={() => setPicker(null)}
+          onConfirm={(ids) => {
+            updateLine(picker.paymentIndex, picker.lineIndex, { ticketIssueIds: ids });
+            setPicker(null);
+          }}
+        />
+      )}
+
+      {/* Payee change would invalidate linked issues */}
+      <AlertDialog
+        open={payeeChange !== null}
+        onOpenChange={(o) => !o && setPayeeChange(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change the payee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears the {payeeChange?.issueCount} linked{" "}
+              {payeeChange?.issueCount === 1 ? "issue" : "issues"} on this payment, because
+              an issue must be assigned to whoever is being paid for it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep the current payee</AlertDialogCancel>
+            <AlertDialogAction onClick={applyPayeeChange}>
+              Change and clear issues
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reloading discards the user's edits, so confirm first */}
+      <AlertDialog open={reloadConfirm} onOpenChange={setReloadConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard your changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Reloading replaces the form with the saved version. Anything you have typed
+              since opening it will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setReloadConfirm(false);
+                if (entryId != null) void loadEntry(entryId);
               }}
-            />
-          );
-        })()}
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting || isPrefilling || !!prefillError}
-          >
-            {isSubmitting && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-            {isEdit ? "Save changes" : "Create entry"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            >
+              Reload and discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Helpers                                                                 */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/** Form state keys are camelCase; error keys use the server's snake_case. */
+function camelToSnake(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+function summaryMessage(errors: DailyPayFormErrors): string {
+  const count = errorCount(errors);
+  if (count === 0) return "";
+  return count === 1 ? "1 field needs attention." : `${count} fields need attention.`;
 }

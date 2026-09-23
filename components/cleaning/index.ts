@@ -19,3 +19,5 @@ export { StatusPill, PhotoThumbs, resolvePhotoUrl, formatDate } from "./cleaning
 export { StorePicker, type StoreOption } from "./store-picker";
 export { PeriodPicker } from "./period-picker";
 export { MyStoreResults } from "./my-store-results";
+export { AllocateWeightDialog, type AllocateTarget } from "./allocate-weight-dialog";
+export { CleaningSettingsDialog } from "./cleaning-settings-dialog";

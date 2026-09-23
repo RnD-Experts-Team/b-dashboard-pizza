@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Pencil, Trash2, AlertTriangle, Repeat, StickyNote } from "lucide-react";
+import { Ban, Clock, Pencil, Trash2, AlertTriangle, Repeat, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -8,34 +8,104 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { formatTime } from "@/lib/scheduling/constants";
+import {
+  SHIFT_ACCENT,
+  SHIFT_CARD_SURFACE,
+  SHIFT_RAIL_BASE,
+  hasRail,
+  type ShiftTone,
+} from "@/lib/scheduling/accents";
+import { formatIsoDateWithWeekday } from "@/lib/scheduling/week";
+import {
+  PENDING_CARD_CLASS,
+  ShiftPendingOverlay,
+} from "./shift-pending";
+import {
+  ShiftTooltipBody,
+  ShiftTooltipHeader,
+  ShiftTooltipHint,
+  ShiftTooltipRow,
+  ShiftTooltipStatus,
+} from "./shift-tooltip";
 import type { Shift } from "@/types/scheduling.types";
+import {
+  ShiftOriginIndicator,
+  ShiftSyncIndicator,
+} from "./shift-sync-badge";
+
+/**
+ * Right-hand space reserved on the text rows for the absolutely-positioned
+ * corner markers.
+ *
+ * `truncate` alone is not enough: it clips against the card's full width, which
+ * knows nothing about the icons floating over it, so a long time range slides
+ * underneath them. Indexed by how many markers that corner is actually showing,
+ * so a card with no markers keeps its full width.
+ *
+ * Logical (`pe-`) rather than `pr-` because the markers sit at `right-0.5` via
+ * `end`-agnostic positioning and the grid is rendered RTL for Arabic.
+ */
+const MARKER_RESERVE = ["", "pe-4", "pe-7", "pe-10"] as const;
 
 interface ShiftCardProps {
   shift: Shift;
-  color: string;
   hasConflict?: boolean;
+  /**
+   * Set when this shift falls inside blocked availability or approved leave.
+   *
+   * The grid used to HIDE these cards entirely, which hid the problem rather
+   * than the card: the shift stayed scheduled, staff still saw it, and it kept
+   * counting toward the hours column and daily totals — so the row read "3
+   * shifts" while only two were drawn. A manager cannot fix a clash they cannot
+   * see, so the card is shown and marked instead.
+   */
+  blockedReason?: string | null;
   onEdit: (shift: Shift) => void;
   onDelete: (shiftId: string) => void;
+  /** An action on this shift is in flight. */
+  isPending?: boolean;
 }
 
-export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: ShiftCardProps) {
-  const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
-  const hours = calcHours(shift.startTime, shift.endTime);
+export function ShiftCard({ shift, hasConflict, blockedReason, isPending, onEdit, onDelete }: ShiftCardProps) {
+  const hours = shift.durationMinutes / 60;
+  // An overlap is the louder problem, so it owns the rail; the block still gets
+  // its own marker and tooltip line below.
+  const isBlocked = !!blockedReason && !hasConflict;
+
+  const tone: ShiftTone = hasConflict
+    ? "critical"
+    : isBlocked
+      ? "attention"
+      : "neutral";
+  const accent = SHIFT_ACCENT[tone];
+
+  const topMarkers =
+    Number(!!hasConflict) + Number(isBlocked) + Number(!!shift.isRecurring);
+  const bottomMarkers =
+    Number(shift.syncStatus !== "synced") +
+    Number(shift.origin !== "operations") +
+    Number(!!shift.note);
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
           className={cn(
-            "group relative rounded-md border px-2 py-1.5 text-xs cursor-pointer transition-all overflow-hidden",
-            hasConflict
-              ? "bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-700 ring-1 ring-red-400/40"
-              : cn(palette.bg, palette.border),
-            shift.isRecurring && "border-dashed border-2"
+            "group relative px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs cursor-pointer transition-all overflow-hidden",
+            SHIFT_CARD_SURFACE,
+            isPending && PENDING_CARD_CLASS,
+            shift.isRecurring && "border-dashed",
+            shift.syncStatus === "pending" && "opacity-90"
           )}
           onClick={() => onEdit(shift)}
         >
+          {isPending && <ShiftPendingOverlay />}
+
+          {/* Status rail — drawn only when something needs attention. */}
+          {hasRail(tone) && (
+            <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          )}
           {/* Dark overlay + centered actions on hover */}
           <div className="absolute inset-0 flex items-center justify-center gap-3 rounded-md bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <Button
@@ -62,31 +132,45 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
             </Button>
           </div>
 
-          {/* Conflict indicator */}
-          {hasConflict && (
-            <div className="absolute top-0.5 right-0.5 z-5">
-              <AlertTriangle className="h-3 w-3 text-red-500" />
+          {/*
+            Top-right markers. One flex cluster rather than individually
+            positioned icons, so a third marker cannot collide with the other
+            two the way a hardcoded `right-4` offset would.
+          */}
+          {(hasConflict || isBlocked || shift.isRecurring) && (
+            <div className="absolute top-0.5 right-0.5 z-5 flex items-center gap-0.5">
+              {hasConflict && (
+                <AlertTriangle className={cn("h-3 w-3", accent.text)} />
+              )}
+              {isBlocked && <Ban className={cn("h-3 w-3", accent.text)} />}
+              {shift.isRecurring && (
+                <Repeat className="h-2.5 w-2.5 text-indigo-500 dark:text-indigo-400" />
+              )}
             </div>
           )}
 
-          {/* Recurring indicator */}
-          {shift.isRecurring && (
-            <div className={cn("absolute top-0.5 z-5", hasConflict ? "right-4" : "right-0.5")}>
-              <Repeat className="h-2.5 w-2.5 text-indigo-500 dark:text-indigo-400" />
-            </div>
-          )}
-
-          {/* Note indicator */}
-          {shift.note && (
-            <div className={cn("absolute bottom-0.5 right-0.5 z-5")}>
-              <StickyNote className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400" />
+          {/*
+            Status markers, bottom-right.
+            Kept off the left edge on purpose: as the week grid scrolls, cards
+            slide under the sticky employee column and lose their left side
+            first, which would hide the sync state precisely when scrolled.
+          */}
+          {(shift.syncStatus !== "synced" ||
+            shift.origin !== "operations" ||
+            shift.note) && (
+            <div className="absolute bottom-0.5 right-0.5 z-5 flex items-center gap-1">
+              <ShiftSyncIndicator syncStatus={shift.syncStatus} />
+              <ShiftOriginIndicator origin={shift.origin} />
+              {shift.note && (
+                <StickyNote className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400" />
+              )}
             </div>
           )}
 
           {/* Time range */}
           <div className={cn(
-            "flex items-center gap-1 font-semibold leading-tight",
-            hasConflict ? "text-red-700 dark:text-red-300" : palette.text
+            "flex items-center gap-1 font-semibold leading-tight text-foreground",
+            MARKER_RESERVE[topMarkers]
           )}>
             <Clock className="h-3 w-3 shrink-0" />
             <span className="truncate">
@@ -96,28 +180,53 @@ export function ShiftCard({ shift, color, hasConflict, onEdit, onDelete }: Shift
 
           {/* Label */}
           <p className={cn(
-            "mt-0.5 text-[10px] leading-tight opacity-75",
-            hasConflict ? "text-red-600 dark:text-red-400" : palette.text
+            "mt-0.5 truncate text-[9px] sm:text-[10px] leading-tight text-muted-foreground",
+            MARKER_RESERVE[bottomMarkers]
           )}>
             {shift.label}
             {shift.isRecurring && " ↻"}
           </p>
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        <p className="font-semibold">{shift.label} Shift</p>
-        <p>
-          {formatTime(shift.startTime)} – {formatTime(shift.endTime)} ({hours.toFixed(1)}h)
-        </p>
-        {hasConflict && (
-          <p className="text-red-500 font-medium">⚠ Overlapping shift conflict</p>
-        )}
-        {shift.isRecurring && (
-          <p className="text-indigo-500">↻ Recurring weekly</p>
-        )}
-        {shift.note && (
-          <p className="text-amber-600 dark:text-amber-400 italic">📝 {shift.note}</p>
-        )}
+      <TooltipContent side="top" className="max-w-60 text-xs">
+        <ShiftTooltipHeader
+          time={`${formatTime(shift.startTime)} – ${formatTime(shift.endTime)}`}
+          hours={hours}
+        />
+        <ShiftTooltipStatus tone={tone}>
+          {hasConflict
+            ? "Overlaps another shift"
+            : isBlocked
+              ? "Scheduled over a block"
+              : "Scheduled"}
+        </ShiftTooltipStatus>
+
+        <ShiftTooltipBody>
+          <ShiftTooltipRow label="Date">
+            {formatIsoDateWithWeekday(shift.shiftDate)}
+          </ShiftTooltipRow>
+          <ShiftTooltipRow label="Label">
+            {shift.label}
+            {shift.isRecurring ? " · repeats weekly" : ""}
+          </ShiftTooltipRow>
+          {shift.syncStatus !== "synced" && (
+            <ShiftTooltipRow label="Sync">
+              {shift.syncStatus === "pending"
+                ? "Saved — waiting to reach Humanity"
+                : "Saved here, but not in Humanity"}
+            </ShiftTooltipRow>
+          )}
+          {shift.origin !== "operations" && (
+            <ShiftTooltipRow label="Origin">
+              Last changed in Humanity
+            </ShiftTooltipRow>
+          )}
+          {shift.note && (
+            <ShiftTooltipRow label="Note">{shift.note}</ShiftTooltipRow>
+          )}
+        </ShiftTooltipBody>
+
+        {blockedReason && <ShiftTooltipHint>{blockedReason}</ShiftTooltipHint>}
       </TooltipContent>
     </Tooltip>
   );

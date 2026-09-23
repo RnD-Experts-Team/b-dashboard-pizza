@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-08-18 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-09-20 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -94,11 +94,21 @@ These areas are designed for customization:
 | `components/dashboard-v1/**` | Dashboard V1 re-skin components — reuses DSPR's hooks/services, no new data layer |
 | `components/dspr/**` | DSPR dashboard components (data source for the classic dashboard and Dashboard V1) |
 | `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay) |
+| `components/scheduling/**` | Weekly scheduling grid, wired to the OperationsPizza API. `day-view.tsx` / `month-overview.tsx` are PARKED — kept on disk but not mounted; the week grid is the only live view |
+| `lib/scheduling/**` | Scheduling support: presentation constants, week identity + date-display helpers, snake_case API adapters, error parsing |
 | `components/cleaning/**` | Cleaning Chart feature (task scheduling/completion, evaluation grid, reports) — tab visibility gated by `lib/auth/cleaning-access.ts`, not a feature flag |
 | `lib/store/**` | Feature-scoped Zustand stores (e.g. `dspr.store.ts`, `selected-store.store.ts`, `drive-thru.store.ts`, `cleaning.store.ts`) — distinct from the Core `lib/dashboard/store/**` |
 | `lib/notifications/**` | Notification → page-segment routing helper, shared by notification click-routing and the sidebar unread-dot indicator |
 | `components/uisfx/**` | Sound-fx UI: global click-sound + unlock singleton (`sound-fx-init.tsx`, mounted once in AppShell), topbar mute toggle (`sound-toggle.tsx`) |
 | `lib/uisfx/**` | Sound-fx logic: `sound.store.ts` (persisted Zustand preferences — pack/volume/enabled), `client.ts` (lazy `uisfx` singleton), `sync.ts` (store→library side effects), `play.ts` (`playSfx(cue)` call-site helper, gated on the `soundFx` feature flag + enabled + unlocked) |
+| `lib/nav/**` | Bottom-nav-eligible link list + permission filtering (`bottom-nav-items.ts`, `bottom-nav-access.ts`) for the mobile/tablet `BottomNav` bar — mirrors `sidebar.tsx`'s nav metadata/order independently rather than importing from that Core file, gated on the `mobileBottomNav` feature flag |
+| `components/daily-pay/**` | Daily Pay v2 — three-level pay sheets (Entry -> Payment -> Line). The create/edit dialog, detail sheet, table, filters, payment/line cards, labour control, warnings panel and revision viewer |
+| `lib/daily-pay/**` | Daily Pay pure logic, no React: `entry-form-state.ts` (form state machine — gather-vs-override hours, lump-sum exclusivity, duplicate-payee detection), `money.ts` (display/preview formulas; the server is authoritative), `field-errors.ts` (Laravel 422 dotted keys -> per-field errors), `warnings.ts` (aggregation-warning copy), `revision-snapshot.ts` (v1/v2 snapshot parsing), `explain.ts` (the calculation as plain-words rows — it is what makes the lump-sum override, the additive "money owed", the gathered-vs-typed hours and the unpaid break visible instead of implied), `from-basket.ts` (regroups the pay basket into an entry/payment/line form; deliberately leaves hours blank, because any value sent marks the line overridden upstream) |
+| `lib/maintenance-tickets/**` | Ticket-side pure logic, no React: `attendance-durations.ts` (warning-code parsing, minute formatting, and `computeAttendancePreview` — a FORM-ONLY preview; the read-only attendance card always renders the server's `durations` instead), `issue-actions.ts` (the action catalogue: every action, its plain-language description, and why it cannot apply right now — disabled with a reason, never hidden), `attendance-timeline.ts` (the event model behind timeline entry, and the store-handoff stamps; documents what a clock window MEANS — one paid segment per store, chained, with travel and parts-run paid and break not), `corrections.ts` (reads an existing record back into the form that made it, so "correct this" is one field rather than twelve), `filters-url.ts` (filters ⇄ query string, so a filtered list is a link) |
+| `components/storage/**` | Storage & Stock — GLOBAL (not store-scoped) storage locations, the append-only stock-movement ledger, and on-hand balances. Page at `dashboard/storage`, tabs Balances / Movements / Locations |
+| `lib/storage/**` | Stock pure logic, no React: `movement-types.ts` (the type→direction table; `reversal` cannot be a key, so it is unpostable at the type level), `movement-builder.ts` (composer form → payload, transfer expansion, 422 line-index mapping), `reversal-pairing.ts` (pairs a mistaken movement with its reversal; degrades to null rather than guessing). `stock-actions.ts` (the plain-language layer: five things that happen in a store room, each mapping onto exactly one movement type, so "transfer_out" and the +1/-1 direction never reach the screen). A mistaken movement STILL COUNTS toward every balance — the flag is display-only |
+| `components/store-passport/**` | Store Passport — the topbar dialog describing the selected store (identity/contact, trading hours, team, facilities, and an access tab of shared logins and door codes, masked behind per-row reveal). Static placeholder data for now, from `lib/mock/store-passport.mock.ts` |
+| `components/layout/topbar-tools-cluster.tsx` | The collapsible topbar drawer holding `BreakTimerButton` + `StorePassportButton`. Forces itself open while a break is running, so the live counter and overtime banner are never hidden |
 | `types/**` | Your custom TypeScript types |
 
 ---
@@ -161,7 +171,7 @@ components/layout/
 
 **Why:** These form the responsive shell that all pages inherit. Modifications break the consistent UX.
 
-**Exception — adding a global overlay or topbar indicator:** a one-line `<NewOverlay />` render in `app-shell.tsx` (or a one-line indicator mount in `topbar.tsx`'s icon cluster) is the one sanctioned edit — everything else in those files (shell structure, layout-variant logic, sidebar/topbar wiring itself) stays off-limits, same spirit as the sidebar's "ADD nav items only" rule above. Precedent already in the codebase: `ScreenProjectPiPOverlay`, `DriveThruOverlay`, `FloatingDebriefButton`, and `AnnouncementOnLoadPopup` are all mounted this way in `app-shell.tsx`; `DriveThruButton` and `BreakTimerButton` are mounted this way in `topbar.tsx`'s icon cluster.
+**Exception — adding a global overlay or topbar indicator:** a one-line `<NewOverlay />` render in `app-shell.tsx` (or a one-line indicator mount in `topbar.tsx`'s icon cluster) is the one sanctioned edit — everything else in those files (shell structure, layout-variant logic, sidebar/topbar wiring itself) stays off-limits, same spirit as the sidebar's "ADD nav items only" rule above. Precedent already in the codebase: `ScreenProjectPiPOverlay`, `DriveThruOverlay`, `FloatingDebriefButton`, `AnnouncementOnLoadPopup`, and `BottomNav` are all mounted this way in `app-shell.tsx`; `DriveThruButton` and `TopbarToolsCluster` are mounted this way in `topbar.tsx`'s icon cluster (the cluster is the collapsible drawer that now holds `BreakTimerButton` and `StorePassportButton`). `BottomNav` (a mobile/tablet quick-nav tab bar) sources its link list from the independent `lib/nav/**` (Extension zone) rather than importing from `sidebar.tsx`.
 
 ### ❌ UI Component Library
 

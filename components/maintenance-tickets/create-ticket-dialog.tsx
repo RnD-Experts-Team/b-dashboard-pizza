@@ -455,7 +455,7 @@ export function CreateTicketDialog({
                 <SelectTrigger className="text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="normal">Normal</SelectItem>
                   <SelectItem value="preventive_maintenance">Preventive Maintenance</SelectItem>
                 </SelectContent>

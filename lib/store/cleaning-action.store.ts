@@ -2,14 +2,18 @@ import { create } from "zustand";
 import type { PeriodType } from "@/types/cleaning.types";
 
 interface PendingCleaningAction {
-  storeId: number;
   periodType: PeriodType;
   periodKey: string;
+  /** A human label (e.g. "Store 1"), not an id — carried through for display
+   *  only. The deep-link target is always the "My Store" tab, which already
+   *  shows the viewing user's own store regardless, so nothing here needs to
+   *  resolve this to an actual store id. */
+  store: string | null;
 }
 
 interface CleaningActionState {
   pendingCleaningAction: PendingCleaningAction | null;
-  openCleaningEvaluation: (storeId: number, periodType: PeriodType, periodKey: string) => void;
+  openCleaningEvaluation: (periodType: PeriodType, periodKey: string, store?: string | null) => void;
   clearPendingCleaningAction: () => void;
 }
 
@@ -20,7 +24,7 @@ interface CleaningActionState {
  */
 export const useCleaningActionStore = create<CleaningActionState>()((set) => ({
   pendingCleaningAction: null,
-  openCleaningEvaluation: (storeId, periodType, periodKey) =>
-    set({ pendingCleaningAction: { storeId, periodType, periodKey } }),
+  openCleaningEvaluation: (periodType, periodKey, store = null) =>
+    set({ pendingCleaningAction: { periodType, periodKey, store } }),
   clearPendingCleaningAction: () => set({ pendingCleaningAction: null }),
 }));

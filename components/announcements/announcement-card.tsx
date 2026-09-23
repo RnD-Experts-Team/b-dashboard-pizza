@@ -6,7 +6,7 @@ import type { Announcement, AnnouncementType } from "@/types/announcement.types"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Info, Wrench, Pin, Eye, Calendar, CheckCheck, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react";
-import { format } from "date-fns";
+import { formatDateOrTimestamp } from "@/lib/utils/date-display";
 
 function getRelativeTime(timestamp: string): string {
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -182,9 +182,9 @@ export function AnnouncementCard({
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Calendar className="h-3.5 w-3.5 shrink-0" />
               <span>
-                {format(new Date(announcement.starts_at), "MMMM d, yyyy")}
+                {formatDateOrTimestamp(announcement.starts_at, "MMMM d, yyyy")}
                 {" – "}
-                {format(new Date(announcement.ends_at), "MMMM d, yyyy")}
+                {formatDateOrTimestamp(announcement.ends_at, "MMMM d, yyyy")}
               </span>
             </div>
 

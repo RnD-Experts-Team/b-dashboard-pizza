@@ -8,6 +8,7 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { MultiSelectOption } from "@/components/daily-pay/multi-select";
 
 /** Normalised store option: integer id (for the API) + display store number. */
 export interface DailyPayStoreOption {
@@ -76,6 +77,34 @@ export function useDailyPay() {
     return () => ctrl.abort();
   }, []);
 
+  // ── "Filled by" options ───────────────────────────────────────────────────
+  //
+  // Derived from the creators present in the loaded page, NOT from a users
+  // endpoint. `filled_by` ids belong to the MAINTENANCE backend, whereas
+  // userService talks to auth.pnepizza.com — a different user namespace — so
+  // building this picker from that would send ids the filter cannot match and
+  // silently return nothing. There is no users endpoint under the maintenance
+  // API today.
+  //
+  // Ids already selected are preserved even when they are not on this page, so
+  // a URL-driven filter never silently drops its own value.
+  //
+  // TODO(backend): expose a filled-by options endpoint.
+  const filledByOptions = useMemo<MultiSelectOption[]>(() => {
+    const byId = new Map<number, string>();
+    for (const entry of data?.data ?? []) {
+      if (entry.createdBy != null) {
+        byId.set(entry.createdBy, entry.creator?.name ?? `User #${entry.createdBy}`);
+      }
+    }
+    for (const id of filters.filled_by ?? []) {
+      if (!byId.has(id)) byId.set(id, `User #${id}`);
+    }
+    return Array.from(byId, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [data, filters.filled_by]);
+
   const refetch = useCallback(() => {
     fetchEntries(filters, currentPage);
   }, [fetchEntries, filters, currentPage]);
@@ -95,5 +124,6 @@ export function useDailyPay() {
     stores,
     technicians,
     isTechniciansLoading,
+    filledByOptions,
   };
 }

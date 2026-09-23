@@ -239,6 +239,9 @@ export interface StoreScoreDetail {
   actual_overtime_hours?: number;
   has_transfer_in?: boolean;
   count?: number;
+  /** Prorated weekly floor/ceil goals for the `labor` detail (percent-of-sales points) — inputs to the same labor-score formula as the backend's `laborScore()`. */
+  floor_goal?: number;
+  ceil_goal?: number;
 }
 
 export interface StoreScoreNonNegotiable {

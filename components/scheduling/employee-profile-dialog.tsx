@@ -20,9 +20,10 @@ import {
   Ban,
   Repeat,
   StickyNote,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EMPLOYEE_COLORS, DAYS_OF_WEEK, calcHours, formatTime } from "@/lib/scheduling/data";
+import { DAYS_OF_WEEK, formatTime } from "@/lib/scheduling/constants";
 import type {
   ScheduleEmployee,
   Shift,
@@ -53,11 +54,10 @@ export function EmployeeProfileDialog({
 }: EmployeeProfileDialogProps) {
   if (!employee) return null;
 
-  const palette = EMPLOYEE_COLORS[employee.color] ?? EMPLOYEE_COLORS.blue;
 
   const empShifts = shifts.filter((s) => s.employeeId === employee.id);
   const totalHours = empShifts.reduce(
-    (acc, s) => acc + calcHours(s.startTime, s.endTime),
+    (acc, s) => acc + s.durationMinutes / 60,
     0
   );
   const recurringCount = empShifts.filter((s) => s.isRecurring).length;
@@ -74,7 +74,7 @@ export function EmployeeProfileDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader className="sr-only">
           <DialogTitle>{employee.name}</DialogTitle>
           <DialogDescription>Employee profile and schedule summary</DialogDescription>
@@ -83,14 +83,8 @@ export function EmployeeProfileDialog({
         {/* Profile header */}
         <div className="flex flex-col items-center gap-3 pt-2 pb-4">
           <Avatar className="h-16 w-16">
-            <AvatarFallback
-              className={cn(
-                "text-xl font-bold",
-                palette.bg,
-                palette.text
-              )}
-            >
-              {employee.avatar}
+            <AvatarFallback className="bg-muted text-muted-foreground">
+              <User className="h-7 w-7" />
             </AvatarFallback>
           </Avatar>
           <div className="text-center">
@@ -205,7 +199,7 @@ export function EmployeeProfileDialog({
                       )}
                     </div>
                     <span className="text-[11px] text-muted-foreground">
-                      {formatTime(s.startTime)} – {formatTime(s.endTime)} · {calcHours(s.startTime, s.endTime).toFixed(1)}h
+                      {formatTime(s.startTime)} – {formatTime(s.endTime)} · {(s.durationMinutes / 60).toFixed(1)}h
                     </span>
                     {s.note && (
                       <div className="flex items-center gap-1 mt-0.5">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { format } from "date-fns";
@@ -74,6 +75,7 @@ import {
   Info,
   Zap,
   ClipboardPaste,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -87,6 +89,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { formatDateOrTimestamp, formatTimestamp } from "@/lib/utils/date-display";
 import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
@@ -108,8 +111,14 @@ import type {
   NoteType,
 } from "@/types/maintenance-tickets.types";
 import { EntityNotesAttachments } from "./entity-extras";
+import { AttendanceStream } from "./attendance-stream";
 import { NotesList } from "./notes-list";
 import { SearchCreateCombobox } from "./search-create-combobox";
+import { AttendancePanel } from "./attendance-panel";
+import { PartUsagePanel } from "./part-usage-panel";
+import { PaymentStatusBadge, RecordPaymentBlockDisplay } from "./payment-status-badge";
+import { AttendanceDurationsStrip } from "./attendance-durations-strip";
+import { PasteFileZone } from "./paste-file-zone";
 import { statusAccent } from "./status-accent";
 import {
   useTicketDraft,
@@ -120,19 +129,6 @@ import {
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Helpers                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-function fmtDate(iso: string) {
-  try {
-    // Date-only strings (YYYY-MM-DD) must be parsed in local time — `new Date("YYYY-MM-DD")` parses
-    // as UTC midnight which shifts the displayed date one day back in UTC-offset timezones.
-    const d = /^\d{4}-\d{2}-\d{2}$/.test(iso.trim()) ? new Date(iso + "T00:00") : new Date(iso);
-    return format(d, "MMM d, yyyy");
-  } catch { return iso; }
-}
-
-function fmtDateTime(iso: string) {
-  try { return format(new Date(iso), "MMM d, yyyy HH:mm"); } catch { return iso; }
-}
 
 function calcDuration(startIso: string, endIso: string): string | null {
   try {
@@ -276,6 +272,18 @@ function DateTimePicker({ value, onChange, placeholder, className }: {
 /*  Color-coded chips                                                        */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * House dropdown skin for this sheet: a fixed 192px cap plus a thin custom
+ * scrollbar. Deliberately denser than the app-wide 240px used everywhere else —
+ * this is the compact text-[11px] navigator/panel skin, and consistency WITHIN
+ * a skin beats consistency across skins.
+ *
+ * Module-scoped so every panel in the file can reach it; it used to live inside
+ * TicketNavigator, which is why three selects further down had no cap at all.
+ */
+const SELECT_CONTENT_CLS =
+  "text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40";
+
 function StatusChip({ value, label }: { value: string; label: string }) {
   const accent = statusAccent(value);
   return (
@@ -297,10 +305,10 @@ const PRIORITY_DOT_COLORS: Record<string, string> = {
   low: "bg-blue-500",
 };
 
-function PriorityChip({ value, label }: { value: string; label: string }) {
+function PriorityChip({ value, label, prefix = "Priority:" }: { value: string; label: string; prefix?: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground/70">Priority:</span>
+      <span className="font-medium text-foreground/70">{prefix}</span>
       <span className={cn("h-2 w-2 shrink-0 rounded-full", PRIORITY_DOT_COLORS[value] ?? "bg-muted-foreground/40")} />
       {label}
     </span>
@@ -364,6 +372,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
   const activeFilterCount = [
     filters?.statuses?.length,
     filters?.priorities?.length,
+    filters?.assigned_priorities?.length,
     filters?.issue_statuses?.length,
     filters?.technician_ids?.length,
     filters?.issue_ids?.length,
@@ -388,7 +397,7 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
   }
 
   const selectCls = "h-6 w-full min-w-0 text-[10px] px-1.5 [&>span]:truncate [&>svg]:shrink-0 [&>svg]:h-2.5 [&>svg]:w-2.5";
-  const selectContentCls = "text-[11px] min-w-[100px] max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40";
+  const selectContentCls = SELECT_CONTENT_CLS;
   const itemCls = "text-[11px] py-1 px-2";
   const labelCls = "text-[9px] font-semibold uppercase tracking-wide text-muted-foreground truncate";
 
@@ -473,6 +482,24 @@ function TicketNavigator({ tickets, activeId, search, onSearchChange, onSelect, 
                   <Select
                     value={filters?.priorities?.[0] || "all"}
                     onValueChange={(v) => updateFilter("priorities", v === "all" ? [] : [v as Priority])}
+                  >
+                    <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
+                    <SelectContent className={selectContentCls}>
+                      <SelectItem value="all" className={itemCls}>All</SelectItem>
+                      <SelectItem value="urgent" className={itemCls}>{t("priority.urgent")}</SelectItem>
+                      <SelectItem value="high" className={itemCls}>{t("priority.high")}</SelectItem>
+                      <SelectItem value="medium" className={itemCls}>{t("priority.medium")}</SelectItem>
+                      <SelectItem value="low" className={itemCls}>{t("priority.low")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Assigned Priority */}
+                <div className="min-w-0 space-y-0.5">
+                  <p className={labelCls}>Assigned Priority</p>
+                  <Select
+                    value={filters?.assigned_priorities?.[0] || "all"}
+                    onValueChange={(v) => updateFilter("assigned_priorities", v === "all" ? [] : [v as Priority])}
                   >
                     <SelectTrigger className={selectCls}><SelectValue /></SelectTrigger>
                     <SelectContent className={selectContentCls}>
@@ -802,6 +829,156 @@ function ChangeStatusPanel({ issue, storeId, ticketId, issueIds, onClose, onSucc
         <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !hasChanged}>
           {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
           {t("common.save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface AssignPriorityPanelProps {
+  issue: TicketIssue;
+  storeId: string;
+  ticketId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+/** Sets or clears the independent `assignedPriority` — separate from `priority`, which never changes after creation. */
+function AssignPriorityPanel({ issue, storeId, ticketId, onClose, onSuccess }: AssignPriorityPanelProps) {
+  const initial = (issue.assignedPriority?.value as Priority | undefined) ?? null;
+  const [priority, setPriority] = useState<Priority | null>(initial);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const hasChanged = priority !== initial;
+
+  async function handleSubmit() {
+    setIsSubmitting(true);
+    try {
+      await maintenanceTicketsService.setAssignedPriority(storeId, ticketId, issue.id, { priority });
+      toast.success(priority ? "Assigned priority updated" : "Assigned priority cleared");
+      onSuccess(); onClose();
+    } catch (err) {
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
+    } finally { setIsSubmitting(false); }
+  }
+
+  const priorityOptions: { value: Priority; label: string }[] = [
+    { value: "urgent", label: "Urgent" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assign Priority</p>
+      <div className="flex flex-wrap gap-1.5">
+        {priorityOptions.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => setPriority(p.value)}
+            className={cn(
+              "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+              priority === p.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-input hover:bg-muted/50"
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setPriority(null)}
+          className={cn(
+            "px-3 py-1.5 rounded-md text-xs font-medium border transition-colors",
+            priority === null
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background text-muted-foreground border-input hover:bg-muted/50"
+          )}
+        >
+          Clear
+        </button>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !hasChanged}>
+          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface RelinkIssuePanelProps {
+  issue: TicketIssue;
+  storeId: string;
+  ticketId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+/** Re-links this ticket-issue line to a different catalog issue. Only the catalog association changes. */
+function RelinkIssuePanel({ issue, storeId, ticketId, onClose, onSuccess }: RelinkIssuePanelProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState<number | null>(issue.issueId);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    setCatalogLoading(true);
+    maintenanceTicketsService.getCatalogIssues(ctrl.signal, storeId)
+      .then((issues) => setCatalogIssues(issues.filter((i) => !i.deletedAt)))
+      .catch(() => {})
+      .finally(() => setCatalogLoading(false));
+    return () => ctrl.abort();
+  }, [storeId]);
+
+  const hasChanged = selectedId !== issue.issueId;
+
+  async function handleSubmit() {
+    if (!selectedId) {
+      setError("Select a catalog issue.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await maintenanceTicketsService.relinkIssue(storeId, ticketId, issue.id, { issue_id: selectedId });
+      toast.success("Issue re-linked successfully");
+      onSuccess(); onClose();
+    } catch (err) {
+      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
+    } finally { setIsSubmitting(false); }
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Change Issue</p>
+
+      <div className="space-y-1">
+        <Label className="text-xs text-muted-foreground">Catalog issue <span className="text-destructive">*</span></Label>
+        {/* No onCreate — re-linking only picks an existing catalog issue, never creates one. */}
+        <SearchCreateCombobox
+          items={catalogIssues.map((i) => ({ id: i.id, label: i.title }))}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          placeholder="Search issues…"
+          loading={catalogLoading}
+        />
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || catalogLoading || !hasChanged}>
+          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}
+          Save
         </Button>
       </div>
     </div>
@@ -1192,302 +1369,6 @@ function WarrantyPanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatch
   );
 }
 
-function AttendancePanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
-  type ClockEntry   = { uid: number; kind: "start_clock"    | "end_clock";    value: string };
-  type BreakEntry   = { uid: number; kind: "start_break"    | "end_break";    value: string };
-  type PartsEntry   = { uid: number; kind: "start_parts_run"| "end_parts_run";value: string };
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [technicianId, setTechnicianId] = useState(issueDraft.attendanceTechnicianId ?? "");
-  const [clockEntries, setClockEntries] = useState<ClockEntry[]>([]);
-  const [breakEntries, setBreakEntries] = useState<BreakEntry[]>([]);
-  const [partsEntries, setPartsEntries] = useState<PartsEntry[]>([]);
-  const uidRef = useRef(0);
-  function nextUid() { return uidRef.current++; }
-
-  function addClock()  { setClockEntries((p) => [...p, { uid: nextUid(), kind: "start_clock",     value: "" }]); }
-  function addBreak()  { setBreakEntries((p) => [...p, { uid: nextUid(), kind: "start_break",     value: "" }]); }
-  function addParts()  { setPartsEntries((p) => [...p, { uid: nextUid(), kind: "start_parts_run", value: "" }]); }
-
-  function patchClock(uid: number, patch: Partial<ClockEntry>) { setClockEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
-  function patchBreak(uid: number, patch: Partial<BreakEntry>) { setBreakEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
-  function patchParts(uid: number, patch: Partial<PartsEntry>) { setPartsEntries((p) => p.map((e) => e.uid === uid ? { ...e, ...patch } : e)); }
-
-  function removeClock(uid: number) { setClockEntries((p) => p.filter((e) => e.uid !== uid)); }
-  function removeBreak(uid: number) { setBreakEntries((p) => p.filter((e) => e.uid !== uid)); }
-  function removeParts(uid: number) { setPartsEntries((p) => p.filter((e) => e.uid !== uid)); }
-
-  async function handleSubmit() {
-    if (!technicianId) { setError("Technician is required."); return; }
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const base = { ticket_issue_ids: issueIds ?? [issue.id], technician_id: Number(technicianId) };
-      const calls: Promise<unknown>[] = [];
-      for (const e of clockEntries) {
-        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
-      }
-      for (const e of breakEntries) {
-        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
-      }
-      for (const e of partsEntries) {
-        if (e.value) calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, { ...base, [e.kind]: toRfc3339OrUndefined(e.value) }));
-      }
-      if (calls.length === 0) {
-        calls.push(maintenanceTicketsService.createAttendanceEntry(storeId, ticketId, base));
-      }
-      await Promise.all(calls);
-      onClearDraftFields([
-        "attendanceTechnicianId",
-        "attendanceStartClock", "attendanceEndClock",
-        "attendanceStartBreak", "attendanceEndBreak",
-        "attendanceStartPartsRun", "attendanceEndPartsRun",
-      ]);
-      toast.success("Attendance saved successfully");
-      onSuccess(); onClose();
-    } catch (err) {
-      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
-      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Attendance</p>
-
-      {/* Technician (required) */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Technician <span className="text-destructive">*</span></Label>
-        <Select value={technicianId} onValueChange={setTechnicianId}>
-          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
-          <SelectContent>
-            {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
-              <SelectItem key={tech.id} value={String(tech.id)}>{tech.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Work Clock */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Work Clock</p>
-        {clockEntries.map((entry) => (
-          <div key={entry.uid} className="flex items-center gap-2">
-            {/* Type toggle */}
-            <div className="flex shrink-0 rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => patchClock(entry.uid, { kind: "start_clock" })}
-                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
-                  entry.kind === "start_clock" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Clock In</button>
-              <button
-                type="button"
-                onClick={() => patchClock(entry.uid, { kind: "end_clock" })}
-                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
-                  entry.kind === "end_clock" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Clock Out</button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <DateTimePicker
-                value={entry.value}
-                onChange={(v) => patchClock(entry.uid, { value: v })}
-                placeholder={entry.kind === "start_clock" ? "Clock in time" : "Clock out time"}
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeClock(entry.uid)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addClock}>
-          <Plus className="me-1 h-3 w-3" /> Add Work Clock
-        </Button>
-      </div>
-
-      {/* Break */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Break</p>
-        {breakEntries.map((entry) => (
-          <div key={entry.uid} className="flex items-center gap-2">
-            <div className="flex shrink-0 rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => patchBreak(entry.uid, { kind: "start_break" })}
-                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
-                  entry.kind === "start_break" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Break Start</button>
-              <button
-                type="button"
-                onClick={() => patchBreak(entry.uid, { kind: "end_break" })}
-                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
-                  entry.kind === "end_break" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Break End</button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <DateTimePicker
-                value={entry.value}
-                onChange={(v) => patchBreak(entry.uid, { value: v })}
-                placeholder={entry.kind === "start_break" ? "Break start time" : "Break end time"}
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeBreak(entry.uid)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addBreak}>
-          <Plus className="me-1 h-3 w-3" /> Add Break
-        </Button>
-      </div>
-
-      {/* Parts Run */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Parts Run</p>
-        {partsEntries.map((entry) => (
-          <div key={entry.uid} className="flex items-center gap-2">
-            <div className="flex shrink-0 rounded-md border overflow-hidden">
-              <button
-                type="button"
-                onClick={() => patchParts(entry.uid, { kind: "start_parts_run" })}
-                className={cn("px-2.5 py-1 text-xs font-medium transition-colors",
-                  entry.kind === "start_parts_run" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Depart</button>
-              <button
-                type="button"
-                onClick={() => patchParts(entry.uid, { kind: "end_parts_run" })}
-                className={cn("px-2.5 py-1 text-xs font-medium border-l transition-colors",
-                  entry.kind === "end_parts_run" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted/60")}
-              >Return</button>
-            </div>
-            <div className="flex-1 min-w-0">
-              <DateTimePicker
-                value={entry.value}
-                onChange={(v) => patchParts(entry.uid, { value: v })}
-                placeholder={entry.kind === "start_parts_run" ? "Depart time" : "Return time"}
-              />
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => removeParts(entry.uid)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" className="h-7 text-xs w-full" onClick={addParts}>
-          <Plus className="me-1 h-3 w-3" /> Add Parts Run
-        </Button>
-      </div>
-
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || !technicianId}>
-          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PartUsagePanel({ issue, storeId, ticketId, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: Omit<LifecyclePanelProps, "technicians">) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [catalogParts, setCatalogParts] = useState<CatalogPart[]>([]);
-  const [partsLoading, setPartsLoading] = useState(true);
-  useEffect(() => {
-    const ctrl = new AbortController();
-    setPartsLoading(true);
-    maintenanceTicketsService.getCatalogParts(ctrl.signal)
-      .then((parts) => setCatalogParts(parts.filter((p) => !p.deletedAt)))
-      .catch(() => {})
-      .finally(() => setPartsLoading(false));
-    return () => ctrl.abort();
-  }, []);
-
-  /** Creates a catalog part and returns the new id. Called by SearchCreateCombobox. */
-  async function createCatalogPart(name: string): Promise<number> {
-    const newPart = await maintenanceTicketsService.createCatalogPart({ name });
-    setCatalogParts((prev) => [...prev, newPart]);
-    return newPart.id;
-  }
-
-  async function handleSubmit() {
-    const partId = asOptionalNumber(issueDraft.partId);
-    const partCost = asOptionalNumber(issueDraft.partCost);
-    if (!partId || partCost == null) {
-      setError("Part and cost are required.");
-      return;
-    }
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      await maintenanceTicketsService.createPartUsage(storeId, ticketId, {
-        ticket_issue_ids: issueIds ?? [issue.id],
-        part_id: partId,
-        cost: partCost,
-      }, files);
-      onClearDraftFields(["partId", "partCost"]);
-      setFiles([]);
-      toast.success("Part usage saved successfully");
-      onSuccess(); onClose();
-    } catch (err) {
-      if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
-      toast.error(err instanceof MaintenanceTicketsError ? err.message : "Something went wrong.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Part Usage</p>
-
-      {/* Part search + create */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Part <span className="text-destructive">*</span></Label>
-        <SearchCreateCombobox
-          items={catalogParts.map((p) => ({ id: p.id, label: p.name }))}
-          selectedId={asOptionalNumber(issueDraft.partId) ?? null}
-          onSelect={(id) => onPatchDraft({ partId: id != null ? String(id) : "" })}
-          onCreate={createCatalogPart}
-          placeholder="Search parts or type to create a new one…"
-          loading={partsLoading}
-        />
-      </div>
-
-      {/* Cost */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Cost ($) <span className="text-destructive">*</span></Label>
-        <Input
-          type="number"
-          min="0"
-          step="0.01"
-          className="h-8"
-          placeholder="0.00"
-          value={issueDraft.partCost}
-          onChange={(e) => onPatchDraft({ partCost: e.target.value })}
-        />
-      </div>
-
-      {/* Attachments */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Attachments</Label>
-        <PasteFileZone files={files} onChange={setFiles} />
-      </div>
-
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
-        <Button size="sm" onClick={handleSubmit} disabled={isSubmitting || partsLoading}>
-          {isSubmitting && <Loader2 className="me-1.5 h-3 w-3 animate-spin" />}Save
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueDraft, onPatchDraft, onClearDraftFields, onClose, onSuccess }: LifecyclePanelProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1535,7 +1416,7 @@ function PayEntryPanel({ issue, storeId, ticketId, technicians, issueIds, issueD
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Add Pay Entry</p>
       <Select value={issueDraft.payTechnicianId} onValueChange={(v) => onPatchDraft({ payTechnicianId: v })}>
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select technician" /></SelectTrigger>
-        <SelectContent>
+        <SelectContent position="popper" className={SELECT_CONTENT_CLS}>
           {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
             <SelectItem key={tech.id} value={String(tech.id)}>{tech.name}</SelectItem>
           ))}
@@ -1645,10 +1526,10 @@ function DelayAssignmentPanel({ issue, storeId, ticketId, issueDraft, onPatchDra
         <Label className="text-xs text-muted-foreground">Assignment <span className="text-destructive">*</span></Label>
         <Select value={issueDraft.delayAssignmentId} onValueChange={(v) => onPatchDraft({ delayAssignmentId: v })}>
           <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select assignment" /></SelectTrigger>
-          <SelectContent>
+          <SelectContent position="popper" className={SELECT_CONTENT_CLS}>
             {issue.assignments.map((assignment) => (
               <SelectItem key={assignment.id} value={String(assignment.id)}>
-                #{assignment.id} · {fmtDate(assignment.assignedDate)}
+                #{assignment.id} · {formatDateOrTimestamp(assignment.assignedDate, "MMM d, yyyy")}
               </SelectItem>
             ))}
           </SelectContent>
@@ -1714,10 +1595,10 @@ function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueDraft, o
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Change Assignment Technicians</p>
       <Select value={issueDraft.changeAssignmentId} onValueChange={(v) => onPatchDraft({ changeAssignmentId: v })}>
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select assignment" /></SelectTrigger>
-        <SelectContent>
+        <SelectContent position="popper" className={SELECT_CONTENT_CLS}>
           {issue.assignments.map((assignment) => (
             <SelectItem key={assignment.id} value={String(assignment.id)}>
-              #{assignment.id} · {fmtDate(assignment.assignedDate)}
+              #{assignment.id} · {formatDateOrTimestamp(assignment.assignedDate, "MMM d, yyyy")}
             </SelectItem>
           ))}
         </SelectContent>
@@ -1783,6 +1664,13 @@ const BULK_DUMMY_ISSUE = {
   statusChanges: [],
   children: [],
   parentId: null,
+  // A dummy has no payment state, and null is exactly "not loaded" — the badge
+  // renders nothing for it, which is correct.
+  //
+  // NOTE: the `as unknown as` cast below means TypeScript will NOT flag a field
+  // missing from this literal. Anything reading a new TicketIssue field off it
+  // must optional-chain, or it throws only in bulk mode.
+  payment: null,
 } as unknown as TicketIssue;
 
 interface BulkActionBarProps {
@@ -1907,6 +1795,7 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
       )}
       {bulkAction === "part" && (
         <PartUsagePanel issue={BULK_DUMMY_ISSUE} storeId={storeId} ticketId={ticketId}
+          technicians={technicians}
           issueIds={issueIds}
           issueDraft={bulkDraft} onPatchDraft={patchDraft} onClearDraftFields={clearDraftFields}
           onClose={() => setBulkAction(null)} onSuccess={handleActionSuccess} />
@@ -1940,89 +1829,6 @@ function BulkActionBar({ issueIds, storeId, ticketId, technicians, attendanceTec
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Paste-aware file zone (used in Diagnosis / Part / Warranty panels)      */
 /* ────────────────────────────────────────────────────────────────────────── */
-
-function PasteFileZone({
-  files,
-  onChange,
-}: {
-  files: File[];
-  onChange: (files: File[]) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const zoneRef = useRef<HTMLDivElement>(null);
-
-  function handlePaste(e: React.ClipboardEvent) {
-    const newFiles = Array.from(e.clipboardData.items)
-      .filter((item) => item.kind === "file")
-      .map((item, i) => {
-        const blob = item.getAsFile();
-        if (!blob) return null;
-        const ext = blob.type ? blob.type.split("/")[1] ?? "bin" : "bin";
-        return new File([blob], `paste-${Date.now()}-${i}.${ext}`, { type: blob.type });
-      })
-      .filter((f): f is File => f !== null);
-    if (newFiles.length === 0) return;
-    e.preventDefault();
-    onChange([...files, ...newFiles]);
-  }
-
-  function handleMouseEnter() {
-    const active = document.activeElement as HTMLElement | null;
-    const isInteractive = active && ["INPUT","TEXTAREA","SELECT","BUTTON"].includes(active.tagName);
-    if (!isInteractive) zoneRef.current?.focus({ preventScroll: true });
-  }
-
-  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(e.target.files ?? []);
-    if (picked.length) onChange([...files, ...picked]);
-    e.target.value = "";
-  }
-
-  return (
-    <div
-      ref={zoneRef}
-      tabIndex={-1}
-      onPaste={handlePaste}
-      onMouseEnter={handleMouseEnter}
-      className={cn(
-        "rounded-md border border-dashed bg-muted/20 outline-none transition-all",
-        "hover:border-primary/50 hover:bg-primary/5",
-        "focus-within:ring-1 focus-within:ring-primary/30 focus-within:border-primary/40"
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <span className="flex items-center gap-1.5">
-          <Paperclip className="h-3.5 w-3.5 shrink-0" />
-          {files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""} staged` : "Attach files…"}
-        </span>
-        <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground/60">
-          <ClipboardPaste className="h-3 w-3" /> Paste
-        </span>
-      </button>
-      <input ref={inputRef} type="file" multiple className="hidden" onChange={handleFileInput} />
-      {files.length > 0 && (
-        <ul className="px-3 pb-2 space-y-0.5">
-          {files.map((f, i) => (
-            <li key={i} className="flex items-center justify-between gap-2 rounded bg-muted/40 px-2 py-0.5 text-[11px]">
-              <span className="truncate max-w-[200px]">{f.name}</span>
-              <button
-                type="button"
-                onClick={() => onChange(files.filter((_, idx) => idx !== i))}
-                className="shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 function SectionCollapse({
   title,
@@ -2106,7 +1912,7 @@ function StatusHistory({ changes }: { changes: TicketIssue["statusChanges"] }) {
                   {c.creator ? c.creator.name : c.changedBy}
                 </span>
               )}
-              <span>{fmtDateTime(c.createdAt)}</span>
+              <span>{formatTimestamp(c.createdAt, "MMM d, yyyy HH:mm")}</span>
               {c.reason && <span className="italic">"{c.reason}"</span>}
             </div>
           ))}
@@ -2127,6 +1933,8 @@ type ActiveAction =
   | "defer"
   | "cancel"
   | "wait"
+  | "assignPriority"
+  | "relinkIssue"
   | "diagnosis"
   | "attendance"
   | "part"
@@ -2241,6 +2049,11 @@ interface IssueNodeProps {
   sharedDiagnosisIssueIdsByRecordId?: ReadonlyMap<number, number[]>;
   /** map: issue id -> display title */
   issueTitleById?: ReadonlyMap<number, string>;
+  /**
+   * Every issue on this ticket, for the attendance panel's cross-issue picker.
+   * Optional — the picker degrades to this-issue-only when it is absent.
+   */
+  ticketIssues?: TicketIssue[];
   /** trigger transient highlight animation for issue cards */
   onHighlightIssues?: (issueIds: number[]) => void;
   /** show shared indicator chip in card header row (used for no-grouping mode) */
@@ -2285,6 +2098,7 @@ function IssueNode({
   sharedWarrantyIssueIdsByRecordId,
   sharedDiagnosisIssueIdsByRecordId,
   issueTitleById,
+  ticketIssues,
   onHighlightIssues,
   showSharedIndicatorWhenCollapsed = false,
   isHighlighted = false,
@@ -2328,6 +2142,8 @@ function IssueNode({
     ...(canDefer ? [{ key: "defer" as const, label: "Defer", Icon: TimerReset, group: "Issue" as const }] : []),
     ...(canWait ? [{ key: "wait" as const, label: "Wait", Icon: ClockIcon, group: "Issue" as const }] : []),
     ...(canCancel ? [{ key: "cancel" as const, label: "Cancel", Icon: X, group: "Issue" as const, destructive: true }] : []),
+    { key: "assignPriority", label: "Assign priority", Icon: Flag, group: "Issue" },
+    { key: "relinkIssue", label: "Change issue", Icon: RefreshCw, group: "Issue" },
     { key: "diagnosis", label: "Troubleshooting", Icon: FileText, group: "Add records" },
     { key: "attendance", label: "Attendance", Icon: Wrench, group: "Add records" },
     { key: "part", label: "Part usage", Icon: Package, group: "Add records" },
@@ -2435,6 +2251,15 @@ function IssueNode({
                 {/* Row 2: Status chip + Shared chip + Priority text + ID + creator */}
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusChip value={issue.status.value} label={issue.status.label} />
+                  {/* Rolled-up server-side. Optional chaining is mandatory:
+                      BULK_DUMMY_ISSUE is cast `as unknown as TicketIssue` and
+                      carries no `payment` key, so TypeScript will not catch a
+                      direct access here. Non-interactive by necessity — this
+                      row sits inside the expand <button>. */}
+                  <PaymentStatusBadge
+                    status={issue.payment?.status}
+                    title="Anything still owed dominates: this reads Not yet paid until the last payable on this issue is settled."
+                  />
                   {showSharedIndicatorWhenCollapsed && hasSharedAction && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
                       <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
@@ -2442,6 +2267,9 @@ function IssueNode({
                     </span>
                   )}
                   <PriorityChip value={issue.priority.value} label={issue.priority.label} />
+                  {issue.assignedPriority && (
+                    <PriorityChip value={issue.assignedPriority.value} label={issue.assignedPriority.label} prefix="Assigned:" />
+                  )}
                   <span className="text-xs font-mono text-muted-foreground/60">#{issue.id}</span>
                   {issue.creator && (
                     <span className="text-xs text-muted-foreground flex items-center gap-0.5">
@@ -2558,7 +2386,7 @@ function IssueNode({
                           <div className="flex flex-col gap-0.5">
                             <span className="text-muted-foreground">Scheduled</span>
                             <span className="text-sm font-medium">
-                              {fmtDate(a.assignedDate)}{a.assignedHour ? `, ${a.assignedHour}` : ""}
+                              {formatDateOrTimestamp(a.assignedDate, "MMM d, yyyy")}{a.assignedHour ? `, ${a.assignedHour}` : ""}
                             </span>
                           </div>
                           {a.technicians.length > 0 && (
@@ -2617,7 +2445,7 @@ function IssueNode({
                                 <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                                   <span className="text-muted-foreground">Rescheduled to:</span>
                                   <span className={cn("font-medium", delay.mistaken && "line-through")}>
-                                    {fmtDate(delay.newDate)}{delay.newHour ? `, ${delay.newHour}` : ""}
+                                    {formatDateOrTimestamp(delay.newDate, "MMM d, yyyy")}{delay.newHour ? `, ${delay.newHour}` : ""}
                                   </span>
                                   {delay.reason && (
                                     <>
@@ -2696,7 +2524,7 @@ function IssueNode({
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <User className="h-3 w-3 shrink-0" />
                               <span>Added by <span className="font-medium text-foreground">{item.creator?.name ?? `#${item.createdBy}`}</span></span>
-                              <span>· {fmtDate(item.createdAt)}</span>
+                              <span>· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                             </div>
                           )}
                           {isShared && sharedWithIds.length > 0 && (
@@ -2763,38 +2591,46 @@ function IssueNode({
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
                         <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
-                          {/* Mistaken banner or ··· menu */}
-                          {item.mistaken ? (
-                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                              This record has been marked as mistaken
+                          {/* Header. The mistaken banner and the ··· menu are
+                              mutually exclusive, but the payment badge shows in
+                              BOTH states — so it lives in a shared right-hand
+                              slot rather than being repeated per branch. */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              {item.mistaken ? (
+                                <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  This record has been marked as mistaken
+                                </div>
+                              ) : (
+                                <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
+                              )}
                             </div>
-                          ) : canMarkMistaken ? (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setMistakenConfirm({
-                                      label: `Attendance entry #${item.id}`,
-                                      onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
-                                    })}
-                                  >
-                                    <AlertTriangle className="h-4 w-4" />
-                                    Mark as Mistaken
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <PaymentStatusBadge status={item.payment?.status} />
+                              {!item.mistaken && canMarkMistaken && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => setMistakenConfirm({
+                                        label: `Attendance entry #${item.id}`,
+                                        onConfirm: async () => { await maintenanceTicketsService.markAttendanceMistaken(storeId, ticketId, item.id); },
+                                      })}
+                                    >
+                                      <AlertTriangle className="h-4 w-4" />
+                                      Mark as Mistaken
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs font-medium text-muted-foreground">Time Entry #{item.id}</span>
-                          )}
+                          </div>
                           {/* Labeled data — 2-column layout */}
                           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                             <div className="flex flex-col gap-0.5">
@@ -2807,11 +2643,17 @@ function IssueNode({
                                 <span className="text-sm flex items-center gap-1">
                                   <User className="h-3 w-3 shrink-0" />
                                   {item.creator?.name ?? `#${item.createdBy}`}
-                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                  <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                                 </span>
                               </div>
                             )}
                           </div>
+                          {/* The SERVER's figures. Sits above the per-section
+                              spans, which are gross — see AttendanceDurationsStrip. */}
+                          <AttendanceDurationsStrip durations={item.durations} />
+                          {/* Which pay sheet(s) covered this entry. Renders
+                              nothing when the claims were not loaded. */}
+                          <RecordPaymentBlockDisplay payment={item.payment} kind="attendance" />
                           {/* Work clock section — 2-column */}
                           {(item.startClock || item.endClock) && (() => {
                             const dur = (item.startClock && item.endClock) ? calcDuration(item.startClock, item.endClock) : null;
@@ -2824,18 +2666,18 @@ function IssueNode({
                                   {item.startClock && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Clock In</span>
-                                      <span className="font-medium">{fmtDateTime(item.startClock)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.startClock, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {item.endClock && (
                                     <div className="flex flex-col gap-0.5">
                                       <span className="text-muted-foreground">Clock Out</span>
-                                      <span className="font-medium">{fmtDateTime(item.endClock)}</span>
+                                      <span className="font-medium">{formatTimestamp(item.endClock, "MMM d, yyyy HH:mm")}</span>
                                     </div>
                                   )}
                                   {dur && (
                                     <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Duration</span>
+                                      <span className="text-muted-foreground">Span (gross)</span>
                                       <span className="font-semibold text-sm">{dur}</span>
                                     </div>
                                   )}
@@ -2843,64 +2685,29 @@ function IssueNode({
                               </div>
                             );
                           })()}
-                          {/* Break section — 2-column */}
-                          {(item.startBreak || item.endBreak) && (() => {
-                            const dur = (item.startBreak && item.endBreak) ? calcDuration(item.startBreak, item.endBreak) : null;
-                            return (
-                              <div className="space-y-1.5 ps-3 border-s">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Break</p>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  {item.startBreak && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Start</span>
-                                      <span className="font-medium">{fmtDateTime(item.startBreak)}</span>
-                                    </div>
-                                  )}
-                                  {item.endBreak && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">End</span>
-                                      <span className="font-medium">{fmtDateTime(item.endBreak)}</span>
-                                    </div>
-                                  )}
-                                  {dur && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Duration</span>
-                                      <span className="font-semibold text-sm">{dur}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                          {/* Parts run section — 2-column */}
-                          {(item.startPartsRun || item.endPartsRun) && (() => {
-                            const dur = (item.startPartsRun && item.endPartsRun) ? calcDuration(item.startPartsRun, item.endPartsRun) : null;
-                            return (
-                              <div className="space-y-1.5 ps-3 border-s">
-                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">Parts Run</p>
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                                  {item.startPartsRun && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Depart</span>
-                                      <span className="font-medium">{fmtDateTime(item.startPartsRun)}</span>
-                                    </div>
-                                  )}
-                                  {item.endPartsRun && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Return</span>
-                                      <span className="font-medium">{fmtDateTime(item.endPartsRun)}</span>
-                                    </div>
-                                  )}
-                                  {dur && (
-                                    <div className="flex flex-col gap-0.5">
-                                      <span className="text-muted-foreground">Duration</span>
-                                      <span className="font-semibold text-sm">{dur}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
+                          {/*
+                            Everything else that happened, as a stream.
+
+                            This was two fixed blocks -- Break and Parts Run --
+                            each able to show exactly ONE of its kind, because
+                            one of each was all the four column pairs could
+                            hold. A session can now hold as many breaks and
+                            parts runs as the day actually had, so a pair of
+                            fixed blocks would show the first and quietly drop
+                            the rest.
+
+                            Read-only: no callbacks are passed, and that is
+                            what makes it so. Recording belongs on the tickets
+                            page.
+                          */}
+                          {item.events.length > 0 && (
+                            <div className="space-y-1.5 ps-3 border-s">
+                              <p className="text-xs font-semibold uppercase tracking-widest text-foreground border-b border-border pb-1">
+                                What happened
+                              </p>
+                              <AttendanceStream events={item.events} />
+                            </div>
+                          )}
                           {isShared && sharedWithIds.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1 text-xs">
                               <span className="text-muted-foreground">Shared with:</span>
@@ -2939,59 +2746,133 @@ function IssueNode({
                       const idsToHighlight = [issue.id, ...sharedWithIds];
                       return (
                         <div key={item.id} className={cn("rounded-md border bg-card p-3 space-y-2", item.mistaken && "opacity-60")}>
-                          {/* Mistaken banner or ··· menu */}
-                          {item.mistaken ? (
-                            <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                              This record has been marked as mistaken
+                          {/* Header — same shape as the attendance card: the
+                              badge shows whether or not the record is mistaken,
+                              so it sits in a shared right-hand slot. */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              {item.mistaken ? (
+                                <div className="flex items-center gap-1.5 rounded-md bg-destructive/10 border border-destructive/30 px-2.5 py-1 text-xs font-medium text-destructive">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                  This record has been marked as mistaken
+                                </div>
+                              ) : (
+                                <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
+                              )}
                             </div>
-                          ) : canMarkMistaken ? (
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => setMistakenConfirm({
-                                      label: `Part usage #${item.id}`,
-                                      onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
-                                    })}
-                                  >
-                                    <AlertTriangle className="h-4 w-4" />
-                                    Mark as Mistaken
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <PaymentStatusBadge status={item.payment?.status} />
+                              {!item.mistaken && canMarkMistaken && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled={mistakenSaving !== null}>
+                                      <MoreHorizontal className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => setMistakenConfirm({
+                                        label: `Part usage #${item.id}`,
+                                        onConfirm: async () => { await maintenanceTicketsService.markPartUsageMistaken(storeId, ticketId, item.id); },
+                                      })}
+                                    >
+                                      <AlertTriangle className="h-4 w-4" />
+                                      Mark as Mistaken
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs font-medium text-muted-foreground">Part Used #{item.id}</span>
-                          )}
-                          {/* Labeled data — 2-column */}
+                          </div>
+                          {/* Labeled data — 2-column.
+                              `strike` is applied to the VALUES when the record is
+                              mistaken: the spec asks for flagged records struck
+                              through rather than hidden, since they are the audit
+                              trail. Same treatment as the delay rows above. */}
+                          {(() => {
+                            const strike = item.mistaken ? "line-through" : "";
+                            return (
                           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                             <div className="flex flex-col gap-0.5">
                               <span className="text-muted-foreground">Part</span>
-                              <span className="text-sm font-medium">{item.part?.name || `Part #${item.partId}`}</span>
+                              <span className={cn("text-sm font-medium", strike)}>{item.part?.name || `Part #${item.partId}`}</span>
                             </div>
+                            {/* A legacy row has no quantity, so it renders as a bare
+                                cost — a fabricated "1 ×" would be inventing data. */}
+                            {!item.isLegacy && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Quantity</span>
+                                <span className={cn("text-sm tabular-nums", strike)}>
+                                  {item.quantity} × ${fmtFixed(item.unitCost, 2)}
+                                </span>
+                              </div>
+                            )}
                             <div className="flex flex-col gap-0.5">
                               <span className="text-muted-foreground">Cost</span>
-                              <span className="text-sm font-semibold">${item.cost.toFixed(2)}</span>
+                              <span className={cn("text-sm font-semibold tabular-nums", strike)}>${fmtFixed(item.cost, 2)}</span>
                             </div>
+                            {/* Net cost is what the payer is out of pocket after
+                                returns, and is what a daily pay reimburses. Shown
+                                only when it actually differs from the gross. */}
+                            {item.netCost !== item.cost && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Net cost</span>
+                                <span className={cn("text-sm font-semibold tabular-nums", strike)}>
+                                  ${fmtFixed(item.netCost, 2)}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">after returns</span>
+                              </div>
+                            )}
+                            {item.source && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Source</span>
+                                <span className={cn("text-sm", strike)}>{item.source.label}</span>
+                              </div>
+                            )}
+                            {item.paidBy && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Paid by</span>
+                                <span className={cn("text-sm", strike)}>
+                                  {item.paidBy.label}
+                                  {item.paidByTechnician && ` · ${item.paidByTechnician.name}`}
+                                </span>
+                              </div>
+                            )}
+                            {item.storageLocation && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Taken from</span>
+                                <span className={cn("text-sm", strike)}>{item.storageLocation.name}</span>
+                              </div>
+                            )}
+                            {item.returnedQuantity != null && item.returnedQuantity > 0 && (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-muted-foreground">Returned</span>
+                                <span className={cn("text-sm tabular-nums", strike)}>
+                                  {item.returnedQuantity}
+                                  {item.returnedToStorageLocation &&
+                                    ` → ${item.returnedToStorageLocation.name}`}
+                                </span>
+                              </div>
+                            )}
                             {(item.creator?.name || item.createdBy != null) && (
                               <div className="flex flex-col gap-0.5 col-span-2">
                                 <span className="text-muted-foreground">Added by</span>
                                 <span className="text-sm flex items-center gap-1">
                                   <User className="h-3 w-3 shrink-0" />
                                   {item.creator?.name ?? `#${item.createdBy}`}
-                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                  <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                                 </span>
                               </div>
                             )}
                           </div>
+                            );
+                          })()}
+                          {/* Claims are NOT struck through on a mistaken record:
+                              a claim is a fact about a pay sheet that really
+                              exists, and striking it would imply the payment
+                              was reversed, which nothing here knows. */}
+                          <RecordPaymentBlockDisplay payment={item.payment} kind="part" />
                           {isShared && sharedWithIds.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1 text-xs">
                               <span className="text-muted-foreground">Shared with:</span>
@@ -3089,25 +2970,25 @@ function IssueNode({
                             {item.basePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Base Pay</span>
-                                <span className="text-sm font-medium">${item.basePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.basePay, 2)}</span>
                               </div>
                             )}
                             {item.performancePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Performance Pay</span>
-                                <span className="text-sm font-medium">${item.performancePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.performancePay, 2)}</span>
                               </div>
                             )}
                             {item.drivingBasePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Driving Base Pay</span>
-                                <span className="text-sm font-medium">${item.drivingBasePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.drivingBasePay, 2)}</span>
                               </div>
                             )}
                             {item.drivingPerformancePay != null && (
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-muted-foreground">Driving Perf. Pay</span>
-                                <span className="text-sm font-medium">${item.drivingPerformancePay.toFixed(2)}</span>
+                                <span className="text-sm font-medium">${fmtFixed(item.drivingPerformancePay, 2)}</span>
                               </div>
                             )}
                             {item.drivingTime != null && (
@@ -3128,7 +3009,7 @@ function IssueNode({
                                 <span className="text-sm flex items-center gap-1">
                                   <User className="h-3 w-3 shrink-0" />
                                   {item.creator?.name ?? `#${item.createdBy}`}
-                                  <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                  <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                                 </span>
                               </div>
                             )}
@@ -3222,7 +3103,7 @@ function IssueNode({
                                 <span className="text-muted-foreground">Expires</span>
                                 <span className={cn("text-sm flex items-center gap-1", expiryColor)}>
                                   <CalendarIcon className="h-3 w-3 shrink-0" />
-                                  {fmtDate(item.expiryDate)}
+                                  {formatDateOrTimestamp(item.expiryDate, "MMM d, yyyy")}
                                   {daysLeft < 0 && <span className="text-xs">(expired)</span>}
                                   {daysLeft >= 0 && daysLeft <= 30 && <span className="text-xs">({daysLeft}d left)</span>}
                                 </span>
@@ -3235,7 +3116,7 @@ function IssueNode({
                               <span className="text-sm flex items-center gap-1">
                                 <User className="h-3 w-3 shrink-0" />
                                 {item.creator?.name ?? `#${item.createdBy}`}
-                                <span className="text-muted-foreground text-xs">· {fmtDate(item.createdAt)}</span>
+                                <span className="text-muted-foreground text-xs">· {formatDateOrTimestamp(item.createdAt, "MMM d, yyyy")}</span>
                               </span>
                             </div>
                           )}
@@ -3370,6 +3251,14 @@ function IssueNode({
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
+                          {activeTab === "assignPriority" && (
+                            <AssignPriorityPanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
+                          {activeTab === "relinkIssue" && (
+                            <RelinkIssuePanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
+                          )}
                           {activeTab === "diagnosis" && (
                             <DiagnosisPanel issue={issue} storeId={storeId} ticketId={ticketId}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
@@ -3377,12 +3266,15 @@ function IssueNode({
                           )}
                           {activeTab === "attendance" && (
                             <AttendancePanel issue={issue} storeId={storeId} ticketId={ticketId}
-                              technicians={technicians.filter((t) => issue.technicians.some((at) => at.id === t.id))}
+                              technicians={technicians}
+                              ticketIssues={ticketIssues}
+                              storeNumber={storeId}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
                           {activeTab === "part" && (
                             <PartUsagePanel issue={issue} storeId={storeId} ticketId={ticketId}
+                              technicians={technicians}
                               issueDraft={issueDraft} onPatchDraft={onPatchDraft} onClearDraftFields={onClearDraftFields}
                               onClose={() => setActiveAction(defaultActionTab)} onSuccess={onReload} />
                           )}
@@ -3482,6 +3374,7 @@ function MobileTicketSwitcher({ tickets, activeId, onSelect }: MobileSwitcherPro
 /* ────────────────────────────────────────────────────────────────────────── */
 
 interface RightPanelProps {
+  readOnly?: boolean;
   activeTicketId: number | null;
   /** The full ticket object for `activeTicketId`, resolved from an accumulated
    * cache so it stays available even after the navigator pages away from the
@@ -3500,6 +3393,7 @@ function RightPanel({
   activeTicketId,
   activeTicket,
   storeId,
+  readOnly = false,
   technicians,
   issuesResponse,
   isLoading,
@@ -3519,10 +3413,13 @@ function RightPanel({
   // storePermissions is keyed by numeric internal id (e.g. "48"), not the
   // human-readable store id (e.g. "03795-00001"). Resolve it via overviewStores.
   const storeNumericId = overviewStores.find((s) => s.storeId === storeId)?.id ?? storeId;
-  const canActOnIssues      = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/technicians",                                storeId: storeNumericId });
-  const canAddFinalNote     = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/final-note",                                storeId: storeNumericId });
-  const canAddEntityNotes   = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",     storeId: storeNumericId });
-  const canMarkMistakenPerm = canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken", storeId: storeNumericId });
+  // `!readOnly &&` on every one, in this one place: a read-only sheet must
+  // never grow an action surface because somebody added a control and checked
+  // only the permission.
+  const canActOnIssues      = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/technicians",                                storeId: storeNumericId });
+  const canAddFinalNote     = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/final-note",                                storeId: storeNumericId });
+  const canAddEntityNotes   = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/notes",     storeId: storeNumericId });
+  const canMarkMistakenPerm = !readOnly && canAccessRoute({ service: "Maintenance", method: "POST", path: "/stores/placeholder/tickets/placeholder/attendance-entries/placeholder/mistaken", storeId: storeNumericId });
   const [selectedIssueIds, setSelectedIssueIds] = useState<Set<number>>(new Set());
   const [highlightedIssueIds, setHighlightedIssueIds] = useState<Set<number>>(new Set());
   const [groupBy, setGroupBy] = useState<"none" | "status" | "priority" | "technician" | "part" | "assigned_technician" | "pay" | "warranty" | "diagnosis">("none");
@@ -4095,6 +3992,7 @@ function RightPanel({
                         sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                         sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                         issueTitleById={issueTitleById}
+                      ticketIssues={issuesResponse.data}
                         onHighlightIssues={triggerIssueHighlight}
                         showSharedIndicatorWhenCollapsed={false}
                         isHighlighted={highlightedIssueIds.has(grp.root.id)}
@@ -4136,6 +4034,7 @@ function RightPanel({
                                 sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                                 sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                                 issueTitleById={issueTitleById}
+                              ticketIssues={issuesResponse.data}
                                 onHighlightIssues={triggerIssueHighlight}
                                 showSharedIndicatorWhenCollapsed={false}
                                 isHighlighted={highlightedIssueIds.has(desc.id)}
@@ -4228,6 +4127,7 @@ function RightPanel({
                       sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                       sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                       issueTitleById={issueTitleById}
+                      ticketIssues={issuesResponse.data}
                       onHighlightIssues={triggerIssueHighlight}
                       showSharedIndicatorWhenCollapsed={true}
                       isHighlighted={highlightedIssueIds.has(group.root.id)}
@@ -4269,6 +4169,7 @@ function RightPanel({
                               sharedWarrantyIssueIdsByRecordId={warrantyIssueIdsByRecordId}
                               sharedDiagnosisIssueIdsByRecordId={diagnosisIssueIdsByRecordId}
                               issueTitleById={issueTitleById}
+                              ticketIssues={issuesResponse.data}
                               onHighlightIssues={triggerIssueHighlight}
                               showSharedIndicatorWhenCollapsed={true}
                               isHighlighted={highlightedIssueIds.has(child.id)}
@@ -4305,6 +4206,15 @@ export interface TicketDetailSheetProps {
   open: boolean;
   ticketId: number | null;
   storeId: string;
+  /**
+   * Reading only -- no actions, no selection, no note composing.
+   *
+   * This is how the dashboards open it. A ticket on DSPR or Dashboard V1 is a
+   * quick showcase: you glance at what is going on and go back. Acting on one
+   * belongs on the maintenance tickets page, and offering half the controls
+   * here as well would only split one habit across two screens.
+   */
+  readOnly?: boolean;
   tickets: Ticket[];
   technicians: CatalogTechnician[];
   filters?: TicketsFilters;
@@ -4336,6 +4246,7 @@ export function TicketDetailSheet({
   isPageLoading,
   onNextPage,
   onPreviousPage,
+  readOnly = false,
 }: TicketDetailSheetProps) {
   const [activeTicketId, setActiveTicketId] = useState<number | null>(ticketId);
   const [search, setSearch] = useState("");
@@ -4461,6 +4372,7 @@ export function TicketDetailSheet({
         {/* 2-pane layout */}
         <div className="flex flex-1 overflow-hidden">
           <RightPanel
+          readOnly={readOnly}
             activeTicketId={activeTicketId}
             activeTicket={activeTicket}
             storeId={effectiveStoreId}

@@ -4,9 +4,10 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DatePicker } from "@/components/ui/date-picker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   BookOpen,
@@ -21,11 +22,14 @@ import {
   AlertCircle,
   CircleDot,
   Flag,
+  Star,
   Check,
   Search,
   CalendarDays,
+  ArrowDownUp,
 } from "lucide-react";
-import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus } from "@/types/maintenance-tickets.types";
+import type { LucideIcon } from "lucide-react";
+import type { CatalogIssue, CatalogTechnician, TicketsFilters, TicketType, TicketStatus, Priority, IssueStatus, PaymentStatusValue, UserRef } from "@/types/maintenance-tickets.types";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { cn } from "@/lib/utils";
@@ -477,6 +481,69 @@ function MultiCheckSelect<T extends string | number = number>({
 /*  Filters bar                                                             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Filter groups — ONE source of truth                                      */
+/*                                                                            */
+/*  FILTER_KEYS (Apply-gating), the header's active count, and the per-tab    */
+/*  badges all derive from this. They used to be separate hand-maintained     */
+/*  lists and had ALREADY drifted once — three keys were in FILTER_KEYS but   */
+/*  missing from the count, so the badge undercounted. A third list would     */
+/*  have guaranteed a third drift.                                           */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+type FilterGroupId = "ticket" | "work" | "dates" | "money" | "results";
+
+interface FilterGroup {
+  id: FilterGroupId;
+  label: string;
+  icon: LucideIcon;
+  keys: readonly (keyof TicketsFilters)[];
+}
+
+const FILTER_GROUPS: readonly FilterGroup[] = [
+  // Properties of the ticket as a record. Most used, so first and default.
+  { id: "ticket", label: "Ticket", icon: CircleDot,
+    keys: ["statuses", "priorities", "assigned_priorities", "types"] },
+  // What is wrong, and who is on it.
+  { id: "work", label: "Work", icon: User,
+    keys: ["issue_ids", "issue_statuses", "technician_ids", "creator_ids"] },
+  // Changed-Status-To lives here, not under Ticket: its two date bounds are
+  // meaningless without it, and splitting the trio makes the pair look broken.
+  { id: "dates", label: "Dates", icon: CalendarDays,
+    keys: ["created_from", "created_to", "changed_statuses", "changed_from", "changed_to"] },
+  // The two cost thresholds are easy to confuse (whole-ticket vs single-issue,
+  // both gross), so they sit where their captions can be compared.
+  { id: "money", label: "Money", icon: DollarSign,
+    keys: ["payment_statuses", "part_cost_total_gt", "part_cost_single_gt"] },
+  // NOT filters — these shape the result set rather than narrow it.
+  { id: "results", label: "Results", icon: List,
+    keys: ["trashed", "sort", "dir", "per_page"] },
+] as const;
+
+/**
+ * `page` is the one key that is pending-change-relevant but is never a
+ * user-chosen "filter", so it belongs in the gating list and in no group.
+ */
+const FILTER_KEYS: (keyof TicketsFilters)[] = [
+  ...FILTER_GROUPS.flatMap((g) => g.keys),
+  "page",
+];
+
+const COUNTED_FILTER_KEYS: (keyof TicketsFilters)[] = FILTER_GROUPS.flatMap((g) => g.keys);
+
+/** Arrays count by length, scalars by value — the original predicate exactly. */
+function isActiveValue(value: unknown): boolean {
+  const v = Array.isArray(value) ? value.length : value;
+  return v != null && v !== 0 && v !== "";
+}
+
+function countActive(
+  f: TicketsFilters,
+  keys: readonly (keyof TicketsFilters)[]
+): number {
+  return keys.filter((k) => isActiveValue(f[k])).length;
+}
+
 interface TicketsFiltersBarProps {
   filters: TicketsFilters;
   onFiltersChange: (filters: TicketsFilters) => void;
@@ -488,6 +555,13 @@ interface TicketsFiltersBarProps {
   stores?: OverviewStore[];
   selectedStoreIds?: string[];
   onStoreApply?: (selection: string[]) => void;
+  /**
+   * Creators present in the currently loaded results, for the "Filed by"
+   * filter. There is no users endpoint in this service, so the options are
+   * page-derived and the control says so.
+   */
+  loadedCreators?: (UserRef | null)[];
+  /** Opens the global "log a visit" dialog. Optional — hidden when absent. */
 }
 
 export function TicketsFiltersBar({
@@ -501,9 +575,11 @@ export function TicketsFiltersBar({
   stores,
   selectedStoreIds,
   onStoreApply,
+  loadedCreators,
 }: TicketsFiltersBarProps) {
   const t = useTranslations("maintenanceTickets");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [filterTab, setFilterTab] = useState<FilterGroupId>("ticket");
   const [catalogIssues, setCatalogIssues] = useState<CatalogIssue[]>([]);
   const [catalogTechnicians, setCatalogTechnicians] = useState<CatalogTechnician[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -514,7 +590,10 @@ export function TicketsFiltersBar({
   // Every time the panel opens, reset the draft to the currently applied filters —
   // discards any unsaved edits from a previous open, same as the store selector.
   useEffect(() => {
-    if (advancedOpen) setDraftFilters(filters);
+    if (advancedOpen) {
+      setDraftFilters(filters);
+      setFilterTab("ticket");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [advancedOpen]);
 
@@ -549,12 +628,6 @@ export function TicketsFiltersBar({
     onFiltersChange({});
   }
 
-  const FILTER_KEYS: (keyof TicketsFilters)[] = [
-    "statuses", "priorities", "issue_ids", "issue_statuses", "technician_ids", "types",
-    "part_cost_total_gt", "part_cost_single_gt", "created_from", "created_to",
-    "changed_statuses", "changed_from", "changed_to", "trashed", "sort", "dir", "page", "per_page",
-  ];
-
   function fieldEqual(a: unknown, b: unknown): boolean {
     if (Array.isArray(a) || Array.isArray(b)) {
       const aArr = (a as unknown[] | undefined) ?? [];
@@ -566,22 +639,23 @@ export function TicketsFiltersBar({
 
   const hasPendingChanges = FILTER_KEYS.some((k) => !fieldEqual(draftFilters[k], filters[k]));
 
-  const activeFilterCount = [
-    filters.statuses?.length,
-    filters.priorities?.length,
-    filters.issue_ids?.length,
-    filters.issue_statuses?.length,
-    filters.technician_ids?.length,
-    filters.types?.length,
-    filters.part_cost_total_gt,
-    filters.trashed,
-    filters.per_page,
-    filters.created_from,
-    filters.created_to,
-    filters.changed_statuses?.length,
-    filters.changed_from,
-    filters.changed_to,
-  ].filter((v) => v != null && v !== 0 && v !== "").length;
+  // Counts the APPLIED filters, for the toolbar and panel-header badges.
+  const activeFilterCount = countActive(filters, COUNTED_FILTER_KEYS);
+
+  // Counts the DRAFT, per tab. Draft rather than applied on purpose: tabs hide
+  // controls, so if these counted only what is applied, setting a filter on
+  // Dates and switching to Ticket would show "Dates 0" until Apply — exactly
+  // the thing the badges exist to prevent. The consequence is that the tab
+  // badges can briefly total more than the header's "N active" while edits are
+  // pending; that is self-explaining, because the header shows an enabled
+  // "Apply filters" in precisely that state.
+  const groupCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        FILTER_GROUPS.map((g) => [g.id, countActive(draftFilters, g.keys)])
+      ) as Record<FilterGroupId, number>,
+    [draftFilters]
+  );
 
   const hasAnyFilter = activeFilterCount > 0;
 
@@ -589,8 +663,7 @@ export function TicketsFiltersBar({
 
   /* ── Option lists ──────────────────────────────────────────────────────── */
 
-  const ticketStatusOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All statuses" },
+  const ticketStatusOptions: MultiCheckOption<TicketStatus>[] = [
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
@@ -599,8 +672,14 @@ export function TicketsFiltersBar({
     { value: "cancelled", label: "Cancelled" },
   ];
 
-  const priorityOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All priorities" },
+  const priorityOptions: MultiCheckOption<Priority>[] = [
+    { value: "urgent", label: "Urgent" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
+  const assignedPriorityOptions: MultiCheckOption<Priority>[] = [
     { value: "urgent", label: "Urgent" },
     { value: "high", label: "High" },
     { value: "medium", label: "Medium" },
@@ -609,8 +688,7 @@ export function TicketsFiltersBar({
 
   const issueOptions: MultiCheckOption[] = catalogIssues.map((i) => ({ value: i.id, label: i.title }));
 
-  const issueStatusOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All statuses" },
+  const issueStatusOptions: MultiCheckOption<IssueStatus>[] = [
     { value: "pending", label: "Pending" },
     { value: "assigned", label: "Assigned" },
     { value: "in_progress", label: "In Progress" },
@@ -630,17 +708,49 @@ export function TicketsFiltersBar({
     { value: "cancelled", label: "Cancelled" },
   ];
 
-  const technicianOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All technicians" },
-    ...catalogTechnicians.map((tech) => ({
-      value: String(tech.id),
-      label: tech.name,
-      subLabel: tech.categoryName ?? undefined,
-    })),
+  const technicianOptions: MultiCheckOption[] = catalogTechnicians.map((tech) => ({
+    value: tech.id,
+    label: tech.name,
+  }));
+
+  /**
+   * "Filed by" options, derived from the creators on the loaded page — there is
+   * no users endpoint in this service. The label says so, rather than implying
+   * the list is every user who has ever filed a ticket.
+   */
+  const creatorOptions: MultiCheckOption[] = (() => {
+    const byId = new Map<number, string>();
+    for (const ticket of loadedCreators ?? []) {
+      if (ticket) byId.set(ticket.id, ticket.name);
+    }
+    for (const id of draftFilters.creator_ids ?? []) {
+      if (!byId.has(id)) byId.set(id, `User #${id}`);
+    }
+    return Array.from(byId, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  })();
+
+  const paymentStatusOptions: MultiCheckOption<PaymentStatusValue>[] = [
+    { value: "unpaid", label: "Not yet paid" },
+    { value: "paid", label: "Paid" },
+    { value: "not_payable", label: "Nothing to pay" },
   ];
 
-  const typeOptions: SearchableSelectOption[] = [
-    { value: "all", label: "All types" },
+  const sortOptions: SearchableSelectOption[] = [
+    { value: "default", label: "Default" },
+    { value: "created_at", label: "Created" },
+    { value: "updated_at", label: "Updated" },
+    { value: "id", label: "ID" },
+  ];
+
+  const dirOptions: SearchableSelectOption[] = [
+    { value: "default", label: "Default" },
+    { value: "desc", label: "Newest first" },
+    { value: "asc", label: "Oldest first" },
+  ];
+
+  const typeOptions: MultiCheckOption<TicketType>[] = [
     { value: "normal", label: "Normal" },
     { value: "preventive_maintenance", label: "Preventive Maintenance" },
   ];
@@ -717,7 +827,7 @@ export function TicketsFiltersBar({
 
         {/* Right side actions */}
         <div className="ms-auto flex items-center gap-2">
-          {canAccessCatalog && (
+              {canAccessCatalog && (
             <Button variant="outline" size="sm" onClick={onCatalogClick} disabled={disabled} className="h-9 gap-1.5">
               <BookOpen className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t("filters.catalog")}</span>
@@ -769,21 +879,48 @@ export function TicketsFiltersBar({
             </div>
           </div>
 
-          {/* Filter fields grid */}
-          <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Filter fields, grouped into tabs. Twenty controls in one grid
+              was five rows deep; grouped it is at most two. Each trigger
+              carries a count of ITS OWN active filters, because tabs hide
+              controls and a hidden active filter is worse than a tall panel. */}
+          <Tabs
+            value={filterTab}
+            onValueChange={(v) => setFilterTab(v as FilterGroupId)}
+            className="w-full"
+          >
+            <div className="-mx-1 overflow-x-auto px-5 pt-3">
+              <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
+                {FILTER_GROUPS.map((g) => (
+                  <TabsTrigger key={g.id} value={g.id} className="gap-1.5 whitespace-nowrap">
+                    <g.icon className="h-3.5 w-3.5" />
+                    <span>{g.label}</span>
+                    {groupCounts[g.id] > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="h-4 min-w-4 px-1 text-[10px] leading-none tabular-nums"
+                      >
+                        {groupCounts[g.id]}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
+            <TabsContent value="ticket" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Ticket Status */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <CircleDot className="h-3 w-3" />
                 Ticket Status
               </label>
-              <SearchableSelect
-                value={draftFilters.statuses?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.statuses ?? []}
                 options={ticketStatusOptions}
-                onChange={(v) => updateField("statuses", v === "all" ? [] : [v as TicketStatus])}
+                onChange={(v) => updateField("statuses", v)}
                 disabled={disabled}
-                active={!!draftFilters.statuses?.length}
+                placeholder="Any status"
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -794,16 +931,53 @@ export function TicketsFiltersBar({
                 <Flag className="h-3 w-3" />
                 Priority
               </label>
-              <SearchableSelect
-                value={draftFilters.priorities?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.priorities ?? []}
                 options={priorityOptions}
-                onChange={(v) => updateField("priorities", v === "all" ? [] : [v as Priority])}
+                onChange={(v) => updateField("priorities", v)}
                 disabled={disabled}
-                active={!!draftFilters.priorities?.length}
+                placeholder="Any priority"
                 searchPlaceholder="Search priorities…"
               />
             </div>
 
+            {/* Assigned Priority */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Star className="h-3 w-3" />
+                Assigned Priority
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.assigned_priorities ?? []}
+                options={assignedPriorityOptions}
+                onChange={(v) => updateField("assigned_priorities", v)}
+                disabled={disabled}
+                placeholder="Any assigned priority"
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Ticket Type */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <List className="h-3 w-3" />
+                Ticket Type
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.types ?? []}
+                options={typeOptions}
+                onChange={(v) => updateField("types", v)}
+                disabled={disabled}
+                placeholder="Any type"
+                searchPlaceholder="Search types…"
+              />
+            </div>
+
+              </div>
+            </TabsContent>
+
+            <TabsContent value="work" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Issue */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -827,12 +1001,12 @@ export function TicketsFiltersBar({
                 <span className="h-3 w-3 rounded-full border-2 border-muted-foreground/50" />
                 Issue Status
               </label>
-              <SearchableSelect
-                value={draftFilters.issue_statuses?.[0] || "all"}
+              <MultiCheckSelect
+                value={draftFilters.issue_statuses ?? []}
                 options={issueStatusOptions}
-                onChange={(v) => updateField("issue_statuses", v === "all" ? [] : [v as IssueStatus])}
+                onChange={(v) => updateField("issue_statuses", v)}
                 disabled={disabled}
-                active={!!draftFilters.issue_statuses?.length}
+                placeholder="Any status"
                 searchPlaceholder="Search statuses…"
               />
             </div>
@@ -843,17 +1017,39 @@ export function TicketsFiltersBar({
                 <User className="h-3 w-3" />
                 Technician
               </label>
-              <SearchableSelect
-                value={draftFilters.technician_ids?.[0] != null ? String(draftFilters.technician_ids[0]) : "all"}
-                options={catalogLoading ? [{ value: "all", label: "Loading…" }] : technicianOptions}
-                onChange={(v) => updateField("technician_ids", v === "all" ? [] : [Number(v)])}
+              <MultiCheckSelect
+                value={draftFilters.technician_ids ?? []}
+                options={technicianOptions}
+                onChange={(v) => updateField("technician_ids", v)}
                 disabled={disabled || catalogLoading}
-                active={!!draftFilters.technician_ids?.length}
-                placeholder={catalogLoading ? "Loading…" : "All technicians"}
+                loading={catalogLoading}
+                placeholder={catalogLoading ? "Loading…" : "Any technician"}
                 searchPlaceholder="Search technicians…"
               />
             </div>
 
+            {/* Filed by */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <User className="h-3 w-3" />
+                Filed by
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.creator_ids ?? []}
+                options={creatorOptions}
+                onChange={(v) => updateField("creator_ids", v)}
+                disabled={disabled}
+                placeholder="Anyone"
+                searchPlaceholder="Search…"
+              />
+              <p className="text-[10px] text-muted-foreground">From loaded results.</p>
+            </div>
+
+              </div>
+            </TabsContent>
+
+            <TabsContent value="dates" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Changed Status To */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -924,22 +1120,6 @@ export function TicketsFiltersBar({
               </div>
             </div>
 
-            {/* Ticket Type */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <List className="h-3 w-3" />
-                Ticket Type
-              </label>
-              <SearchableSelect
-                value={draftFilters.types?.[0] || "all"}
-                options={typeOptions}
-                onChange={(v) => updateField("types", v === "all" ? [] : [v as TicketType])}
-                disabled={disabled}
-                active={!!draftFilters.types?.length}
-                searchPlaceholder="Search types…"
-              />
-            </div>
-
             {/* Created from */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -994,11 +1174,35 @@ export function TicketsFiltersBar({
               </div>
             </div>
 
-            {/* Min part cost */}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="money" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Payment Status — how finance pulls up everything still owed */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <DollarSign className="h-3 w-3" />
-                Min part cost
+                Payment Status
+              </label>
+              <MultiCheckSelect
+                value={draftFilters.payment_statuses ?? []}
+                options={paymentStatusOptions}
+                onChange={(v) => updateField("payment_statuses", v)}
+                disabled={disabled}
+                placeholder="Any payment status"
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Min ticket part cost. Renamed: the old "Min part cost" label
+                did not say which of the two cost filters it mapped to. Both
+                sum GROSS cost, not net_cost after returns, so neither will
+                ever match a reimbursement figure. */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                Min ticket part cost
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-xs text-muted-foreground">$</span>
@@ -1016,8 +1220,43 @@ export function TicketsFiltersBar({
                   )}
                 />
               </div>
+              <p className="text-[10px] text-muted-foreground">
+                Whole ticket, gross; a shared part counts once.
+              </p>
             </div>
 
+            {/* Min single-issue part cost */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                Min single-issue part cost
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-xs text-muted-foreground">$</span>
+                <Input
+                  placeholder="0.00"
+                  value={draftFilters.part_cost_single_gt ?? ""}
+                  onChange={(e) => updateField("part_cost_single_gt", e.target.value ? Number(e.target.value) : undefined)}
+                  disabled={disabled}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={cn(
+                    "h-9 ps-6 text-sm",
+                    draftFilters.part_cost_single_gt != null && "border-primary/40 bg-primary/5"
+                  )}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                At least one issue whose parts exceed this, gross.
+              </p>
+            </div>
+
+              </div>
+            </TabsContent>
+
+            <TabsContent value="results" className="mt-0">
+              <div className="grid gap-x-4 gap-y-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Deleted records */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -1030,6 +1269,40 @@ export function TicketsFiltersBar({
                 onChange={(v) => updateField("trashed", v === "none" ? undefined : (v as TicketsFilters["trashed"]))}
                 disabled={disabled}
                 active={!!draftFilters.trashed}
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Sort */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <ArrowDownUp className="h-3 w-3" />
+                Sort by
+              </label>
+              <SearchableSelect
+                value={draftFilters.sort ?? "default"}
+                options={sortOptions}
+                onChange={(v) => updateField("sort", v === "default" ? undefined : v)}
+                disabled={disabled}
+                active={!!draftFilters.sort}
+                searchPlaceholder="Search…"
+              />
+            </div>
+
+            {/* Direction */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <ArrowDownUp className="h-3 w-3" />
+                Direction
+              </label>
+              <SearchableSelect
+                value={draftFilters.dir ?? "default"}
+                options={dirOptions}
+                onChange={(v) =>
+                  updateField("dir", v === "default" ? undefined : (v as TicketsFilters["dir"]))
+                }
+                disabled={disabled}
+                active={!!draftFilters.dir}
                 searchPlaceholder="Search…"
               />
             </div>
@@ -1049,8 +1322,10 @@ export function TicketsFiltersBar({
                 searchPlaceholder="Search…"
               />
             </div>
+              </div>
+            </TabsContent>
 
-          </div>
+          </Tabs>
         </div>
       )}
     </div>

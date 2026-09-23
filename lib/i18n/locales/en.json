@@ -46,6 +46,11 @@
   },
   "nav": {
     "dashboard": "Dashboard",
+    "dashboards": "Dashboards",
+    "laborDashboard": "Labor Dashboard",
+    "announcements": "Announcements",
+    "dailyPay": "Daily Pay",
+    "employeeManagement": "Employee Management",
     "users": "Users",
     "employees": "Employees",
     "stores": "Stores",
@@ -101,7 +106,8 @@
       "i18n": "i18n Intelligence",
       "security": "Security Monitor"
     },
-    "breadcrumb": "Breadcrumb"
+    "breadcrumb": "Breadcrumb",
+    "storage": "Storage & Stock"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -149,7 +155,8 @@
     "edit": "Edit",
     "store-details": "Store Details",
     "user-details": "User Details",
-    "screen-project": "Screen Project"
+    "screen-project": "Screen Project",
+    "storage": "Storage & Stock"
   },
   "auth": {
     "login": {
@@ -1180,9 +1187,6 @@
     }
   },
   "maintenanceTickets": {
-    "title": "Maintenance Tickets",
-    "description": "Track and manage maintenance tickets for your store.",
-    "refresh": "Refresh",
     "groupBy": {
       "label": "Group by",
       "none": "No grouping",
@@ -1195,6 +1199,9 @@
       "warranty": "Warranty",
       "diagnosis": "Troubleshooting"
     },
+    "title": "Maintenance Tickets",
+    "description": "Track and manage maintenance tickets for your store.",
+    "refresh": "Refresh",
     "common": {
       "cancel": "Cancel",
       "save": "Save",
@@ -1928,7 +1935,9 @@
       "noEvaluationTitle": "No evaluation data",
       "noEvaluationDescription": "Nothing to grade for this period yet.",
       "openFull": "Open in Cleaning Chart",
-      "pendingTotal": "{pending} pending · {total} total"
+      "pendingTotal": "{pending} pending · {total} total",
+      "openedFromNotification": "Showing {store}'s evaluation for {period}.",
+      "openedFromNotificationFallbackStore": "your store"
     },
     "tabs": {
       "due": "Due Today",
@@ -1942,7 +1951,8 @@
       "delete": "Delete",
       "refresh": "Refresh",
       "loading": "Loading…",
-      "date": "Date"
+      "date": "Date",
+      "close": "Close"
     },
     "frequency": {
       "daily": "Daily",
@@ -1968,6 +1978,7 @@
       "pass": "Pass",
       "fail": "Fail",
       "auto_fail": "Auto",
+      "not_applicable": "N/A",
       "empty": "Empty"
     },
     "storePicker": {
@@ -1997,9 +2008,13 @@
       "viewHistory": "View history",
       "undo": "Undo",
       "complete": "Complete",
-      "evaluateHint": "Set today's cleaning-chart verdict for this task",
+      "evaluateHint": "Set this task's cleaning-chart verdict for the selected date",
       "evaluatePass": "Pass",
       "evaluateFail": "Fail",
+      "lockedShortPending": "Waiting — not due yet",
+      "lockedExplainPending": "The store hasn't marked this complete yet, but the period is still open — nothing has failed. Grading unlocks once it's logged, or once the deadline passes.",
+      "lockedShortBlocked": "Locked — auto-failed",
+      "lockedExplainBlocked": "The store never marked this complete for this period, so it's read-only and was already failed automatically. No verdict can be entered here — open the Evaluation tab once it's logged to see it unlock.",
       "undoDialog": {
         "title": "Undo completion?",
         "description": "This reverts “{label}” back to pending for {date}. Any recorded photo, note, and employees will be removed."
@@ -2008,8 +2023,10 @@
         "reverted": "“{label}” reverted to pending.",
         "undoFailed": "Could not undo.",
         "evaluated": "“{label}” evaluated.",
+        "evaluateCleared": "“{label}” evaluation cleared.",
         "evaluateFailed": "Could not save the evaluation.",
-        "evaluateForbidden": "You don't have permission to evaluate tasks."
+        "evaluateForbidden": "You don't have permission to evaluate tasks.",
+        "noPeriodForWeek": "Couldn't work out which week this date belongs to — reload and try again."
       }
     },
     "tasks": {
@@ -2144,6 +2161,8 @@
       "searchEmployees": "Search employees…",
       "loadingShort": "Loading…",
       "noEmployees": "No employees found for this store.",
+      "employeesLoadFailed": "Couldn't load employees.",
+      "retry": "Retry",
       "note": "Note (optional)",
       "notePlaceholder": "e.g. done during opening",
       "photo": "Photo",
@@ -2154,6 +2173,7 @@
       "submit": "Complete",
       "toasts": {
         "pasted": "Image pasted.",
+        "maxReached": "You can add up to {max} photos.",
         "done": "“{label}” marked as done.",
         "failed": "Could not complete the task."
       }
@@ -2174,10 +2194,30 @@
       "load": "Load",
       "periodSearchPlaceholder": "Search periods…",
       "periodSearchEmpty": "No matching period.",
+      "periodLoadError": "Couldn't load periods — try again.",
       "addItemPlaceholder": "Add inspection item…",
+      "newItemWeightTitle": "Weight (1–100) — you can change this later from the item's weight editor",
+      "weightPrefix": "Wt",
       "add": "Add",
       "legendLabel": "Legend",
-      "legendHint": "Click an inspection item to grade it · click a chart chip to toggle Pass/Fail",
+      "legendHint": "Click an inspection item to grade it · click a chart chip to cycle Pass/Fail/N-A, click × to clear",
+      "itemValueExplain": {
+        "pass": "Counts as a pass toward the score.",
+        "fail": "Counts as a fail toward the score.",
+        "auto_fail": "An automatic, serious fail — zeroes out the Item Score for this store (but never the Final Score by itself).",
+        "not_applicable": "Doesn't apply here — excluded from scoring entirely, doesn't help or hurt.",
+        "empty": "No grade yet. Setting an already-graded cell to Empty permanently deletes its note and photos."
+      },
+      "legendWeight": "task weight",
+      "legendWeightExplain": "How much this task counts toward the Chart Score, relative to the others.",
+      "legendAllocated": "weight boosted",
+      "legendAllocatedExplain": "This task's own weight, plus extra weight given to it from a task that isn't due this period (e.g. 3+2 = weight 3, plus 2 more allocated to it).",
+      "legendNote": "has a note/photo",
+      "legendHistorical": "locked (past period)",
+      "legendPending": "waiting (not due yet)",
+      "legendPendingExplain": "The store hasn't marked this complete yet, but the period is still open — nothing has failed, and it's read-only until it's logged or the deadline passes.",
+      "legendAutoFail": "auto-failed (not logged)",
+      "legendAutoFailExplain": "The store never marked this complete for this period — the system failed it automatically once the deadline passed. Fully read-only; it unlocks by itself once it's logged.",
       "noStores": {
         "title": "No stores to evaluate",
         "description": "Nothing to grade for this period yet."
@@ -2186,46 +2226,215 @@
         "store": "Store",
         "inspectionItems": "Inspection Items",
         "itemScore": "Item Score",
+        "itemScoreExplain": "Share of graded inspection items that passed.",
         "cleaningChart": "Cleaning Chart",
         "chartScore": "Chart Score",
+        "chartScoreExplain": "Share of graded cleaning-chart tasks that passed, weighted by each task's weight.",
+        "finalScore": "Final Score",
+        "finalScoreExplain": "The overall score — a weighted average of Item Score and Chart Score. This is the number that matters most.",
         "notify": "Notify"
       },
+      "scoreSide": {
+        "items": "Items only",
+        "chart": "Chart only"
+      },
+      "itemWeight": {
+        "badge": "wt {weight}",
+        "title": "Weight: {weight} — click to edit",
+        "label": "Weight (1–100)",
+        "save": "Save",
+        "failed": "Could not save the weight."
+      },
+      "absentTasksLink": "{count, plural, one {# absent task} other {# absent tasks}} — allocate",
       "removeItemTitle": "Remove item",
       "cellWeightTitle": "{name} (weight {weight})",
+      "cellWeightTitleAllocated": "{name} (weight {weight}, base {base} + allocated from {sources})",
+      "historicalTitle": "Graded before this task became absent this period — locked so the sent report doesn't change",
+      "pendingLockTitle": "Waiting — not marked complete yet, period still open, nothing failed",
+      "autoFailedLockTitle": "Never marked complete for this period — auto-failed, read-only",
+      "partiallyCompletedLockTitle": "Not marked complete enough times this period (last done {when} by {who}) — auto-failed, read-only",
+      "evidenceUnknownWhen": "an earlier date",
+      "evidenceUnknownWho": "someone",
+      "clearVerdictTitle": "Clear verdict",
+      "hasNoteTitle": "Has a note or photo",
       "finalize": "Finalize",
+      "finalized": "Finalized",
+      "reopen": "Reopen",
+      "completionHint": "{graded}/{required} graded",
+      "completionHintExplain": "Every inspection item and cleaning-chart task must be graded (Pass/Fail/Auto/N-A) before this store can be finalized.",
+      "autoFailedBadge": "{count, plural, one {⚠ # auto-failed} other {⚠ # auto-failed}}",
+      "autoFailedExplain": "{count, plural, one {# task wasn't logged done for this period, so it was auto-failed} other {# tasks weren't logged done for this period, so they were auto-failed}}",
+      "copyAllocationLink": "Copy split to other stores",
+      "copyAllocationLinkExplain": "Apply this store's whole saved weight split to other stores for this period.",
+      "absentTasksLinkExplain": "These monthly tasks aren't due this specific week — click to give their weight to tasks that are due this week, instead of leaving it unused.",
       "noItems": "No inspection items yet — add one above to start grading.",
       "removeDialog": {
         "title": "Remove inspection item?",
         "description": "This removes the “{name}” column and its recorded values for all stores in this period. This cannot be undone.",
         "confirm": "Remove"
       },
+      "missingDialog": {
+        "title": "Can't finalize yet",
+        "description": "{store} still has ungraded cells for this period:",
+        "kind": {
+          "item": "Item",
+          "chart": "Chart"
+        }
+      },
+      "reopenDialog": {
+        "title": "Reopen this evaluation?",
+        "description": "{store}'s finalized scores will be discarded and the evaluation returns to live computation. The store's cells become editable again.",
+        "confirm": "Reopen"
+      },
       "toasts": {
         "saveFailed": "Save failed.",
-        "notified": "{store} notified."
+        "notified": "{store} notified.",
+        "reopened": "{store}'s evaluation reopened."
       }
     },
     "gradeDialog": {
       "title": "Grade “{item}”",
       "description": "{store} — set the verdict, a note, and any supporting photos.",
       "verdict": "Verdict",
-      "verdictHint": "Pass or Fail for a normal check; Auto marks it auto-failed; Empty clears any verdict.",
+      "verdictHint": "Pass or Fail for a normal check; Auto marks it auto-failed; N/A excludes it from scoring; Empty permanently deletes this cell's note and photos.",
       "note": "Note",
       "notePlaceholder": "What did you find?",
       "noteHint": "Optional, but recommended for Fail/Auto so the store manager knows what to fix.",
       "photos": "Photos",
       "pasteHint": "Tip: press Ctrl+V (⌘V on Mac) anywhere in this dialog to paste a screenshot or copied image.",
       "photoPasted": "Photo pasted from clipboard.",
+      "photoMaxReached": "You can add up to {max} photos.",
       "cancel": "Cancel",
       "save": "Save",
       "saved": "“{item}” graded.",
-      "failed": "Could not save the grade."
+      "failed": "Could not save the grade.",
+      "emptyConfirm": {
+        "title": "Delete this grade?",
+        "descriptionNoteAndPhotos": "Setting this to Empty permanently deletes the note and {count, plural, one {# photo} other {# photos}} attached to this cell. This can't be undone.",
+        "descriptionNoteOnly": "Setting this to Empty permanently deletes the note attached to this cell. This can't be undone.",
+        "descriptionPhotosOnly": "Setting this to Empty permanently deletes the {count, plural, one {# photo} other {# photos}} attached to this cell. This can't be undone.",
+        "confirm": "Delete and clear"
+      }
     },
     "photoPicker": {
       "choose": "Add photos",
       "addMore": "Add more",
+      "maxReached": "Up to {max} photos",
       "remove": "Remove {name}",
       "savedAlt": "Saved photo {n}",
       "pasted": "Photo pasted from clipboard."
+    },
+    "allocateDialog": {
+      "title": "Allocate weight",
+      "description": "{store} — split an absent task's weight across this period's in-play tasks.",
+      "noAbsentTasks": "No absent tasks for this period — every assigned task is in play.",
+      "currentSplits": "Current splits",
+      "removeSplit": "Remove this split",
+      "removeSplitDialog": {
+        "title": "Remove this split?",
+        "description": "This removes “{task}”'s weight split — its weight becomes unallocated again until it's split across in-play tasks another way. This cannot be undone.",
+        "confirm": "Remove"
+      },
+      "sourceLabel": "Absent task",
+      "sourcePlaceholder": "Choose an absent task…",
+      "sourceOption": "{name} — weight {weight} ({unallocated} unallocated)",
+      "splitLabel": "Split {weight} points across:",
+      "noTargets": "No in-play tasks to allocate to this period.",
+      "remainingZero": "Fully allocated",
+      "remaining": "{remaining} left",
+      "fill": "Fill",
+      "fillRemaining": "Give this task everything that's left to allocate",
+      "evenSplitHint": "An even split changes no score — this only matters when the split is deliberately uneven.",
+      "cancel": "Cancel",
+      "save": "Save split",
+      "saved": "Weight from “{task}” allocated.",
+      "deleted": "Allocation removed.",
+      "failed": "Could not save the allocation.",
+      "copyToStores": "Copy to other stores",
+      "copyUnsavedWarning": "Save your changes first — copying uses what's saved, not what's on screen.",
+      "removeFromStores": "Remove from stores"
+    },
+    "removeAllocationDialog": {
+      "title": "Remove weight splits",
+      "description": "Clear saved weight splits from several stores at once — the undo for a copy.",
+      "clearsNotUndoWarning": "This clears, it does not undo: if a copy replaced a store's own distribution, removing will not bring the old one back. Stores whose evaluation is finalized are skipped.",
+      "onlyThisTask": "Only remove “{task}”",
+      "scopeAllSplits": "Every saved split these stores have for this period will be removed.",
+      "scopeSelectedTasks": "Only “{task}” will be removed — each store's other splits stay.",
+      "storesLabel": "{count, plural, one {# store selected} other {# stores selected}}",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "noStoresWithSplits": "No store has a saved split for this period.",
+      "splitCount": "{count, plural, one {# split} other {# splits}}",
+      "finalizedNote": "Finalized — reopen the evaluation first if this really needs to change.",
+      "maxStores": "You can select up to {max} stores at a time.",
+      "previewLabel": "Preview",
+      "resultLabel": "Result",
+      "staleNotice": "Selection changed — preview again",
+      "removedCount": "{count, plural, =0 {nothing removed} one {# split removed} other {# splits removed}}",
+      "splitDetail": "“{task}” — weight {amount} across {targets, plural, one {# task} other {# tasks}}",
+      "skipReasons": {
+        "evaluation_already_finalized": "Finalized — reopen it first if this really needs to change.",
+        "nothing_to_remove": "This store has no saved split for this period."
+      },
+      "close": "Close",
+      "preview": "Preview",
+      "removeNow": "Remove from {count, plural, one {# store} other {# stores}}",
+      "removed": "{count, plural, =0 {Nothing to remove.} one {# split removed.} other {# splits removed.}}",
+      "failed": "Could not remove the splits."
+    },
+    "copyAllocationDialog": {
+      "title": "Copy weight split",
+      "description": "Apply {store}'s whole saved weight split to other stores for this period.",
+      "wholeSplitWarning": "This copies the store's ENTIRE saved split, not just one task — every absent task's distribution is applied to each selected store.",
+      "targetStoresLabel": "{count, plural, one {# store selected} other {# stores selected}}",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "noOtherStores": "No other stores available.",
+      "finalizedNote": "Finalized — reopen the evaluation first if this really needs to change.",
+      "maxTargets": "You can select up to {max} stores at a time.",
+      "previewLabel": "Preview",
+      "resultLabel": "Result",
+      "staleNotice": "Selection changed — preview again",
+      "copiedCount": "{count, plural, one {# task copied} other {# tasks copied}}",
+      "replacesExistingWarning": "This replaces any split already saved for these tasks at this store.",
+      "skipReasons": {
+        "nothing_to_copy": "This store has no saved split to copy for this period.",
+        "evaluation_already_finalized": "Finalized — reopen it first if this really needs to change.",
+        "source_task_not_absent_here": "That task isn't absent for this store.",
+        "target_task_not_in_play": "A receiving task isn't gradable here.",
+        "split_does_not_match_weight": "The split doesn't add up to the task's weight.",
+        "store_not_visible": "This store isn't visible in this grid."
+      },
+      "close": "Close",
+      "preview": "Preview",
+      "copyNow": "Copy now",
+      "copied": "{count, plural, one {# task copied} other {# tasks copied}}.",
+      "failed": "Could not copy the allocation."
+    },
+    "settingsDialog": {
+      "trigger": "Scoring settings",
+      "title": "Scoring settings",
+      "description": "Changes apply to unfinalized evaluations immediately and never affect finalized ones.",
+      "formulaAverageHint": "The Final Score is a weighted average of the Item Score and Chart Score, split by the percentages below.",
+      "sharesLabel": "Items / Chart split",
+      "sharesItemsEnd": "Items",
+      "sharesChartEnd": "Chart",
+      "previewTitle": "Example",
+      "previewBody": "A store scoring {itemScore}% on items and {chartScore}% on the chart would get a Final Score of {result}%.",
+      "requiresCompletionLabel": "Require task completion",
+      "requiresCompletionHint": "A task the store never logged as done is auto-failed and can't be passed until it's logged.",
+      "completionRuleLabel": "Completion rule",
+      "completionRule": {
+        "any": "Marked complete once",
+        "all": "Every occurrence",
+        "threshold": "Percentage threshold"
+      },
+      "completionThresholdLabel": "Threshold (%)",
+      "close": "Close",
+      "save": "Save",
+      "saved": "Scoring settings saved.",
+      "failed": "Could not save the settings."
     },
     "reports": {
       "title": "Cleaning Report",
@@ -2250,8 +2459,7 @@
         "score": "Score",
         "average": "Average",
         "empty": "No stores to report for this period.",
-        "pass": "Pass",
-        "fail": "Fail"
+        "completionTitle": "{pct}% of cells graded"
       },
       "toasts": {
         "imageDownloaded": "Report image downloaded.",
@@ -2264,6 +2472,11 @@
       "noRow": "No evaluation recorded for your store in this period yet.",
       "itemScore": "Item Score",
       "chartScoreLabel": "Chart Score",
+      "finalScoreLabel": "Final Score",
+      "scoreSide": {
+        "items": "Items only",
+        "chart": "Chart only"
+      },
       "inspectionItems": "Inspection Items",
       "itemColumn": "Item",
       "resultColumn": "Result",
@@ -2281,7 +2494,7 @@
       "verdict": {
         "pass": "Pass",
         "fail": "Fail",
-        "auto_fail": "Auto"
+        "not_applicable": "N/A"
       },
       "photoAlt": "Photo {n}"
     },
@@ -2291,6 +2504,16 @@
       "somethingWrong": "Something went wrong",
       "retry": "Try again"
     }
+  },
+  "notepad": {
+    "tab": "Notepad",
+    "title": "Notepad",
+    "placeholder": "Write anything here — reminders, handover notes, follow-ups…",
+    "hint": "Saved on this device only. Not shared with anyone.",
+    "saved": "Saved",
+    "clear": "Clear",
+    "clearConfirm": "Confirm clear?",
+    "charCount": "{count} / {max}"
   },
   "breakTimer": {
     "trigger": "Break timer",
@@ -2320,5 +2543,133 @@
     "overtimeIncrease": "Increase by one minute",
     "overtimeDecrease": "Decrease by one minute",
     "overtimeAlert": "Your break has run long — please wrap up."
+  },
+  "bottomNav": {
+    "editTrigger": "Customize quick links",
+    "editTitle": "Choose your quick links",
+    "editDescription": "Pick up to {max} links to show in the bottom bar.",
+    "selectedCount": "{count}/{max} selected",
+    "save": "Save",
+    "cancel": "Cancel",
+    "reset": "Reset",
+    "saved": "Quick links updated",
+    "discardChanges": {
+      "title": "Discard changes?",
+      "description": "You have unsaved changes to your quick links. Are you sure you want to discard them?"
+    },
+    "resetConfirm": {
+      "title": "Reset quick links",
+      "description": "This will restore the default quick links based on your permissions."
+    }
+  },
+  "topbarTools": {
+    "expand": "Show tools",
+    "collapse": "Hide tools",
+    "lockedOnBreak": "Stays open while a break is running"
+  },
+  "storePassport": {
+    "trigger": "Store passport",
+    "subtitle": "Everything about this store in one place.",
+    "placeholderNote": "Placeholder data — this passport is not wired to the backend yet.",
+    "copy": "Copy",
+    "copied": "Copied to clipboard",
+    "reveal": "Reveal",
+    "hide": "Hide",
+    "hideAll": "Hide all",
+    "yes": "Yes",
+    "no": "No",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "hours": "Hours",
+      "team": "Team",
+      "facilities": "Facilities",
+      "access": "Access"
+    },
+    "sections": {
+      "identity": "Identity",
+      "contact": "Contact",
+      "management": "Management",
+      "headcount": "Headcount",
+      "capacity": "Capacity & equipment",
+      "services": "Services"
+    },
+    "fields": {
+      "name": "Store name",
+      "code": "Store code",
+      "internalId": "Internal ID",
+      "franchisee": "Franchisee",
+      "legalEntity": "Legal entity",
+      "openedOn": "Opened",
+      "address": "Address",
+      "phone": "Phone",
+      "email": "Email",
+      "timezone": "Time zone",
+      "generalManager": "General manager",
+      "areaManager": "Area manager",
+      "assistantManagers": "Assistant managers",
+      "seating": "Seating",
+      "posTerminals": "POS terminals",
+      "ovens": "Ovens",
+      "makeLines": "Make lines",
+      "parkingSpaces": "Parking spaces",
+      "deliveryRadius": "Delivery radius",
+      "driveThru": "Drive thru",
+      "dineIn": "Dine in"
+    },
+    "units": {
+      "miles": "{count} mi"
+    },
+    "roles": {
+      "shiftLeads": "Shift leads",
+      "cooks": "Cooks",
+      "drivers": "Drivers",
+      "csr": "CSR"
+    },
+    "hours": {
+      "openNow": "Open now",
+      "closedNow": "Closed now",
+      "day": "Day",
+      "open": "Opens",
+      "close": "Closes",
+      "holidayNote": "Holiday hours may differ — check with the area manager.",
+      "days": {
+        "sun": "Sunday",
+        "mon": "Monday",
+        "tue": "Tuesday",
+        "wed": "Wednesday",
+        "thu": "Thursday",
+        "fri": "Friday",
+        "sat": "Saturday"
+      }
+    },
+    "access": {
+      "warning": "Sensitive — anyone who can open this dialog can read these. Don't share them outside the store team, and change them when someone leaves.",
+      "sections": {
+        "websites": "Websites",
+        "alarm": "Alarm",
+        "registers": "Registers & safe"
+      },
+      "fields": {
+        "paychexUrl": "Paychex URL",
+        "paychexUser": "Paychex username",
+        "paychexPassword": "Paychex password",
+        "altametricsUrl": "Altametrics URL",
+        "altametricsUser": "Altametrics username",
+        "altametricsPassword": "Altametrics password",
+        "alarmProvider": "Alarm provider",
+        "alarmAccount": "Account number",
+        "alarmCode": "Alarm code",
+        "alarmDuressCode": "Duress code",
+        "alarmPhone": "Alarm line",
+        "managerOverride": "Manager override",
+        "register1": "Register 1",
+        "register2": "Register 2",
+        "safeCode": "Safe code"
+      }
+    }
   }
 }

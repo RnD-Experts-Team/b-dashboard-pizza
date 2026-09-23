@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { UserX, Clock } from "lucide-react";
+import { UserX, Clock, User } from "lucide-react";
 import type { ScheduleEmployee, Shift, ActualShift } from "@/types/scheduling.types";
-import { formatTime, calcHours, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
 
 interface EditActualShiftDialogProps {
   open: boolean;
@@ -37,6 +37,17 @@ interface EditActualShiftDialogProps {
   onSave: (startTime: string, endTime: string, label: string, type: Shift["type"], note: string) => void;
   onMarkAbsent: () => void;
 }
+
+/**
+ * A label for a record that has none.
+ *
+ * Preferring the preset that matches the record's own shift type keeps a
+ * label-less evening punch from being announced as "Morning" purely because
+ * that preset happens to be first. Types with no preset (e.g. `afternoon`)
+ * still land on the first one, which is a guess either way.
+ */
+const presetLabelFor = (t: Shift["type"] | undefined) =>
+  SHIFT_PRESETS.find((p) => p.type === t)?.label ?? SHIFT_PRESETS[0].label;
 
 export function EditActualShiftDialog({
   open,
@@ -56,24 +67,45 @@ export function EditActualShiftDialog({
 
   const isAddCoverage = !plannedShift;
   const isNewCoverage = isAddCoverage && !editingActual;
+  /**
+   * They are on the clock right now, so there is no end time to correct.
+   *
+   * Only a real punch (or a correction in TCP) can close a segment, so letting
+   * a manager type an end here would either be overwritten by the next sync or
+   * would invent a clock-out that never happened.
+   */
+  const isRunning = !!editingActual?.isOpen;
 
   useEffect(() => {
-    if (editingActual && editingActual.status !== "absent") {
+    if (editingActual && editingActual.reviewState !== "absent") {
       setStartTime(editingActual.startTime);
-      setEndTime(editingActual.endTime);
-      setLabel(editingActual.label);
+      // Null while they are still on the clock. Seeding "" would put an empty
+      // <input type="time"> on screen and POST `end_time: ""` if saved; the
+      // form is blocked in that case anyway (see `isRunning` below), so the
+      // plan's end is only here to keep the field showing something sane.
+      setEndTime(editingActual.endTime ?? plannedShift?.endTime ?? "");
+      /**
+       * A timeclock punch has `"label": null`, which the adapter turns into "".
+       * That matched no option, so the Select rendered an empty box. Fall back
+       * to the plan's label, then to the first preset.
+       */
+      setLabel(
+        editingActual.label ||
+          plannedShift?.label ||
+          presetLabelFor(editingActual.type),
+      );
       setType(editingActual.type);
       setNote(editingActual.note ?? "");
     } else if (plannedShift) {
       setStartTime(plannedShift.startTime);
       setEndTime(plannedShift.endTime);
-      setLabel(plannedShift.label);
+      setLabel(plannedShift.label || presetLabelFor(plannedShift.type));
       setType(plannedShift.type);
       setNote("");
     } else {
       setStartTime("08:00");
       setEndTime("16:00");
-      setLabel("Morning");
+      setLabel(SHIFT_PRESETS[0].label);
       setType("morning");
       setNote("");
     }
@@ -93,11 +125,10 @@ export function EditActualShiftDialog({
 
   if (!employee) return null;
 
-  const palette = EMPLOYEE_COLORS[employee.color] ?? EMPLOYEE_COLORS.blue;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isNewCoverage ? "Add Coverage" : isAddCoverage ? "Edit Coverage" : "Edit Actual Time"}</DialogTitle>
           <DialogDescription>
@@ -110,21 +141,18 @@ export function EditActualShiftDialog({
           {/* Employee preview */}
           <div
             className={cn(
-              "flex items-center gap-2 rounded-md border px-3 py-2",
-              palette.bg,
-              palette.border
+              "flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2",
             )}
           >
             <div
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                palette.text
+                "flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground",
               )}
             >
-              {employee.avatar}
+              <User className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className={cn("text-sm font-semibold", palette.text)}>{employee.name}</p>
+              <p className="text-sm font-semibold">{employee.name}</p>
               <p className="text-xs text-muted-foreground">{employee.role}</p>
             </div>
           </div>
@@ -153,6 +181,7 @@ export function EditActualShiftDialog({
                 type="time"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
+                disabled={isRunning}
                 className="mt-1"
               />
             </div>
@@ -165,10 +194,18 @@ export function EditActualShiftDialog({
                 type="time"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
+                disabled={isRunning}
                 className="mt-1"
               />
             </div>
           </div>
+
+          {isRunning && (
+            <p className="rounded-md border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+              {employee.name} is still on the clock, so these times cannot be
+              edited yet. They will finish when the clock-out comes through.
+            </p>
+          )}
 
           {/* Shift label */}
           <div>
@@ -177,14 +214,17 @@ export function EditActualShiftDialog({
             </Label>
             <Select value={label} onValueChange={setLabel}>
               <SelectTrigger id="actual-shift-label" className="mt-1">
-                <SelectValue />
+                {/* Placeholder so an unrecognised value can never render blank. */}
+                <SelectValue placeholder="Choose a label" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Morning">Morning</SelectItem>
-                <SelectItem value="Evening">Evening</SelectItem>
-                <SelectItem value="Night">Night</SelectItem>
-                <SelectItem value="Split AM">Split AM</SelectItem>
-                <SelectItem value="Split PM">Split PM</SelectItem>
+                {/* From the shared presets — this list was duplicated from the
+                    add dialog and could drift out of step with it. */}
+                {SHIFT_PRESETS.map((preset) => (
+                  <SelectItem key={preset.label} value={preset.label}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
                 <SelectItem value="Custom">Custom</SelectItem>
               </SelectContent>
             </Select>
@@ -234,7 +274,9 @@ export function EditActualShiftDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit}>Save</Button>
+            <Button onClick={handleSubmit} disabled={isRunning}>
+              Save
+            </Button>
           </div>
         </DialogFooter>
       </DialogContent>

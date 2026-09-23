@@ -482,6 +482,7 @@ export interface DashboardReportExtras {
   "cleaning-review"?: CleaningReview;
   "customer-service"?: CustomerService;
   portioning?: Portioning;
+  "hnr-plus"?: HnrPlus;
 }
 
 // ============================================================================
@@ -504,4 +505,44 @@ export interface Portioning {
   };
   theo_usage: number;
   variance_breakdown: PortioningVarianceEntry[];
+}
+
+// ============================================================================
+// hnr-plus
+// ============================================================================
+
+export interface HnrPlusItem {
+  item_id: string;
+  item_name: string;
+  made: number;
+  sold: number;
+  voided: number;
+  wasted: number;
+  variance: number;
+  no_inventory_available: number;
+}
+
+export interface HnrPlus {
+  filtering: {
+    store: string;
+    date: string;
+    week_start: string;
+    week_end: string;
+    data_week_start: string;
+    data_week_end: string;
+    used_previous_week: boolean;
+  };
+  made: number;
+  sold_percent: number;
+  void_percent: number;
+  waste_percent: number;
+  variance_percent: number;
+  no_inventory_percent: number;
+  variance_score: number;
+  sold_score: number;
+  no_inventory_score: number;
+  void_score: number;
+  waste_score: number;
+  total_score: number;
+  items: HnrPlusItem[];
 }

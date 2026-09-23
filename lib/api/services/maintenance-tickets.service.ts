@@ -1,7 +1,21 @@
 import axios from "axios";
+import { buildNestedFormData, payloadHasFiles } from "@/lib/api/form-data";
 import type {
+  AttendanceDurations,
+  AttendanceMinutes,
+  ApiAttendanceDurations,
+  ApiIssuePaymentBlock,
+  ApiRecordPaymentBlock,
+  ApiRecordPaymentClaim,
+  ApiStorageLocationRef,
+  IssuePaymentBlock,
+  PaymentStatusField,
+  RecordPaymentBlock,
+  RecordPaymentClaim,
+  StorageLocationRef,
   TicketsListResponse,
   TicketIssuesResponse,
+  TicketWithIssuesResponse,
   CatalogIssue,
   CatalogTechnician,
   CatalogCategory,
@@ -12,10 +26,13 @@ import type {
   DeferPayload,
   CancelPayload,
   WaitPayload,
+  RelinkIssuePayload,
+  AssignedPriorityPayload,
   FinalNotePayload,
   CreateNotePayload,
   CreateDiagnosisPayload,
   CreateAttendanceEntryPayload,
+  CreateAttendanceEventPayload,
   CreatePartUsagePayload,
   CreatePayEntryPayload,
   CreateWarrantyPayload,
@@ -57,8 +74,10 @@ import type {
   LaravelPaginationMeta,
   LaravelPaginationLinks,
   ApiTicketsAnalytics,
+  ApiTicketsAnalyticsDuration,
   ApiTicketsAnalyticsResponse,
   TicketsAnalytics,
+  TicketsAnalyticsDuration,
 } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -83,16 +102,25 @@ export class MaintenanceTicketsError extends Error {
   readonly code: TicketsErrorCode;
   readonly retryable: boolean;
   readonly validationErrors?: Record<string, string[]>;
+  /**
+   * Structured 422 detail, when the API sends it. Currently the stock-shortfall
+   * block: { part_id, storage_location_id, requested, available }, which lets
+   * the UI show the shortfall inline instead of just a sentence.
+   * Read it via readStockShortfall in lib/api/maintenance-tickets-errors.ts.
+   */
+  readonly context?: Record<string, unknown>;
 
   constructor(
     message: string,
     code: TicketsErrorCode,
-    validationErrors?: Record<string, string[]>
+    validationErrors?: Record<string, string[]>,
+    context?: Record<string, unknown>
   ) {
     super(message);
     this.name = "MaintenanceTicketsError";
     this.code = code;
     this.validationErrors = validationErrors;
+    this.context = context;
     this.retryable = ["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code);
   }
 }
@@ -148,7 +176,8 @@ function handleAxiosError(err: unknown): never {
       throw new MaintenanceTicketsError(
         message || "Validation failed.",
         "VALIDATION_ERROR",
-        data?.errors
+        data?.errors,
+        data?.context
       );
     }
     if (status === 429) throw new MaintenanceTicketsError("Too many requests.", "RATE_LIMITED");
@@ -232,6 +261,7 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     issueTitle: raw.display_title ?? raw.issue?.title ?? null,
     otherTitle: raw.other_title,
     priority: transformEnumField(raw.priority),
+    assignedPriority: raw.assigned_priority ? transformEnumField(raw.assigned_priority) : null,
     status: transformEnumField(raw.status),
     description: raw.description,
     parentId: raw.parent_id,
@@ -244,6 +274,7 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     partUsages: (raw.part_usages ?? []).map(transformPartUsage),
     payEntries: (raw.pay_entries ?? []).map(transformPayEntry),
     warranties: (raw.warranties ?? []).map(transformWarranty),
+    payment: transformIssuePaymentBlock(raw.payment),
     attachments: (raw.attachments ?? []).map(transformAttachment),
     notes: (raw.notes ?? []).map(transformNote),
     createdBy: raw.created_by ?? null,
@@ -264,6 +295,15 @@ function transformTicket(raw: ApiTicket): Ticket {
     attachments: (raw.attachments ?? []).map(transformAttachment),
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
     issueCount: raw.issues_count ?? raw.issues?.length ?? 0,
+    // The list already eager-loads these upstream, so carrying them costs
+    // nothing and lets the rail put a ticket in a basket without opening it.
+    issues: (raw.issues ?? []).map((i) => ({
+      id: i.id,
+      title: i.display_title ?? i.catalog_issue?.title ?? i.title ?? `Issue #${i.id}`,
+      status: i.status ? transformEnumField(i.status) : null,
+      priority: i.priority ? transformEnumField(i.priority) : null,
+      technicians: (i.technicians ?? []).map((t) => ({ id: t.id, name: t.name })),
+    })),
     issueTitles: (raw.issues ?? [])
       .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)
       .filter((t): t is string => !!t),
@@ -273,35 +313,55 @@ function transformTicket(raw: ApiTicket): Ticket {
   };
 }
 
+/**
+ * Analytics is ALL aggregates, and the API sends `null` — or omits a block
+ * entirely — whenever there is nothing to aggregate: no tickets, or a filter
+ * combination matching none.
+ *
+ * Every access below is therefore optional-chained. The transform is the one
+ * place API reality meets our types, so it guards here and hands the UI a
+ * shape that tells the truth, instead of every render site having to remember.
+ *
+ * Counts fall back to 0 (a count of nothing IS zero). AVERAGES fall back to
+ * null, never 0 — "no tickets" is not "zero tickets per week", and the panel
+ * renders an em dash for it.
+ */
 function transformTicketsAnalytics(raw: ApiTicketsAnalytics): TicketsAnalytics {
+  const dur = (d: ApiTicketsAnalyticsDuration | null | undefined): TicketsAnalyticsDuration => ({
+    avgSeconds: d?.avg_seconds ?? null,
+    avgHours: d?.avg_hours ?? null,
+    sampleSize: d?.sample_size ?? 0,
+  });
+
+  const week = raw.avg_tickets_per_week;
+
   return {
     issues: {
-      total: raw.issues.total,
-      statusBreakdown: raw.issues.status_breakdown.map((b) => ({
+      total: raw.issues?.total ?? 0,
+      statusBreakdown: (raw.issues?.status_breakdown ?? []).map((b) => ({
         status: b.status,
         label: b.label,
         count: b.count,
       })),
     },
+    // `?? null`, never `?? 0`. An older backend omits `attention` entirely, and
+    // rendering 0 would claim nothing is overdue when we simply weren't told.
+    attention: {
+      overdue: raw.attention?.overdue ?? null,
+      stuck: raw.attention?.stuck ?? null,
+      asOf: raw.attention?.as_of ?? null,
+    },
     durations: {
-      pendingToNextStatus: {
-        avgSeconds: raw.durations.pending_to_next_status.avg_seconds,
-        avgHours: raw.durations.pending_to_next_status.avg_hours,
-        sampleSize: raw.durations.pending_to_next_status.sample_size,
-      },
-      timeToCompleteOrCancelled: {
-        avgSeconds: raw.durations.time_to_complete_or_cancelled.avg_seconds,
-        avgHours: raw.durations.time_to_complete_or_cancelled.avg_hours,
-        sampleSize: raw.durations.time_to_complete_or_cancelled.sample_size,
-      },
+      pendingToNextStatus: dur(raw.durations?.pending_to_next_status),
+      timeToCompleteOrCancelled: dur(raw.durations?.time_to_complete_or_cancelled),
     },
     avgTicketsPerWeek: {
-      value: raw.avg_tickets_per_week.value,
-      totalTickets: raw.avg_tickets_per_week.total_tickets,
-      weeksSpanned: raw.avg_tickets_per_week.weeks_spanned,
-      spanStart: raw.avg_tickets_per_week.span_start,
-      spanEnd: raw.avg_tickets_per_week.span_end,
-      weekStartsOn: raw.avg_tickets_per_week.week_starts_on,
+      value: week?.value ?? null,
+      totalTickets: week?.total_tickets ?? null,
+      weeksSpanned: week?.weeks_spanned ?? null,
+      spanStart: week?.span_start ?? null,
+      spanEnd: week?.span_end ?? null,
+      weekStartsOn: week?.week_starts_on ?? null,
     },
   };
 }
@@ -425,15 +485,47 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
   return form;
 }
 
+/**
+ * Chooses the encoding for an attendance POST. Shared by the ticket-scoped and
+ * global endpoints so the two can never drift.
+ *
+ * Files can hide inside `payload.notes[i].files`, so `files?.length` alone is
+ * not sufficient to decide.
+ *
+ * The conditional is KEPT rather than going multipart-always: if the upstream
+ * rejects multipart with no files, always-multipart would break attendance for
+ * every user, not just the new notes path. The multipart branch already works
+ * today whenever files are attached.
+ */
+function attendanceRequestBody(
+  payload: CreateAttendanceEntryPayload,
+  files?: File[]
+): { body: FormData | CreateAttendanceEntryPayload; extraHeaders: Record<string, string> } {
+  const hasFile = !!files?.length || payloadHasFiles(payload.notes);
+  return {
+    body: hasFile ? buildNestedFormData(payload, files) : payload,
+    extraHeaders: hasFile ? {} : { "Content-Type": "application/json" },
+  };
+}
+
 function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   const p = new URLSearchParams();
+  // Trimmed, and omitted when empty: a bare `?q=` is a no-op server-side, but
+  // sending it puts a meaningless key in the shareable URL.
+  const q = filters.q?.trim();
+  if (q) p.set("q", q);
+  if (filters.assigned_from) p.set("assigned_from", filters.assigned_from);
+  if (filters.assigned_to)   p.set("assigned_to",   filters.assigned_to);
   (filters.statuses ?? []).forEach((v) => v && p.append("statuses[]", v));
   (filters.priorities ?? []).forEach((v) => v && p.append("priorities[]", v));
+  (filters.assigned_priorities ?? []).forEach((v) => v && p.append("assigned_priorities[]", v));
   (filters.issue_ids ?? []).forEach((v) => p.append("issue_ids[]", String(v)));
   (filters.issue_statuses ?? []).forEach((v) => v && p.append("issue_statuses[]", v));
   (filters.technician_ids ?? []).forEach((v) => p.append("technician_ids[]", String(v)));
   (filters.types ?? []).forEach((v) => p.append("types[]", v));
   (filters.stores ?? []).forEach((v) => v && p.append("stores[]", v));
+  (filters.creator_ids ?? []).forEach((v) => p.append("creator_ids[]", String(v)));
+  (filters.payment_statuses ?? []).forEach((v) => v && p.append("payment_statuses[]", v));
   if (filters.part_cost_total_gt != null) p.set("part_cost_total_gt", String(filters.part_cost_total_gt));
   if (filters.part_cost_single_gt != null) p.set("part_cost_single_gt", String(filters.part_cost_single_gt));
   if (filters.created_from)  p.set("created_from",  filters.created_from);
@@ -453,7 +545,7 @@ function buildFilterParams(filters: TicketsFilters): URLSearchParams {
 /*  Lifecycle record transform helpers                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function transformAttachment(raw: ApiTicketAttachment): TicketAttachment {
+export function transformAttachment(raw: ApiTicketAttachment): TicketAttachment {
   const fileName = raw.file_name ?? raw.original_name ?? raw.path ?? `attachment-${raw.id}`;
   const fileSize = raw.file_size ?? raw.size ?? null;
   const contentType = raw.content_type ?? raw.mime_type ?? null;
@@ -469,7 +561,7 @@ function transformAttachment(raw: ApiTicketAttachment): TicketAttachment {
   };
 }
 
-function transformNote(raw: ApiTicketNote): TicketNote {
+export function transformNote(raw: ApiTicketNote): TicketNote {
   return {
     id: raw.id,
     type: raw.type,
@@ -497,6 +589,96 @@ function transformDiagnosis(raw: ApiTicketIssueDiagnosis): TicketIssueDiagnosis 
   };
 }
 
+/**
+ * Laravel decimals arrive as strings. Falls back rather than producing NaN —
+ * never `parseFloat` straight into `.toFixed()`, or a legacy row or a
+ * partially-deployed upstream puts "NaN" on screen.
+ */
+function safeDecimal(
+  raw: string | number | null | undefined,
+  fallback: number
+): number {
+  if (raw == null) return fallback;
+  const parsed = typeof raw === "number" ? raw : parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function transformMinutes(
+  raw: Partial<AttendanceMinutes> | null | undefined
+): AttendanceMinutes {
+  return {
+    work: raw?.work ?? 0,
+    travel: raw?.travel ?? 0,
+    break: raw?.break ?? 0,
+    parts_run: raw?.parts_run ?? 0,
+  };
+}
+
+function transformDurations(
+  raw: ApiAttendanceDurations | null | undefined
+): AttendanceDurations | null {
+  if (raw == null) return null;
+  const minutes = transformMinutes(raw.minutes);
+  return {
+    minutes,
+    // `hours` is only the rounded presentation of `minutes`, which is
+    // authoritative — derive it when the API omits it rather than showing 0.
+    hours: {
+      work: raw.hours?.work ?? minutes.work / 60,
+      travel: raw.hours?.travel ?? minutes.travel / 60,
+      break: raw.hours?.break ?? minutes.break / 60,
+      parts_run: raw.hours?.parts_run ?? minutes.parts_run / 60,
+    },
+    warnings: raw.warnings ?? [],
+  };
+}
+
+function transformStorageLocationRef(
+  raw: ApiStorageLocationRef | null | undefined
+): StorageLocationRef | null {
+  return raw ? { id: raw.id, name: raw.name, code: raw.code ?? null } : null;
+}
+
+function transformPaymentClaim(raw: ApiRecordPaymentClaim): RecordPaymentClaim {
+  return {
+    dailyPayPaymentId: raw.daily_pay_payment_id,
+    dailyPayEntryId: raw.daily_pay_entry_id,
+    dailyPayLineId: raw.daily_pay_line_id ?? null,
+    date: raw.date,
+    technicianId: raw.technician_id,
+    technician: raw.technician
+      ? { id: raw.technician.id, name: raw.technician.name }
+      : null,
+    amount: raw.amount != null ? safeDecimal(raw.amount, 0) : null,
+    minutes: raw.minutes != null ? transformMinutes(raw.minutes) : null,
+  };
+}
+
+/**
+ * `payment` is null when the claims were not loaded, and `payments` is `[]`
+ * when the record is genuinely unpaid. Those are different facts, so this
+ * returns null rather than fabricating an "unpaid" block.
+ */
+function transformPaymentBlock(
+  raw: ApiRecordPaymentBlock | null | undefined
+): RecordPaymentBlock | null {
+  if (raw == null) return null;
+  return {
+    status: transformEnumField(raw.status) as PaymentStatusField,
+    payments: (raw.payments ?? []).map(transformPaymentClaim),
+  };
+}
+
+function transformIssuePaymentBlock(
+  raw: ApiIssuePaymentBlock | null | undefined
+): IssuePaymentBlock | null {
+  if (raw == null) return null;
+  return {
+    status: transformEnumField(raw.status) as PaymentStatusField,
+    dailyPayLineIds: raw.daily_pay_line_ids ?? [],
+  };
+}
+
 function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendance {
   return {
     id: raw.id,
@@ -505,10 +687,20 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
     technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
     startClock: raw.start_clock,
     endClock: raw.end_clock,
-    startBreak: raw.start_break,
-    endBreak: raw.end_break,
-    startPartsRun: raw.start_parts_run,
-    endPartsRun: raw.end_parts_run,
+    // Kept in the order the server sent it -- oldest first, by the time each
+    // thing happened rather than the order it was typed in.
+    events: (raw.events ?? []).map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      label: e.label,
+      bucket: e.bucket,
+      opens: e.opens,
+      paid: e.paid,
+      at: e.at,
+      mistaken: e.mistaken,
+    })),
+    durations: transformDurations(raw.durations),
+    payment: transformPaymentBlock(raw.payment),
     attachments: (raw.attachments ?? []).map(transformAttachment),
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
@@ -518,13 +710,48 @@ function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendan
   };
 }
 
+/**
+ * Part usage, defensive against pre-v2 rows.
+ *
+ * Legacy rows carry only `cost`, and the spec says to read them as "one unit at
+ * that price, purchased, paid by us". The quantity/cost fallbacks below encode
+ * exactly that — but `source` and `paidBy` fall back to NULL rather than to a
+ * synthesized {value:"purchased"}, because a fabricated label on screen is
+ * worse than a blank one. `isLegacy` then lets the card render a bare cost
+ * instead of an invented "1 ×".
+ */
 function transformPartUsage(raw: ApiTicketIssuePartUsage): TicketIssuePartUsage {
+  const quantity = safeDecimal(raw.quantity, 1);
+  const cost = safeDecimal(raw.cost, 0);
+  // One unit at that price ⇒ the unit cost IS the cost.
+  const unitCost = safeDecimal(raw.unit_cost, cost);
+
   return {
     id: raw.id,
     ticketIssueId: raw.ticket_issue_id,
     partId: raw.part_id,
     part: raw.part ? { id: raw.part.id, name: raw.part.name } : null,
-    cost: parseFloat(raw.cost),
+    quantity,
+    unitCost,
+    cost,
+    // No returns on a legacy row, so net equals gross.
+    netQuantity: safeDecimal(raw.net_quantity, quantity),
+    netCost: safeDecimal(raw.net_cost, cost),
+    source: raw.source ? transformEnumField(raw.source) : null,
+    paidBy: raw.paid_by ? transformEnumField(raw.paid_by) : null,
+    reimbursable: raw.reimbursable ?? false,
+    paidByTechnicianId: raw.paid_by_technician_id ?? null,
+    paidByTechnician: raw.paid_by_technician
+      ? { id: raw.paid_by_technician.id, name: raw.paid_by_technician.name }
+      : null,
+    storageLocationId: raw.storage_location_id ?? null,
+    storageLocation: transformStorageLocationRef(raw.storage_location),
+    returnedQuantity: raw.returned_quantity != null ? safeDecimal(raw.returned_quantity, 0) : null,
+    returnedToStorageLocationId: raw.returned_to_storage_location_id ?? null,
+    returnedToStorageLocation: transformStorageLocationRef(raw.returned_to_storage_location),
+    stockMovementIds: raw.stock_movement_ids ?? [],
+    payment: transformPaymentBlock(raw.payment),
+    isLegacy: raw.quantity == null,
     attachments: (raw.attachments ?? []).map(transformAttachment),
     notes: (raw.notes ?? []).map(transformNote),
     mistaken: raw.mistaken,
@@ -583,6 +810,27 @@ function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
  * Builds the relative entity path passed to `addNote` / `addAttachments`.
  * Each value is the path WITHOUT the `/notes` or `/attachments` suffix.
  */
+/**
+ * One attendance session's URL.
+ *
+ * Built in one place because three calls share it, and a typo in one of them
+ * would be a 404 with no obvious cause.
+ *
+ * NULL STORE OR TICKET GIVES THE UNSCOPED URL. A visit covering issues on
+ * several tickets has no one ticket its URL could honestly name -- which is
+ * why the create endpoint has an unscoped variant too. Only the path differs
+ * between the two, so switching it here beats three more near-identical
+ * methods that could drift apart.
+ */
+const ATT_BASE = (
+  storeId: string | null,
+  ticketId: number | null,
+  attendanceId: number
+) =>
+  storeId && ticketId
+    ? `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}`
+    : `/api/maintenance-tickets/attendance-entries/${attendanceId}`;
+
 export const entityPaths = {
   ticket: (store: string, ticket: number) =>
     `/stores/${encodeURIComponent(store)}/tickets/${ticket}`,
@@ -605,6 +853,9 @@ export const entityPaths = {
   technician: (id: number) => `/catalog/technicians/${id}`,
   category: (id: number) => `/catalog/categories/${id}`,
   part: (id: number) => `/catalog/parts/${id}`,
+  // Global — no store segment, matching the routes.
+  storageLocation: (id: number) => `/storage-locations/${id}`,
+  stockMovement: (id: number) => `/stock-movements/${id}`,
 } as const;
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -729,6 +980,46 @@ export const maintenanceTicketsService = {
     }
   },
 
+  /**
+   * The same listing, without needing to know the store.
+   *
+   * Prefer getTicketIssues when a store is in hand -- that is the canonical
+   * route. This exists because a ticket created with `otherStore` has a null
+   * store_id and cannot bind inside upstream's /stores/{store}/... group, so
+   * those tickets have no other way to be read. It is also what lets the
+   * ticket page be a clean /maintenance-tickets/{id} URL rather than one that
+   * smuggles a store the ticket may not have.
+   */
+  async getTicketIssuesById(
+    ticketId: number,
+    storeNumber?: string | null,
+    signal?: AbortSignal
+  ): Promise<TicketWithIssuesResponse> {
+    const token = requireToken();
+    // Passed purely for authorization. Upstream's globalIndex(Ticket) ignores
+    // it; pizzasys reads it out of the query string to scope the rule to this
+    // ticket's store, which is what lets a reports-view user -- whose
+    // `reports view` is granted per store, not globally -- read the ticket at
+    // all. Omitted for an other-store ticket, which has no store to name.
+    const qs = storeNumber ? `?store_id=${encodeURIComponent(storeNumber)}` : "";
+    try {
+      const res = await axios.get<ApiTicketIssuesResponse & { ticket: ApiTicket }>(
+        `/api/maintenance-tickets/tickets/${ticketId}/issues${qs}`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          timeout: 15_000,
+          signal,
+        }
+      );
+      return {
+        data: res.data.data.map(transformIssue),
+        ticket: transformTicket(res.data.ticket),
+      };
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
   /** Assign issues to technicians with a date */
   async assignIssues(
     storeId: string,
@@ -842,6 +1133,58 @@ export const maintenanceTicketsService = {
     try {
       await axios.post(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/wait`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Re-link a ticket-issue line to a different catalog issue. Only the catalog association changes. */
+  async relinkIssue(
+    storeId: string,
+    ticketId: number,
+    issueId: number,
+    payload: RelinkIssuePayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.patch(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          timeout: 15_000,
+        }
+      );
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Set (or clear, via `priority: null`) the independent assigned_priority on a ticket-issue line. */
+  async setAssignedPriority(
+    storeId: string,
+    ticketId: number,
+    issueId: number,
+    payload: AssignedPriorityPayload
+  ): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/assigned-priority`,
         payload,
         {
           headers: {
@@ -1292,12 +1635,33 @@ export const maintenanceTicketsService = {
     files?: File[]
   ): Promise<TicketIssueAttendance> {
     const token = requireToken();
-    const body = files?.length ? buildFormData(payload, files) : payload;
+    const { body, extraHeaders } = attendanceRequestBody(payload, files);
     try {
       const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries`,
         body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(!files?.length ? { "Content-Type": "application/json" } : {}) }, timeout: 120_000 }
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...extraHeaders }, timeout: 120_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * Log an attendance entry WITHOUT a ticket-scoped URL, for a visit that does
+   * not sit under any one ticket. Identical payload and encoding to
+   * createAttendanceEntry — only the URL differs.
+   */
+  async createAttendanceEntryGlobal(
+    payload: CreateAttendanceEntryPayload,
+    files?: File[]
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    const { body, extraHeaders } = attendanceRequestBody(payload, files);
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `/api/maintenance-tickets/attendance-entries`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...extraHeaders }, timeout: 120_000 }
       );
       return transformAttendance(res.data.data);
     } catch (err) { return handleAxiosError(err); }
@@ -1315,6 +1679,87 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
+  /* ── Attendance events ─────────────────────────────────────────────────── */
+
+  /*
+   * Attendance is an append-only event ledger. Each call below writes ONE
+   * thing that happened and gets the whole session back, so the UI never has
+   * to guess what the server made of it.
+   *
+   * This is what the old shape had no room for: after creating an entry, the
+   * only mutation in the entire API was "mistaken = true", so adding a travel
+   * start to a saved clock-in meant flagging the record wrong and retyping it.
+   */
+
+  /**
+   * Record one thing that happened.
+   *
+   * A `clock_in` on an already-open session opens a NEW session server-side and
+   * returns that one -- coming back to a store later is a second visit. So the
+   * caller must use the returned session's id rather than assuming it wrote to
+   * the one it was given.
+   */
+  async createAttendanceEvent(
+    storeId: string | null,
+    ticketId: number | null,
+    attendanceId: number,
+    payload: CreateAttendanceEventPayload
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * Correct when something happened.
+   *
+   * Refused with a 422 once a pay sheet has claimed the session: you can fix
+   * what nobody has been paid against, but not quietly rewrite what somebody
+   * was paid on. The message says so, so surface it rather than replacing it.
+   */
+  async updateAttendanceEvent(
+    storeId: string | null,
+    ticketId: number | null,
+    attendanceId: number,
+    eventId: number,
+    at: string
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}`,
+        { at },
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Strike one event. It stays in the ledger, struck through, and stops
+   *  counting -- the same flag every other record here uses. */
+  async markAttendanceEventMistaken(
+    storeId: string | null,
+    ticketId: number | null,
+    attendanceId: number,
+    eventId: number
+  ): Promise<TicketIssueAttendance> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
+        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}/mistaken`,
+        {},
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
+      );
+      return transformAttendance(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
   /* ── Part usages ───────────────────────────────────────────────────────── */
 
   /** Add a part-usage record to one or more ticket issues */
@@ -1325,7 +1770,9 @@ export const maintenanceTicketsService = {
     files?: File[]
   ): Promise<TicketIssuePartUsage> {
     const token = requireToken();
-    const body = buildFormData(payload, files);
+    // Nested builder, for notes[i][body] and notes[i][files][]. Already
+    // always-multipart, so there is no content-type risk in the switch.
+    const body = buildNestedFormData(payload, files);
     try {
       const res = await axios.post<{ data: ApiTicketIssuePartUsage }>(
         `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages`,

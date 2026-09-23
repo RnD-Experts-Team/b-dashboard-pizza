@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TBL, TH, TD, NUM } from "@/components/wbr-reports/primitives";
 import type { CashControl } from "@/types/dashboard-report.types";
 import { fmt$2, fmtDate, fmtNum, StatTile, WbrCardSkeleton } from "./wbr-format";
+import { parseDateOrNull } from "@/lib/utils/date-display";
 
 function diffColor(n: number) {
   if (n > 0.5) return "text-emerald-600 dark:text-emerald-400";
@@ -27,7 +28,8 @@ export function WbrCashControlCard({
   if (!data) return null;
 
   const { filtering, week, period, quarter, year } = data;
-  const weekEnd = format(addDays(parseISO(filtering.week_start), 6), "MMM d");
+  const weekStartDate = parseDateOrNull(filtering.week_start);
+  const weekEnd = weekStartDate ? format(addDays(weekStartDate, 6), "MMM d") : "—";
 
   const diffRows = [
     { label: "Week", v: week.deposit_minus_cash_sales },

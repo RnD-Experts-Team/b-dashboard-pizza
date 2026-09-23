@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import type {
   ApiDueResponse,
   DueResponse,
@@ -19,13 +20,53 @@ import type {
   EvalRow,
   ApiChartCell,
   ChartCell,
+  ApiAllocatedFrom,
+  AllocatedFrom,
   ApiItemCell,
   ItemCell,
+  ApiAbsentTask,
+  AbsentTask,
+  ApiAllocation,
+  Allocation,
+  ApiMissingCell,
+  MissingCell,
+  ApiPeriodInfo,
+  PeriodInfo,
   ApiInspectionItem,
   InspectionItem,
   SetCellPayload,
   FinalizePayload,
+  ReopenPayload,
   PeriodType,
+  ApiPeriodsResponse,
+  PeriodsResponse,
+  ApiPeriodOption,
+  PeriodOption,
+  UpdateInspectionItemPayload,
+  GetAllocationsQuery,
+  SetAllocationPayload,
+  DeleteAllocationPayload,
+  ApiCleaningSettings,
+  CleaningSettings,
+  UpdateSettingsPayload,
+  AllocationCopyRequest,
+  ApiAllocationCopyResponse,
+  AllocationCopyResponse,
+  ApiAllocationCopySplit,
+  AllocationCopySplit,
+  ApiAllocationCopySkip,
+  AllocationCopySkip,
+  ApiAllocationCopyResult,
+  AllocationCopyResult,
+  AllocationRemoveRequest,
+  ApiAllocationRemoveResponse,
+  AllocationRemoveResponse,
+  ApiAllocationRemoveSplit,
+  AllocationRemoveSplit,
+  ApiAllocationRemoveSkip,
+  AllocationRemoveSkip,
+  ApiAllocationRemoveResult,
+  AllocationRemoveResult,
 } from "@/types/cleaning.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -39,6 +80,7 @@ export type CleaningErrorCode =
   | "NOT_FOUND"
   | "NOT_SYNCED"
   | "VALIDATION_ERROR"
+  | "CONFLICT"
   | "RATE_LIMITED"
   | "TIMEOUT"
   | "NETWORK_ERROR"
@@ -49,16 +91,44 @@ export class CleaningError extends Error {
   readonly code: CleaningErrorCode;
   readonly retryable: boolean;
   readonly fieldErrors?: Record<string, string[]>;
+  /** Present on a 409 from POST /evaluations/finalize when cells are still
+   *  ungraded — the exact cells, per the API, not just "incomplete". */
+  readonly missing?: MissingCell[];
+  /** Present on a 422 from POST /evaluations when the cell is completion-
+   *  locked (guide §2) — `reason` is one of `period_not_finished` (locked,
+   *  not failed) / `not_completed` / `partially_completed` (locked AND
+   *  auto-failed), plus the counts that explain why. */
+  readonly reason?: string;
+  /** Occurrences already past their deadline — drives auto-fail. */
+  readonly completionExpected?: number;
+  readonly completionFound?: number;
+  /** Everything the period asks for — drives whether the cell is editable. */
+  readonly completionExpectedPeriod?: number;
+  readonly completionFoundPeriod?: number;
 
   constructor(
     message: string,
     code: CleaningErrorCode,
-    fieldErrors?: Record<string, string[]>
+    fieldErrors?: Record<string, string[]>,
+    missing?: MissingCell[],
+    completionLock?: {
+      reason?: string;
+      completionExpected?: number;
+      completionFound?: number;
+      completionExpectedPeriod?: number;
+      completionFoundPeriod?: number;
+    }
   ) {
     super(message);
     this.name = "CleaningError";
     this.code = code;
     this.fieldErrors = fieldErrors;
+    this.missing = missing;
+    this.reason = completionLock?.reason;
+    this.completionExpected = completionLock?.completionExpected;
+    this.completionFound = completionLock?.completionFound;
+    this.completionExpectedPeriod = completionLock?.completionExpectedPeriod;
+    this.completionFoundPeriod = completionLock?.completionFoundPeriod;
     this.retryable = ["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code);
   }
 }
@@ -91,23 +161,35 @@ function authHeaders(): Record<string, string> {
 
 /**
  * The dashboard's currently-selected store as its HUMAN code (e.g.
- * "03795-00001") — read straight from the persisted store rather than passed
- * in, so every call site gets it without threading a param through.
+ * "03795-00001") — read straight from persisted/auth state rather than
+ * passed in, so every call site gets it without threading a param through.
  *
- * Same helper/convention as qa.service.ts's getSelectedStoreId: cleaning talks
- * to the same QA backend, whose store-scoped auth rules resolve the store from
- * the `X-Store-Id` header, and they expect the human code, not the numeric id.
+ * Same base convention as qa.service.ts's getSelectedStoreId (cleaning talks
+ * to the same QA backend, whose store-scoped auth rules resolve the store
+ * from the `X-Store-Id` header and expect the human code, not the numeric
+ * id) — extended here with an `overviewStores` fallback so it doesn't
+ * depend on a store-switcher widget having been used at least once.
  */
 function getSelectedStoreCode(): string | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("selected-store-storage");
-  if (!raw) return null;
-  try {
-    const storeId = JSON.parse(raw)?.state?.selectedStore?.storeId;
-    return typeof storeId === "string" && storeId.trim() ? storeId.trim() : null;
-  } catch {
-    return null;
+  if (raw) {
+    try {
+      const storeId = JSON.parse(raw)?.state?.selectedStore?.storeId;
+      if (typeof storeId === "string" && storeId.trim()) return storeId.trim();
+    } catch {
+      // fall through to the overviewStores fallback below
+    }
   }
+  // "selected-store-storage" only gets written once a store-switcher widget
+  // has actually been used — a store manager who never touches one (common
+  // when they only have one store) would otherwise always resolve to null
+  // here. Falls back to their own first assigned store from
+  // GET /auth/general-overview, loaded at login regardless of widget use.
+  const overviewStoreId = useAuthStore.getState().overviewStores?.[0]?.storeId;
+  return typeof overviewStoreId === "string" && overviewStoreId.trim()
+    ? overviewStoreId.trim()
+    : null;
 }
 
 /**
@@ -147,9 +229,34 @@ function toCleaningError(err: unknown): CleaningError {
 
     // Extract Laravel-style upstream validation errors, if present.
     const upstream = data?.error?.details?.upstream as
-      | { errors?: Record<string, string[]>; message?: string }
+      | {
+          errors?: Record<string, string[]>;
+          message?: string;
+          missing?: MissingCell[];
+          reason?: string;
+          completion_expected?: number;
+          completion_found?: number;
+          completion_expected_period?: number;
+          completion_found_period?: number;
+        }
       | undefined;
     const fieldErrors = upstream?.errors;
+    // The completion-lock 422 (guide §2.1) may come through nested under
+    // `upstream` (like the 409's `missing`) or flat on the response body —
+    // check both rather than assuming one shape.
+    const flat = data as unknown as {
+      reason?: string;
+      completion_expected?: number;
+      completion_found?: number;
+      completion_expected_period?: number;
+      completion_found_period?: number;
+    };
+    const lockReason = upstream?.reason ?? flat?.reason;
+    const lockExpected = upstream?.completion_expected ?? flat?.completion_expected;
+    const lockFound = upstream?.completion_found ?? flat?.completion_found;
+    const lockExpectedPeriod =
+      upstream?.completion_expected_period ?? flat?.completion_expected_period;
+    const lockFoundPeriod = upstream?.completion_found_period ?? flat?.completion_found_period;
 
     if (status === 401 || serverCode === "UNAUTHORIZED" || serverCode === "NOT_AUTHENTICATED") {
       const msg = serverMessage || "";
@@ -174,7 +281,29 @@ function toCleaningError(err: unknown): CleaningError {
       return new CleaningError(
         upstream?.message || serverMessage || "Some fields are invalid.",
         "VALIDATION_ERROR",
-        fieldErrors
+        fieldErrors,
+        undefined,
+        lockReason
+          ? {
+              reason: lockReason,
+              completionExpected: lockExpected,
+              completionFound: lockFound,
+              completionExpectedPeriod: lockExpectedPeriod,
+              completionFoundPeriod: lockFoundPeriod,
+            }
+          : undefined
+      );
+    }
+    if (status === 409) {
+      // Two distinct 409s share this status: finalize-with-ungraded-cells
+      // (carries `missing[]`) and any write on an already-finalized/locked
+      // evaluation (message only). Both surface as CONFLICT; callers that
+      // care about the missing-cells case check `.missing`.
+      return new CleaningError(
+        upstream?.message || serverMessage || "This action can't be completed right now.",
+        "CONFLICT",
+        undefined,
+        upstream?.missing
       );
     }
     if (status === 429 || serverCode === "RATE_LIMITED") {
@@ -228,6 +357,9 @@ function transformDueItem(raw: ApiDueItem): DueItem {
     photos: raw.photos ?? [],
     note: raw.note ?? null,
     completionId: raw.completion_id ?? null,
+    hasHistory: raw.has_history ?? false,
+    completionsCount: raw.completions_count ?? 0,
+    startedAtOrBeforePeriod: raw.started_at_or_before_period ?? false,
   };
 }
 
@@ -289,29 +421,92 @@ function transformTask(raw: ApiCleaningTask): CleaningTask {
   };
 }
 
+function transformAllocatedFrom(raw: ApiAllocatedFrom): AllocatedFrom {
+  return { taskId: raw.task_id, name: raw.name, amount: raw.amount };
+}
+
 function transformChartCell(raw: ApiChartCell): ChartCell {
   return {
     taskId: raw.task_id,
     name: raw.name,
     weight: raw.weight,
+    baseWeight: raw.base_weight ?? raw.weight,
+    effectiveWeight: raw.effective_weight ?? raw.weight,
+    allocatedFrom: (raw.allocated_from ?? []).map(transformAllocatedFrom),
     verdict: raw.verdict ?? null,
+    note: raw.note ?? null,
+    photos: raw.photos ?? [],
+    historical: raw.historical ?? false,
+
+    verdictSource: raw.verdict_source ?? null,
+    completionExpected: raw.completion_expected ?? 0,
+    completionFound: raw.completion_found ?? 0,
+    completionExpectedPeriod: raw.completion_expected_period ?? 0,
+    completionFoundPeriod: raw.completion_found_period ?? 0,
+    completionPct: raw.completion_pct ?? 0,
+    completionStatus: raw.completion_status ?? "pending",
+    completionDone: raw.completion_done ?? false,
+    completionLate: raw.completion_late ?? false,
+    lastDoneAt: raw.last_done_at ?? null,
+    doneBy: raw.done_by ?? [],
+    // Default `true` (evaluable) when the field is absent — an older/mid-
+    // deploy API that doesn't send it yet must not lock every cell.
+    evaluable: raw.evaluable ?? true,
+    autoFailed: raw.auto_failed ?? false,
+    lockReason: raw.lock_reason ?? null,
+  };
+}
+
+/**
+ * `item_values[name]` is `{value, weight, note, photos}` on current backends
+ * but was a bare value string on older ones — normalize both so a mid-deploy
+ * API can't blank (or crash) the grid.
+ */
+function transformItemCell(raw: ApiItemCell | undefined): ItemCell {
+  if (raw == null) return { value: "empty", weight: 1, note: null, photos: [] };
+  if (typeof raw === "string") return { value: raw, weight: 1, note: null, photos: [] };
+  return {
+    value: raw.value ?? "empty",
+    weight: raw.weight ?? 1,
     note: raw.note ?? null,
     photos: raw.photos ?? [],
   };
 }
 
-/**
- * `item_values[name]` is `{value, note, photos}` on current backends but was a
- * bare value string on older ones — normalize both so a mid-deploy API can't
- * blank (or crash) the grid.
- */
-function transformItemCell(raw: ApiItemCell | undefined): ItemCell {
-  if (raw == null) return { value: "empty", note: null, photos: [] };
-  if (typeof raw === "string") return { value: raw, note: null, photos: [] };
+function transformAbsentTask(raw: ApiAbsentTask): AbsentTask {
   return {
-    value: raw.value ?? "empty",
-    note: raw.note ?? null,
-    photos: raw.photos ?? [],
+    taskId: raw.task_id,
+    name: raw.name,
+    frequency: raw.frequency,
+    weight: raw.weight,
+    reason: raw.reason,
+    allocated: raw.allocated,
+    unallocated: raw.unallocated,
+  };
+}
+
+function transformAllocation(raw: ApiAllocation): Allocation {
+  return {
+    sourceTaskId: raw.source_task_id,
+    targetTaskId: raw.target_task_id,
+    amount: raw.amount,
+  };
+}
+
+function transformMissingCell(raw: ApiMissingCell): MissingCell {
+  return { kind: raw.kind, id: raw.id, name: raw.name };
+}
+
+function transformPeriodInfo(raw: ApiPeriodInfo): PeriodInfo {
+  return {
+    key: raw.key,
+    year: raw.year,
+    week: raw.week,
+    period: raw.period,
+    weekInPeriod: raw.week_in_period,
+    label: raw.label,
+    from: raw.from,
+    to: raw.to,
   };
 }
 
@@ -333,6 +528,33 @@ function transformEvalRow(raw: ApiEvalRow): EvalRow {
     },
     chartScore: raw.chart_score ?? 0,
     weightLost: raw.weight_lost ?? 0,
+
+    absentTasks: (raw.absent_tasks ?? []).map(transformAbsentTask),
+    allocations: (raw.allocations ?? []).map(transformAllocation),
+
+    completionPct: raw.completion_pct ?? 0,
+    isComplete: raw.is_complete ?? false,
+    gradedCount: raw.graded_count ?? 0,
+    requiredCount: raw.required_count ?? 0,
+    missing: (raw.missing ?? []).map(transformMissingCell),
+
+    // `final_score` is meaningfully nullable — a store with nothing graded has
+    // NO score, not a zero score. Never coerce this to 0.
+    finalScore: raw.final_score ?? null,
+    commitmentPass: raw.commitment_pass ?? false,
+    scoreFormula: raw.score_formula ?? "average",
+    scoreShares: raw.score_shares ?? { items: 50, chart: 50 },
+    scoreSides: raw.score_sides ?? [],
+    itemHasAutoFail: raw.item_has_auto_fail ?? false,
+    scoreFrozen: raw.score_frozen ?? false,
+
+    finalizedAt: raw.finalized_at ?? null,
+    finalizedBy: raw.finalized_by ?? null,
+
+    completionEnforced: raw.completion_enforced ?? false,
+    tasksNotCompleted: raw.tasks_not_completed ?? 0,
+    tasksAutoFailed: raw.tasks_auto_failed ?? 0,
+    tasksInPlay: raw.tasks_in_play ?? 0,
   };
 }
 
@@ -340,8 +562,135 @@ function transformGrid(raw: ApiEvaluationGrid): EvaluationGrid {
   return {
     periodType: raw.period_type,
     periodKey: raw.period_key,
-    items: (raw.items ?? []).map((i: ApiInspectionItem) => ({ id: i.id, name: i.name })),
+    period: transformPeriodInfo(raw.period),
+    items: (raw.items ?? []).map((i: ApiInspectionItem) => ({
+      id: i.id,
+      name: i.name,
+      weight: i.weight ?? 1,
+    })),
     rows: (raw.rows ?? []).map(transformEvalRow),
+  };
+}
+
+function transformPeriodOption(raw: ApiPeriodOption): PeriodOption {
+  return {
+    key: raw.key,
+    label: raw.label,
+    period: raw.period,
+    weekInPeriod: raw.week_in_period,
+    from: raw.from,
+    to: raw.to,
+  };
+}
+
+function transformPeriodsResponse(raw: ApiPeriodsResponse): PeriodsResponse {
+  return {
+    current: raw.current,
+    options: (raw.options ?? []).map(transformPeriodOption),
+  };
+}
+
+/**
+ * Accepts flat `items_share`/`chart_share` OR a nested `shares`/`score_shares`
+ * object (the same shape the evaluation row already uses for its own
+ * `score_shares`) — whichever the deployment actually returns. Always yields
+ * finite numbers that sum to 100, never `NaN`/`undefined` reaching the UI.
+ */
+function transformSettings(raw: ApiCleaningSettings): CleaningSettings {
+  const nested = raw.shares ?? raw.score_shares;
+  const rawItems = raw.items_share ?? nested?.items;
+  const rawChart = raw.chart_share ?? nested?.chart;
+  const itemsShare = Number.isFinite(rawItems)
+    ? (rawItems as number)
+    : Number.isFinite(rawChart)
+      ? 100 - (rawChart as number)
+      : 50;
+  const chartShare = Number.isFinite(rawChart) ? (rawChart as number) : 100 - itemsShare;
+  return {
+    scoreFormula: raw.score_formula ?? "average",
+    itemsShare,
+    chartShare,
+    explain: raw.explain ?? {},
+
+    chartRequiresCompletion: raw.chart_requires_completion ?? true,
+    completionRule: raw.completion_rule ?? "any",
+    completionThreshold: raw.completion_threshold ?? 100,
+  };
+}
+
+function transformAllocationCopySplit(raw: ApiAllocationCopySplit): AllocationCopySplit {
+  return {
+    sourceTaskId: raw.source_task_id,
+    name: raw.name,
+    targets: (raw.targets ?? []).map((t) => ({
+      targetTaskId: t.target_task_id,
+      amount: t.amount,
+    })),
+    replacesExisting: raw.replaces_existing ?? false,
+  };
+}
+
+function transformAllocationCopySkip(raw: ApiAllocationCopySkip): AllocationCopySkip {
+  return { reason: raw.reason, detail: raw.detail ?? null };
+}
+
+function transformAllocationCopyResult(raw: ApiAllocationCopyResult): AllocationCopyResult {
+  return {
+    storeId: raw.store_id,
+    store: raw.store,
+    copied: raw.copied ?? 0,
+    skipped: (raw.skipped ?? []).map(transformAllocationCopySkip),
+    splits: (raw.splits ?? []).map(transformAllocationCopySplit),
+  };
+}
+
+function transformAllocationRemoveSplit(raw: ApiAllocationRemoveSplit): AllocationRemoveSplit {
+  return {
+    sourceTaskId: raw.source_task_id,
+    name: raw.name,
+    amount: raw.amount,
+    targets: raw.targets,
+  };
+}
+
+function transformAllocationRemoveSkip(raw: ApiAllocationRemoveSkip): AllocationRemoveSkip {
+  return { reason: raw.reason, detail: raw.detail ?? null };
+}
+
+function transformAllocationRemoveResult(
+  raw: ApiAllocationRemoveResult
+): AllocationRemoveResult {
+  return {
+    storeId: raw.store_id,
+    store: raw.store,
+    removed: raw.removed ?? 0,
+    skipped: (raw.skipped ?? []).map(transformAllocationRemoveSkip),
+    splits: (raw.splits ?? []).map(transformAllocationRemoveSplit),
+  };
+}
+
+function transformAllocationRemove(
+  raw: ApiAllocationRemoveResponse
+): AllocationRemoveResponse {
+  return {
+    dryRun: raw.dry_run,
+    period: { periodType: raw.period.period_type, periodKey: raw.period.period_key },
+    scope: raw.scope,
+    results: (raw.results ?? []).map(transformAllocationRemoveResult),
+  };
+}
+
+function transformAllocationCopy(raw: ApiAllocationCopyResponse): AllocationCopyResponse {
+  return {
+    dryRun: raw.dry_run,
+    source: {
+      storeId: raw.source.store_id,
+      store: raw.source.store,
+      splits: raw.source.splits,
+      rows: raw.source.rows,
+    },
+    period: { periodType: raw.period.period_type, periodKey: raw.period.period_key },
+    results: (raw.results ?? []).map(transformAllocationCopyResult),
   };
 }
 
@@ -565,12 +914,61 @@ export const cleaningService = {
     }
   },
 
+  /** Throws a CONFLICT CleaningError with `.missing` populated when the
+   *  evaluation still has ungraded cells (409) — see the guide's §7/§13. */
   async finalizeStore(payload: FinalizePayload): Promise<void> {
     try {
       await axios.post(`/api/cleaning/evaluations/finalize`, payload, {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         timeout: 20_000,
       });
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Gated by the "cleaning specialist" permission (403 otherwise) — not
+   *  Super Admin only, confirmed against the live permission registry.
+   *  Clears the finalize lock and discards the frozen scores, returning the
+   *  evaluation to live computation. */
+  async reopenStore(payload: ReopenPayload): Promise<void> {
+    try {
+      await axios.post(`/api/cleaning/evaluations/reopen`, payload, {
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        timeout: 20_000,
+      });
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /* ── Track 2: Periods (accounting calendar) ── */
+
+  /**
+   * The only legitimate source of period keys — never generate one locally
+   * (see the migration guide §4: local ISO-week keys silently diverge from
+   * the accounting calendar on 2026-12-29).
+   *
+   * Store-scoped headers, same as `getEvaluations` — this URL carries no
+   * store, so a store_manager whose "cleaning specialist" permission is
+   * granted at the store level (not globally) 403s without `X-Store-Id` to
+   * resolve which store to authorize them against (confirmed live: a store
+   * manager on the My Store tab got 403 here with plain auth headers).
+   */
+  async getPeriods(
+    type: PeriodType,
+    around: string,
+    span = 4,
+    signal?: AbortSignal
+  ): Promise<PeriodsResponse> {
+    try {
+      const res = await axios.get<ApiPeriodsResponse>(`/api/cleaning/periods`, {
+        params: { type, around, span },
+        headers: storeScopedHeaders(),
+        timeout: 15_000,
+        signal,
+      });
+      return transformPeriodsResponse(res.data);
     } catch (err) {
       throw toCleaningError(err);
     }
@@ -586,21 +984,41 @@ export const cleaningService = {
         signal,
       });
       const rows = unwrap<ApiInspectionItem[]>(res.data) ?? [];
-      return rows.map((i) => ({ id: i.id, name: i.name }));
+      return rows.map((i) => ({ id: i.id, name: i.name, weight: i.weight ?? 1 }));
     } catch (err) {
       throw toCleaningError(err);
     }
   },
 
-  async addInspectionItem(name: string): Promise<InspectionItem> {
+  /** `weight` defaults to 1 server-side when omitted — set it up front here,
+   *  or change it later per-item from the Evaluation grid's weight editor. */
+  async addInspectionItem(name: string, weight?: number): Promise<InspectionItem> {
     try {
       const res = await axios.post(
         `/api/cleaning/inspection-items`,
-        { name },
+        weight != null ? { name, weight } : { name },
         { headers: { ...authHeaders(), "Content-Type": "application/json" }, timeout: 15_000 }
       );
       const item = unwrap<ApiInspectionItem>(res.data);
-      return { id: item.id, name: item.name };
+      return { id: item.id, name: item.name, weight: item.weight ?? 1 };
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** PUT /inspection-items/{id} — the item keeps every already-graded cell;
+   *  weights are snapshotted per cell, so this never re-scores past grades. */
+  async updateInspectionItem(
+    id: number,
+    payload: UpdateInspectionItemPayload
+  ): Promise<InspectionItem> {
+    try {
+      const res = await axios.put(`/api/cleaning/inspection-items/${id}`, payload, {
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        timeout: 15_000,
+      });
+      const item = unwrap<ApiInspectionItem>(res.data);
+      return { id: item.id, name: item.name, weight: item.weight ?? 1 };
     } catch (err) {
       throw toCleaningError(err);
     }
@@ -617,6 +1035,154 @@ export const cleaningService = {
     }
   },
 
+  /* ── Track 2: Weight allocation ── */
+
+  async getAllocations(
+    query: GetAllocationsQuery,
+    signal?: AbortSignal
+  ): Promise<Allocation[]> {
+    try {
+      const res = await axios.get(`/api/cleaning/evaluations/allocations`, {
+        params: {
+          store_id: query.store_id,
+          period_type: query.period_type,
+          period_key: query.period_key,
+        },
+        headers: authHeaders(),
+        timeout: 15_000,
+        signal,
+      });
+      const rows = unwrap<ApiAllocation[]>(res.data) ?? [];
+      return rows.map(transformAllocation);
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Replaces the ENTIRE split for one `source_task_id` in a single
+   *  transaction — amounts must sum to the source task's weight exactly. */
+  async setAllocation(payload: SetAllocationPayload): Promise<void> {
+    try {
+      await axios.post(
+        `/api/cleaning/evaluations/allocations`,
+        {
+          store_id: payload.store_id,
+          period_type: payload.period_type,
+          period_key: payload.period_key,
+          source_task_id: payload.source_task_id,
+          // The upstream field is `allocations`, not `amounts` — confirmed
+          // against a live 422 ("The allocations field is required.").
+          allocations: payload.amounts.map((a) => ({
+            target_task_id: a.target_task_id,
+            amount: a.amount,
+          })),
+        },
+        { headers: { ...authHeaders(), "Content-Type": "application/json" }, timeout: 20_000 }
+      );
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  async deleteAllocation(payload: DeleteAllocationPayload): Promise<void> {
+    try {
+      await axios.delete(`/api/cleaning/evaluations/allocations`, {
+        params: {
+          store_id: payload.store_id,
+          period_type: payload.period_type,
+          period_key: payload.period_key,
+          source_task_id: payload.source_task_id,
+        },
+        headers: authHeaders(),
+        timeout: 15_000,
+      });
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Copies the source store's WHOLE saved split to each target store
+   *  (guide §3) — always call with `dry_run: true` first to preview, since
+   *  it's a bulk write across stores and some legitimately can't take it. */
+  async copyAllocation(payload: AllocationCopyRequest): Promise<AllocationCopyResponse> {
+    try {
+      const res = await axios.post(
+        `/api/cleaning/evaluations/allocations/copy`,
+        {
+          source_store_id: payload.source_store_id,
+          target_store_ids: payload.target_store_ids,
+          period_type: payload.period_type,
+          period_key: payload.period_key,
+          dry_run: payload.dry_run ?? true,
+        },
+        { headers: { ...authHeaders(), "Content-Type": "application/json" }, timeout: 20_000 }
+      );
+      return transformAllocationCopy(unwrap<ApiAllocationCopyResponse>(res.data));
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Removes saved splits from up to 50 stores in one call — the undo for
+   *  `copyAllocation`. Omitting `source_task_ids` clears every split those
+   *  stores have for the period. Always preview with `dry_run: true` first:
+   *  it moves the chart score on every store it touches, and there is no
+   *  restore (remove-button guide §2-3). */
+  async removeAllocations(payload: AllocationRemoveRequest): Promise<AllocationRemoveResponse> {
+    try {
+      const res = await axios.post(
+        `/api/cleaning/evaluations/allocations/remove`,
+        {
+          store_ids: payload.store_ids,
+          period_type: payload.period_type,
+          period_key: payload.period_key,
+          // Omitted entirely (not sent as null/[]) when clearing everything —
+          // the API treats "absent" and "empty list" differently.
+          ...(payload.source_task_ids?.length
+            ? { source_task_ids: payload.source_task_ids }
+            : {}),
+          dry_run: payload.dry_run ?? true,
+        },
+        { headers: { ...authHeaders(), "Content-Type": "application/json" }, timeout: 20_000 }
+      );
+      return transformAllocationRemove(unwrap<ApiAllocationRemoveResponse>(res.data));
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /* ── Track 2: Scoring settings (gated by the "cleaning specialist"
+     permission, confirmed against the live registry — not Super Admin
+     only) ── */
+
+  async getSettings(signal?: AbortSignal): Promise<CleaningSettings> {
+    try {
+      const res = await axios.get(`/api/cleaning/settings`, {
+        headers: authHeaders(),
+        timeout: 15_000,
+        signal,
+      });
+      return transformSettings(unwrap<ApiCleaningSettings>(res.data));
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
+  /** Gated by the "cleaning specialist" permission — not Super Admin only.
+   *  `items_share + chart_share` must equal 100 exactly (422 otherwise) —
+   *  the caller should enforce this before submitting. */
+  async updateSettings(payload: UpdateSettingsPayload): Promise<CleaningSettings> {
+    try {
+      const res = await axios.put(`/api/cleaning/settings`, payload, {
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        timeout: 15_000,
+      });
+      return transformSettings(unwrap<ApiCleaningSettings>(res.data));
+    } catch (err) {
+      throw toCleaningError(err);
+    }
+  },
+
   /* ── Track 2: Reports ── */
 
   async getReportData(
@@ -628,7 +1194,9 @@ export const cleaningService = {
       const res = await axios.get<ApiEvaluationGrid>(`/api/cleaning/reports/data`, {
         params: { period_type: periodType, period_key: periodKey },
         headers: authHeaders(),
-        timeout: 15_000,
+        // Matches downloadCsv's timeout below — same report query underneath,
+        // and 15s was proven too tight for it (that's why CSV already uses 60s).
+        timeout: 60_000,
         signal,
       });
       return transformGrid(res.data);

@@ -252,7 +252,8 @@ export function BreakTimerButton() {
   if (now == null) return null;
 
   return (
-    <div className="relative flex items-center">
+    // data-guide-id: PageGuide spotlight target, used by the Dashboard V1 tour.
+    <div data-guide-id="topbar-break-timer" className="relative flex items-center">
       {/* Overtime notice — sits in the empty topbar space just before the
           button (logical "end" side) instead of a corner toast, so it stays
           visually tied to the timer for as long as isOvertime is true. */}

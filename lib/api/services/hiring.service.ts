@@ -289,8 +289,8 @@ export const hiringService = {
    * Proxied through GET /api/v1/requests
    * → GET {HIRING_BASE_URL}/v1/requests?storeIds[]=X&request_type=Y&{type}_page=N&{type}_per_page=M
    *
-   * Pagination is per-type on the backend now (separation/hiring/milestone_gift
-   * each paginate independently). When multiple types are requested at once the
+   * Pagination is per-type on the backend now (separation/hiring each
+   * paginate independently). When multiple types are requested at once the
    * response is keyed by type ({ separation: {...}, hiring: {...} }), but when
    * filtering to a single `request_type` (which is what every caller here does)
    * the backend collapses back to a plain flat paginator at the top level —

@@ -19,7 +19,7 @@ export function getNotificationPageSegment(notification: Notification): string |
   if (type.startsWith("data_entry_key")) return "keys";
   if (
     type.startsWith("hiring_request") ||
-    type.startsWith("milestone_gift_request") ||
+    type.startsWith("shirt_milestone") ||
     type.startsWith("separation_request")
   ) {
     return "hiring-request";

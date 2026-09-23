@@ -1,168 +1,339 @@
 "use client";
 
-import { AlertTriangle, Check, UserX, Clock } from "lucide-react";
+import { AlertTriangle, Check, Clock, UserX } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatTime, EMPLOYEE_COLORS } from "@/lib/scheduling/data";
+import { formatTime } from "@/lib/scheduling/constants";
+import {
+  formatDurationDelta,
+  shiftEdgeOffsets,
+} from "@/lib/scheduling/utils";
+import {
+  SHIFT_ACCENT,
+  SHIFT_CARD_SURFACE,
+  SHIFT_RAIL_BASE,
+  type ShiftTone,
+} from "@/lib/scheduling/accents";
+import { ShiftSegments } from "./shift-segments";
+import {
+  ShiftTooltipBody,
+  ShiftTooltipHeader,
+  ShiftTooltipHint,
+  ShiftTooltipRow,
+  ShiftTooltipStatus,
+} from "./shift-tooltip";
 import type { Shift, ActualShift } from "@/types/scheduling.types";
 
+/**
+ * Plan against reality, in one cell.
+ *
+ * Always two rows in the same order — PLAN on top, ACT underneath — so the eye
+ * can compare the same position across every cell in the week. The previous
+ * version had five different layouts depending on outcome (matched shifts hid
+ * the planned row, absences moved it, added coverage showed one row), which
+ * meant the reader had to work out what each card was showing before they could
+ * read it.
+ *
+ * A missing side is stated rather than omitted. "Not recorded" and "Not planned"
+ * are meaningfully different from each other and from a blank cell, and the
+ * whole point of this view is to find those gaps.
+ *
+ * Both sides missing renders nothing — the grid has nothing to compare, so an
+ * empty cell is the honest output.
+ */
+
 interface ComparisonShiftCardProps {
-  /** The planned shift this cell represents. Undefined for standalone "added" coverage. */
+  /** The planned shift. Undefined for ad-hoc coverage that was never planned. */
   plannedShift?: Shift;
-  /** The linked (or standalone) actual entry, if reviewed. */
+  /** The linked (or standalone) actual entry, if one has been recorded. */
   actual?: ActualShift;
-  color: string;
 }
 
-export function ComparisonShiftCard({ plannedShift, actual, color }: ComparisonShiftCardProps) {
-  const palette = EMPLOYEE_COLORS[color] ?? EMPLOYEE_COLORS.blue;
+type Outcome =
+  | "match"
+  | "differs"
+  | "absent"
+  | "unplanned"
+  | "not-recorded"
+  | "in-progress";
 
-  // Standalone ad-hoc coverage — no planned reference to compare against
-  if (!plannedShift && actual?.status === "added") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="rounded-md border border-sky-400 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/30 px-2 py-1.5 text-xs">
-            <div className="flex items-center gap-1 font-semibold leading-tight text-sky-700 dark:text-sky-300">
-              <Clock className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {formatTime(actual.startTime)} - {formatTime(actual.endTime)}
-              </span>
-            </div>
-            <p className="mt-0.5 text-[10px] leading-tight text-sky-600 dark:text-sky-400">
-              Added coverage
-            </p>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          <p className="font-semibold">Added coverage</p>
-          <p>Not in the original plan</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
+/**
+ * Outcomes mapped onto the three shared tones.
+ *
+ * `match` and `not-recorded` are deliberately `neutral` — one is the expected
+ * result and the other is simply "nobody has looked yet". Neither is a problem,
+ * so neither earns colour; that is what leaves the genuinely notable outcomes
+ * visible at a glance instead of competing with four other hues.
+ */
+const OUTCOME: Record<
+  Outcome,
+  { tone: ShiftTone; dashed?: boolean; icon: typeof Check | null }
+> = {
+  // Plan and reality agree — worth showing as a positive, not as absence.
+  match: { tone: "success", icon: Check },
+  differs: { tone: "attention", icon: AlertTriangle },
+  absent: { tone: "critical", icon: UserX },
+  unplanned: { tone: "info", icon: AlertTriangle },
+  "not-recorded": { tone: "neutral", dashed: true, icon: null },
+  /**
+   * Still on the clock. Neutral on purpose — an unfinished shift is not a
+   * problem, and there is nothing to compare it against until it ends.
+   */
+  "in-progress": { tone: "neutral", icon: Clock },
+};
 
-  if (!plannedShift) return null;
+/** "+7m" / "−4m" / "on time" — one edge against the plan. */
+function offsetLabel(minutes: number): string {
+  if (minutes === 0) return "on time";
+  return `${minutes > 0 ? "+" : "−"}${Math.abs(minutes)}m`;
+}
 
-  // Still pending review — nothing to compare yet
-  if (!actual) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={cn("relative rounded-md border border-dashed px-2 py-1.5 text-xs opacity-60", palette.border)}>
-            <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
-            <div className={cn("flex items-center gap-1 font-semibold leading-tight", palette.text)}>
-              <Clock className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {formatTime(plannedShift.startTime)} - {formatTime(plannedShift.endTime)}
-              </span>
-            </div>
-            <p className={cn("mt-0.5 text-[10px] leading-tight opacity-75", palette.text)}>
-              Pending review
-            </p>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          <p className="font-semibold">Not yet reviewed</p>
-          <p>No actual attendance recorded for this shift</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
+/** One side of the comparison. Fixed label column so the times line up. */
+function Row({
+  label,
+  children,
+  muted,
+  strike,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  muted?: boolean;
+  strike?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="w-6 shrink-0 text-[8px] font-bold uppercase leading-tight tracking-wider text-muted-foreground/70">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-[10px] font-medium leading-tight",
+          muted && "italic text-muted-foreground",
+          strike && "line-through",
+          className,
+        )}
+      >
+        {children}
+      </span>
+    </div>
+  );
+}
 
-  // Absent — planned struck through, red no-show badge, warning
-  if (actual.status === "absent") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="relative rounded-md border border-red-400 dark:border-red-700 bg-red-50 dark:bg-red-950/30 px-2 py-1.5 text-xs">
-            <div className="absolute top-0.5 right-0.5">
-              <AlertTriangle className="h-3 w-3 text-red-500" />
-            </div>
-            <p className="text-[10px] leading-tight text-red-500 dark:text-red-400 line-through">
-              Planned {formatTime(plannedShift.startTime)}–{formatTime(plannedShift.endTime)}
-            </p>
-            <div className="mt-0.5 flex items-center gap-1 font-semibold leading-tight text-red-700 dark:text-red-300">
-              <UserX className="h-3 w-3 shrink-0" />
-              <span className="truncate">No Show</span>
-            </div>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          <p className="font-semibold text-red-500">⚠ No attendance — planned but did not work</p>
-          <p>
-            Planned: {formatTime(plannedShift.startTime)} – {formatTime(plannedShift.endTime)}
-          </p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
+export function ComparisonShiftCard({
+  plannedShift,
+  actual,
+}: ComparisonShiftCardProps) {
+  // Nothing planned and nothing recorded — there is no comparison to draw.
+  if (!plannedShift && !actual) return null;
 
-  const timesMatch =
-    plannedShift.startTime === actual.startTime && plannedShift.endTime === actual.endTime;
+  let outcome: Outcome;
+  if (!plannedShift) outcome = "unplanned";
+  else if (!actual) outcome = "not-recorded";
+  else if (actual.reviewState === "absent") outcome = "absent";
+  // Judging a shift nobody has finished is not possible and not useful: there
+  // is no end punch to compare, and the hours keep climbing.
+  else if (actual.isOpen) outcome = "in-progress";
+  /*
+   * The server's comparison, not our own.
+   *
+   * This card used to re-compare the times itself with a ten-minute tolerance,
+   * which put it at odds with `needs_attention` and with the Actual view. It
+   * also only ever looked at times — the server compares the label too, so a
+   * shift renamed after the fact now shows up here, as it should.
+   */
+  else outcome = actual.timeVariance === "matches" ? "match" : "differs";
 
-  // Matches — compact single card, small check, no need to duplicate the time
-  if (timesMatch) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className={cn("relative rounded-md border px-2 py-1.5 text-xs", palette.bg, palette.border)}>
-            <div className="absolute top-0.5 right-0.5">
-              <Check className="h-3 w-3 text-emerald-500" />
-            </div>
-            <div className={cn("flex items-center gap-1 font-semibold leading-tight", palette.text)}>
-              <Clock className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {formatTime(actual.startTime)} - {formatTime(actual.endTime)}
-              </span>
-            </div>
-            <p className={cn("mt-0.5 text-[10px] leading-tight opacity-75", palette.text)}>
-              Matches plan
-            </p>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          <p className="font-semibold text-emerald-600">✓ Worked as planned</p>
-          <p>
-            {formatTime(actual.startTime)} – {formatTime(actual.endTime)}
-          </p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
+  const spec = OUTCOME[outcome];
+  const accent = SHIFT_ACCENT[spec.tone];
+  const Icon = spec.icon;
 
-  // Differ (modified) — stacked planned/actual with warning triangle
+  /**
+   * Shown for a match too, not only for a discrepancy.
+   *
+   * Counting a near-miss as "as planned" is only honest if the near-miss is
+   * still on screen — otherwise a shift eight minutes long over the plan looks
+   * identical to one worked to the minute, and the hours at the end of the row
+   * stop adding up for the reader.
+   */
+  const compared =
+    plannedShift &&
+    actual &&
+    outcome !== "absent" &&
+    outcome !== "unplanned" &&
+    outcome !== "in-progress"
+      ? {
+          delta: formatDurationDelta(
+            plannedShift.durationMinutes,
+            actual.durationMinutes,
+          ),
+          offsets: shiftEdgeOffsets(plannedShift, actual),
+        }
+      : null;
+
+  const delta = compared?.delta ?? null;
+  const offsets = compared?.offsets ?? null;
+  const shifted =
+    !!offsets && (offsets.start !== 0 || (offsets.end ?? 0) !== 0);
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="relative rounded-md border border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-xs">
-          <div className="absolute top-0.5 right-0.5">
-            <AlertTriangle className="h-3 w-3 text-amber-500" />
-          </div>
-          <p className="text-[10px] leading-tight text-muted-foreground">
-            Planned {formatTime(plannedShift.startTime)}–{formatTime(plannedShift.endTime)}
-          </p>
-          <div className="mt-0.5 flex items-center gap-1 font-semibold leading-tight text-amber-700 dark:text-amber-300">
-            <Clock className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              {formatTime(actual.startTime)} - {formatTime(actual.endTime)}
-            </span>
-          </div>
+        <div
+          className={cn(
+            "relative overflow-hidden ps-2 pe-1.5 py-1",
+            SHIFT_CARD_SURFACE,
+            spec.dashed && "border-dashed",
+          )}
+        >
+          {/* Rail only for outcomes worth noticing — see OUTCOME above. */}
+          {spec.tone !== "neutral" && (
+            <span aria-hidden className={cn(SHIFT_RAIL_BASE, accent.rail)} />
+          )}
+
+          {Icon && (
+            <Icon
+              className={cn("absolute end-0.5 top-0.5 h-2.5 w-2.5", accent.text)}
+            />
+          )}
+
+          {/*
+            PLAN — always first, even when there is nothing planned.
+            `pe-3` keeps a long time string clear of the absolutely-positioned
+            status icon, which text would otherwise run underneath.
+          */}
+          <Row
+            label="Plan"
+            muted={!plannedShift}
+            strike={outcome === "absent"}
+            className={cn(
+              Icon && "pe-3",
+              outcome === "absent" && accent.text,
+            )}
+          >
+            {plannedShift
+              ? `${formatTime(plannedShift.startTime)}–${formatTime(plannedShift.endTime)}`
+              : "Not planned"}
+          </Row>
+
+          <span className="my-0.5 block h-px bg-border/50" />
+
+          {/* ACT — always second, even when nothing was recorded. */}
+          <Row
+            label="Act"
+            muted={!actual || outcome === "not-recorded"}
+            className={
+              outcome === "absent" || outcome === "differs" || outcome === "unplanned"
+                ? accent.text
+                : undefined
+            }
+          >
+            {!actual
+              ? "Not recorded"
+              : actual.reviewState === "absent"
+                ? "No show"
+                : actual.isOpen
+                  ? `${formatTime(actual.startTime)}– in progress`
+                  : `${formatTime(actual.startTime)}–${formatTime(actual.endTime)}`}
+          </Row>
+
+          {delta && (
+            <p
+              className={cn(
+                "mt-0.5 text-end text-[9px] font-semibold tabular-nums leading-none",
+                accent.text,
+              )}
+            >
+              {delta}
+            </p>
+          )}
+
+          {/*
+            Without this, a shift with a break in it reads 9:00–5:00 against a
+            9:00–5:00 plan and then shows −30m, with nothing on the card to say
+            where the half hour went. Actual explains it; Compare is where the
+            week gets checked before payroll, so it has more need of it, not
+            less.
+          */}
+          {actual && <ShiftSegments segments={actual.segments} />}
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        <p className="font-semibold text-amber-500">⚠ Actual time differs from plan</p>
-        <p>
-          Planned: {formatTime(plannedShift.startTime)} – {formatTime(plannedShift.endTime)}
-        </p>
-        <p>
-          Actual: {formatTime(actual.startTime)} – {formatTime(actual.endTime)}
-        </p>
-        {actual.note && <p className="text-amber-600 dark:text-amber-400 italic">📝 {actual.note}</p>}
+
+      <TooltipContent side="top" className="max-w-60 text-xs">
+        <ShiftTooltipHeader
+          time={
+            actual && actual.reviewState !== "absent"
+              ? `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`
+              : plannedShift
+                ? `${formatTime(plannedShift.startTime)} – ${formatTime(plannedShift.endTime)}`
+                : "—"
+          }
+          hours={
+            actual && actual.reviewState !== "absent"
+              ? actual.durationMinutes / 60
+              : plannedShift
+                ? plannedShift.durationMinutes / 60
+                : undefined
+          }
+        />
+        <ShiftTooltipStatus tone={spec.tone}>
+          {outcome === "match" && "Worked as planned"}
+          {outcome === "differs" && "Worked different hours"}
+          {outcome === "absent" && "Did not attend"}
+          {outcome === "unplanned" && "Worked without a planned shift"}
+          {outcome === "not-recorded" && "Not reviewed yet"}
+          {outcome === "in-progress" && "On the clock now"}
+        </ShiftTooltipStatus>
+
+        <ShiftTooltipBody>
+          <ShiftTooltipRow label="Plan">
+            {plannedShift
+              ? `${formatTime(plannedShift.startTime)} – ${formatTime(plannedShift.endTime)}`
+              : "Nothing scheduled"}
+          </ShiftTooltipRow>
+          <ShiftTooltipRow label="Actual">
+            {!actual
+              ? "Nothing recorded"
+              : actual.reviewState === "absent"
+                ? "Did not work"
+                : `${formatTime(actual.startTime)} – ${formatTime(actual.endTime)}`}
+          </ShiftTooltipRow>
+          {delta && (
+            <ShiftTooltipRow label="Against">{delta} the plan</ShiftTooltipRow>
+          )}
+          {/*
+            The two edges, because the total hides them: clocking in and out
+            ten minutes late nets to zero, and the row above would then say
+            nothing at all about a shift that moved.
+          */}
+          {shifted && offsets && (
+            <ShiftTooltipRow label="Clocked">
+              in {offsetLabel(offsets.start)}
+              {offsets.end !== null && <> · out {offsetLabel(offsets.end)}</>}
+            </ShiftTooltipRow>
+          )}
+          {actual?.note && (
+            <ShiftTooltipRow label="Note">{actual.note}</ShiftTooltipRow>
+          )}
+        </ShiftTooltipBody>
+
+        {outcome === "not-recorded" && (
+          <ShiftTooltipHint>
+            Switch to the Actual view to record what happened.
+          </ShiftTooltipHint>
+        )}
+
+        {outcome === "in-progress" && (
+          <ShiftTooltipHint>
+            Still being worked, so there is nothing to compare yet. The hours
+            shown are what has been worked so far.
+          </ShiftTooltipHint>
+        )}
       </TooltipContent>
     </Tooltip>
   );

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Loader2, Users } from "lucide-react";
+import axios from "axios";
+import { Loader2, RefreshCw, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CleaningError } from "@/lib/api/services/cleaning.service";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
-import { PhotoPicker } from "./photo-picker";
+import { MAX_PHOTOS, PhotoPicker } from "./photo-picker";
 import type { DueItem } from "@/types/cleaning.types";
 
 const ACTIVE_STATUSES = ["hired", "rehired"];
@@ -47,6 +48,8 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
   const t = useTranslations("cleaningChart.completeDialog");
   const [employees, setEmployees] = useState<MultiSelectOption<number>[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
+  const [empError, setEmpError] = useState(false);
+  const [empRetryKey, setEmpRetryKey] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
   const [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -58,12 +61,20 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
     [selected, photoRequired, photos, submitting]
   );
 
-  /* ── Fetch the store's active employees on mount ── */
+  /* ── Fetch the store's active employees on mount (and on retry) ──
+   * A failed fetch previously fell back to an empty list indistinguishable
+   * from "this store has no active employees" — now it's surfaced as an
+   * error with a way to try again, since silently emptying the picker left
+   * the Complete button disabled with no clue why.
+   * Requires the Cleaning Specialist role to hold the Hiring service's
+   * GET /v1/employees permission — granted on the backend so this works
+   * for every store the specialist can reach, not just their own. */
   useEffect(() => {
     if (!storeCode) return;
     let cancelled = false;
     const controller = new AbortController();
     setEmpLoading(true);
+    setEmpError(false);
     employeeService
       .getEmployeesAll(
         [storeCode],
@@ -83,8 +94,11 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
           }))
         );
       })
-      .catch(() => {
-        if (!cancelled) setEmployees([]);
+      .catch((err) => {
+        if (cancelled || axios.isCancel(err)) return;
+        setEmployees([]);
+        setEmpError(true);
+        toast.error(t("employeesLoadFailed"));
       })
       .finally(() => {
         if (!cancelled) setEmpLoading(false);
@@ -93,7 +107,7 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
       cancelled = true;
       controller.abort();
     };
-  }, [storeCode]);
+  }, [storeCode, empRetryKey]);
 
   /* ── Ctrl+V paste an image while the form is open ── */
   const handlePaste = useCallback(
@@ -104,11 +118,16 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
         .filter((f): f is File => f != null);
       if (pasted.length > 0) {
         e.preventDefault();
-        setPhotos((prev) => [...prev, ...pasted]);
-        toast.success(t("toasts.pasted"));
+        setPhotos((prev) => {
+          const room = Math.max(0, MAX_PHOTOS - prev.length);
+          if (pasted.length > room) toast.warning(t("toasts.maxReached", { max: MAX_PHOTOS }));
+          if (room === 0) return prev;
+          toast.success(t("toasts.pasted"));
+          return [...prev, ...pasted.slice(0, room)];
+        });
       }
     },
-    []
+    [t]
   );
 
   const handleSubmit = async () => {
@@ -147,6 +166,19 @@ export function CompleteTaskForm({ storeCode, date, item, onComplete, onClose }:
           emptyText={empLoading ? t("loadingShort") : t("noEmployees")}
           disabled={empLoading}
         />
+        {empError && !empLoading && (
+          <p className="flex items-center gap-1.5 text-xs text-destructive">
+            {t("employeesLoadFailed")}
+            <button
+              type="button"
+              onClick={() => setEmpRetryKey((k) => k + 1)}
+              className="inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline"
+            >
+              <RefreshCw className="h-3 w-3" />
+              {t("retry")}
+            </button>
+          </p>
+        )}
       </div>
 
       {/* Note */}

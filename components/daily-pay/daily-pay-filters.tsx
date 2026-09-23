@@ -11,6 +11,7 @@ import {
   CalendarDays,
   ArrowDownUp,
   List,
+  UserCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MultiSelect } from "./multi-select";
+import { MultiSelect, type MultiSelectOption } from "./multi-select";
 import type { DailyPayFilters } from "@/types/daily-pay.types";
 import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
 import type { DailyPayStoreOption } from "@/lib/hooks/use-daily-pay";
@@ -34,6 +35,11 @@ interface DailyPayFiltersBarProps {
   onCreateClick: () => void;
   stores: DailyPayStoreOption[];
   technicians: CatalogTechnician[];
+  /**
+   * Who filled the sheet. Derived from the loaded page's creators — see
+   * use-daily-pay.ts for why there is no endpoint behind this.
+   */
+  filledByOptions?: MultiSelectOption[];
   disabled?: boolean;
   canCreate?: boolean;
 }
@@ -44,6 +50,7 @@ export function DailyPayFiltersBar({
   onCreateClick,
   stores,
   technicians,
+  filledByOptions = [],
   disabled,
   canCreate = true,
 }: DailyPayFiltersBarProps) {
@@ -56,14 +63,18 @@ export function DailyPayFiltersBar({
     onFiltersChange({ ...filters, [key]: value });
   }
 
-  const advancedCount = [
-    filters.date,
-    filters.date_from,
-    filters.date_to,
-    filters.sort,
-    filters.dir,
-    filters.per_page,
-  ].filter((v) => v != null && v !== "").length;
+  const advancedCount =
+    [
+      filters.date,
+      filters.date_from,
+      filters.date_to,
+      filters.created_from,
+      filters.created_to,
+      filters.sort,
+      filters.dir,
+      filters.per_page,
+    ].filter((v) => v != null && v !== "").length +
+    (filters.filled_by?.length ? 1 : 0);
 
   const totalActive =
     (filters.technician_ids?.length ? 1 : 0) +
@@ -228,6 +239,51 @@ export function DailyPayFiltersBar({
               />
             </div>
 
+            {/* Filled by */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <UserCheck className="h-3 w-3" />
+                Filled by
+              </label>
+              <MultiSelect
+                options={filledByOptions}
+                selected={filters.filled_by ?? []}
+                onChange={(ids) =>
+                  updateField("filled_by", ids.length ? ids : undefined)
+                }
+                placeholder="Anyone"
+                disabled={disabled}
+              />
+            </div>
+
+            {/* Created from */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Created from
+              </label>
+              <DatePicker
+                value={filters.created_from ?? ""}
+                onChange={(v) => updateField("created_from", v || undefined)}
+                placeholder="YYYY-MM-DD"
+                disabled={disabled}
+              />
+            </div>
+
+            {/* Created to */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <CalendarDays className="h-3 w-3" />
+                Created to
+              </label>
+              <DatePicker
+                value={filters.created_to ?? ""}
+                onChange={(v) => updateField("created_to", v || undefined)}
+                placeholder="YYYY-MM-DD"
+                disabled={disabled}
+              />
+            </div>
+
             {/* Sort column */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -244,7 +300,7 @@ export function DailyPayFiltersBar({
                 <SelectTrigger className={cn("h-9 text-sm", filters.sort && "border-primary/40 bg-primary/5")}>
                   <SelectValue placeholder="Default" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="date">Workday date</SelectItem>
                   <SelectItem value="created_at">Created at</SelectItem>
@@ -268,7 +324,7 @@ export function DailyPayFiltersBar({
                 <SelectTrigger className={cn("h-9 text-sm", filters.dir && "border-primary/40 bg-primary/5")}>
                   <SelectValue placeholder="Default" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="desc">Newest first</SelectItem>
                   <SelectItem value="asc">Oldest first</SelectItem>
@@ -292,7 +348,7 @@ export function DailyPayFiltersBar({
                 <SelectTrigger className={cn("h-9 text-sm", filters.per_page != null && "border-primary/40 bg-primary/5")}>
                   <SelectValue placeholder="Default" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
                   <SelectItem value="default">Default</SelectItem>
                   <SelectItem value="10">10</SelectItem>
                   <SelectItem value="15">15</SelectItem>

@@ -20,22 +20,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Repeat, Ban, StickyNote } from "lucide-react";
+import { AlertTriangle, Ban, StickyNote, User } from "lucide-react";
 import type {
   ScheduleEmployee,
   Shift,
   AvailabilityRule,
   TimeOffEntry,
+  EmployeeSyncRequestStatus,
 } from "@/types/scheduling.types";
-import {
-  SHIFT_PRESETS,
-  formatTime,
-  calcHours,
-  EMPLOYEE_COLORS,
-} from "@/lib/scheduling/data";
+import { SHIFT_PRESETS, calcHours, formatTime } from "@/lib/scheduling/constants";
+import { EmployeeSyncWaiting } from "./employee-sync-notice";
+import { ScheduleErrorAlert } from "./schedule-error-alert";
+import type { SchedulingError } from "@/lib/scheduling/errors";
 import {
   wouldConflict,
   isBlockedByAvailability,
@@ -45,6 +43,26 @@ import {
 interface AddShiftDialogNewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** True while the create/update request is in flight. */
+  isSubmitting?: boolean;
+  /**
+   * Set when the API refused because the employee has no Humanity counterpart
+   * yet. This is a WAIT, not a failure: the dialog stays open with the typed
+   * values intact and the write replays automatically once setup completes.
+   */
+  syncWait?: {
+    employeeName: string;
+    status: EmployeeSyncRequestStatus;
+    elapsedSeconds: number;
+    timedOut: boolean;
+    lastError: string | null;
+  } | null;
+  onCancelSyncWait?: () => void;
+  onRequestManualSync?: () => void;
+  onRetryAfterSync?: () => void;
+  isRequestingSync?: boolean;
+  /** A refusal the manager cannot override, shown inline with the server's wording. */
+  error?: SchedulingError | null;
   employee: ScheduleEmployee | null;
   dayLabel: string;
   dayIndex: number;
@@ -60,11 +78,30 @@ interface AddShiftDialogNewProps {
     note: string
   ) => void;
   editingShift?: Shift | null;
+  /**
+   * Set when editing an UNSAVED shift. Carries only times/label/note —
+   * a draft has no server-assigned fields, which is why it cannot just be
+   * passed as `editingShift`.
+   */
+  editingDraft?: {
+    startTime: string;
+    endTime: string;
+    label: string;
+    type: Shift["type"];
+    note?: string;
+  } | null;
 }
 
 export function AddShiftDialogNew({
   open,
   onOpenChange,
+  isSubmitting = false,
+  syncWait = null,
+  onCancelSyncWait,
+  onRequestManualSync,
+  onRetryAfterSync,
+  isRequestingSync = false,
+  error = null,
   employee,
   dayLabel,
   dayIndex,
@@ -73,20 +110,38 @@ export function AddShiftDialogNew({
   timeOff: timeOffEntries,
   onConfirm,
   editingShift,
+  editingDraft = null,
 }: AddShiftDialogNewProps) {
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("16:00");
   const [label, setLabel] = useState("Morning");
   const [type, setType] = useState<Shift["type"]>("morning");
   const [activePreset, setActivePreset] = useState<number | null>(0);
+  // No UI control: the backend accepts is_recurring and silently ignores it, so
+  // offering a toggle would promise scheduling that never happens. The state is
+  // kept so editing an existing recurring shift preserves its flag rather than
+  // stripping it. Restore the toggle once series generation ships.
   const [isRecurring, setIsRecurring] = useState(false);
   const [note, setNote] = useState("");
 
-  const isEditing = !!editingShift;
+  const isEditing = !!editingShift || !!editingDraft;
 
   // Sync form when dialog opens
   useEffect(() => {
-    if (editingShift) {
+    if (editingDraft) {
+      setStartTime(editingDraft.startTime);
+      setEndTime(editingDraft.endTime);
+      setLabel(editingDraft.label);
+      setType(editingDraft.type);
+      setNote(editingDraft.note ?? "");
+      setIsRecurring(false);
+      const draftPreset = SHIFT_PRESETS.findIndex(
+        (pr) =>
+          pr.startTime === editingDraft.startTime &&
+          pr.endTime === editingDraft.endTime
+      );
+      setActivePreset(draftPreset >= 0 ? draftPreset : null);
+    } else if (editingShift) {
       setStartTime(editingShift.startTime);
       setEndTime(editingShift.endTime);
       setLabel(editingShift.label);
@@ -109,7 +164,7 @@ export function AddShiftDialogNew({
       setIsRecurring(false);
       setNote("");
     }
-  }, [editingShift, open]);
+  }, [editingShift, editingDraft, open]);
 
   // Conflict warning
   const conflictWarning = useMemo(() => {
@@ -161,18 +216,19 @@ export function AddShiftDialogNew({
   };
 
   const handleSubmit = () => {
+    // Deliberately does not close the dialog: the write may be refused or
+    // suspended, and the manager's input must survive either. The parent closes
+    // this once the write actually succeeds.
     onConfirm(startTime, endTime, label, type, isRecurring, note.trim());
-    onOpenChange(false);
   };
 
   if (!employee) return null;
 
-  const palette = EMPLOYEE_COLORS[employee.color] ?? EMPLOYEE_COLORS.blue;
   const hours = calcHours(startTime, endTime);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Shift" : "Add Shift"}</DialogTitle>
           <DialogDescription>
@@ -185,21 +241,18 @@ export function AddShiftDialogNew({
           {/* Employee preview */}
           <div
             className={cn(
-              "flex items-center gap-2 rounded-md border px-3 py-2",
-              palette.bg,
-              palette.border
+              "flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2",
             )}
           >
             <div
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
-                palette.text
+                "flex h-7 w-7 items-center justify-center rounded-full bg-muted text-muted-foreground",
               )}
             >
-              {employee.avatar}
+              <User className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className={cn("text-sm font-semibold", palette.text)}>
+              <p className="text-sm font-semibold">
                 {employee.name}
               </p>
               <p className="text-xs text-muted-foreground">{employee.role}</p>
@@ -215,11 +268,19 @@ export function AddShiftDialogNew({
               {SHIFT_PRESETS.map((preset, idx) => (
                 <Badge
                   key={idx}
+                  asChild
                   variant={activePreset === idx ? "default" : "outline"}
                   className="cursor-pointer text-xs px-2.5 py-1 transition-colors"
-                  onClick={() => handlePresetClick(idx)}
                 >
-                  {preset.label}
+                  {/* A real button: this is the main way a shift gets its times,
+                      and as a styled span it could not be tabbed to or announced. */}
+                  <button
+                    type="button"
+                    aria-pressed={activePreset === idx}
+                    onClick={() => handlePresetClick(idx)}
+                  >
+                    {preset.label}
+                  </button>
                 </Badge>
               ))}
             </div>
@@ -277,23 +338,6 @@ export function AddShiftDialogNew({
                 <SelectItem value="Custom">Custom</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Recurring toggle */}
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Repeat className="h-4 w-4 text-muted-foreground" />
-              <div>
-                <p className="text-sm font-medium">Recurring weekly</p>
-                <p className="text-[11px] text-muted-foreground">
-                  Repeat this shift every week
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={isRecurring}
-              onCheckedChange={setIsRecurring}
-            />
           </div>
 
           {/* Shift note */}
@@ -354,13 +398,43 @@ export function AddShiftDialogNew({
           </div>
         </div>
 
+        {/* Server refusal that is not overridable — shown with its own wording. */}
+        {error && !syncWait && (
+          <ScheduleErrorAlert
+            error={error}
+            title={isEditing ? "Couldn't save changes" : "Couldn't add this shift"}
+            compact
+          />
+        )}
+
+        {/* Resumable wait — the typed values above are preserved throughout. */}
+        {syncWait && (
+          <EmployeeSyncWaiting
+            employeeName={syncWait.employeeName}
+            status={syncWait.status}
+            elapsedSeconds={syncWait.elapsedSeconds}
+            timedOut={syncWait.timedOut}
+            lastError={syncWait.lastError}
+            onManualSync={() => onRequestManualSync?.()}
+            onRetry={() => onRetryAfterSync?.()}
+            onCancel={() => onCancelSyncWait?.()}
+            isRequesting={isRequestingSync}
+          />
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>
-            {isEditing ? "Save Changes" : "Add Shift"}
-          </Button>
+          {!syncWait && (
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting
+                ? "Saving…"
+                : isEditing
+                  ? "Save Changes"
+                  : "Add Shift"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

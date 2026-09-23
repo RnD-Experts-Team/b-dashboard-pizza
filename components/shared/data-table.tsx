@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Table,
   TableBody,
@@ -58,59 +58,19 @@ export function DataTable<T extends object>({
   onPageChange,
 }: DataTableProps<T>) {
   const [searchValue, setSearchValue] = useState("");
+  const onSearchChangeRef = useRef(onSearchChange);
+  onSearchChangeRef.current = onSearchChange;
 
   const handleSearchChange = (value: string) => {
     setSearchValue(value);
-    onSearchChange?.(value);
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {searchable && (
-          // <div className="relative max-w-sm">
-          //   <Skeleton className="h-10 w-full" />
-          // </div>
-
-          //fixed ui bug
-          <div className="relative max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder={searchPlaceholder}
-            value={searchValue}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        )}
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableHead key={column.key} className={column.className}>
-                    {column.header}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {columns.map((column) => (
-                    <TableCell key={column.key} className={column.className}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      onSearchChangeRef.current?.(searchValue);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [searchValue]);
 
   return (
     <div className="space-y-4">
@@ -138,7 +98,17 @@ export function DataTable<T extends object>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {columns.map((column) => (
+                    <TableCell key={column.key} className={column.className}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : data.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length}

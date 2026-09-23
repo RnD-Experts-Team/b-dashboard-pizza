@@ -12,7 +12,10 @@ export const BASE_URL =
 // Generous timeout to accommodate attachment uploads (photos, PDFs) on slow connections.
 const TIMEOUT_MS = 120_000;
 
-export async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -25,18 +28,20 @@ export async function fetchWithTimeout(url: string, init: RequestInit): Promise<
 export function errorJson(code: string, message: string, status: number) {
   return NextResponse.json(
     { success: false, error: { code, message } },
-    { status, headers: { "Cache-Control": "no-store" } }
+    { status, headers: { "Cache-Control": "no-store" } },
   );
 }
 
-export function authorizationOrError(request: NextRequest):
-  | { authorization: string }
-  | { error: NextResponse } {
+export function authorizationOrError(
+  request: NextRequest,
+): { authorization: string } | { error: NextResponse } {
   const authError = requireAuthorization(request);
   if (authError) return { error: authError };
   const authorization = getAuthorizationHeader(request);
   if (!authorization) {
-    return { error: errorJson("NOT_AUTHENTICATED", "Missing authorization token", 401) };
+    return {
+      error: errorJson("NOT_AUTHENTICATED", "Missing authorization token", 401),
+    };
   }
   return { authorization };
 }
@@ -48,19 +53,29 @@ export async function proxyGet(request: NextRequest, upstreamUrl: string) {
   try {
     const res = await fetchWithTimeout(upstreamUrl, {
       method: "GET",
-      headers: { Authorization: auth.authorization, Accept: "application/json" },
+      headers: {
+        Authorization: auth.authorization,
+        Accept: "application/json",
+      },
     });
     const body = await res.text();
     return new NextResponse(body, {
       status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     if (msg.includes("abort") || msg.includes("timed out")) {
       return errorJson("TIMEOUT", "Upstream request timed out", 504);
     }
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
   }
 }
 
@@ -71,19 +86,39 @@ export async function proxyDelete(request: NextRequest, upstreamUrl: string) {
   try {
     const res = await fetchWithTimeout(upstreamUrl, {
       method: "DELETE",
-      headers: { Authorization: auth.authorization, Accept: "application/json" },
+      headers: {
+        Authorization: auth.authorization,
+        Accept: "application/json",
+      },
     });
+    if (res.status === 204) {
+      return new NextResponse(null, {
+        status: 204,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     const body = await res.text();
+
     return new NextResponse(body, {
       status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     if (msg.includes("abort") || msg.includes("timed out")) {
       return errorJson("TIMEOUT", "Upstream request timed out", 504);
     }
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
   }
 }
 
@@ -111,14 +146,115 @@ export async function proxyJsonPost(request: NextRequest, upstreamUrl: string) {
     const text = await res.text();
     return new NextResponse(text, {
       status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     if (msg.includes("abort") || msg.includes("timed out")) {
       return errorJson("TIMEOUT", "Upstream request timed out", 504);
     }
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
+  }
+}
+
+export async function proxyJsonPatch(
+  request: NextRequest,
+  upstreamUrl: string,
+) {
+  const auth = authorizationOrError(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorJson("INVALID_REQUEST", "Invalid JSON body", 400);
+  }
+
+  try {
+    const res = await fetchWithTimeout(upstreamUrl, {
+      method: "PATCH",
+      headers: {
+        Authorization: auth.authorization,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    if (msg.includes("abort") || msg.includes("timed out")) {
+      return errorJson("TIMEOUT", "Upstream request timed out", 504);
+    }
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
+  }
+}
+
+/**
+ * PUT, for the endpoints that replace a whole resource rather than patch it.
+ *
+ * Added alongside PATCH rather than folded into it: the distinction is load
+ * bearing upstream. Setting a part's place sends the COMPLETE address, and a
+ * level left out is cleared -- which is a PUT, and would be a lie as a PATCH.
+ */
+export async function proxyJsonPut(request: NextRequest, upstreamUrl: string) {
+  const auth = authorizationOrError(request);
+  if ("error" in auth) return auth.error;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorJson("INVALID_REQUEST", "Invalid JSON body", 400);
+  }
+
+  try {
+    const res = await fetchWithTimeout(upstreamUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: auth.authorization,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    if (msg.includes("abort") || msg.includes("timed out")) {
+      return errorJson("TIMEOUT", "Upstream request timed out", 504);
+    }
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
   }
 }
 
@@ -126,7 +262,8 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
   const auth = authorizationOrError(request);
   if ("error" in auth) return auth.error;
 
-  const contentType = request.headers.get("content-type") || "application/octet-stream";
+  const contentType =
+    request.headers.get("content-type") || "application/octet-stream";
   const body = await request.arrayBuffer();
 
   try {
@@ -142,13 +279,20 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
     const text = await res.text();
     return new NextResponse(text, {
       status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
     if (msg.includes("abort") || msg.includes("timed out")) {
       return errorJson("TIMEOUT", "Upstream request timed out", 504);
     }
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
   }
 }

@@ -96,18 +96,21 @@ export function StatusPill({ status }: { status: DueStatus }) {
   return <AccentBadge accent={DUE_STATUS_ACCENT[status]} label={t(status)} />;
 }
 
-/* ── Evaluation / report value accents (Pass · Fail · Auto · Empty) ── */
+/* ── Evaluation / report value accents (Pass · Fail · Auto · N/A · Empty) ── */
 export const VALUE_ACCENT: Record<ItemValue, CleaningAccent> = {
   pass: { bar: "bg-green-500", text: "text-green-700 dark:text-green-400" },
   fail: { bar: "bg-red-500", text: "text-red-700 dark:text-red-400" },
   auto_fail: { bar: "bg-foreground/70", text: "text-foreground" },
+  not_applicable: { bar: "bg-blue-400", text: "text-blue-700 dark:text-blue-400" },
   empty: { bar: "bg-muted-foreground/40", text: "text-muted-foreground" },
 };
-/** Chart verdicts reuse the same three accents (no "empty" state). */
+/** Chart verdicts reuse the item accents minus `auto_fail` — the backend
+ *  rejects `auto_fail` on a chart task (it was arithmetically identical to
+ *  `fail` there), and chart cells have no "empty" state either. */
 export const VERDICT_ACCENT: Record<ChartVerdict, CleaningAccent> = {
   pass: VALUE_ACCENT.pass,
   fail: VALUE_ACCENT.fail,
-  auto_fail: VALUE_ACCENT.auto_fail,
+  not_applicable: VALUE_ACCENT.not_applicable,
 };
 
 /**
@@ -197,6 +200,16 @@ export function ValueBadge({
 }
 
 /**
+ * One-decimal score formatting (migration guide §3): the API returns
+ * `item_score`/`chart_score`/`final_score` as floats with one decimal, and
+ * they must always display with one — `25.0%`/`66.7%`, never a bare `25%`
+ * that a `45.9%` final score next to it would make read as a bug.
+ */
+export function formatScorePct(pct: number): string {
+  return pct.toFixed(1);
+}
+
+/**
  * Threshold-coloured percentage text — shared between Evaluation and Reports.
  *
  * - "passOnly" — green when passing (≥80%), plain otherwise (Reports: only
@@ -224,7 +237,11 @@ export function ScoreText({
         : pct >= 80
           ? "text-green-600 dark:text-green-400"
           : "text-foreground";
-  return <span className={cn("font-semibold tabular-nums", tone, className)}>{pct}%</span>;
+  return (
+    <span className={cn("font-semibold tabular-nums", tone, className)}>
+      {formatScorePct(pct)}%
+    </span>
+  );
 }
 
 /**

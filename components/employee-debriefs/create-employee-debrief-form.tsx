@@ -223,15 +223,15 @@ export function CreateEmployeeDebriefForm({
   return (
     <Card className="flex flex-col border-0 shadow-none p-0 gap-0 bg-transparent">
       <div className="flex items-center justify-between px-0 pt-0 pb-0">
-        {/* <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Form Fields</p> */}
+        {/* <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Form Fields</p> */}
         <div className="shrink-0">
           {draftSavedFlash ? (
-            <Badge variant="secondary" className="gap-1 text-[11px]">
+            <Badge variant="secondary" className="gap-1 text-[10px]">
               <CheckCircle2 className="h-2.5 w-2.5" />
               Saved
             </Badge>
           ) : hasDraft ? (
-            <Badge variant="outline" className="gap-1 text-[11px] text-muted-foreground border-gray-200/60 dark:border-gray-700/60">
+            <Badge variant="outline" className="gap-1 text-[10px] text-muted-foreground border-gray-200/60 dark:border-gray-700/60">
               <Clock className="h-2.5 w-2.5" />
               Draft
             </Badge>
@@ -244,11 +244,11 @@ export function CreateEmployeeDebriefForm({
           {/* Date */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <Label htmlFor="debrief-date" className="text-[11px] font-medium">
+              <Label htmlFor="debrief-date" className="text-[10px] font-medium">
                 Date
               </Label>
               {isToday && (
-                <span className="text-[11px] text-muted-foreground">Today</span>
+                <span className="text-[10px] text-muted-foreground">Today</span>
               )}
             </div>
             <Input
@@ -257,13 +257,13 @@ export function CreateEmployeeDebriefForm({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
-              className="h-8 text-xs"
+              className="h-8 text-[11px]"
             />
           </div>
 
           {/* Employee name */}
           <div className="space-y-1">
-            <Label htmlFor="debrief-employee-name" className="text-[11px] font-medium">
+            <Label htmlFor="debrief-employee-name" className="text-[10px] font-medium">
               Employee Name
             </Label>
             <Popover open={empOpen} onOpenChange={setEmpOpen}>
@@ -271,7 +271,7 @@ export function CreateEmployeeDebriefForm({
                 <button
                   type="button"
                   className={cn(
-                    "w-full flex items-center justify-between h-8 rounded-md border border-input bg-background px-3 text-xs text-left",
+                    "w-full flex items-center justify-between h-8 rounded-md border border-input bg-background px-3 text-[11px] text-left",
                     "ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
                     "disabled:cursor-not-allowed disabled:opacity-50",
                     !selectedDisplayName && "text-muted-foreground"
@@ -306,7 +306,7 @@ export function CreateEmployeeDebriefForm({
                     placeholder="Search employee…"
                     value={empSearch}
                     onChange={(e) => setEmpSearch(e.target.value)}
-                    className="h-7 text-xs"
+                    className="h-7 text-[11px]"
                   />
                 </div>
                 {/* Filtered list */}
@@ -319,7 +319,7 @@ export function CreateEmployeeDebriefForm({
                     });
                     if (filtered.length === 0) {
                       return (
-                        <p className="px-3 py-2 text-xs text-muted-foreground">No employees found.</p>
+                        <p className="px-3 py-2 text-[11px] text-muted-foreground">No employees found.</p>
                       );
                     }
                     return filtered.map((emp) => {
@@ -331,7 +331,7 @@ export function CreateEmployeeDebriefForm({
                           key={emp.id}
                           type="button"
                           className={cn(
-                            "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-accent hover:text-accent-foreground transition-colors",
+                            "w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left hover:bg-accent hover:text-accent-foreground transition-colors",
                             selectedEmployeeId === emp.id && "bg-accent text-accent-foreground font-medium"
                           )}
                           onClick={() => {
@@ -344,7 +344,7 @@ export function CreateEmployeeDebriefForm({
                         >
                           <span className="flex-1 truncate">{fullName}</span>
                           {!emp.active && (
-                            <Badge variant="secondary" className="text-[10px] h-4 px-1 border-0 bg-gray-200/60 dark:bg-gray-700/60 text-muted-foreground">
+                            <Badge variant="secondary" className="text-[9px] h-4 px-1 border-0 bg-gray-200/60 dark:bg-gray-700/60 text-muted-foreground">
                               inactive
                             </Badge>
                           )}
@@ -360,11 +360,11 @@ export function CreateEmployeeDebriefForm({
           {/* Debrief type (optional) */}
           {debriefTypes.length > 0 && (
             <div className="space-y-1">
-              <Label htmlFor="debrief-type" className="text-[11px] font-medium">
+              <Label htmlFor="debrief-type" className="text-[10px] font-medium">
                 Type (optional)
               </Label>
               <Select value={selectedType} onValueChange={setSelectedType}>
-                <SelectTrigger id="debrief-type" size="sm" className="h-8 w-full text-xs">
+                <SelectTrigger id="debrief-type" size="sm" className="h-8 w-full text-[11px]">
                   <SelectValue placeholder="None" />
                 </SelectTrigger>
                 <SelectContent>
@@ -381,7 +381,7 @@ export function CreateEmployeeDebriefForm({
 
           {/* Note */}
           <div className="space-y-1">
-            <Label htmlFor="debrief-note" className="text-xs font-semibold text-foreground uppercase tracking-wide">
+            <Label htmlFor="debrief-note" className="text-[11px] font-semibold text-foreground uppercase tracking-wide">
               Note
             </Label>
             <Textarea
@@ -393,9 +393,9 @@ export function CreateEmployeeDebriefForm({
                 onClearError();
               }}
               required
-              className="min-h-25 resize-y text-xs leading-relaxed border-gray-200/60 dark:border-gray-700/60 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
+              className="min-h-25 resize-y text-[11px] leading-relaxed border-gray-200/60 dark:border-gray-700/60 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
             />
-            <p className={cn("text-right text-[11px] tabular-nums font-medium", note.length > MAX_NOTE * 0.8 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
+            <p className={cn("text-right text-[10px] tabular-nums font-medium", note.length > MAX_NOTE * 0.8 ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")}>
               {note.length} / {MAX_NOTE}
             </p>
           </div>
@@ -407,14 +407,14 @@ export function CreateEmployeeDebriefForm({
             onMouseLeave={() => setIsHoveringAttachments(false)}
           >
             <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-medium">
+              <Label className="text-[10px] font-medium">
                 Attachments
                 {isHoveringAttachments && (
                   <span className="ml-2 font-normal text-muted-foreground/70">· Ctrl+V to paste</span>
                 )}
               </Label>
               {attachments.length > 0 && (
-                <span className="text-[11px] text-muted-foreground">{attachments.length} file{attachments.length > 1 ? "s" : ""}</span>
+                <span className="text-[10px] text-muted-foreground">{attachments.length} file{attachments.length > 1 ? "s" : ""}</span>
               )}
             </div>
             <input
@@ -436,7 +436,7 @@ export function CreateEmployeeDebriefForm({
                 {attachments.map((file, idx) => (
                   <li
                     key={idx}
-                    className="flex items-center gap-2 rounded-md border border-gray-200/60 dark:border-gray-700/60 bg-muted/30 px-2 py-1.5 text-xs"
+                    className="flex items-center gap-2 rounded-md border border-gray-200/60 dark:border-gray-700/60 bg-muted/30 px-2 py-1.5 text-[11px]"
                   >
                     {file.type.startsWith("image/") ? (
                       <FileImage className="h-3.5 w-3.5 shrink-0 text-blue-400" />
@@ -444,7 +444,7 @@ export function CreateEmployeeDebriefForm({
                       <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     )}
                     <span className="flex-1 truncate text-foreground/80">{file.name}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                    <span className="shrink-0 text-[9px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
                     <button
                       type="button"
                       className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive transition-colors"
@@ -460,7 +460,7 @@ export function CreateEmployeeDebriefForm({
               type="button"
               variant="outline"
               size="sm"
-              className="w-full h-8 gap-1.5 border-dashed border-gray-200/60 dark:border-gray-700/60 text-xs text-muted-foreground hover:text-foreground"
+              className="w-full h-8 gap-1.5 border-dashed border-gray-200/60 dark:border-gray-700/60 text-[11px] text-muted-foreground hover:text-foreground"
               onClick={() => fileInputRef.current?.click()}
             >
               <Paperclip className="h-3.5 w-3.5" />
@@ -471,7 +471,7 @@ export function CreateEmployeeDebriefForm({
           {/* Error banner */}
           {submitError && (
             <div className="rounded-lg border border-gray-200/60 dark:border-gray-700/60 px-3 py-2">
-              <p className="text-xs text-foreground font-medium">{submitError}</p>
+              <p className="text-[11px] text-foreground font-medium">{submitError}</p>
             </div>
           )}
 
@@ -479,7 +479,7 @@ export function CreateEmployeeDebriefForm({
           {successFlash && (
             <div className="flex items-center gap-2 rounded-lg border border-gray-200/60 dark:border-gray-700/60 px-3 py-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <p className="text-xs text-foreground font-medium">
+              <p className="text-[11px] text-foreground font-medium">
                 Debrief submitted successfully.
               </p>
             </div>

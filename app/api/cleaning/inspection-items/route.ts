@@ -21,12 +21,12 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/** POST /api/cleaning/inspection-items — { name } */
+/** POST /api/cleaning/inspection-items — { name, weight? } */
 export async function POST(request: NextRequest) {
   const authError = requireAuthorization(request);
   if (authError) return authError;
 
-  let body: { name?: unknown };
+  let body: { name?: unknown; weight?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -39,9 +39,20 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const payload: { name: string; weight?: number } = { name: body.name.trim() };
+  if (body.weight != null) {
+    const weight = Number(body.weight);
+    if (!Number.isFinite(weight) || weight < 1 || weight > 100) {
+      return errorResponse("VALIDATION_ERROR", "Weight must be between 1 and 100.", 422, {
+        field: "weight",
+      });
+    }
+    payload.weight = Math.round(weight);
+  }
+
   return forwardJson(`${CLEANING_BASE_URL}/inspection-items`, {
     method: "POST",
     headers: jsonHeaders(request),
-    body: JSON.stringify({ name: body.name.trim() }),
+    body: JSON.stringify(payload),
   });
 }

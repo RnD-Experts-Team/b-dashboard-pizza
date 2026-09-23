@@ -1,3 +1,10 @@
+# SUPERSEDED (2026-08-31) — historical only.
+# This is pre-build research from 2026-03 describing the v1 scheduling tree
+# (EmployeeSidebar, drag-and-drop ScheduleGrid, AddShiftDialog,
+# EmployeeDetailsDialog, PublishedSchedules). Those files no longer exist.
+# It also lists 'API layer patterns' as a gap it did not examine, so it
+# contains no API contract decisions. Do not build against it.
+
 plan_id: scheduling-weekly
 objective: Gather all context needed to build a new weekly employee scheduling page
 focus_area: scheduling

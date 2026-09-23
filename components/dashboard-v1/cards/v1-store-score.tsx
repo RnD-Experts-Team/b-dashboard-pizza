@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { format } from "date-fns";
 import { Star, TrendingUp, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import { playSfx } from "@/lib/uisfx/play";
 import { fmt$ } from "@/components/dspr/wbr-format";
 import { WbrDetailDialog } from "@/components/dspr/wbr-detail-dialog";
 import type { DsprGoalMetric, StoreScoreData, UpsellingScoreRecord } from "@/types/dspr.types";
+import type { WeeklyLaborEntry } from "@/types/employee.types";
 import { V1Card } from "../v1-card";
 import { V1SubLabel, V1Metric, V1MetricGrid, V1Empty, V1_TBL, V1_TH, V1_TD, V1_NUM } from "../v1-ui";
 
@@ -81,6 +83,72 @@ function fmtPts(n: number): string {
   return (Math.round(n * 100) / 100).toString();
 }
 
+/* ── Final Labor substitution — mirrors ReportsController.php's labor scoring ──
+ * Backend: computeStoreScore() sums each detail's `score` into `raw_score`, then
+ * `score = max(0, raw_score - non_negotiable.penalty)`, labelled via STORE_SCORE_LABELS.
+ * The `labor` detail's own score comes from laborScore($floor, $ceil, $actual, $max),
+ * where $actual is the data-system's week-to-date average labor %. Here we recompute
+ * that one detail's score with Final Labor (from the hiring system) as $actual instead,
+ * then re-derive the total the same way the backend does. ────────────────────── */
+const STORE_SCORE_LABEL_THRESHOLDS: [number, string][] = [
+  [80, "Fantastic +"],
+  [70, "Fantastic"],
+  [60, "Good"],
+  [50, "Fair"],
+  [0, "Poor"],
+];
+function labelForScore(score: number): string {
+  for (const [threshold, label] of STORE_SCORE_LABEL_THRESHOLDS) {
+    if (score >= threshold) return label;
+  }
+  return "Poor";
+}
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** laborScore() port — floor/ceil/actual are percentage-point numbers (e.g. 19.87 = 19.87%). */
+function laborScoreFromPercent(floor: number, ceil: number, actual: number, max: number): number {
+  let deduction: number;
+  if (actual > ceil) {
+    deduction = ((actual - ceil) / 100) * 30;
+  } else if (actual < floor) {
+    deduction = ((floor - actual) / 100) * 30;
+  } else {
+    deduction = 0;
+  }
+  return Math.max(0, max / 100 - deduction) * 100;
+}
+
+/** Swaps the `labor` detail's actual/score for Final Labor when it's available, and re-sums the total the same way the backend does. Falls back to `storeScore` untouched otherwise. */
+function applyFinalLabor(
+  storeScore: StoreScoreData | undefined,
+  finalLaborValue: number | null | undefined,
+): StoreScoreData | undefined {
+  if (!storeScore || finalLaborValue == null) return storeScore;
+
+  const idx = storeScore.details.findIndex((d) => d.key === "labor");
+  const laborDetail = idx >= 0 ? storeScore.details[idx] : undefined;
+  if (!laborDetail || laborDetail.floor_goal == null || laborDetail.ceil_goal == null) {
+    return storeScore;
+  }
+
+  const newScore = round2(
+    laborScoreFromPercent(laborDetail.floor_goal, laborDetail.ceil_goal, finalLaborValue, laborDetail.max),
+  );
+  const details = storeScore.details.map((d, i) =>
+    i === idx ? { ...d, score: newScore, actual_percent: round2(finalLaborValue) } : d,
+  );
+  const rawScore = details.reduce((sum, d) => sum + d.score, 0);
+  const score = Math.max(0, rawScore - storeScore.non_negotiable.penalty);
+
+  return {
+    ...storeScore,
+    details,
+    raw_score: round2(rawScore),
+    score: round2(score),
+    label: labelForScore(score),
+  };
+}
+
 /* ── RAF helper ──────────────────────────────────────────────────────────── */
 function makeAnimator() {
   const rafs: Record<string, number> = {};
@@ -110,17 +178,32 @@ function makeAnimator() {
 }
 
 /* ── Score view (animated detail bars) ──────────────────────────────────── */
-function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
+function ScoreView({
+  storeScore,
+  weeklyLaborEntries,
+}: {
+  storeScore?: StoreScoreData;
+  /** Same 6-week labor history as the Labor card — its last entry is Final Labor. */
+  weeklyLaborEntries?: WeeklyLaborEntry[];
+}) {
   const totalBarRef   = useRef<HTMLDivElement | null>(null);
   const scoreNumRef   = useRef<HTMLSpanElement | null>(null);
   const detailBarRefs = useRef<(HTMLDivElement | null)[]>([]);
   const animator      = useRef(makeAnimator());
 
+  const finalLaborValue = weeklyLaborEntries && weeklyLaborEntries.length > 0
+    ? weeklyLaborEntries[weeklyLaborEntries.length - 1].labor
+    : null;
+  const effectiveScore = useMemo(
+    () => applyFinalLabor(storeScore, finalLaborValue),
+    [storeScore, finalLaborValue],
+  );
+
   useEffect(() => {
     const { animateTo, cancelAll } = animator.current;
-    if (!storeScore) return;
+    if (!effectiveScore) return;
 
-    const { score, details } = storeScore;
+    const { score, details } = effectiveScore;
     const totalMax = details.reduce((s, d) => s + d.max, 0) || 100;
     const totalPct = Math.min(100, (score / totalMax) * 100);
 
@@ -150,9 +233,9 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
     });
 
     return () => cancelAll();
-  }, [storeScore]);
+  }, [effectiveScore]);
 
-  if (!storeScore) {
+  if (!effectiveScore) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
         No score data
@@ -160,9 +243,9 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
     );
   }
 
-  const { label, details, non_negotiable } = storeScore;
+  const { label, details, non_negotiable } = effectiveScore;
   const totalMax   = details.reduce((s, d) => s + d.max, 0) || 100;
-  const color      = scoreColor(storeScore.score, totalMax);
+  const color      = scoreColor(effectiveScore.score, totalMax);
   const hasPenalty = non_negotiable.penalty !== 0;
 
   return (
@@ -194,7 +277,7 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
                 {d.label}
                 {d.actual_percent != null && (
                   <span className="ml-0.5 text-[8px] text-muted-foreground/60">
-                    ({d.actual_percent.toFixed(1)}%)
+                    ({fmtFixed(d.actual_percent, 1)}%{d.key === "labor" && finalLaborValue != null ? " Final" : ""})
                   </span>
                 )}
               </span>
@@ -206,7 +289,7 @@ function ScoreView({ storeScore }: { storeScore?: StoreScoreData }) {
                 />
               </div>
               <span className={cn("w-11 text-right text-[9px] tabular-nums font-semibold shrink-0", isPerfect ? "text-emerald-600 dark:text-emerald-400" : SCORE_TEXT[c])}>
-                {d.score % 1 === 0 ? d.score : d.score.toFixed(1)}/{d.max % 1 === 0 ? d.max : d.max.toFixed(1)}
+                {d.score % 1 === 0 ? d.score : fmtFixed(d.score, 1)}/{d.max % 1 === 0 ? d.max : fmtFixed(d.max, 1)}
               </span>
             </div>
           );
@@ -500,6 +583,7 @@ export function V1StoreScoreCard({
   upsellingScore,
   goalMetrics,
   storeScore,
+  weeklyLaborEntries,
   date,
   span,
   className,
@@ -507,6 +591,8 @@ export function V1StoreScoreCard({
   upsellingScore?: UpsellingScoreProp;
   goalMetrics?: DsprGoalMetric[];
   storeScore?: StoreScoreData;
+  /** Same 6-week labor history as the Labor card — used to score Labor off Final Labor once it exists. */
+  weeklyLaborEntries?: WeeklyLaborEntry[];
   date?: Date;
   span?: 1 | 2 | 3;
   className?: string;
@@ -576,7 +662,7 @@ export function V1StoreScoreCard({
       onExpand={tab === "upselling" ? () => setDialogOpen(true) : undefined}
     >
       {tab === "score" ? (
-        <ScoreView storeScore={storeScore} />
+        <ScoreView storeScore={storeScore} weeklyLaborEntries={weeklyLaborEntries} />
       ) : (
         <UpsellingSummary
           goal={goal}

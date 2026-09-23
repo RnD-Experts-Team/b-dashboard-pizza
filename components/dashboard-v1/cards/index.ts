@@ -18,6 +18,7 @@ export { V1LaborCard } from "./v1-labor";
 export { V1GoToCard } from "./v1-goto";
 export { V1PortalWeeklyCard } from "./v1-portal-weekly";
 export { V1NonNegotiableCard } from "./v1-non-negotiable";
+export { V1HnrPlusCard } from "./v1-hnr-plus";
 
 // Menu
 export { V1TopItemsCard } from "./v1-top-items";

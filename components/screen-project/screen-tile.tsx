@@ -11,7 +11,7 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent, DisconnectReason } from "livekit-client";
-import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, Monitor, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
+import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -46,7 +46,18 @@ type StationControlMsg =
   | { type: "mic-control";   enabled: boolean }
   | { type: "cam-control";   enabled: boolean }
   | { type: "device-switch"; kind: "audioinput" | "videoinput" | "audiooutput"; deviceId: string }
-  | { type: "fullscreen";    enabled: boolean };
+  | { type: "fullscreen";    enabled: boolean }
+  /** Station playback level, 0..1. "speaker" = supervisor's voice, "media" = media-library video. */
+  | { type: "volume-control"; target: "speaker" | "media"; level: number };
+
+/**
+ * Never resolves to exactly 0: LiveKit's RemoteAudioTrack.attach() re-applies a
+ * stored volume only `if (this.elementVolume)`, so a level of 0 is falsy and a
+ * re-attached element silently returns to full volume. 0.0001 is inaudible.
+ * Also guards against a malformed payload, which would throw on `el.volume`.
+ */
+const clampSpeakerLevel = (n: unknown) =>
+  typeof n === "number" && Number.isFinite(n) ? Math.min(1, Math.max(0.0001, n)) : 1;
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Sound bars — animated indicator shown when remote audio is active       */
@@ -112,8 +123,10 @@ export interface ScreenTileProps {
   onToggleMyCam?: () => void;
   /** Whether the supervisor's screen share should be published into this room */
   myScreenShareEnabled?: boolean;
-  /** Toggle the supervisor's screen share for this room (main tile only) */
-  onToggleMyScreenShare?: () => void;
+  /** Fired once the share is actually publishing in this room */
+  onScreenShareStarted?: () => void;
+  /** Fired when the share failed to start, was cancelled, or ended on its own */
+  onScreenShareStopped?: () => void;
   /** 0-1 local volume gain */
   volume?: number;
   onVolumeChange?: (v: number) => void;
@@ -192,10 +205,15 @@ export interface ScreenTileProps {
   stationVideoInput?:       string;
   stationAudioOutput?:      string;
   stationFullscreen?:       boolean;
+  /** Level (0..1) of the supervisor's voice out of the station's speakers. */
+  stationSpeakerVolume?:    number;
+  /** Level (0..1) of media-library video playing on the station screen. */
+  stationMediaVolume?:      number;
   onToggleStationMic?:      () => void;
   onToggleStationCam?:      () => void;
   onToggleStationFullscreen?: () => void;
   onStationDeviceChange?:   (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => void;
+  onStationVolumeChange?:   (target: "speaker" | "media", level: number) => void;
   onStationStateReceived?:  (state: StationStateMsg) => void;
   /**
    * Station side only: fired after a remote device-switch command is applied AND
@@ -222,7 +240,8 @@ interface InnerProps {
   onToggleAudio: () => void;
   onToggleMyCam?: () => void;
   myScreenShareEnabled?: boolean;
-  onToggleMyScreenShare?: () => void;
+  onScreenShareStarted?: () => void;
+  onScreenShareStopped?: () => void;
   volume: number;
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
@@ -246,10 +265,13 @@ interface InnerProps {
   stationVideoInput?:       string;
   stationAudioOutput?:      string;
   stationFullscreen?:       boolean;
+  stationSpeakerVolume?:    number;
+  stationMediaVolume?:      number;
   onToggleStationMic?:      () => void;
   onToggleStationCam?:      () => void;
   onToggleStationFullscreen?: () => void;
   onStationDeviceChange?:   (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => void;
+  onStationVolumeChange?:   (target: "speaker" | "media", level: number) => void;
   onStationStateReceived?:  (state: StationStateMsg) => void;
   onActiveDeviceChange?:    (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string, label?: string) => void;
 }
@@ -312,7 +334,8 @@ function ScreenTileInner({
   onToggleAudio,
   onToggleMyCam,
   myScreenShareEnabled,
-  onToggleMyScreenShare,
+  onScreenShareStarted,
+  onScreenShareStopped,
   volume,
   onVolumeChange,
   videoQuality,
@@ -336,10 +359,13 @@ function ScreenTileInner({
   stationVideoInput,
   stationAudioOutput,
   stationFullscreen,
+  stationSpeakerVolume,
+  stationMediaVolume,
   onToggleStationMic,
   onToggleStationCam,
   onToggleStationFullscreen,
   onStationDeviceChange,
+  onStationVolumeChange,
   onStationStateReceived,
   onActiveDeviceChange,
 }: InnerProps) {
@@ -472,6 +498,12 @@ function ScreenTileInner({
   // Supervisor side: device list received from the station via "station-state" data channel
   const [stationInfo, setStationInfo] = useState<StationStateMsg | null>(null);
 
+  // Station side: playback levels commanded by the supervisor. null = never
+  // commanded, so the tile keeps its own defaults (voice at the `volume` prop,
+  // media silent) and "commanded to zero" stays distinguishable.
+  const [stationSpeakerLevel, setStationSpeakerLevel] = useState<number | null>(null);
+  const [stationMediaLevel, setStationMediaLevel] = useState<number | null>(null);
+
   // Station side: on-screen confirmation that a remote command arrived and was applied —
   // this is a kiosk device with no DevTools access, so console logs alone aren't enough.
   const [controlToast, setControlToast] = useState<{ text: string; ok: boolean } | null>(null);
@@ -480,6 +512,25 @@ function ScreenTileInner({
     const t = setTimeout(() => setControlToast(null), 3500);
     return () => clearTimeout(t);
   }, [controlToast]);
+
+  /**
+   * Applies the commanded media level to the station's media <video>.
+   * A callback ref rather than an effect: this element is unmounted and
+   * remounted whenever the supervisor's camera turns on and off, and an effect
+   * keyed on the level alone would not re-run then, silently losing the level.
+   * Changing this callback's identity re-invokes it, so it covers level changes too.
+   *
+   * Unmuting an autoplaying video without user activation makes Chrome pause it
+   * silently, so every recovery path ends muted-and-playing rather than
+   * unmuted-and-frozen.
+   */
+  const applyMediaLevel = useCallback((el: HTMLVideoElement | null) => {
+    if (!el) return;
+    const level = stationMediaLevel ?? 0;
+    el.volume = level;
+    el.muted = level === 0;
+    if (el.paused) el.play().catch(() => { el.muted = true; el.play().catch(() => {}); });
+  }, [stationMediaLevel]);
 
   // Publish / unpublish supervisor's mic in this room when myMicEnabled changes
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -506,13 +557,59 @@ function ScreenTileInner({
     room.localParticipant.setCameraEnabled(myCamEnabled).catch(() => {});
   }, [myCamEnabled, connectionState, room]);
 
-  // Publish / unpublish supervisor's screen share (main tile only)
+  /**
+   * Publish / unpublish the supervisor's screen share for the station this
+   * share is pinned to.
+   *
+   * Tracks what has actually been applied so the effect only reacts to a
+   * change of intent. Without that, every reconnect would re-run the enable
+   * path and pop a fresh browser picker with no user gesture behind it.
+   * Failures (most often the user cancelling the picker, which rejects with
+   * NotAllowedError) are reported upward so the UI can follow reality instead
+   * of an optimistic guess.
+   */
+  const appliedShareRef = useRef(false);
+  // The parent passes fresh closures every render; hold them in refs so the
+  // effects below don't re-run (and the event listener doesn't re-subscribe)
+  // on every parent render.
+  const onShareStartedRef = useRef(onScreenShareStarted);
+  onShareStartedRef.current = onScreenShareStarted;
+  const onShareStoppedRef = useRef(onScreenShareStopped);
+  onShareStoppedRef.current = onScreenShareStopped;
+
   useEffect(() => {
-    if (connectionState !== ConnectionState.Connected) return;
+    if (connectionState !== ConnectionState.Connected) {
+      if (appliedShareRef.current) {
+        appliedShareRef.current = false;
+        onShareStoppedRef.current?.();
+      }
+      return;
+    }
+    const want = !!myScreenShareEnabled;
+    if (want === appliedShareRef.current) return;
+    appliedShareRef.current = want;
     room.localParticipant
-      .setScreenShareEnabled(!!myScreenShareEnabled, { audio: true })
-      .catch(() => {});
+      .setScreenShareEnabled(want, { audio: true })
+      .then(() => { if (want) onShareStartedRef.current?.(); })
+      .catch(() => {
+        appliedShareRef.current = false;
+        if (want) onShareStoppedRef.current?.();
+      });
   }, [myScreenShareEnabled, connectionState, room]);
+
+  // The browser's own "Stop sharing" bar ends the track without going through
+  // our button. LiveKit already unpublishes it for us and emits this event, so
+  // we only need to report it up — calling setScreenShareEnabled(false) here
+  // would be redundant.
+  useEffect(() => {
+    const onUnpublished = (pub: { source: Track.Source }) => {
+      if (pub.source !== Track.Source.ScreenShare) return;
+      appliedShareRef.current = false;
+      onShareStoppedRef.current?.();
+    };
+    room.on(RoomEvent.LocalTrackUnpublished, onUnpublished);
+    return () => { room.off(RoomEvent.LocalTrackUnpublished, onUnpublished); };
+  }, [room]);
 
   // Request the appropriate simulcast layer from the server
   useEffect(() => {
@@ -640,7 +737,7 @@ function ScreenTileInner({
       }
       // Only react to our control message shapes
       if (!msg || !("type" in msg)) return;
-      if (msg.type !== "mic-control" && msg.type !== "cam-control" && msg.type !== "device-switch" && msg.type !== "fullscreen") return;
+      if (msg.type !== "mic-control" && msg.type !== "cam-control" && msg.type !== "device-switch" && msg.type !== "fullscreen" && msg.type !== "volume-control") return;
 
       switch (msg.type) {
         case "mic-control":
@@ -687,6 +784,16 @@ function ScreenTileInner({
           if (msg.enabled) document.documentElement.requestFullscreen().catch(() => {});
           else document.exitFullscreen().catch(() => {});
           break;
+        case "volume-control": {
+          const pct = Math.round(Math.min(1, Math.max(0, msg.level)) * 100);
+          if (msg.target === "speaker") setStationSpeakerLevel(msg.level);
+          else setStationMediaLevel(msg.level);
+          setControlToast({
+            text: `${msg.target === "speaker" ? "Voice" : "Media"} volume ${pct}%`,
+            ok: true,
+          });
+          break;
+        }
       }
     };
     room.on(RoomEvent.DataReceived, handler);
@@ -745,6 +852,8 @@ function ScreenTileInner({
   const stationVideoInputRef  = useRef(stationVideoInput);  stationVideoInputRef.current  = stationVideoInput;
   const stationAudioOutputRef = useRef(stationAudioOutput); stationAudioOutputRef.current = stationAudioOutput;
   const stationFullscreenRef  = useRef(stationFullscreen);  stationFullscreenRef.current  = stationFullscreen;
+  const stationSpeakerVolumeRef = useRef(stationSpeakerVolume); stationSpeakerVolumeRef.current = stationSpeakerVolume;
+  const stationMediaVolumeRef   = useRef(stationMediaVolume);   stationMediaVolumeRef.current   = stationMediaVolume;
 
   const publishControl = useCallback((msg: StationControlMsg) => {
     room.localParticipant.publishData(
@@ -783,6 +892,17 @@ function ScreenTileInner({
     publishControl({ type: "fullscreen", enabled: stationFullscreen });
   }, [stationFullscreen, connectionState, publishNetworkStatus, publishControl]);
 
+  // Guard on `=== undefined`, not truthiness — a level of 0 must still be sent.
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || stationSpeakerVolume === undefined) return;
+    publishControl({ type: "volume-control", target: "speaker", level: stationSpeakerVolume });
+  }, [stationSpeakerVolume, connectionState, publishNetworkStatus, publishControl]);
+
+  useEffect(() => {
+    if (publishNetworkStatus || connectionState !== ConnectionState.Connected || stationMediaVolume === undefined) return;
+    publishControl({ type: "volume-control", target: "media", level: stationMediaVolume });
+  }, [stationMediaVolume, connectionState, publishNetworkStatus, publishControl]);
+
   // Re-send all commands when the station participant reconnects (e.g. page refresh)
   useEffect(() => {
     if (publishNetworkStatus) return;
@@ -793,6 +913,8 @@ function ScreenTileInner({
       if (stationVideoInputRef.current)  publishControl({ type: "device-switch", kind: "videoinput",  deviceId: stationVideoInputRef.current });
       if (stationAudioOutputRef.current) publishControl({ type: "device-switch", kind: "audiooutput", deviceId: stationAudioOutputRef.current });
       if (stationFullscreenRef.current !== undefined)  publishControl({ type: "fullscreen",    enabled: stationFullscreenRef.current! });
+      if (stationSpeakerVolumeRef.current !== undefined) publishControl({ type: "volume-control", target: "speaker", level: stationSpeakerVolumeRef.current! });
+      if (stationMediaVolumeRef.current !== undefined)   publishControl({ type: "volume-control", target: "media",   level: stationMediaVolumeRef.current! });
     };
     room.on(RoomEvent.ParticipantConnected, handler);
     return () => { room.off(RoomEvent.ParticipantConnected, handler); };
@@ -933,13 +1055,21 @@ function ScreenTileInner({
                 />
               ) : (
                 <video
+                  ref={applyMediaLevel}
                   src={displayedSrc}
                   autoPlay
                   loop
-                  muted
+                  muted={(stationMediaLevel ?? 0) === 0}
                   playsInline
                   preload="auto"
                   onError={() => setMediaError(true)}
+                  onPause={(e) => {
+                    // Autoplay policy bounced us after unmuting — survive muted
+                    // rather than leaving a frozen frame on the store screen.
+                    const el = e.currentTarget;
+                    el.muted = true;
+                    el.play().catch(() => {});
+                  }}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )}
@@ -1061,7 +1191,7 @@ function ScreenTileInner({
             key={t.publication.trackSid}
             trackRef={t}
             muted={!isAudioEnabled}
-            volume={volume}
+            volume={stationSpeakerLevel === null ? volume : clampSpeakerLevel(stationSpeakerLevel)}
           />
         ))}
 
@@ -1179,26 +1309,6 @@ function ScreenTileInner({
             )}
           </Button>
 
-          {/* Screen share toggle — main tile only */}
-          {isMain && onToggleMyScreenShare && (
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={myScreenShareEnabled ? "Stop sharing screen" : "Share screen"}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleMyScreenShare();
-              }}
-              className={cn(
-                "h-8 shrink-0 gap-1.5 px-2.5 text-xs text-white hover:bg-white/20 hover:text-white focus-visible:ring-white/40",
-                myScreenShareEnabled && "text-red-400 hover:text-red-300",
-              )}
-            >
-              <Monitor className="h-3.5 w-3.5" />
-              <span>{myScreenShareEnabled ? "Stop Share" : "Share Screen"}</span>
-            </Button>
-          )}
-
           {/* My camera toggle — bottom-right: controls whether supervisor's cam is sent to THIS room (side tiles only) */}
           {!isMain && onToggleMyCam && (
             <Button
@@ -1300,6 +1410,34 @@ function ScreenTileInner({
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  )}
+                  {onStationVolumeChange && (
+                    <div className="space-y-2 border-t border-white/10 pt-3">
+                      <p className="text-[0.65rem] font-medium text-white/50 uppercase tracking-wide">Station volume</p>
+                      {([
+                        { target: "speaker" as const, label: "Voice", level: stationSpeakerVolume ?? 1 },
+                        { target: "media" as const,   label: "Media", level: stationMediaVolume ?? 0 },
+                      ]).map(({ target, label, level }) => (
+                        <div key={target} className="flex items-center gap-2">
+                          {level === 0
+                            ? <VolumeX className="h-3.5 w-3.5 shrink-0 text-white/40" />
+                            : <Volume2 className="h-3.5 w-3.5 shrink-0 text-white/70" />}
+                          <span className="w-10 shrink-0 text-[0.65rem] text-white/50">{label}</span>
+                          <Slider
+                            value={[Math.round(level * 100)]}
+                            min={0}
+                            max={100}
+                            step={5}
+                            onValueChange={([v]) => onStationVolumeChange(target, v / 100)}
+                            className="flex-1"
+                            aria-label={`Station ${label.toLowerCase()} volume`}
+                          />
+                          <span className="w-8 shrink-0 text-right text-[0.65rem] text-white/50 tabular-nums">
+                            {Math.round(level * 100)}%
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </PopoverContent>
@@ -1436,7 +1574,8 @@ export function ScreenTile({
   onToggleAudio,
   onToggleMyCam,
   myScreenShareEnabled,
-  onToggleMyScreenShare,
+  onScreenShareStarted,
+  onScreenShareStopped,
   volume = 1,
   onVolumeChange,
   videoQuality = VideoQuality.HIGH,
@@ -1461,10 +1600,13 @@ export function ScreenTile({
   stationVideoInput,
   stationAudioOutput,
   stationFullscreen,
+  stationSpeakerVolume,
+  stationMediaVolume,
   onToggleStationMic,
   onToggleStationCam,
   onToggleStationFullscreen,
   onStationDeviceChange,
+  onStationVolumeChange,
   onStationStateReceived,
   onActiveDeviceChange,
 }: ScreenTileProps) {
@@ -1570,7 +1712,8 @@ export function ScreenTile({
         onToggleAudio={onToggleAudio}
         onToggleMyCam={onToggleMyCam}
         myScreenShareEnabled={myScreenShareEnabled}
-        onToggleMyScreenShare={onToggleMyScreenShare}
+        onScreenShareStarted={onScreenShareStarted}
+        onScreenShareStopped={onScreenShareStopped}
         volume={volume}
         onVolumeChange={onVolumeChange}
         videoQuality={videoQuality}
@@ -1594,10 +1737,13 @@ export function ScreenTile({
         stationVideoInput={stationVideoInput}
         stationAudioOutput={stationAudioOutput}
         stationFullscreen={stationFullscreen}
+        stationSpeakerVolume={stationSpeakerVolume}
+        stationMediaVolume={stationMediaVolume}
         onToggleStationMic={onToggleStationMic}
         onToggleStationCam={onToggleStationCam}
         onToggleStationFullscreen={onToggleStationFullscreen}
         onStationDeviceChange={onStationDeviceChange}
+        onStationVolumeChange={onStationVolumeChange}
         onStationStateReceived={onStationStateReceived}
         onActiveDeviceChange={onActiveDeviceChange}
       />

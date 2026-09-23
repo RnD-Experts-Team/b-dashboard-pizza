@@ -1,6 +1,7 @@
 "use client";
 
 import { fmt$, type WbrData } from "@/lib/mock/wbr-reports.mock";
+import { fmtFixed } from "@/lib/utils/number-display";
 import {
   ReportCard,
   Chip,
@@ -122,7 +123,7 @@ export function ServiceTab({ data }: { data: WbrData }) {
                   <td className={TD}>
                     <span className="flex items-center gap-2">
                       <Stars rating={r.reviews.avg} />
-                      <span className="font-mono text-[11px] tabular-nums">{r.reviews.avg.toFixed(1)}</span>
+                      <span className="font-mono text-[11px] tabular-nums">{fmtFixed(r.reviews.avg, 1)}</span>
                     </span>
                   </td>
                 </tr>

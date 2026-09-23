@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { BASE_URL, errorJson, proxyGet } from "@/app/api/maintenance-tickets/_lib/proxy";
+import { BASE_URL, errorJson, proxyGet, proxyJsonPatch } from "@/app/api/maintenance-tickets/_lib/proxy";
 
 export async function GET(
   request: NextRequest,
@@ -12,4 +12,17 @@ export async function GET(
 
   const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/${encodeURIComponent(ticket)}/issues/${encodeURIComponent(issue)}`;
   return proxyGet(request, upstreamUrl);
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ store: string; ticket: string; issue: string }> }
+) {
+  const { store, ticket, issue } = await params;
+  if (!store || !ticket || !issue) {
+    return errorJson("MISSING_PARAM", "store, ticket, and issue are required", 400);
+  }
+
+  const upstreamUrl = `${BASE_URL}/stores/${encodeURIComponent(store)}/tickets/${encodeURIComponent(ticket)}/issues/${encodeURIComponent(issue)}`;
+  return proxyJsonPatch(request, upstreamUrl);
 }

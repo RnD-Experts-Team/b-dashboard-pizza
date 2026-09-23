@@ -11,7 +11,7 @@ import {
   Bell,
   X,
   Briefcase,
-  Gift,
+  Shirt,
   TrendingUp,
   UserMinus,
 } from "lucide-react";
@@ -23,8 +23,8 @@ function getToastVisuals(type: string) {
   if (type.startsWith("hiring_request")) {
     return { Icon: Briefcase, color: "text-blue-600 dark:text-blue-400" };
   }
-  if (type.startsWith("milestone_gift_request")) {
-    return { Icon: Gift, color: "text-pink-600 dark:text-pink-400" };
+  if (type.startsWith("shirt_milestone")) {
+    return { Icon: Shirt, color: "text-pink-600 dark:text-pink-400" };
   }
   if (type.startsWith("employee_promoted")) {
     return { Icon: TrendingUp, color: "text-green-600 dark:text-green-400" };

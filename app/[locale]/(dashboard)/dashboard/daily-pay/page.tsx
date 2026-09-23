@@ -2,10 +2,15 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, SlidersHorizontal, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
+import { PageSection, SectionBreak, SectionGroup } from "@/components/shared/page-section";
+import { PayBasketPanel } from "@/components/daily-pay/pay-basket-panel";
+import { usePayBasketStore } from "@/lib/store/pay-basket.store";
+import { entryFormFromBasket } from "@/lib/daily-pay/from-basket";
+import type { EntryFormState } from "@/lib/daily-pay/entry-form-state";
 import {
   DailyPaySkeleton,
   DailyPayEmptyState,
@@ -51,8 +56,16 @@ function parseFiltersFromUrl(params: URLSearchParams): DailyPayFilters {
   const dateTo = params.get("date_to");
   if (dateTo) filters.date_to = dateTo;
 
-  const filledBy = params.get("filled_by");
-  if (filledBy && Number.isInteger(Number(filledBy))) filters.filled_by = Number(filledBy);
+  // filled_by became an ARRAY in the v2 release — same comma-joined URL
+  // encoding as technician_ids / store_ids.
+  const filledBy = parseIntList(params.get("filled_by"));
+  if (filledBy) filters.filled_by = filledBy;
+
+  const createdFrom = params.get("created_from");
+  if (createdFrom) filters.created_from = createdFrom;
+
+  const createdTo = params.get("created_to");
+  if (createdTo) filters.created_to = createdTo;
 
   const sort = params.get("sort");
   if (sort === "date" || sort === "created_at") filters.sort = sort;
@@ -77,7 +90,9 @@ function buildUrlFromFilters(filters: DailyPayFilters): string {
   if (filters.date) params.set("date", filters.date);
   if (filters.date_from) params.set("date_from", filters.date_from);
   if (filters.date_to) params.set("date_to", filters.date_to);
-  if (filters.filled_by) params.set("filled_by", String(filters.filled_by));
+  if (filters.filled_by?.length) params.set("filled_by", filters.filled_by.join(","));
+  if (filters.created_from) params.set("created_from", filters.created_from);
+  if (filters.created_to) params.set("created_to", filters.created_to);
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.dir) params.set("dir", filters.dir);
   if (filters.per_page) params.set("per_page", String(filters.per_page));
@@ -107,6 +122,7 @@ function DailyPayPageInner() {
     clearError,
     stores,
     technicians,
+    filledByOptions,
   } = useDailyPay();
 
   // ── URL is the source of truth: fetch whenever the query string changes ──
@@ -120,6 +136,10 @@ function DailyPayPageInner() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  /** Set when the dialog was opened from the pay basket, so it opens filled in. */
+  const [seededState, setSeededState] = useState<EntryFormState | null>(null);
+  const groupForSheet = usePayBasketStore((s) => s.groupForSheet);
+  const clearPayBasket = usePayBasketStore((s) => s.clear);
   const [editId, setEditId] = useState<number | null>(null);
 
   // ── URL writers ─────────────────────────────────────────────────────────
@@ -154,7 +174,32 @@ function DailyPayPageInner() {
 
   function handleCreate() {
     setEditId(null);
+    // An empty sheet: nothing was collected, so nothing is assumed.
+    setSeededState(null);
     setDialogOpen(true);
+  }
+
+  /**
+   * Opens the dialog filled in from the pay basket.
+   *
+   * The basket is cleared only once the sheet actually saves -- clearing on
+   * open would lose the collected work if the coordinator closed the dialog to
+   * go and check something, which is exactly when they would.
+   */
+  function handleStartSheetFromBasket() {
+    setEditId(null);
+    setSeededState(entryFormFromBasket(groupForSheet(), stores));
+    setDialogOpen(true);
+  }
+
+  function handleDialogSuccess() {
+    // Saved: the collected work is now on a real sheet, so the staging area has
+    // done its job.
+    if (seededState) {
+      clearPayBasket();
+      setSeededState(null);
+    }
+    refetch();
   }
 
   function handleEdit(entry: DailyPayEntry) {
@@ -189,14 +234,33 @@ function DailyPayPageInner() {
         </Button>
       </PageHeader>
 
-      <DailyPayFiltersBar
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        onCreateClick={handleCreate}
-        stores={stores}
-        technicians={technicians}
-        disabled={isLoading}
-      />
+      {/*
+        GROUP OF TWO, then the break, then the sheets.
+
+        Note this page has three blocks, not five -- the grouping is 2-then-1
+        rather than 2-then-3. The count is not the point; the ASYMMETRY is. An
+        even alternation would look the same from everywhere and tell you
+        nothing, which is the state we are leaving.
+      */}
+      <SectionGroup>
+        {/* Work marked for payment from the tickets. Renders nothing when
+            empty, so on most days this section is simply absent. */}
+        <PayBasketPanel onStartSheet={handleStartSheetFromBasket} disabled={isLoading} />
+
+        <PageSection rank="secondary" icon={SlidersHorizontal} title="Narrow it down">
+          <DailyPayFiltersBar
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onCreateClick={handleCreate}
+            stores={stores}
+            technicians={technicians}
+            filledByOptions={filledByOptions}
+            disabled={isLoading}
+          />
+        </PageSection>
+      </SectionGroup>
+
+      <SectionBreak />
 
       {/* Loading skeleton (first load) */}
       {isLoading && !data && <DailyPaySkeleton />}
@@ -209,16 +273,18 @@ function DailyPayPageInner() {
       {/* Empty */}
       {!isLoading && !error && data && data.data.length === 0 && <DailyPayEmptyState />}
 
-      {/* Table */}
+      {/* The sheets themselves -- the one PRIMARY block on the page. */}
       {data && data.data.length > 0 && (
-        <DailyPayTable
-          data={data}
-          isRefreshing={isRefreshing}
-          currentPage={currentPage}
-          onPageChange={handlePageChange}
-          onRowClick={handleRowClick}
-          onEdit={handleEdit}
-        />
+        <PageSection rank="primary" accent={5} icon={Wallet} title="Pay sheets">
+          <DailyPayTable
+            data={data}
+            isRefreshing={isRefreshing}
+            currentPage={currentPage}
+            onPageChange={handlePageChange}
+            onRowClick={handleRowClick}
+            onEdit={handleEdit}
+          />
+        </PageSection>
       )}
 
       {/* Detail sheet */}
@@ -227,16 +293,20 @@ function DailyPayPageInner() {
         entryId={detailId}
         onClose={() => setSheetOpen(false)}
         onEdit={handleEditFromSheet}
+        onChanged={refetch}
+        technicians={technicians}
+        stores={stores}
       />
 
       {/* Create / edit dialog */}
       <DailyPayEntryDialog
         open={dialogOpen}
+        initialState={seededState}
         entryId={editId}
         stores={stores}
         technicians={technicians}
         onClose={() => setDialogOpen(false)}
-        onSuccess={handleSuccess}
+        onSuccess={handleDialogSuccess}
       />
     </div>
   );

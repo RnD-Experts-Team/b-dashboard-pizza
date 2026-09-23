@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { fmtFixed } from "@/lib/utils/number-display";
 import { useMemo, useState } from "react";
 import type { ApexOptions } from "apexcharts";
 import type { DsprSales } from "@/types/dspr.types";
@@ -195,8 +196,10 @@ export function V1SalesTrendCard({
           })}
         </div>
 
-        {/* Day-by-day table */}
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+        {/* Day-by-day table — bleeds to the dialog's edges on mobile so the
+            horizontally-scrolling table gets the full viewport width to work
+            with, instead of being squeezed inside the dialog's own padding. */}
+        <div className="-mx-4 sm:mx-0 overflow-x-auto border-y sm:rounded-lg sm:border border-zinc-200 dark:border-zinc-700">
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-zinc-50 dark:bg-zinc-800/60 border-b border-zinc-200 dark:border-zinc-700">
@@ -247,7 +250,7 @@ export function V1SalesTrendCard({
                     <td className="px-3 py-2 text-right tabular-nums">{renderPct(vsLY)}</td>
                     {laborWeekToDateByDay && (
                       laborEntry && laborEntry.percent > 0
-                        ? <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: laborColor(laborEntry.percent) }}>{laborEntry.percent.toFixed(1)}%</td>
+                        ? <td className="px-3 py-2 text-right tabular-nums font-semibold" style={{ color: laborColor(laborEntry.percent) }}>{fmtFixed(laborEntry.percent, 1)}%</td>
                         : <td className="px-3 py-2 text-right tabular-nums text-zinc-300 dark:text-zinc-600">—</td>
                     )}
                   </tr>
