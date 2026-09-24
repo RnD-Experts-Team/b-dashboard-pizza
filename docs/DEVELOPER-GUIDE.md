@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-09-20 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-09-24 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -108,6 +108,8 @@ These areas are designed for customization:
 | `components/storage/**` | Storage & Stock — GLOBAL (not store-scoped) storage locations, the append-only stock-movement ledger, and on-hand balances. Page at `dashboard/storage`, tabs Balances / Movements / Locations |
 | `lib/storage/**` | Stock pure logic, no React: `movement-types.ts` (the type→direction table; `reversal` cannot be a key, so it is unpostable at the type level), `movement-builder.ts` (composer form → payload, transfer expansion, 422 line-index mapping), `reversal-pairing.ts` (pairs a mistaken movement with its reversal; degrades to null rather than guessing). `stock-actions.ts` (the plain-language layer: five things that happen in a store room, each mapping onto exactly one movement type, so "transfer_out" and the +1/-1 direction never reach the screen). A mistaken movement STILL COUNTS toward every balance — the flag is display-only |
 | `components/store-passport/**` | Store Passport — the topbar dialog describing the selected store (identity/contact, trading hours, team, facilities, and an access tab of shared logins and door codes, masked behind per-row reveal). Static placeholder data for now, from `lib/mock/store-passport.mock.ts` |
+| `components/workbooks/**` | Workbooks (ToolboxPizza, via `app/api/toolbox/**` and `TOOLBOX_API_URL`): nested folders → user-defined tables (typed columns + rows), each folder/workbook/row carrying a visibility tag where the most restrictive tag up the chain wins. Folder browser at `dashboard/workbooks` (`?folder=`), grid at `dashboard/workbooks/[workbookId]`. Every control renders from the server's `viewer.can` and explains a refusal from `effective_visibility.capped_by` — never re-derive the tag rules client-side. A read 404 means "not found OR no access", never "deleted". Super-admin only for now (sidebar "Toolbox" group) |
+| `lib/workbooks/**` | Workbook pure logic, no React: `errors.ts` (error kind from the server's `error.code`, 422 flattening, the 409 force-delete counts, cell type-mismatch `allowed` values), `cells.ts` (per-type display/editor values — dates read from the ISO string's calendar part, never `new Date()`; numbers stay strings), `columns-diff.ts` (column editor model; the columns endpoint is a WHOLE-LIST replace, so this works out which columns a save would delete), `roles.ts` (trim + de-dupe only), `grid-url.ts` (grid query ⇄ URL) |
 | `components/layout/topbar-tools-cluster.tsx` | The collapsible topbar drawer holding `BreakTimerButton` + `StorePassportButton`. Forces itself open while a break is running, so the live counter and overtime banner are never hidden |
 | `types/**` | Your custom TypeScript types |
 
