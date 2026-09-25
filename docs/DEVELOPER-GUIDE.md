@@ -1,6 +1,6 @@
 # B-Dashboard Developer Guide
 
-_Last updated: 2026-09-24 (bump this whenever you substantively edit this file)_
+_Last updated: 2026-09-25 (bump this whenever you substantively edit this file)_
 
 > **⚠️ IMPORTANT: This document defines what parts of the codebase are considered CORE infrastructure and should NOT be modified by developers or AI agents who want to maintain sync compatibility with upstream.**
 
@@ -111,6 +111,8 @@ These areas are designed for customization:
 | `components/layout/topbar-tools-cluster.tsx` | The collapsible topbar drawer holding `BreakTimerButton` + `StorePassportButton`. Forces itself open while a break is running (read from `useBreaksStore().active`), so the live counter is never hidden |
 | `components/break-logger/**` | Breaks — self-service break timer on ToolboxPizza's API (proxied by `app/api/toolbox/**`, base `TOOLBOX_API_URL`, which already ends in `/api/v1`). The topbar popover body, the `/dashboard/break-logger` page (Today / History / Settings), and the entry, notes, delete and export dialogs. `BreakTimerButton` owns the only poller (`lib/hooks/use-breaks.ts`), which runs only while a break is open. `GET breaks/active` and `GET breaks/day` WRITE upstream — never prefetch or cache them |
 | `lib/break-logger/**` | Breaks pure logic, no React: `errors.ts` (normalises domain / Laravel-validation / not-found / proxy error bodies into a code-keyed `BreakError`), `work-date.ts` (work-date math from the server's `cutoff_hour` + `timezone` — never hardcoded), `payload.ts` (manual-entry body, changed-keys-only update body — `ended_at: null` reopens a break — and the history query with `0`/`1` booleans) |
+| `components/workbooks/**` | Workbooks (ToolboxPizza, via `app/api/toolbox/**` and `TOOLBOX_API_URL`): nested folders → user-defined tables (typed columns + rows), each folder/workbook/row carrying a visibility tag where the most restrictive tag up the chain wins. Folder browser at `dashboard/workbooks` (`?folder=`), grid at `dashboard/workbooks/[workbookId]`. Every control renders from the server's `viewer.can` and explains a refusal from `effective_visibility.capped_by` — never re-derive the tag rules client-side. A read 404 means "not found OR no access", never "deleted". Super-admin only for now (sidebar "Toolbox" group) |
+| `lib/workbooks/**` | Workbook pure logic, no React: `errors.ts` (error kind from the server's `error.code`, 422 flattening, the 409 force-delete counts, cell type-mismatch `allowed` values), `cells.ts` (per-type display/editor values — dates read from the ISO string's calendar part, never `new Date()`; numbers stay strings), `columns-diff.ts` (column editor model; the columns endpoint is a WHOLE-LIST replace, so this works out which columns a save would delete), `roles.ts` (trim + de-dupe only), `grid-url.ts` (grid query ⇄ URL) |
 | `types/**` | Your custom TypeScript types |
 
 ---

@@ -49,6 +49,7 @@ import {
   UserSearch,
   Sparkles,
   Coffee,
+  Table2,
 } from "lucide-react";
 import {
   Dialog,
@@ -680,11 +681,20 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
     ],
   };
-  // Toolbox (ToolboxPizza) — Breaks is self-service, so nothing to gate on.
+  // Toolbox (ToolboxPizza). Workbooks is SUPER-ADMIN ONLY for now — gated
+  // here by role, not by an auth rule, because the pizzasys rules for the
+  // toolbox are not seeded yet. Once they are, swap the role gate for a
+  // requirement such as { service: "Toolbox", method: "GET", path: "/workbook-options" }.
+  // Breaks is self-service, so it is shown to everyone.
+  const workbooksItem: NavItem = {
+    title: t("workbooks"),
+    href: `/${locale}/dashboard/workbooks`,
+    icon: Table2,
+  };
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [breaksItem],
+    items: [...(isSuperAdmin() ? [workbooksItem] : []), breaksItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
@@ -1029,7 +1039,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 7c. Toolbox */}
+          {/* 7c. Toolbox (Workbooks super-admin only for now) */}
           {visibleToolboxGroup && (
             <SidebarNavGroup
               group={visibleToolboxGroup}

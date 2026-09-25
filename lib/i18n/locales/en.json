@@ -109,7 +109,8 @@
     "breadcrumb": "Breadcrumb",
     "storage": "Storage & Stock",
     "breaks": "Breaks",
-    "toolbox": "Toolbox"
+    "toolbox": "Toolbox",
+    "workbooks": "Workbooks"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -2878,6 +2879,300 @@
         "register2": "Register 2",
         "safeCode": "Safe code"
       }
+    }
+  },
+  "workbooks": {
+    "title": "Workbooks",
+    "description": "Shared tables, organised in folders. Each item's access tag decides who can see it and who can change it.",
+    "refresh": "Refresh",
+    "optionsError": "Couldn't load the access and column-type options, so some forms may be incomplete.",
+    "noAccess": {
+      "title": "No access to workbooks",
+      "body": "Workbooks are limited to super-admins while the toolbox is being rolled out."
+    },
+    "common": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "create": "Create",
+      "creating": "Creating…",
+      "delete": "Delete",
+      "back": "Back",
+      "clear": "Clear",
+      "loading": "Loading…",
+      "search": "Search…",
+      "noResults": "No results.",
+      "optional": "Optional",
+      "yes": "Yes",
+      "no": "No",
+      "any": "Any"
+    },
+    "errors": {
+      "title": "Something went wrong",
+      "retry": "Try again",
+      "backToWorkbooks": "Back to workbooks",
+      "notFound": {
+        "title": "Not found, or you don't have access",
+        "body": "It may not exist, or its access settings may not include you."
+      },
+      "noAccess": {
+        "title": "You don't have access",
+        "body": "The toolbox refused this request for your account.",
+        "rulesHint": "If nobody can open workbooks yet, the toolbox access rules may still need to be set up in pizzasys."
+      },
+      "storeUnknown": {
+        "title": "Store not registered in the toolbox",
+        "body": "The toolbox doesn't know the selected store yet. Pick another store, or ask an administrator to add it."
+      },
+      "noStore": {
+        "title": "Select a store first",
+        "body": "New items are recorded against a store. Pick one in the sidebar."
+      },
+      "auth": {
+        "title": "Your session has ended",
+        "body": "Sign in again to continue."
+      },
+      "network": {
+        "title": "Can't reach the toolbox",
+        "body": "Check your connection and try again."
+      },
+      "timeout": {
+        "title": "The toolbox took too long",
+        "body": "It didn't answer in time. Try again in a moment."
+      },
+      "server": {
+        "title": "The toolbox had a problem",
+        "body": "Something failed on the toolbox side. Try again in a moment."
+      }
+    },
+    "capped": {
+      "folder": "The folder “{name}” is set to {label}, which limits what you can do here.",
+      "folderUnnamed": "A folder above this is set to {label}, which limits what you can do here.",
+      "workbook": "The workbook “{name}” is set to {label}, which limits what you can do here.",
+      "workbookUnnamed": "The workbook this belongs to is set to {label}, which limits what you can do here.",
+      "escapeHatch": "To open it up, change the access on that folder — or ask its owner to.",
+      "readOnly": "You can view this, but you can't change it.",
+      "noPermission": "You don't have permission to do this."
+    },
+    "tree": {
+      "title": "Folders",
+      "open": "Folders",
+      "allFolders": "All folders",
+      "empty": "No folders yet.",
+      "loadError": "Couldn't load folders.",
+      "retry": "Retry",
+      "expand": "Expand folder",
+      "collapse": "Collapse folder"
+    },
+    "contents": {
+      "rootTitle": "All folders",
+      "rootHint": "Workbooks live inside folders. Open or create a folder to add one.",
+      "subfolders": "Folders",
+      "workbooks": "Workbooks",
+      "searchPlaceholder": "Search in this folder…",
+      "sort": {
+        "nameAsc": "Name A–Z",
+        "nameDesc": "Name Z–A",
+        "newest": "Newest first",
+        "oldest": "Oldest first"
+      },
+      "workbooksCount": "{count, plural, =0 {No workbooks} one {# workbook} other {# workbooks}}",
+      "columnsCount": "{count, plural, one {# column} other {# columns}}",
+      "by": "by {name}",
+      "atStore": "at {store}",
+      "newFolder": "New folder",
+      "newSubfolder": "New subfolder",
+      "newWorkbook": "New workbook",
+      "needStore": "Select a store in the sidebar first. New items are recorded against a store.",
+      "actions": "Actions",
+      "rename": "Edit details",
+      "access": "Change access",
+      "delete": "Delete",
+      "empty": {
+        "rootTitle": "No folders yet",
+        "rootBody": "Create a folder to start organising workbooks.",
+        "folderTitle": "This folder is empty",
+        "folderBody": "Add a workbook or a subfolder to get started.",
+        "readOnlyBody": "Nothing here yet, and this folder is view-only for you.",
+        "searchTitle": "Nothing matches your search",
+        "searchBody": "Try another word, or clear the search."
+      }
+    },
+    "visibility": {
+      "title": "Who can see this?",
+      "editTitle": "Change access",
+      "editDescription": "Choose who can see “{name}” and who can change it.",
+      "canEdit": "can edit",
+      "viewOnly": "view only",
+      "rolesLabel": "Roles",
+      "rolesPlaceholder": "Type a role name, then press Enter",
+      "rolesAdd": "Add",
+      "rolesRemove": "Remove {role}",
+      "rolesRequired": "Add at least one role.",
+      "rolesHintExact": "Role names must match pizzasys exactly. A typo matches nobody, and you won't see an error.",
+      "rolesHintHierarchy": "There's no role hierarchy here: a GM only gets in if they hold one of these roles directly.",
+      "rolesHintDelay": "A role granted in pizzasys a moment ago can take a little while to arrive here.",
+      "parentTitle": "Sits inside",
+      "parentBody": "The most restrictive access wins, so this can never be more open than the item it sits in.",
+      "parentRoles": "Roles on the item above: {roles}",
+      "sharedRoles": "Only these roles are on both lists, so only they get in: {roles}",
+      "noSharedRoles": "These roles share nothing with the item above, so only the owners will be able to get in.",
+      "ownerNote": "Whoever creates an item can always view and edit it.",
+      "saved": "Access updated"
+    },
+    "folderForm": {
+      "createTitle": "New folder",
+      "createSubTitle": "New folder in “{name}”",
+      "editTitle": "Edit folder",
+      "noInherit": "A new folder doesn't copy the access of the folder it's in, so choose it below.",
+      "name": "Name",
+      "namePlaceholder": "e.g. Openings",
+      "nameRequired": "Give the folder a name.",
+      "description": "Description",
+      "parent": "Inside",
+      "parentRoot": "Top level (no parent)",
+      "parentPlaceholder": "Choose a folder",
+      "parentSearch": "Search folders…",
+      "parentHint": "You need edit rights on the folder you put this in.",
+      "parentForbidden": "You can't add to that folder. You need edit rights on it.",
+      "insideItself": "Inside this folder",
+      "cycle": "A folder can't go inside itself or one of its own subfolders.",
+      "created": "Folder created",
+      "updated": "Folder updated",
+      "moved": "Folder moved"
+    },
+    "deleteFolder": {
+      "title": "Delete the folder “{name}”?",
+      "body": "This can't be undone.",
+      "notEmptyTitle": "This folder isn't empty",
+      "notEmptyBody": "Deleting “{name}” also deletes everything inside it, for good:",
+      "childFolders": "{count, plural, one {# subfolder} other {# subfolders}}",
+      "workbooks": "{count, plural, one {# workbook} other {# workbooks}}",
+      "rowsNote": "plus every row and cell in those workbooks.",
+      "cannotUndo": "This can't be undone.",
+      "confirmForce": "Delete everything",
+      "deleted": "Folder deleted"
+    },
+    "workbookForm": {
+      "createTitle": "New workbook",
+      "createDescription": "In “{folder}”. Set up the columns now; you can change them later.",
+      "editTitle": "Edit workbook",
+      "name": "Name",
+      "namePlaceholder": "e.g. Morning checks",
+      "nameRequired": "Give the workbook a name.",
+      "description": "Description",
+      "stepDetails": "Details",
+      "stepColumns": "Columns",
+      "stepAccess": "Access",
+      "columnsHint": "Drag to reorder",
+      "created": "Workbook created",
+      "updated": "Workbook updated"
+    },
+    "deleteWorkbook": {
+      "title": "Delete the workbook “{name}”?",
+      "body": "Every row and cell in it is deleted for good. This can't be undone.",
+      "deleted": "Workbook deleted"
+    },
+    "columns": {
+      "editTitle": "Edit columns",
+      "editDescription": "Drag to reorder. Nothing changes until you save.",
+      "add": "Add column",
+      "name": "Column name",
+      "namePlaceholder": "Column {n} name",
+      "type": "Type",
+      "typeSearch": "Search types…",
+      "noTypes": "No types.",
+      "typeLocked": "A column's type can't change once it exists.",
+      "required": "Required",
+      "optionsPlaceholder": "Type a choice, then press Enter",
+      "addOption": "Add",
+      "removeOption": "Remove {option}",
+      "remove": "Remove column",
+      "drag": "Drag to reorder",
+      "new": "New",
+      "pendingRemoval": "Will be deleted when you save: {names}",
+      "confirmTitle": "Delete {count, plural, one {# column} other {# columns}}?",
+      "confirmBody": "Their cells are deleted too, and can't be recovered.",
+      "confirmRows": "This affects up to {count, plural, one {# row} other {# rows}}.",
+      "confirm": "Delete and save",
+      "saved": "Columns saved",
+      "errors": {
+        "nameRequired": "Give this column a name.",
+        "duplicateName": "Another column already has this name.",
+        "optionsRequired": "Add at least one choice.",
+        "atLeastOne": "A workbook needs at least one column.",
+        "lastColumn": "A workbook needs at least one column. Keep one, or add a new one first."
+      }
+    },
+    "grid": {
+      "breadcrumb": "Location",
+      "rowsCount": "{count, plural, one {# row} other {# rows}}",
+      "addRow": "Add row",
+      "editColumns": "Columns",
+      "editDetails": "Edit details",
+      "deleteWorkbook": "Delete workbook",
+      "access": "Access",
+      "filters": "Filters",
+      "clearFilters": "Clear filters",
+      "searchPlaceholder": "Search every cell…",
+      "contains": "Contains…",
+      "exactNumber": "Exact number",
+      "sortBy": "Sort by {name}",
+      "rowActions": "Row actions",
+      "editRow": "Edit row",
+      "rowAccess": "Change access",
+      "deleteRow": "Delete row",
+      "thisRow": "this row",
+      "dragRow": "Drag to reorder",
+      "reorderDisabled": "Clear the sorting and filters to reorder rows.",
+      "reordered": "Order saved",
+      "reorderFailed": "Couldn't save the new order.",
+      "edit": "Click to edit",
+      "noColumns": "This workbook has no columns yet.",
+      "rowCreated": "Row added",
+      "rowUpdated": "Row saved",
+      "rowDeleted": "Row deleted",
+      "empty": {
+        "title": "No data yet",
+        "body": "Add the first row to get started.",
+        "readOnly": "No rows here yet.",
+        "filteredTitle": "No rows match your filters",
+        "filteredBody": "Try loosening or clearing them."
+      }
+    },
+    "cell": {
+      "required": "This column is required.",
+      "notNumber": "Enter a number, like 12 or 1.50.",
+      "notDate": "Pick a date.",
+      "notOption": "Pick one of the choices.",
+      "empty": "(empty)",
+      "pick": "Pick…",
+      "ctrlEnter": "Ctrl+Enter to save"
+    },
+    "rowForm": {
+      "createTitle": "Add row",
+      "editTitle": "Edit row",
+      "description": "Blank cells are saved as empty.",
+      "createDescription": "Recorded at {store}. Blank cells are saved as empty.",
+      "editDescription": "Only the cells you change are saved.",
+      "accessTitle": "Who can see this row?"
+    },
+    "deleteRow": {
+      "title": "Delete this row?",
+      "body": "This can't be undone."
+    },
+    "pagination": {
+      "page": "Page {current} of {total}",
+      "showing": "{from}–{to} of {total}",
+      "perPage": "Rows",
+      "first": "First page",
+      "previous": "Previous page",
+      "next": "Next page",
+      "last": "Last page"
+    },
+    "demo": {
+      "title": "Demo data.",
+      "body": "The toolbox isn't connected, so this page is running on sample data held by the dashboard server (TOOLBOX_MOCK=true). Changes reset when the server restarts."
     }
   }
 }
