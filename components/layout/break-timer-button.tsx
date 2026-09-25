@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Coffee } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { liveCountedSeconds, useBreaksStore } from "@/lib/store/breaks.store";
 import { useBreaksSync, useNow } from "@/lib/hooks/use-breaks";
+import { useBreakAlerts } from "@/lib/hooks/use-break-alerts";
 import { elapsedSeconds, floorMinutes, formatClock } from "@/lib/break-logger/work-date";
-import { playSfx } from "@/lib/uisfx/play";
 import { BreakPopoverBody } from "@/components/break-logger/break-popover";
 
 /**
@@ -40,20 +40,8 @@ export function BreakTimerButton() {
   const allowance = settings?.daily_allowance_minutes ?? null;
   const isOver = allowance != null && onBreak && countedMinutes > allowance;
 
-  /**
-   * One warning cue when the live counted total first passes the allowance.
-   * Soft limit: nothing is blocked, so a single cue — not a siren. Keyed per
-   * work date so it won't replay on every poll or page change.
-   */
-  const warnedFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isOver || !today) return;
-    if (warnedFor.current === today.work_date) return;
-    warnedFor.current = today.work_date;
-    // Already over when the page loaded → the user knows; stay quiet.
-    if (today.over_limit) return;
-    playSfx("warning", { volume: 1 });
-  }, [isOver, today]);
+  // Toast + sound on milestones, the allowance and a long-running break.
+  useBreakAlerts(now);
 
   // Keep the last clock face while the clock collapses, so it doesn't snap to 0:00.
   const lastFace = useRef("0:00");

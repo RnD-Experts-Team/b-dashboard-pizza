@@ -2752,6 +2752,16 @@
       "SERVER": "حدثت مشكلة في خدمة الاستراحات. حاول مجددًا.",
       "CANCELLED": "أُلغي.",
       "UNKNOWN": "حدث خطأ ما."
+    },
+    "alerts": {
+      "milestoneTitle": "تم استخدام {minutes} دقيقة من الاستراحة",
+      "milestoneBody": "استخدمت {used} من أصل {allowance} دقيقة استراحة يومية. متبقٍ {left} دقيقة.",
+      "milestoneBodyOver": "استخدمت {used} من أصل {allowance} دقيقة استراحة يومية — بزيادة {over}.",
+      "allowanceTitle": "تم استنفاد رصيد الاستراحة اليومي",
+      "allowanceBody": "استخدمت {used} من أصل {allowance} دقيقة استراحة يومية — بزيادة {over}. تستمر الاستراحات ولا يُمنع شيء.",
+      "longTitle": "هل ما زلت في استراحة؟",
+      "longBody": "{label} مستمرة منذ {minutes} دقيقة.",
+      "endBreak": "إنهاء الاستراحة"
     }
   },
   "bottomNav": {

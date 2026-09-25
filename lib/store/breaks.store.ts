@@ -47,6 +47,8 @@ interface BreaksState {
   /** Re-read the catalogue — read-only upstream, safe to retry any time. */
   reloadTypes: () => Promise<void>;
   reloadSettings: () => Promise<void>;
+  /** Re-read just the thresholds (`GET break-milestones`) into `settings`. */
+  reloadMilestones: () => Promise<void>;
   setSettings: (settings: BreakSettings) => void;
   /** Throws BreakError — the caller handles ALREADY_ON_BREAK as a flow. */
   start: (breakTypeId: number, otherLabel?: string) => Promise<void>;
@@ -60,6 +62,12 @@ interface BreaksState {
 let bootstrapInflight: Promise<void> | null = null;
 let refreshInflight: Promise<void> | null = null;
 let typesInflight: Promise<void> | null = null;
+/**
+ * Bumped by `reset()` (logout, login, impersonation). A read that started
+ * under the previous identity checks it before writing, so a slow response
+ * for account A can never land in account B's store.
+ */
+let epoch = 0;
 
 const INITIAL = {
   settings: null,
@@ -79,19 +87,23 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
   bootstrap: () => {
     if (get().ready && get().settings) return get().refresh();
     if (bootstrapInflight) return bootstrapInflight;
+    const mine = epoch;
     bootstrapInflight = (async () => {
       try {
         // The catalogue loads on its own track: a failed or empty type list
         // must not take settings (and the whole timer) down with it.
         void get().reloadTypes();
         const settings = await breaksService.getSettings();
+        if (mine !== epoch) return;
         set({ settings });
         await get().refresh();
       } catch (err) {
-        set({ syncError: parseBreakError(err) });
+        if (mine === epoch) set({ syncError: parseBreakError(err) });
       } finally {
-        set({ ready: true });
-        bootstrapInflight = null;
+        if (mine === epoch) {
+          set({ ready: true });
+          bootstrapInflight = null;
+        }
       }
     })();
     return bootstrapInflight;
@@ -99,18 +111,20 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
 
   refresh: () => {
     if (refreshInflight) return refreshInflight;
+    const mine = epoch;
     refreshInflight = (async () => {
       try {
         const [active, today] = await Promise.all([
           breaksService.getActive(),
           breaksService.getDay(),
         ]);
+        if (mine !== epoch) return;
         set({ active, today, syncError: null, syncedAt: Date.now() });
       } catch (err) {
         const parsed = parseBreakError(err);
-        if (parsed.code !== "CANCELLED") set({ syncError: parsed });
+        if (mine === epoch && parsed.code !== "CANCELLED") set({ syncError: parsed });
       } finally {
-        refreshInflight = null;
+        if (mine === epoch) refreshInflight = null;
       }
     })();
     return refreshInflight;
@@ -118,25 +132,36 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
 
   reloadTypes: () => {
     if (typesInflight) return typesInflight;
+    const mine = epoch;
     typesInflight = (async () => {
       set({ typesLoading: true });
       try {
         const types = await breaksService.getTypes();
-        set({ types, typesError: null });
+        if (mine === epoch) set({ types, typesError: null });
       } catch (err) {
         const parsed = parseBreakError(err);
-        if (parsed.code !== "CANCELLED") set({ typesError: parsed });
+        if (mine === epoch && parsed.code !== "CANCELLED") set({ typesError: parsed });
       } finally {
-        set({ typesLoading: false });
-        typesInflight = null;
+        if (mine === epoch) {
+          set({ typesLoading: false });
+          typesInflight = null;
+        }
       }
     })();
     return typesInflight;
   },
 
+  reloadMilestones: async () => {
+    const mine = epoch;
+    const thresholds = await breaksService.getMilestones();
+    const settings = get().settings;
+    if (mine === epoch && settings) set({ settings: { ...settings, thresholds } });
+  },
+
   reloadSettings: async () => {
+    const mine = epoch;
     const settings = await breaksService.getSettings();
-    set({ settings });
+    if (mine === epoch) set({ settings });
   },
 
   setSettings: (settings) => set({ settings }),
@@ -183,6 +208,7 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
   },
 
   reset: () => {
+    epoch += 1;
     bootstrapInflight = null;
     refreshInflight = null;
     typesInflight = null;

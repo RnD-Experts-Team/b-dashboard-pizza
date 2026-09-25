@@ -66,46 +66,83 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-type Envelope<T> = { data: T };
+/**
+ * A 2xx whose body isn't the documented shape (an HTML error page from a
+ * gateway, an empty body, a changed contract) must fail as an error the UI
+ * can render — not flow `undefined` into components that then crash.
+ */
+function malformed(): BreakError {
+  return new BreakError({
+    code: "SERVER",
+    message: "The breaks service sent an unexpected response.",
+  });
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** `{ data: {...} }` → the object. */
+function unwrapObject<T>(body: unknown): T {
+  if (isObject(body) && isObject(body.data)) return body.data as T;
+  throw malformed();
+}
+
+/** `{ data: {...} | null }` → the object or null (`breaks/active` when idle). */
+function unwrapNullable<T>(body: unknown): T | null {
+  if (isObject(body) && (body.data === null || isObject(body.data))) return body.data as T | null;
+  throw malformed();
+}
+
+/** `{ data: [...] }` → the array. */
+function unwrapArray<T>(body: unknown): T[] {
+  if (isObject(body) && Array.isArray(body.data)) return body.data as T[];
+  throw malformed();
+}
 
 export const breaksService = {
   /* ── Catalogue & settings ─────────────────────────────────────────── */
 
+  /** An empty `[]` is a real answer (nothing seeded); a malformed body is an error. */
   getTypes(signal?: AbortSignal): Promise<BreakType[]> {
-    return call(async () => {
-      const body = (await axios.get<Envelope<BreakType[]>>(`${BASE}/break-types`, config(signal)))
-        .data;
-      // Contract is `{ data: [...] }`; anything else renders as an empty catalogue
-      // (with its own message) rather than crashing the picker.
-      return Array.isArray(body?.data) ? body.data : [];
-    });
+    return call(async () =>
+      unwrapArray<BreakType>((await axios.get(`${BASE}/break-types`, config(signal))).data)
+    );
   },
 
   /** Creates the settings row upstream on first read — safe to call on boot. */
   getSettings(signal?: AbortSignal): Promise<BreakSettings> {
     return call(async () =>
-      (await axios.get<Envelope<BreakSettings>>(`${BASE}/break-settings`, config(signal))).data.data
+      unwrapObject<BreakSettings>((await axios.get(`${BASE}/break-settings`, config(signal))).data)
     );
   },
 
   updateSettings(dailyAllowanceMinutes: number): Promise<BreakSettings> {
     return call(async () =>
-      (
-        await axios.post<Envelope<BreakSettings>>(
-          `${BASE}/break-settings`,
-          { daily_allowance_minutes: dailyAllowanceMinutes },
-          config()
-        )
-      ).data.data
+      unwrapObject<BreakSettings>(
+        (
+          await axios.post(
+            `${BASE}/break-settings`,
+            { daily_allowance_minutes: dailyAllowanceMinutes },
+            config()
+          )
+        ).data
+      )
+    );
+  },
+
+  /** The caller's thresholds as a flat ascending int array (ids aren't exposed). */
+  getMilestones(signal?: AbortSignal): Promise<number[]> {
+    return call(async () =>
+      unwrapArray<number>((await axios.get(`${BASE}/break-milestones`, config(signal))).data)
     );
   },
 
   /** Whole-list replace. `[]` is valid and turns milestones off. */
   replaceMilestones(thresholds: number[]): Promise<number[]> {
     return call(async () =>
-      (
-        await axios.post<Envelope<number[]>>(`${BASE}/break-milestones`, { thresholds }, config())
-      ).data.data
+      unwrapArray<number>(
+        (await axios.post(`${BASE}/break-milestones`, { thresholds }, config())).data
+      )
     );
   },
 
@@ -114,20 +151,19 @@ export const breaksService = {
   /** ⚠ This read WRITES upstream (milestone evaluation). Never prefetch it. */
   getActive(signal?: AbortSignal): Promise<ActiveBreak | null> {
     return call(async () =>
-      (await axios.get<Envelope<ActiveBreak | null>>(`${BASE}/breaks/active`, config(signal))).data
-        .data
+      unwrapNullable<ActiveBreak>((await axios.get(`${BASE}/breaks/active`, config(signal))).data)
     );
   },
 
   start(input: StartBreakInput): Promise<BreakEntry> {
     return call(async () =>
-      (await axios.post<Envelope<BreakEntry>>(`${BASE}/breaks/start`, input, config())).data.data
+      unwrapObject<BreakEntry>((await axios.post(`${BASE}/breaks/start`, input, config())).data)
     );
   },
 
   stop(id: number): Promise<BreakEntry> {
     return call(async () =>
-      (await axios.post<Envelope<BreakEntry>>(`${BASE}/breaks/${id}/stop`, {}, config())).data.data
+      unwrapObject<BreakEntry>((await axios.post(`${BASE}/breaks/${id}/stop`, {}, config())).data)
     );
   },
 
@@ -136,24 +172,28 @@ export const breaksService = {
   /** ⚠ Writes upstream while the day is open. Omit `date` for the current work date. */
   getDay(date?: string, signal?: AbortSignal): Promise<BreakDay> {
     return call(async () =>
-      (
-        await axios.get<Envelope<BreakDay>>(`${BASE}/breaks/day`, {
-          ...config(signal),
-          params: date ? { date } : undefined,
-        })
-      ).data.data
+      unwrapObject<BreakDay>(
+        (
+          await axios.get(`${BASE}/breaks/day`, {
+            ...config(signal),
+            params: date ? { date } : undefined,
+          })
+        ).data
+      )
     );
   },
 
   /** Only on "copy summary" — never on a poll. */
   exportDay(date?: string): Promise<BreakDayExport> {
     return call(async () =>
-      (
-        await axios.get<Envelope<BreakDayExport>>(`${BASE}/breaks/day/export`, {
-          ...config(),
-          params: date ? { date } : undefined,
-        })
-      ).data.data
+      unwrapObject<BreakDayExport>(
+        (
+          await axios.get(`${BASE}/breaks/day/export`, {
+            ...config(),
+            params: date ? { date } : undefined,
+          })
+        ).data
+      )
     );
   },
 
@@ -164,33 +204,32 @@ export const breaksService = {
     filters: BreakHistoryFilters,
     signal?: AbortSignal
   ): Promise<LaravelPaginator<BreakEntry>> {
-    return call(async () =>
-      (
-        await axios.get<LaravelPaginator<BreakEntry>>(
-          `${BASE}/breaks?${historyQuery(filters).toString()}`,
-          config(signal)
-        )
-      ).data
-    );
+    return call(async () => {
+      const body: unknown = (
+        await axios.get(`${BASE}/breaks?${historyQuery(filters).toString()}`, config(signal))
+      ).data;
+      if (!isObject(body) || !Array.isArray(body.data)) throw malformed();
+      return body as unknown as LaravelPaginator<BreakEntry>;
+    });
   },
 
   getBreak(id: number, signal?: AbortSignal): Promise<BreakEntry> {
     return call(async () =>
-      (await axios.get<Envelope<BreakEntry>>(`${BASE}/breaks/${id}`, config(signal))).data.data
+      unwrapObject<BreakEntry>((await axios.get(`${BASE}/breaks/${id}`, config(signal))).data)
     );
   },
 
   /** The "forgot to time it" path — recorded as `source: "manual"`. */
   create(input: CreateBreakInput): Promise<BreakEntry> {
     return call(async () =>
-      (await axios.post<Envelope<BreakEntry>>(`${BASE}/breaks`, input, config())).data.data
+      unwrapObject<BreakEntry>((await axios.post(`${BASE}/breaks`, input, config())).data)
     );
   },
 
   /** Partial. Build `input` with `buildUpdatePayload` — key presence matters. */
   update(id: number, input: UpdateBreakInput): Promise<BreakEntry> {
     return call(async () =>
-      (await axios.post<Envelope<BreakEntry>>(`${BASE}/breaks/${id}`, input, config())).data.data
+      unwrapObject<BreakEntry>((await axios.post(`${BASE}/breaks/${id}`, input, config())).data)
     );
   },
 
@@ -204,8 +243,9 @@ export const breaksService = {
   /** Returns ONLY the note, not the break. Text only — no attachments exist. */
   addNote(id: number, body: string): Promise<BreakNote> {
     return call(async () =>
-      (await axios.post<Envelope<BreakNote>>(`${BASE}/breaks/${id}/notes`, { body }, config())).data
-        .data
+      unwrapObject<BreakNote>(
+        (await axios.post(`${BASE}/breaks/${id}/notes`, { body }, config())).data
+      )
     );
   },
 };

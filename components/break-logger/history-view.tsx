@@ -164,10 +164,10 @@ export function HistoryView({
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="flex flex-wrap items-end gap-2">
+      {/* Filters — two per row on phones, one wrapping line from sm up. */}
+      <div className="grid grid-cols-2 items-end gap-2 sm:flex sm:flex-wrap">
         {todayDate && (
-          <div className="inline-flex h-9 items-center gap-0.5 rounded-md border p-0.5">
+          <div className="col-span-2 flex h-9 items-center gap-0.5 rounded-md border p-0.5 sm:inline-flex">
             {QUICK_RANGES.map((r) => (
               <Button
                 key={r}
@@ -175,7 +175,7 @@ export function HistoryView({
                 size="sm"
                 variant={activeRange === r ? "secondary" : "ghost"}
                 aria-pressed={activeRange === r}
-                className="h-7 px-2.5 text-xs"
+                className="h-7 flex-1 px-2.5 text-xs sm:flex-none"
                 onClick={() => applyRange(r)}
               >
                 {t(`history.${r}`)}
@@ -183,18 +183,18 @@ export function HistoryView({
             ))}
           </div>
         )}
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.from")}</Label>
-          <DatePicker value={from} onChange={withReset(setFrom)} className="w-40" />
+          <DatePicker value={from} onChange={withReset(setFrom)} className="w-full sm:w-40" />
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.to")}</Label>
-          <DatePicker value={to} onChange={withReset(setTo)} className="w-40" />
+          <DatePicker value={to} onChange={withReset(setTo)} className="w-full sm:w-40" />
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.source")}</Label>
           <Select value={source} onValueChange={(v) => withReset(setSource)(v as SourceFilter)}>
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-full sm:w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -204,10 +204,10 @@ export function HistoryView({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.counted")}</Label>
           <Select value={counted} onValueChange={(v) => withReset(setCounted)(v as CountedFilter)}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -217,11 +217,11 @@ export function HistoryView({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.types")}</Label>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="w-40 justify-between font-normal">
+              <Button variant="outline" className="w-full justify-between font-normal sm:w-40">
                 <span className="truncate">
                   {typeIds.length
                     ? t("history.typesCount", { count: typeIds.length })
@@ -252,7 +252,7 @@ export function HistoryView({
           </DropdownMenu>
         </div>
         {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={clearAll} className="mb-0.5">
+          <Button variant="ghost" size="sm" onClick={clearAll} className="mb-0.5 justify-self-start">
             <X className="me-1 h-3.5 w-3.5" />
             {t("history.clear")}
           </Button>
@@ -289,7 +289,7 @@ export function HistoryView({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("history.colTime")}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t("history.colTime")}</TableHead>
                   <TableHead>{t("history.colType")}</TableHead>
                   <TableHead className="text-end">{t("history.colDuration")}</TableHead>
                   <TableHead className="w-10">
@@ -320,11 +320,17 @@ export function HistoryView({
                       </TableRow>
                     )}
                     <TableRow>
-                      <TableCell className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                      <TableCell className="hidden whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:table-cell">
                         {formatTime(entry.started_at)} –{" "}
                         {entry.running ? "…" : formatTime(entry.ended_at)}
                       </TableCell>
-                      <TableCell>
+                      {/* whitespace-normal: long labels + badges wrap instead of
+                          forcing the table wider than a phone. */}
+                      <TableCell className="whitespace-normal">
+                        <p className="mb-0.5 whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:hidden">
+                          {formatTime(entry.started_at)} –{" "}
+                          {entry.running ? "…" : formatTime(entry.ended_at)}
+                        </p>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-sm font-medium">{entry.label}</span>
                           <CountedBadge counted={entry.counts_toward_limit} />

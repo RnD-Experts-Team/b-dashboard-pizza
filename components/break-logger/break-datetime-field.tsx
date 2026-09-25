@@ -187,7 +187,14 @@ export function BreakDateTimeField({
           <span className="truncate">{display || t("pickDateTime")}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      {/* On phones calendar + time stack taller than the screen: cap to the
+          space Radix measures and scroll inside (wheel kept from the dialog). */}
+      <PopoverContent
+        className="max-h-(--radix-popover-content-available-height) w-auto overflow-y-auto p-0"
+        align="start"
+        collisionPadding={8}
+        onWheel={(e) => e.stopPropagation()}
+      >
         <div className="flex flex-col sm:flex-row">
           <Calendar
             mode="single"

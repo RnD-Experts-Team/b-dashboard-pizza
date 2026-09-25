@@ -362,11 +362,17 @@ export function TodayView({
                       : entry.duration_seconds;
                   return (
                     <li key={entry.id} className="flex items-start gap-3 py-2.5">
-                      <div className="w-32 shrink-0 whitespace-nowrap pt-0.5 text-xs tabular-nums text-muted-foreground">
+                      {/* Own column from sm up; on phones it sits above the label
+                          so the label keeps the width. */}
+                      <div className="hidden w-32 shrink-0 whitespace-nowrap pt-0.5 text-xs tabular-nums text-muted-foreground sm:block">
                         {formatTime(entry.started_at)} –{" "}
                         {entry.running ? "…" : formatTime(entry.ended_at)}
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
+                        <p className="whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:hidden">
+                          {formatTime(entry.started_at)} –{" "}
+                          {entry.running ? "…" : formatTime(entry.ended_at)}
+                        </p>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="truncate text-sm font-medium">{entry.label}</span>
                           <CountedBadge counted={entry.counts_toward_limit} />

@@ -225,6 +225,10 @@ export const useAuthStore = create<AuthState>()(
               ...s,
               storeId: loginIdMap.get(s.id) ?? s.id,
             }));
+            // A session can end without logout() (expired token, 401 cleanup),
+            // so identity-scoped break state is also dropped on sign-in —
+            // otherwise the previous account's allowance/milestones linger.
+            useBreaksStore.getState().reset();
             set({
               user,
               token: response.data.token,

@@ -2753,6 +2753,16 @@
       "SERVER": "The breaks service had a problem. Please try again.",
       "CANCELLED": "Cancelled.",
       "UNKNOWN": "Something went wrong."
+    },
+    "alerts": {
+      "milestoneTitle": "{minutes} minutes of break used",
+      "milestoneBody": "You have used {used} of your {allowance} daily break minutes. {left} minutes left.",
+      "milestoneBodyOver": "You have used {used} of your {allowance} daily break minutes — {over} over.",
+      "allowanceTitle": "Daily break allowance used up",
+      "allowanceBody": "You have used {used} of your {allowance} daily break minutes — {over} over. Breaks keep running; nothing is blocked.",
+      "longTitle": "Still on break?",
+      "longBody": "{label} has been running for {minutes} minutes.",
+      "endBreak": "End break"
     }
   },
   "bottomNav": {

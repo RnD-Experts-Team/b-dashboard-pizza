@@ -44,6 +44,14 @@ export function SettingsView({
   const ready = useBreaksStore((s) => s.ready);
   const syncError = useBreaksStore((s) => s.syncError);
   const bootstrap = useBreaksStore((s) => s.bootstrap);
+  const reloadMilestones = useBreaksStore((s) => s.reloadMilestones);
+  const hasSettings = settings != null;
+
+  // Fresh thresholds when Settings opens — another tab may have changed them.
+  // Quiet on failure: the copy from `break-settings` is still shown.
+  useEffect(() => {
+    if (hasSettings) reloadMilestones().catch(() => {});
+  }, [hasSettings, reloadMilestones]);
   const { saveAllowance, saveMilestones } = useBreakMutations();
 
   const [allowance, setAllowance] = useState("");
