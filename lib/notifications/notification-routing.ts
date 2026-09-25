@@ -28,5 +28,7 @@ export function getNotificationPageSegment(notification: Notification): string |
   // cleaning_task_created / cleaning_task_completed / cleaning_evaluation_ready
   // all deep-link into the Cleaning Chart tabs rather than a dedicated page.
   if (type.startsWith("cleaning_")) return "cleaning-chart";
+  // break_milestone_reached / break_allowance_exceeded open the Breaks day view.
+  if (type.startsWith("break_")) return "break-logger";
   return null;
 }

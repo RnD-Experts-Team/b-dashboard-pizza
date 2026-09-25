@@ -18,6 +18,7 @@ import {
   TrendingUp,
   UserMinus,
   SprayCan,
+  Coffee,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
@@ -83,6 +84,17 @@ function parseCleaningActionUrl(
   return { periodType, periodKey, store };
 }
 
+/** The `date` query param of a break notification's action_url, if it's a valid work date. */
+function parseBreakActionDate(actionUrl: string | null | undefined): string | null {
+  if (!actionUrl) return null;
+  try {
+    const date = new URL(actionUrl, "http://x").searchParams.get("date");
+    return date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  } catch {
+    return null;
+  }
+}
+
 const HIRING_SEGMENT_TO_TAB: Record<string, HiringActionTab> = {
   "hiring-requests": "hiring",
   "separation-requests": "separation",
@@ -116,6 +128,9 @@ function parseHiringActionUrl(
  * Common types: "announcement.created", "announcement.updated", etc.
  */
 function getTypeVisuals(type: string) {
+  if (type.startsWith("break_")) {
+    return { Icon: Coffee, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
+  }
   if (type.startsWith("data_entry_key")) {
     return { Icon: KeyRound, bg: "bg-orange-500/10 text-orange-600 dark:text-orange-400" };
   }
@@ -210,10 +225,16 @@ export function NotificationItem({
     notification.type.startsWith("separation_request");
   const isEmployeeType = notification.type.startsWith("employee_promoted");
   const isCleaningType = notification.type.startsWith("cleaning_");
+  const isBreakType = notification.type.startsWith("break_");
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
-    isDebriefType || isAnnouncementType || isHiringType || isEmployeeType || isCleaningType;
+    isDebriefType ||
+    isAnnouncementType ||
+    isHiringType ||
+    isEmployeeType ||
+    isCleaningType ||
+    isBreakType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -254,6 +275,16 @@ export function NotificationItem({
         openCleaningEvaluation(parsed.periodType, parsed.periodKey, parsed.store);
       }
       router.push(`/${locale}/dashboard/cleaning-chart`);
+      return;
+    }
+
+    if (isBreakType) {
+      // action_url is `/toolbox/breaks?date={work_date}` — only the WORK date
+      // is carried over; the path itself belongs to another app.
+      const date = parseBreakActionDate(notification.action_url);
+      router.push(
+        `/${locale}/dashboard/break-logger${date ? `?date=${encodeURIComponent(date)}` : ""}`
+      );
       return;
     }
   }
@@ -307,6 +338,8 @@ export function NotificationItem({
                   ? "Hiring Requests"
                   : isEmployeeType
                   ? "Employees"
+                  : isBreakType
+                  ? "Breaks"
                   : "Cleaning Chart"}
               </span>
             </>

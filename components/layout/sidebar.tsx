@@ -48,6 +48,7 @@ import {
   LogOut,
   UserSearch,
   Sparkles,
+  Coffee,
 } from "lucide-react";
 import {
   Dialog,
@@ -353,6 +354,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: "Announcements",
     href: `/${locale}/dashboard/announcements`,
     icon: Megaphone,
+  };
+
+  // Self-service break timer — every user manages only their own breaks, so
+  // there is nothing to gate on.
+  const breaksItem: NavItem = {
+    title: t("breaks"),
+    href: `/${locale}/dashboard/break-logger`,
+    icon: Coffee,
   };
 
   /* ---- Collapsible groups ---- */
@@ -671,6 +680,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
     ],
   };
+  // Toolbox (ToolboxPizza) — Breaks is self-service, so nothing to gate on.
+  const toolboxGroup: NavGroup = {
+    label: t("toolbox"),
+    icon: Boxes,
+    items: [breaksItem],
+  };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
   if (devToolsEnabled && process.env.NODE_ENV === "development") {
@@ -767,6 +782,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
   const visibleInventoryManagementGroup = filterGroup(inventoryManagementGroup);
+  const visibleToolboxGroup = filterGroup(toolboxGroup);
 
   /* ---- Helper: render a single flat nav link ---- */
   const renderNavLink = (item: NavItem) => {
@@ -1005,6 +1021,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {visibleInventoryManagementGroup && (
             <SidebarNavGroup
               group={visibleInventoryManagementGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
+            />
+          )}
+
+          {/* 7c. Toolbox */}
+          {visibleToolboxGroup && (
+            <SidebarNavGroup
+              group={visibleToolboxGroup}
               pathname={pathname}
               locale={locale}
               collapsed={collapsed}
