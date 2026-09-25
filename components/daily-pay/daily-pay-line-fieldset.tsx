@@ -22,7 +22,11 @@ import { MoneyField } from "./daily-pay-num-field";
 import { DailyPayLabourControl } from "./daily-pay-labour-control";
 import { DailyPayNoteList } from "./daily-pay-note-list";
 import { PayFieldset, PayFoldout } from "./daily-pay-fieldset";
-import type { LineForm, LineLocationKind } from "@/lib/daily-pay/entry-form-state";
+import type {
+  LineForm,
+  LineLocationKind,
+  PaymentPayShape,
+} from "@/lib/daily-pay/entry-form-state";
 import type { DailyPayFormErrors } from "@/lib/daily-pay/field-errors";
 import { lineError } from "@/lib/daily-pay/field-errors";
 import type { DailyPayStoreOption } from "@/lib/hooks/use-daily-pay";
@@ -31,6 +35,12 @@ interface DailyPayLineFieldsetProps {
   line: LineForm;
   paymentIndex: number;
   lineIndex: number;
+  /** How the payment pays -- decides what this store's pay box allows. */
+  payShape: PaymentPayShape;
+  /** The payment's default rate, as typed. */
+  paymentRate: string;
+  /** The payment's price for the day, as typed. */
+  dayPrice: string;
   stores: DailyPayStoreOption[];
   errors: DailyPayFormErrors;
   disabled?: boolean;
@@ -48,6 +58,9 @@ export function DailyPayLineFieldset({
   line,
   paymentIndex,
   lineIndex,
+  payShape,
+  paymentRate,
+  dayPrice,
   stores,
   errors,
   disabled,
@@ -165,8 +178,11 @@ export function DailyPayLineFieldset({
       </div>
       </PayFieldset>
 
-      <PayFieldset legend="Hours and rate" tone="quiet">
+      <PayFieldset legend="Pay for this store" tone="quiet">
       <DailyPayLabourControl
+        payShape={payShape}
+        paymentRate={paymentRate}
+        dayPrice={dayPrice}
         mode={line.labourMode}
         onModeChange={(labourMode) => onPatch({ labourMode })}
         hoursValue={line.totalWorkingHours}

@@ -79,7 +79,7 @@ export function NumField({
 
 /** Money: two decimal places and a currency prefix. */
 export function MoneyField(props: Omit<NumFieldProps, "prefix" | "step">) {
-  return <NumField {...props} prefix="$" step="0.01" placeholder="0.00" />;
+  return <NumField {...props} prefix="$" step="0.01" placeholder={props.placeholder ?? "0.00"} />;
 }
 
 /** Hours: quarter-hour steps, since that is how shifts are recorded. */
