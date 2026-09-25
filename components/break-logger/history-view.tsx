@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -51,6 +50,7 @@ import {
 } from "@/lib/break-logger/work-date";
 import type { BreakHistoryFilters, BreakSource } from "@/types/breaks.types";
 import { BreakEntryActions, type BreakEntryHandlers } from "./break-entry-actions";
+import { BreakDateField } from "./break-date-field";
 import {
   CountedBadge,
   RunningBadge,
@@ -90,6 +90,8 @@ export function HistoryView({
   const formatWorkDate = useFormatWorkDate();
   const types = useBreaksStore((s) => s.types);
   const todayDate = useBreaksStore((s) => s.today?.work_date ?? null);
+  // Breaks older than the retention horizon are gone; nothing to pick there.
+  const minDate = todayDate ? retentionMinDate(todayDate) : null;
 
   function rangeFor(range: QuickRange, today: string) {
     return range === "last7"
@@ -185,11 +187,27 @@ export function HistoryView({
         )}
         <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.from")}</Label>
-          <DatePicker value={from} onChange={withReset(setFrom)} className="w-full sm:w-40" />
+          <BreakDateField
+            value={from}
+            onChange={withReset(setFrom)}
+            min={minDate}
+            max={to || todayDate}
+            placeholder={t("history.anyDate")}
+            ariaLabel={t("history.from")}
+            className="w-full sm:w-44"
+          />
         </div>
         <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.to")}</Label>
-          <DatePicker value={to} onChange={withReset(setTo)} className="w-full sm:w-40" />
+          <BreakDateField
+            value={to}
+            onChange={withReset(setTo)}
+            min={from || minDate}
+            max={todayDate}
+            placeholder={t("history.anyDate")}
+            ariaLabel={t("history.to")}
+            className="w-full sm:w-44"
+          />
         </div>
         <div className="min-w-0 space-y-1">
           <Label className="text-xs">{t("history.source")}</Label>

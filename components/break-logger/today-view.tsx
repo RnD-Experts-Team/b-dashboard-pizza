@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -34,6 +33,7 @@ import {
 } from "@/lib/break-logger/work-date";
 import type { BreakCategory, BreakDay } from "@/types/breaks.types";
 import { BreakEntryActions, type BreakEntryHandlers } from "./break-entry-actions";
+import { BreakDateField } from "./break-date-field";
 import {
   AllowanceBar,
   CountedBadge,
@@ -177,12 +177,13 @@ export function TodayView({
         >
           <ChevronLeft className="h-4 w-4 rtl:-scale-x-100" />
         </Button>
-        <DatePicker
+        {/* Only retention-horizon → today is pickable; future days are greyed out. */}
+        <BreakDateField
           value={viewed ?? ""}
           onChange={(v) => v && go(v)}
-          className="w-40"
-          fromYear={minDate ? Number(minDate.slice(0, 4)) : undefined}
-          toYear={todayDate ? Number(todayDate.slice(0, 4)) : undefined}
+          min={minDate}
+          max={todayDate}
+          className="w-44"
         />
         <Button
           variant="outline"

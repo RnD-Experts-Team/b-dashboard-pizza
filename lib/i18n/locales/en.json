@@ -2654,7 +2654,8 @@
       "next": "Next page",
       "last7": "Last 7 days",
       "last30": "Last 30 days",
-      "openDay": "Open {date} in Today"
+      "openDay": "Open {date} in Today",
+      "anyDate": "Any date"
     },
     "entry": {
       "createTitle": "Add a break you forgot to time",
