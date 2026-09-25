@@ -16,7 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { workbooksService } from "@/lib/api/services/workbooks.service";
 import { isCancelled, readFolderNotEmpty } from "@/lib/workbooks/errors";
-import type { WorkbookFolder } from "@/types/workbooks.types";
+import type { Breadcrumb, WorkbookFolder } from "@/types/workbooks.types";
+import { useErrorText } from "./guarded";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Folder delete: two steps, driven by the server.                          */
@@ -31,10 +32,12 @@ interface DeleteFolderDialogProps {
   folder: WorkbookFolder | null;
   onOpenChange: (open: boolean) => void;
   onDeleted: (folder: WorkbookFolder) => void;
+  breadcrumb?: Breadcrumb[];
 }
 
-export function DeleteFolderDialog({ folder, onOpenChange, onDeleted }: DeleteFolderDialogProps) {
+export function DeleteFolderDialog({ folder, onOpenChange, onDeleted, breadcrumb }: DeleteFolderDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const [busy, setBusy] = useState(false);
   const [counts, setCounts] = useState<{ childFolders: number; workbooks: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +64,7 @@ export function DeleteFolderDialog({ folder, onOpenChange, onDeleted }: DeleteFo
       if (notEmpty && !force) {
         setCounts(notEmpty);
       } else {
-        const message = err instanceof Error ? err.message : t("errors.title");
+        const message = errorText(err, breadcrumb);
         setError(message);
         toast.error(message);
       }
@@ -119,10 +122,12 @@ interface ConfirmDeleteDialogProps {
   body: string;
   /** Resolve on success, throw on failure (the dialog shows the message). */
   onConfirm: () => Promise<void>;
+  breadcrumb?: Breadcrumb[];
 }
 
-export function ConfirmDeleteDialog({ open, onOpenChange, title, body, onConfirm }: ConfirmDeleteDialogProps) {
+export function ConfirmDeleteDialog({ open, onOpenChange, title, body, onConfirm, breadcrumb }: ConfirmDeleteDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,7 +143,7 @@ export function ConfirmDeleteDialog({ open, onOpenChange, title, body, onConfirm
       onOpenChange(false);
     } catch (err) {
       if (isCancelled(err)) return;
-      const message = err instanceof Error ? err.message : t("errors.title");
+      const message = errorText(err, breadcrumb);
       setError(message);
       toast.error(message);
     } finally {

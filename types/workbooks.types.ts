@@ -162,8 +162,6 @@ export interface ColumnTypeOption {
 export interface WorkbookOptions {
   visibilities: VisibilityOption[];
   columnTypes: ColumnTypeOption[];
-  /** True when the proxy is answering from the in-memory demo (TOOLBOX_MOCK). */
-  demo: boolean;
 }
 
 export interface CappedBy {

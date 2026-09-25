@@ -21,6 +21,7 @@ import { getWorkbookFieldErrors, hasServerCode, isCancelled } from "@/lib/workbo
 import type { Workbook, WorkbookFolder } from "@/types/workbooks.types";
 import { ColumnEditor } from "./column-editor";
 import { DialogShell, Field, FormError } from "./dialog-shell";
+import { useErrorText } from "./guarded";
 import {
   VisibilityFields,
   toVisibilityPayload,
@@ -61,6 +62,7 @@ export function WorkbookFormDialog({
   onSaved,
 }: WorkbookFormDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const { visibilities, columnTypes, loading: optionsLoading } = useWorkbookOptions();
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -145,7 +147,7 @@ export function WorkbookFormDialog({
       setFieldErrors(top);
       setColumnErrors(cols);
       if (Object.keys(top).length === 0 && Object.keys(cols).length === 0) {
-        const message = err instanceof Error ? err.message : t("errors.title");
+        const message = errorText(err, workbook ? workbook.breadcrumb : folder ? [...folder.breadcrumb, { id: folder.id, name: folder.name }] : []);
         setFormError(message);
         toast.error(message);
         scrollTop();

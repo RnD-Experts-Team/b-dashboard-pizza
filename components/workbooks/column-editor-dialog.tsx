@@ -20,6 +20,7 @@ import { getWorkbookFieldErrors, hasServerCode, isCancelled } from "@/lib/workbo
 import type { Workbook, WorkbookColumn } from "@/types/workbooks.types";
 import { ColumnEditor } from "./column-editor";
 import { DialogShell, FormError } from "./dialog-shell";
+import { useErrorText } from "./guarded";
 
 interface ColumnEditorDialogProps {
   open: boolean;
@@ -37,6 +38,7 @@ interface ColumnEditorDialogProps {
  */
 export function ColumnEditorDialog({ open, onOpenChange, workbook, rowCount, onSaved }: ColumnEditorDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const { columnTypes } = useWorkbookOptions();
   const [drafts, setDrafts] = useState<ColumnDraft[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -79,7 +81,7 @@ export function ColumnEditorDialog({ open, onOpenChange, workbook, rowCount, onS
         else leftovers.push(message);
       }
       setErrors(byKey);
-      const message = leftovers[0] ?? (Object.keys(byKey).length ? null : err instanceof Error ? err.message : t("errors.title"));
+      const message = leftovers[0] ?? (Object.keys(byKey).length ? null : errorText(err, workbook.breadcrumb));
       if (message) {
         setFormError(message);
         toast.error(message);

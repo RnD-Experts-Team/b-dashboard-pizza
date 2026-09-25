@@ -301,16 +301,10 @@ function toPage<A, T>(raw: ApiPaginator<A>, map: (a: A) => T): Page<T> {
 /* ── Catalogue ───────────────────────────────────────────────────────────── */
 
 async function getOptions(signal?: AbortSignal): Promise<WorkbookOptions> {
-  let demo = false;
   const res = await call<{ data: { visibilities: ApiVisibilityOption[]; column_types: ApiColumnTypeOption[] } }>(
-    async () => {
-      const r = await axios.get(`${BASE}/workbook-options`, { headers: headers(), timeout: TIMEOUT_MS, signal });
-      demo = r.headers?.["x-toolbox-mock"] === "1";
-      return r;
-    },
+    () => axios.get(`${BASE}/workbook-options`, { headers: headers(), timeout: TIMEOUT_MS, signal }),
   );
   return {
-    demo,
     visibilities: (res.data?.visibilities ?? []).map((v) => ({
       value: v.value,
       label: v.label,

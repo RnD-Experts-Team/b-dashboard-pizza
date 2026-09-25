@@ -1,5 +1,5 @@
 import { WorkbooksError } from "@/lib/api/services/workbooks.service";
-import type { WorkbooksErrorState } from "@/types/workbooks.types";
+import type { CappedBy, WorkbooksErrorState } from "@/types/workbooks.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Workbook error reading — pure, no React.                                 */
@@ -112,4 +112,15 @@ export function hasServerCode(err: unknown, code: string): boolean {
 export function errorMessage(err: unknown, fallback: string): string {
   if (err instanceof WorkbooksError && err.message) return err.message;
   return fallback;
+}
+
+/**
+ * A refused WRITE (403 WORKBOOK_FORBIDDEN) with the reason the server gave.
+ * `cappedBy` is the nearest ancestor that withheld the permission, when one
+ * did. The UI turns it into "the folder Openings is view-only" — the same
+ * sentence the disabled buttons use — instead of a bare "not allowed".
+ */
+export function readRefusal(err: unknown): { message: string; cappedBy: CappedBy | null } | null {
+  if (!(err instanceof WorkbooksError) || err.code !== "FORBIDDEN") return null;
+  return { message: err.message, cappedBy: err.cappedBy };
 }

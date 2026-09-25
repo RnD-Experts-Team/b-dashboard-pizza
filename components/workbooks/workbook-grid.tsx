@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import {
   DndContext,
   KeyboardSensor,
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cellKey, useWorkbookGridStore } from "@/lib/store/workbook-grid.store";
 import { isCancelled } from "@/lib/workbooks/errors";
+import { formatDay, formatTimestamp, wasUpdated } from "@/lib/workbooks/dates";
 import type {
   Breadcrumb,
   EffectiveVisibility,
@@ -53,7 +55,7 @@ import type {
   WorkbookRow,
 } from "@/types/workbooks.types";
 import { GridCell } from "./grid-cell";
-import { MenuRow, useDenyReason } from "./guarded";
+import { MenuRow, useDenyReason, useErrorText } from "./guarded";
 import { VisibilityChip } from "./visibility-chip";
 
 interface WorkbookGridProps {
@@ -96,6 +98,7 @@ export function WorkbookGrid({
   onReorder,
 }: WorkbookGridProps) {
   const t = useTranslations("workbooks.grid");
+  const errorText = useErrorText();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -119,7 +122,7 @@ export function WorkbookGrid({
     } catch (err) {
       reorderLocal(before);
       if (!isCancelled(err))
-        toast.error(err instanceof Error ? err.message : t("reorderFailed"));
+        toast.error(errorText(err, crumbs) || t("reorderFailed"));
     }
   };
 
@@ -280,6 +283,22 @@ function GridRow({
     return () => clearTimeout(id);
   }, [flashedAt]);
 
+  // Created / updated, short on the row and in full on hover.
+  const tc = useTranslations("workbooks.contents");
+  const params = useParams();
+  const locale = (params?.locale as string) || "en";
+  const edited = wasUpdated(row.createdAt, row.updatedAt);
+  const shortDay = formatDay(edited ? row.updatedAt : row.createdAt, locale);
+  const rowDate = shortDay ? tc(edited ? "updated" : "created", { date: shortDay }) : null;
+  const fullCreated = formatTimestamp(row.createdAt, locale);
+  const fullUpdated = formatTimestamp(row.updatedAt, locale);
+  const rowTimes = [
+    fullCreated && tc("created", { date: fullCreated }),
+    edited && fullUpdated && tc("updated", { date: fullUpdated }),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   // Rows get the row-level deny reason; the workbook's cap explains most of them.
   const effective = workbookEffective;
 
@@ -389,11 +408,23 @@ function GridRow({
             label={row.visibilityLabel}
             roles={row.visibilityRoles}
           />
-          <p className="max-w-[200px] truncate text-[10px] text-muted-foreground">
-            {[row.createdBy?.name, row.store?.storeNumber]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+          <div
+            className="max-w-[220px] space-y-0.5 text-[10px] leading-snug text-muted-foreground"
+            title={rowTimes}
+          >
+            <p className="truncate">
+              {[
+                row.createdBy?.name,
+                row.store &&
+                  (row.store.name && row.store.name !== row.store.storeNumber
+                    ? `${row.store.name} (${row.store.storeNumber})`
+                    : row.store.storeNumber),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            {rowDate && <p className="truncate tabular-nums">{rowDate}</p>}
+          </div>
         </div>
       </td>
     </tr>
