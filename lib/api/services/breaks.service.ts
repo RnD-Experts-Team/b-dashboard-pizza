@@ -72,9 +72,13 @@ export const breaksService = {
   /* ── Catalogue & settings ─────────────────────────────────────────── */
 
   getTypes(signal?: AbortSignal): Promise<BreakType[]> {
-    return call(async () =>
-      (await axios.get<Envelope<BreakType[]>>(`${BASE}/break-types`, config(signal))).data.data
-    );
+    return call(async () => {
+      const body = (await axios.get<Envelope<BreakType[]>>(`${BASE}/break-types`, config(signal)))
+        .data;
+      // Contract is `{ data: [...] }`; anything else renders as an empty catalogue
+      // (with its own message) rather than crashing the picker.
+      return Array.isArray(body?.data) ? body.data : [];
+    });
   },
 
   /** Creates the settings row upstream on first read — safe to call on boot. */

@@ -160,7 +160,8 @@
     "user-details": "تفاصيل المستخدم",
     "screen-project": "مشروع الشاشة",
     "storage": "المخزون والمستودعات",
-    "break-logger": "الاستراحات"
+    "break-logger": "الاستراحات",
+    "workbooks": "دفاتر العمل"
   },
   "employees": {
     "title": "الموظفون",
@@ -2549,7 +2550,8 @@
       "hintOnBreak": "في {label} · {clock}",
       "idleSummary": "استُخدم {used}د من {allowance}د اليوم",
       "addNote": "إضافة ملاحظة",
-      "back": "رجوع"
+      "back": "رجوع",
+      "noTypes": "لا توجد أنواع استراحات مُعدّة بعد، لذا لا يمكن بدء استراحة. حاول مرة أخرى بعد قليل."
     },
     "allowance": {
       "used": "{used}د من {allowance}د",

@@ -160,7 +160,8 @@
     "user-details": "User Details",
     "screen-project": "Screen Project",
     "storage": "Storage & Stock",
-    "break-logger": "Breaks"
+    "break-logger": "Breaks",
+    "workbooks": "Workbooks"
   },
   "auth": {
     "login": {
@@ -2550,7 +2551,8 @@
       "hintOnBreak": "On {label} · {clock}",
       "idleSummary": "{used}m of {allowance}m used today",
       "addNote": "Add a note",
-      "back": "Back"
+      "back": "Back",
+      "noTypes": "No break types are set up yet, so a break can’t be started. Try again in a moment."
     },
     "allowance": {
       "used": "{used}m of {allowance}m",

@@ -38,9 +38,14 @@ interface BreaksState {
   syncError: BreakError | null;
   /** Epoch ms of the last successful active/today sync. */
   syncedAt: number | null;
+  /** The catalogue failed to load (settings may still be fine). */
+  typesError: BreakError | null;
+  typesLoading: boolean;
 
   bootstrap: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Re-read the catalogue — read-only upstream, safe to retry any time. */
+  reloadTypes: () => Promise<void>;
   reloadSettings: () => Promise<void>;
   setSettings: (settings: BreakSettings) => void;
   /** Throws BreakError — the caller handles ALREADY_ON_BREAK as a flow. */
@@ -54,6 +59,7 @@ interface BreaksState {
 
 let bootstrapInflight: Promise<void> | null = null;
 let refreshInflight: Promise<void> | null = null;
+let typesInflight: Promise<void> | null = null;
 
 const INITIAL = {
   settings: null,
@@ -63,6 +69,8 @@ const INITIAL = {
   ready: false,
   syncError: null,
   syncedAt: null,
+  typesError: null,
+  typesLoading: false,
 } satisfies Partial<BreaksState>;
 
 export const useBreaksStore = create<BreaksState>()((set, get) => ({
@@ -73,11 +81,11 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
     if (bootstrapInflight) return bootstrapInflight;
     bootstrapInflight = (async () => {
       try {
-        const [settings, types] = await Promise.all([
-          breaksService.getSettings(),
-          breaksService.getTypes(),
-        ]);
-        set({ settings, types });
+        // The catalogue loads on its own track: a failed or empty type list
+        // must not take settings (and the whole timer) down with it.
+        void get().reloadTypes();
+        const settings = await breaksService.getSettings();
+        set({ settings });
         await get().refresh();
       } catch (err) {
         set({ syncError: parseBreakError(err) });
@@ -106,6 +114,24 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
       }
     })();
     return refreshInflight;
+  },
+
+  reloadTypes: () => {
+    if (typesInflight) return typesInflight;
+    typesInflight = (async () => {
+      set({ typesLoading: true });
+      try {
+        const types = await breaksService.getTypes();
+        set({ types, typesError: null });
+      } catch (err) {
+        const parsed = parseBreakError(err);
+        if (parsed.code !== "CANCELLED") set({ typesError: parsed });
+      } finally {
+        set({ typesLoading: false });
+        typesInflight = null;
+      }
+    })();
+    return typesInflight;
   },
 
   reloadSettings: async () => {
@@ -159,6 +185,7 @@ export const useBreaksStore = create<BreaksState>()((set, get) => ({
   reset: () => {
     bootstrapInflight = null;
     refreshInflight = null;
+    typesInflight = null;
     set({ ...INITIAL });
   },
 }));

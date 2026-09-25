@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { BreakTypesEmpty } from "./break-type-picker";
 
 export interface BreakTypeOption {
   id: number;
@@ -129,7 +130,9 @@ export function BreakTypeCombobox({
           />
         </div>
 
-        {filtered.length === 0 ? (
+        {options.length === 0 ? (
+          <BreakTypesEmpty className="p-3" />
+        ) : filtered.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">
             {t("entry.noTypeMatch")}
           </p>
