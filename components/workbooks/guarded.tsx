@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { readRefusal } from "@/lib/workbooks/errors";
 import type { Breadcrumb, EffectiveVisibility } from "@/types/workbooks.types";
 import { useCappedText } from "./access-note";
 
@@ -24,6 +25,24 @@ export function useDenyReason() {
   ): string | null => {
     if (allowed) return null;
     return capped(effective?.cappedBy, breadcrumb) ?? t("capped.noPermission");
+  };
+}
+
+/**
+ * The words for a failed mutation, for toasts and form errors. A 403 gets
+ * the capping ancestor appended ("… The folder “Openings” is set to This
+ * store — can view …"); anything else is the server's own message.
+ */
+export function useErrorText() {
+  const t = useTranslations("workbooks");
+  const capped = useCappedText();
+  return (err: unknown, breadcrumb: Breadcrumb[] = []): string => {
+    const refusal = readRefusal(err);
+    if (refusal) {
+      const why = capped(refusal.cappedBy, breadcrumb);
+      return why ? `${refusal.message} ${why}` : refusal.message;
+    }
+    return err instanceof Error && err.message ? err.message : t("errors.title");
   };
 }
 

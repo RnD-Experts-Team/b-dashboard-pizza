@@ -10,7 +10,9 @@ export { FolderTree } from "./folder-tree";
 export { CellDisplay, GridCell } from "./grid-cell";
 export { GridFilters } from "./grid-filters";
 export { GridPagination } from "./grid-pagination";
-export { GuardedButton, MenuRow, useDenyReason } from "./guarded";
+export { InfoHint } from "./info-hint";
+export type { InfoRow } from "./info-hint";
+export { GuardedButton, MenuRow, useDenyReason, useErrorText } from "./guarded";
 export { RowFormDialog } from "./row-form-dialog";
 export { tagGrantsEdit, visibilityAccent } from "./visibility-accent";
 export { VisibilityChip } from "./visibility-chip";
@@ -22,7 +24,6 @@ export { WorkbookGrid } from "./workbook-grid";
 export {
   BrowserSkeleton,
   GridSkeleton,
-  WorkbooksDemoBanner,
   WorkbooksEmptyState,
   WorkbooksErrorCard,
   WorkbooksNoAccess,

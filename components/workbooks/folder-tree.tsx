@@ -1,9 +1,9 @@
 "use client";
 
-import { ChevronRight, Folder, FolderOpen, Layers, Loader2, RotateCw } from "lucide-react";
+import { ChevronRight, ChevronsDown, Folder, FolderOpen, Layers, Loader2, RotateCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { ROOT_KEY, useWorkbooksStore } from "@/lib/store/workbooks.store";
+import { ROOT_KEY, treeKey, useWorkbooksStore } from "@/lib/store/workbooks.store";
 import type { WorkbookFolder } from "@/types/workbooks.types";
 import { visibilityAccent } from "./visibility-accent";
 
@@ -50,6 +50,7 @@ export function FolderTree({ selectedId, onSelect, className }: FolderTreeProps)
           {(roots ?? []).map((f) => (
             <TreeNode key={f.id} folder={f} depth={0} selectedId={selectedId} onSelect={onSelect} />
           ))}
+          <TreeShowMore parentId={null} depth={0} />
         </ul>
       )}
     </nav>
@@ -112,6 +113,7 @@ function TreeNode({
           onClick={() => onSelect(folder.id)}
           className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-start"
           aria-current={isSelected ? "page" : undefined}
+          title={folder.description ? `${folder.name}\n${folder.description}` : folder.name}
         >
           <Icon className={cn("h-4 w-4 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
           <span className={cn("truncate", isSelected && "font-medium")}>{folder.name}</span>
@@ -133,10 +135,36 @@ function TreeNode({
               {(kids ?? []).map((f) => (
                 <TreeNode key={f.id} folder={f} depth={depth + 1} selectedId={selectedId} onSelect={onSelect} />
               ))}
+              <TreeShowMore parentId={folder.id} depth={depth + 1} />
             </ul>
           )}
         </div>
       )}
+    </li>
+  );
+}
+
+/** A level holds more than one page (200): fetch the next and append it. */
+function TreeShowMore({ parentId, depth }: { parentId: number | null; depth: number }) {
+  const t = useTranslations("workbooks.tree");
+  const key = treeKey(parentId);
+  const pager = useWorkbooksStore((s) => s.childrenPage[key]);
+  const shown = useWorkbooksStore((s) => s.children[key]?.length ?? 0);
+  const loading = useWorkbooksStore((s) => Boolean(s.childrenLoadingMore[key]));
+  const loadMoreChildren = useWorkbooksStore((s) => s.loadMoreChildren);
+  if (!pager || pager.currentPage >= pager.lastPage) return null;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => void loadMoreChildren(parentId)}
+        disabled={loading}
+        className="flex w-full items-center gap-2 rounded-md py-1.5 pe-2 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        style={{ paddingInlineStart: depth * 14 + 28 }}
+      >
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronsDown className="h-3 w-3" />}
+        {t("showMore", { shown, total: pager.total })}
+      </button>
     </li>
   );
 }

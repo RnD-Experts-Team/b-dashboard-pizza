@@ -17,6 +17,7 @@ import { checkCellInput, toEditorValue, toWireValue } from "@/lib/workbooks/cell
 import { getWorkbookFieldErrors, isCancelled, readCellMismatch } from "@/lib/workbooks/errors";
 import type { Workbook, WorkbookColumn, WorkbookRow } from "@/types/workbooks.types";
 import { DialogShell, Field, FormError } from "./dialog-shell";
+import { useErrorText } from "./guarded";
 import {
   VisibilityFields,
   toVisibilityPayload,
@@ -54,6 +55,7 @@ export function RowFormDialog({
   onSaved,
 }: RowFormDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const { visibilities, loading: optionsLoading } = useWorkbookOptions();
   const bodyRef = useRef<HTMLDivElement>(null);
   const isEdit = Boolean(row);
@@ -145,7 +147,7 @@ export function RowFormDialog({
         else if (field.startsWith("visibility")) next.visibility_roles = message;
         else next._form = message;
       }
-      const formMsg = next._form ?? (Object.keys(next).length === 0 ? (err instanceof Error ? err.message : t("errors.title")) : null);
+      const formMsg = next._form ?? (Object.keys(next).length === 0 ? (errorText(err, [...workbook.breadcrumb, { id: workbook.id, name: workbook.name }])) : null);
       delete next._form;
       setErrors(next);
       if (formMsg) {

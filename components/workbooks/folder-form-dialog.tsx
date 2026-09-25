@@ -13,8 +13,10 @@ import { workbooksService } from "@/lib/api/services/workbooks.service";
 import { useWorkbookOptions } from "@/lib/hooks/use-workbook-options";
 import { useWorkbooksStore } from "@/lib/store/workbooks.store";
 import { getWorkbookFieldErrors, hasServerCode, isCancelled } from "@/lib/workbooks/errors";
+import { buildPaths } from "@/lib/workbooks/folder-paths";
 import type { WorkbookFolder } from "@/types/workbooks.types";
 import { DialogShell, Field, FormError } from "./dialog-shell";
+import { useErrorText } from "./guarded";
 import {
   VisibilityFields,
   toVisibilityPayload,
@@ -34,22 +36,6 @@ interface FolderFormDialogProps {
   folder?: WorkbookFolder | null;
   storeCode: string | null;
   onSaved: (folder: WorkbookFolder, previousParentId: number | null) => void;
-}
-
-/** "Operations / Openings / Morning" from the flat list's parent links. */
-function buildPaths(folders: WorkbookFolder[]): Map<number, string> {
-  const byId = new Map(folders.map((f) => [f.id, f]));
-  const paths = new Map<number, string>();
-  const pathOf = (f: WorkbookFolder, guard = 0): string => {
-    const cached = paths.get(f.id);
-    if (cached) return cached;
-    const parent = f.parentId != null ? byId.get(f.parentId) : undefined;
-    const p = parent && guard < 50 ? `${pathOf(parent, guard + 1)} / ${f.name}` : f.name;
-    paths.set(f.id, p);
-    return p;
-  };
-  folders.forEach((f) => pathOf(f));
-  return paths;
 }
 
 /** The folder and everything under it — a move target there is a cycle. */
@@ -78,6 +64,7 @@ export function FolderFormDialog({
   onSaved,
 }: FolderFormDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const { visibilities, loading: optionsLoading } = useWorkbookOptions();
   const allFolders = useWorkbooksStore((s) => s.allFolders);
   const allFoldersLoading = useWorkbooksStore((s) => s.allFoldersLoading);
@@ -188,7 +175,7 @@ export function FolderFormDialog({
       }
       setFieldErrors(fields);
       if (Object.keys(fields).length === 0) {
-        const message = err instanceof Error ? err.message : t("errors.title");
+        const message = errorText(err, [...((folder ?? parent)?.breadcrumb ?? []), ...(parent ? [{ id: parent.id, name: parent.name }] : [])]);
         setFormError(message);
         toast.error(message);
       }

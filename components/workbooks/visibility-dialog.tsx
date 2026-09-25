@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useWorkbookOptions } from "@/lib/hooks/use-workbook-options";
 import { getWorkbookFieldErrors, hasServerCode, isCancelled } from "@/lib/workbooks/errors";
-import type { Tagged, VisibilityPayload } from "@/types/workbooks.types";
+import type { Breadcrumb, Tagged, VisibilityPayload } from "@/types/workbooks.types";
 import { DialogShell, FormError } from "./dialog-shell";
+import { useErrorText } from "./guarded";
 import {
   VisibilityFields,
   toVisibilityPayload,
@@ -27,11 +28,22 @@ interface VisibilityDialogProps {
   parent?: ParentAccess | null;
   /** Sends the retag. Resolve on success, throw a WorkbooksError on failure. */
   onSubmit: (payload: VisibilityPayload) => Promise<void>;
+  /** Crumbs above the item, so a refusal can name the capping folder. */
+  breadcrumb?: Breadcrumb[];
 }
 
 /** Retag a folder, workbook or row — the same dialog for all three. */
-export function VisibilityDialog({ open, onOpenChange, itemName, current, parent, onSubmit }: VisibilityDialogProps) {
+export function VisibilityDialog({
+  open,
+  onOpenChange,
+  itemName,
+  current,
+  parent,
+  onSubmit,
+  breadcrumb,
+}: VisibilityDialogProps) {
   const t = useTranslations("workbooks");
+  const errorText = useErrorText();
   const { visibilities, loading } = useWorkbookOptions();
   const [draft, setDraft] = useState<VisibilityDraft>({ visibility: current.visibility, roles: current.visibilityRoles ?? [] });
   const [saving, setSaving] = useState(false);
@@ -65,7 +77,7 @@ export function VisibilityDialog({ open, onOpenChange, itemName, current, parent
       if (hasServerCode(err, "WORKBOOK_ROLES_REQUIRED") || fields.visibility_roles) {
         setRolesError(fields.visibility_roles ?? t("visibility.rolesRequired"));
       } else {
-        const message = err instanceof Error ? err.message : t("errors.title");
+        const message = errorText(err, breadcrumb);
         setFormError(message);
         toast.error(message);
       }

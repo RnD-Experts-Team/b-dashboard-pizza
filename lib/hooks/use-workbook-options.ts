@@ -38,7 +38,6 @@ export function useWorkbookOptions() {
     columnTypes: options?.columnTypes ?? [],
     visibilityByValue,
     columnTypeByValue,
-    demo: options?.demo ?? false,
     loading: !options && !error,
     error,
     reload,

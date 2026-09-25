@@ -2974,7 +2974,8 @@
       "loadError": "Couldn't load folders.",
       "retry": "Retry",
       "expand": "Expand folder",
-      "collapse": "Collapse folder"
+      "collapse": "Collapse folder",
+      "showMore": "Show more ({shown} of {total})"
     },
     "contents": {
       "rootTitle": "All folders",
@@ -2986,12 +2987,11 @@
         "nameAsc": "Name A–Z",
         "nameDesc": "Name Z–A",
         "newest": "Newest first",
-        "oldest": "Oldest first"
+        "oldest": "Oldest first",
+        "mostWorkbooks": "Most workbooks"
       },
       "workbooksCount": "{count, plural, =0 {No workbooks} one {# workbook} other {# workbooks}}",
       "columnsCount": "{count, plural, one {# column} other {# columns}}",
-      "by": "by {name}",
-      "atStore": "at {store}",
       "newFolder": "New folder",
       "newSubfolder": "New subfolder",
       "newWorkbook": "New workbook",
@@ -3008,7 +3008,18 @@
         "readOnlyBody": "Nothing here yet, and this folder is view-only for you.",
         "searchTitle": "Nothing matches your search",
         "searchBody": "Try another word, or clear the search."
-      }
+      },
+      "foldersCount": "{count, plural, one {# subfolder} other {# subfolders}}",
+      "updated": "Updated {date}",
+      "created": "Created {date}",
+      "viewOnly": "View only",
+      "loadMore": "Load more ({shown} of {total})",
+      "scope": {
+        "folder": "This folder",
+        "all": "All folders",
+        "workbooksNote": "Searching folder names everywhere. To search workbooks, open a folder."
+      },
+      "descriptionLabel": "Description"
     },
     "visibility": {
       "title": "Who can see this?",
@@ -3182,9 +3193,12 @@
       "next": "Next page",
       "last": "Last page"
     },
-    "demo": {
-      "title": "Demo data.",
-      "body": "The toolbox isn't connected, so this page is running on sample data held by the dashboard server (TOOLBOX_MOCK=true). Changes reset when the server restarts."
+    "info": {
+      "label": "Details",
+      "createdBy": "Created by",
+      "store": "Store",
+      "created": "Created",
+      "updated": "Last updated"
     }
   }
 }

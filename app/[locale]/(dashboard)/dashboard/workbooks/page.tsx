@@ -12,7 +12,6 @@ import {
   BrowserSkeleton,
   FolderContents,
   FolderTree,
-  WorkbooksDemoBanner,
   WorkbooksErrorCard,
   WorkbooksNoAccess,
 } from "@/components/workbooks";
@@ -64,7 +63,7 @@ function WorkbooksBrowser() {
 
   const [treeOpen, setTreeOpen] = useState(false);
   const wb = useWorkbooks(folderId);
-  const { error: optionsError, reload: reloadOptions, demo } = useWorkbookOptions();
+  const { error: optionsError, reload: reloadOptions } = useWorkbookOptions();
 
   const openFolder = (id: number | null) => {
     setTreeOpen(false);
@@ -98,8 +97,6 @@ function WorkbooksBrowser() {
           {t("refresh")}
         </Button>
       </PageHeader>
-
-      {demo && <WorkbooksDemoBanner />}
 
       {optionsError && !blocked && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">

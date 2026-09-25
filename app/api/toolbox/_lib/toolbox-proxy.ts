@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { errorResponse, requireAuthorization } from "@/app/api/_lib/auth";
-import { TOOLBOX_MOCK_ENABLED, handleMockToolbox } from "@/app/api/toolbox/_lib/mock-toolbox";
 
 /**
  * Shared upstream plumbing for the ToolboxPizza BFF routes (workbooks).
@@ -78,23 +77,6 @@ export function checkSegments(segments: {
   return null;
 }
 
-/**
- * DEMO MODE (TOOLBOX_MOCK=true, never in production): answer from the
- * in-memory stand-in instead of the real host. Auth is still required, so the
- * page behaves exactly as it will live. `X-Toolbox-Mock` lets the UI say so.
- */
-async function mockResponse(request: NextRequest, path: string, body = ""): Promise<NextResponse> {
-  const result = await handleMockToolbox(request.method, path, request.nextUrl.searchParams, body);
-  return new NextResponse(result.body === null ? null : JSON.stringify(result.body), {
-    status: result.status,
-    headers: {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-store",
-      "X-Toolbox-Mock": "1",
-    },
-  });
-}
-
 function authHeader(request: NextRequest): string {
   return request.headers.get("authorization") ?? "";
 }
@@ -106,7 +88,6 @@ function authHeader(request: NextRequest): string {
 export async function toolboxGet(request: NextRequest, path: string): Promise<NextResponse> {
   const denied = requireAuthorization(request);
   if (denied) return denied;
-  if (TOOLBOX_MOCK_ENABLED) return mockResponse(request, path);
 
   const url = new URL(`${TOOLBOX_BASE_URL}${path}`);
   request.nextUrl.searchParams.forEach((value, key) => url.searchParams.append(key, value));
@@ -123,7 +104,6 @@ export async function toolboxPost(request: NextRequest, path: string): Promise<N
   if (denied) return denied;
 
   const body = await request.text();
-  if (TOOLBOX_MOCK_ENABLED) return mockResponse(request, path, body);
   return proxyFetch(`${TOOLBOX_BASE_URL}${path}`, {
     method: "POST",
     headers: {
@@ -139,7 +119,6 @@ export async function toolboxPost(request: NextRequest, path: string): Promise<N
 export async function toolboxDelete(request: NextRequest, path: string): Promise<NextResponse> {
   const denied = requireAuthorization(request);
   if (denied) return denied;
-  if (TOOLBOX_MOCK_ENABLED) return mockResponse(request, path);
 
   const url = new URL(`${TOOLBOX_BASE_URL}${path}`);
   request.nextUrl.searchParams.forEach((value, key) => url.searchParams.append(key, value));

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
   Clock,
-  FlaskConical,
   FolderSearch,
   Lock,
   ServerCrash,
@@ -127,22 +126,6 @@ export function WorkbooksNoAccess() {
         <p className="text-sm font-medium">{t("title")}</p>
         <p className="max-w-sm text-xs text-muted-foreground">{t("body")}</p>
       </div>
-    </div>
-  );
-}
-
-/** Shown while the proxy answers from the in-memory demo (TOOLBOX_MOCK=true). */
-export function WorkbooksDemoBanner() {
-  const t = useTranslations("workbooks.demo");
-  return (
-    <div
-      role="note"
-      className="flex items-start gap-2 rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-800 animate-in fade-in-0 dark:text-sky-300"
-    >
-      <FlaskConical className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <p>
-        <span className="font-semibold">{t("title")}</span> {t("body")}
-      </p>
     </div>
   );
 }

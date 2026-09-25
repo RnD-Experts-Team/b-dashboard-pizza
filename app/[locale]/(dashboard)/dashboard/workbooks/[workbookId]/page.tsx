@@ -47,7 +47,6 @@ import {
   VisibilityDialog,
   WorkbookFormDialog,
   WorkbookGrid,
-  WorkbooksDemoBanner,
   WorkbooksEmptyState,
   WorkbooksErrorCard,
   WorkbooksNoAccess,
@@ -64,6 +63,8 @@ import {
   rowsQueryFromParams,
   rowsQueryToParams,
 } from "@/lib/workbooks/grid-url";
+import { formatTimestamp, wasUpdated } from "@/lib/workbooks/dates";
+import { InfoHint } from "@/components/workbooks/info-hint";
 import type {
   Breadcrumb,
   RowsQuery,
@@ -127,7 +128,7 @@ function WorkbookScreen() {
     [qs],
   );
   const denyReason = useDenyReason();
-  const { demo } = useWorkbookOptions();
+  useWorkbookOptions();
 
   const selectedStoreName = useSelectedStoreStore(
     (s) => s.selectedStore?.name ?? null,
@@ -323,16 +324,30 @@ function WorkbookScreen() {
               {t("grid.rowsCount", { count: rows.total })}
             </span>
           )}
-          {workbook.createdBy && (
-            <span>{t("contents.by", { name: workbook.createdBy.name })}</span>
-          )}
-          {workbook.store && (
-            <span>· {workbook.store.name || workbook.store.storeNumber}</span>
-          )}
+          {/* Who / where / when, behind the (i) — same as the folder cards. */}
+          <InfoHint
+            className="h-7 w-7"
+            rows={[
+              { label: t("info.createdBy"), value: workbook.createdBy?.name },
+              {
+                label: t("info.store"),
+                value: workbook.store
+                  ? workbook.store.name && workbook.store.name !== workbook.store.storeNumber
+                    ? `${workbook.store.name} (${workbook.store.storeNumber})`
+                    : workbook.store.storeNumber
+                  : null,
+              },
+              { label: t("info.created"), value: formatTimestamp(workbook.createdAt, locale) },
+              {
+                label: t("info.updated"),
+                value: wasUpdated(workbook.createdAt, workbook.updatedAt)
+                  ? formatTimestamp(workbook.updatedAt, locale)
+                  : null,
+              },
+            ]}
+          />
         </div>
       </div>
-
-      {demo && <WorkbooksDemoBanner />}
 
       {!can.edit && (
         <AccessNote capped={eff?.cappedBy} breadcrumb={crumbs} readOnly />
@@ -470,6 +485,7 @@ function WorkbookScreen() {
           open
           onOpenChange={(o) => !o && setPending(null)}
           itemName={t("grid.thisRow")}
+          breadcrumb={crumbs}
           current={pending.row}
           parent={{
             name: workbook.name,
@@ -495,6 +511,7 @@ function WorkbookScreen() {
         onOpenChange={(o) => !o && setPending(null)}
         title={t("deleteRow.title")}
         body={t("deleteRow.body")}
+        breadcrumb={crumbs}
         onConfirm={async () => {
           if (pending?.kind !== "deleteRow") return;
           await workbooksService.deleteRow(workbook.id, pending.row.id);
@@ -540,6 +557,7 @@ function WorkbookScreen() {
           onOpenChange={(o) => !o && setPending(null)}
           itemName={workbook.name}
           current={workbook}
+          breadcrumb={crumbs}
           parent={
             parentFolder
               ? {
@@ -566,6 +584,7 @@ function WorkbookScreen() {
         onOpenChange={(o) => !o && setPending(null)}
         title={t("deleteWorkbook.title", { name: workbook.name })}
         body={t("deleteWorkbook.body")}
+        breadcrumb={crumbs}
         onConfirm={async () => {
           await workbooksService.deleteWorkbook(workbook.id);
           toast.success(t("deleteWorkbook.deleted"));

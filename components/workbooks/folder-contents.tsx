@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import {
   ArrowDownUp,
   ChevronRight,
+  Eye,
   Folder,
   FolderPlus,
   Home,
@@ -31,10 +32,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { workbooksService } from "@/lib/api/services/workbooks.service";
-import { useWorkbooksStore, type ContentQuery } from "@/lib/store/workbooks.store";
+import { isSearchingAll, useWorkbooksStore, type ContentQuery } from "@/lib/store/workbooks.store";
+import { formatTimestamp, wasUpdated } from "@/lib/workbooks/dates";
+import { buildPaths, parentPath } from "@/lib/workbooks/folder-paths";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   Breadcrumb,
   EffectiveVisibility,
+  StoreRef,
+  UserRef,
+  ViewerCan,
   Workbook,
   WorkbookFolder,
   WorkbooksErrorState,
@@ -43,6 +50,7 @@ import { AccessNote } from "./access-note";
 import { ConfirmDeleteDialog, DeleteFolderDialog } from "./delete-dialogs";
 import { FolderFormDialog } from "./folder-form-dialog";
 import { GuardedButton, MenuRow, useDenyReason } from "./guarded";
+import { InfoHint, type InfoRow } from "./info-hint";
 import { VisibilityChip } from "./visibility-chip";
 import { VisibilityDialog } from "./visibility-dialog";
 import type { ParentAccess } from "./visibility-fields";
@@ -56,6 +64,8 @@ const SORTS: Record<string, Pick<ContentQuery, "sortBy" | "sortOrder">> = {
   "name-desc": { sortBy: "name", sortOrder: "desc" },
   "created-desc": { sortBy: "created_at", sortOrder: "desc" },
   "created-asc": { sortBy: "created_at", sortOrder: "asc" },
+  // Folders only — the workbook list falls back to name.
+  "workbooks-desc": { sortBy: "workbooks_count", sortOrder: "desc" },
 };
 
 interface FolderContentsProps {
@@ -114,6 +124,12 @@ export function FolderContents(props: FolderContentsProps) {
   const refreshAfterWrite = useWorkbooksStore((s) => s.refreshAfterWrite);
   const children = useWorkbooksStore((s) => s.children);
   const allFolders = useWorkbooksStore((s) => s.allFolders);
+  const subfoldersPage = useWorkbooksStore((s) => s.subfolders);
+  const workbooksPage = useWorkbooksStore((s) => s.workbooks);
+  const subfoldersLoadingMore = useWorkbooksStore((s) => s.subfoldersLoadingMore);
+  const workbooksLoadingMore = useWorkbooksStore((s) => s.workbooksLoadingMore);
+  const loadMoreSubfolders = useWorkbooksStore((s) => s.loadMoreSubfolders);
+  const loadMoreWorkbooks = useWorkbooksStore((s) => s.loadMoreWorkbooks);
 
   const [pending, setPending] = useState<Pending>(null);
   const [deletingFolder, setDeletingFolder] = useState<WorkbookFolder | null>(null);
@@ -155,11 +171,55 @@ export function FolderContents(props: FolderContentsProps) {
 
   const isRoot = folderId === null;
   const searching = contentQuery.search.trim() !== "";
+  const searchingAll = isSearchingAll(contentQuery);
+
+  /** Search-everywhere hits say where they live ("Operations / Openings"). */
+  const paths = useMemo(
+    () => (searchingAll ? buildPaths([...(allFolders ?? []), ...(subfolders ?? [])]) : null),
+    [searchingAll, allFolders, subfolders],
+  );
+
+  /** Who / where / when — behind the (i), not spelled out on every card. */
+  const infoRows = (item: {
+    createdBy: UserRef | null;
+    store: StoreRef | null;
+    createdAt: string;
+    updatedAt: string;
+  }): InfoRow[] => [
+    { label: t("info.createdBy"), value: item.createdBy?.name },
+    {
+      label: t("info.store"),
+      value: item.store
+        ? item.store.name && item.store.name !== item.store.storeNumber
+          ? `${item.store.name} (${item.store.storeNumber})`
+          : item.store.storeNumber
+        : null,
+    },
+    { label: t("info.created"), value: formatTimestamp(item.createdAt, locale) },
+    {
+      label: t("info.updated"),
+      value: wasUpdated(item.createdAt, item.updatedAt) ? formatTimestamp(item.updatedAt, locale) : null,
+    },
+  ];
   const noStoreReason = storeCode ? null : t("contents.needStore");
 
   // At the root anyone signed in may start a folder; inside one you need edit on it.
   const createFolderReason = noStoreReason ?? (isRoot ? null : denyReason(folder?.can.edit ?? false, folder?.effective, crumbs));
   const createWorkbookReason = noStoreReason ?? denyReason(folder?.can.edit ?? false, folder?.effective, crumbs);
+
+  /** A quiet marker on items the viewer can open but not change — with why. */
+  const viewOnlyPill = (can: ViewerCan, effective: EffectiveVisibility | null) =>
+    can.edit ? null : (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-md border bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <Eye className="h-3 w-3" aria-hidden="true" />
+            {t("contents.viewOnly")}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">{denyReason(false, effective, crumbs)}</TooltipContent>
+      </Tooltip>
+    );
 
   /* ── Page-level failure of the folder itself (404 = "not found or no access") ── */
   if (!isRoot && folderError && !folder) {
@@ -229,16 +289,16 @@ export function FolderContents(props: FolderContentsProps) {
                     roles={folder.visibilityRoles}
                     size="md"
                   />
+                  <InfoHint rows={infoRows(folder)} className="-ms-1 h-7 w-7" />
                 </div>
-                {folder.description && <p className="text-sm text-muted-foreground">{folder.description}</p>}
-                <p className="text-[11px] text-muted-foreground">
-                  {[
-                    folder.createdBy && t("contents.by", { name: folder.createdBy.name }),
-                    folder.store && t("contents.atStore", { store: folder.store.name || folder.store.storeNumber }),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
+                {folder.description && (
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t("contents.descriptionLabel")}
+                    </p>
+                    <p className="whitespace-pre-line break-words text-sm text-foreground/80">{folder.description}</p>
+                  </div>
+                )}
               </>
             ) : null}
             {isRoot && <p className="text-xs text-muted-foreground">{t("contents.rootHint")}</p>}
@@ -312,6 +372,7 @@ export function FolderContents(props: FolderContentsProps) {
               { value: "name-desc", label: t("contents.sort.nameDesc") },
               { value: "created-desc", label: t("contents.sort.newest") },
               { value: "created-asc", label: t("contents.sort.oldest") },
+              { value: "workbooks-desc", label: t("contents.sort.mostWorkbooks") },
             ]}
             value={sortKey}
             onChange={(v) => setContentQuery(SORTS[v])}
@@ -322,6 +383,31 @@ export function FolderContents(props: FolderContentsProps) {
           {refreshing && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />}
         </div>
       </div>
+
+      {/* Where the search looks: this folder, or the whole tree (flat). */}
+      {searching && (
+        <div className="-mt-1 flex flex-wrap items-center gap-2 animate-in fade-in-0 slide-in-from-top-1">
+          {(["folder", "all"] as const).map((scope) => (
+            <button
+              key={scope}
+              type="button"
+              aria-pressed={contentQuery.scope === scope}
+              onClick={() => contentQuery.scope !== scope && setContentQuery({ scope })}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                contentQuery.scope === scope
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              {scope === "folder" ? t("contents.scope.folder") : t("contents.scope.all")}
+            </button>
+          ))}
+          {searchingAll && (
+            <span className="text-[11px] text-muted-foreground">{t("contents.scope.workbooksNote")}</span>
+          )}
+        </div>
+      )}
 
       {/* ── Lists ───────────────────────────────────────────────────────── */}
       {listsLoading ? (
@@ -376,7 +462,11 @@ export function FolderContents(props: FolderContentsProps) {
             <WorkbooksErrorCard error={subfoldersError} onRetry={onRetry} compact />
           ) : (subfolders?.length ?? 0) > 0 ? (
             <section className="space-y-2">
-              <SectionTitle icon={Folder} label={t("contents.subfolders")} count={subfolders!.length} />
+              <SectionTitle
+                icon={Folder}
+                label={t("contents.subfolders")}
+                count={subfoldersPage?.total ?? subfolders!.length}
+              />
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {subfolders!.map((f) => (
                   <li key={f.id} className="min-w-0 animate-in fade-in-0">
@@ -385,11 +475,19 @@ export function FolderContents(props: FolderContentsProps) {
                       iconClass="text-sky-600 dark:text-sky-400 bg-sky-500/15 dark:bg-sky-500/20"
                       title={f.name}
                       onOpen={() => onOpenFolder(f.id)}
-                      chip={<VisibilityChip value={f.visibility} label={f.visibilityLabel} roles={f.visibilityRoles} />}
+                      chip={
+                        <>
+                          <VisibilityChip value={f.visibility} label={f.visibilityLabel} roles={f.visibilityRoles} />
+                          {viewOnlyPill(f.can, f.effective)}
+                        </>
+                      }
+                      path={paths ? (parentPath(f, paths) ?? t("contents.rootTitle")) : null}
+                      description={f.description}
                       meta={[
+                        f.childrenCount ? t("contents.foldersCount", { count: f.childrenCount }) : null,
                         f.workbooksCount != null ? t("contents.workbooksCount", { count: f.workbooksCount }) : null,
-                        f.createdBy ? t("contents.by", { name: f.createdBy.name }) : null,
                       ]}
+                      info={infoRows(f)}
                       menu={
                         <FolderMenu
                           folder={f}
@@ -404,6 +502,14 @@ export function FolderContents(props: FolderContentsProps) {
                   </li>
                 ))}
               </ul>
+              {subfoldersPage && subfoldersPage.currentPage < subfoldersPage.lastPage && (
+                <LoadMore
+                  shown={subfolders!.length}
+                  total={subfoldersPage.total}
+                  loading={subfoldersLoadingMore}
+                  onClick={() => void loadMoreSubfolders()}
+                />
+              )}
             </section>
           ) : null}
 
@@ -413,7 +519,11 @@ export function FolderContents(props: FolderContentsProps) {
               <WorkbooksErrorCard error={workbooksError} onRetry={onRetry} compact />
             ) : (workbooks?.length ?? 0) > 0 ? (
               <section className="space-y-2">
-                <SectionTitle icon={Table2} label={t("contents.workbooks")} count={workbooks!.length} />
+                <SectionTitle
+                  icon={Table2}
+                  label={t("contents.workbooks")}
+                  count={workbooksPage?.total ?? workbooks!.length}
+                />
                 <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {workbooks!.map((w) => (
                     <li key={w.id} className="min-w-0 animate-in fade-in-0">
@@ -422,11 +532,16 @@ export function FolderContents(props: FolderContentsProps) {
                         iconClass="text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 dark:bg-emerald-500/20"
                         title={w.name}
                         href={`/${locale}/dashboard/workbooks/${w.id}`}
-                        chip={<VisibilityChip value={w.visibility} label={w.visibilityLabel} roles={w.visibilityRoles} />}
+                        chip={
+                          <>
+                            <VisibilityChip value={w.visibility} label={w.visibilityLabel} roles={w.visibilityRoles} />
+                            {viewOnlyPill(w.can, w.effective)}
+                          </>
+                        }
                         meta={[
                           w.columns.length ? t("contents.columnsCount", { count: w.columns.length }) : null,
-                          w.createdBy ? t("contents.by", { name: w.createdBy.name }) : null,
                         ]}
+                        info={infoRows(w)}
                         description={w.description}
                         menu={
                           <ItemMenu
@@ -442,6 +557,14 @@ export function FolderContents(props: FolderContentsProps) {
                     </li>
                   ))}
                 </ul>
+                {workbooksPage && workbooksPage.currentPage < workbooksPage.lastPage && (
+                  <LoadMore
+                    shown={workbooks!.length}
+                    total={workbooksPage.total}
+                    loading={workbooksLoadingMore}
+                    onClick={() => void loadMoreWorkbooks()}
+                  />
+                )}
               </section>
             ) : null)}
         </div>
@@ -467,6 +590,7 @@ export function FolderContents(props: FolderContentsProps) {
           itemName={pending.folder.name}
           current={pending.folder}
           parent={asParent(findFolder(pending.folder.parentId))}
+          breadcrumb={pending.folder.breadcrumb.length ? pending.folder.breadcrumb : crumbs}
           onSubmit={async (payload) => {
             const saved = await workbooksService.setFolderVisibility(pending.folder.id, payload);
             void refreshAfterWrite([saved.parentId]);
@@ -477,6 +601,7 @@ export function FolderContents(props: FolderContentsProps) {
       <DeleteFolderDialog
         folder={deletingFolder}
         onOpenChange={(o) => !o && setDeletingFolder(null)}
+        breadcrumb={crumbs}
         onDeleted={(deleted) => {
           if (deleted.id === folderId) onOpenFolder(deleted.parentId);
           void refreshAfterWrite([deleted.parentId]);
@@ -500,6 +625,7 @@ export function FolderContents(props: FolderContentsProps) {
           itemName={pending.workbook.name}
           current={pending.workbook}
           parent={asParent(folder)}
+          breadcrumb={crumbs}
           onSubmit={async (payload) => {
             await workbooksService.setWorkbookVisibility(pending.workbook.id, payload);
             void refreshAfterWrite([folderId]);
@@ -514,6 +640,7 @@ export function FolderContents(props: FolderContentsProps) {
           name: pending?.kind === "deleteWorkbook" ? pending.workbook.name : "",
         })}
         body={t("deleteWorkbook.body")}
+        breadcrumb={crumbs}
         onConfirm={async () => {
           if (pending?.kind !== "deleteWorkbook") return;
           await workbooksService.deleteWorkbook(pending.workbook.id);
@@ -526,6 +653,28 @@ export function FolderContents(props: FolderContentsProps) {
 }
 
 /* ── Pieces ──────────────────────────────────────────────────────────────── */
+
+function LoadMore({
+  shown,
+  total,
+  loading,
+  onClick,
+}: {
+  shown: number;
+  total: number;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  const t = useTranslations("workbooks.contents");
+  return (
+    <div className="flex justify-center pt-1">
+      <Button variant="outline" size="sm" onClick={onClick} disabled={loading}>
+        {loading && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
+        {t("loadMore", { shown, total })}
+      </Button>
+    </div>
+  );
+}
 
 function SectionTitle({ icon: Icon, label, count }: { icon: typeof Folder; label: string; count: number }) {
   return (
@@ -545,7 +694,9 @@ function ItemCard({
   onOpen,
   chip,
   meta,
+  info,
   description,
+  path,
   menu,
 }: {
   icon: typeof Folder;
@@ -554,19 +705,46 @@ function ItemCard({
   href?: string;
   onOpen?: () => void;
   chip: React.ReactNode;
+  /** Counts — the things worth reading at a glance. */
   meta: Array<string | null>;
+  /** Who / where / when, behind the (i). */
+  info: InfoRow[];
   description?: string | null;
+  /** Search-everywhere: where the item lives. */
+  path?: string | null;
   menu: React.ReactNode;
 }) {
+  const descriptionLabel = useTranslations("workbooks.contents")("descriptionLabel");
   const inner = (
     <>
       <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", iconClass)}>
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1 space-y-1">
-        <span className="block truncate text-sm font-medium">{title}</span>
-        <span className="flex min-w-0 flex-wrap items-center gap-1.5">{chip}</span>
-        {description && <span className="block truncate text-[11px] text-muted-foreground">{description}</span>}
+        {/* Name and access badge share a line; on a narrow card the badge
+            wraps under the name instead of squeezing it. */}
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="min-w-0 max-w-full truncate text-sm font-medium" title={title}>
+            {title}
+          </span>
+          {chip}
+        </span>
+        {path && (
+          <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+            <Folder className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="truncate">{path}</span>
+          </span>
+        )}
+        {description && (
+          <span className="block space-y-0.5 rounded-md border-s-2 border-border bg-muted/30 px-2 py-1">
+            <span className="block text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {descriptionLabel}
+            </span>
+            <span className="line-clamp-2 whitespace-pre-line break-words text-xs text-foreground/80" title={description}>
+              {description}
+            </span>
+          </span>
+        )}
         {meta.some(Boolean) && (
           <span className="block truncate text-[11px] text-muted-foreground">{meta.filter(Boolean).join(" · ")}</span>
         )}
@@ -586,7 +764,11 @@ function ItemCard({
           {inner}
         </button>
       )}
-      <div className="shrink-0 p-2">{menu}</div>
+      {/* Outside the link/button: nested interactive elements are invalid. */}
+      <div className="flex shrink-0 flex-col items-center gap-0.5 p-2">
+        {menu}
+        <InfoHint rows={info} />
+      </div>
     </div>
   );
 }
