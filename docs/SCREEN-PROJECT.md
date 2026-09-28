@@ -101,8 +101,10 @@ Defined in `.env.local`:
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL` | Base URL for the Screen Project REST API. Used by proxy routes (server-side) and by the service file (falls through to the proxy anyway). Currently points to the **testing** environment: `https://controltesting.screens.lcportal.cloud/api`. Change to `https://control.screens.lcportal.cloud/api` for production. |
+| `SCREEN_PROJECT_LIVEKIT_DOMAIN` | HTTPS origin of the LiveKit server that the CSP allows, e.g. `https://screens.lcportal.cloud` (testing: `https://screenstesting.lcportal.cloud`). Server-only, read by `next.config.ts`. Falls back to `https://screens.lcportal.cloud` if unset. |
+| `SCREEN_PROJECT_LIVEKIT_WSS` | WebSocket origin of the same LiveKit server, e.g. `wss://screens.lcportal.cloud` (testing: `wss://screenstesting.lcportal.cloud`). Server-only. Falls back to `wss://screens.lcportal.cloud` if unset. Keep it on the same host as `SCREEN_PROJECT_LIVEKIT_DOMAIN`. |
 
-The LiveKit server URL (`https://screens.lcportal.cloud`) is **not** stored in `.env.local` — it is returned dynamically by the `POST /tokens/supervisor` endpoint in the `server_url` field and passed directly to `<LiveKitRoom serverUrl={...}>`.
+The LiveKit server URL the app actually **connects** to is not configured here — it is returned dynamically by the `POST /tokens/supervisor` endpoint in the `server_url` field and passed directly to `<LiveKitRoom serverUrl={...}>`. The two `SCREEN_PROJECT_LIVEKIT_*` variables only control what the CSP permits, so they **must match the host in that `server_url`** — see section 4.
 
 > **Note:** The proxy routes (`app/api/`) read `process.env.SCREEN_PROJECT_BASE_URL` (server-only) falling back to `NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL`. Never expose a secret API key in a `NEXT_PUBLIC_` variable; the current API uses only the user's own auth Bearer token.
 
@@ -111,21 +113,29 @@ The LiveKit server URL (`https://screens.lcportal.cloud`) is **not** stored in `
 ## 4. Content Security Policy
 
 LiveKit connects via:
-- **HTTPS** to `https://screens.lcportal.cloud/rtc/v1/validate` (token validation)
-- **WebSocket** to `wss://screens.lcportal.cloud` (signalling & media)
+- **HTTPS** to `https://<livekit host>/rtc/v1/validate` (token validation)
+- **WebSocket** to `wss://<livekit host>` (signalling & media)
 
 Both origins must be listed in the CSP `connect-src` directive, otherwise the browser refuses the connection entirely. This is configured in `next.config.ts`:
 
 ```ts
 // next.config.ts
-const livekitDomain = "https://screens.lcportal.cloud";
-const livekitWss    = "wss://screens.lcportal.cloud";
-const screenProjectDomain = getApiDomain(process.env.NEXT_PUBLIC_SCREEN_PROJECT_BASE_URL);
+const livekitDomain =
+  process.env.SCREEN_PROJECT_LIVEKIT_DOMAIN || "https://screens.lcportal.cloud";
+const livekitWss =
+  process.env.SCREEN_PROJECT_LIVEKIT_WSS || "wss://screens.lcportal.cloud";
 
-// connect-src includes:  ... ${screenProjectDomain} ${livekitDomain} ${livekitWss}
+// connect-src includes:  ... ${livekitDomain} ${livekitWss}
 ```
 
-> **Symptom when missing:** `Fetch API cannot load https://screens.lcportal.cloud/rtc/v1/validate ... Refused to connect because it violates the document's Content Security Policy.` Room state stays `disconnected`, all tracks return empty.
+The Screen Project REST API is **not** in `connect-src` — the browser only ever reaches it through the same-origin `/api` proxy routes, which `'self'` already covers.
+
+**Switching to a testing LiveKit server:**
+1. Open DevTools → Network, find the `tokens/supervisor` response from the backend you're using, and read the host in its `server_url`.
+2. Set `SCREEN_PROJECT_LIVEKIT_DOMAIN` (`https://…`) and `SCREEN_PROJECT_LIVEKIT_WSS` (`wss://…`) to exactly that host. Pointing them anywhere else blocks the real connection.
+3. Restart the dev server — CSP headers are computed when `next.config.ts` loads, not per request. Other environments need a rebuild/redeploy.
+
+> **Symptom when missing or mismatched:** `Fetch API cannot load https://<host>/rtc/v1/validate ... Refused to connect because it violates the document's Content Security Policy.` Room state stays `disconnected`, all tracks return empty.
 
 ---
 
