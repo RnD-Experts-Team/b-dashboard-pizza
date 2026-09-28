@@ -48,6 +48,8 @@ import {
   LogOut,
   UserSearch,
   Sparkles,
+  Coffee,
+  Table2,
 } from "lucide-react";
 import {
   Dialog,
@@ -353,6 +355,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     title: "Announcements",
     href: `/${locale}/dashboard/announcements`,
     icon: Megaphone,
+  };
+
+  // Self-service break timer — every user manages only their own breaks, so
+  // there is nothing to gate on.
+  const breaksItem: NavItem = {
+    title: t("breaks"),
+    href: `/${locale}/dashboard/break-logger`,
+    icon: Coffee,
   };
 
   /* ---- Collapsible groups ---- */
@@ -671,6 +681,21 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
     ],
   };
+  // Toolbox (ToolboxPizza). Workbooks is SUPER-ADMIN ONLY for now — gated
+  // here by role, not by an auth rule, because the pizzasys rules for the
+  // toolbox are not seeded yet. Once they are, swap the role gate for a
+  // requirement such as { service: "Toolbox", method: "GET", path: "/workbook-options" }.
+  // Breaks is self-service, so it is shown to everyone.
+  const workbooksItem: NavItem = {
+    title: t("workbooks"),
+    href: `/${locale}/dashboard/workbooks`,
+    icon: Table2,
+  };
+  const toolboxGroup: NavGroup = {
+    label: t("toolbox"),
+    icon: Boxes,
+    items: [...(isSuperAdmin() ? [workbooksItem] : []), breaksItem],
+  };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
   if (devToolsEnabled && process.env.NODE_ENV === "development") {
@@ -767,6 +792,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const visibleHighLevelMgmtGroup = filterGroup(highLevelMgmtGroup);
   const visibleHiringManagementGroup = filterGroup(hiringManagementGroup);
   const visibleInventoryManagementGroup = filterGroup(inventoryManagementGroup);
+  const visibleToolboxGroup = filterGroup(toolboxGroup);
 
   /* ---- Helper: render a single flat nav link ---- */
   const renderNavLink = (item: NavItem) => {
@@ -1012,6 +1038,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               getUnreadCount={getUnreadCount}
             />
           )}
+
+          {/* 7c. Toolbox (Workbooks super-admin only for now) — detached from
+              the sidebar for now; the break timer stays reachable from the topbar. */}
+          {/* {visibleToolboxGroup && (
+            <SidebarNavGroup
+              group={visibleToolboxGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
+            />
+          )} */}
 
           {/* 8. High Level Management */}
           {visibleHighLevelMgmtGroup && (

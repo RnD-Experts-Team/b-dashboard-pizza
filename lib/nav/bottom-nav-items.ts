@@ -27,6 +27,7 @@ import {
   Briefcase,
   Package,
   Landmark,
+  Coffee,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
@@ -75,6 +76,7 @@ export const BOTTOM_NAV_GROUPS: Record<string, BottomNavGroup> = {
   maintenance: { labelKey: "maintenance", icon: Wrench },
   employeeManagement: { labelKey: "employeeManagement", icon: Briefcase },
   inventoryManagement: { labelKey: "inventoryManagement", icon: Package },
+  toolbox: { labelKey: "toolbox", icon: Boxes },
   highLevelMgmt: { labelKey: "highLevelMgmt", icon: Landmark },
 };
 
@@ -329,6 +331,15 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
       { service: "Inventory", method: "GET", path: "/inventory/entries/*", storeId },
     ],
     groupKey: "inventoryManagement",
+  },
+
+  // Toolbox
+  {
+    id: "breaks",
+    href: (locale) => `/${locale}/dashboard/break-logger`,
+    icon: Coffee,
+    titleKey: "breaks",
+    groupKey: "toolbox",
   },
 
   // High Level Management

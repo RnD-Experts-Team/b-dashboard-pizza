@@ -13,6 +13,7 @@ import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDsprStore } from "@/lib/store/dspr.store";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useScreenProjectSelectionStore } from "@/lib/store/screen-project-selection.store";
+import { useBreaksStore } from "@/lib/store/breaks.store";
 import { useBreakTimerStore } from "@/lib/store/break-timer.store";
 import { useBottomNavStore } from "@/lib/store/bottom-nav.store";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
@@ -165,6 +166,7 @@ function resetIdentityScopedCaches() {
       useScreenProjectPiPStore.getState().closePiP();
     }
     useScreenProjectSelectionStore.getState().clearSelection();
+    useBreaksStore.getState().reset();
     useBreakTimerStore.getState().reset();
     useBottomNavStore.getState().reset();
   } catch {
@@ -225,6 +227,10 @@ export const useAuthStore = create<AuthState>()(
               ...s,
               storeId: loginIdMap.get(s.id) ?? s.id,
             }));
+            // A session can end without logout() (expired token, 401 cleanup),
+            // so identity-scoped break state is also dropped on sign-in —
+            // otherwise the previous account's allowance/milestones linger.
+            useBreaksStore.getState().reset();
             set({
               user,
               token: response.data.token,

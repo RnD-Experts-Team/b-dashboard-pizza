@@ -24,14 +24,17 @@ import { DailyPayNoteList } from "./daily-pay-note-list";
 import { DailyPayLineFieldset } from "./daily-pay-line-fieldset";
 import { PayFieldset, PayFoldout } from "./daily-pay-fieldset";
 import { DailyPayWarningsPanel } from "./daily-pay-warnings-panel";
+import { PaymentFormSummary } from "./payment-form-summary";
 import {
   emptyLine,
   payeeIdsInUse,
+  switchPayShape,
   toNum,
   type LineForm,
   type PaymentForm,
-  type PaymentLabourMode,
 } from "@/lib/daily-pay/entry-form-state";
+import { formatMoney } from "@/lib/daily-pay/money";
+import { previewPaymentForm } from "@/lib/daily-pay/payment-form-preview";
 import { paymentError, paymentHasError, type DailyPayFormErrors } from "@/lib/daily-pay/field-errors";
 import type { DailyPayAggregationWarning } from "@/types/daily-pay.types";
 import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
@@ -106,6 +109,35 @@ export function DailyPayPaymentCard({
   );
   const payeeId = toNum(payment.technicianId);
   const isDuplicate = payeeId != null && takenPayeeIds.has(payeeId);
+  const payeeName = technicians.find((t) => t.id === payeeId)?.name ?? null;
+
+  const shape = payment.payShape;
+
+  const storeLabel = (line: LineForm, j: number) => {
+    if (line.locationKind === "other") return line.otherStore.trim() || `Store ${j + 1}`;
+    const store = stores.find((s) => String(s.id) === line.storeId);
+    return store ? `Store ${store.storeNumber}` : `Store ${j + 1}`;
+  };
+
+  const perStorePrices = useMemo(() => {
+    const prices = payment.lines
+      .map((line) => toNum(line.lumpSum))
+      .filter((v): v is number => v != null);
+    return {
+      entered: prices.length,
+      sum: prices.reduce((cents, v) => cents + Math.round(v * 100), 0) / 100,
+    };
+  }, [payment.lines]);
+
+  // Under "store by store", how the stores have actually been split.
+  const storeSplit = {
+    fixed: payment.lines.filter((line) => line.labourMode === "lumpSum").length,
+    hourly: payment.lines.filter((line) => line.labourMode !== "lumpSum").length,
+  };
+
+  // Recomputed every render on purpose: it is a handful of additions, and a
+  // memo keyed on the right fields would be one more thing to get wrong.
+  const preview = previewPaymentForm(payment, storeLabel);
 
   return (
     <div
@@ -182,60 +214,109 @@ export function DailyPayPaymentCard({
       </div>
       </PayFieldset>
 
-      {/* 2. HOW THEY ARE PAID. The fork that decides what every field below
-          means, so it gets a group of its own rather than sharing one with the
-          gas money. */}
+      {/* 2. HOW THEY ARE PAID. The fork that decides what every field below --
+          including every store's "how this store is paid" -- means, so it gets
+          a group of its own rather than sharing one with the gas money. */}
       <PayFieldset
         legend="How this one is paid"
         icon={Coins}
-        hint="Not tied to any one store — this covers the whole payment."
+        hint="Pick one. It decides what each store below can do."
       >
-        <div className="grid gap-3 sm:grid-cols-2">
-          {/*
-            HOW IS THIS ONE PAID? Asked as two buttons rather than a dropdown of
-            two jargon phrases, because it is the fork that decides what every
-            field below means -- and because there are genuinely two processes
-            here: our own technicians by the hour, and outside companies at an
-            agreed price. They shared one form, and that is how a lump sum came
-            to silently switch off hours that stayed on screen looking live.
-          */}
-          <div className="sm:col-span-2">
-            <PayShapePicker
-              value={payment.labourMode === "lumpSum" ? "fixed" : "hourly"}
-              onChange={(shape) =>
-                onPatch({ labourMode: (shape === "fixed" ? "lumpSum" : "sumLines") as PaymentLabourMode })
-              }
-              disabled={disabled}
-            />
-          </div>
-
-          {payment.labourMode === "lumpSum" ? (
-            <MoneyField
-              label="Lump sum"
-              value={payment.lumpSum}
-              onChange={(lumpSum) => onPatch({ lumpSum })}
-              disabled={disabled}
-              error={err("lump_sum")}
-              hint="Paid instead of the hours on every store, not on top of them."
-              required
-            />
-          ) : (
-            <MoneyField
-              label="Default hourly rate"
-              value={payment.hourlyPaymentRate}
-              onChange={(hourlyPaymentRate) => onPatch({ hourlyPaymentRate })}
-              disabled={disabled}
-              error={err("hourly_payment_rate")}
-              hint="Used for any store that does not set its own rate."
-            />
-          )}
-
-        </div>
+        <PayShapePicker
+          value={shape}
+          onChange={(next) => onPatch(switchPayShape(payment, next))}
+          disabled={disabled}
+          renderField={(option, active) => {
+            if (option === "hourly") {
+              return (
+                <MoneyField
+                  label="Default hourly rate"
+                  value={payment.hourlyPaymentRate}
+                  onChange={(hourlyPaymentRate) => onPatch({ hourlyPaymentRate })}
+                  disabled={disabled || !active}
+                  error={active ? err("hourly_payment_rate") : undefined}
+                  hint={
+                    active
+                      ? "Any store without its own rate uses this."
+                      : shape === "mixed"
+                        ? "The same rate is set under “Store by store”."
+                        : "Not used — this payee is on a fixed price."
+                  }
+                />
+              );
+            }
+            if (option === "mixed") {
+              return (
+                <div className="space-y-2">
+                  {/* The same payment rate as "By the hour" -- one value, shown
+                      where it is live. It only reaches the hourly stores. */}
+                  <MoneyField
+                    label="Default rate for the hourly stores"
+                    value={payment.hourlyPaymentRate}
+                    onChange={(hourlyPaymentRate) => onPatch({ hourlyPaymentRate })}
+                    disabled={disabled || !active}
+                    error={active ? err("hourly_payment_rate") : undefined}
+                    hint={
+                      active
+                        ? "Stores at a fixed price ignore it."
+                        : "Choose this option to pick per store."
+                    }
+                  />
+                  {active && (
+                    <p className="text-[11px] tabular-nums text-muted-foreground">
+                      {storeSplit.hourly} by the hour · {storeSplit.fixed} at a fixed price
+                    </p>
+                  )}
+                </div>
+              );
+            }
+            if (option === "fixedDay") {
+              return (
+                <MoneyField
+                  label="Price for the day"
+                  value={payment.lumpSum}
+                  onChange={(lumpSum) => onPatch({ lumpSum })}
+                  disabled={disabled || !active}
+                  error={active ? err("lump_sum") : undefined}
+                  hint={
+                    active
+                      ? "Covers every store below. Hours do not change it."
+                      : "Choose this option to use it."
+                  }
+                  required={active}
+                />
+              );
+            }
+            return (
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Store prices</p>
+                <p
+                  className={cn(
+                    "flex h-9 items-center text-sm tabular-nums",
+                    !active && "text-muted-foreground"
+                  )}
+                >
+                  {perStorePrices.entered > 0
+                    ? `${formatMoney(perStorePrices.sum)} across ${perStorePrices.entered} of ${payment.lines.length} ${payment.lines.length === 1 ? "store" : "stores"}`
+                    : "—"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {active
+                    ? "Type each store's price on the store, below."
+                    : "Choose this option to set a price on each store."}
+                </p>
+              </div>
+            );
+          }}
+        />
 
         {/* Money that rides along with the labour but is not labour. Its own
             sub-group, because "what is the rate" and "how much fuel" are two
             different questions and they were sitting in one four-cell grid. */}
-        <PayFieldset legend="On top of the labour" tone="quiet">
+        <PayFieldset legend="On top of the pay" tone="quiet">
+          <p className="-mt-1 text-[11px] text-muted-foreground">
+            Added on top whichever way they are paid — even on a fixed price.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <MoneyField
               label="Gas"
@@ -243,7 +324,7 @@ export function DailyPayPaymentCard({
               onChange={(gas) => onPatch({ gas })}
               disabled={disabled}
               error={err("gas")}
-              hint="Fuel not attributable to one store."
+              hint="Fuel not tied to one store. A store's own fuel goes on that store."
             />
             <MoneyField
               label="Additional owed"
@@ -251,7 +332,7 @@ export function DailyPayPaymentCard({
               onChange={(moneyOwed) => onPatch({ moneyOwed })}
               disabled={disabled}
               error={err("money_owed")}
-              hint="An extra amount on top — not a total."
+              hint="An extra amount on top — not the total. The total is worked out below."
             />
           </div>
         </PayFieldset>
@@ -326,6 +407,12 @@ export function DailyPayPaymentCard({
           )}
         </div>
 
+        {/* What the choice above means for the stores, said where the stores
+            are -- so nobody reaches a store's pay box wondering why it is locked. */}
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          {STORES_UNDER_SHAPE[shape]}
+        </p>
+
         {err("lines") && <p className="text-[11px] text-destructive">{err("lines")}</p>}
 
         {payment.lines.map((line, j) => (
@@ -334,6 +421,9 @@ export function DailyPayPaymentCard({
             line={line}
             paymentIndex={index}
             lineIndex={j}
+            payShape={shape}
+            paymentRate={payment.hourlyPaymentRate}
+            dayPrice={payment.lumpSum}
             stores={stores}
             errors={errors}
             disabled={disabled}
@@ -362,6 +452,20 @@ export function DailyPayPaymentCard({
           Add store line
         </Button>
       </div>
+
+      {/* 6. THE ANSWER. Last, because it reads everything above it. */}
+      <PaymentFormSummary preview={preview} payeeName={payeeName} />
     </div>
   );
 }
+
+const STORES_UNDER_SHAPE: Record<PaymentForm["payShape"], string> = {
+  hourly:
+    "Paid by the hour: each store is paid its hours × a rate. Link the ticket issues so the logged hours are found.",
+  fixedDay:
+    "One price for the day: the stores below do not change the pay. They are still needed — they say where the work was, and linking the issues marks that work as paid.",
+  fixedPerStore:
+    "A price per store: type each store's price on the store. Link the issues so that work is marked as paid.",
+  mixed:
+    "Store by store: on each store, choose “How this store is paid” — its logged hours, hours you type, or a fixed price.",
+};

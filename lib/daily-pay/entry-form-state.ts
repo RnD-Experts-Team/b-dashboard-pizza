@@ -30,8 +30,56 @@ import { paymentKey, lineKey, type DailyPayFormErrors } from "./field-errors";
 /* ────────────────────────────────────────────────────────────────────────── */
 
 export type LineLabourMode = "gather" | "hours" | "lumpSum";
-export type PaymentLabourMode = "sumLines" | "lumpSum";
 export type LineLocationKind = "store" | "other";
+
+/**
+ * How a payee is paid. Chosen ONCE, on the payment, and every store line
+ * follows it.
+ *
+ * The API has two independent lump sums (payment and line) and lets them be
+ * mixed freely -- which is exactly how a payment-level lump sum came to
+ * silently swallow line lump sums, and how a "fixed" company's hours kept
+ * looking live on every store. The form collapses that into four shapes a
+ * person can actually name:
+ *
+ *   hourly        each store: logged (or typed) hours × rate
+ *   fixedDay      one price covers every store; lines carry no labour money,
+ *                 so the price is NOT split across the stores
+ *   fixedPerStore each store carries its own price, so each store's cost is right
+ *   mixed         each store picks its own way -- hours or a fixed price. The
+ *                 one shape where stores differ, so it is chosen on purpose
+ *                 rather than drifted into by filling in the wrong field.
+ *
+ * Only `fixedDay` can never be mixed with anything: a day price replaces ALL
+ * the stores' labour, so a store price beside it would silently not count.
+ *
+ * Switching shape never clears what was typed: the line fields keep their
+ * values, and `formStateToInput` sends only what the chosen shape uses. So
+ * flipping back and forth is safe, and nothing a person typed vanishes.
+ */
+export type PaymentPayShape = "hourly" | "fixedDay" | "fixedPerStore" | "mixed";
+
+/** Shapes where hours × rate can be paid, so the rates mean something. */
+export function shapeUsesRates(shape: PaymentPayShape): boolean {
+  return shape === "hourly" || shape === "mixed";
+}
+
+/**
+ * What a line's labour actually is under its payment's shape. The line's own
+ * `labourMode` only matters on an hourly or mixed payment; the fixed shapes
+ * override it.
+ *
+ * `coveredByDay` means the line carries no labour money at all -- the day's
+ * price covers it. Typed hours are still sent as a record (they cannot change
+ * the money), otherwise the hours are gathered.
+ */
+export type EffectiveLineLabour = LineLabourMode | "coveredByDay";
+
+export function effectiveLineLabour(shape: PaymentPayShape, line: LineForm): EffectiveLineLabour {
+  if (shape === "fixedDay") return "coveredByDay";
+  if (shape === "fixedPerStore") return "lumpSum";
+  return line.labourMode;
+}
 
 export interface NoteForm {
   body: string;
@@ -69,7 +117,8 @@ export interface LineForm {
 
 export interface PaymentForm {
   technicianId: string;
-  labourMode: PaymentLabourMode;
+  payShape: PaymentPayShape;
+  /** The day's price. Only sent when `payShape` is "fixedDay". */
   lumpSum: string;
   hourlyPaymentRate: string;
   gas: string;
@@ -126,7 +175,7 @@ export function emptyLine(): LineForm {
 export function emptyPayment(): PaymentForm {
   return {
     technicianId: "",
-    labourMode: "sumLines",
+    payShape: "hourly",
     lumpSum: "",
     hourlyPaymentRate: "",
     gas: "",
@@ -187,6 +236,28 @@ function labourModeFor(line: {
   return line.hoursOverridden ? "hours" : "gather";
 }
 
+/**
+ * Which shape a saved payment opens in.
+ *
+ * A payment lump sum wins, exactly as it does in the server's arithmetic --
+ * any line lump sums beside it were already being ignored, and the form now
+ * says so instead of showing them as if they counted.
+ *
+ * A payment where only SOME lines have a lump sum opens as "store by store",
+ * which is exactly what it is -- every store keeps the way it was paid.
+ */
+function payShapeFor(payment: {
+  lumpSum: number | null;
+  lines: { lumpSum: number | null }[] | null;
+}): PaymentPayShape {
+  if (payment.lumpSum != null) return "fixedDay";
+  const lines = payment.lines ?? [];
+  const fixed = lines.filter((line) => line.lumpSum != null).length;
+  if (lines.length > 0 && fixed === lines.length) return "fixedPerStore";
+  if (fixed > 0) return "mixed";
+  return "hourly";
+}
+
 export function entryToFormState(entry: DailyPayEntry): EntryFormState {
   const payments = entry.payments ?? [];
 
@@ -196,7 +267,7 @@ export function entryToFormState(entry: DailyPayEntry): EntryFormState {
     payments: payments.length
       ? payments.map((payment) => ({
           technicianId: String(payment.technicianId),
-          labourMode: payment.lumpSum != null ? "lumpSum" : "sumLines",
+          payShape: payShapeFor(payment),
           lumpSum: numToString(payment.lumpSum),
           hourlyPaymentRate: numToString(payment.hourlyPaymentRate),
           gas: numToString(payment.gas),
@@ -320,8 +391,32 @@ export function validateFormState(state: EntryFormState): DailyPayFormErrors {
         "This payee is already on this sheet. Put all their stores on the one payment.";
     }
 
-    if (payment.labourMode === "lumpSum" && toNum(payment.lumpSum) == null) {
-      fields[paymentKey(i, "lump_sum")] = "Enter a lump sum, or switch back to per-store labour.";
+    const shape = payment.payShape;
+
+    if (shape === "fixedDay" && toNum(payment.lumpSum) == null) {
+      fields[paymentKey(i, "lump_sum")] = "Enter the price for the day.";
+    }
+
+    // Trap: a store paid by the hour with no rate of its own and no default to
+    // fall back on is paid $0 for its hours -- silently, today. Typing 0 on
+    // purpose is still allowed; leaving it blank is not.
+    if (shapeUsesRates(shape) && toNum(payment.hourlyPaymentRate) == null) {
+      const unrated = payment.lines
+        .map((line, j) => ({ line, j }))
+        .filter(
+          ({ line }) =>
+            line.labourMode !== "lumpSum" && toNum(line.hourlyPaymentRate) == null
+        );
+      if (unrated.length > 0) {
+        const names = unrated.map(({ j }) => `store ${j + 1}`);
+        const which =
+          names.length === 1
+            ? names[0]
+            : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+        fields[paymentKey(i, "hourly_payment_rate")] = names.length === 1
+          ? `Enter a default rate — ${which} has no rate of its own and would be paid $0 for its hours.`
+          : `Enter a default rate — ${which} have no rate of their own and would be paid $0 for their hours.`;
+      }
     }
     for (const [field, value] of [
       ["hourly_payment_rate", payment.hourlyPaymentRate],
@@ -349,12 +444,22 @@ export function validateFormState(state: EntryFormState): DailyPayFormErrors {
       // An "hours" mode with nothing typed is an ERROR, never a silent fall
       // back to "gather" — that would be the exact "I typed a 0 and it got
       // gathered instead" bug.
-      if (line.labourMode === "hours" && toNum(line.totalWorkingHours) == null) {
+      const labour = effectiveLineLabour(shape, line);
+
+      // A day-priced line is not validated for hours: they cannot change the
+      // money, the control is locked, and an error there could not be fixed.
+      if (labour === "hours" && toNum(line.totalWorkingHours) == null) {
         fields[lineKey(i, j, "total_working_hours")] =
           "Enter the hours to override with, or switch back to gathered.";
       }
-      if (line.labourMode === "lumpSum" && toNum(line.lumpSum) == null) {
-        fields[lineKey(i, j, "lump_sum")] = "Enter a lump sum, or switch back to hours.";
+      if (labour === "lumpSum" && shape !== "hourly" && toNum(line.lumpSum) == null) {
+        fields[lineKey(i, j, "lump_sum")] = "Enter the price for this store.";
+      }
+      // Defensive: switching to hourly resets fixed stores, and a mixed saved
+      // sheet opens as "store by store", so this should not be reachable.
+      if (shape === "hourly" && line.labourMode === "lumpSum") {
+        fields[lineKey(i, j, "lump_sum")] =
+          "This store has a fixed price, but the payment is paid by the hour. Switch this store to its hours, or change the payment to “Store by store”.";
       }
       for (const [field, value] of [
         ["hourly_payment_rate", line.hourlyPaymentRate],
@@ -392,19 +497,27 @@ function buildNotes(notes: NoteForm[]): DailyPayNoteInput[] | undefined {
   return built.length ? built : undefined;
 }
 
-function buildLineLabour(line: LineForm): DailyPayLabourInput {
-  if (line.labourMode === "lumpSum") {
+function buildLineLabour(shape: PaymentPayShape, line: LineForm): DailyPayLabourInput {
+  const labour = effectiveLineLabour(shape, line);
+
+  if (labour === "lumpSum") {
     // Validation guarantees this parses; the ?? 0 is only to satisfy the type.
     return { kind: "lumpSum", lumpSum: toNum(line.lumpSum) ?? 0 };
   }
-  if (line.labourMode === "hours") {
+  if (labour === "hours") {
     return { kind: "hours", totalWorkingHours: toNum(line.totalWorkingHours) ?? 0 };
+  }
+  if (labour === "coveredByDay") {
+    // Never a lump sum -- the day's price is the only labour money. Hours typed
+    // earlier are kept as the record; they cannot move the total.
+    const typed = line.labourMode === "hours" ? toNum(line.totalWorkingHours) : null;
+    return typed != null ? { kind: "hours", totalWorkingHours: typed } : { kind: "gather" };
   }
   return { kind: "gather" };
 }
 
 function buildPaymentLabour(payment: PaymentForm): DailyPayPaymentLabourInput {
-  if (payment.labourMode === "lumpSum") {
+  if (payment.payShape === "fixedDay") {
     return { kind: "lumpSum", lumpSum: toNum(payment.lumpSum) ?? 0 };
   }
   return { kind: "sumLines" };
@@ -427,11 +540,12 @@ export function formStateToInput(
   const payments: DailyPayPaymentInput[] = state.payments.map((payment) => ({
     technicianId: toNum(payment.technicianId) ?? 0,
     labour: buildPaymentLabour(payment),
-    // A payment-level lump sum replaces all of its lines' labour, so an hourly
-    // rate alongside it is meaningless — drop it rather than send a value the
-    // server will ignore.
-    hourlyPaymentRate:
-      payment.labourMode === "lumpSum" ? null : toNum(payment.hourlyPaymentRate),
+    // Rates only mean anything where hours are paid. On a fixed payment they
+    // are dropped rather than sent: a stray rate would put an hours × rate
+    // figure on a store's line total that was never actually paid.
+    hourlyPaymentRate: shapeUsesRates(payment.payShape)
+      ? toNum(payment.hourlyPaymentRate)
+      : null,
     gas: toNum(payment.gas),
     moneyOwed: toNum(payment.moneyOwed),
     notes: buildNotes(payment.notes),
@@ -441,9 +555,11 @@ export function formStateToInput(
         line.locationKind === "store"
           ? { kind: "store", storeId: toNum(line.storeId) ?? 0 }
           : { kind: "other", otherStore: line.otherStore.trim() },
-      labour: buildLineLabour(line),
+      labour: buildLineLabour(payment.payShape, line),
       hourlyPaymentRate:
-        line.labourMode === "lumpSum" ? null : toNum(line.hourlyPaymentRate),
+        shapeUsesRates(payment.payShape) && line.labourMode !== "lumpSum"
+          ? toNum(line.hourlyPaymentRate)
+          : null,
       gas: toNum(line.gas),
       moneyOwed: toNum(line.moneyOwed),
       ticketIssueIds: line.ticketIssueIds.length ? line.ticketIssueIds : undefined,
@@ -484,6 +600,52 @@ export function patchLine(
       ? { ...p, lines: p.lines.map((l, j) => (j === lineIndex ? { ...l, ...patch } : l)) }
       : p
   );
+}
+
+/**
+ * The patch for changing how a payee is paid.
+ *
+ * Nothing typed is cleared, so switching back restores it. Two conveniences,
+ * both only into an EMPTY field so they can never overwrite a figure:
+ *   - to "one price for the day": prefill with the stores' prices added up
+ *   - to "a price per store" with one store: prefill it with the day's price
+ * Going to hourly resets any store set to a fixed price back to its logged
+ * hours -- a fixed store cannot sit on an hourly payment. Going from "a price
+ * per store" to "store by store" keeps every store that has a price on its
+ * price, so nothing typed silently turns into hours.
+ *
+ * `lumpSum` and `hourlyPaymentRate` are always in the patch, even unchanged,
+ * so the dialog clears any error still showing on them from the old shape.
+ */
+export function switchPayShape(payment: PaymentForm, payShape: PaymentPayShape): Partial<PaymentForm> {
+  let lumpSum = payment.lumpSum;
+  let lines = payment.lines;
+
+  if (payShape === "fixedDay" && toNum(lumpSum) == null) {
+    const prices = lines.map((line) => toNum(line.lumpSum)).filter((v): v is number => v != null);
+    if (prices.length > 0) {
+      lumpSum = String(prices.reduce((cents, v) => cents + Math.round(v * 100), 0) / 100);
+    }
+  }
+
+  if (payShape === "fixedPerStore" && lines.length === 1 && toNum(lines[0].lumpSum) == null) {
+    const day = toNum(payment.lumpSum);
+    if (day != null) lines = [{ ...lines[0], lumpSum: String(day) }];
+  }
+
+  if (payShape === "hourly") {
+    lines = lines.map((line) =>
+      line.labourMode === "lumpSum" ? { ...line, labourMode: "gather" as const } : line
+    );
+  }
+
+  if (payShape === "mixed" && payment.payShape === "fixedPerStore") {
+    lines = lines.map((line) =>
+      toNum(line.lumpSum) != null ? { ...line, labourMode: "lumpSum" as const } : line
+    );
+  }
+
+  return { payShape, lumpSum, hourlyPaymentRate: payment.hourlyPaymentRate, lines };
 }
 
 /**

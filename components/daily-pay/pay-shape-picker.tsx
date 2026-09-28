@@ -1,87 +1,154 @@
 "use client";
 
-import { Clock, Banknote } from "lucide-react";
+import { Banknote, Clock, Split, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PayShape } from "@/lib/daily-pay/explain";
+import type { PaymentPayShape } from "@/lib/daily-pay/entry-form-state";
 
 /**
- * How is this payee paid? Asked first, before anything else.
+ * How is this payee paid? Asked first, before anything else, as four options
+ * that each carry their own field.
  *
- * There are two genuinely different processes crammed into this one screen: our
- * own technicians, paid by the hour, every working day; and outside companies,
- * paid a fixed amount per job. They share every field, and the result is the
- * worst trap in the feature -- typing a lump sum silently switches the hours
- * and rate off, while both stay on screen looking like they count.
+ * There are four genuinely different ways people get paid on this screen, and
+ * the API lets their fields be mixed freely -- which is how a lump sum came to
+ * silently switch off hours that stayed on screen looking live, and how a
+ * payment-level lump sum silently swallowed the stores' own prices. Asking the
+ * question once, on the payment, and making every store follow the answer
+ * removes those by construction rather than by explanation.
  *
- * Forking here removes that by construction rather than by explanation. On the
- * fixed side the hours block is still rendered, dimmed, saying it does not
- * count: hiding it would leave someone who typed six hours wondering where they
- * went, and "nothing hidden" is the rule for this whole feature.
+ * Each option's field sits INSIDE the option, so "the rate belongs to paying by
+ * the hour" is visible rather than learned. The options not chosen stay on
+ * screen with their field greyed and a reason -- nothing hidden is the rule for
+ * this whole area, and a greyed "$18.00 — not used" is how someone who switched
+ * away sees their typed rate did not vanish, it just does not count.
  */
 
+export interface PayShapeOption {
+  id: PaymentPayShape;
+  label: string;
+  description: string;
+  /** Who this is normally for, in the coordinator's words. */
+  usualFor: string;
+  icon: typeof Clock;
+}
+
+export const PAY_SHAPES: PayShapeOption[] = [
+  {
+    id: "hourly",
+    label: "By the hour",
+    description: "Each store pays its hours × a rate. Hours come from what was logged on the tickets.",
+    usualFor: "Usually our own technicians.",
+    icon: Clock,
+  },
+  {
+    id: "fixedDay",
+    label: "One price for the day",
+    description:
+      "One agreed amount covers every store. Hours do not count, and the price is not split between the stores.",
+    usualFor: "Usually a company with a day rate.",
+    icon: Banknote,
+  },
+  {
+    id: "fixedPerStore",
+    label: "A price per store",
+    description:
+      "Each store gets its own agreed amount. Hours do not count, and each store's cost comes out right.",
+    usualFor: "Usually a company priced per job.",
+    icon: Store,
+  },
+  {
+    id: "mixed",
+    label: "Store by store",
+    description:
+      "Each store is paid its own way — some by the hour, some at a fixed price. You choose on each store.",
+    usualFor: "When one payee did hourly work at one store and a priced job at another.",
+    icon: Split,
+  },
+];
+
+export const PAY_SHAPE_LABEL: Record<PaymentPayShape, string> = {
+  hourly: PAY_SHAPES[0].label,
+  fixedDay: PAY_SHAPES[1].label,
+  fixedPerStore: PAY_SHAPES[2].label,
+  mixed: PAY_SHAPES[3].label,
+};
+
 interface PayShapePickerProps {
-  value: PayShape;
-  onChange: (shape: PayShape) => void;
+  value: PaymentPayShape;
+  onChange: (shape: PaymentPayShape) => void;
+  /** The field that belongs to each option, told whether it is the chosen one. */
+  renderField: (shape: PaymentPayShape, active: boolean) => React.ReactNode;
   disabled?: boolean;
   className?: string;
 }
 
-const SHAPES: Array<{
-  id: PayShape;
-  label: string;
-  description: string;
-  icon: typeof Clock;
-}> = [
-  {
-    id: "hourly",
-    label: "By the hour",
-    description: "Our own technicians. Hours come from what was logged on the tickets.",
-    icon: Clock,
-  },
-  {
-    id: "fixed",
-    label: "A fixed amount",
-    description: "An agreed price for the job, usually an outside company. Hours do not count.",
-    icon: Banknote,
-  },
-];
-
 export function PayShapePicker({
   value,
   onChange,
+  renderField,
   disabled = false,
   className,
 }: PayShapePickerProps) {
   return (
-    <div className={cn("space-y-1.5", className)}>
-      <p className="text-xs text-muted-foreground">How is this one paid?</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {SHAPES.map((shape) => {
+    <div className={className}>
+      {/* The fieldset legend above already asks the question in words. */}
+      <div
+        role="radiogroup"
+        aria-label="How is this one paid?"
+        className="grid grid-cols-1 gap-2 md:grid-cols-2"
+      >
+        {PAY_SHAPES.map((shape) => {
           const Icon = shape.icon;
           const isActive = value === shape.id;
           return (
-            <button
+            <div
               key={shape.id}
-              type="button"
-              disabled={disabled}
-              aria-pressed={isActive}
-              onClick={() => onChange(shape.id)}
               className={cn(
-                "flex h-full flex-col items-start gap-0.5 rounded-lg border p-3 text-start transition-colors",
+                "flex flex-col rounded-lg border transition-colors",
+                // The chosen one is the bright, outlined card; the others sit
+                // back. The other way round reads as "this one is switched off".
                 isActive
-                  ? "border-primary bg-primary/10"
-                  : "bg-card hover:border-primary/50 hover:bg-accent",
-                disabled && "cursor-not-allowed opacity-50"
+                  ? "border-primary bg-card shadow-sm ring-1 ring-primary"
+                  : "border-dashed bg-muted/40"
               )}
             >
-              <span className="flex items-center gap-2 text-sm font-medium">
-                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                {shape.label}
-              </span>
-              <span className="text-[11px] leading-snug text-muted-foreground">
-                {shape.description}
-              </span>
-            </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                disabled={disabled}
+                onClick={() => onChange(shape.id)}
+                className={cn(
+                  "flex flex-1 flex-col items-start gap-1 rounded-t-lg p-3 text-start transition-colors",
+                  !isActive && "hover:bg-accent",
+                  disabled && "cursor-not-allowed opacity-50"
+                )}
+              >
+                <span className="flex w-full items-center gap-2 text-sm font-medium">
+                  {/* A drawn radio dot, so it reads as "pick one" at a glance. */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                      isActive ? "border-primary" : "border-muted-foreground/50"
+                    )}
+                  >
+                    {isActive && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </span>
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  {shape.label}
+                </span>
+                <span className="text-[11px] leading-snug text-muted-foreground">
+                  {shape.description}
+                </span>
+                <span className="text-[11px] leading-snug text-muted-foreground/80 italic">
+                  {shape.usualFor}
+                </span>
+              </button>
+
+              <div className={cn("border-t p-3", !isActive && "border-dashed opacity-70")}>
+                {renderField(shape.id, isActive)}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -90,7 +157,7 @@ export function PayShapePicker({
 }
 
 /**
- * The wrapper that dims a block a fixed amount has switched off.
+ * The wrapper that dims a block a fixed price has switched off.
  *
  * Not `display: none`. The fields stay readable and the banner says why they do
  * not count -- that is how the rule gets learned, and it is the only honest way
@@ -98,10 +165,12 @@ export function PayShapePicker({
  */
 export function OverriddenByFixedAmount({
   active,
+  reason = "Not used — the fixed amount replaces this",
   children,
   className,
 }: {
   active: boolean;
+  reason?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -110,9 +179,11 @@ export function OverriddenByFixedAmount({
   return (
     <div className={cn("relative rounded-lg border border-dashed p-3", className)}>
       <p className="mb-2 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-        Not used — the fixed amount replaces this
+        {reason}
       </p>
-      <div className="pointer-events-none opacity-50">{children}</div>
+      <div className="pointer-events-none opacity-50" aria-disabled="true">
+        {children}
+      </div>
     </div>
   );
 }

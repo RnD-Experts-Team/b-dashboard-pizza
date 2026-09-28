@@ -64,6 +64,7 @@ import {
 import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScheduleErrorAlert } from "./schedule-error-alert";
+import { captureFullElement } from "@/lib/screenshot";
 import { useErrorAnnouncer } from "@/lib/hooks/use-error-announcer";
 import { AdjustShiftDialog } from "./adjust-shift-dialog";
 import { OnTheClockDialog } from "./on-the-clock-dialog";
@@ -1525,16 +1526,13 @@ export function SchedulingManager() {
   const handleScreenshot = useCallback(async () => {
     setIsTakingScreenshot(true);
     try {
-      const html2canvas = (await import("html2canvas-pro")).default;
       const target = gridRef.current;
       if (!target) { toast.error("Could not find grid"); return; }
 
-      const canvas = await html2canvas(target, {
-        backgroundColor: null,
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
+      // Takes the WHOLE table, not just the part the window can show. The grid
+      // scrolls sideways and the app shell clips it again, so a plain capture
+      // loses the end of the week.
+      const canvas = await captureFullElement(target);
 
       const a = document.createElement("a");
       a.download = `schedule-${week.label.replace(/[^a-z0-9]/gi, "-")}.png`;
@@ -1567,15 +1565,11 @@ export function SchedulingManager() {
 
     let blob: Blob | null = null;
     try {
-      const html2canvas = (await import("html2canvas-pro")).default;
       const target = gridRef.current;
       if (target) {
-        const canvas = await html2canvas(target, {
-          backgroundColor: null,
-          scale: 2,
-          useCORS: true,
-          logging: false,
-        });
+        // The image that ends up on the noticeboard — a cropped week here is a
+        // cropped rota in the store, so this one matters most of the three.
+        const canvas = await captureFullElement(target);
         blob = await new Promise<Blob | null>((resolve) =>
           canvas.toBlob((b) => resolve(b), "image/png")
         );
@@ -1620,16 +1614,10 @@ export function SchedulingManager() {
     // Give React one tick to re-render with employeeView=true
     await new Promise((r) => setTimeout(r, 100));
     try {
-      const html2canvas = (await import("html2canvas-pro")).default;
       const target = gridRef.current;
       if (!target) { toast.error("Could not find grid"); return; }
 
-      const canvas = await html2canvas(target, {
-        backgroundColor: null,
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
+      const canvas = await captureFullElement(target);
 
       const a = document.createElement("a");
       a.download = `schedule-employees-${week.label.replace(/[^a-z0-9]/gi, "-")}.png`;
