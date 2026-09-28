@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StorePassportButton } from "@/components/store-passport/store-passport-button";
-import { useBreaksStore } from "@/lib/store/breaks.store";
+import { isOnBreak, useBreakTimerStore } from "@/lib/store/break-timer.store";
 import { cn } from "@/lib/utils";
 import { BreakTimerButton } from "./break-timer-button";
 
@@ -31,12 +31,13 @@ import { BreakTimerButton } from "./break-timer-button";
  */
 export function TopbarToolsCluster() {
   const t = useTranslations("topbarTools");
-  const onBreak = useBreaksStore((s) => s.active != null);
+  const sessions = useBreakTimerStore((s) => s.sessions);
 
   const [userOpen, setUserOpen] = useState(false);
   /**
-   * The running break is only known client-side (fetched from the Breaks
-   * API), so gate the lock on mount to keep the first paint identical to SSR.
+   * The break store is persisted, so its first client read can differ from
+   * what the server rendered. Gate the lock on mount for the same reason
+   * BreakTimerButton withholds its first paint.
    */
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -44,9 +45,10 @@ export function TopbarToolsCluster() {
   /**
    * A running break forces the drawer open and keeps it there. The break
    * button's whole job while a break runs is to be visible — the live m:ss
-   * counter and the amber/red tint are worthless behind a collapsed chevron.
+   * counter, the amber/red tint and the overtime banner are worthless behind
+   * a collapsed chevron.
    */
-  const locked = mounted && onBreak;
+  const locked = mounted && isOnBreak(sessions);
   const open = userOpen || locked;
 
   /**
