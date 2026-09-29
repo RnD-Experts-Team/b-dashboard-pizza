@@ -1,13 +1,14 @@
 "use client";
 
-import { AlertTriangle, CornerLeftUp, Eye, Info, Pencil } from "lucide-react";
+// ROLES (commented out): AlertTriangle, Info
+import { CornerLeftUp, Eye, Pencil } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { Label } from "@/components/ui/label";
+// ROLES (commented out): import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { normalizeRoles, sharedRoles } from "@/lib/workbooks/roles";
+import { normalizeRoles } from "@/lib/workbooks/roles"; // ROLES (commented out): sharedRoles
 import type { VisibilityOption, VisibilityPayload } from "@/types/workbooks.types";
-import { ChipInput } from "./chip-input";
+// ROLES (commented out): import { ChipInput } from "./chip-input";
 import { VisibilityChip } from "./visibility-chip";
 import { visibilityAccent } from "./visibility-accent";
 
@@ -61,17 +62,18 @@ export function VisibilityFields({
   options,
   loading,
   parent,
-  rolesError,
+  // ROLES (commented out): rolesError, idPrefix
   visibilityError,
   disabled,
-  idPrefix = "vis",
 }: VisibilityFieldsProps) {
   const t = useTranslations("workbooks.visibility");
   const selected = options.find((o) => o.value === value.visibility);
-  const needsRoles = Boolean(selected?.needsRoles);
-
-  const parentRoles = parent?.roles ?? null;
-  const overlap = needsRoles && parentRoles ? sharedRoles(normalizeRoles(value.roles), parentRoles) : null;
+  // ROLES (commented out):
+  // const needsRoles = Boolean(selected?.needsRoles);
+  // const parentRoles = parent?.roles ?? null;
+  // const overlap = needsRoles && parentRoles ? sharedRoles(normalizeRoles(value.roles), parentRoles) : null;
+  // Role-based tags can't be completed without the roles input, so they aren't offered.
+  const visibleOptions = options.filter((o) => !o.needsRoles);
 
   if (loading) {
     return (
@@ -93,19 +95,21 @@ export function VisibilityFields({
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium">{parent.name}</span>
-            <VisibilityChip value={parent.visibility} label={parent.visibilityLabel} roles={parent.roles} />
+            <VisibilityChip value={parent.visibility} label={parent.visibilityLabel} /* ROLES (commented out): roles={parent.roles} */ />
           </div>
           <p className="mt-1.5 text-muted-foreground">{t("parentBody")}</p>
+          {/* ROLES (commented out)
           {parentRoles && parentRoles.length > 0 && (
             <p className="mt-1 text-muted-foreground">
               {t("parentRoles", { roles: parentRoles.join(", ") })}
             </p>
           )}
+          */}
         </div>
       )}
 
       <div role="radiogroup" aria-label={t("title")} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {options.map((opt) => {
+        {visibleOptions.map((opt) => {
           const isSelected = opt.value === value.visibility;
           const accent = visibilityAccent(opt.value);
           return (
@@ -147,6 +151,7 @@ export function VisibilityFields({
       </div>
       {visibilityError && <p className="text-[11px] text-destructive">{visibilityError}</p>}
 
+      {/* ROLES (commented out)
       {needsRoles && (
         <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 animate-in fade-in-0 slide-in-from-top-1">
           <Label htmlFor={`${idPrefix}-roles`} className="text-xs">
@@ -188,6 +193,7 @@ export function VisibilityFields({
           )}
         </div>
       )}
+      */}
 
       <p className="text-[11px] text-muted-foreground">{t("ownerNote")}</p>
     </div>
