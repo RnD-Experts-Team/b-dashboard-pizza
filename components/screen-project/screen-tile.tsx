@@ -99,6 +99,11 @@ function SoundBars({ isMain }: { isMain: boolean }) {
 /*  Public types                                                             */
 /* ─────────────────────────────────────────────────────────────────────────── */
 
+export type ScreenShareMode = "screen" | "audio";
+
+/** An audio-only share was picked, but the browser returned no audio track. */
+class NoAudioShareError extends Error {}
+
 export interface ScreenTileProps {
   /** Station display name */
   name: string;
@@ -123,10 +128,15 @@ export interface ScreenTileProps {
   onToggleMyCam?: () => void;
   /** Whether the supervisor's screen share should be published into this room */
   myScreenShareEnabled?: boolean;
+  /** "screen" = video + audio (default), "audio" = only the captured audio, no video published */
+  myScreenShareMode?: ScreenShareMode;
   /** Fired once the share is actually publishing in this room */
   onScreenShareStarted?: () => void;
-  /** Fired when the share failed to start, was cancelled, or ended on its own */
-  onScreenShareStopped?: () => void;
+  /**
+   * Fired when the share failed to start, was cancelled, or ended on its own.
+   * "no-audio" = an audio-only share was picked but the browser returned no audio.
+   */
+  onScreenShareStopped?: (reason?: "no-audio") => void;
   /** 0-1 local volume gain */
   volume?: number;
   onVolumeChange?: (v: number) => void;
@@ -240,8 +250,9 @@ interface InnerProps {
   onToggleAudio: () => void;
   onToggleMyCam?: () => void;
   myScreenShareEnabled?: boolean;
+  myScreenShareMode?: ScreenShareMode;
   onScreenShareStarted?: () => void;
-  onScreenShareStopped?: () => void;
+  onScreenShareStopped?: (reason?: "no-audio") => void;
   volume: number;
   onVolumeChange?: (v: number) => void;
   videoQuality: VideoQuality;
@@ -334,6 +345,7 @@ function ScreenTileInner({
   onToggleAudio,
   onToggleMyCam,
   myScreenShareEnabled,
+  myScreenShareMode = "screen",
   onScreenShareStarted,
   onScreenShareStopped,
   volume,
@@ -568,7 +580,7 @@ function ScreenTileInner({
    * NotAllowedError) are reported upward so the UI can follow reality instead
    * of an optimistic guess.
    */
-  const appliedShareRef = useRef(false);
+  const appliedShareRef = useRef<ScreenShareMode | null>(null);
   // The parent passes fresh closures every render; hold them in refs so the
   // effects below don't re-run (and the event listener doesn't re-subscribe)
   // on every parent render.
@@ -577,34 +589,103 @@ function ScreenTileInner({
   const onShareStoppedRef = useRef(onScreenShareStopped);
   onShareStoppedRef.current = onScreenShareStopped;
 
+  /**
+   * Audio-only share. Browsers won't hand out display audio without also
+   * capturing video, so the video track is captured but never published — and
+   * kept alive rather than stopped, since stopping it can end the whole
+   * capture in some browsers. Everything is stopped together on teardown.
+   */
+  const audioShareStreamRef = useRef<MediaStream | null>(null);
+
+  const stopAudioShare = useCallback(() => {
+    const stream = audioShareStreamRef.current;
+    if (!stream) return;
+    audioShareStreamRef.current = null;
+    const [audio] = stream.getAudioTracks();
+    if (audio) room.localParticipant.unpublishTrack(audio).catch(() => {});
+    stream.getTracks().forEach((t) => t.stop());
+  }, [room]);
+
+  const startAudioShare = useCallback(async () => {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    // Stopped or disconnected while the picker was open — discard the capture.
+    if (appliedShareRef.current !== "audio") {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    const [audio] = stream.getAudioTracks();
+    if (!audio) {
+      // Picked a window, didn't tick "Share audio", or the browser can't share audio.
+      stream.getTracks().forEach((t) => t.stop());
+      throw new NoAudioShareError();
+    }
+    audioShareStreamRef.current = stream;
+    // The browser's own "Stop sharing" bar ends the capture without our button.
+    const onEnded = () => {
+      if (audioShareStreamRef.current !== stream) return;
+      stopAudioShare();
+      appliedShareRef.current = null;
+      onShareStoppedRef.current?.();
+    };
+    stream.getTracks().forEach((t) => t.addEventListener("ended", onEnded, { once: true }));
+    await room.localParticipant.publishTrack(audio, { source: Track.Source.ScreenShareAudio });
+    // Torn down while publishing — undo the publish that just landed.
+    if (audioShareStreamRef.current !== stream) {
+      room.localParticipant.unpublishTrack(audio).catch(() => {});
+    }
+  }, [room, stopAudioShare]);
+
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected) {
       if (appliedShareRef.current) {
-        appliedShareRef.current = false;
+        if (appliedShareRef.current === "audio") stopAudioShare();
+        appliedShareRef.current = null;
         onShareStoppedRef.current?.();
       }
       return;
     }
-    const want = !!myScreenShareEnabled;
-    if (want === appliedShareRef.current) return;
+    const want: ScreenShareMode | null = myScreenShareEnabled ? myScreenShareMode : null;
+    const applied = appliedShareRef.current;
+    if (want === applied) return;
+    // Record intent before tearing down, so the unpublish events our own stop
+    // triggers aren't mistaken for the browser's "Stop sharing" bar.
     appliedShareRef.current = want;
-    room.localParticipant
-      .setScreenShareEnabled(want, { audio: true })
-      .then(() => { if (want) onShareStartedRef.current?.(); })
-      .catch(() => {
-        appliedShareRef.current = false;
-        if (want) onShareStoppedRef.current?.();
-      });
-  }, [myScreenShareEnabled, connectionState, room]);
+    if (applied === "screen") room.localParticipant.setScreenShareEnabled(false).catch(() => {});
+    if (applied === "audio") stopAudioShare();
+    if (!want) return;
 
-  // The browser's own "Stop sharing" bar ends the track without going through
-  // our button. LiveKit already unpublishes it for us and emits this event, so
-  // we only need to report it up — calling setScreenShareEnabled(false) here
-  // would be redundant.
+    const start =
+      want === "screen"
+        ? room.localParticipant.setScreenShareEnabled(true, { audio: true }).then(() => {})
+        : startAudioShare();
+    start
+      .then(() => {
+        if (appliedShareRef.current === want) onShareStartedRef.current?.();
+      })
+      .catch((err) => {
+        if (appliedShareRef.current !== want) return; // superseded by a newer intent
+        appliedShareRef.current = null;
+        onShareStoppedRef.current?.(err instanceof NoAudioShareError ? "no-audio" : undefined);
+      });
+  }, [myScreenShareEnabled, myScreenShareMode, connectionState, room, startAudioShare, stopAudioShare]);
+
+  // Unmounting (e.g. navigating away) disconnects the room, but the captured
+  // stream would keep running — and keep the browser's sharing bar up.
+  useEffect(() => () => {
+    const stream = audioShareStreamRef.current;
+    audioShareStreamRef.current = null;
+    stream?.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  // The browser's own "Stop sharing" bar ends a screen share without going
+  // through our button. LiveKit already unpublishes it for us and emits this
+  // event, so we only need to report it up. Our own stops are ignored because
+  // appliedShareRef has already moved off "screen" by the time they land.
   useEffect(() => {
     const onUnpublished = (pub: { source: Track.Source }) => {
       if (pub.source !== Track.Source.ScreenShare) return;
-      appliedShareRef.current = false;
+      if (appliedShareRef.current !== "screen") return;
+      appliedShareRef.current = null;
       onShareStoppedRef.current?.();
     };
     room.on(RoomEvent.LocalTrackUnpublished, onUnpublished);
@@ -1574,6 +1655,7 @@ export function ScreenTile({
   onToggleAudio,
   onToggleMyCam,
   myScreenShareEnabled,
+  myScreenShareMode,
   onScreenShareStarted,
   onScreenShareStopped,
   volume = 1,
@@ -1712,6 +1794,7 @@ export function ScreenTile({
         onToggleAudio={onToggleAudio}
         onToggleMyCam={onToggleMyCam}
         myScreenShareEnabled={myScreenShareEnabled}
+        myScreenShareMode={myScreenShareMode}
         onScreenShareStarted={onScreenShareStarted}
         onScreenShareStopped={onScreenShareStopped}
         volume={volume}

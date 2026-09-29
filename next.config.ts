@@ -22,9 +22,12 @@ const apiDomain = getApiDomain(apiUrl);
 // directly, so they are intentionally NOT listed in connect-src below (they are
 // covered by 'self'). This keeps the CSP tight and keeps those internal
 // hostnames out of the response header.
-// LiveKit server — wss:// + https:// for the same host
-const livekitDomain = "https://screens.lcportal.cloud";
-const livekitWss = "wss://screens.lcportal.cloud";
+// LiveKit server — wss:// + https:// for the same host. Must match the
+// server_url the Screen Project backend returns, or CSP blocks the connection.
+const livekitDomain =
+  process.env.SCREEN_PROJECT_LIVEKIT_DOMAIN || "https://screens.lcportal.cloud";
+const livekitWss =
+  process.env.SCREEN_PROJECT_LIVEKIT_WSS || "wss://screens.lcportal.cloud";
 // Laravel Reverb WebSocket — wss:// uses the WS host directly
 const reverbWsHost = process.env.NEXT_PUBLIC_REVERB_WS_HOST || "";
 const reverbWss = reverbWsHost ? `wss://${reverbWsHost}` : "";

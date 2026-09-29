@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, MonitorOff, HelpCircle, LogOut, Check, Maximize, Minimize } from "lucide-react";
+import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, MonitorOff, HelpCircle, LogOut, Check, Maximize, Minimize, AudioLines } from "lucide-react";
 import { VideoQuality } from "livekit-client";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
-import type { StationStateMsg } from "./screen-tile";
+import type { StationStateMsg, ScreenShareMode } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
 import { ObserverDialog } from "./observer-dialog";
 import { useScreenProject } from "@/lib/hooks/use-screen-project";
@@ -230,11 +231,17 @@ export function ScreenProjectView() {
    * screen never disturbs it (and never triggers a fresh browser picker).
    */
   const [sharingRoomId, setSharingRoomId] = useState<string | null>(null);
+  /** What the share sends: the whole screen (with audio), or the captured audio alone. */
+  const [shareMode, setShareMode] = useState<ScreenShareMode>("screen");
   /** True while the browser's share picker is open, so the control can't be double-fired. */
   const [sharePending, setSharePending] = useState(false);
+  /** Whether the idle share button's "screen / audio only" menu is open. */
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   /** Mirror of sharingRoomId, so async reports from a tile can be matched against the latest value. */
   const sharingRoomIdRef = useRef<string | null>(null);
   sharingRoomIdRef.current = sharingRoomId;
+  const shareModeRef = useRef<ScreenShareMode>("screen");
+  shareModeRef.current = shareMode;
   const [myCamVisible, setMyCamVisible] = useState(false);
   /** Self-view size multiplier, 1 = base size, capped at SELF_VIEW_MAX_SCALE. */
   const [selfViewScale, setSelfViewScale] = useState(1);
@@ -625,8 +632,10 @@ export function ScreenProjectView() {
   }, []);
 
   /** Start (or move) the share on a given station. */
-  const handleStartShare = useCallback((roomName: string) => {
+  const handleStartShare = useCallback((roomName: string, mode: ScreenShareMode) => {
+    setShareMenuOpen(false);
     setSharePending(true);
+    setShareMode(mode);
     setSharingRoomId(roomName);
   }, []);
 
@@ -638,7 +647,9 @@ export function ScreenProjectView() {
   /** The share is really publishing now — only then take the camera down. */
   const handleShareStarted = useCallback(() => {
     setSharePending(false);
-    setMyVideoOff(true); // camera and screen share are mutually exclusive
+    // Camera and screen share compete for the station's one video slot;
+    // audio-only has no video, so the camera is left alone.
+    if (shareModeRef.current === "screen") setMyVideoOff(true);
   }, []);
 
   /**
@@ -647,10 +658,15 @@ export function ScreenProjectView() {
    * sharing — while moving a share, the old station's teardown arrives after
    * the new one is already pinned and must not wipe it out.
    */
-  const handleShareStopped = useCallback((roomName: string) => {
+  const handleShareStopped = useCallback((roomName: string, reason?: "no-audio") => {
     if (sharingRoomIdRef.current !== roomName) return; // stale teardown from a station we already moved off
     setSharingRoomId(null);
     setSharePending(false);
+    if (reason === "no-audio") {
+      toast.error("No audio was shared", {
+        description: "Pick a Chrome tab and turn on \"Share tab audio\". Firefox and Safari can't share audio.",
+      });
+    }
   }, []);
 
   const handleCamToAllToggle = useCallback(() => {
@@ -1154,8 +1170,9 @@ export function ScreenProjectView() {
                   myCamEnabled={!myVideoOff && (s.isMain || (screenStates[s.room_name]?.myCamEnabled ?? false))}
                   onToggleMyCam={!s.isMain ? () => handleToggleMyCam(s.room_name) : undefined}
                   myScreenShareEnabled={s.room_name === sharingRoomId}
+                  myScreenShareMode={shareMode}
                   onScreenShareStarted={handleShareStarted}
-                  onScreenShareStopped={() => handleShareStopped(s.room_name)}
+                  onScreenShareStopped={(reason) => handleShareStopped(s.room_name, reason)}
                   onClick={!s.isMain ? () => handleSwap(s.room_name) : undefined}
                   isVideoEnabled={screenStates[s.room_name]?.videoEnabled ?? true}
                   isAudioEnabled={screenStates[s.room_name]?.audioEnabled ?? false}
@@ -1391,53 +1408,83 @@ export function ScreenProjectView() {
           </button>
 
           {/* Screen share — pinned to one station, named so it's always clear where it's going */}
-          {sharingStation ? (
-            <Popover>
+          {sharingStation ? (() => {
+            const ShareIcon = shareMode === "audio" ? AudioLines : Monitor;
+            const sharingLabel = shareMode === "audio"
+              ? `Sharing audio to ${sharingStation.name}`
+              : `Sharing your screen to ${sharingStation.name}`;
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    disabled={sharePending}
+                    title={sharingLabel}
+                    aria-label={sharingLabel}
+                    className="flex h-9 items-center gap-1.5 rounded-xl bg-red-500/20 px-2.5 text-red-400 transition-all duration-150 hover:bg-red-500/30 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <ShareIcon className="h-4 w-4 shrink-0" />
+                    <span className="max-w-24 truncate text-xs">
+                      {sharePending ? "Starting…" : sharingStation.name}
+                    </span>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent side="top" align="center" className="w-56 border-white/10 bg-neutral-900 p-1 text-white">
+                  <p className="px-2 py-1.5 text-[0.65rem] uppercase tracking-wide text-white/50">
+                    {shareMode === "audio" ? "Sharing audio to" : "Sharing to"} {sharingStation.name}
+                  </p>
+                  {mainStationName && sharingRoomId !== mainId && (
+                    <button
+                      onClick={() => handleStartShare(mainId, shareMode)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
+                    >
+                      <ShareIcon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Share to {mainStationName} instead</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleStopShare}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10"
+                  >
+                    <MonitorOff className="h-3.5 w-3.5 shrink-0" />
+                    Stop sharing
+                  </button>
+                </PopoverContent>
+              </Popover>
+            );
+          })() : (
+            <Popover open={shareMenuOpen} onOpenChange={setShareMenuOpen}>
               <PopoverTrigger asChild>
                 <button
-                  disabled={sharePending}
-                  title={`Sharing your screen to ${sharingStation.name}`}
-                  aria-label={`Sharing your screen to ${sharingStation.name}`}
-                  className="flex h-9 items-center gap-1.5 rounded-xl bg-red-500/20 px-2.5 text-red-400 transition-all duration-150 hover:bg-red-500/30 disabled:pointer-events-none disabled:opacity-40"
+                  disabled={sharePending || !mainId}
+                  title={mainStationName ? `Share to ${mainStationName}` : "Share"}
+                  aria-label="Share your screen or audio"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-white/50 transition-all duration-150 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-40"
                 >
-                  <Monitor className="h-4 w-4 shrink-0" />
-                  <span className="max-w-24 truncate text-xs">
-                    {sharePending ? "Starting…" : sharingStation.name}
-                  </span>
+                  <Monitor className="h-4 w-4" />
                 </button>
               </PopoverTrigger>
               <PopoverContent side="top" align="center" className="w-56 border-white/10 bg-neutral-900 p-1 text-white">
-                <p className="px-2 py-1.5 text-[0.65rem] uppercase tracking-wide text-white/50">
-                  Sharing to {sharingStation.name}
-                </p>
-                {mainStationName && sharingRoomId !== mainId && (
-                  <button
-                    onClick={() => handleStartShare(mainId)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
-                  >
-                    <Monitor className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">Share to {mainStationName} instead</span>
-                  </button>
+                {mainStationName && (
+                  <p className="px-2 py-1.5 text-[0.65rem] uppercase tracking-wide text-white/50">
+                    Share to {mainStationName}
+                  </p>
                 )}
                 <button
-                  onClick={handleStopShare}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10"
+                  onClick={() => mainId && handleStartShare(mainId, "screen")}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
                 >
-                  <MonitorOff className="h-3.5 w-3.5 shrink-0" />
-                  Stop sharing
+                  <Monitor className="h-3.5 w-3.5 shrink-0" />
+                  Share screen
+                </button>
+                <button
+                  onClick={() => mainId && handleStartShare(mainId, "audio")}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white hover:bg-white/10"
+                >
+                  <AudioLines className="h-3.5 w-3.5 shrink-0" />
+                  Share audio only
                 </button>
               </PopoverContent>
             </Popover>
-          ) : (
-            <button
-              onClick={() => mainId && handleStartShare(mainId)}
-              disabled={sharePending || !mainId}
-              title={mainStationName ? `Share your screen to ${mainStationName}` : "Share your screen"}
-              aria-label="Share your screen"
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-white/50 transition-all duration-150 hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:opacity-40"
-            >
-              <Monitor className="h-4 w-4" />
-            </button>
           )}
 
           <div className="w-px h-5 bg-white/10 mx-1" />
