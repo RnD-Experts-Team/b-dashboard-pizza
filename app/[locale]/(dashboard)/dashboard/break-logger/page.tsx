@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBreakDay } from "@/lib/hooks/use-break-day";
-import { useBreaksSync } from "@/lib/hooks/use-breaks";
 import { isIsoDate } from "@/lib/break-logger/work-date";
 import type { BreakEntry } from "@/types/breaks.types";
 import { TodayView } from "@/components/break-logger/today-view";
@@ -64,9 +63,6 @@ function BreakLoggerPageInner() {
     [router, pathname, searchParams]
   );
 
-  // The topbar button is the local timer again, so this page owns the
-  // Breaks API sync (bootstrap + polling while a break runs) itself.
-  useBreaksSync();
   const { day, loading, error, isToday, reload } = useBreakDay(date);
 
   const [entryDialog, setEntryDialog] = useState<BreakEntryDialogMode | null>(null);

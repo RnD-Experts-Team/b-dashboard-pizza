@@ -1039,9 +1039,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 7c. Toolbox (Workbooks super-admin only for now) — detached from
-              the sidebar for now; the break timer stays reachable from the topbar. */}
-          {/* {visibleToolboxGroup && (
+          {/* 7c. Toolbox (Workbooks super-admin only for now) */}
+          {visibleToolboxGroup && (
             <SidebarNavGroup
               group={visibleToolboxGroup}
               pathname={pathname}
@@ -1050,7 +1049,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               onNavigate={onNavigate}
               getUnreadCount={getUnreadCount}
             />
-          )} */}
+          )}
 
           {/* 8. High Level Management */}
           {visibleHighLevelMgmtGroup && (
