@@ -177,6 +177,15 @@ export function ScreenProjectView() {
 
   const canSupervisor = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/supervisor` });
   const canObserver = useCanAccessRoute({ service: "Screens", method: "POST", path: `/${storeId || "store"}/tokens/observer` });
+  // Store-aware variant for restoring a saved selection. The checks above pass no
+  // store, so store-scoped rules deny everyone except super admins; the permission
+  // map is keyed by the store's numeric id, not the storeId code used in the path.
+  const canSupervisorInStore = useCanAccessRoute({
+    service: "Screens",
+    method: "POST",
+    path: `/${storeId || "store"}/tokens/supervisor`,
+    storeId: selectedStore?.id,
+  });
   const { isSuperAdmin } = useAuthStore();
 
   const networkStatus = useNetworkStatus();
@@ -194,7 +203,7 @@ export function ScreenProjectView() {
    */
   const [savedSelection] = useState(() => {
     const saved = useScreenProjectSelectionStore.getState();
-    if (saved.storeId !== storeId || saved.selectedStationIds.length === 0 || !canSupervisor) return null;
+    if (saved.storeId !== storeId || saved.selectedStationIds.length === 0 || !canSupervisorInStore) return null;
     return saved;
   });
 

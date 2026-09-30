@@ -30,5 +30,8 @@ export function getNotificationPageSegment(notification: Notification): string |
   if (type.startsWith("cleaning_")) return "cleaning-chart";
   // break_milestone_reached / break_allowance_exceeded open the Breaks day view.
   if (type.startsWith("break_")) return "break-logger";
+  // ticket_created / _responded / _fixed / _closed / _reopened /
+  // _status_changed / _participant_added all open the ticket page.
+  if (type.startsWith("ticket_")) return "tickets";
   return null;
 }

@@ -28,6 +28,7 @@ import {
   Package,
   Landmark,
   Coffee,
+  MessageSquareWarning,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
@@ -339,6 +340,13 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     href: (locale) => `/${locale}/dashboard/break-logger`,
     icon: Coffee,
     titleKey: "breaks",
+    groupKey: "toolbox",
+  },
+  {
+    id: "tickets",
+    href: (locale) => `/${locale}/dashboard/tickets`,
+    icon: MessageSquareWarning,
+    titleKey: "tickets",
     groupKey: "toolbox",
   },
 
