@@ -125,13 +125,14 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
     step: {
       id: "sched-staffing-guide",
       icon: Users,
-      title: "Staffing guide — plan against what usually happens",
+      title: "Plan against a usual week",
       description:
-        "For each day, how much each hour usually sells and how many people were really on the clock, from the last four weeks.",
+        "The last four weeks, set against the week you are building: expected sales, the hours your team usually works, and your labor % as you plan.",
       bullets: [
-        "Pick a day to see it hour by hour; your plan for the week is drawn on top as you add shifts",
-        "Amber rows: you have planned fewer people than usually worked that hour",
-        "\"Keep in mind\" lists weeks that were unusually busy or slow. Typical leaves them out of the numbers, All days counts them",
+        "Under each day in the grid: expected sales, hours planned of usual, and a bar per hour — grey is how many people usually work, colour is your plan",
+        "The words under the bars tell you what is left, like \"Short 2 · 5–7p\". They update as you place each shift",
+        "The day headers stay pinned while you scroll, so a check is always one glance up the column",
+        "\"Keep in mind\" lists weeks that were unusually busy or slow. They are left out of the numbers unless you choose Included",
         "A day with no data, such as a closure, is left out of the averages",
       ],
       placement: "bottom",

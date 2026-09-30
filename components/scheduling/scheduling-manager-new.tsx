@@ -104,7 +104,9 @@ import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { PublishedSchedules } from "./published-schedules";
 import { DataFreshness } from "./data-freshness";
-import { StaffingGuide } from "./staffing-guide";
+import { WeekOutlook } from "./week-outlook";
+import { useSchedulingInsights } from "@/lib/hooks/use-scheduling-insights";
+import { buildWeekPlan, compactMoney, type Basis } from "@/lib/scheduling/day-plan";
 import { ShiftLegend } from "./shift-legend";
 import { pendingActualKey, pendingShiftKey } from "./shift-pending";
 import { BulkOperationProgress } from "./bulk-operation-progress";
@@ -145,7 +147,6 @@ import {
   shiftIsoDate,
   snapToWeekStart,
   todayIso,
-  todayIndexIn,
   formatTimestamp,
 } from "@/lib/scheduling/week";
 import {
@@ -549,6 +550,26 @@ export function SchedulingManager() {
    * week's cost can change after someone's raise.
    */
   const isPlannedOnly = scheduleMode === "planned" && !comparisonMode;
+
+  /**
+   * The last four weeks, set against the plan being built. Loads only while
+   * planning, alongside (never ahead of) the grid, and the result is cached by
+   * window, so flipping between future weeks costs nothing.
+   *
+   * Fed the PLAN — saved shifts plus unsaved drafts — so the plan row under
+   * each day moves the moment a shift is placed.
+   */
+  const [insightsBasis, setInsightsBasis] = useState<Basis>("typical");
+  const insights = useSchedulingInsights(storeId, week.start, isPlannedOnly);
+  const weekPlan = useMemo(
+    () =>
+      insights.data
+        ? buildWeekPlan(insights.data, week, shifts, drafts, insightsBasis)
+        : null,
+    [insights.data, week, shifts, drafts, insightsBasis],
+  );
+  /** The history as the stats tiles see it: only while planning. */
+  const outlook = isPlannedOnly ? weekPlan : null;
 
   /**
    * Guard a view-mode change, but only when it moves AWAY from planned.
@@ -2316,10 +2337,41 @@ export function SchedulingManager() {
         */}
         <div
           className={cn(
-            "grid grid-cols-2 gap-3 @2xl:grid-cols-4 transition-opacity",
+            "grid grid-cols-2 gap-3 transition-opacity",
+            outlook?.expectedSales != null
+              ? "@2xl:grid-cols-3 @4xl:grid-cols-5"
+              : "@2xl:grid-cols-4",
             weekIsSettling && "opacity-50"
           )}
         >
+          {/*
+            While planning, the tiles also say how the plan compares with a
+            usual week. The history lives here, beside the plan's own totals,
+            rather than in a second set of numbers somewhere else.
+          */}
+          {outlook?.expectedSales != null && (
+            <Card className="p-0">
+              <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
+                <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                  <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-600 dark:text-sky-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
+                    Expected Sales
+                  </p>
+                  <p className="text-base sm:text-lg font-bold leading-tight">
+                    {compactMoney(outlook.expectedSales)}
+                  </p>
+                  {outlook.busiest.length > 0 && (
+                    <p className="truncate text-[9px] leading-tight text-muted-foreground">
+                      busiest {outlook.busiest.map((d) => d.name.slice(0, 3)).join(" · ")}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -2332,6 +2384,11 @@ export function SchedulingManager() {
                 <p className="text-base sm:text-lg font-bold leading-tight">
                   {fmtFixed(stats.totalHours, 1)}h
                 </p>
+                {outlook?.usualHours != null && (
+                  <p className="truncate text-[9px] leading-tight text-muted-foreground">
+                    of {Math.round(outlook.usualHours)}h usually worked
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -2384,7 +2441,13 @@ export function SchedulingManager() {
                 </p>
                 {/* The qualifier that used to sit in the label and wrap it. */}
                 <p className="truncate text-[9px] leading-tight text-muted-foreground/70">
-                  at current rates
+                  {outlook?.expectedSales && stats.totalHours > 0
+                    ? `${((stats.laborCost / outlook.expectedSales) * 100).toFixed(1)}% of sales${
+                        outlook.usualLaborPct !== null
+                          ? ` · usually ${(outlook.usualLaborPct * 100).toFixed(1)}%`
+                          : ""
+                      }`
+                    : "at current rates"}
                 </p>
               </div>
             </CardContent>
@@ -2393,17 +2456,20 @@ export function SchedulingManager() {
         </div>
 
         {/*
-          History to plan against: what each hour usually sells and how many
-          people really worked it. Fed the PLAN (saved shifts + unsaved drafts),
-          not the merged reality, so it stays the same in every view.
+          The week at a glance against the last four weeks. Planned view only:
+          it measures the plan, and the day-by-day detail sits in the grid's
+          plan row under each day header.
         */}
-        <StaffingGuide
-          storeId={storeId}
-          week={week}
-          shifts={shifts}
-          drafts={drafts}
-          initialDayIndex={Math.max(0, todayIndexIn(week))}
-        />
+        {isPlannedOnly && (
+          <WeekOutlook
+            plan={weekPlan}
+            isLoading={insights.isLoading}
+            error={insights.error}
+            onRetry={insights.retry}
+            basis={insightsBasis}
+            onBasisChange={setInsightsBasis}
+          />
+        )}
 
         {/* Conflict & overtime warnings */}
         {conflicts.length > 0 && (
@@ -2502,6 +2568,8 @@ export function SchedulingManager() {
             draftShifts={drafts}
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
+            weekPlan={isPlannedOnly ? weekPlan : null}
+            weekPlanLoading={isPlannedOnly && insights.isLoading && !weekPlan}
           />
 
         </div>

@@ -30,6 +30,8 @@ import { TimeclockReviewCard } from "./timeclock-review-card";
 import { pendingActualKey, pendingShiftKey } from "./shift-pending";
 import { ComparisonShiftCard } from "./comparison-shift-card";
 import { EmployeeProfileDialog } from "./employee-profile-dialog";
+import { PlanRow } from "./day-plan-cell";
+import type { WeekPlan } from "@/lib/scheduling/day-plan";
 import type {
   ScheduleEmployee,
   Shift,
@@ -91,6 +93,12 @@ interface ScheduleGridProps {
   draftShifts?: DraftShift[];
   onEditDraft?: (draft: DraftShift) => void;
   onDeleteDraft?: (draftId: string) => void;
+  /**
+   * Past weeks against the plan being built, shown as a row under the day
+   * headers. Planned view only; never in the employee-facing image.
+   */
+  weekPlan?: WeekPlan | null;
+  weekPlanLoading?: boolean;
 }
 
 /**
@@ -176,6 +184,8 @@ export function ScheduleGrid({
   draftShifts = [],
   onEditDraft,
   onDeleteDraft,
+  weekPlan,
+  weekPlanLoading,
 }: ScheduleGridProps) {
   const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
   const isActualMode = scheduleMode === "actual" && !comparisonMode;
@@ -314,13 +324,32 @@ export function ScheduleGrid({
     return totals;
   }, [effectiveShifts, effectiveDrafts]);
 
+  const showPlanRow =
+    isPlannedMode && !employeeView && (!!weekPlan || !!weekPlanLoading);
+
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      {/* Horizontal scroll wrapper */}
-      <div className="overflow-x-auto">
+      {/*
+        Scrolls both ways, so the day headers (and the plan row under them) stay
+        pinned while the roster scrolls: checking a day never means scrolling
+        back up. Held to the viewport so the grid fills the screen once it is
+        reached. The employee-facing image is left unbounded; the capture helper
+        unclips the manager's own screenshot.
+      */}
+      <div
+        className={cn(
+          "overflow-auto",
+          !employeeView && "max-h-[calc(100dvh-6rem)]",
+        )}
+      >
         <table className="w-full min-w-200 sm:min-w-225 border-collapse">
           {/* Header row */}
-          <thead>
+          <thead
+            className={cn(
+              !employeeView &&
+                "sticky top-0 z-30 bg-card shadow-[0_1px_0_0_var(--border)]",
+            )}
+          >
             <tr className="border-b bg-muted/30">
               {/* Employee column header */}
               <th className="relative md:sticky left-0 z-20 bg-card w-31 min-w-31 sm:w-55 sm:min-w-55 border-r px-2 sm:px-3 py-2 sm:py-2.5 text-left">
@@ -373,6 +402,15 @@ export function ScheduleGrid({
               </th>
               )}
             </tr>
+
+            {/*
+              Plan vs usual, one cell under each day: expected sales, hours
+              planned of usual, people per hour, and what is still short. Pinned
+              with the headers, so it is always one glance up the column.
+            */}
+            {showPlanRow && (
+              <PlanRow plan={weekPlan ?? null} week={week} todayIndex={todayIndex} />
+            )}
           </thead>
 
           {/* Employee rows */}
