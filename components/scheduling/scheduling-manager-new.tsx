@@ -104,6 +104,7 @@ import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { PublishedSchedules } from "./published-schedules";
 import { DataFreshness } from "./data-freshness";
+import { StaffingGuide } from "./staffing-guide";
 import { ShiftLegend } from "./shift-legend";
 import { pendingActualKey, pendingShiftKey } from "./shift-pending";
 import { BulkOperationProgress } from "./bulk-operation-progress";
@@ -144,6 +145,7 @@ import {
   shiftIsoDate,
   snapToWeekStart,
   todayIso,
+  todayIndexIn,
   formatTimestamp,
 } from "@/lib/scheduling/week";
 import {
@@ -2389,6 +2391,19 @@ export function SchedulingManager() {
           </Card>
         </div>
         </div>
+
+        {/*
+          History to plan against: what each hour usually sells and how many
+          people really worked it. Fed the PLAN (saved shifts + unsaved drafts),
+          not the merged reality, so it stays the same in every view.
+        */}
+        <StaffingGuide
+          storeId={storeId}
+          week={week}
+          shifts={shifts}
+          drafts={drafts}
+          initialDayIndex={Math.max(0, todayIndexIn(week))}
+        />
 
         {/* Conflict & overtime warnings */}
         {conflicts.length > 0 && (

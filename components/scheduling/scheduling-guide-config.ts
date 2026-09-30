@@ -9,6 +9,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  Users,
 } from "lucide-react";
 import type { GuideStep } from "@/components/shared/page-guide";
 
@@ -116,6 +117,24 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
         "Publish the week once you are happy with it — that is what your team sees",
       ],
       placement: "top",
+    },
+    view: PLANNED,
+  },
+
+  {
+    step: {
+      id: "sched-staffing-guide",
+      icon: Users,
+      title: "Staffing guide — plan against what usually happens",
+      description:
+        "For each day, how much each hour usually sells and how many people were really on the clock, from the last four weeks.",
+      bullets: [
+        "Pick a day to see it hour by hour; your plan for the week is drawn on top as you add shifts",
+        "Amber rows: you have planned fewer people than usually worked that hour",
+        "\"Keep in mind\" lists weeks that were unusually busy or slow. Typical leaves them out of the numbers, All days counts them",
+        "A day with no data, such as a closure, is left out of the averages",
+      ],
+      placement: "bottom",
     },
     view: PLANNED,
   },

@@ -569,3 +569,104 @@ export const SETUP_ERROR_CODES: readonly SchedulingErrorCode[] = [
   // no amount of retrying by a manager will change it.
   "STORE_NOT_ALLOWLISTED",
 ];
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Staffing guide (history shown while building a schedule)                 */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The same figure two ways: `avg` counts every week in the window, `typical`
+ * leaves out the weeks that were flagged as odd. Equal when nothing was flagged.
+ */
+export interface InsightPair {
+  avg: number;
+  typical: number;
+}
+
+export interface InsightStat extends InsightPair {
+  /** Lowest / highest single week. */
+  low: number;
+  high: number;
+  samples: number;
+  typicalSamples: number;
+  /** The weeks simply differ a lot, so nothing was singled out. */
+  volatile: boolean;
+}
+
+export type InsightMetric = "sales" | "daily_sales" | "headcount" | "labor_hours";
+
+export interface InsightAnomaly {
+  /** The business date that was odd, "YYYY-MM-DD". */
+  date: string;
+  /** 0=Sun..6=Sat */
+  weekday: number;
+  /** Store-local hour 0-23, or null for a whole-day finding. */
+  hour: number | null;
+  metric: InsightMetric;
+  kind: "spike" | "dip";
+  value: number;
+  /** What the other weeks usually show. */
+  usual: number;
+  ratio: number;
+  /** Set on a sales finding when staffing was odd at the same time. */
+  staffing?: { kind: "spike" | "dip"; value: number; usual: number };
+}
+
+export interface InsightHour {
+  /** Store-local hour of the business day, 0-23. Hours after midnight stay on the previous date. */
+  hour: number;
+  sales: InsightStat | null;
+  orders: InsightStat | null;
+  /** People actually on the clock. */
+  headcount: InsightStat | null;
+  /** People usually scheduled, from past plans. */
+  scheduled: number | null;
+  /** Average people per job label, biggest first. */
+  byJob: Record<string, number>;
+  /** Sales per person on the clock. Null when nobody was. */
+  splh: InsightPair | null;
+  salesPerScheduled: number | null;
+  channels: {
+    delivery: InsightPair;
+    carryout: InsightPair;
+    driveThru: InsightPair;
+    digital: InsightPair;
+  } | null;
+}
+
+export interface InsightDay {
+  /** 0=Sun..6=Sat */
+  weekday: number;
+  name: string;
+  /** Weeks that counted, per source. A source with no data for a date skips it. */
+  daysSampled: { sales: number; staffing: number };
+  /** Weeks in the window for this weekday, counted or not. */
+  weeksInWindow: number;
+  dates: string[];
+  skippedDates: string[];
+  daily: {
+    sales: InsightStat | null;
+    orders: InsightStat | null;
+    customers: InsightPair | null;
+    avgTicket: InsightPair | null;
+    laborHours: InsightStat | null;
+    laborCost: InsightPair | null;
+    employeesWorked: InsightPair | null;
+    /** Labor cost as a share of sales, 0-1. */
+    laborPct: InsightPair | null;
+  };
+  hours: InsightHour[];
+}
+
+export type InsightSourceState = "ok" | "error";
+
+export interface SchedulingInsights {
+  window: { start: string; end: string };
+  /** One side can fail without taking the other down. */
+  sources: { sales: InsightSourceState; staffing: InsightSourceState };
+  /** First hour of a business day, for ordering hours. */
+  businessDayCutoff: number;
+  /** Tuesday first for this chain: the store's week order. */
+  weekdays: InsightDay[];
+  anomalies: InsightAnomaly[];
+}
