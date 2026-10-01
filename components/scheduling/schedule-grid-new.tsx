@@ -8,7 +8,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { cn } from "@/lib/utils";
 import { calcHours, formatTime } from "@/lib/scheduling/constants";
 import { todayIndexIn } from "@/lib/scheduling/week";
@@ -342,7 +342,17 @@ export function ScheduleGrid({
           !employeeView && "max-h-[calc(100dvh-6rem)]",
         )}
       >
-        <table className="w-full min-w-200 sm:min-w-225 border-collapse">
+        <table
+          className={cn(
+            "w-full border-collapse",
+            // Fixed layout with the insight row: an auto table lets the
+            // Employee column swell to its widest content, so the width set on
+            // it is ignored. Min width = employee + hours + 7 day columns.
+            showPlanRow
+              ? "table-fixed min-w-[calc(7.75rem+3.5rem+7*11rem)] sm:min-w-[calc(11rem+5rem+7*14rem)]"
+              : "min-w-200 sm:min-w-225",
+          )}
+        >
           {/* Header row */}
           <thead
             className={cn(
@@ -352,7 +362,7 @@ export function ScheduleGrid({
           >
             <tr className="border-b bg-muted/30">
               {/* Employee column header */}
-              <th className="relative md:sticky left-0 z-20 bg-card w-31 min-w-31 sm:w-55 sm:min-w-55 border-r px-2 sm:px-3 py-2 sm:py-2.5 text-left">
+              <th className="relative md:sticky left-0 z-20 bg-card w-31 min-w-31 sm:w-44 sm:min-w-44 border-r px-2 sm:px-3 py-2 sm:py-2.5 text-left">
                 <span
                   aria-hidden
                   className="pointer-events-none absolute inset-0 bg-muted/30"
@@ -367,9 +377,11 @@ export function ScheduleGrid({
                 <th
                   key={day}
                   className={cn(
-                    comparisonMode
-                      ? "min-w-32 sm:min-w-40"
-                      : "min-w-32 sm:min-w-32.5",
+                    showPlanRow
+                      ? "min-w-44 sm:min-w-56"
+                      : comparisonMode
+                        ? "min-w-32 sm:min-w-40"
+                        : "min-w-32 sm:min-w-32.5",
                     "border-r last:border-r-0 px-1 sm:px-2 py-1.5 sm:py-2.5 text-center",
                     todayIndex === i && "bg-primary/5"
                   )}

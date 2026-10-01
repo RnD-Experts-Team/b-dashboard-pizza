@@ -132,6 +132,7 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
         "Under each day in the grid: expected sales, hours planned of usual, and a bar per hour — grey is how many people usually work, colour is your plan",
         "The words under the bars tell you what is left, like \"Short 2 · 5–7p\". They update as you place each shift",
         "The day headers stay pinned while you scroll, so a check is always one glance up the column",
+        "Every hour's exact numbers are open under each day. The arrow beside \"Plan vs usual\" folds the whole row down to its title when you want the room, and it stays folded until you open it",
         "\"Keep in mind\" lists weeks that were unusually busy or slow. They are left out of the numbers unless you choose Included",
         "A day with no data, such as a closure, is left out of the averages",
       ],

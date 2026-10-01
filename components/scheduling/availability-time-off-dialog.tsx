@@ -25,7 +25,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { Ban, CalendarOff, Info, Lock, Plus, Trash2 } from "lucide-react";
 import { formatTime } from "@/lib/scheduling/constants";
 import type {

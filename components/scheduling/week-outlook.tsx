@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, ArrowDownUp, History, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,14 +10,13 @@ import type { Basis, OddDay, WeekPlan } from "@/lib/scheduling/day-plan";
 /**
  * What the week's history is based on, and the dates that were out of the
  * ordinary. The numbers themselves are elsewhere: the week's totals in the stats
- * tiles above, each day's detail in the grid's plan row, so nothing is shown
+ * tiles beside it, each day's detail in the grid's plan row, so nothing is shown
  * twice.
  *
- * Odd dates are one plain sentence each, furthest off first. Three are shown;
- * the rest are one click away, never a wall of text.
+ * Odd dates are one plain sentence each, furthest off first. They sit in a short
+ * list that scrolls, so a month of them never grows the card and nothing needs a
+ * click to reveal.
  */
-
-const VISIBLE_NOTES = 3;
 
 function NoteIcon({ kind }: { kind: OddDay["kind"] }) {
   const className = "mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400";
@@ -34,6 +32,17 @@ export interface WeekOutlookProps {
   onRetry: () => void;
   basis: Basis;
   onBasisChange: (basis: Basis) => void;
+  /**
+   * Merged onto the root of every state (card, skeleton, error), so the page can
+   * size and place it without this file knowing where it sits.
+   */
+  className?: string;
+  /**
+   * Merged onto the odd-day scroll window. The default height suits a card that
+   * stands alone; a page that sets the card beside something taller or shorter
+   * can resize the window to fill the difference instead of leaving a gap.
+   */
+  listClassName?: string;
 }
 
 export function WeekOutlook({
@@ -43,14 +52,19 @@ export function WeekOutlook({
   onRetry,
   basis,
   onBasisChange,
+  className,
+  listClassName,
 }: WeekOutlookProps) {
-  const [showAll, setShowAll] = useState(false);
-
   if (!plan) {
-    if (isLoading) return <Skeleton className="h-10 w-full rounded-lg" />;
+    if (isLoading) return <Skeleton className={cn("h-10 w-full rounded-lg", className)} />;
     if (!error) return null;
     return (
-      <div className="flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm text-muted-foreground">
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm text-muted-foreground",
+          className,
+        )}
+      >
         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
         <span className="flex-1">{error}</span>
         <Button variant="outline" size="sm" onClick={onRetry}>
@@ -61,12 +75,15 @@ export function WeekOutlook({
   }
 
   const notes = plan.keepInMind;
-  const visible = showAll ? notes : notes.slice(0, VISIBLE_NOTES);
-  const hidden = notes.length - VISIBLE_NOTES;
 
   return (
+    // A column, so that when the page stretches the card to the height of the
+    // tiles beside it, the amber box takes up the slack instead of leaving a gap.
     <div
-      className="space-y-2 rounded-lg border bg-card px-3 py-2.5 sm:px-4"
+      className={cn(
+        "flex flex-col gap-2 rounded-lg border bg-card px-3 py-2.5 sm:px-4",
+        className,
+      )}
       data-guide-id="sched-staffing-guide"
     >
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -112,28 +129,32 @@ export function WeekOutlook({
       </div>
 
       {notes.length > 0 && (
-        <div className="rounded-md bg-amber-50 px-3 py-2 dark:bg-amber-950/25">
+        <div className="flex-1 rounded-md bg-amber-50 px-3 py-2 dark:bg-amber-950/25">
           <p className="mb-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
             Keep in mind: {notes.length} odd {notes.length === 1 ? "day" : "days"} in the last 4 weeks
             {basis === "typical" ? ", left out of the averages" : ", counted in the averages"}
           </p>
-          <ul className="space-y-0.5">
-            {visible.map((d) => (
-              <li key={d.date} className="flex items-start gap-1.5 text-xs">
-                <NoteIcon kind={d.kind} />
-                <span>{d.text}</span>
-              </li>
-            ))}
-          </ul>
-          {hidden > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              className="mt-1 text-[11px] font-medium text-amber-800 underline underline-offset-2 dark:text-amber-300"
-            >
-              {showAll ? "Show fewer" : `Show ${hidden} more`}
-            </button>
-          )}
+          {/* A fixed window onto the list. It scrolls rather than growing, so the
+              card keeps its height however many odd days there are. Focusable so
+              the keyboard can scroll it too. */}
+          <div
+            role="region"
+            aria-label="Odd days"
+            tabIndex={0}
+            className={cn(
+              "max-h-20 overflow-y-auto rounded-sm pe-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-600/50",
+              listClassName,
+            )}
+          >
+            <ul className="space-y-0.5">
+              {notes.map((d) => (
+                <li key={d.date} className="flex items-start gap-1.5 text-xs">
+                  <NoteIcon kind={d.kind} />
+                  <span>{d.text}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
     </div>

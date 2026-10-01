@@ -6,7 +6,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { Loader2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EmployeeSyncRequestStatus } from "@/types/scheduling.types";
