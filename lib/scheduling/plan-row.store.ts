@@ -17,6 +17,15 @@ interface PlanRowState {
    */
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  /**
+   * The row's two bodies can be put away on their own, leaving each day's totals
+   * and status words: the hourly bar chart, and the hour-by-hour table. Both open
+   * by default, remembered the same way.
+   */
+  chartHidden: boolean;
+  setChartHidden: (hidden: boolean) => void;
+  tableHidden: boolean;
+  setTableHidden: (hidden: boolean) => void;
 }
 
 export const usePlanRowStore = create<PlanRowState>()(
@@ -24,6 +33,10 @@ export const usePlanRowStore = create<PlanRowState>()(
     (set) => ({
       collapsed: false,
       setCollapsed: (collapsed) => set({ collapsed }),
+      chartHidden: false,
+      setChartHidden: (chartHidden) => set({ chartHidden }),
+      tableHidden: false,
+      setTableHidden: (tableHidden) => set({ tableHidden }),
     }),
     {
       name: "scheduling-plan-row",
@@ -31,7 +44,12 @@ export const usePlanRowStore = create<PlanRowState>()(
       storage: createJSONStorage(() =>
         typeof window !== "undefined" ? localStorage : noopStorage,
       ),
-      partialize: (state) => ({ collapsed: state.collapsed }),
+      // Browsers that saved only `collapsed` earlier keep it; the new flags start open.
+      partialize: (state) => ({
+        collapsed: state.collapsed,
+        chartHidden: state.chartHidden,
+        tableHidden: state.tableHidden,
+      }),
     },
   ),
 );

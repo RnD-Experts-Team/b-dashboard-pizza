@@ -317,6 +317,24 @@ export function hourRange(from: number, to: number): string {
   return `${start}–${shortHour(to)}`;
 }
 
+/**
+ * 17 -> "5 PM", 0 -> "12 AM", 12 -> "12 PM". The plain-spoken sibling of
+ * `shortHour`, with the same uppercase-and-a-space form as the DSPR hourly
+ * charts, for places that have the room to be easy to read.
+ */
+export function clockHour(hour: number): string {
+  const h24 = ((hour % 24) + 24) % 24;
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h} ${h24 < 12 ? "AM" : "PM"}`;
+}
+
+/** 17..19 -> "5–7 PM"; 11..13 -> "11 AM–1 PM". The first AM/PM is dropped when both ends share it. */
+export function clockHourRange(from: number, to: number): string {
+  const sameHalf = (from < 12) === (to < 12) && to !== 0;
+  const start = sameHalf ? String(from % 12 === 0 ? 12 : from % 12) : clockHour(from);
+  return `${start}–${clockHour(to)}`;
+}
+
 /** "$2.4k", "$860". */
 export function compactMoney(n: number): string {
   if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k`;
@@ -338,6 +356,8 @@ export interface OddDay {
   text: string;
   /** How far off the date was, for ranking. */
   score: number;
+  /** The findings behind the sentence, so the date can be drawn rather than read. */
+  items: InsightAnomaly[];
 }
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -377,7 +397,7 @@ function hourRuns(items: InsightAnomaly[], cutoff: number): InsightAnomaly[][] {
 function runRange(run: InsightAnomaly[]): string {
   const from = run[0].hour ?? 0;
   const to = ((run[run.length - 1].hour ?? 0) + 1) % 24;
-  return run.length === 1 ? shortHour(from) : hourRange(from, to);
+  return run.length === 1 ? clockHour(from) : clockHourRange(from, to);
 }
 
 /**
@@ -452,6 +472,7 @@ export function summarizeOddDays(anomalies: InsightAnomaly[], cutoff: number): O
         parts.length > 2 ? ` (+${parts.length - 2} more)` : ""
       }`,
       score,
+      items,
     });
   }
 

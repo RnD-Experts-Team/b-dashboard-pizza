@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Pin, X } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePlanRowStore } from "@/lib/scheduling/plan-row.store";
+import { Collapse } from "./collapse";
 import {
   Tooltip,
   TooltipContent,
@@ -33,20 +34,19 @@ import type { WeekInfo } from "@/types/scheduling.types";
  *   what is still wrong       "Short 2 · 5–7p", in words
  *
  * And when a number has to be exact:
- *   every hour                the hour-by-hour numbers are open for ALL hours
- *                             to begin with, in every day, so a column can be
- *                             read straight down
- *   hover a bar               that hour's exact figures, and the same hour lit
+ *   the table                 the hour-by-hour numbers for EVERY hour of the
+ *                             day, in every day, so a column can be read
+ *                             straight down. There is no choosing hours: it is
+ *                             always all of them
+ *   hover a bar or a row      that hour's exact figures, and the same hour lit
  *                             up in every day so days compare at a glance
- *   click a bar               narrows the numbers to that hour in EVERY day, so
- *                             it stays in view while you place shifts;
- *                             shift-click (or the from/to pickers) for a range,
- *                             "All" to open every hour again
  *
  * The row is pinned with the day headers, so all of it stays in view however
- * far down the roster you are. That makes it tall with every hour open, so the
- * whole row folds down to its title bar (the arrow beside the title). The
- * choice is remembered in `usePlanRowStore`.
+ * far down the roster you are. That makes it tall, so it folds three ways: the
+ * whole row down to its title bar (the arrow beside the title), or just the
+ * bar chart, or just the table, each from its own switch in the left cell and
+ * each leaving the day's totals and status words. The choices are remembered in
+ * `usePlanRowStore`.
  */
 
 const FILL: Record<HourStatus, string> = {
@@ -62,20 +62,6 @@ const TEXT: Record<HourStatus, string> = {
   extra: "text-sky-700 dark:text-sky-400",
   closed: "text-muted-foreground",
 };
-
-/** Pinned hours, as indexes into the week's shared hour list (inclusive). */
-export interface HourFocus {
-  from: number;
-  to: number;
-}
-
-/** Every hour of the week's shared list: where the numbers start out. */
-const allHours = (plan: WeekPlan | null): HourFocus | null =>
-  plan && plan.hours.length > 0 ? { from: 0, to: plan.hours.length - 1 } : null;
-
-/** True while the selection is the whole day, which is nothing to highlight. */
-const coversAll = (focus: HourFocus | null, plan: WeekPlan | null): boolean =>
-  focus !== null && plan !== null && focus.from === 0 && focus.to === plan.hours.length - 1;
 
 const people = (n: number) => (Math.round(n * 10) / 10).toString();
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
@@ -158,32 +144,24 @@ interface StripProps {
   day: DayPlan;
   plan: WeekPlan;
   hoverIdx: number | null;
-  /** The hours whose exact numbers are open. */
-  focus: HourFocus | null;
-  /** The hours tinted on the bars: the selection, unless it is every hour. */
-  highlight: HourFocus | null;
   onHover: (idx: number | null) => void;
-  onPick: (idx: number, extend: boolean) => void;
 }
 
-function HourStrip({ day, plan, hoverIdx, highlight, onHover, onPick }: StripProps) {
+function HourStrip({ day, plan, hoverIdx, onHover }: StripProps) {
   return (
     <div className="flex h-20 items-end" onMouseLeave={() => onHover(null)}>
       {day.hours.map((h, idx) => {
         const usualPct = h.usual === null ? 0 : Math.min(100, (h.usual / plan.scale) * 100);
         const plannedPct = Math.min(100, (h.planned / plan.scale) * 100);
-        const pinned = highlight !== null && idx >= highlight.from && idx <= highlight.to;
         return (
           <Tooltip key={h.hour}>
             <TooltipTrigger asChild>
               <div
                 className={cn(
-                  "relative h-full min-w-0 flex-1 cursor-pointer px-px",
-                  pinned && "bg-primary/15",
+                  "relative h-full min-w-0 flex-1 cursor-default px-px",
                   hoverIdx === idx && "bg-foreground/10",
                 )}
                 onMouseEnter={() => onHover(idx)}
-                onClick={(e) => onPick(idx, e.shiftKey)}
               >
                 <div className="relative h-full">
                   {/* What usually works this hour */}
@@ -218,7 +196,7 @@ function HourStrip({ day, plan, hoverIdx, highlight, onHover, onPick }: StripPro
   );
 }
 
-/* ── Pinned hours, as exact numbers ─────────────────────────────────────── */
+/* ── Every hour, as exact numbers ───────────────────────────────────────── */
 
 /** Hour rows visible before the list scrolls. The summary never scrolls away. */
 const VISIBLE_ROWS = 6;
@@ -242,9 +220,8 @@ const sumOf = (xs: (number | null)[]) => {
 /** People summed over hours are person-hours: "20h". */
 const hoursOf = (n: number) => `${n >= 10 ? Math.round(n) : people(n)}h`;
 
-interface FocusBlockProps {
+interface HourTableProps {
   day: DayPlan;
-  focus: HourFocus;
   hoverIdx: number | null;
   onHover: (idx: number | null) => void;
   /** The hour list, registered so every day's list scrolls together. */
@@ -252,8 +229,8 @@ interface FocusBlockProps {
   onListScroll: (el: HTMLDivElement) => void;
 }
 
-function FocusBlock({ day, focus, hoverIdx, onHover, listRef, onListScroll }: FocusBlockProps) {
-  const hours = day.hours.slice(focus.from, focus.to + 1);
+function HourTable({ day, hoverIdx, onHover, listRef, onListScroll }: HourTableProps) {
+  const hours = day.hours;
   if (hours.length === 0) return null;
 
   const n = hours.length;
@@ -265,7 +242,7 @@ function FocusBlock({ day, focus, hoverIdx, onHover, listRef, onListScroll }: Fo
     <div className="@container overflow-hidden rounded-md border border-primary/15 bg-primary/5 text-[10px] leading-4 tabular-nums @max-[6.75rem]:text-[9px]">
       {/* Labels */}
       <div className={cn(ROW, "border-b border-primary/10 text-[9px] text-muted-foreground")}>
-        <span>{n > 1 ? `${n} hrs` : "hour"}</span>
+        <span>{n} hrs</span>
         <span className="text-right">usual</span>
         <span className="text-right">plan</span>
         <span className="text-right">sales</span>
@@ -279,8 +256,7 @@ function FocusBlock({ day, focus, hoverIdx, onHover, listRef, onListScroll }: Fo
         className="overflow-y-auto"
         style={{ maxHeight: `${VISIBLE_ROWS}rem` }}
       >
-        {hours.map((h, i) => {
-          const idx = focus.from + i;
+        {hours.map((h, idx) => {
           return (
             <div
               key={h.hour}
@@ -296,7 +272,7 @@ function FocusBlock({ day, focus, hoverIdx, onHover, listRef, onListScroll }: Fo
         })}
       </div>
 
-      {/* The range as a whole: per hour on average, and in total */}
+      {/* The day as a whole: per hour on average, and in total */}
       {n > 1 && (
         <div className="border-t border-primary/15 bg-primary/5 font-medium">
           <div className={cn(ROW, "h-4")}>
@@ -370,17 +346,22 @@ function StatusLines({ day }: { day: DayPlan }) {
 interface DayPlanCellProps extends StripProps {
   listRef: (el: HTMLDivElement | null) => void;
   onListScroll: (el: HTMLDivElement) => void;
+  /** Put away on their own, leaving the day's totals and status words. */
+  chartHidden: boolean;
+  tableHidden: boolean;
 }
 
-function DayPlanCell({ listRef, onListScroll, ...props }: DayPlanCellProps) {
-  const { day, plan, hoverIdx, focus, onHover } = props;
+function DayPlanCell({ listRef, onListScroll, chartHidden, tableHidden, ...props }: DayPlanCellProps) {
+  const { day, plan, hoverIdx, onHover } = props;
   const hasHistory = day.state !== "no-history";
   const usual = day.usualHours;
 
   return (
     // `w-0 min-w-full`: fill the column, never widen it. Otherwise a long gap
     // line would stretch its day and push the week off the screen.
-    <div className="w-0 min-w-full space-y-1 text-left">
+    // The 4px between blocks is `pt-1` on each block rather than a gap on the
+    // column, so a block that slides away takes its gap with it.
+    <div className="w-0 min-w-full text-left">
       {/* How big the day is */}
       <div className="flex items-baseline justify-between gap-1">
         <span className="text-xs font-semibold tabular-nums">
@@ -393,42 +374,51 @@ function DayPlanCell({ listRef, onListScroll, ...props }: DayPlanCellProps) {
         </span>
       </div>
 
-      {/* Between the day's totals and its hour chart. Always drawn, so the lines
-          and the charts under them stay level across all seven days. */}
-      <div className="h-px bg-border" aria-hidden />
+      {/* Between the day's totals and what follows. Always drawn, so the lines
+          and the blocks under them stay level across all seven days. */}
+      <div className="pt-1">
+        <div className="h-px bg-border" aria-hidden />
+      </div>
 
       {/* When it is busy, and how the plan meets it */}
       {hasHistory && plan.hours.length > 0 && (
-        <div>
-          <HourStrip {...props} />
-          <div className="mt-px flex justify-between text-[8px] leading-none text-muted-foreground">
-            <span>{shortHour(plan.hours[0])}</span>
-            {hoverIdx !== null && (
-              <span className="font-semibold text-foreground">{shortHour(plan.hours[hoverIdx])}</span>
-            )}
-            <span>{shortHour((plan.hours[plan.hours.length - 1] + 1) % 24)}</span>
+        <Collapse open={!chartHidden}>
+          <div className="pt-1">
+            <HourStrip {...props} />
+            <div className="mt-px flex justify-between text-[8px] leading-none text-muted-foreground">
+              <span>{shortHour(plan.hours[0])}</span>
+              {hoverIdx !== null && (
+                <span className="font-semibold text-foreground">{shortHour(plan.hours[hoverIdx])}</span>
+              )}
+              <span>{shortHour((plan.hours[plan.hours.length - 1] + 1) % 24)}</span>
+            </div>
           </div>
-        </div>
+        </Collapse>
       )}
 
-      {/* Pinned hours, exact */}
-      {hasHistory && focus && (
-        <FocusBlock
-          day={day}
-          focus={focus}
-          hoverIdx={hoverIdx}
-          onHover={onHover}
-          listRef={listRef}
-          onListScroll={onListScroll}
-        />
+      {/* Every hour, exact */}
+      {hasHistory && (
+        <Collapse open={!tableHidden}>
+          <div className="pt-1">
+            <HourTable
+              day={day}
+              hoverIdx={hoverIdx}
+              onHover={onHover}
+              listRef={listRef}
+              onListScroll={onListScroll}
+            />
+          </div>
+        </Collapse>
       )}
 
       {/* What is left to fix */}
-      <StatusLines day={day} />
+      <div className="pt-1">
+        <StatusLines day={day} />
+      </div>
 
       {/* How much history stands behind these numbers */}
       {hasHistory && day.sampled < day.weeksInWindow && (
-        <p className="text-[9px] text-muted-foreground">
+        <p className="pt-1 text-[9px] text-muted-foreground">
           From {day.sampled} of {day.weeksInWindow} weeks
         </p>
       )}
@@ -446,10 +436,7 @@ function DayPlanCellSkeleton() {
   );
 }
 
-/* ── The pinned left cell: what the row is, and the hour picker ─────────── */
-
-const selectClass =
-  "h-6 rounded border bg-background px-1 text-[10px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring";
+/* ── The pinned left cell: what the row is, and what to show of it ──────── */
 
 /** The row's title, which is also the button that folds it away and back. */
 function PlanRowToggle({
@@ -459,7 +446,6 @@ function PlanRowToggle({
   collapsed: boolean;
   onToggle: () => void;
 }) {
-  const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
     <button
       type="button"
@@ -467,29 +453,85 @@ function PlanRowToggle({
       aria-expanded={!collapsed}
       className="-ms-1 flex items-center gap-1 rounded px-1 py-0.5 text-start text-[9px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:text-xs"
     >
-      <Chevron className="h-3 w-3 shrink-0 rtl:-scale-x-100" aria-hidden />
+      {/* Turns with the slide, rather than swapping to a different icon. */}
+      <ChevronDown
+        className={cn(
+          "h-3 w-3 shrink-0 transition-transform duration-300 motion-reduce:transition-none",
+          collapsed && "-rotate-90 rtl:rotate-90",
+        )}
+        aria-hidden
+      />
       Plan vs usual
+    </button>
+  );
+}
+
+/**
+ * A small switch that puts one body of the row away or brings it back, without
+ * touching the rest of the row. Open shows a down chevron, put away a right one.
+ * The focus ring is drawn inset because it sits inside a `Collapse`, which clips.
+ */
+function SectionToggle({
+  label,
+  hint,
+  hidden,
+  onToggle,
+}: {
+  label: string;
+  /** What it holds, for the tooltip and screen readers. */
+  hint: string;
+  hidden: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!hidden}
+      aria-label={`${hidden ? "Show" : "Hide"} the ${label.toLowerCase()}: ${hint}`}
+      title={`${hidden ? "Show" : "Hide"}: ${hint}`}
+      className={cn(
+        "flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
+        hidden ? "border-dashed text-muted-foreground" : "text-foreground",
+      )}
+    >
+      <ChevronDown
+        className={cn(
+          "h-3 w-3 shrink-0 transition-transform duration-300 motion-reduce:transition-none",
+          hidden && "-rotate-90 rtl:rotate-90",
+        )}
+        aria-hidden
+      />
+      {label}
     </button>
   );
 }
 
 function PlanLegendCell({
   plan,
-  focus,
-  onFocus,
+  collapsed,
   onToggle,
+  chartHidden,
+  tableHidden,
+  onToggleChart,
+  onToggleTable,
 }: {
   plan: WeekPlan | null;
-  focus: HourFocus | null;
-  onFocus: (focus: HourFocus | null) => void;
+  /** The whole row is folded: only the title stays. */
+  collapsed: boolean;
   onToggle: () => void;
+  chartHidden: boolean;
+  tableHidden: boolean;
+  onToggleChart: () => void;
+  onToggleTable: () => void;
 }) {
-  const hours = plan?.hours ?? [];
-  const everyHour = coversAll(focus, plan);
+  const hasHours = (plan?.hours.length ?? 0) > 0;
 
   return (
-    <div className="space-y-1.5 text-left">
-      <PlanRowToggle collapsed={false} onToggle={onToggle} />
+    <div className="text-left">
+      <PlanRowToggle collapsed={collapsed} onToggle={onToggle} />
+      <Collapse open={!collapsed}>
+        <div className="space-y-1.5 pt-1.5">
       <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-medium sm:text-[10px]">
         <span className="flex items-center gap-1">
           <span className="h-2 w-2 rounded-[2px] bg-amber-500" />
@@ -509,68 +551,27 @@ function PlanLegendCell({
         </span>
       </div>
 
-      {hours.length > 0 && (
+      {hasHours && (
         <div className="space-y-1">
-          {/* The picker shows on phones too: shift-click does not exist on touch. */}
-          <p className="hidden text-[10px] leading-tight text-muted-foreground sm:block">
-            Hover a bar for exact numbers. Click one to look at just that hour, shift-click for a range.
-          </p>
+          {/* Only worth saying while there are bars to hover. */}
+          {!chartHidden && (
+            <p className="hidden text-[10px] leading-tight text-muted-foreground sm:block">
+              Hover a bar for that hour in full, in every day.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-1">
-            <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
-            <select
-              aria-label="Pin hours from"
-              className={selectClass}
-              value={focus?.from ?? ""}
-              onChange={(e) => {
-                if (e.target.value === "") return onFocus(null);
-                const from = Number(e.target.value);
-                onFocus({ from, to: Math.max(from, focus?.to ?? from) });
-              }}
-            >
-              <option value="">hours</option>
-              {hours.map((h, i) => (
-                <option key={h} value={i}>
-                  {shortHour(h)}
-                </option>
-              ))}
-            </select>
-            {focus && (
-              <>
-                <span className="text-[10px] text-muted-foreground">to</span>
-                <select
-                  aria-label="Pin hours to"
-                  className={selectClass}
-                  value={focus.to}
-                  onChange={(e) => onFocus({ from: focus.from, to: Number(e.target.value) })}
-                >
-                  {hours.map((h, i) =>
-                    i >= focus.from ? (
-                      <option key={h} value={i}>
-                        {shortHour((h + 1) % 24)}
-                      </option>
-                    ) : null,
-                  )}
-                </select>
-                <button
-                  type="button"
-                  aria-label="Hide the hour numbers"
-                  onClick={() => onFocus(null)}
-                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </>
-            )}
-            {/* Back to every hour, from a narrower range or from hidden. */}
-            {!everyHour && (
-              <button
-                type="button"
-                onClick={() => onFocus(allHours(plan))}
-                className="rounded px-1 py-0.5 text-[10px] font-medium text-primary hover:bg-muted"
-              >
-                All
-              </button>
-            )}
+            <SectionToggle
+              label="Chart"
+              hint="the hour-by-hour bars"
+              hidden={chartHidden}
+              onToggle={onToggleChart}
+            />
+            <SectionToggle
+              label="Table"
+              hint="the numbers for every hour"
+              hidden={tableHidden}
+              onToggle={onToggleTable}
+            />
           </div>
         </div>
       )}
@@ -585,6 +586,8 @@ function PlanLegendCell({
           Sales history unavailable
         </p>
       )}
+        </div>
+      </Collapse>
     </div>
   );
 }
@@ -601,26 +604,17 @@ export function PlanRow({
   todayIndex: number;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  // Every hour is open to begin with.
-  const [focus, setFocus] = useState<HourFocus | null>(() => allHours(plan));
   const collapsed = usePlanRowStore((s) => s.collapsed);
   const setCollapsed = usePlanRowStore((s) => s.setCollapsed);
-
-  // A different hour list (another store, or the basis changed which hours are
-  // active) would leave the selection pointing at the wrong hours, so it starts
-  // over from every hour. The same happens when the history first arrives, after
-  // the row has been showing its skeleton.
-  const hoursKey = plan?.hours.join(",") ?? "";
-  const [focusFor, setFocusFor] = useState(hoursKey);
-  if (focusFor !== hoursKey) {
-    setFocusFor(hoursKey);
-    setFocus(allHours(plan));
-  }
+  const chartHidden = usePlanRowStore((s) => s.chartHidden);
+  const setChartHidden = usePlanRowStore((s) => s.setChartHidden);
+  const tableHidden = usePlanRowStore((s) => s.tableHidden);
+  const setTableHidden = usePlanRowStore((s) => s.setTableHidden);
 
   /**
-   * The pinned-hour lists of all seven days scroll as one, so a given row is the
-   * same hour in every column. Setting the others fires their own scroll
-   * events, which find nothing left to change and stop there.
+   * The hour lists of all seven days scroll as one, so a given row is the same
+   * hour in every column. Setting the others fires their own scroll events,
+   * which find nothing left to change and stop there.
    */
   const lists = useRef<(HTMLDivElement | null)[]>([]);
   const syncScroll = (source: HTMLDivElement) => {
@@ -631,48 +625,29 @@ export function PlanRow({
     }
   };
 
-  const pick = (idx: number, extend: boolean) => {
-    // A range grows from the hour already picked. With every hour open there is
-    // none, and "from the first hour" would be a surprise, so that click is just
-    // a click.
-    if (extend && focus && !coversAll(focus, plan)) {
-      setFocus({ from: Math.min(focus.from, idx), to: Math.max(focus.from, idx) });
-    } else if (focus && focus.from === idx && focus.to === idx) {
-      setFocus(null);
-    } else {
-      setFocus({ from: idx, to: idx });
-    }
-  };
-
   const toggle = () => setCollapsed(!collapsed);
 
-  // Folded: just the title bar. Today's tint is kept so the column still reads
-  // straight through from the day header below to the top of the pinned header.
-  if (collapsed) {
-    return (
-      <tr className="border-b">
-        <th className="relative md:sticky left-0 z-20 bg-card border-r px-2 sm:px-3 py-1 text-start font-normal">
-          <PlanRowToggle collapsed onToggle={toggle} />
-        </th>
-        {week.dayNamesShort.map((name, i) => (
-          <td
-            key={name}
-            className={cn("border-r last:border-r-0", todayIndex === i && "bg-primary/5")}
-          />
-        ))}
-        <td />
-      </tr>
-    );
-  }
-
-  // Tint the bars only for a narrowed selection. With every hour open it would
-  // be a wash over the whole chart.
-  const highlight = coversAll(focus, plan) ? null : focus;
-
+  // One row, folded or not: folding slides every cell's contents shut and eases
+  // the title cell's padding in, until only the title bar is left. Today's tint
+  // stays throughout, so the column still reads straight through from the day
+  // header below to the top of the pinned header.
   return (
     <tr className="border-b">
-      <th className="relative md:sticky left-0 z-20 bg-card border-r px-2 sm:px-3 py-2 align-top font-normal">
-        <PlanLegendCell plan={plan} focus={focus} onFocus={setFocus} onToggle={toggle} />
+      <th
+        className={cn(
+          "relative md:sticky left-0 z-20 bg-card border-r px-2 sm:px-3 align-top font-normal transition-[padding] duration-300 motion-reduce:transition-none",
+          collapsed ? "py-1" : "py-2",
+        )}
+      >
+        <PlanLegendCell
+          plan={plan}
+          collapsed={collapsed}
+          onToggle={toggle}
+          chartHidden={chartHidden}
+          tableHidden={tableHidden}
+          onToggleChart={() => setChartHidden(!chartHidden)}
+          onToggleTable={() => setTableHidden(!tableHidden)}
+        />
       </th>
       {week.dayNamesShort.map((name, i) => {
         const day = plan?.days[i];
@@ -684,34 +659,37 @@ export function PlanRow({
               todayIndex === i && "bg-primary/5",
             )}
           >
-            {plan && day ? (
-              <DayPlanCell
-                day={day}
-                plan={plan}
-                hoverIdx={hoverIdx}
-                focus={focus}
-                highlight={highlight}
-                onHover={setHoverIdx}
-                onPick={pick}
-                listRef={(el) => {
-                  lists.current[i] = el;
-                }}
-                onListScroll={syncScroll}
-              />
-            ) : (
-              <DayPlanCellSkeleton />
-            )}
+            <Collapse open={!collapsed}>
+              {plan && day ? (
+                <DayPlanCell
+                  day={day}
+                  plan={plan}
+                  hoverIdx={hoverIdx}
+                  onHover={setHoverIdx}
+                  chartHidden={chartHidden}
+                  tableHidden={tableHidden}
+                  listRef={(el) => {
+                    lists.current[i] = el;
+                  }}
+                  onListScroll={syncScroll}
+                />
+              ) : (
+                <DayPlanCellSkeleton />
+              )}
+            </Collapse>
           </th>
         );
       })}
       <th className="px-1 sm:px-2 py-2 align-top font-normal text-center">
-        {plan?.usualHours != null && (
-          <p className="text-[10px] leading-tight text-muted-foreground tabular-nums">
-            usual
-            <br />
-            <span className="font-semibold text-foreground">{Math.round(plan.usualHours)}h</span>
-          </p>
-        )}
+        <Collapse open={!collapsed}>
+          {plan?.usualHours != null && (
+            <p className="text-[10px] leading-tight text-muted-foreground tabular-nums">
+              usual
+              <br />
+              <span className="font-semibold text-foreground">{Math.round(plan.usualHours)}h</span>
+            </p>
+          )}
+        </Collapse>
       </th>
     </tr>
   );

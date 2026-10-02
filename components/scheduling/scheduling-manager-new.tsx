@@ -2500,14 +2500,12 @@ export function SchedulingManager() {
           it measures the plan, and the day-by-day detail sits in the grid's
           plan row under each day header. The left half beside the tiles on a
           wide page (`order-first` puts it before them), under them on a narrow
-          one. The scroll window is sized per layout so the card comes out as
-          tall as the tiles: ~96px stacked, ~144px beside two columns of tiles
-          (three rows tall), ~80px beside three (two rows).
+          one. Its odd-day window is a fixed height of its own (~224px), so the
+          card is taller than the tiles and they stretch to match it.
         */}
         {outlookBeside && (
           <WeekOutlook
             className="min-w-0 @4xl/summary:order-first @4xl/summary:h-auto"
-            listClassName="max-h-24 @4xl/summary:max-h-36 @7xl/summary:max-h-20"
             plan={weekPlan}
             isLoading={insights.isLoading}
             error={insights.error}
