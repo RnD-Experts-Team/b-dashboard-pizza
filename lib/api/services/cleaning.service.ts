@@ -1,5 +1,6 @@
 import axios from "axios";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { shrinkImages } from "@/lib/utils/shrink-image";
 import type {
   ApiDueResponse,
   DueResponse,
@@ -748,7 +749,9 @@ export const cleaningService = {
       fd.append("date", payload.date);
       payload.employeeIds.forEach((id) => fd.append("employee_ids[]", String(id)));
       if (payload.note?.trim()) fd.append("note", payload.note.trim());
-      (payload.photos ?? []).forEach((file) => fd.append("photos[]", file, file.name));
+      // Shrink first — the upstream API rejects any photo over 10 MB.
+      const photos = await shrinkImages(payload.photos ?? []);
+      photos.forEach((file) => fd.append("photos[]", file, file.name));
 
       // NOTE: do not set Content-Type — the browser adds the multipart boundary.
       await axios.post(
@@ -895,7 +898,9 @@ export const cleaningService = {
         fd.append("inspection_item_id", String(payload.inspection_item_id));
         fd.append("value", payload.value);
         if (payload.note?.trim()) fd.append("note", payload.note.trim());
-        (payload.images ?? []).forEach((file) => fd.append("images[]", file, file.name));
+        // Shrink first — the upstream API rejects any photo over 10 MB.
+        const images = await shrinkImages(payload.images ?? []);
+        images.forEach((file) => fd.append("images[]", file, file.name));
 
         const res = await axios.post(`/api/cleaning/evaluations`, fd, {
           headers: authHeaders(),
