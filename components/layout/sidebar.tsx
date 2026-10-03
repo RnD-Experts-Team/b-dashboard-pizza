@@ -51,6 +51,7 @@ import {
   CookingPot,
   Coffee,
   Table2,
+  MessageSquareWarning,
 } from "lucide-react";
 import {
   Dialog,
@@ -705,10 +706,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     href: `/${locale}/dashboard/workbooks`,
     icon: Table2,
   };
+  // Tickets — no gate by design: the inbox is filtered upstream to what each
+  // caller can see, and the admin tab explains its own 403.
+  const ticketsItem: NavItem = {
+    title: t("tickets"),
+    href: `/${locale}/dashboard/tickets`,
+    icon: MessageSquareWarning,
+  };
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [...(isSuperAdmin() ? [workbooksItem] : []), breaksItem],
+    items: [...(isSuperAdmin() ? [workbooksItem] : []), breaksItem, ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];

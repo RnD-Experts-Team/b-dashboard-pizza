@@ -5,7 +5,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { cn } from "@/lib/utils";
 
 /**

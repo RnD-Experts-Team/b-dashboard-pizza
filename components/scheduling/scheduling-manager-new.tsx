@@ -42,7 +42,8 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@/components/ui/tooltip";
+  TOOLTIP_DELAY_MS,
+} from "./delayed-tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,6 +105,9 @@ import { AddShiftDialogNew } from "./add-shift-dialog-new";
 import { EditActualShiftDialog } from "./edit-actual-shift-dialog";
 import { PublishedSchedules } from "./published-schedules";
 import { DataFreshness } from "./data-freshness";
+import { WeekOutlook } from "./week-outlook";
+import { useSchedulingInsights } from "@/lib/hooks/use-scheduling-insights";
+import { buildWeekPlan, compactMoney, type Basis } from "@/lib/scheduling/day-plan";
 import { ShiftLegend } from "./shift-legend";
 import { pendingActualKey, pendingShiftKey } from "./shift-pending";
 import { BulkOperationProgress } from "./bulk-operation-progress";
@@ -547,6 +551,33 @@ export function SchedulingManager() {
    * week's cost can change after someone's raise.
    */
   const isPlannedOnly = scheduleMode === "planned" && !comparisonMode;
+
+  /**
+   * The last four weeks, set against the plan being built. Loads only while
+   * planning, alongside (never ahead of) the grid, and the result is cached by
+   * window, so flipping between future weeks costs nothing.
+   *
+   * Fed the PLAN — saved shifts plus unsaved drafts — so the plan row under
+   * each day moves the moment a shift is placed.
+   */
+  const [insightsBasis, setInsightsBasis] = useState<Basis>("typical");
+  const insights = useSchedulingInsights(storeId, week.start, isPlannedOnly);
+  const weekPlan = useMemo(
+    () =>
+      insights.data
+        ? buildWeekPlan(insights.data, week, shifts, drafts, insightsBasis)
+        : null,
+    [insights.data, week, shifts, drafts, insightsBasis],
+  );
+  /** The history as the stats tiles see it: only while planning. */
+  const outlook = isPlannedOnly ? weekPlan : null;
+  /**
+   * Whether the usual-week card takes a place next to the stats tiles. It holds
+   * that place for as long as it has anything to show (the card, its skeleton or
+   * its error), so the tiles do not reflow when the history lands.
+   */
+  const outlookBeside =
+    isPlannedOnly && (weekPlan !== null || insights.isLoading || !!insights.error);
 
   /**
    * Guard a view-mode change, but only when it moves AWAY from planned.
@@ -1753,7 +1784,7 @@ export function SchedulingManager() {
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
       <div className="space-y-4">
         {/* Page header */}
         {pageHeader}
@@ -2295,17 +2326,35 @@ export function SchedulingManager() {
         </div>
 
         {/*
-          Summary cards.
+          Summary cards, and — while planning — the usual-week card beside them.
 
-          `@container` + `@2xl:` rather than `sm:` on purpose. Viewport media
+          Container queries rather than `sm:`/`lg:` on purpose. Viewport media
           queries cannot see the sidebar, which swings the content box by 192px
           (w-64 expanded vs w-16 collapsed) — so `sm:grid-cols-4` fired on a
           1024px viewport even when the sidebar left only ~720px, squeezing four
           tiles to ~140px each and wrapping their labels onto three lines. A
-          container query tracks the width these cards actually get.
+          container query tracks the width these cards actually get. Every
+          breakpoint below is measured on this one named container, so the tiles
+          and the card always agree on how much room there is.
           `@2xl` (672px) is where four tiles clear ~150px each plus gaps.
+
+          While planning, the usual-week card and the tiles split the row in half
+          from `@4xl` (896px): the card on the left, the tiles on the right in two
+          columns, or three from `@7xl` (1280px), once each tile can keep ~200px.
+          Under 896px the card stacks below the tiles, as it always has. Measured
+          on the page rather than the screen, so an open sidebar is accounted for.
         */}
-        <div className="@container">
+        <div className="@container/summary">
+        <div
+          className={cn(
+            "flex flex-col gap-4",
+            // A two-column grid rather than a flex row: the card has padding and
+            // a border, which a flex split takes out of its half first (it came
+            // out 34px wider than the tiles). Equal `1fr` columns are exactly
+            // half each, and both cells stretch to the taller one.
+            outlookBeside && "@4xl/summary:grid @4xl/summary:grid-cols-2"
+          )}
+        >
         {/*
           Dimmed while a refetch is in flight. These numbers go stale the moment
           drafts are saved — the tiles read 0 shifts / 0.0h for the few seconds
@@ -2314,10 +2363,51 @@ export function SchedulingManager() {
         */}
         <div
           className={cn(
-            "grid grid-cols-2 gap-3 @2xl:grid-cols-4 transition-opacity",
+            "grid grid-cols-2 gap-3 transition-opacity",
+            outlook?.expectedSales != null
+              ? "@2xl/summary:grid-cols-3"
+              : "@2xl/summary:grid-cols-4",
+            // The right half, beside the card: two columns, three from `@7xl`
+            // when there are five tiles (four, while the history is still
+            // loading, stay 2 x 2). Five tiles only exist while the card does,
+            // so there is no 5-across layout left to fall back to. Stretched to
+            // the card's height, each tile's content centred.
+            outlookBeside &&
+              cn(
+                "@4xl/summary:min-w-0 @4xl/summary:grid-cols-2 @4xl/summary:*:justify-center",
+                outlook?.expectedSales != null && "@7xl/summary:grid-cols-3"
+              ),
             weekIsSettling && "opacity-50"
           )}
         >
+          {/*
+            While planning, the tiles also say how the plan compares with a
+            usual week. The history lives here, beside the plan's own totals,
+            rather than in a second set of numbers somewhere else.
+          */}
+          {outlook?.expectedSales != null && (
+            <Card className="p-0">
+              <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
+                <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                  <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-sky-600 dark:text-sky-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[9px] sm:text-[10px] font-medium leading-tight text-muted-foreground uppercase tracking-wider">
+                    Expected Sales
+                  </p>
+                  <p className="text-base sm:text-lg font-bold leading-tight">
+                    {compactMoney(outlook.expectedSales)}
+                  </p>
+                  {outlook.busiest.length > 0 && (
+                    <p className="truncate text-[9px] leading-tight text-muted-foreground">
+                      busiest {outlook.busiest.map((d) => d.name.slice(0, 3)).join(" · ")}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="p-0">
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -2330,6 +2420,11 @@ export function SchedulingManager() {
                 <p className="text-base sm:text-lg font-bold leading-tight">
                   {fmtFixed(stats.totalHours, 1)}h
                 </p>
+                {outlook?.usualHours != null && (
+                  <p className="truncate text-[9px] leading-tight text-muted-foreground">
+                    of {Math.round(outlook.usualHours)}h usually worked
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -2366,7 +2461,12 @@ export function SchedulingManager() {
             </CardContent>
           </Card>
 
-          <Card className="p-0">
+          {/* Beside the card there are five tiles in two or three columns, so
+              this one spans the columns left on the last row rather than
+              leaving a hole. */}
+          <Card
+            className={cn("p-0", outlook?.expectedSales != null && "@4xl/summary:col-span-2")}
+          >
             <CardContent className="flex items-center gap-2 sm:gap-3 py-2.5 px-3 sm:py-3 sm:px-4">
               <div className="flex h-7 w-7 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
                 <span className="text-sm font-bold text-amber-600 dark:text-amber-400">$</span>
@@ -2382,11 +2482,38 @@ export function SchedulingManager() {
                 </p>
                 {/* The qualifier that used to sit in the label and wrap it. */}
                 <p className="truncate text-[9px] leading-tight text-muted-foreground/70">
-                  at current rates
+                  {outlook?.expectedSales && stats.totalHours > 0
+                    ? `${((stats.laborCost / outlook.expectedSales) * 100).toFixed(1)}% of sales${
+                        outlook.usualLaborPct !== null
+                          ? ` · usually ${(outlook.usualLaborPct * 100).toFixed(1)}%`
+                          : ""
+                      }`
+                    : "at current rates"}
                 </p>
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/*
+          The week at a glance against the last four weeks. Planned view only:
+          it measures the plan, and the day-by-day detail sits in the grid's
+          plan row under each day header. The left half beside the tiles on a
+          wide page (`order-first` puts it before them), under them on a narrow
+          one. Its odd-day window is a fixed height of its own (~224px), so the
+          card is taller than the tiles and they stretch to match it.
+        */}
+        {outlookBeside && (
+          <WeekOutlook
+            className="min-w-0 @4xl/summary:order-first @4xl/summary:h-auto"
+            plan={weekPlan}
+            isLoading={insights.isLoading}
+            error={insights.error}
+            onRetry={insights.retry}
+            basis={insightsBasis}
+            onBasisChange={setInsightsBasis}
+          />
+        )}
         </div>
         </div>
 
@@ -2487,6 +2614,8 @@ export function SchedulingManager() {
             draftShifts={drafts}
             onEditDraft={handleEditDraft}
             onDeleteDraft={handleDeleteDraft}
+            weekPlan={isPlannedOnly ? weekPlan : null}
+            weekPlanLoading={isPlannedOnly && insights.isLoading && !weekPlan}
           />
 
         </div>

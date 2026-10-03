@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound, Settings2, Mic, Video as VideoIcon } from "lucide-react";
+import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound, Settings2, Mic, Video as VideoIcon, Eye, EyeOff } from "lucide-react";
 import { VideoQuality, DisconnectReason } from "livekit-client";
 
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,9 @@ interface PublicScreenViewProps {
   storeId: string;
 }
 
+/** Per-device preference: the employee hid their own camera preview. */
+const SELF_VIEW_HIDDEN_KEY = "station-self-view-hidden";
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 export function PublicScreenView({ storeId }: PublicScreenViewProps) {
@@ -61,6 +64,14 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   /** Bumped to force a fresh <ScreenTile> mount (fresh LiveKitRoom, fresh
    * connection) with whatever token/serverUrl are currently in `streaming`. */
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  /** Kept in localStorage so an unattended kiosk that reloads keeps the choice. */
+  const [selfViewHidden, setSelfViewHidden] = useState(() => {
+    try {
+      return localStorage.getItem(SELF_VIEW_HIDDEN_KEY) === "1";
+    } catch {
+      return false; // server render, or storage blocked
+    }
+  });
   const reconnectingRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -244,6 +255,16 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     [],
   );
 
+  function handleToggleSelfView() {
+    const next = !selfViewHidden;
+    setSelfViewHidden(next);
+    try {
+      localStorage.setItem(SELF_VIEW_HIDDEN_KEY, next ? "1" : "0");
+    } catch {
+      // storage blocked — the toggle still works for this session
+    }
+  }
+
   function handleChangeStation() {
     passwordRef.current = "";
     reconnectingRef.current = false;
@@ -425,7 +446,7 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             initialMedia={streaming.media}
             onRetry={handleChangeStation}
             onActiveDeviceChange={handleActiveDeviceChange}
-            showSelfView={streaming.station.type !== "drive_through"}
+            showSelfView={streaming.station.type !== "drive_through" && !selfViewHidden}
             onUnrecoverableDisconnect={handleStationDisconnected}
             className="h-full w-full"
           />
@@ -449,6 +470,20 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
           <div className="flex items-center gap-2 shrink-0">
             {/* Network status badge */}
             <NetworkBadge status={networkStatus} />
+
+            {/* Show / hide the employee's own camera preview (drive-thru has none) */}
+            {streaming.station.type !== "drive_through" && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleToggleSelfView}
+                aria-label={selfViewHidden ? "Show self view" : "Hide self view"}
+                title={selfViewHidden ? "Show self view" : "Hide self view"}
+              >
+                {selfViewHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            )}
 
             {/* Device settings popover */}
             <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>

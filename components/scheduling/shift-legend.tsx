@@ -11,7 +11,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { cn } from "@/lib/utils";
 import { SHIFT_ACCENT, type ShiftTone } from "@/lib/scheduling/accents";
 

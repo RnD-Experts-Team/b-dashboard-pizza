@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { ScheduleMode } from "@/types/scheduling.types";
+import type { ScheduleMode, SchedulingInsights } from "@/types/scheduling.types";
 
 /**
  * Client for the scheduling proxy at `/api/scheduling/...`.
@@ -106,6 +106,26 @@ export const schedulingService = {
   ): Promise<unknown> {
     const { data } = await axios.get<DataEnvelope<unknown>>(
       `${base(storeId)}/schedule/week`,
+      { params, headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
+    );
+    return data.data;
+  },
+
+  /**
+   * History for the staffing guide: per weekday and hour, what usually sells and
+   * how many people were on the clock. One call: the proxy asks the sales and
+   * staffing services together and joins them.
+   *
+   * `week_start` is the grid's true week start; `today` is the date the page
+   * already treats as today, so the window matches the "Today" button.
+   */
+  async getInsights(
+    storeId: string,
+    params: { week_start: string; today: string },
+    signal?: AbortSignal,
+  ): Promise<SchedulingInsights> {
+    const { data } = await axios.get<DataEnvelope<SchedulingInsights>>(
+      `${base(storeId)}/insights`,
       { params, headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
     );
     return data.data;

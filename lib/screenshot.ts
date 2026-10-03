@@ -122,7 +122,12 @@ export async function captureFullElement(
         const h = el.scrollHeight;
         change(el, (st) => {
           if (overflowsX) st.width = `${w}px`;
-          if (overflowsY) st.height = `${h}px`;
+          if (overflowsY) {
+            st.height = `${h}px`;
+            // The grid is held to the viewport so its headers can stay
+            // pinned; a class-driven max-height would clamp the height above.
+            st.maxHeight = "none";
+          }
           st.overflow = "visible";
         });
         continue;

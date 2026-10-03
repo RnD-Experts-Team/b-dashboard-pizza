@@ -19,6 +19,7 @@ import {
   UserMinus,
   SprayCan,
   Coffee,
+  MessageSquareWarning,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
@@ -95,6 +96,19 @@ function parseBreakActionDate(actionUrl: string | null | undefined): string | nu
   }
 }
 
+/**
+ * Ticket action_url is `/toolbox/tickets/{id}` — or, for a reply,
+ * `/toolbox/tickets/{id}#response-{responseId}`. It carries no store code;
+ * the ticket page resolves that itself. Only the id and anchor are used.
+ */
+function parseTicketActionUrl(
+  actionUrl: string | null | undefined
+): { ticketId: string; hash: string } | null {
+  if (!actionUrl) return null;
+  const m = /\/tickets\/(\d{1,12})(?:[/?][^#]*)?(#response-\d{1,12})?$/.exec(actionUrl);
+  return m ? { ticketId: m[1], hash: m[2] ?? "" } : null;
+}
+
 const HIRING_SEGMENT_TO_TAB: Record<string, HiringActionTab> = {
   "hiring-requests": "hiring",
   "separation-requests": "separation",
@@ -130,6 +144,9 @@ function parseHiringActionUrl(
 function getTypeVisuals(type: string) {
   if (type.startsWith("break_")) {
     return { Icon: Coffee, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
+  }
+  if (type.startsWith("ticket_")) {
+    return { Icon: MessageSquareWarning, bg: "bg-rose-500/10 text-rose-600 dark:text-rose-400" };
   }
   if (type.startsWith("data_entry_key")) {
     return { Icon: KeyRound, bg: "bg-orange-500/10 text-orange-600 dark:text-orange-400" };
@@ -226,6 +243,7 @@ export function NotificationItem({
   const isEmployeeType = notification.type.startsWith("employee_promoted");
   const isCleaningType = notification.type.startsWith("cleaning_");
   const isBreakType = notification.type.startsWith("break_");
+  const isTicketType = notification.type.startsWith("ticket_");
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
@@ -234,7 +252,8 @@ export function NotificationItem({
     isHiringType ||
     isEmployeeType ||
     isCleaningType ||
-    isBreakType;
+    isBreakType ||
+    isTicketType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -284,6 +303,16 @@ export function NotificationItem({
       const date = parseBreakActionDate(notification.action_url);
       router.push(
         `/${locale}/dashboard/break-logger${date ? `?date=${encodeURIComponent(date)}` : ""}`
+      );
+      return;
+    }
+
+    if (isTicketType) {
+      const parsed = parseTicketActionUrl(notification.action_url);
+      router.push(
+        parsed
+          ? `/${locale}/dashboard/tickets/${parsed.ticketId}${parsed.hash}`
+          : `/${locale}/dashboard/tickets`
       );
       return;
     }
@@ -340,6 +369,8 @@ export function NotificationItem({
                   ? "Employees"
                   : isBreakType
                   ? "Breaks"
+                  : isTicketType
+                  ? "Tickets"
                   : "Cleaning Chart"}
               </span>
             </>

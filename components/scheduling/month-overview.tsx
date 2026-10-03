@@ -27,7 +27,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { calcHours } from "@/lib/scheduling/constants";
 import type { Shift } from "@/types/scheduling.types";
 

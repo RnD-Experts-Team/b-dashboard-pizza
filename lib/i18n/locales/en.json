@@ -111,7 +111,8 @@
     "storage": "Storage & Stock",
     "breaks": "Breaks",
     "toolbox": "Toolbox",
-    "workbooks": "Workbooks"
+    "workbooks": "Workbooks",
+    "tickets": "Tickets"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -162,7 +163,8 @@
     "screen-project": "Screen Project",
     "storage": "Storage & Stock",
     "break-logger": "Breaks",
-    "workbooks": "Workbooks"
+    "workbooks": "Workbooks",
+    "tickets": "Tickets"
   },
   "auth": {
     "login": {
@@ -3568,6 +3570,420 @@
       "store": "Store",
       "created": "Created",
       "updated": "Last updated"
+    }
+  },
+  "toolboxTickets": {
+    "title": "Tickets",
+    "description": "Report a problem from anywhere in the dashboard — it routes itself to whoever owns that area at that store.",
+    "newTicket": "New ticket",
+    "refresh": "Refresh",
+    "sectionsError": "Couldn't load the ticket areas: {message}",
+    "tabs": {
+      "inbox": "My inbox",
+      "store": "Store queue",
+      "admin": "Admin"
+    },
+    "queue": {
+      "inboxHint": "Every ticket you raised, own, or were added to — across all your stores.",
+      "storeHint": "Every ticket at {store}. Tickets you can't open are hidden.",
+      "noStoreTitle": "No store selected",
+      "noStoreBody": "Pick a store in the sidebar to see its whole ticket queue.",
+      "emptyTitle": "No tickets yet",
+      "emptyBody": "When a problem is reported, it shows up here.",
+      "emptyFilteredTitle": "No tickets match these filters",
+      "emptyFilteredBody": "Try removing a filter or searching for something else."
+    },
+    "filters": {
+      "search": "Search title or description…",
+      "clearSearch": "Clear search",
+      "status": "Status",
+      "section": "Area",
+      "store": "Store",
+      "searchIn": "Search…",
+      "noMatches": "No matches.",
+      "reportedByMe": "Reported by me",
+      "clear": "Clear ({count})",
+      "clearAll": "Clear all filters"
+    },
+    "status": {
+      "pending": "Pending",
+      "in_progress": "In progress",
+      "fixed": "Fixed",
+      "closed": "Closed"
+    },
+    "list": {
+      "hidden": "{count, plural, one {# ticket} other {# tickets}} at this store you don't have access to {count, plural, one {is} other {are}} hidden.",
+      "ticket": "Ticket",
+      "status": "Status",
+      "section": "Area",
+      "store": "Store",
+      "reporter": "Reported by",
+      "activity": "Last activity",
+      "reopened": "Reopened",
+      "range": "{from}–{to} of {total}",
+      "perPage": "{count} / page",
+      "perPageSearch": "Page size…",
+      "prev": "Previous page",
+      "next": "Next page",
+      "pageOf": "{page} / {last}",
+      "allHidden": "Every ticket on this page is one you don't have access to. Try the next page, or use My inbox to see only your tickets."
+    },
+    "errors": {
+      "title": "Something went wrong",
+      "retry": "Try again",
+      "back": "Back to tickets",
+      "notFound": {
+        "title": "Ticket not found",
+        "body": "It doesn't exist, or it isn't one you have access to."
+      },
+      "storeUnknown": {
+        "title": "Store not in the ticket system yet",
+        "body": "Store {store} exists, but hasn't been copied to the ticket system yet. Try again later."
+      },
+      "noStore": {
+        "title": "No store selected",
+        "body": "Pick a store in the sidebar first."
+      },
+      "envForbidden": {
+        "title": "Access was refused",
+        "body": "The request was refused before the ticket system could answer. Either your account doesn't have ticket access here, or ticket access rules haven't been set up in this environment yet."
+      },
+      "adminForbidden": {
+        "title": "Admin access required",
+        "body": "Managing areas, levels and assignments needs the \"administer tickets\" permission."
+      },
+      "auth": {
+        "title": "You're signed out",
+        "body": "Sign in again to continue."
+      },
+      "network": {
+        "title": "Can't reach the ticket system",
+        "body": "Check your connection and try again."
+      },
+      "timeout": {
+        "title": "That took too long",
+        "body": "The ticket system didn't answer in time. Try again."
+      },
+      "server": {
+        "title": "The ticket system had a problem",
+        "body": "It's not something you did. Try again in a moment."
+      }
+    },
+    "files": {
+      "drop": "Drop files here, paste, or click to browse",
+      "full": "Maximum of {max} files reached",
+      "limits": "Up to {max} files, 10 MB each · {types}",
+      "tooBig": "Larger than 10 MB — it will be refused.",
+      "badType": "This file type isn't allowed.",
+      "remove": "Remove file",
+      "truncated": "Only {max} files can be attached — {dropped, plural, one {# file was} other {# files were}} left out."
+    },
+    "userPicker": {
+      "placeholder": "Choose a person…",
+      "userId": "User #{id}",
+      "search": "Search by name or email…",
+      "useId": "Use user #{id}",
+      "unavailable": "The people directory isn't available to your account. Type a user ID instead.",
+      "empty": "No people found."
+    },
+    "roles": {
+      "reader": "Reader",
+      "readerHint": "Can read",
+      "responder": "Responder",
+      "responderHint": "Can read and reply",
+      "assignee": "Assignee",
+      "assigneeHint": "Full control of this ticket"
+    },
+    "common": {
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "close": "Close",
+      "search": "Search…",
+      "noMatches": "No matches.",
+      "remove": "Remove"
+    },
+    "create": {
+      "title": "New ticket",
+      "description": "It goes straight to whoever is responsible for this area at this store.",
+      "store": "Store",
+      "storePlaceholder": "Choose a store…",
+      "section": "What is this about?",
+      "sectionPlaceholder": "Choose an area…",
+      "sectionHint": "The area decides who gets the ticket.",
+      "noSections": "No areas have been set up yet.",
+      "ticketTitle": "Title",
+      "titlePlaceholder": "e.g. Box 4 shows yesterday's count",
+      "ticketDescription": "Description",
+      "descriptionPlaceholder": "What happened, where, and what you expected instead.",
+      "participants": "Loop people in",
+      "participantsHint": "Optional. You'll be able to follow and reply either way.",
+      "addParticipant": "Add person",
+      "files": "Attachments",
+      "submit": "Submit ticket",
+      "submitting": "Submitting…",
+      "created": "Ticket submitted",
+      "noRecipients": "Submitted — but nobody is assigned to this area yet.",
+      "noRecipientsBody": "Your ticket is saved. An admin needs to assign someone to this area before anyone is notified.",
+      "errors": {
+        "store": "Choose a store.",
+        "section": "Choose what this is about.",
+        "title": "Give the ticket a title.",
+        "description": "Describe the problem.",
+        "participant": "Pick a person for each row, or remove the empty row.",
+        "files": "Remove the files marked in red first."
+      }
+    },
+    "detail": {
+      "reopenCount": "Reopened {count, plural, one {once} other {# times}}",
+      "yourRole": "You: {role}",
+      "reportedBy": "by {name}",
+      "moveTo": "Mark {status}",
+      "reopen": "Reopen",
+      "edit": "Edit",
+      "readOnly": "You can read this ticket, but not reply to it."
+    },
+    "thread": {
+      "description": "Description",
+      "replies": "Replies",
+      "notes": "Notes",
+      "files": "Files",
+      "history": "History",
+      "noReplies": "No replies yet",
+      "noRepliesBody": "Replies are the conversation everyone on the ticket sees and is notified about.",
+      "noNotes": "No notes yet",
+      "noNotesBody": "Notes are remarks on the ticket — context, findings, reminders.",
+      "noFiles": "No files attached",
+      "opened": "Opened",
+      "reopen": "Reopen",
+      "download": "Download"
+    },
+    "composer": {
+      "reply": "Reply",
+      "note": "Note",
+      "replyPlaceholder": "Write a reply…",
+      "notePlaceholder": "Add a note about this ticket…",
+      "attach": "Attach files",
+      "filesCount": "{count, plural, one {# file} other {# files}}",
+      "shortcut": "Ctrl+Enter to send",
+      "sending": "Sending…",
+      "upload": "Upload files",
+      "sendReply": "Send reply",
+      "addNote": "Add note",
+      "replied": "Reply sent",
+      "noted": "Note added",
+      "attached": "Files uploaded"
+    },
+    "statusDialog": {
+      "title": "Change status",
+      "description": "Everyone following the ticket will be notified.",
+      "submit": "Change status",
+      "reasonLabel": "Reason (optional)",
+      "reasonPlaceholder": "Recorded in the ticket's history…",
+      "reopenTitle": "Reopen ticket",
+      "reopenDescription": "It goes back to Pending and has to be picked up again.",
+      "reopenNote": "Reopening clears the fixed/closed time and tells everyone following the ticket.",
+      "reopenSubmit": "Reopen ticket",
+      "reasonLabelRequired": "Why is it being reopened?",
+      "reopenPlaceholder": "e.g. Box 4 is showing yesterday's count again.",
+      "reasonRequired": "A reason is required to reopen a ticket."
+    },
+    "edit": {
+      "title": "Edit ticket",
+      "description": "Changes are visible to everyone on the ticket.",
+      "descriptionPending": "You can edit this while it's pending. Once someone picks it up, only they can change it.",
+      "ticketTitle": "Title",
+      "ticketDescription": "Description",
+      "section": "Area",
+      "sectionHint": "Changing the area re-routes the ticket to a different team.",
+      "saved": "Ticket updated",
+      "rerouted": "Ticket re-routed",
+      "errors": {
+        "title": "Give the ticket a title.",
+        "description": "Describe the problem."
+      }
+    },
+    "details": {
+      "title": "Details",
+      "store": "Store",
+      "section": "Area",
+      "reporter": "Reported by",
+      "created": "Opened",
+      "firstResponse": "First response",
+      "lastActivity": "Last activity",
+      "fixed": "Fixed",
+      "closed": "Closed",
+      "reopened": "Reopened",
+      "none": "Not yet"
+    },
+    "participants": {
+      "title": "People",
+      "add": "Add",
+      "addConfirm": "Add person",
+      "cancel": "Cancel",
+      "reporter": "Reporter",
+      "userId": "User #{id}",
+      "none": "Nobody else has been added.",
+      "remove": "Remove person",
+      "added": "Person added",
+      "roleChanged": "Role changed",
+      "removed": "Person removed"
+    },
+    "routing": {
+      "title": "Who gets this ticket",
+      "explain": "Everyone assigned to this area, and which of them actually receive it. People assigned to the area who don't have access to this store don't receive it.",
+      "nobody": "Nobody is assigned to this area yet — no one was notified.",
+      "summary": "{receiving} of {candidates} assigned people receive it",
+      "userId": "User #{id}",
+      "viaSection": "via area",
+      "viaLevel": "via level #{id}",
+      "receivesScoped": "Receives — has access to this store",
+      "receivesAll": "Receives — assigned across all stores",
+      "notHoldingStore": "Doesn't receive — no access to this store",
+      "viaLevelNamed": "via {name}"
+    },
+    "actionErrors": {
+      "alreadyInStatus": "It's already in that status — refreshed.",
+      "allowed": "Available now: {statuses}",
+      "forbidden": "Your access on this ticket changed. The page has been refreshed.",
+      "notFound": "This ticket is no longer available to you."
+    },
+    "admin": {
+      "tabs": {
+        "sections": "Areas",
+        "levels": "Levels",
+        "assignments": "Assignments"
+      },
+      "intro": {
+        "sections": "An area is where a ticket comes from — each dashboard page that raises tickets sends one area key. The key is fixed once created; the name can change freely.",
+        "levels": "Levels group areas, so someone can own \"all of Hiring\" at once. Owning a level reaches every area beneath it, however deep.",
+        "assignments": "Who receives tickets for which area or level. People only receive tickets for stores they have access to, unless the assignment covers all stores."
+      },
+      "form": {
+        "section": "area",
+        "level": "level",
+        "createTitle": "New {noun}",
+        "editTitle": "Edit {noun}",
+        "sectionDescription": "Pages send this area's key when they raise a ticket. Create it before the page ships, or its tickets will be refused.",
+        "levelDescription": "A grouping of areas. Nest levels to mirror the org chart.",
+        "name": "Name",
+        "namePlaceholderSection": "e.g. Main dashboard - inventory",
+        "namePlaceholderLevel": "e.g. Hiring",
+        "key": "Key",
+        "keyHint": "Lowercase letters, numbers, dots, dashes and underscores. Convention: area.page. Can't be changed later.",
+        "keyLocked": "Keys can't be changed — pages depend on them. To change one, retire this and create a new one.",
+        "parent": "Parent level",
+        "parentHint": "Levels below this one aren't listed — that would create a loop.",
+        "topLevel": "None — top level",
+        "descriptionLabel": "Description",
+        "order": "Display order",
+        "orderHint": "Lower numbers are listed first.",
+        "errors": {
+          "keyRequired": "A key is required.",
+          "keyFormat": "Use lowercase letters, numbers, . _ or - and start with a letter or number (max 64).",
+          "nameRequired": "A name is required.",
+          "order": "Use a whole number.",
+          "cycle": "That would create a loop: {path}"
+        }
+      },
+      "sections": {
+        "search": "Search areas by name or key…",
+        "filterAll": "All",
+        "filterActive": "Active",
+        "filterRetired": "Retired",
+        "new": "New area",
+        "empty": "No areas yet",
+        "emptyBody": "Create an area for each page (or group of pages) that raises tickets.",
+        "noMatches": "No areas match.",
+        "retired": "Retired",
+        "edit": "Edit",
+        "retire": "Retire",
+        "restore": "Restore",
+        "created": "Area created",
+        "saved": "Area updated",
+        "restored": "Area restored",
+        "retiredToast": "Area retired",
+        "retireTitle": "Retire \"{name}\"?",
+        "retireDescription": "It stops appearing in pickers and can't receive new tickets. Existing tickets are kept. You can restore it later.",
+        "retireWarning": "Any page still sending the key {key} will fail to raise tickets until the area is restored."
+      },
+      "levels": {
+        "search": "Search levels…",
+        "new": "New level",
+        "empty": "No levels yet",
+        "emptyBody": "Levels are optional. Create one to let a person own several areas at once.",
+        "noMatches": "No levels match.",
+        "inactive": "Inactive",
+        "expand": "Expand",
+        "collapse": "Collapse",
+        "sections": "{count, plural, =0 {Areas} other {Areas (#)}}",
+        "child": "Sub-level",
+        "edit": "Edit level",
+        "deactivate": "Deactivate",
+        "reactivate": "Reactivate",
+        "created": "Level created",
+        "saved": "Level updated",
+        "reactivated": "Level reactivated",
+        "sectionsSaved": "Areas updated",
+        "deactivated": "Level deactivated — {count, plural, =0 {no assignments} one {# assignment} other {# assignments}} affected",
+        "deactivateTitle": "Deactivate \"{name}\"?",
+        "deactivateDescription": "People assigned to this level stop receiving its tickets.",
+        "chainWarning": "This level sits in the middle of a chain. Deactivating it also cuts off everyone assigned to the levels ABOVE it from every area BELOW it — they will silently stop receiving those tickets. This is not just hiding a row.",
+        "directCount": "{count, plural, =0 {Nobody is assigned directly to this level.} one {# person is assigned directly to this level.} other {# people are assigned directly to this level.}}",
+        "countUnknown": "Couldn't count the assignments on this level.",
+        "reversible": "You can reactivate it later."
+      },
+      "levelSections": {
+        "title": "Areas in \"{name}\"",
+        "description": "Check every area that belongs under this level. Saving replaces the whole list — unchecked areas are removed.",
+        "count": "{count, plural, =0 {No areas selected} one {# area selected} other {# areas selected}}",
+        "removing": "{count, plural, one {# will be removed} other {# will be removed}}",
+        "retired": "Retired"
+      },
+      "assignments": {
+        "filterUser": "Any person",
+        "filterSection": "Any area",
+        "filterLevel": "Any level",
+        "clear": "Clear",
+        "new": "New assignment",
+        "empty": "Nobody is assigned yet",
+        "emptyBody": "Until someone is assigned, new tickets are saved but nobody is notified.",
+        "noMatches": "No assignments match.",
+        "userId": "User #{id}",
+        "level": "Level",
+        "section": "Area",
+        "widened": "Receives across all stores anyway — another of their assignments covers all stores.",
+        "scoped": "Their stores",
+        "allStores": "All stores",
+        "active": "Active",
+        "paused": "Paused",
+        "delete": "Delete",
+        "created": "Assignment created",
+        "deleted": "Assignment deleted",
+        "deleteTitle": "Delete assignment?",
+        "deleteDescription": "{user} will stop receiving tickets for {target}. This can't be undone — create it again if needed."
+      },
+      "assignmentForm": {
+        "title": "New assignment",
+        "description": "Make someone responsible for an area or a level. To change what an assignment covers, delete it and create a new one.",
+        "user": "Person",
+        "target": "Responsible for",
+        "aSection": "An area",
+        "aLevel": "A level",
+        "pickSection": "Choose an area…",
+        "pickLevel": "Choose a level…",
+        "sectionHint": "Tickets from this one area.",
+        "levelHint": "Tickets from every area under this level, however deep.",
+        "scoped": "Only stores they have access to",
+        "scopedOn": "Recommended. They receive tickets only for stores they already have access to.",
+        "scopedOff": "They receive this area's tickets from every store in the company.",
+        "submit": "Create assignment",
+        "errors": {
+          "user": "Choose a person.",
+          "target": "Choose what they're responsible for.",
+          "duplicate": "This person already has this assignment."
+        }
+      }
     }
   }
 }
