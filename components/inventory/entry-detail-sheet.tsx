@@ -20,6 +20,7 @@ import {
   User,
 } from "lucide-react";
 import { EntryDetailItems } from "@/components/inventory/entry-detail-items";
+import { EntryPlanComparison } from "@/components/dough-sauce/entry-plan-comparison";
 import { useEntryDetail } from "@/lib/hooks/use-inventory-entries";
 import { cn } from "@/lib/utils";
 
@@ -164,6 +165,12 @@ export function EntryDetailSheet({
                   />
                 </div>
               </Card>
+
+              <EntryPlanComparison
+                storeKey={entry.store?.store_number}
+                date={entry.date}
+                items={entry.items}
+              />
 
               <EntryDetailItems items={entry.items} canViewHistory={hasHistoryAccess} />
             </div>

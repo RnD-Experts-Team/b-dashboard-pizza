@@ -48,6 +48,7 @@ import {
   LogOut,
   UserSearch,
   Sparkles,
+  CookingPot,
   Coffee,
   Table2,
 } from "lucide-react";
@@ -75,6 +76,7 @@ import { useFeature, Feature } from "@/lib/config";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useAuth } from "@/lib/auth/use-auth";
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import { DS_ROUTES } from "@/lib/dough-sauce/access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
 import { useNotificationStore } from "@/lib/store/notification.store";
@@ -480,6 +482,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/cleaning-chart`,
         icon: Sparkles,
         // Role/permission gating deferred — visible to all for now.
+      },
+      {
+        title: t("doughSauce"),
+        href: `/${locale}/dashboard/dough-sauce`,
+        icon: CookingPot,
+        // Specialist (`dough and sauce`) via the unscoped plans rule, or a Store Manager
+        // (`reports view`) via the per-store plan rule for any store they have.
+        // See lib/dough-sauce/access.ts / docs/DOUGH-SAUCE-ACCESS.md.
+        requirements: [
+          DS_ROUTES.plans(),
+          ...(overviewStores ?? []).map((s) => DS_ROUTES.planGet(s.id)),
+        ],
       },
     ],
   };

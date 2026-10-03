@@ -10,10 +10,10 @@ import {
   ArrowRight,
   CalendarClock,
   Loader2,
+  Play,
   RotateCcw,
   Square,
   StickyNote,
-  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +27,10 @@ import { CUSTOM_LABEL_MAX, NOTE_MAX, cleanLabel } from "@/lib/break-logger/paylo
 import { formatClock } from "@/lib/break-logger/work-date";
 import type { BreakRunningRef, BreakType } from "@/types/breaks.types";
 import { BreakTypePicker } from "./break-type-picker";
+import { BreakHourglass } from "./break-hourglass";
 import {
-  AllowanceBar,
   CountedBadge,
+  PulseDot,
   useBreakErrorText,
   useFormatTime,
 } from "./break-ui";
@@ -116,6 +117,10 @@ export function BreakPopoverBody({
   const allowance = settings?.daily_allowance_minutes ?? 0;
   const over = liveCountedMinutes > allowance;
   const lastType = types.find((x) => x.id === lastTypeId) ?? null;
+  const upcoming = (settings?.thresholds ?? []).filter(
+    (m) => m > liveCountedMinutes && m < allowance
+  );
+  const nextMilestone = upcoming.length ? Math.min(...upcoming) : null;
 
   async function doStart(type: BreakType, label?: string) {
     setBusy("start");
@@ -266,63 +271,103 @@ export function BreakPopoverBody({
 
   return (
     <div className="space-y-3">
-      {/* Allowance — always first: it's the number people glance for. */}
-      <div className="space-y-1.5">
-        <div className="flex items-baseline justify-between gap-2 text-xs">
-          <span className="font-medium tabular-nums">
-            {t("allowance.used", { used: liveCountedMinutes, allowance })}
-          </span>
-          <span
-            className={cn(
-              "tabular-nums",
-              over ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground"
+      {/* Header — the SAME card idle or running, so starting a break reads as
+          the hourglass simply starting to run. Idle: its sand is the allowance
+          left. Running: it drains through each minute and flips when a new
+          minute starts. */}
+      <div className="flex items-center gap-3 px-1 py-1">
+        <span className="flex shrink-0 items-center justify-center">
+          <BreakHourglass
+            size={40}
+            running={!!active}
+            over={over}
+            minuteIndex={active ? Math.floor(runningSeconds / 60) : undefined}
+            fill={
+              active
+                ? (runningSeconds % 60) / 60
+                : Math.min(1, liveCountedMinutes / Math.max(allowance, 1))
+            }
+          />
+        </span>
+
+        {active ? (
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              <PulseDot className="size-1.5" />
+              {t("timer.onBreak")}
+              <span className="font-normal normal-case tracking-normal text-muted-foreground">
+                · {t("timer.since", { time: formatTime(active.started_at) })}
+              </span>
+            </p>
+            <p
+              className="font-heading text-2xl font-bold leading-none tracking-tight tabular-nums"
+              aria-live="off"
+            >
+              {formatClock(runningSeconds)}
+            </p>
+            <p className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="truncate font-medium text-foreground">{active.label}</span>
+              <span aria-hidden>·</span>
+              <span
+                className={cn(
+                  "shrink-0 tabular-nums",
+                  over ? "font-medium text-red-600 dark:text-red-400" : undefined
+                )}
+              >
+                {over
+                  ? t("allowance.over", { minutes: liveCountedMinutes - allowance })
+                  : t("allowance.left", { minutes: allowance - liveCountedMinutes })}
+              </span>
+            </p>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {t("today.allowanceTitle")}
+            </p>
+            <p
+              className={cn(
+                "font-heading text-2xl font-bold leading-none tabular-nums",
+                over && "text-red-600 dark:text-red-400"
+              )}
+            >
+              {over
+                ? t("allowance.over", { minutes: liveCountedMinutes - allowance })
+                : t("allowance.left", { minutes: allowance - liveCountedMinutes })}
+            </p>
+            <p className="text-[11px] leading-snug tabular-nums text-muted-foreground">
+              {t("allowance.used", { used: liveCountedMinutes, allowance })}
+              {!over && nextMilestone != null && (
+                <>
+                  {" · "}
+                  {t("today.nextMilestoneIn", { minutes: nextMilestone - liveCountedMinutes })}
+                </>
+              )}
+            </p>
+            {over && (
+              <p className="text-[11px] leading-snug text-muted-foreground">{t("allowance.softLimit")}</p>
             )}
-          >
-            {over
-              ? t("allowance.over", { minutes: liveCountedMinutes - allowance })
-              : t("allowance.left", { minutes: allowance - liveCountedMinutes })}
-          </span>
-        </div>
-        <AllowanceBar
-          countedMinutes={liveCountedMinutes}
-          allowanceMinutes={allowance}
-          thresholds={settings.thresholds}
-        />
-        {over && (
-          <p className="text-[11px] leading-snug text-muted-foreground">{t("allowance.softLimit")}</p>
+          </div>
         )}
       </div>
 
       {active ? (
         /* ── Running ─────────────────────────────────────────────── */
-        <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 dark:border-amber-400/20 dark:bg-amber-500/10">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                {t("timer.onBreak")}
-              </p>
-              <p className="truncate font-medium">{active.label}</p>
-              <p className="text-xs text-muted-foreground">
-                {t("timer.since", { time: formatTime(active.started_at) })}
-              </p>
+        <div className="space-y-3">
+          {(!active.counts_toward_limit || active.belongs_to_previous_work_day) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <CountedBadge counted={active.counts_toward_limit} />
+              {active.belongs_to_previous_work_day && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border px-1.5 text-[10px] font-medium text-muted-foreground"
+                  title={t("timer.belongsToYesterdayHint")}
+                >
+                  <CalendarClock className="h-3 w-3" />
+                  {t("timer.belongsToYesterday")}
+                </span>
+              )}
             </div>
-            <span className="font-heading text-2xl font-bold tabular-nums" aria-live="off">
-              {formatClock(runningSeconds)}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <CountedBadge counted={active.counts_toward_limit} />
-            {active.belongs_to_previous_work_day && (
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 px-1.5 text-[10px] font-medium text-sky-700 dark:text-sky-400"
-                title={t("timer.belongsToYesterdayHint")}
-              >
-                <CalendarClock className="h-3 w-3" />
-                {t("timer.belongsToYesterday")}
-              </span>
-            )}
-          </div>
+          )}
           {active.belongs_to_previous_work_day && (
             <p className="text-[11px] leading-snug text-muted-foreground">
               {t("timer.belongsToYesterdayHint")}
@@ -362,7 +407,7 @@ export function BreakPopoverBody({
           ) : (
             <div className="flex gap-2">
               <Button
-                className="flex-1 bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600"
+                className="h-10 flex-1 bg-amber-600 text-white shadow-sm transition-all hover:bg-amber-700 active:scale-[0.99] dark:bg-amber-500 dark:hover:bg-amber-600"
                 onClick={() => void doStop()}
                 disabled={busy != null}
               >
@@ -376,6 +421,7 @@ export function BreakPopoverBody({
               <Button
                 variant="outline"
                 size="icon"
+                className="h-10 w-10"
                 aria-label={t("timer.addNote")}
                 title={t("timer.addNote")}
                 onClick={() => setNoteOpen(true)}
@@ -430,21 +476,33 @@ export function BreakPopoverBody({
         /* ── Idle: pick & go ─────────────────────────────────────── */
         <div className="space-y-3">
           {lastType && !lastType.requires_custom_label && (
-            <Button
-              className="w-full justify-start"
+            <button
+              type="button"
               onClick={() => void doStart(lastType)}
               disabled={busy != null}
-            >
-              {busy === "start" ? (
-                <Loader2 className="me-1.5 h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="me-1.5 h-4 w-4" />
+              aria-label={t("timer.quickStart", { label: lastType.name })}
+              className={cn(
+                "group flex w-full items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-2 text-start transition-all duration-200 dark:border-amber-400/20 dark:bg-amber-500/10",
+                "hover:border-amber-500/50 hover:bg-amber-500/10 active:scale-[0.99] dark:hover:bg-amber-500/15",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60"
               )}
-              {t("timer.quickStart", { label: lastType.name })}
-            </Button>
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-amber-600 text-white shadow-sm dark:bg-amber-500">
+                {busy === "start" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 fill-current rtl:-scale-x-100" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[9px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  {t("timer.repeatLast")}
+                </span>
+                <span className="block truncate text-sm font-medium">{lastType.name}</span>
+              </span>            </button>
           )}
-          <div className="space-y-2">
-            <p className="text-xs font-medium">{t("timer.pickType")}</p>
+          <div className="space-y-1.5">
+            <p className="px-0.5 text-xs font-medium">{t("timer.pickType")}</p>
             <BreakTypePicker types={types} onSelect={onPick} disabled={busy != null} />
           </div>
         </div>

@@ -8,6 +8,7 @@ import {
   UserCog,
   ShieldCheck,
   Sparkles,
+  CookingPot,
   ClipboardCheck,
   Lock,
   GitBranch,
@@ -31,6 +32,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import { DS_ROUTES } from "@/lib/dough-sauce/access";
 
 /**
  * Mirrors components/layout/sidebar.tsx's nav item metadata/order 1:1 — every
@@ -169,6 +171,18 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: Sparkles,
     titleKey: "cleaningChart",
     groupKey: "qaManagement",
+  },
+  {
+    id: "doughSauce",
+    href: (locale) => `/${locale}/dashboard/dough-sauce`,
+    icon: CookingPot,
+    titleKey: "doughSauce",
+    groupKey: "qaManagement",
+    // Specialist (unscoped plans rule) or a Store Manager (per-store plan rule).
+    requirements: (storeId) => [
+      DS_ROUTES.plans(),
+      ...(storeId ? [DS_ROUTES.planGet(storeId)] : []),
+    ],
   },
 
   // Data Management

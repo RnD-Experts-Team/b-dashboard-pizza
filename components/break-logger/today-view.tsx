@@ -4,16 +4,18 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   AlertCircle,
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
+  CircleSlash,
   ClipboardCopy,
   Coffee,
-  Flag,
   Info,
   Plus,
-  Radio,
   RotateCcw,
   StickyNote,
+  Timer,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,27 +30,44 @@ import {
   clampDate,
   elapsedSeconds,
   floorMinutes,
+  formatClock,
   retentionMinDate,
   shiftDate,
 } from "@/lib/break-logger/work-date";
 import type { BreakCategory, BreakDay } from "@/types/breaks.types";
 import { BreakEntryActions, type BreakEntryHandlers } from "./break-entry-actions";
 import { BreakDateField } from "./break-date-field";
+import { BreakHourglass } from "./break-hourglass";
 import {
-  AllowanceBar,
   CountedBadge,
+  PulseDot,
   RunningBadge,
   useBreakErrorText,
   useFormatTime,
 } from "./break-ui";
 
-function Kpi({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+function Kpi({
+  label,
+  value,
+  icon: Icon,
+  muted,
+}: {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+  muted?: boolean;
+}) {
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+    <div className="flex flex-col justify-between gap-3 rounded-lg border bg-card p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      </div>
       <p
         className={cn(
-          "mt-0.5 font-heading text-xl font-semibold tabular-nums",
+          "font-heading text-2xl font-semibold leading-none tabular-nums",
           muted && "text-muted-foreground"
         )}
       >
@@ -62,39 +81,46 @@ function CategoryGroup({
   title,
   minutes,
   items,
+  maxSeconds,
 }: {
   title: string;
   minutes: string;
   items: BreakCategory[];
+  /** Largest category of the day — each bar is its share of that. */
+  maxSeconds: number;
 }) {
   const t = useTranslations("breaks");
   if (items.length === 0) return null;
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-2 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
         <span>{title}</span>
         <span className="tabular-nums">{minutes}</span>
       </div>
       {items.map((c) => (
-        <div
-          key={`${c.break_type_id}-${c.label}`}
-          className="flex items-center justify-between gap-2 text-sm"
-        >
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span
-              className={cn(
-                "h-2 w-2 shrink-0 rounded-full",
-                c.counts_toward_limit ? "bg-amber-500" : "bg-muted-foreground/40"
-              )}
-            />
-            <span className="truncate">{c.label}</span>
-            {c.entry_count > 1 && (
-              <span className="text-xs text-muted-foreground">×{c.entry_count}</span>
-            )}
-          </span>
-          <span className="tabular-nums text-muted-foreground">
-            {t("minutes", { minutes: c.minutes })}
-          </span>
+        <div key={`${c.break_type_id}-${c.label}`} className="flex items-center">
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <span className="truncate">{c.label}</span>
+                {c.entry_count > 1 && (
+                  <span className="text-xs tabular-nums text-muted-foreground">×{c.entry_count}</span>
+                )}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {t("minutes", { minutes: c.minutes })}
+              </span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  c.counts_toward_limit ? "bg-amber-500 dark:bg-amber-400" : "bg-muted-foreground/40"
+                )}
+                style={{ width: `${Math.max(3, (c.seconds / maxSeconds) * 100)}%` }}
+              />
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -163,6 +189,9 @@ export function TodayView({
       ? Math.max(0, Math.floor((now - new Date(day.as_of).getTime()) / 1000))
       : 0;
   const totalMinutes = day ? floorMinutes(day.total_seconds + sinceAsOf) : 0;
+  // The store's active break, while it belongs to the day on screen.
+  const runningNow = running && active != null && now != null;
+  const runningSeconds = running && active && now != null ? elapsedSeconds(active.started_at, now) : 0;
 
   const header = (
     <div className="flex flex-wrap items-center gap-2">
@@ -245,14 +274,30 @@ export function TodayView({
     );
   }
 
-  const fired = [...day.milestones.fired].sort(
-    (a, b) => new Date(a.crossed_at).getTime() - new Date(b.crossed_at).getTime()
-  );
   // Pending as the server last saw it, minus any the live total has already passed.
   const upcoming = day.milestones.pending.filter((m) => m > countedMinutes);
   const nextMilestone = upcoming.length ? Math.min(...upcoming) : null;
   const countedCategories = day.categories.filter((c) => c.counts_toward_limit);
   const excludedCategories = day.categories.filter((c) => !c.counts_toward_limit);
+  const maxCategorySeconds = Math.max(1, ...day.categories.map((c) => c.seconds));
+
+  // Fired (with their true crossed_at) and pending, as one ladder by threshold.
+  const milestoneSteps = [
+    ...day.milestones.fired.map((f) => ({
+      key: `${f.kind}-${f.threshold_minutes}`,
+      minutes: f.threshold_minutes,
+      allowance: f.kind === "allowance",
+      reached: true,
+      crossedAt: f.crossed_at as string | null,
+    })),
+    ...day.milestones.pending.map((m) => ({
+      key: `pending-${m}`,
+      minutes: m,
+      allowance: false,
+      reached: m <= countedMinutes,
+      crossedAt: null as string | null,
+    })),
+  ].sort((a, b) => a.minutes - b.minutes || Number(a.allowance) - Number(b.allowance));
 
   return (
     <div className="space-y-4">
@@ -269,68 +314,92 @@ export function TodayView({
       {/* KPI strip — totals always from the server, never summed per row. */}
       <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-5">
         {/* Hero: counted vs allowance is the one number that matters. */}
-        <div className="col-span-3 space-y-2 rounded-lg border bg-card p-3 lg:col-span-2">
-          <div className="flex items-center gap-1">
-            <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {t("today.allowanceTitle")}
+        <div className="col-span-3 flex items-center gap-4 rounded-lg border bg-card p-3 lg:col-span-2">
+          {/* Same hourglass as the topbar: allowance sand when idle, and the
+              per-minute flip while today's break runs. */}
+          <span className="flex shrink-0 items-center justify-center">
+            <BreakHourglass
+              size={52}
+              running={runningNow}
+              over={over}
+              minuteIndex={runningNow ? Math.floor(runningSeconds / 60) : undefined}
+              fill={
+                runningNow
+                  ? (runningSeconds % 60) / 60
+                  : Math.min(1, countedMinutes / Math.max(allowance, 1))
+              }
+            />
+          </span>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex items-center gap-1">
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {t("today.allowanceTitle")}
+              </p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={t("today.softLimitInfo")}
+                    className="rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <Info className="h-3 w-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-60">{t("allowance.softLimit")}</TooltipContent>
+              </Tooltip>
+            </div>
+            <p className="font-heading text-2xl font-semibold leading-none tabular-nums">
+              <span className={cn(over && "text-red-600 dark:text-red-400")}>
+                {t("minutes", { minutes: countedMinutes })}
+              </span>
+              <span className="text-base font-normal text-muted-foreground">
+                {" / "}
+                {t("minutes", { minutes: allowance })}
+              </span>
             </p>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={t("today.softLimitInfo")}
-                  className="rounded-full text-muted-foreground hover:text-foreground"
-                >
-                  <Info className="h-3 w-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-60">{t("allowance.softLimit")}</TooltipContent>
-            </Tooltip>
+            <p className="text-[11px] tabular-nums text-muted-foreground">
+              {over ? (
+                <span className="font-medium text-red-600 dark:text-red-400">
+                  {t("allowance.over", { minutes: countedMinutes - allowance })}
+                </span>
+              ) : (
+                <span className="font-medium text-foreground">
+                  {t("allowance.left", { minutes: allowance - countedMinutes })}
+                </span>
+              )}
+              {nextMilestone != null && (
+                <>
+                  {" · "}
+                  {t("today.nextMilestoneIn", { minutes: nextMilestone - countedMinutes })}
+                </>
+              )}
+            </p>
           </div>
-          <p className="font-heading text-xl font-semibold tabular-nums">
-            <span className={cn(over && "text-red-600 dark:text-red-400")}>
-              {t("minutes", { minutes: countedMinutes })}
+          {running && (
+            <span className="hidden shrink-0 items-center gap-1.5 self-start rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 sm:inline-flex dark:bg-amber-500/20 dark:text-amber-400">
+              <PulseDot className="size-1.5" />
+              {t("today.running")}
+              {runningNow && <span className="tabular-nums">· {formatClock(runningSeconds)}</span>}
             </span>
-            <span className="text-base font-normal text-muted-foreground">
-              {" / "}
-              {t("minutes", { minutes: allowance })}
-            </span>
-          </p>
-          <AllowanceBar
-            countedMinutes={countedMinutes}
-            allowanceMinutes={allowance}
-            thresholds={day.milestones.thresholds}
-          />
-          <p className="text-[11px] tabular-nums text-muted-foreground">
-            {over ? (
-              <span className="font-medium text-red-600 dark:text-red-400">
-                {t("allowance.over", { minutes: countedMinutes - allowance })}
-              </span>
-            ) : (
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                {t("allowance.left", { minutes: allowance - countedMinutes })}
-              </span>
-            )}
-            {nextMilestone != null && (
-              <>
-                {" · "}
-                {t("today.nextMilestoneIn", { minutes: nextMilestone - countedMinutes })}
-              </>
-            )}
-          </p>
+          )}
         </div>
         <Kpi
           label={t("today.kpiExcluded")}
           value={t("minutes", { minutes: day.excluded_minutes })}
+          icon={CircleSlash}
           muted
         />
-        <Kpi label={t("today.kpiTotal")} value={t("minutes", { minutes: totalMinutes })} />
-        <Kpi label={t("today.kpiEntries")} value={String(day.entry_count)} />
+        <Kpi
+          label={t("today.kpiTotal")}
+          value={t("minutes", { minutes: totalMinutes })}
+          icon={Timer}
+        />
+        <Kpi label={t("today.kpiEntries")} value={String(day.entry_count)} icon={Coffee} />
       </div>
 
       {running && (
-        <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-          <Radio className="h-3.5 w-3.5 motion-safe:animate-pulse" />
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <PulseDot />
           {t("today.live")}
         </p>
       )}
@@ -344,7 +413,9 @@ export function TodayView({
           <CardContent>
             {day.entries.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-16 text-center">
-                <Coffee className="h-8 w-8 text-muted-foreground" />
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400">
+                  <Coffee className="h-6 w-6" />
+                </span>
                 <div className="space-y-1">
                   <p className="font-medium">{t("today.emptyTitle")}</p>
                   <p className="text-sm text-muted-foreground">{t("today.emptyHint")}</p>
@@ -362,7 +433,10 @@ export function TodayView({
                       ? elapsedSeconds(entry.started_at, now)
                       : entry.duration_seconds;
                   return (
-                    <li key={entry.id} className="flex items-start gap-3 py-2.5">
+                    <li
+                      key={entry.id}
+                      className="-mx-2 flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-muted/40"
+                    >
                       {/* Own column from sm up; on phones it sits above the label
                           so the label keeps the width. */}
                       <div className="hidden w-32 shrink-0 whitespace-nowrap pt-0.5 text-xs tabular-nums text-muted-foreground sm:block">
@@ -429,11 +503,13 @@ export function TodayView({
                   title={t("today.countedGroup")}
                   minutes={t("minutes", { minutes: day.counted_minutes })}
                   items={countedCategories}
+                  maxSeconds={maxCategorySeconds}
                 />
                 <CategoryGroup
                   title={t("today.excludedGroup")}
                   minutes={t("minutes", { minutes: day.excluded_minutes })}
                   items={excludedCategories}
+                  maxSeconds={maxCategorySeconds}
                 />
               </CardContent>
             </Card>
@@ -444,47 +520,62 @@ export function TodayView({
             <CardHeader className="pb-2">
               <CardTitle className="text-base">{t("today.milestones")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {fired.length === 0 && day.milestones.pending.length === 0 ? (
+            <CardContent className="text-sm">
+              {milestoneSteps.length === 0 ? (
                 <p className="text-muted-foreground">{t("today.noMilestones")}</p>
               ) : (
-                <>
-                  {fired.map((f) => (
-                    <div key={`${f.kind}-${f.threshold_minutes}`} className="flex items-center gap-2">
-                      <Flag
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0",
-                          f.kind === "allowance"
-                            ? "text-red-600 dark:text-red-400"
-                            : "text-emerald-600 dark:text-emerald-400"
+                /* Fired and pending as one ladder; the connector fills as you climb. */
+                <ol>
+                  {milestoneSteps.map((step, i) => {
+                    const last = i === milestoneSteps.length - 1;
+                    return (
+                      <li key={step.key} className="relative flex gap-3 pb-4 last:pb-0">
+                        {!last && (
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "absolute start-[11px] top-6 bottom-0 w-px",
+                              step.reached ? "bg-amber-500/60" : "bg-border"
+                            )}
+                          />
                         )}
-                      />
-                      <span className="flex-1">
-                        {f.kind === "allowance"
-                          ? t("today.allowanceReached", { minutes: f.threshold_minutes })
-                          : t("today.milestoneReached", { minutes: f.threshold_minutes })}
-                      </span>
-                      <span className="text-xs tabular-nums text-muted-foreground">
-                        {t("today.at", { time: formatTime(f.crossed_at) })}
-                      </span>
-                    </div>
-                  ))}
-                  {day.milestones.pending.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-xs text-muted-foreground">{t("today.pending")}</span>
-                      {day.milestones.pending.map((m) => (
-                        <Badge key={m} variant="outline" className="gap-1 tabular-nums">
-                          {t("minutes", { minutes: m })}
-                          {m > countedMinutes && (
-                            <span className="font-normal text-muted-foreground">
-                              · {t("today.inMinutes", { minutes: m - countedMinutes })}
-                            </span>
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full border",
+                            step.reached
+                              ? step.allowance
+                                ? "border-red-500 bg-red-500 text-white dark:border-red-400 dark:bg-red-400"
+                                : "border-amber-500 bg-amber-500 text-white dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950"
+                              : "border-dashed border-muted-foreground/40 bg-card text-muted-foreground"
                           )}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </>
+                        >
+                          {step.reached ? (
+                            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                          ) : (
+                            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+                          )}
+                        </span>
+                        <div className="flex min-w-0 flex-1 items-baseline justify-between gap-2 pt-0.5">
+                          <span className={cn("tabular-nums", !step.reached && "text-muted-foreground")}>
+                            {step.allowance
+                              ? t("today.allowanceReached", { minutes: step.minutes })
+                              : step.reached
+                                ? t("today.milestoneReached", { minutes: step.minutes })
+                                : t("minutes", { minutes: step.minutes })}
+                          </span>
+                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            {step.crossedAt
+                              ? t("today.at", { time: formatTime(step.crossedAt) })
+                              : !step.reached
+                                ? t("today.inMinutes", { minutes: step.minutes - countedMinutes })
+                                : null}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
               )}
             </CardContent>
           </Card>
