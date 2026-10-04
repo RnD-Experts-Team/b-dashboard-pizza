@@ -55,7 +55,7 @@ export function LaborHeader({
   const [dateOpen, setDateOpen] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div data-report-target="header" className="flex flex-wrap items-center gap-1">
       <Badge variant="secondary" className="gap-1.5 px-3 py-1 text-xs font-medium">
         <Store className="h-3.5 w-3.5" />
         {storeNumber ? `Store ${storeNumber}` : "No store selected"}

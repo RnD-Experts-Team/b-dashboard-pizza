@@ -233,6 +233,8 @@ export function SummaryTile({
         <Wrapper
           type={onClick ? "button" : undefined}
           onClick={onClick}
+          data-report-target="card"
+          data-report-label={typeof label === "string" ? label : undefined}
           className={cn(
             "flex items-center gap-1.5 rounded-lg border border-l-2 bg-card px-2 py-1.5 text-start",
             "cursor-default transition-all hover:bg-accent/50 hover:shadow-sm",

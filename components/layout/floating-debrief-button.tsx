@@ -164,6 +164,7 @@ export function FloatingDebriefButton() {
   const [isMobile, setIsMobile] = useState(false);
 
   const tNotepad = useTranslations("notepad");
+  const tReport = useTranslations("reportProblem.regions");
 
   // ── Cleaning Chart state ───────────────────────────────────────────────
   const t = useTranslations("cleaningChart");
@@ -1111,6 +1112,8 @@ export function FloatingDebriefButton() {
 
       {pos && isMobile && (
         <div
+          data-report-target="floating"
+          data-report-label={tReport("debrief")}
           className="fixed z-50"
           style={{ left: pos.x, top: pos.y, touchAction: "none" }}
           onPointerDown={handlePointerDown}
@@ -1146,6 +1149,8 @@ export function FloatingDebriefButton() {
         >
           <PopoverTrigger asChild>
             <div
+              data-report-target="floating"
+              data-report-label={tReport("debrief")}
               className="fixed z-50"
               style={{ left: pos.x, top: pos.y, touchAction: "none" }}
               onPointerDown={handlePointerDown}

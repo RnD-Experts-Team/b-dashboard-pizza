@@ -653,6 +653,7 @@ export function V1StoreScoreCard({
 
   return (
     <V1Card
+      reportId="v1-store-score"
       title={tab === "score" ? "Store Score" : "Upselling"}
       category="sales"
       period="D·WTD"

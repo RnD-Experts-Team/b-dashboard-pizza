@@ -33,6 +33,11 @@ interface SearchableSelectProps<TValue extends string | number = string> {
   disabled?: boolean;
   loading?: boolean;
   className?: string;
+  /**
+   * Extra classes for the dropdown panel — e.g. a z-index override when the
+   * select lives inside a dialog stacked above the default z-50 layer.
+   */
+  contentClassName?: string;
   icon?: React.ReactNode;
 }
 
@@ -52,6 +57,7 @@ export function SearchableSelect<TValue extends string | number = string>({
   disabled,
   loading,
   className,
+  contentClassName,
   icon,
 }: SearchableSelectProps<TValue>) {
   const [open, setOpen] = useState(false);
@@ -100,7 +106,7 @@ export function SearchableSelect<TValue extends string | number = string>({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] min-w-52 p-0"
+        className={cn("w-[var(--radix-popover-trigger-width)] min-w-52 p-0", contentClassName)}
         align="start"
       >
         <div className="flex items-center gap-2 border-b px-3 py-2">

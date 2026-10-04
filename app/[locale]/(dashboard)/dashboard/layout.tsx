@@ -7,6 +7,7 @@ import { AppShell } from "@/components/layout/app-shell";
 // import { AnnouncementPopup } from "@/components/announcements/announcement-popup";
 import { AnnouncementOnLoadPopup } from "@/components/announcements/announcement-onload-popup";
 import { PizzaLoader } from "@/components/shared/pizza-loader";
+import { ReportProblemRoot } from "@/components/report-problem";
 
 export default function DashboardLayout({
   children,
@@ -39,6 +40,7 @@ export default function DashboardLayout({
       <AppShell>{children}</AppShell>
       {/* <AnnouncementPopup /> */}
       <AnnouncementOnLoadPopup />
+      <ReportProblemRoot />
     </>
   );
 }

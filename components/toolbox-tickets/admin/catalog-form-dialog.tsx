@@ -29,6 +29,11 @@ interface CatalogFormDialogProps {
   initial: (CatalogFormValues & { id: number }) | null;
   /** Create only — prefilled values, e.g. the parent for "add child". */
   defaults?: Partial<CatalogFormValues>;
+  /**
+   * Create only — the prefilled key is fixed (Coverage: it's the key the
+   * "Report a problem" button already sends, so it can't be reworded).
+   */
+  lockKey?: boolean;
   /** Levels only — already excludes self + descendants (cycle prevention). */
   parentOptions?: SearchableSelectOption<string>[];
   /** Levels only — id → name, to spell out a TICKET_LEVEL_CYCLE `error.path`. */
@@ -46,6 +51,7 @@ export function CatalogFormDialog({
   kind,
   initial,
   defaults,
+  lockKey,
   parentOptions,
   levelNames,
   onSubmit,
@@ -106,8 +112,17 @@ export function CatalogFormDialog({
         };
         fe.parent_id = t("errors.cycle", { path: parsed.path.map(label).join(" → ") });
       }
+      // A fixed key can't be corrected in its read-only field — say it up top.
+      let lockedKeyError: string | null = null;
+      if (lockKey && fe.key) {
+        lockedKeyError = fe.key;
+        delete fe.key;
+      }
       setErrors(fe);
-      if (!["key", "name", "description", "display_order", "parent_id"].some((k) => fe[k])) {
+      if (lockedKeyError) {
+        setFormError(lockedKeyError);
+        onError(parsed);
+      } else if (!["key", "name", "description", "display_order", "parent_id"].some((k) => fe[k])) {
         setFormError(parsed.message);
         onError(parsed);
       }
@@ -145,7 +160,7 @@ export function CatalogFormDialog({
               maxLength={190}
               onChange={(e) => {
                 const name = e.target.value;
-                set(!editing && !keyTouched ? { name, key: suggestKey(name) } : { name });
+                set(!editing && !lockKey && !keyTouched ? { name, key: suggestKey(name) } : { name });
               }}
               placeholder={kind === "section" ? t("namePlaceholderSection") : t("namePlaceholderLevel")}
               disabled={saving}
@@ -156,13 +171,13 @@ export function CatalogFormDialog({
             htmlFor="tbx-cat-key"
             required={!editing}
             error={errors.key}
-            hint={editing ? t("keyLocked") : t("keyHint")}
+            hint={editing ? t("keyLocked") : lockKey ? t("keyFixed") : t("keyHint")}
           >
             <Input
               id="tbx-cat-key"
               value={values.key}
               maxLength={64}
-              readOnly={editing}
+              readOnly={editing || lockKey}
               onChange={(e) => {
                 setKeyTouched(true);
                 set({ key: e.target.value.toLowerCase() });

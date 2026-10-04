@@ -24,6 +24,8 @@ interface TicketUserPickerProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** Extra classes for the dropdown panel (e.g. a z-index inside a raised dialog). */
+  contentClassName?: string;
 }
 
 /**
@@ -39,6 +41,7 @@ export function TicketUserPicker({
   placeholder,
   disabled,
   className,
+  contentClassName,
 }: TicketUserPickerProps) {
   const t = useTranslations("toolboxTickets.userPicker");
   const [open, setOpen] = useState(false);
@@ -116,7 +119,10 @@ export function TicketUserPicker({
           <ChevronsUpDown className="ms-auto h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-60 p-0" align="start">
+      <PopoverContent
+        className={cn("w-[var(--radix-popover-trigger-width)] min-w-60 p-0", contentClassName)}
+        align="start"
+      >
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <Input

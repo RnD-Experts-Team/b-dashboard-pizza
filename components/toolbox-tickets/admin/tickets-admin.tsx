@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { FolderTree, Layers, UserCheck } from "lucide-react";
+import { FolderTree, Layers, ShieldCheck, UserCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { AssignmentsPanel } from "./assignments-panel";
+import { CoveragePanel } from "./coverage-panel";
 import { LevelsPanel } from "./levels-panel";
 import { SectionsPanel } from "./sections-panel";
 
-type AdminTab = "sections" | "levels" | "assignments";
+type AdminTab = "sections" | "levels" | "assignments" | "coverage";
 
 const TABS: { id: AdminTab; icon: typeof Layers }[] = [
   { id: "sections", icon: Layers },
   { id: "levels", icon: FolderTree },
   { id: "assignments", icon: UserCheck },
+  { id: "coverage", icon: ShieldCheck },
 ];
 
 /**
@@ -53,6 +55,7 @@ export function TicketsAdmin({ onCatalogChanged }: { onCatalogChanged: () => voi
       {tab === "sections" && <SectionsPanel onChanged={onCatalogChanged} />}
       {tab === "levels" && <LevelsPanel onChanged={onCatalogChanged} />}
       {tab === "assignments" && <AssignmentsPanel />}
+      {tab === "coverage" && <CoveragePanel onChanged={onCatalogChanged} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import axios from "axios";
-import { buildNestedFormData } from "@/lib/api/form-data";
+import { buildNestedFormData, payloadHasFiles } from "@/lib/api/form-data";
 import { filtersToApiQuery } from "@/lib/toolbox-tickets/filters-url";
 import { parseTicketError, TicketError, type TicketErrorScope } from "@/lib/toolbox-tickets/errors";
 import type {
@@ -364,22 +364,28 @@ async function getTicket(storeCode: string, id: number, signal?: AbortSignal): P
 }
 
 async function createTicket(storeCode: string, payload: CreateTicketPayload): Promise<CreateTicketResult> {
-  const data = body(
-    {
-      section_key: payload.sectionKey,
-      title: payload.title,
-      description: payload.description,
-      participants: payload.participants.length
-        ? payload.participants.map((p) => ({ user_id: p.userId, role: p.role }))
-        : undefined,
-    },
-    payload.files,
-  );
+  const notes = (payload.notes ?? [])
+    // Contiguous indexes only — a hole silently drops the note upstream.
+    .filter((n) => n.body.trim() || n.files.length)
+    .map((n) => ({ body: n.body, files: n.files.length ? n.files : undefined }));
+  const fields = {
+    section_key: payload.sectionKey,
+    title: payload.title,
+    description: payload.description,
+    participants: payload.participants.length
+      ? payload.participants.map((p) => ({ user_id: p.userId, role: p.role }))
+      : undefined,
+    notes: notes.length ? notes : undefined,
+  };
+  // Multipart whenever a file rides ANYWHERE — top level or on a note
+  // (notes[0][files][]); plain JSON otherwise.
+  const hasFiles = payload.files.length > 0 || payloadHasFiles(notes);
+  const data = hasFiles ? buildNestedFormData(fields, payload.files) : fields;
   const res = await call<Envelope<Raw>>(() =>
     axios.post(
       `${BASE}/stores/${store(storeCode)}/tickets`,
       data,
-      opts(undefined, payload.files.length ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS),
+      opts(undefined, hasFiles ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS),
     ),
   );
   return { ticket: remember(toTicket(res.data)), warnings: Array.isArray(res.warnings) ? res.warnings : [] };

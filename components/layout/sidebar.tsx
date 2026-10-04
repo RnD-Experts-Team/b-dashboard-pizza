@@ -37,7 +37,6 @@ import {
   Megaphone,
   Monitor,
   Target,
-  LifeBuoy,
   Ticket,
   Wallet,
   Warehouse,
@@ -70,6 +69,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { UserMenu } from "./user-menu";
+import { ReportProblemSidebarButton } from "@/components/report-problem";
 import { ImpersonateDialog } from "./impersonate-dialog";
 import { useUIStore } from "@/lib/store/ui.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -1098,24 +1098,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
       <Separator />
 
-      {/* Support Button */}
-      <div className={cn("px-2 sm:px-3 py-2", collapsed && "flex justify-center")}>
-        <a
-          href="https://tasks.rdexperts.tech/support-ticket"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full",
-            "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
-          {!collapsed && <span className="truncate">Support</span>}
-        </a>
-      </div>
-
-      <Separator />
+      {/* Report a problem — replaced the external Support link. Tablets and
+          up; brings its own trailing separator so the phone drawer (where
+          it's hidden) doesn't show two in a row. */}
+      <ReportProblemSidebarButton collapsed={collapsed} onBeforeStart={onNavigate} />
 
       {/* Impersonate User — super admin only, or while impersonating (so
           the "exit" control stays available even after roles/menus have

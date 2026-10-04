@@ -3852,12 +3852,14 @@
       "tabs": {
         "sections": "Areas",
         "levels": "Levels",
-        "assignments": "Assignments"
+        "assignments": "Assignments",
+        "coverage": "Coverage"
       },
       "intro": {
         "sections": "An area is where a ticket comes from — each dashboard page that raises tickets sends one area key. The key is fixed once created; the name can change freely.",
         "levels": "Levels group areas, so someone can own \"all of Hiring\" at once. Owning a level reaches every area beneath it, however deep.",
-        "assignments": "Who receives tickets for which area or level. People only receive tickets for stores they have access to, unless the assignment covers all stores."
+        "assignments": "Who receives tickets for which area or level. People only receive tickets for stores they have access to, unless the assignment covers all stores.",
+        "coverage": "Every area the \"Report a problem\" button can send reports to. A missing area means those reports land in General — create it here in one click."
       },
       "form": {
         "section": "area",
@@ -3884,7 +3886,8 @@
           "nameRequired": "A name is required.",
           "order": "Use a whole number.",
           "cycle": "That would create a loop: {path}"
-        }
+        },
+        "keyFixed": "This is the key the \"Report a problem\" button already sends — it can't be changed here."
       },
       "sections": {
         "search": "Search areas by name or key…",
@@ -3983,7 +3986,142 @@
           "target": "Choose what they're responsible for.",
           "duplicate": "This person already has this assignment."
         }
+      },
+      "coverage": {
+        "summary": "{active} of {total} areas are set up",
+        "status": {
+          "active": "Set up",
+          "retired": "Retired",
+          "missing": "Missing"
+        },
+        "filter": {
+          "all": "All areas",
+          "missing": "Missing",
+          "retired": "Retired",
+          "active": "Set up"
+        },
+        "search": "Search areas by name or key…",
+        "noMatches": "No areas match.",
+        "create": "Create",
+        "restore": "Restore",
+        "created": "Area {key} created",
+        "restored": "Area {key} restored",
+        "fallbackNote": "The fallback: reports from a part with no area of its own come here.",
+        "generalFirst": "Create {key} first — it's where reports go when their own area isn't set up yet."
       }
+    }
+  },
+  "reportProblem": {
+    "trigger": {
+      "label": "Report a problem",
+      "blocked": {
+        "small": "Reporting a problem works on tablets and larger screens.",
+        "fullscreen": "Leave full screen first, then report the problem.",
+        "modal": "Close the open window first, then report the problem.",
+        "covered": "Close what's on top of the page first, then report the problem."
+      }
+    },
+    "inspect": {
+      "instruction": "Click the part of the page that has the problem",
+      "hintSpecific": "On dashboards you can pick a single card.",
+      "hintGeneral": "Pick the header or the section the problem is in.",
+      "escKey": "Esc",
+      "cancel": "Cancel",
+      "clickToReport": "click to report",
+      "reportThis": "Report this",
+      "capturing": "Taking a screenshot…",
+      "contents": "Contains: {names}",
+      "wholePage": "Whole page",
+      "explain": "We'll take a screenshot of it and send it to the team that looks after that part."
+    },
+    "kinds": {
+      "card": "Card",
+      "section": "Section",
+      "header": "Header",
+      "sidebar": "Sidebar",
+      "topbar": "Top bar",
+      "bottomnav": "Bottom bar",
+      "floating": "Floating button",
+      "overlay": "Screen preview"
+    },
+    "pages": {
+      "dspr": "DSPR Dashboard",
+      "dashboardV1": "Dashboard V1",
+      "businessReports": "Business Reports",
+      "wbrReports": "WBR Reports",
+      "employeeProfile": "Employee Profile",
+      "devTools": "Developer Tools",
+      "unknown": "This page"
+    },
+    "dialog": {
+      "title": "Report a problem",
+      "description": "It goes to whoever looks after this part of the dashboard, with a screenshot and the page details attached.",
+      "titleTemplate": "Problem with {part} — {page}",
+      "impersonating": "You're viewing as {name}. This report will be filed under their account.",
+      "youPicked": "You picked",
+      "onPage": "On {page}",
+      "notePreview": "Details we'll attach as a note",
+      "area": {
+        "label": "Area",
+        "placeholder": "Choose an area…",
+        "from": {
+          "element": "Picked automatically from {part}.",
+          "region": "Picked automatically for this part of the app.",
+          "page": "Picked automatically for {page}.",
+          "fallback": "This page has no area of its own yet."
+        },
+        "fromReporter": "You chose this area.",
+        "fallback": "The area for this part ({key}) isn't set up yet, so it goes to General. An admin can add it under Tickets → Admin → Coverage.",
+        "missing": "The area for this part ({key}) isn't set up yet, and there's no General area either. Choose the closest area.",
+        "loadFailed": "Couldn't load the areas: {message}"
+      },
+      "retry": "Try again",
+      "store": "Store",
+      "storePlaceholder": "Choose a store…",
+      "titleLabel": "Title",
+      "whatsWrong": "What's wrong?",
+      "whatsWrongPlaceholder": "What did you expect, and what happened instead?",
+      "moreFiles": "More files",
+      "moreFilesHint": "Optional — anything else that helps explain it.",
+      "people": "Loop people in (optional)",
+      "peopleHint": "They'll be able to follow and reply. You can always follow your own report.",
+      "addPerson": "Add person",
+      "discardQuestion": "Discard this report?",
+      "keepEditing": "Keep editing",
+      "discard": "Discard",
+      "send": "Send report",
+      "sending": "Sending…",
+      "sent": "Report sent — ticket #{id}",
+      "viewTicket": "View ticket",
+      "errors": {
+        "store": "Choose a store.",
+        "area": "Choose an area.",
+        "title": "Give the report a title.",
+        "description": "Say what's wrong.",
+        "participant": "Pick a person for each row, or remove the empty row.",
+        "files": "Remove the files marked in red first."
+      }
+    },
+    "screenshot": {
+      "title": "Screenshot",
+      "capturing": "Taking the screenshot…",
+      "partial": "Cropped to what was visible",
+      "failed": "We couldn't take a screenshot. You can still send the report, or attach one yourself under More files.",
+      "failedTimeout": "The screenshot took too long. You can still send the report, or retake it.",
+      "removed": "Screenshot removed — it won't be sent.",
+      "restore": "Add it back",
+      "retake": "Retake",
+      "remove": "Remove",
+      "open": "Open full size",
+      "alt": "Screenshot of the part you picked",
+      "privacy": "Everyone who can see this ticket will see the screenshot.",
+      "refused": "The screenshot was refused: {message}",
+      "sendWithout": "Send without the screenshot"
+    },
+    "regions": {
+      "debrief": "Debrief button",
+      "screenPreview": "Screen preview",
+      "settingsMenu": "Settings menu"
     }
   }
 }

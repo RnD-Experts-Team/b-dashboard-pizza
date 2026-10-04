@@ -145,12 +145,21 @@ export interface TicketListFilters {
   perPage: number;
 }
 
+/** A note written at creation time. `files` ride on the note, not the ticket. */
+export interface CreateTicketNote {
+  /** ≤ 10000 chars upstream. */
+  body: string;
+  files: File[];
+}
+
 export interface CreateTicketPayload {
   sectionKey: string;
   title: string;
   description: string;
   participants: { userId: number; role: ParticipantRole }[];
   files: File[];
+  /** Paired by index upstream: notes[0][files][0] lands on the first note. */
+  notes?: CreateTicketNote[];
 }
 
 export interface CreateTicketResult {

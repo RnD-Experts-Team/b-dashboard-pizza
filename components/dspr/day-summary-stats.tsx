@@ -193,6 +193,8 @@ export function DaySummaryStats({ day, className }: DaySummaryStatsProps) {
           <Tooltip key={stat.label}>
             <TooltipTrigger asChild>
               <div
+                data-report-target="card"
+                data-report-label={stat.label}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg border border-l-2 bg-card px-2 py-1.5",
                   "hover:shadow-sm hover:bg-accent/50 transition-all cursor-default",
