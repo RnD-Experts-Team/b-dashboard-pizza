@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useMaintenanceTicketsStore } from "@/lib/store/maintenance-tickets.store";
 import { useMaintenanceTicketsCatalogStore } from "@/lib/store/maintenance-tickets-catalog.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -61,15 +61,30 @@ export function useMaintenanceTickets(options?: UseMaintenanceTicketsOptions) {
     clearError: clearCatalogError,
   } = useMaintenanceTicketsCatalogStore();
 
-  // Fetch tickets when the effective store or mode changes
+  // Fetch tickets when the effective store or mode changes.
+  //
+  // On mount (and on a re-run for the same store/mode, e.g. StrictMode) the
+  // filters and page already in the store are kept: that is what makes coming
+  // back from a ticket land on the same list instead of a fresh one. A genuine
+  // store/mode change still starts clean, because filter values such as
+  // technician or issue ids belong to the store they were picked in.
+  const lastScopeRef = useRef<string | null>(null);
   useEffect(() => {
+    const scope = `${mode}:${effectiveStoreId ?? ""}`;
+    const keepView = lastScopeRef.current === null || lastScopeRef.current === scope;
+    lastScopeRef.current = scope;
+    const { filters: keptFilters, currentPage: keptPage } =
+      useMaintenanceTicketsStore.getState();
+    const nextFilters = keepView ? keptFilters : {};
+    const nextPage = keepView ? keptPage : 1;
+
     if (mode === "global") {
-      fetchTickets(undefined, {}, 1);
-      fetchAnalytics(undefined, {});
+      fetchTickets(undefined, nextFilters, nextPage);
+      fetchAnalytics(undefined, nextFilters);
       fetchBaseAnalytics(undefined);
     } else if (effectiveStoreId) {
-      fetchTickets(effectiveStoreId, {}, 1);
-      fetchAnalytics(effectiveStoreId, {});
+      fetchTickets(effectiveStoreId, nextFilters, nextPage);
+      fetchAnalytics(effectiveStoreId, nextFilters);
       fetchBaseAnalytics(effectiveStoreId);
     } else {
       reset();

@@ -26,6 +26,14 @@ interface MaintenanceTicketsState {
   lastStoreId: string | null;
   /** Global-index scoping: restricts a "global" fetch to these store numbers (stores[]). Null = unrestricted. */
   scopedStoreIds: string[] | null;
+  /**
+   * The store(s) the user applied in the page's store filter. Lives here rather
+   * than in page state so it survives opening a ticket and coming back --
+   * `mode`, `scopedStoreIds`, `filters` and the page already do, and a selection
+   * that did not would silently snap back to the sidebar store. Null = the page
+   * has not picked one yet. Deliberately NOT cleared by `reset()`.
+   */
+  storeSelection: string[] | null;
 
   analytics: TicketsAnalytics | null;
   analyticsLoading: boolean;
@@ -53,6 +61,7 @@ interface MaintenanceTicketsState {
   fetchBaseAnalytics: (storeId?: string) => Promise<void>;
   setMode: (mode: "store" | "global") => void;
   setScopedStoreIds: (ids: string[] | null) => void;
+  setStoreSelection: (ids: string[] | null) => void;
   goToPage: (page: number) => void;
   setFilters: (filters: TicketsFilters) => void;
   clearError: () => void;
@@ -87,6 +96,7 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
     filters: {},
     lastStoreId: null,
     scopedStoreIds: null,
+    storeSelection: null,
 
     analytics: null,
     analyticsLoading: false,
@@ -285,6 +295,10 @@ export const useMaintenanceTicketsStore = create<MaintenanceTicketsState>()(
 
     setScopedStoreIds: (ids: string[] | null) => {
       set({ scopedStoreIds: ids });
+    },
+
+    setStoreSelection: (ids: string[] | null) => {
+      set({ storeSelection: ids });
     },
 
     goToPage: (page: number) => {
