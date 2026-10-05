@@ -26,6 +26,7 @@ import {
   buildUrlFromFilters,
 } from "@/lib/maintenance-tickets/filters-url";
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
+import { useMaintenanceTicketsStore } from "@/lib/store/maintenance-tickets.store";
 import { useAuth } from "@/lib/auth/use-auth";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -78,14 +79,23 @@ function MaintenanceTicketsPageInner() {
    *            the user has blanket GET /tickets access, in which case
    *            selecting every store is sent unrestricted.
    */
-  const [pageStoreSelection, setPageStoreSelection] = useState<
-    string[] | null
-  >(null);
+  const pageStoreSelection = useMaintenanceTicketsStore((s) => s.storeSelection);
+  const setPageStoreSelection = useMaintenanceTicketsStore((s) => s.setStoreSelection);
 
   const initRef = useRef(false);
   useEffect(() => {
     if (initRef.current) return;
     initRef.current = true;
+
+    // Coming back from a ticket: the selection (and mode / scope) is still in
+    // the store, so keep it rather than snapping back to the sidebar store.
+    // Only trust it while every store in it is still one the user can pick.
+    const kept = useMaintenanceTicketsStore.getState().storeSelection;
+    const keptIsValid =
+      kept != null &&
+      kept.length > 0 &&
+      kept.every((id) => activeStores.some((s) => (s.storeId ?? s.id) === id));
+    if (keptIsValid) return;
 
     // Default to whichever store is selected in the sidebar, not "All Stores" —
     // only fall back to all-stores / first-active-store when the sidebar has no
@@ -163,7 +173,14 @@ function MaintenanceTicketsPageInner() {
     const parsed = parseFiltersFromUrl(new URLSearchParams(search));
     // Nothing in the URL means nothing to restore -- and crucially, no extra
     // request on top of the one the hook already fires on mount.
-    if (Object.keys(parsed).length === 0) return;
+    if (Object.keys(parsed).length === 0) {
+      // Coming back from a ticket via a bare link: the hook kept the filters
+      // from the store, so put them back in the URL to keep it truthful.
+      const kept = useMaintenanceTicketsStore.getState();
+      const qs = buildUrlFromFilters({ ...kept.filters, page: kept.currentPage });
+      if (qs) router.replace(`${pathname}?${qs}`, { scroll: false });
+      return;
+    }
 
     applyFilters(parsed);
     if (parsed.page && parsed.page > 1) goToPage(parsed.page);
@@ -199,6 +216,9 @@ function MaintenanceTicketsPageInner() {
   function handleStoreApply(selection: string[]) {
     if (selection.length === 0) return; // must keep at least one store selected
     setPageStoreSelection(selection);
+    // Changing store starts the filters clean (see the hook), so the URL must
+    // not keep describing the old ones.
+    router.replace(pathname, { scroll: false });
     const isEveryStoreSelected =
       activeStores.length > 0 && selection.length === activeStores.length;
     if (selection.length === 1) {
