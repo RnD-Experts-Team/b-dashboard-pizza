@@ -7,6 +7,7 @@ import { VideoQuality, DisconnectReason } from "livekit-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,6 +43,8 @@ interface PublicScreenViewProps {
 
 /** Per-device preference: the employee hid their own camera preview. */
 const SELF_VIEW_HIDDEN_KEY = "station-self-view-hidden";
+/** Per-device preference: the drive-thru mic's wind/noise reduction was switched off. */
+const NOISE_REDUCTION_OFF_KEY = "station-noise-reduction-off";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 
@@ -70,6 +73,14 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
       return localStorage.getItem(SELF_VIEW_HIDDEN_KEY) === "1";
     } catch {
       return false; // server render, or storage blocked
+    }
+  });
+  /** On by default; the switch exists so a quiet customer being cut can be fixed on the spot. */
+  const [noiseReduction, setNoiseReduction] = useState(() => {
+    try {
+      return localStorage.getItem(NOISE_REDUCTION_OFF_KEY) !== "1";
+    } catch {
+      return true; // server render, or storage blocked
     }
   });
   const reconnectingRef = useRef(false);
@@ -265,6 +276,15 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     }
   }
 
+  function handleNoiseReductionChange(enabled: boolean) {
+    setNoiseReduction(enabled);
+    try {
+      localStorage.setItem(NOISE_REDUCTION_OFF_KEY, enabled ? "0" : "1");
+    } catch {
+      // storage blocked — the switch still works for this session
+    }
+  }
+
   function handleChangeStation() {
     passwordRef.current = "";
     reconnectingRef.current = false;
@@ -447,6 +467,8 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             onRetry={handleChangeStation}
             onActiveDeviceChange={handleActiveDeviceChange}
             showSelfView={streaming.station.type !== "drive_through" && !selfViewHidden}
+            driveThruMic={streaming.station.type === "drive_through"}
+            noiseReduction={streaming.station.type === "drive_through" && noiseReduction}
             onUnrecoverableDisconnect={handleStationDisconnected}
             className="h-full w-full"
           />
@@ -572,6 +594,25 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Wind / noise reduction — drive-thru stations only */}
+                {streaming.station.type === "drive_through" && (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <Label htmlFor="noise-reduction" className="text-xs">
+                        Noise reduction
+                      </Label>
+                      <p className="text-[0.7rem] text-muted-foreground">
+                        Turn off if the customer sounds cut out.
+                      </p>
+                    </div>
+                    <Switch
+                      id="noise-reduction"
+                      checked={noiseReduction}
+                      onCheckedChange={handleNoiseReductionChange}
+                    />
+                  </div>
+                )}
 
                   </div>
                 </ScrollArea>
