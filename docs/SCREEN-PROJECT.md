@@ -25,7 +25,6 @@ This document explains the end-to-end architecture of the Screen Project feature
 12. [Known Issues & Fixes Applied](#12-known-issues--fixes-applied)
 13. [File Map](#13-file-map)
 14. [Addendum: Media Library & Drive Thru (2026-08-04)](#14-addendum-media-library--drive-thru-2026-08-04)
-15. [Addendum: Drive-thru microphone processing](#15-addendum-drive-thru-microphone-processing)
 
 ---
 
@@ -817,25 +816,3 @@ New components under `components/screen-project/media-library/`: `media-grid.tsx
 `DriveThruOverlay` is mounted globally in `components/layout/app-shell.tsx`; `DriveThruButton` (topbar indicator) is mounted in `components/layout/topbar.tsx`. See `CLAUDE.md`'s Core-zone carve-out note and `docs/DEVELOPER-GUIDE.md`'s Base Layout Components section for why that's a sanctioned exception rather than a Core-file violation.
 
 No new ADR was written for either addition — both are conformant applications of the existing hook → service → route → external-API pattern, not new architectural decisions.
-
----
-
-## 15. Addendum: Drive-thru microphone processing
-
-The drive-thru **station** mic (the public `/store/<n>/stations` page, `station.type === "drive_through"`) gets wind/noise reduction before it is published. Other stations are untouched.
-
-**What it does** (`components/screen-project/drive-thru/drive-thru-mic-processor.ts`, a LiveKit `TrackProcessor`):
-- The mic is captured with **auto gain off** (`driveThruMic` → `autoGainControl: false` in `ScreenTile`'s room options). Auto gain turns the level up while nobody is talking, which amplifies wind, and it acts at capture time so nothing downstream can undo it.
-- Then: two cascaded high-pass filters (120 Hz, removes wind rumble) → RNNoise (ML noise suppression, runs in the browser via `@sapphi-red/web-noise-suppressor`) → output.
-- It runs in its own 48 kHz `AudioContext` because RNNoise only works at 48 kHz.
-- `ScreenTile`'s `noiseReduction` prop attaches/detaches it live. The station's Device Settings popover has a **Noise reduction** switch (default on, remembered per device in `localStorage` as `station-noise-reduction-off`) in case it cuts out a quiet customer.
-
-**It must never make the mic worse.** It is attached only after the mic is published, and every failure falls back to the raw mic: `init` throws (LiveKit then keeps the raw track), `restart` never throws, and a suspended/dead audio context hands the raw mic back. If the processor's passthrough fallback is ever edited: LiveKit calls `processedTrack.stop()` when a processor stops, so the fallback must hand it a **clone** of the raw track, never the raw track itself.
-
-**Tuning:** `HIGHPASS_HZ` and `OUTPUT_GAIN` at the top of the processor file. With auto gain off a quiet customer is no longer boosted; raise `OUTPUT_GAIN` if that shows up.
-
-**Static assets** — `public/rnnoise/` (served at `/rnnoise/*`): `rnnoiseWorklet.js`, `rnnoise.wasm`, `rnnoise_simd.wasm`. These are copied from `node_modules/@sapphi-red/web-noise-suppressor/dist/` (`rnnoise/workletProcessor.js` → `rnnoiseWorklet.js`, plus the two `.wasm` files) at version **0.4.1**, which is pinned in `package.json`. The only edit is that the trailing `//# sourceMappingURL=` comment was removed from the worklet (the map isn't shipped, and it would show as a 404 in DevTools). To upgrade, bump the package, re-copy the three files, and re-test.
-
-**CSP:** the worklet compiles WebAssembly, so `script-src` in `next.config.ts` includes `'wasm-unsafe-eval'` (WASM only, not JS `eval`). **Dev hides a missing one**, because dev already adds `'unsafe-eval'` — always check a production build (`next build && next start`) for CSP errors after touching this. The worklet and wasm are same-origin, so `'self'` covers them.
-
-**Not covered:** switching the mic in the station popover goes through LiveKit's `switchActiveDevice`, which this feature neither fixes nor depends on (a failed switch can still leave a dead mic — separate problem).

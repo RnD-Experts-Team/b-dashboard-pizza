@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback } from "react";
-import { LifeBuoy } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { HelpCircle, LifeBuoy } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { inSheet, startBlocker, waitForSheetClosed } from "@/lib/report-problem/guard";
 import { useReportProblem } from "@/lib/store/report-problem.store";
 import { useUIStore } from "@/lib/store/ui.store";
@@ -50,26 +51,45 @@ export function ReportProblemSidebarButton({
   onBeforeStart?: () => void;
 }) {
   const t = useTranslations("reportProblem.trigger");
+  const isRtl = useLocale() === "ar";
   const startReport = useStartReport();
 
   return (
     // Tablets and up only for now — hidden in the phone drawer.
     <div className="hidden md:block" data-slot="report-problem-sidebar">
-      <div className={cn("px-2 py-2 sm:px-3", collapsed && "flex justify-center")}>
+      <div className={cn("flex items-center gap-1 px-2 py-2 sm:px-3", collapsed && "justify-center")}>
         <button
           type="button"
           onClick={(e) => void startReport(e.currentTarget, onBeforeStart)}
-          title={collapsed ? t("label") : undefined}
+          // Collapsed there's no room for the "?" — its help goes in the tooltip here.
+          title={collapsed ? `${t("label")} — ${t("help")}` : undefined}
           aria-label={t("label")}
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            "flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed && "justify-center px-2",
+            collapsed && "flex-none justify-center px-2",
           )}
         >
           <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
           {!collapsed && <span className="truncate">{t("label")}</span>}
         </button>
+        {!collapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Explains the button — never starts a report itself. */}
+              <button
+                type="button"
+                aria-label={t("helpLabel")}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side={isRtl ? "left" : "right"} sideOffset={6} className="max-w-64">
+              {t("help")}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
       <Separator />
     </div>
@@ -84,15 +104,22 @@ export function ReportProblemTopbarButton() {
   if (layoutVariant !== "topnav") return null;
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="hidden h-9 w-9 md:inline-flex"
-      aria-label={t("label")}
-      title={t("label")}
-      onClick={(e) => void startReport(e.currentTarget)}
-    >
-      <LifeBuoy className="h-4 w-4" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="hidden h-9 w-9 md:inline-flex"
+          aria-label={t("label")}
+          onClick={(e) => void startReport(e.currentTarget)}
+        >
+          <LifeBuoy className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-64">
+        <p className="font-semibold">{t("label")}</p>
+        <p className="opacity-90">{t("help")}</p>
+      </TooltipContent>
+    </Tooltip>
   );
 }

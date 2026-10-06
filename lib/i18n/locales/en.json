@@ -4014,6 +4014,8 @@
   "reportProblem": {
     "trigger": {
       "label": "Report a problem",
+      "help": "This is the new way to report a problem. Go to the page that has the problem, then click Report a problem.",
+      "helpLabel": "What is Report a problem?",
       "blocked": {
         "small": "Reporting a problem works on tablets and larger screens.",
         "fullscreen": "Leave full screen first, then report the problem.",

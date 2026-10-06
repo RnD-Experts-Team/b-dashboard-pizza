@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import type { NetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
-import { createDriveThruMicProcessor, DRIVE_THRU_MIC_PROCESSOR_NAME } from "./drive-thru/drive-thru-mic-processor";
 import { useScreenProjectMedia } from "@/lib/hooks/use-screen-project-media";
 import { useStationMediaAsset } from "@/lib/hooks/use-station-media-asset";
 import { MediaLibraryTrigger } from "./media-library/media-library-trigger";
@@ -182,16 +181,6 @@ export interface ScreenTileProps {
    */
   showSelfView?: boolean;
   /**
-   * Station side, drive-thru only: capture the mic without auto gain, which
-   * pumps wind up while nobody is talking. Fixed for the tile's lifetime.
-   */
-  driveThruMic?: boolean;
-  /**
-   * Station side, drive-thru only: run wind/noise reduction on the published
-   * mic. Can be switched on and off while connected.
-   */
-  noiseReduction?: boolean;
-  /**
    * Fired when the room disconnects for a reason that isn't an intentional/
    * final end (station removed, room deleted, etc.) — see the reason enum.
    * Intended for a caller to silently re-authenticate and rejoin, since
@@ -274,7 +263,6 @@ interface InnerProps {
   onConnectionStateChange?: (connected: boolean) => void;
   onMediaPublisherReady?: (publish: (media: StationMedia[]) => void) => void;
   showSelfView?: boolean;
-  noiseReduction?: boolean;
   onUnrecoverableDisconnect?: (reason?: DisconnectReason) => void;
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
@@ -370,7 +358,6 @@ function ScreenTileInner({
   onConnectionStateChange,
   onMediaPublisherReady,
   showSelfView = false,
-  noiseReduction = false,
   onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
@@ -581,41 +568,6 @@ function ScreenTileInner({
     if (connectionState !== ConnectionState.Connected) return;
     room.localParticipant.setCameraEnabled(myCamEnabled).catch(() => {});
   }, [myCamEnabled, connectionState, room]);
-
-  // Wind/noise reduction on the drive-thru station mic. Attached once the mic is
-  // published — never through capture options — so any failure leaves the raw mic
-  // running. Calls are chained so a publish event can't race the first attach.
-  useEffect(() => {
-    if (connectionState !== ConnectionState.Connected) return;
-    let cancelled = false;
-
-    const applyOnce = async () => {
-      const track = room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack;
-      if (!track || cancelled) return;
-      const attached = track.getProcessor()?.name === DRIVE_THRU_MIC_PROCESSOR_NAME;
-      try {
-        if (noiseReduction && !attached) await track.setProcessor(createDriveThruMicProcessor());
-        else if (!noiseReduction && attached) await track.stopProcessor();
-      } catch (err) {
-        console.warn("[drive-thru-mic] noise reduction unavailable, using the raw mic", err);
-      }
-    };
-
-    let queue: Promise<void> = Promise.resolve();
-    const apply = () => {
-      queue = queue.then(applyOnce);
-    };
-
-    apply();
-    const onPublished = (pub: { source: Track.Source }) => {
-      if (pub.source === Track.Source.Microphone) apply();
-    };
-    room.on(RoomEvent.LocalTrackPublished, onPublished);
-    return () => {
-      cancelled = true;
-      room.off(RoomEvent.LocalTrackPublished, onPublished);
-    };
-  }, [noiseReduction, connectionState, room]);
 
   /**
    * Publish / unpublish the supervisor's screen share for the station this
@@ -1716,8 +1668,6 @@ export function ScreenTile({
   onConnectionStateChange,
   onMediaPublisherReady,
   showSelfView,
-  driveThruMic,
-  noiseReduction,
   onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
@@ -1751,17 +1701,10 @@ export function ScreenTile({
   // A new object on every render would cause LiveKitRoom to tear down and
   // recreate the room (closing the RTCEngine) on each re-render.
   const roomOptions = useMemo(
-    () => {
-      // Only set what's needed, so other stations keep LiveKit's defaults untouched.
-      const audioCapture = {
-        ...(selectedAudioDeviceId ? { deviceId: selectedAudioDeviceId } : {}),
-        ...(driveThruMic ? { autoGainControl: false } : {}),
-      };
-      return {
-        audioCaptureDefaults: Object.keys(audioCapture).length > 0 ? audioCapture : undefined,
-        videoCaptureDefaults: selectedVideoDeviceId ? { deviceId: selectedVideoDeviceId } : undefined,
-      };
-    },
+    () => ({
+      audioCaptureDefaults: selectedAudioDeviceId ? { deviceId: selectedAudioDeviceId } : undefined,
+      videoCaptureDefaults: selectedVideoDeviceId ? { deviceId: selectedVideoDeviceId } : undefined,
+    }),
     // Only re-create when the initial device IDs change (not on every render).
     // Device switching after connect is handled via room.switchActiveDevice inside ScreenTileInner.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1864,7 +1807,6 @@ export function ScreenTile({
         onConnectionStateChange={onConnectionStateChange}
         onMediaPublisherReady={onMediaPublisherReady}
         showSelfView={showSelfView}
-        noiseReduction={noiseReduction}
         onUnrecoverableDisconnect={onUnrecoverableDisconnect}
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}

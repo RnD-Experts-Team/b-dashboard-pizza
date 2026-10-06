@@ -59,6 +59,53 @@ const ENTER_GRACE_MS = 300;
 const REBUILD_DEBOUNCE_MS = 150;
 const REDRAW_INTERVAL_MS = 600;
 
+/** How long the border takes to draw itself around a part; it lights up after. */
+const DRAW_MS = 600;
+const SCRIM = "rgba(0,0,0,0.55)";
+
+/*
+ * The hover animation: the border draws itself from the bottom-left corner
+ * up the left side and on around (stroke-dashoffset 1 → 0 over a
+ * pathLength=1 path), THEN the part's own dim fades out — it "lights up" —
+ * and its name chip appears. Kept local to the overlay rather than in the
+ * Core globals.css.
+ */
+const HIGHLIGHT_CSS = `
+@keyframes rp-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes rp-fade-out { to { opacity: 0; } }
+@keyframes rp-fade-in { to { opacity: 1; } }
+.rp-border-path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: rp-draw ${DRAW_MS}ms ease-in-out forwards; }
+.rp-light-up { animation: rp-fade-out 250ms ease-out ${DRAW_MS}ms forwards; }
+.rp-after-draw { opacity: 0; animation: rp-fade-in 200ms ease-out ${DRAW_MS}ms forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .rp-border-path { animation: none; stroke-dashoffset: 0; }
+  .rp-light-up { animation: none; opacity: 0; }
+  .rp-after-draw { animation: none; opacity: 1; }
+}
+`;
+
+/** A rounded rectangle that STARTS at the bottom-left corner and runs clockwise (up the left side first). */
+function borderPath(w: number, h: number): string {
+  const i = 1; // half the 2px stroke, so it isn't clipped by the svg edge
+  const x0 = i;
+  const y0 = i;
+  const x1 = Math.max(w - i, x0);
+  const y1 = Math.max(h - i, y0);
+  const r = Math.max(0, Math.min(6, (x1 - x0) / 2, (y1 - y0) / 2));
+  return [
+    `M${x0},${y1 - r}`,
+    `L${x0},${y0 + r}`,
+    `A${r},${r} 0 0 1 ${x0 + r},${y0}`,
+    `L${x1 - r},${y0}`,
+    `A${r},${r} 0 0 1 ${x1},${y0 + r}`,
+    `L${x1},${y1 - r}`,
+    `A${r},${r} 0 0 1 ${x1 - r},${y1}`,
+    `L${x0 + r},${y1}`,
+    `A${r},${r} 0 0 1 ${x0},${y1 - r}`,
+    "Z",
+  ].join(" ");
+}
+
 interface PointerState {
   id: number;
   type: string;
@@ -110,12 +157,13 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
   }, []);
   useEffect(() => clearPending, [clearPending]);
 
-  /* ── Drawing: dashed outlines on one canvas; the highlight is a div. ──── */
+  /* ── Drawing: the page stays a plain dark scrim; only `?reportDebug=1`   */
+  /*    paints candidate boxes + labels on the canvas. The highlight is DOM. */
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const index = indexRef.current;
-    if (!canvas || !index) return;
+    if (!canvas || !index || !debug) return;
     const dpr = window.devicePixelRatio || 1;
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -141,21 +189,18 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
       const r = clip ? intersect(toBox(c.el.getBoundingClientRect()), clip) : null;
       if (r) boxes.push({ c, r });
     }
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1;
     ctx.setLineDash([6, 4]);
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
-    for (const { r } of boxes) ctx.strokeRect(r.left + 1, r.top + 1, r.width - 2, r.height - 2);
-    if (debug) {
-      ctx.setLineDash([]);
-      ctx.font = "10px ui-monospace, monospace";
-      for (const { c, r } of boxes) {
-        const text = `${c.kind}${c.id ? `#${c.id}` : ""}${c.outlined ? "" : " (coarse)"}`;
-        const tw = ctx.measureText(text).width + 6;
-        ctx.fillStyle = "rgba(0,0,0,0.75)";
-        ctx.fillRect(r.left + 2, r.top + 2, tw, 14);
-        ctx.fillStyle = "#fff";
-        ctx.fillText(text, r.left + 5, r.top + 12);
-      }
+    ctx.strokeStyle = "rgba(255,255,255,0.6)";
+    ctx.font = "10px ui-monospace, monospace";
+    for (const { c, r } of boxes) {
+      ctx.strokeRect(r.left + 1, r.top + 1, r.width - 2, r.height - 2);
+      const text = `${c.kind}${c.id ? `#${c.id}` : ""}${c.outlined ? "" : " (coarse)"}`;
+      const tw = ctx.measureText(text).width + 6;
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.fillRect(r.left + 2, r.top + 2, tw, 14);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, r.left + 5, r.top + 12);
     }
   }, [debug]);
 
@@ -397,8 +442,8 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
       : { left: Math.max(8, Math.min(box.left, window.innerWidth - 240)) }
     : {};
   const name = hovered ? nameOf(hovered) : null;
-  // The card occupies roughly the top 110px; get out of the way of a part there.
-  const cardAtBottom = Boolean(box && box.top < 110 && box.bottom < window.innerHeight - 140);
+  // The card occupies roughly the top 70px; get out of the way of a part there.
+  const cardAtBottom = Boolean(box && box.top < 70 && box.bottom < window.innerHeight - 100);
 
   return createPortal(
     <div
@@ -406,25 +451,44 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
       data-slot="report-problem-inspector"
       className="pointer-events-none fixed inset-0 z-[10040] animate-in fade-in-0 duration-200"
     >
-      {/* Dim layer: the highlight's huge shadow when something is hovered
-          (a cut-out around it), a flat scrim otherwise. */}
-      {/* Separate keys: React must not reuse the full-screen scrim's node for
-          the highlight, or the box would animate in from inset-0. It fades in
-          the first time, then glides slowly (400ms) from part to part. */}
+      <style>{HIGHLIGHT_CSS}</style>
+
+      {/* Dim layer: one plain dark scrim — no outlines on the parts. A
+          hovered part gets a cut-out (the box's huge shadow keeps the rest
+          dark), stays dimmed while its border draws, then lights up. A new
+          key per part replays the animation every time the hover moves. */}
       {box ? (
         <div
-          key="highlight"
-          className="absolute rounded-md border-2 border-blue-500 bg-blue-500/10 transition-[top,left,width,height] duration-400 ease-out animate-in fade-in-0"
+          key={`highlight-${hoverSeqRef.current}`}
+          data-slot="report-problem-highlight"
+          className="absolute rounded-md"
           style={{
             top: box.top,
             left: box.left,
             width: box.width,
             height: box.height,
-            boxShadow: "0 0 0 9999px rgba(0,0,0,0.45)",
+            boxShadow: `0 0 0 9999px ${SCRIM}`,
           }}
-        />
+        >
+          <div className="rp-light-up absolute inset-0 rounded-md" style={{ background: SCRIM }} />
+          <svg
+            aria-hidden
+            className="absolute inset-0 overflow-visible"
+            width={box.width}
+            height={box.height}
+          >
+            <path
+              className="rp-border-path stroke-blue-500"
+              d={borderPath(box.width, box.height)}
+              pathLength={1}
+              fill="none"
+              strokeWidth={2}
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
       ) : (
-        <div key="scrim" className="absolute inset-0 bg-black/45" />
+        <div key="scrim" className="absolute inset-0" style={{ background: SCRIM }} />
       )}
 
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
@@ -455,10 +519,11 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
       {/* Name chip next to the highlighted part. */}
       {box && name && (
         <div
-          // New key per part: the chip fades in again each time the highlight lands.
+          // New key per part: the chip appears once the border has finished drawing.
           key={hoverSeqRef.current}
           className={cn(
-            "absolute flex max-w-[min(26rem,calc(100vw-1rem))] items-center gap-2 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs text-white shadow-lg animate-in fade-in-0 duration-300",
+            "absolute flex max-w-[min(26rem,calc(100vw-1rem))] items-center gap-2 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs text-white shadow-lg",
+            !capturing && "rp-after-draw",
             touchPreview && !capturing && "pointer-events-auto",
           )}
           style={{ top: chipTop, ...chipSide }}
@@ -497,11 +562,10 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
         </div>
       )}
 
-      {/* Instruction card — big on purpose: it's the only thing telling the
-          user what to do. Slides in as inspect mode opens. Pointer moves pass
-          THROUGH it to the catcher (only Cancel takes clicks), and it moves to
-          the bottom while the highlighted part sits under it — the top bar
-          and page header stay pickable and visible. */}
+      {/* Instruction pill — compact. Slides in as inspect mode opens. Pointer
+          moves pass THROUGH it to the catcher (only Cancel takes clicks), and
+          it moves to the bottom while the highlighted part sits under it —
+          the top bar and page header stay pickable and visible. */}
       <div
         className={cn(
           "pointer-events-none absolute inset-x-0 flex justify-center px-4",
@@ -514,35 +578,32 @@ export function InspectOverlay({ mode, capturing, onChoose, onCancel, debug }: I
           tabIndex={-1}
           role="status"
           className={cn(
-            "flex w-full max-w-2xl items-center gap-4 rounded-2xl border bg-background/95 px-5 py-4 shadow-2xl outline-none backdrop-blur animate-in fade-in-0 duration-300",
-            cardAtBottom ? "slide-in-from-bottom-4" : "slide-in-from-top-4",
+            "flex max-w-full items-center gap-3 rounded-full border bg-background/95 py-1.5 ps-1.5 pe-2 shadow-lg outline-none backdrop-blur animate-in fade-in-0 duration-300",
+            cardAtBottom ? "slide-in-from-bottom-2" : "slide-in-from-top-2",
           )}
         >
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-500/15 dark:bg-blue-500/20">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-500/15 dark:bg-blue-500/20">
             {capturing ? (
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
             ) : (
-              <Info className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-semibold leading-snug text-pretty lg:text-lg">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium leading-tight">
               {capturing ? t("capturing") : t("instruction")}
             </p>
             {!capturing && (
-              <>
-                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
-                  {mode === "specific" ? t("hintSpecific") : t("hintGeneral")}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground/80 text-pretty">{t("explain")}</p>
-              </>
+              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+                {mode === "specific" ? t("hintSpecific") : t("hintGeneral")} {t("explain")}
+              </p>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground lg:inline">
+            <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
               {t("escKey")}
             </kbd>
-            <Button variant="outline" className="pointer-events-auto h-9" onClick={onCancel}>
+            <Button variant="outline" size="sm" className="pointer-events-auto h-7 rounded-full" onClick={onCancel}>
               {t("cancel")}
             </Button>
           </div>
