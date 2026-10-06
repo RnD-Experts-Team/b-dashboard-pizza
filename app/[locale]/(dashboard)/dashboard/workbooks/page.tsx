@@ -13,9 +13,7 @@ import {
   FolderContents,
   FolderTree,
   WorkbooksErrorCard,
-  WorkbooksNoAccess,
 } from "@/components/workbooks";
-import { useAuth } from "@/lib/auth/use-auth";
 import { useWorkbookOptions } from "@/lib/hooks/use-workbook-options";
 import { useWorkbooks } from "@/lib/hooks/use-workbooks";
 import { ROOT_KEY } from "@/lib/store/workbooks.store";
@@ -23,8 +21,8 @@ import { ROOT_KEY } from "@/lib/store/workbooks.store";
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Workbooks — folder browser (ToolboxPizza)                                */
 /*                                                                            */
-/*  Super-admin only while the toolbox rolls out; the sidebar hides the item  */
-/*  for everyone else and this guard covers a typed-in URL.                  */
+/*  Open to every signed-in user: the toolbox filters each list to what the   */
+/*  caller may see, and a 403 on the first listing shows its own error card.  */
 /*                                                                            */
 /*  The open folder lives in the URL (?folder=7) so it survives a reload and  */
 /*  can be linked. Reads are not store-scoped; creates use the selected       */
@@ -34,23 +32,9 @@ import { ROOT_KEY } from "@/lib/store/workbooks.store";
 export default function WorkbooksPage() {
   return (
     <Suspense fallback={<BrowserSkeleton />}>
-      <WorkbooksGate />
+      <WorkbooksBrowser />
     </Suspense>
   );
-}
-
-function WorkbooksGate() {
-  const t = useTranslations("workbooks");
-  const { isSuperAdmin } = useAuth();
-  if (!isSuperAdmin()) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={t("title")} description={t("description")} />
-        <WorkbooksNoAccess />
-      </div>
-    );
-  }
-  return <WorkbooksBrowser />;
 }
 
 function WorkbooksBrowser() {

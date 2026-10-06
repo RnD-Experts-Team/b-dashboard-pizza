@@ -3269,10 +3269,6 @@
     "description": "Shared tables, organised in folders. Each item's access tag decides who can see it and who can change it.",
     "refresh": "Refresh",
     "optionsError": "Couldn't load the access and column-type options, so some forms may be incomplete.",
-    "noAccess": {
-      "title": "No access to workbooks",
-      "body": "Workbooks are limited to super-admins while the toolbox is being rolled out."
-    },
     "common": {
       "cancel": "Cancel",
       "save": "Save",

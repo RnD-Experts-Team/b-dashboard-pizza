@@ -696,11 +696,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
     ],
   };
-  // Toolbox (ToolboxPizza). Workbooks is SUPER-ADMIN ONLY for now — gated
-  // here by role, not by an auth rule, because the pizzasys rules for the
-  // toolbox are not seeded yet. Once they are, swap the role gate for a
-  // requirement such as { service: "Toolbox", method: "GET", path: "/workbook-options" }.
-  // Breaks is self-service, so it is shown to everyone.
+  // Toolbox (ToolboxPizza). No gates: Breaks is self-service, and Workbooks
+  // filters upstream — every list returns only what the caller may see, and
+  // each item's own viewer.can decides what they can do with it.
   const workbooksItem: NavItem = {
     title: t("workbooks"),
     href: `/${locale}/dashboard/workbooks`,
@@ -716,7 +714,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [...(isSuperAdmin() ? [workbooksItem] : []), breaksItem, ticketsItem],
+    items: [workbooksItem, breaksItem, ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
@@ -1061,7 +1059,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 7c. Toolbox (Workbooks super-admin only for now) */}
+          {/* 7c. Toolbox */}
           {visibleToolboxGroup && (
             <SidebarNavGroup
               group={visibleToolboxGroup}

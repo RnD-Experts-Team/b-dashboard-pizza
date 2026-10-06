@@ -423,6 +423,15 @@ export function FloatingDebriefButton() {
     clearPendingPanelTab();
   }, [pendingPanelTab, clearPendingPanelTab]);
 
+  // Position of the item currently shown in the sheet within the visible list, so the
+  // sheet can step to the previous/next debrief item without being closed first.
+  // Must stay above the early returns below — a hook after them changes the hook
+  // count on /due-keys ("Rendered fewer hooks than expected").
+  const dueKeySheetIndex = useMemo(() => {
+    if (!dueKeySheetItem) return -1;
+    return activeItems.findIndex((i) => i.keyId === dueKeySheetItem.keyId);
+  }, [activeItems, dueKeySheetItem]);
+
   if (!canCreateDebrief) return null;
   if (pathname?.includes("/due-keys")) return null;
 
@@ -469,13 +478,6 @@ export function FloatingDebriefButton() {
     clearDueKeyError();
     setDueKeySheetOpen(true);
   };
-
-  // Position of the item currently shown in the sheet within the visible list, so the
-  // sheet can step to the previous/next debrief item without being closed first.
-  const dueKeySheetIndex = useMemo(() => {
-    if (!dueKeySheetItem) return -1;
-    return activeItems.findIndex((i) => i.keyId === dueKeySheetItem.keyId);
-  }, [activeItems, dueKeySheetItem]);
 
   const handleDueKeySheetNavigate = (direction: -1 | 1) => {
     if (dueKeySheetIndex < 0) return;

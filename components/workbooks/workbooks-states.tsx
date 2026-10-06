@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import {
   Clock,
   FolderSearch,
-  Lock,
   ServerCrash,
   ShieldOff,
   Store,
@@ -112,20 +111,6 @@ export function WorkbooksEmptyState({ icon: Icon, title, body, action, className
         {body && <p className="mx-auto max-w-sm text-xs text-muted-foreground">{body}</p>}
       </div>
       {action}
-    </div>
-  );
-}
-
-/** Nothing at all is permitted — distinct from "permitted but empty". */
-export function WorkbooksNoAccess() {
-  const t = useTranslations("workbooks.noAccess");
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
-      <Lock className="h-8 w-8 text-muted-foreground" />
-      <div className="space-y-1">
-        <p className="text-sm font-medium">{t("title")}</p>
-        <p className="max-w-sm text-xs text-muted-foreground">{t("body")}</p>
-      </div>
     </div>
   );
 }

@@ -49,11 +49,9 @@ import {
   WorkbookGrid,
   WorkbooksEmptyState,
   WorkbooksErrorCard,
-  WorkbooksNoAccess,
   useDenyReason,
 } from "@/components/workbooks";
 import { workbooksService } from "@/lib/api/services/workbooks.service";
-import { useAuth } from "@/lib/auth/use-auth";
 import { useWorkbookGrid } from "@/lib/hooks/use-workbook-grid";
 import { useWorkbookOptions } from "@/lib/hooks/use-workbook-options";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -84,23 +82,9 @@ import type {
 export default function WorkbookPage() {
   return (
     <Suspense fallback={<GridSkeleton />}>
-      <WorkbookGate />
+      <WorkbookScreen />
     </Suspense>
   );
-}
-
-function WorkbookGate() {
-  const t = useTranslations("workbooks");
-  const { isSuperAdmin } = useAuth();
-  if (!isSuperAdmin()) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={t("title")} description={t("description")} />
-        <WorkbooksNoAccess />
-      </div>
-    );
-  }
-  return <WorkbookScreen />;
 }
 
 type Pending =

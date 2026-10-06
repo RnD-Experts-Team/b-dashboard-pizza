@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Script from "next/script";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { AppShell } from "@/components/layout/app-shell";
 // import { AnnouncementPopup } from "@/components/announcements/announcement-popup";
@@ -41,6 +42,12 @@ export default function DashboardLayout({
       {/* <AnnouncementPopup /> */}
       <AnnouncementOnLoadPopup />
       <ReportProblemRoot />
+      {/* Chat widget (rdexperts). Remove this <Script> + CHAT_WIDGET_ORIGIN in next.config.ts to drop it. */}
+      {/* <Script
+        src="https://chat.rdexperts.tech/w/wk_xyg50sd4c3kv4h25lnkg.js"
+        strategy="afterInteractive"
+        async
+      /> */}
     </>
   );
 }

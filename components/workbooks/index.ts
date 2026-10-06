@@ -26,5 +26,4 @@ export {
   GridSkeleton,
   WorkbooksEmptyState,
   WorkbooksErrorCard,
-  WorkbooksNoAccess,
 } from "./workbooks-states";
