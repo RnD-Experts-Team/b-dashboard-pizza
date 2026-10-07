@@ -25,6 +25,7 @@ This document explains the end-to-end architecture of the Screen Project feature
 12. [Known Issues & Fixes Applied](#12-known-issues--fixes-applied)
 13. [File Map](#13-file-map)
 14. [Addendum: Media Library & Drive Thru (2026-08-04)](#14-addendum-media-library--drive-thru-2026-08-04)
+15. [Drive Thru Station Mic Noise Filter (2026-10-07)](#15-drive-thru-station-mic-noise-filter-2026-10-07)
 
 ---
 
@@ -136,6 +137,8 @@ The Screen Project REST API is **not** in `connect-src` — the browser only eve
 3. Restart the dev server — CSP headers are computed when `next.config.ts` loads, not per request. Other environments need a rebuild/redeploy.
 
 > **Symptom when missing or mismatched:** `Fetch API cannot load https://<host>/rtc/v1/validate ... Refused to connect because it violates the document's Content Security Policy.` Room state stays `disconnected`, all tracks return empty.
+
+`script-src` also carries `'wasm-unsafe-eval'` for the drive-thru mic noise filter's WebAssembly (see [section 15](#15-drive-thru-station-mic-noise-filter-2026-10-07)).
 
 ---
 
@@ -816,3 +819,85 @@ New components under `components/screen-project/media-library/`: `media-grid.tsx
 `DriveThruOverlay` is mounted globally in `components/layout/app-shell.tsx`; `DriveThruButton` (topbar indicator) is mounted in `components/layout/topbar.tsx`. See `CLAUDE.md`'s Core-zone carve-out note and `docs/DEVELOPER-GUIDE.md`'s Base Layout Components section for why that's a sanctioned exception rather than a Core-file violation.
 
 No new ADR was written for either addition — both are conformant applications of the existing hook → service → route → external-API pattern, not new architectural decisions.
+
+---
+
+## 15. Drive Thru Station Mic Noise Filter (2026-10-07)
+
+Cleans the customer's audio (wind, engines) on the **drive-thru station's** mic, before it is sent into the LiveKit room. It runs on drive-thru stations only (`station.type === "drive_through"` on the public page `/store/{n}/stations`). The manager controls it from the Drive Thru sheet. Code: `components/screen-project/drive-thru/mic/`.
+
+### Audio chain (station browser, one 48 kHz `AudioContext`)
+
+```
+selected mic → high-pass ×2 (Wind cut) → AudioWorklet: RNNoise v0.2 + strength mix
+             → gain (Mic boost) → limiter (DynamicsCompressor, -3 dB, ratio 20) → LiveKit
+```
+
+- It is a LiveKit `TrackProcessor` (`processor.ts`) attached to the station's published mic track, so it always processes **the mic selected on the station**. A mic switch goes through the processor's `restart`.
+- Added latency is 30 ms: RNNoise works in 480-sample frames and has 2 frames of internal delay. The original signal is delayed by the same amount, so the Filter strength mix never echoes.
+- **Noise filter off** is a passthrough inside the worklet. The processor stays attached, so Wind cut, Mic boost and the limiter still apply.
+- **Fail-open.** If the worklet, the WebAssembly or the audio context fails, the station sends the raw mic and reports `failed` with the reason. It never goes silent.
+  - Init failure: LiveKit keeps the raw track.
+  - Mic-switch failure: falls back to a clone of the raw track.
+  - Audio context dies, or the worklet reports an error: the processor calls `stopProcessor()` and hands the raw mic back.
+
+### Settings (manager → station)
+
+| Control | Field | Range | Default |
+|---|---|---|---|
+| Noise filter | `enabled` | on/off | on |
+| Filter strength | `strength` | 0–1 | 1 |
+| Wind cut | `windCutHz` | 0 (off) or 60–250 Hz | 80 |
+| Mic boost | `boost` | 0.5–3 | 1 |
+| Auto volume (browser AGC) | `autoGain` | on/off | on |
+| Show test panel on station | `testPanel` | on/off | on |
+
+- **The station is the source of truth.** It saves the settings in `localStorage` (`drive-thru-mic-settings`), so they survive a reload with no manager connected.
+- Every value from the network or storage goes through `sanitizeMicSettings` / `parseMicMessage` in `settings.ts`: strict types, clamped ranges, and a 200-character limit on text.
+- Changing Auto volume restarts the capture with `restartTrack`, keeping the full constraints and the exact current deviceId. That's why it stays on the same mic.
+
+### Protocol — LiveKit data topic `drive-thru-mic` (reliable, `v: 1`)
+
+| Message | Direction | Meaning |
+|---|---|---|
+| `hello` | manager → station | "Report your state" (sent on connect / when the station joins) |
+| `set { seq, settings }` | manager → station | Apply these full settings |
+| `state { seq \| null, settings, status, at }` | station → manager | Confirms `seq`, or reports spontaneously. The station also sends one every 2 s with mic levels. |
+
+The manager panel shows "✓ Applied on the station at …" only when a `state` with the matching `seq` arrives, and "⚠ Not confirmed" after 4 s. When two managers adjust at once, the last change wins.
+
+### Files
+
+| File | Role |
+|---|---|
+| `public/rnnoise-v2/rnnoise.js` | Vendored, **unchanged** `@shiguredo/rnnoise-wasm@2025.1.5` `dist/rnnoise.js` (RNNoise v0.2, WebAssembly + model embedded, 4.8 MB). Apache-2.0, see `LICENSE.txt` next to it |
+| `public/rnnoise-v2/rnnoise-worklet.js` | Hand-written AudioWorklet: framing, RNNoise, strength mix, ~1 s stats. Defines a stand-in `globalThis.WorkerGlobalScope` because the package refuses to start without `window`/`WorkerGlobalScope` |
+| `mic/settings.ts` | Types, defaults, ranges, validation, protocol, formatting (pure) |
+| `mic/processor.ts` | The LiveKit `TrackProcessor` (audio chain, live updates, fail-open) |
+| `mic/use-station-mic.ts` | Station side: attach, apply `set`, report `state`, selected-mic check, logs |
+| `mic/use-manager-mic.ts` | Manager side: send/receive over the topic |
+| `mic/mic-control-panel.tsx` | Manager UI in the Drive Thru sheet (each control has an (i) explanation) |
+| `mic/mic-test-panel.tsx` + `mic/log-store.ts` | **Test only** — station overlay with state, levels and the log |
+
+`ScreenTile` gains `driveThruMic` (station) and `onDriveThruMicApi` / `onDriveThruMicReport` (manager). With none of them set, other stations behave exactly as before.
+
+### Console
+
+- Station logs use the prefix `[drive-thru-mic]`, and the same lines appear in the test panel.
+- Manager logs use the prefix `[drive-thru-mic:manager]`.
+
+### Updating RNNoise
+
+```bash
+npm pack @shiguredo/rnnoise-wasm@<version>
+```
+
+Extract `package/dist/rnnoise.js` over `public/rnnoise-v2/rnnoise.js` unchanged, and update the version here. Then check on a production build (`next build && next start`) that the station's console shows the worklet ready with no CSP errors. Dev's `'unsafe-eval'` hides a missing `'wasm-unsafe-eval'`.
+
+### Removing the test panel later
+
+1. Delete `mic/mic-test-panel.tsx` and its one mount in `public-screen-view.tsx`.
+2. Drop the "Show test panel on station" row from `mic-control-panel.tsx`.
+3. Leave `testPanel` in the settings type, or remove it. Stored values without it fall back to defaults either way.
+
+The log store can stay, since it feeds the console.

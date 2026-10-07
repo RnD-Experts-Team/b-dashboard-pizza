@@ -128,7 +128,9 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline' ${CHAT_WIDGET_ORIGIN}${isDev ? " 'unsafe-eval'" : ""}`,
+              // 'wasm-unsafe-eval' lets the drive-thru mic's RNNoise worklet compile its
+              // WebAssembly (not JS eval). Dev's 'unsafe-eval' would hide a missing one.
+              `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${CHAT_WIDGET_ORIGIN}${isDev ? " 'unsafe-eval'" : ""}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               // Station media plays from blob: object URLs (cached bytes) served

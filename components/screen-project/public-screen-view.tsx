@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
 import { ScreenTile } from "./screen-tile";
+import { MicTestPanel } from "./drive-thru/mic/mic-test-panel";
 import type { Station, StationTokenResponse } from "@/types/screen-project.types";
 import type { StationMedia } from "@/types/screen-project-media.types";
 
@@ -447,9 +448,12 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             onRetry={handleChangeStation}
             onActiveDeviceChange={handleActiveDeviceChange}
             showSelfView={streaming.station.type !== "drive_through" && !selfViewHidden}
+            driveThruMic={streaming.station.type === "drive_through"}
             onUnrecoverableDisconnect={handleStationDisconnected}
             className="h-full w-full"
           />
+          {/* TEST ONLY — shown while the manager's "Show test panel" switch is on */}
+          {streaming.station.type === "drive_through" && <MicTestPanel />}
         </div>
 
         {/* Bottom bar — station name + device settings + change station */}

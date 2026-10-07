@@ -11,6 +11,8 @@ import { playSfx } from "@/lib/uisfx/play";
 import { ScreenTile } from "../screen-tile";
 import { MediaLibraryTrigger } from "../media-library/media-library-trigger";
 import { MediaLibrarySheet } from "../media-library/media-library-sheet";
+import { MicControlPanel } from "./mic/mic-control-panel";
+import type { ManagerMicApi, StationMicReport } from "./mic/use-manager-mic";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,10 +59,19 @@ export function DriveThruOverlay() {
   const disconnect = useDriveThruStore((s) => s.disconnect);
   const refreshToken = useDriveThruStore((s) => s.refreshToken);
   const setLive = useDriveThruStore((s) => s.setLive);
+  const isLive = useDriveThruStore((s) => s.isLive);
 
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+
+  // Station mic noise-filter controls — the API and the station's latest
+  // report are handed up by <ScreenTile> (drive-thru-mic data topic).
+  const [micApi, setMicApi] = useState<ManagerMicApi | null>(null);
+  const [micReport, setMicReport] = useState<StationMicReport | null>(null);
+  useEffect(() => {
+    if (!connection) setMicReport(null);
+  }, [connection]);
 
   // ── Toggle-to-talk with an auto-timeout safety net ─────────────────────────
   // Click starts talking (no need to hold the mouse down — the operator needs
@@ -239,6 +250,8 @@ export function DriveThruOverlay() {
           viewerOnly={true}
           onConnectionStateChange={setLive}
           onMediaPublisherReady={handleMediaPublisherReady}
+          onDriveThruMicApi={setMicApi}
+          onDriveThruMicReport={setMicReport}
           className="absolute inset-0 h-full w-full"
         />
       </motion.div>
@@ -286,8 +299,9 @@ export function DriveThruOverlay() {
               {/* Reserved video space — the floating tile above renders on top of this rect */}
               <div className="aspect-video w-full shrink-0" />
 
-              {/* Controls */}
-              <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+              {/* Controls — scrolls when the mic panel makes it taller than the sheet */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+                <div className="my-auto flex flex-col items-center gap-4">
                 <button
                   onClick={toggleMute}
                   className={cn(
@@ -339,6 +353,8 @@ export function DriveThruOverlay() {
                   </p>
                 )}
 
+                <MicControlPanel api={micApi} report={micReport} isLive={isLive} />
+
                 <button
                   onClick={disconnect}
                   className="mt-4 flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
@@ -346,6 +362,7 @@ export function DriveThruOverlay() {
                   <PhoneOff className="h-3.5 w-3.5" />
                   Disconnect
                 </button>
+                </div>
               </div>
             </motion.div>
           </>
