@@ -295,7 +295,7 @@ function TicketPageInner() {
 
             {/* The ticket's own notes and files -- closing notes included. They
                 used to be reachable only from the old side sheet. */}
-            <PageSection rank="secondary" icon={Paperclip} title="Ticket notes and files">
+            <PageSection rank="secondary" icon={Paperclip} title="Ticket notes and files" collapsible defaultOpen={false}>
               <EntityNotesAttachments
                 entityPath={entityPaths.ticket(storeNumber, ticket.id)}
                 notes={ticket.notes}
@@ -492,10 +492,11 @@ function IssueCard({
 }) {
   const [activeAction, setActiveAction] = useState<IssueActionId | null>(null);
   /**
-   * Whether "What you can do" is expanded. Controlled, not left to the
-   * section's own internal toggle -- see `openAction` below for why.
+   * Whether "What you can do" is expanded. Starts folded, like every section
+   * on this page. Controlled, not left to the section's own internal toggle
+   * -- see `openAction` below for why.
    */
-  const [actionsOpen, setActionsOpen] = useState(true);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   /**
    * Every path that opens a panel goes through here rather than calling
@@ -725,15 +726,14 @@ function IssueCard({
       )}
 
       <SectionGroup className="mt-3">
-        {/* Collapsible: a ticket with several issues stacks several of these,
-            and the record list is the one you are least likely to need open
-            for every issue at once. Starts open, so nothing looks different
-            until you actually fold one away. */}
+        {/* Every section on the ticket page starts folded (the owner's call):
+            the page opens as an overview, and you unfold what you need. */}
         <PageSection
           rank="secondary"
           icon={ClipboardList}
           title="What has been recorded"
           collapsible
+          defaultOpen={false}
         >
           <IssueRecordList
             issue={issue}
@@ -840,7 +840,7 @@ function IssueCard({
       </PageSection>
       )}
 
-      <PageSection rank="secondary" icon={Paperclip} title="Notes and files">
+      <PageSection rank="secondary" icon={Paperclip} title="Notes and files" collapsible defaultOpen={false}>
         <EntityNotesAttachments
           entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
           notes={issue.notes}
@@ -866,6 +866,7 @@ function IssueCard({
           issueId={issue.issueId}
           issueTitle={issue.issueTitle ?? title}
           excludeTicketId={ticketId}
+          collapsed
         />
       )}
       </SectionGroup>

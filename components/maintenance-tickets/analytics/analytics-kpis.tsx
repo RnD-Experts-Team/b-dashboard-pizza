@@ -1,58 +1,112 @@
 "use client";
 
-import { AlarmClock, CheckCircle2, FilePlus2, Hourglass, Inbox, Repeat } from "lucide-react";
+import { CheckCircle2, Clock, FileText, Inbox, Repeat } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
 
+interface Kpi {
+  label: string;
+  value: number;
+  icon: LucideIcon;
+  /** Icon tile tint: the colour names the kind of number, the label says it. */
+  tint: string;
+  /** One short line under the number. */
+  note: string;
+  /** The table on the page this number counts. */
+  target?: string;
+}
+
 /**
- * The headline numbers. Stat tiles, not charts: each is one number, and the
- * number is the chart. Range figures and "right now" figures are labelled as
- * such, because they answer different questions.
+ * The headline numbers. Every card has the same three rows -- label and icon,
+ * the number, one short line -- so the numbers line up across the row however
+ * narrow the page gets. The grid follows the space it is given (a container
+ * query), not the window: beside the sidebar the page is far narrower than
+ * the screen.
  */
-export function AnalyticsKpis({ summary }: { summary: AnalyticsSummary }) {
+export function AnalyticsKpis({ summary, rangeLabel }: { summary: AnalyticsSummary; rangeLabel: string }) {
   const k = summary.kpis;
-  const tiles: { label: string; value: string; hint: string; icon: LucideIcon }[] = [
-    { label: "Tickets opened", value: fmt(k.tickets_created), hint: `${fmt(k.issues_created)} issues reported in the range`, icon: FilePlus2 },
-    { label: "Issues completed", value: fmt(k.issues_completed), hint: "in the range", icon: CheckCircle2 },
+  const days = summary.untouched_days;
+
+  const kpis: Kpi[] = [
     {
-      label: "Average time to complete",
-      value: k.avg_hours_to_complete === null ? "—" : hours(k.avg_hours_to_complete),
-      hint: "from reported to complete, for issues completed in the range",
-      icon: Hourglass,
-    },
-    { label: "Open tickets", value: fmt(k.open_tickets), hint: "right now", icon: Inbox },
-    {
-      label: "Untouched",
-      value: fmt(k.untouched_tickets),
-      hint: `open and silent ${summary.untouched_days === 1 ? "a day" : `${summary.untouched_days} days`} or more, right now`,
-      icon: AlarmClock,
+      label: "New tickets",
+      value: k.tickets_created,
+      icon: FileText,
+      tint: "bg-red-500/10 text-red-600 dark:text-red-400",
+      note: `${rangeLabel} · ${k.issues_created} ${k.issues_created === 1 ? "issue" : "issues"}`,
+      target: "new-tickets",
     },
     {
-      label: "Recurring issues",
-      value: fmt(k.recurring_issues),
-      hint: `${summary.recurring_window.min}+ tickets at one store in ${summary.recurring_window.days} days`,
+      label: "No update",
+      value: k.untouched_tickets,
+      icon: Clock,
+      tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      note: `Quiet ${days === 1 ? "24+ hours" : `${days}+ days`}`,
+      target: "untouched",
+    },
+    {
+      label: "Open",
+      value: k.open_tickets,
+      icon: Inbox,
+      tint: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      note: "Tickets, right now",
+    },
+    {
+      label: "Completed",
+      value: k.issues_completed,
+      icon: CheckCircle2,
+      tint: "bg-green-500/10 text-green-600 dark:text-green-400",
+      note: k.avg_hours_to_complete === null ? rangeLabel : `Avg. ${hours(k.avg_hours_to_complete)} to fix`,
+    },
+    {
+      label: "Recurring",
+      value: k.recurring_issues,
       icon: Repeat,
+      tint: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      note: `Issues, ${summary.recurring_window.min}+ in ${summary.recurring_window.days} days`,
+      target: "recurring",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {tiles.map(({ label, value, hint, icon: Icon }) => (
-        <div key={label} className="rounded-lg border bg-card p-3">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-            {label}
-          </p>
-          <p className="mt-1 font-heading text-2xl font-semibold">{value}</p>
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{hint}</p>
-        </div>
-      ))}
+    <div className="@container">
+      <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-3 @4xl:grid-cols-5">
+        {kpis.map((kpi) => {
+          const Icon = kpi.icon;
+          const body = (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-medium text-muted-foreground">{kpi.label}</p>
+                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", kpi.tint)}>
+                  <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                </span>
+              </div>
+              <p className="mt-2 font-heading text-3xl font-semibold leading-none tabular-nums">{kpi.value.toLocaleString()}</p>
+              <p className="mt-2 truncate text-xs text-muted-foreground" title={kpi.note}>{kpi.note}</p>
+            </>
+          );
+          const shell = "block w-full rounded-xl border bg-card p-4 text-start shadow-sm";
+          return kpi.target ? (
+            <button
+              key={kpi.label}
+              type="button"
+              onClick={() => scrollToSection(kpi.target!)}
+              className={cn(shell, "cursor-pointer transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+              aria-label={`${kpi.label}: ${kpi.value}. Show the list`}
+            >
+              {body}
+            </button>
+          ) : (
+            <div key={kpi.label} className={shell}>
+              {body}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
-}
-
-function fmt(n: number): string {
-  return n.toLocaleString();
 }
 
 /** "5.2 h" under two days, "3.1 days" over -- a coordinator thinks in both. */

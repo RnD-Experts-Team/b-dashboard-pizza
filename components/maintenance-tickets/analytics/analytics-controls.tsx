@@ -1,16 +1,18 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { ArrowRight, CalendarDays, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { StoreMultiSelect, type StoreOption } from "@/components/business-reports/store-multi-select";
 import type { StoreSelection } from "@/types/business-reports.types";
-import { RANGE_PRESETS, matchPreset, presetDays, viewerTimeZone, type RangePreset } from "@/lib/maintenance-tickets/local-range";
+import { RANGE_PRESETS, matchPreset, presetDays, type RangePreset } from "@/lib/maintenance-tickets/local-range";
 
 /**
- * Which stores, which days. Changes apply at once -- the page is light, and
- * a Load button between the manager and "yesterday" would only be in the way.
+ * The filter bar: which days, which stores -- one row, applied at once.
+ *
+ * The presets are a segmented control; picking your own dates simply leaves
+ * none of them lit, and the dates say the range. Which time zone the days are counted in is
+ * said in the page subtitle, because "yesterday" means YOUR yesterday.
  */
 export function AnalyticsControls({
   storeOptions,
@@ -19,7 +21,7 @@ export function AnalyticsControls({
   startDate,
   endDate,
   onRangeChange,
-  disabled,
+  isUpdating,
 }: {
   storeOptions: StoreOption[];
   selection: StoreSelection;
@@ -27,10 +29,10 @@ export function AnalyticsControls({
   startDate: string;
   endDate: string;
   onRangeChange: (startDate: string, endDate: string) => void;
-  disabled?: boolean;
+  /** A reload is in flight -- the controls stay usable, the bar says so. */
+  isUpdating?: boolean;
 }) {
   const active = matchPreset(startDate, endDate);
-  const zone = viewerTimeZone();
 
   function pick(preset: RangePreset) {
     const days = presetDays(preset);
@@ -38,44 +40,51 @@ export function AnalyticsControls({
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 md:items-end">
-      <div className="flex flex-wrap items-center gap-2">
-        <StoreMultiSelect options={storeOptions} value={selection} onChange={onSelectionChange} disabled={disabled} />
-        <div className="flex flex-wrap gap-1" role="group" aria-label="Date range">
-          {RANGE_PRESETS.map((p) => (
-            <Button
-              key={p.id}
-              type="button"
-              size="sm"
-              variant={active === p.id ? "default" : "outline"}
-              onClick={() => pick(p.id)}
-              disabled={disabled}
-            >
-              {p.label}
-            </Button>
-          ))}
-        </div>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
+      <div role="group" aria-label="Date range" className="inline-flex flex-wrap rounded-lg border bg-muted/50 p-0.5">
+        {RANGE_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            aria-pressed={active === p.id}
+            onClick={() => pick(p.id)}
+            className={cn(
+              "cursor-pointer whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              active === p.id
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {p.label.replace(/^Last /, "")}
+          </button>
+        ))}
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className={cn(active === null && "font-medium text-foreground")}>From</span>
+
+      <div className="flex items-center gap-1.5">
+        <CalendarDays className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="sr-only">From</span>
         <DatePicker
           value={startDate}
           onChange={(value) => value && onRangeChange(value, value > endDate ? value : endDate)}
           className="w-36"
-          disabled={disabled}
         />
-        <span className={cn(active === null && "font-medium text-foreground")}>to</span>
+        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        <span className="sr-only">To</span>
         <DatePicker
           value={endDate}
           onChange={(value) => value && onRangeChange(value < startDate ? value : startDate, value)}
           className="w-36"
-          disabled={disabled}
         />
-        <span className="inline-flex items-center gap-1" title="Days start and end at midnight in your time zone">
-          <Clock className="h-3 w-3" aria-hidden="true" />
-          Days in your time{zone ? ` (${zone})` : ""}
-        </span>
       </div>
+
+      <StoreMultiSelect options={storeOptions} value={selection} onChange={onSelectionChange} className="w-48" />
+
+      {isUpdating && (
+        <span className="ms-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Updating…
+        </span>
+      )}
     </div>
   );
 }

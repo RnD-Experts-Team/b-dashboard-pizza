@@ -25,6 +25,9 @@ const SERIES_COLOR = "#008FFB";
 /** Bars stay thin: the slot is 34px, the bar about 20px of it. */
 const ROW_PX = 34;
 
+/** Bars shown at most: the biggest ones. The rest are counted under the chart. */
+const MAX_ROWS = 8;
+
 /** Module-level so the chart options are not rebuilt on every render. */
 const formatCount = (v: number) => v.toLocaleString();
 
@@ -44,7 +47,9 @@ export function AnalyticsBarChart({
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === "dark";
 
-  const sorted = useMemo(() => [...rows].sort((a, b) => b.value - a.value), [rows]);
+  const all = useMemo(() => [...rows].sort((a, b) => b.value - a.value), [rows]);
+  const sorted = useMemo(() => all.slice(0, MAX_ROWS), [all]);
+  const hidden = all.length - sorted.length;
 
   const options: ApexOptions = useMemo(() => {
     const ink = dark ? "#e4e4e7" : "#3f3f46";
@@ -104,13 +109,18 @@ export function AnalyticsBarChart({
         options={options}
         height={Math.max(120, sorted.length * ROW_PX + 48)}
       />
+      {hidden > 0 && (
+        <p className="text-xs text-muted-foreground">
+          The top {MAX_ROWS} shown; {hidden} more with smaller numbers.
+        </p>
+      )}
       <table className="sr-only">
         <caption>{title}</caption>
         <thead>
           <tr><th scope="col">Item</th><th scope="col">{valueLabel}</th></tr>
         </thead>
         <tbody>
-          {sorted.map((r) => (
+          {all.map((r) => (
             <tr key={r.label}><td>{r.label}</td><td>{format(r.value)}</td></tr>
           ))}
         </tbody>

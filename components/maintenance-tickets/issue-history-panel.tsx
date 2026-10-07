@@ -34,6 +34,7 @@ export function IssueHistoryPanel({
   excludeTicketId,
   title,
   className,
+  collapsed = false,
 }: {
   storeNumber: string;
   issueId: number;
@@ -43,6 +44,8 @@ export function IssueHistoryPanel({
   /** Overrides the default heading. */
   title?: string;
   className?: string;
+  /** Start folded, with a toggle (the ticket page). Open and fixed otherwise. */
+  collapsed?: boolean;
 }) {
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
@@ -101,6 +104,8 @@ export function IssueHistoryPanel({
         </span>
       }
       className={className}
+      collapsible={collapsed}
+      defaultOpen={!collapsed}
     >
       {error && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
