@@ -4,7 +4,9 @@ import { Clock, Package, Plus, Stethoscope, ShieldCheck, Wallet } from "lucide-r
 import { cn } from "@/lib/utils";
 import { fmtFixed } from "@/lib/utils/number-display";
 import { formatDateOrTimestamp, formatTimestamp } from "@/lib/utils/date-display";
-import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import { entityPaths, maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import { EntityNotesAttachments } from "./entity-extras";
+import type { NotePrivacy } from "./notes-list";
 import { AttendanceDurationsStrip } from "./attendance-durations-strip";
 import { AttendanceStream } from "./attendance-stream";
 import { isOnTheClock } from "@/lib/maintenance-tickets/attendance-events";
@@ -19,8 +21,10 @@ import {
   type CorrectionSeed,
 } from "@/lib/maintenance-tickets/corrections";
 import type {
+  TicketAttachment,
   TicketIssue,
   TicketIssueAttendance,
+  TicketNote,
 } from "@/types/maintenance-tickets.types";
 
 /**
@@ -46,6 +50,10 @@ interface IssueRecordListProps {
    *  stream is shown but nothing here can write to it. */
   onRecordAttendance?: (entry: TicketIssueAttendance) => void;
   onChanged: () => void;
+  /** May this user add notes and files to the records here? */
+  canAddNotes?: boolean;
+  /** Ticket-side note privacy -- who may lock, and where. */
+  notePrivacy?: NotePrivacy;
   className?: string;
 }
 
@@ -57,8 +65,22 @@ export function IssueRecordList({
   onCorrect,
   onRecordAttendance,
   onChanged,
+  canAddNotes = false,
+  notePrivacy,
   className,
 }: IssueRecordListProps) {
+  /** Every record's own notes and files -- open when it has any. */
+  const extras = (entityPath: string, notes: TicketNote[], attachments: TicketAttachment[]) => (
+    <RecordExtras
+      entityPath={entityPath}
+      notes={notes}
+      attachments={attachments}
+      canAdd={canAddNotes}
+      privacy={notePrivacy}
+      onChanged={onChanged}
+    />
+  );
+
   const hasAny =
     issue.attendanceEntries.length > 0 ||
     issue.partUsages.length > 0 ||
@@ -119,6 +141,8 @@ export function IssueRecordList({
 
                 <AttendanceDurationsStrip durations={entry.durations} />
 
+                {extras(entityPaths.attendance(storeId, ticketId, entry.id), entry.notes, entry.attachments)}
+
                 {onRecordAttendance && !entry.mistaken && (
                   <button
                     type="button"
@@ -169,6 +193,7 @@ export function IssueRecordList({
                   {usage.paidBy ? ` · ${usage.paidBy.label}` : ""}
                   {usage.storageLocation ? ` · from ${usage.storageLocation.name}` : ""}
                 </p>
+                {extras(entityPaths.partUsage(storeId, ticketId, usage.id), usage.notes, usage.attachments)}
               </div>
               {canAct && (
                 <RecordCorrectionMenu
@@ -197,6 +222,7 @@ export function IssueRecordList({
                 <p className="text-[11px] text-muted-foreground">
                   {formatTimestamp(diagnosis.createdAt)}
                 </p>
+                {extras(entityPaths.diagnosis(storeId, ticketId, diagnosis.id), diagnosis.notes, diagnosis.attachments)}
               </div>
               {canAct && (
                 <RecordCorrectionMenu
@@ -227,6 +253,7 @@ export function IssueRecordList({
                     ? `covered until ${formatDateOrTimestamp(warranty.expiryDate)}`
                     : "no end date recorded"}
                 </p>
+                {extras(entityPaths.warranty(storeId, ticketId, warranty.id), warranty.notes, warranty.attachments)}
               </div>
               {canAct && (
                 <RecordCorrectionMenu
@@ -257,6 +284,7 @@ export function IssueRecordList({
                 <p className="text-[11px] tabular-nums text-muted-foreground">
                   base {fmtFixed(entry.basePay, 2)} · performance {fmtFixed(entry.performancePay, 2)}
                 </p>
+                {extras(entityPaths.payEntry(storeId, ticketId, entry.id), entry.notes, entry.attachments)}
               </div>
               {canAct && (
                 <RecordCorrectionMenu
@@ -276,6 +304,43 @@ export function IssueRecordList({
         </Section>
       )}
     </div>
+  );
+}
+
+/**
+ * A record's own notes and files. Open when there is something in it -- a
+ * note written on a visit used to be invisible on this page -- and a slim
+ * "Notes & files" line otherwise.
+ */
+function RecordExtras({
+  entityPath,
+  notes,
+  attachments,
+  canAdd,
+  privacy,
+  onChanged,
+}: {
+  entityPath: string;
+  notes: TicketNote[];
+  attachments: TicketAttachment[];
+  canAdd: boolean;
+  privacy?: NotePrivacy;
+  onChanged: () => void;
+}) {
+  const hasAny = notes.length + attachments.length > 0;
+  if (!hasAny && !canAdd) return null;
+
+  return (
+    <EntityNotesAttachments
+      entityPath={entityPath}
+      notes={notes}
+      attachments={attachments}
+      onSuccess={onChanged}
+      canAdd={canAdd}
+      alwaysOpen={hasAny}
+      privacy={privacy}
+      className="no-underline!"
+    />
   );
 }
 

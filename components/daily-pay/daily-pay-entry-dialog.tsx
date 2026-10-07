@@ -32,6 +32,8 @@ import {
   emptyPayment,
   entryToFormState,
   formStateToInput,
+  countNewFiles,
+  MAX_NEW_FILES_PER_SAVE,
   mergePaymentIntoFirstWithSamePayee,
   patchLine,
   patchPayment,
@@ -306,6 +308,16 @@ export function DailyPayEntryDialog({
   }
 
   async function handleSubmit() {
+    const newFiles = countNewFiles(state);
+    if (newFiles > MAX_NEW_FILES_PER_SAVE) {
+      toast.error(
+        `This save would upload ${newFiles} files, but the server takes at most ${MAX_NEW_FILES_PER_SAVE} at once ` +
+          `and silently drops the rest. Remove ${newFiles - MAX_NEW_FILES_PER_SAVE}, save, then edit the sheet to add them -- ` +
+          `files already saved are kept, not uploaded again.`
+      );
+      return;
+    }
+
     const validation = validateFormState(state);
     if (errorCount(validation) > 0) {
       setErrors(validation);

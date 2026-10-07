@@ -33,5 +33,7 @@ export function getNotificationPageSegment(notification: Notification): string |
   // ticket_created / _responded / _fixed / _closed / _reopened /
   // _status_changed / _participant_added all open the ticket page.
   if (type.startsWith("ticket_")) return "tickets";
+  // maintenance_ticket_created / _updated open the maintenance ticket.
+  if (type.startsWith("maintenance_")) return "maintenance-tickets";
   return null;
 }

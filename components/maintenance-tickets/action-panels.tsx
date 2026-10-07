@@ -45,6 +45,7 @@ import { SearchCreateCombobox } from "./search-create-combobox";
 import { PasteFileZone } from "./paste-file-zone";
 import { DatePicker, TimePicker, DateTimePicker } from "./form-bits";
 import { SELECT_CONTENT_CLS } from "./ticket-chips";
+import { TechnicianCheckList } from "./technician-check-list";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Inline action panels                                                    */
@@ -286,8 +287,6 @@ export function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, i
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activeTechs = technicians.filter((tech) => !tech.deletedAt);
-
   function toggleTech(id: number) {
     const current = issueDraft.assignTechs;
     onPatchDraft({ assignTechs: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] });
@@ -327,28 +326,13 @@ export function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, i
       </div>
       <div className="space-y-1">
         <Label className="text-xs">{t("detailSheet.selectTechnicians")}</Label>
-        <div className="rounded-md border max-h-36 overflow-y-auto divide-y bg-background">
-          {activeTechs.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">{t("detailSheet.noTechnicians")}</p>
-          ) : (
-            activeTechs.map((tech) => (
-              <button key={tech.id} type="button" onClick={() => toggleTech(tech.id)}
-                className={cn("flex w-full items-center gap-2.5 px-3 py-1.5 text-sm text-start transition-colors hover:bg-muted/40",
-                  issueDraft.assignTechs.includes(tech.id) && "bg-accent")}>
-                <div className={cn("h-3.5 w-3.5 rounded border shrink-0 flex items-center justify-center",
-                  issueDraft.assignTechs.includes(tech.id) ? "bg-primary border-primary" : "border-input")}>
-                  {issueDraft.assignTechs.includes(tech.id) && (
-                    <span className="text-[9px] text-primary-foreground leading-none">&#10003;</span>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium">{tech.name}</p>
-                  {tech.categoryName && <p className="truncate text-[10px] text-muted-foreground">{tech.categoryName}</p>}
-                </div>
-              </button>
-            ))
-          )}
-        </div>
+        <TechnicianCheckList
+          technicians={technicians}
+          catalogIssueId={issue.issueId ?? null}
+          selected={issueDraft.assignTechs}
+          onToggle={toggleTech}
+          emptyText={t("detailSheet.noTechnicians")}
+        />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
@@ -753,19 +737,12 @@ export function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueI
   return (
     <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Attach Technicians</p>
-      <div className="rounded-md border max-h-36 overflow-y-auto divide-y bg-background">
-        {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
-          <button key={tech.id} type="button" onClick={() => toggleTech(tech.id)}
-            className={cn("flex w-full items-center gap-2.5 px-3 py-1.5 text-sm text-start transition-colors hover:bg-muted/40",
-              issueDraft.attachTechs.includes(tech.id) && "bg-accent")}>
-            <div className={cn("h-3.5 w-3.5 rounded border shrink-0 flex items-center justify-center",
-              issueDraft.attachTechs.includes(tech.id) ? "bg-primary border-primary" : "border-input")}>
-              {issueDraft.attachTechs.includes(tech.id) && <span className="text-[9px] text-primary-foreground leading-none">&#10003;</span>}
-            </div>
-            <p className="truncate text-xs font-medium">{tech.name}</p>
-          </button>
-        ))}
-      </div>
+      <TechnicianCheckList
+        technicians={technicians}
+        catalogIssueId={issue.issueId ?? null}
+        selected={issueDraft.attachTechs}
+        onToggle={toggleTech}
+      />
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
@@ -887,19 +864,12 @@ export function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueD
           ))}
         </SelectContent>
       </Select>
-      <div className="rounded-md border max-h-36 overflow-y-auto divide-y bg-background">
-        {technicians.filter((tech) => !tech.deletedAt).map((tech) => (
-          <button key={tech.id} type="button" onClick={() => toggleTech(tech.id)}
-            className={cn("flex w-full items-center gap-2.5 px-3 py-1.5 text-sm text-start transition-colors hover:bg-muted/40",
-              issueDraft.changeTechs.includes(tech.id) && "bg-accent")}>
-            <div className={cn("h-3.5 w-3.5 rounded border shrink-0 flex items-center justify-center",
-              issueDraft.changeTechs.includes(tech.id) ? "bg-primary border-primary" : "border-input")}>
-              {issueDraft.changeTechs.includes(tech.id) && <span className="text-[9px] text-primary-foreground leading-none">&#10003;</span>}
-            </div>
-            <p className="truncate text-xs font-medium">{tech.name}</p>
-          </button>
-        ))}
-      </div>
+      <TechnicianCheckList
+        technicians={technicians}
+        catalogIssueId={issue.issueId ?? null}
+        selected={issueDraft.changeTechs}
+        onToggle={toggleTech}
+      />
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>Cancel</Button>

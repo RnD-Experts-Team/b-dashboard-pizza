@@ -51,6 +51,7 @@ import {
   Coffee,
   Table2,
   MessageSquareWarning,
+  LifeBuoy,
 } from "lucide-react";
 import {
   Dialog,
@@ -666,6 +667,22 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: Ticket,
         requirements: [
           { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
+        ],
+      },
+      {
+        title: t("maintenanceAnalytics"),
+        href: `/${locale}/dashboard/maintenance-analytics`,
+        icon: BarChart3,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId: effectiveStoreId }
+        ],
+      },
+      {
+        title: t("maintenanceTroubleshooting"),
+        href: `/${locale}/dashboard/maintenance-troubleshooting`,
+        icon: LifeBuoy,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
         ],
       },
       {

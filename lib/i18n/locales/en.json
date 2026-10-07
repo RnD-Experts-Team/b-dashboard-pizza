@@ -112,7 +112,9 @@
     "breaks": "Breaks",
     "toolbox": "Toolbox",
     "workbooks": "Workbooks",
-    "tickets": "Tickets"
+    "tickets": "Tickets",
+    "maintenanceAnalytics": "Maintenance Analytics",
+    "maintenanceTroubleshooting": "Troubleshooting"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -164,7 +166,9 @@
     "storage": "Storage & Stock",
     "break-logger": "Breaks",
     "workbooks": "Workbooks",
-    "tickets": "Tickets"
+    "tickets": "Tickets",
+    "maintenance-analytics": "Maintenance Analytics",
+    "maintenance-troubleshooting": "Troubleshooting"
   },
   "auth": {
     "login": {
@@ -1366,7 +1370,18 @@
       "categoryNamePlaceholder": "Category name",
       "addPart": "New Part",
       "partNamePlaceholder": "Part name",
-      "descriptionPlaceholder": "Description (optional)"
+      "descriptionPlaceholder": "Description (optional)",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "editing": "Editing",
+      "phoneLabel": "Phone",
+      "categoryLabel": "Category",
+      "nameLabel": "Name",
+      "titleLabel": "Title",
+      "descriptionLabel": "Description",
+      "callTechnician": "Call",
+      "saveFailed": "Could not save. Please try again."
     }
   },
   "keys": {

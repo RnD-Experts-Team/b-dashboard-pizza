@@ -112,7 +112,9 @@
     "breaks": "الاستراحات",
     "toolbox": "صندوق الأدوات",
     "workbooks": "دفاتر العمل",
-    "tickets": "التذاكر"
+    "tickets": "التذاكر",
+    "maintenanceAnalytics": "تحليلات الصيانة",
+    "maintenanceTroubleshooting": "استكشاف الأعطال"
   },
   "breadcrumbs": {
     "dashboard": "لوحة التحكم",
@@ -164,7 +166,9 @@
     "storage": "المخزون والمستودعات",
     "break-logger": "الاستراحات",
     "workbooks": "دفاتر العمل",
-    "tickets": "التذاكر"
+    "tickets": "التذاكر",
+    "maintenance-analytics": "تحليلات الصيانة",
+    "maintenance-troubleshooting": "استكشاف الأعطال"
   },
   "employees": {
     "title": "الموظفون",
@@ -1366,7 +1370,18 @@
       "categoryNamePlaceholder": "اسم الفئة",
       "addPart": "قطعة جديدة",
       "partNamePlaceholder": "اسم القطعة",
-      "descriptionPlaceholder": "الوصف (اختياري)"
+      "descriptionPlaceholder": "الوصف (اختياري)",
+      "edit": "تعديل",
+      "save": "حفظ",
+      "cancel": "إلغاء",
+      "editing": "جارٍ التعديل",
+      "phoneLabel": "الهاتف",
+      "categoryLabel": "الفئة",
+      "nameLabel": "الاسم",
+      "titleLabel": "العنوان",
+      "descriptionLabel": "الوصف",
+      "callTechnician": "اتصال",
+      "saveFailed": "تعذر الحفظ. حاول مرة أخرى."
     }
   },
   "keys": {

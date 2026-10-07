@@ -200,6 +200,11 @@ function transformNote(raw: ApiTicketNote): TicketNote {
     type: raw.type,
     typeLabel: raw.type_label,
     body: raw.body,
+    // Pay-sheet notes are never private (only ticket-side notes can be); the
+    // fields are carried so the shape matches TicketNote everywhere.
+    isPrivate: raw.is_private ?? false,
+    lockedAt: raw.locked_at ?? null,
+    locker: raw.locker ?? null,
     attachments: (raw.attachments ?? []).map(transformAttachment),
     createdBy: raw.created_by ?? null,
     creator: transformUserRef(raw.creator),
@@ -431,6 +436,20 @@ function appendNotes(
 }
 
 /**
+ * Edit only: the existing notes and files this payment/line keeps, by id.
+ * Anything on the sheet that is not listed is removed by the save.
+ */
+function appendKept(
+  form: FormData,
+  prefix: string,
+  noteIds: number[] | undefined,
+  attachmentIds: number[] | undefined
+): void {
+  (noteIds ?? []).forEach((id) => form.append(`${prefix}[keep_note_ids][]`, String(id)));
+  (attachmentIds ?? []).forEach((id) => form.append(`${prefix}[keep_attachment_ids][]`, String(id)));
+}
+
+/**
  * Builds the multipart body using the bracket notation the API expects:
  *   payments[i][technician_id]
  *   payments[i][lines][j][store_id]
@@ -459,6 +478,7 @@ function buildEntryFormData(payload: DailyPayEntryInput): FormData {
     }
     appendNotes(form, p, payment.notes);
     (payment.files ?? []).forEach((file) => form.append(`${p}[files][]`, file));
+    appendKept(form, p, payment.keepNoteIds, payment.keepAttachmentIds);
 
     payment.lines.forEach((line, j) => {
       const l = `${p}[lines][${j}]`;
@@ -493,6 +513,7 @@ function buildEntryFormData(payload: DailyPayEntryInput): FormData {
 
       appendNotes(form, l, line.notes);
       (line.files ?? []).forEach((file) => form.append(`${l}[files][]`, file));
+      appendKept(form, l, line.keepNoteIds, line.keepAttachmentIds);
     });
   });
 

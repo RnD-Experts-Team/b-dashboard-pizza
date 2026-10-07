@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthorization, getAuthorizationHeader } from "@/app/api/_lib/auth";
+import { proxyJsonPatch } from "@/app/api/maintenance-tickets/_lib/proxy";
 
 const BASE_URL =
   process.env.NEW_MAINTENANCE_API_URL ||
@@ -46,4 +47,14 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (msg.includes("abort") || msg.includes("timed out")) return errorJson("TIMEOUT", "Upstream request timed out", 504);
     return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
   }
+}
+
+/**
+ * Edit in place (partial update: only the fields sent change). Before this the
+ * catalog had no edit at all -- changing a technician's category meant deleting
+ * and recreating them.
+ */
+export async function PATCH(request: NextRequest, { params }: Params) {
+  const { id } = await params;
+  return proxyJsonPatch(request, `${BASE_URL}/parts/${id}`);
 }
