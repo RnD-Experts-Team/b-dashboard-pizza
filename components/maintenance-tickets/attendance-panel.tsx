@@ -35,6 +35,8 @@ import { AttendanceStream } from "./attendance-stream";
 import { AttendanceDurationsStrip } from "./attendance-durations-strip";
 import { PasteFileZone } from "./paste-file-zone";
 import { IssuePickerDialog } from "./issue-picker-dialog";
+import { useMaintenanceTicketsCatalogStore } from "@/lib/store/maintenance-tickets-catalog.store";
+import { rankTechnicians, standingWords } from "@/lib/maintenance-tickets/technician-ranking";
 import type { IssueDraft } from "@/lib/hooks/use-ticket-draft";
 import type {
   AttendanceEvent,
@@ -431,10 +433,14 @@ export function AttendancePanel({
   // Narrowed to the issue's own technicians by default, but widened the moment
   // extra issues are picked — the right person may not be attached to THIS one.
   const hasExtras = sameTicketExtras.length > 0 || crossTicketExtras.length > 0;
-  const attached = new Set((issue.technicians ?? []).map((t) => t.id));
-  const visibleTechnicians = hasExtras
-    ? technicians
-    : technicians.filter((t) => attached.size === 0 || attached.has(t.id));
+  // Then ranked: the one to call first for this issue at the top. Extras can
+  // be other issues, so with extras the overall ratings decide.
+  const abilities = useMaintenanceTicketsCatalogStore((s) => s.abilities);
+  const visibleTechnicians = useMemo(() => {
+    const attached = new Set((issue.technicians ?? []).map((t) => t.id));
+    const listed = hasExtras ? technicians : technicians.filter((t) => attached.size === 0 || attached.has(t.id));
+    return rankTechnicians(listed, abilities, hasExtras ? null : issue.issueId ?? null);
+  }, [technicians, issue.technicians, hasExtras, abilities, issue.issueId]);
 
   function patch(next: Partial<AttendanceFormValue>) {
     // Every field this form owns is a string on both sides, but indexing
@@ -614,10 +620,10 @@ export function AttendancePanel({
               Who <span className="text-destructive">*</span>
             </Label>
             <SearchableSelect
-              options={visibleTechnicians.map((t) => ({
+              options={visibleTechnicians.map(({ technician: t, standing }) => ({
                 value: String(t.id),
                 label: t.name,
-                hint: t.categoryName ?? undefined,
+                hint: [...standingWords(standing), t.categoryName].filter(Boolean).join(" · ") || undefined,
               }))}
               value={value.technicianId || undefined}
               onChange={(v) => patch({ technicianId: v })}

@@ -5,10 +5,12 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
+  CalendarClock,
   ClipboardList,
   Clock,
   Hash,
   History,
+  LifeBuoy,
   Paperclip,
   RefreshCw,
   Store as StoreIcon,
@@ -33,6 +35,7 @@ import { IssueActionGrid } from "@/components/maintenance-tickets/issue-action-g
 import { IssueActionHost } from "@/components/maintenance-tickets/issue-action-host";
 import { IssueRecordList } from "@/components/maintenance-tickets/issue-record-list";
 import { EntityNotesAttachments } from "@/components/maintenance-tickets/entity-extras";
+import type { NotePrivacy } from "@/components/maintenance-tickets/notes-list";
 import { IssueStatusHistory } from "@/components/maintenance-tickets/issue-status-history";
 import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
 import { TicketRail } from "@/components/maintenance-tickets/ticket-rail";
@@ -40,8 +43,12 @@ import { useIssueBasketStore } from "@/lib/store/issue-basket.store";
 import { payeeOf, usePayBasketStore } from "@/lib/store/pay-basket.store";
 import { useVisitBasketStore } from "@/lib/store/visit-basket.store";
 import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-panel";
+import { LocalTimestamp } from "@/components/maintenance-tickets/local-timestamp";
+import { IssueHistoryPanel } from "@/components/maintenance-tickets/issue-history-panel";
+import { TroubleshootingSteps } from "@/components/maintenance-tickets/troubleshooting/troubleshooting-steps";
 import { Checkbox } from "@/components/ui/checkbox";
 import { entityPaths } from "@/lib/api/services/maintenance-tickets.service";
+import { withTicketNotes } from "@/lib/maintenance-tickets/ticket-notes";
 import type { IssueActionId } from "@/lib/maintenance-tickets/issue-actions";
 import type { CorrectionSeed } from "@/lib/maintenance-tickets/corrections";
 import type {
@@ -95,6 +102,36 @@ function TicketPageInner() {
 
   const abortRef = useRef<AbortController | null>(null);
 
+  /*
+   * Asked under BOTH keys on purpose. getGeneralOverview builds
+   * storePermissions keyed by the numeric id; normalizeAuthPermissions, the
+   * login fallback, keys the same map by the human code. Picking one and
+   * being wrong does not error -- it finds an empty permission set and denies,
+   * which would quietly strip the page for somebody who does have access.
+   */
+  const allowedAt = useCallback(
+    (store: string, method: string, path: string) => {
+      const numericId = overviewStores.find((s) => s.storeId === store)?.id ?? store;
+      return [numericId, store].some((storeId) => canAccessRoute({ service: "Maintenance", method, path, storeId }));
+    },
+    [overviewStores, canAccessRoute]
+  );
+
+  /**
+   * Locked notes: the ticket's notes come from one of two reads -- the normal
+   * one, or "all notes" (locked ones too) for whoever the auth rules allow.
+   */
+  const readsAllNotes = useCallback(
+    (store: string) => allowedAt(store, "GET", "/stores/placeholder/tickets/placeholder/notes/all"),
+    [allowedAt]
+  );
+  // Read through a ref so `load` stays stable when the auth store fills in
+  // later -- a new `load` would re-run the first load and blank the page.
+  const readsAllNotesRef = useRef(readsAllNotes);
+  useEffect(() => {
+    readsAllNotesRef.current = readsAllNotes;
+  }, [readsAllNotes]);
+
   const load = useCallback(
     async (mode: "initial" | "refresh") => {
       if (!Number.isFinite(ticketId)) return;
@@ -112,8 +149,25 @@ function TicketPageInner() {
           storeFromLink,
           ctrl.signal
         );
-        setTicket(res.ticket);
-        setIssues(res.data);
+        let loaded = { ticket: res.ticket, issues: res.data };
+        // An off-system ticket has no store, so no notes reads: its notes are
+        // the ones the issues read carried.
+        if (res.ticket.storeId) {
+          try {
+            const notes = await maintenanceTicketsService.getTicketNotes(
+              res.ticket.storeId,
+              res.ticket.id,
+              readsAllNotesRef.current(res.ticket.storeId),
+              ctrl.signal
+            );
+            loaded = withTicketNotes(res.ticket, res.data, notes);
+          } catch (err) {
+            if (err instanceof MaintenanceTicketsError && err.code === "CANCELLED") return;
+            // Keep the notes the issues read carried (never the locked ones).
+          }
+        }
+        setTicket(loaded.ticket);
+        setIssues(loaded.issues);
         setError(null);
       } catch (err) {
         if (err instanceof MaintenanceTicketsError) {
@@ -158,23 +212,28 @@ function TicketPageInner() {
    * getGeneralOverview), not the human "03795-00001" -- resolve it through
    * overviewStores or a scoped rule finds an empty permission set and denies.
    */
-  const storeNumericId =
-    overviewStores.find((s) => s.storeId === storeNumber)?.id ?? storeNumber;
-  /*
-   * Asked under BOTH keys on purpose. getGeneralOverview builds
-   * storePermissions keyed by the numeric id; normalizeAuthPermissions, the
-   * login fallback, keys the same map by the human code. Picking one and
-   * being wrong does not error -- it finds an empty permission set and denies,
-   * which would quietly strip the page for somebody who does have access.
-   */
-  const canWrite = (path: string) =>
-    [storeNumericId, storeNumber].some((storeId) =>
-      canAccessRoute({ service: "Maintenance", method: "POST", path, storeId })
-    );
+  const canWrite = (path: string) => allowedAt(storeNumber, "POST", path);
   const canActOnIssues = canWrite("/stores/placeholder/tickets/placeholder/technicians");
   const canAddNotes = canWrite(
     "/stores/placeholder/tickets/placeholder/issues/placeholder/notes"
   );
+
+  /*
+   * Locked notes: only on a ticket that has a store (the lock endpoint is
+   * store-scoped), and only offered to people the auth rules let read them
+   * and lock them. Everyone else never even receives a locked note.
+   */
+  const notePrivacy: NotePrivacy | undefined =
+    ticket && storeNumber
+      ? {
+          canLock:
+            readsAllNotes(storeNumber) &&
+            allowedAt(storeNumber, "PATCH", "/stores/placeholder/tickets/placeholder/notes/placeholder/privacy"),
+          storeNumber,
+          ticketId: ticket.id,
+          onChanged: () => void load("refresh"),
+        }
+      : undefined;
 
   useEffect(() => {
     if (storeNumber) loadCatalog(storeNumber);
@@ -232,7 +291,21 @@ function TicketPageInner() {
               isRefreshing && "opacity-60 pointer-events-none"
             )}
           >
-            <TicketSummary ticket={ticket} issueCount={issues.length} />
+            <TicketSummary ticket={ticket} issues={issues} />
+
+            {/* The ticket's own notes and files -- closing notes included. They
+                used to be reachable only from the old side sheet. */}
+            <PageSection rank="secondary" icon={Paperclip} title="Ticket notes and files" collapsible defaultOpen={false}>
+              <EntityNotesAttachments
+                entityPath={entityPaths.ticket(storeNumber, ticket.id)}
+                notes={ticket.notes}
+                attachments={ticket.attachments}
+                onSuccess={() => void load("refresh")}
+                canAdd={canAddNotes && Boolean(storeNumber)}
+                alwaysOpen={ticket.notes.length + ticket.attachments.length > 0}
+                privacy={notePrivacy}
+              />
+            </PageSection>
 
             {/* Each renders nothing until something is put in it. Three
                 different collections doing three different jobs, so each has
@@ -271,6 +344,7 @@ function TicketPageInner() {
                 technicians={technicians}
                 canAct={canActOnIssues}
                 canAddNotes={canAddNotes}
+                notePrivacy={notePrivacy}
                 onChanged={() => void load("refresh")}
               />
             ))}
@@ -330,25 +404,64 @@ function PayBasketPeek({ locale }: { locale: string }) {
 
 /* ────────────────────────────────────────────────────────────────────────── */
 
-function TicketSummary({ ticket, issueCount }: { ticket: Ticket; issueCount: number }) {
+/**
+ * The newest of several API timestamps, compared as instants (not strings:
+ * the API's microsecond form and a frontend-made ISO string sort differently).
+ */
+function latestTimestamp(values: Array<string | null | undefined>): string | null {
+  let best: string | null = null;
+  let bestMs = -Infinity;
+  for (const value of values) {
+    if (!value) continue;
+    const ms = Date.parse(value);
+    if (Number.isNaN(ms) || ms <= bestMs) continue;
+    best = value;
+    bestMs = ms;
+  }
+  return best;
+}
+
+function TicketSummary({ ticket, issues }: { ticket: Ticket; issues: TicketIssue[] }) {
+  const issueCount = issues.length;
+  // Issues, their records, notes and files all touch the ticket on the
+  // server, so its updated_at (or an issue's) is when anything last changed.
+  const lastUpdated = latestTimestamp([ticket.updatedAt, ...issues.map((i) => i.updatedAt)]);
+  const showLastUpdated =
+    lastUpdated !== null && Date.parse(lastUpdated) - Date.parse(ticket.createdAt) >= 60_000;
+
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
-      <StatusChip value={ticket.status.value} label={ticket.status.label} />
-      <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <StoreIcon className="h-3.5 w-3.5" aria-hidden="true" />
-        {ticket.otherStore ?? ticket.storeId ?? "Store not recorded"}
-      </span>
-      {ticket.type && (
-        <span className="text-sm text-muted-foreground">{ticket.type.label}</span>
-      )}
-      <span className="text-sm text-muted-foreground">
-        {issueCount === 1 ? "1 issue" : `${issueCount} issues`}
-      </span>
-      {ticket.creator && (
-        <span className="ms-auto text-xs text-muted-foreground">
-          raised by {ticket.creator.name}
+    <div className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <StatusChip value={ticket.status.value} label={ticket.status.label} />
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <StoreIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          {ticket.otherStore ?? ticket.storeId ?? "Store not recorded"}
         </span>
-      )}
+        {ticket.type && (
+          <span className="text-sm text-muted-foreground">{ticket.type.label}</span>
+        )}
+        <span className="text-sm text-muted-foreground">
+          {issueCount === 1 ? "1 issue" : `${issueCount} issues`}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-sm">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          <span className="text-muted-foreground">Opened</span>
+          <LocalTimestamp iso={ticket.createdAt} />
+          {ticket.creator && (
+            <span className="text-muted-foreground">by {ticket.creator.name}</span>
+          )}
+        </span>
+        {showLastUpdated && lastUpdated && (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <History className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            <span className="text-muted-foreground">Last updated</span>
+            <LocalTimestamp iso={lastUpdated} showZone={false} />
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -362,6 +475,7 @@ function IssueCard({
   technicians,
   canAct,
   canAddNotes,
+  notePrivacy,
   onChanged,
 }: {
   issue: TicketIssue;
@@ -373,14 +487,16 @@ function IssueCard({
   /** May this user change the issue at all? Every write surface hangs off it. */
   canAct: boolean;
   canAddNotes: boolean;
+  notePrivacy?: NotePrivacy;
   onChanged: () => void;
 }) {
   const [activeAction, setActiveAction] = useState<IssueActionId | null>(null);
   /**
-   * Whether "What you can do" is expanded. Controlled, not left to the
-   * section's own internal toggle -- see `openAction` below for why.
+   * Whether "What you can do" is expanded. Starts folded, like every section
+   * on this page. Controlled, not left to the section's own internal toggle
+   * -- see `openAction` below for why.
    */
-  const [actionsOpen, setActionsOpen] = useState(true);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   /**
    * Every path that opens a panel goes through here rather than calling
@@ -589,16 +705,35 @@ function IssueCard({
         )}
       </header>
 
+      {/* What the store was asked to try before opening this -- and confirmed
+          trying. The guide as it read then, not as it reads now. */}
+      {issue.troubleshootingSnapshot && issue.troubleshootingConfirmedAt && (
+        <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+          <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+            <LifeBuoy className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            Troubleshooting tried before the ticket was opened
+            <span className="text-xs font-normal text-muted-foreground">
+              confirmed <LocalTimestamp iso={issue.troubleshootingConfirmedAt} showZone={false} /> · guide version {issue.troubleshootingSnapshot.version}
+            </span>
+          </p>
+          <TroubleshootingSteps
+            className="mt-2"
+            steps={issue.troubleshootingSnapshot.steps}
+            linkUrl={issue.troubleshootingSnapshot.linkUrl}
+            fileNames={issue.troubleshootingSnapshot.files.map((f) => f.name)}
+          />
+        </div>
+      )}
+
       <SectionGroup className="mt-3">
-        {/* Collapsible: a ticket with several issues stacks several of these,
-            and the record list is the one you are least likely to need open
-            for every issue at once. Starts open, so nothing looks different
-            until you actually fold one away. */}
+        {/* Every section on the ticket page starts folded (the owner's call):
+            the page opens as an overview, and you unfold what you need. */}
         <PageSection
           rank="secondary"
           icon={ClipboardList}
           title="What has been recorded"
           collapsible
+          defaultOpen={false}
         >
           <IssueRecordList
             issue={issue}
@@ -615,6 +750,8 @@ function IssueCard({
                 : undefined
             }
             onChanged={onChanged}
+            canAddNotes={canAddNotes}
+            notePrivacy={notePrivacy}
           />
         </PageSection>
       </SectionGroup>
@@ -703,7 +840,7 @@ function IssueCard({
       </PageSection>
       )}
 
-      <PageSection rank="secondary" icon={Paperclip} title="Notes and files">
+      <PageSection rank="secondary" icon={Paperclip} title="Notes and files" collapsible defaultOpen={false}>
         <EntityNotesAttachments
           entityPath={entityPaths.ticketIssue(storeId, ticketId, issue.id)}
           notes={issue.notes}
@@ -711,6 +848,7 @@ function IssueCard({
           onSuccess={onChanged}
           allowNoteType={false}
           canAdd={canAddNotes}
+          privacy={notePrivacy}
         />
       </PageSection>
 
@@ -719,6 +857,18 @@ function IssueCard({
       <PageSection rank="tertiary" icon={History}>
         <IssueStatusHistory changes={issue.statusChanges} />
       </PageSection>
+
+      {/* Has this happened here before? Only for catalog issues at a store --
+          a free-text "Other" issue has nothing to match on. */}
+      {issue.issueId !== null && storeId && (
+        <IssueHistoryPanel
+          storeNumber={storeId}
+          issueId={issue.issueId}
+          issueTitle={issue.issueTitle ?? title}
+          excludeTicketId={ticketId}
+          collapsed
+        />
+      )}
       </SectionGroup>
     </section>
   );

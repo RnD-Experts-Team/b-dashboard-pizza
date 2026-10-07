@@ -269,6 +269,10 @@ export interface DailyPayLineInput {
   ticketIssueIds?: number[];
   notes?: DailyPayNoteInput[];
   files?: File[];
+  /** Edit only: notes already on this line (by id) that survive the save, files and all. */
+  keepNoteIds?: number[];
+  /** Edit only: files already on this line (by id) that survive the save. */
+  keepAttachmentIds?: number[];
 }
 
 export interface DailyPayPaymentInput {
@@ -280,6 +284,10 @@ export interface DailyPayPaymentInput {
   moneyOwed?: number | null;
   notes?: DailyPayNoteInput[];
   files?: File[];
+  /** Edit only: notes already on this payment (by id) that survive the save, files and all. */
+  keepNoteIds?: number[];
+  /** Edit only: files already on this payment (by id) that survive the save. */
+  keepAttachmentIds?: number[];
   /**
    * At least one. ALL of a payee's stores go on THIS payment — a payee
    * appearing twice in payments[] is a 422 on payments.N.technician_id.

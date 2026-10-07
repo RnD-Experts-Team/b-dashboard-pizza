@@ -25,11 +25,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SearchCreateCombobox } from "./search-create-combobox";
+import { TroubleshootingPanel } from "./troubleshooting/troubleshooting-panel";
 import { useAuth } from "@/lib/auth/use-auth";
 import { toast } from "sonner";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
-import type { CatalogIssue, Priority, TicketType } from "@/types/maintenance-tickets.types";
+import type { CatalogIssue, Priority, TicketType, TroubleshootingGuide } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                   */
@@ -43,6 +44,8 @@ interface IssueRow {
   description: string;
   note: string;
   files: File[];
+  /** "I read these steps and tried them" -- for an issue with a guide. */
+  troubleshootingConfirmed: boolean;
 }
 
 function makeRow(): IssueRow {
@@ -54,6 +57,7 @@ function makeRow(): IssueRow {
     description: "",
     note: "",
     files: [],
+    troubleshootingConfirmed: false,
   };
 }
 
@@ -158,6 +162,8 @@ export function CreateTicketDialog({
   const [rows, setRows] = useState<IssueRow[]>([makeRow()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /** Set once a submit was refused for a missing troubleshooting tick. */
+  const [showGuideErrors, setShowGuideErrors] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // When storeId prop is empty (all-stores mode), the user picks a store inside the dialog.
@@ -227,6 +233,13 @@ export function CreateTicketDialog({
 
   const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
+  /** The troubleshooting guide a row must confirm, if its issue has one with steps. */
+  function guideFor(row: IssueRow): TroubleshootingGuide | null {
+    if (isOtherStore || !row.issueId) return null;
+    const guide = localCatalogIssues.find((i) => i.id === row.issueId)?.troubleshooting ?? null;
+    return guide && guide.steps.some((step) => step.trim() !== "") ? guide : null;
+  }
+
   function updateRow(id: string, patch: Partial<IssueRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
@@ -270,6 +283,7 @@ export function CreateTicketDialog({
     if (isSubmitting) return;
     setRows([makeRow()]);
     setSubmitError(null);
+    setShowGuideErrors(false);
     onClose();
   }
 
@@ -302,6 +316,12 @@ export function CreateTicketDialog({
         setSubmitError(t("createDialog.validationDescriptionRequired"));
         return;
       }
+      if (guideFor(row) && !row.troubleshootingConfirmed) {
+        const title = localCatalogIssues.find((i) => i.id === row.issueId)?.title ?? "this issue";
+        setShowGuideErrors(true);
+        setSubmitError(`Try the troubleshooting steps for ${title} first, then tick "I read these steps and tried them".`);
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -315,6 +335,9 @@ export function CreateTicketDialog({
           description: row.description.trim(),
           ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
           ...(row.files.length ? { files: row.files } : {}),
+          ...(guideFor(row) && row.troubleshootingConfirmed
+            ? { troubleshooting_confirmed: true, troubleshooting_version: guideFor(row)!.version }
+            : {}),
         })),
         type: ticketType,
       };
@@ -327,6 +350,7 @@ export function CreateTicketDialog({
 
       setRows([makeRow()]);
       setSubmitError(null);
+      setShowGuideErrors(false);
       toast.success(rows.length > 1 ? "Ticket created with all issues." : "Ticket created successfully.");
       onSuccess();
       onClose();
@@ -503,7 +527,8 @@ export function CreateTicketDialog({
                   <SearchCreateCombobox
                     items={comboItems}
                     selectedId={row.issueId}
-                    onSelect={(id) => updateRow(row.id, { issueId: id })}
+                    // A different issue is a different guide: the tick resets.
+                    onSelect={(id) => updateRow(row.id, { issueId: id, troubleshootingConfirmed: false })}
                     onCreate={canManageCatalog ? createCatalogIssue : undefined}
                     placeholder={
                       catalogLoading
@@ -515,6 +540,21 @@ export function CreateTicketDialog({
                   />
                 )}
               </div>
+
+              {/* Troubleshooting: try these first, then confirm. */}
+              {(() => {
+                const guide = guideFor(row);
+                if (!guide) return null;
+                return (
+                  <TroubleshootingPanel
+                    issueTitle={localCatalogIssues.find((i) => i.id === row.issueId)?.title ?? "this issue"}
+                    guide={guide}
+                    confirmed={row.troubleshootingConfirmed}
+                    onConfirmedChange={(confirmed) => updateRow(row.id, { troubleshootingConfirmed: confirmed })}
+                    showError={showGuideErrors}
+                  />
+                );
+              })()}
 
               {/* Priority */}
               <div className="space-y-1">

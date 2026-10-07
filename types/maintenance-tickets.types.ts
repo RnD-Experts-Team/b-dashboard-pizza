@@ -153,6 +153,8 @@ export interface CatalogIssue {
   id: number;
   title: string;
   description: string | null;
+  /** What to try before opening a ticket for it. Null (or absent) when none. */
+  troubleshooting?: TroubleshootingGuide | null;
   deletedAt: string | null;
   notes?: TicketNote[];
   attachments?: TicketAttachment[];
@@ -248,6 +250,14 @@ export interface TicketNote {
   type: string | null;
   typeLabel: string | null;
   body: string;
+  /**
+   * Locked note (MOS only). Only the ticket's "all notes" read returns one;
+   * every other read leaves it out, files and all.
+   */
+  isPrivate: boolean;
+  /** When it was last locked or unlocked, and by whom. */
+  lockedAt: string | null;
+  locker: { id: number; name: string } | null;
   attachments: TicketAttachment[];
   createdBy: number | null;
   creator: UserRef | null;
@@ -453,6 +463,10 @@ export interface TicketIssue {
   status: EnumField;
   description: string | null;
   parentId: number | null;
+  /** When the manager confirmed trying the troubleshooting steps before opening. */
+  troubleshootingConfirmedAt: string | null;
+  /** Those steps, as they read then. */
+  troubleshootingSnapshot: TroubleshootingSnapshot | null;
   assignments: TicketAssignment[];
   statusChanges: TicketIssueStatusChange[];
   technicians: CatalogTechnician[];
@@ -624,6 +638,10 @@ export interface CreateTicketIssueRow {
   notes?: Array<{ body: string; type?: string | null }>;
   /** Files to attach directly to this issue (multipart only) */
   files?: File[];
+  /** The manager read the issue's troubleshooting steps and tried them. */
+  troubleshooting_confirmed?: boolean;
+  /** The guide version they were shown. */
+  troubleshooting_version?: number;
 }
 
 export interface CreateTicketPayload {
@@ -679,6 +697,8 @@ export interface FinalNotePayload {
 export interface CreateNotePayload {
   body: string;
   type?: string;
+  /** 1 = locked (MOS only). Sent as "1": the API's boolean rule refuses "true". */
+  is_private?: 0 | 1;
 }
 
 export interface CreateDiagnosisPayload {
@@ -883,6 +903,7 @@ export interface ApiCatalogIssue {
   id: number;
   title: string;
   description: string | null;
+  troubleshooting?: ApiTroubleshootingGuide | null;
   deleted_at: string | null;
   notes?: ApiTicketNote[];
   attachments?: ApiTicketAttachment[];
@@ -972,11 +993,35 @@ export interface ApiTicketNote {
   type: string | null;
   type_label: string | null;
   body: string;
+  is_private?: boolean;
+  locked_by?: number | null;
+  locked_at?: string | null;
+  locker?: { id: number; name: string } | null;
   attachments?: ApiTicketAttachment[];
   created_by: number | null;
   creator: { id: number; name: string; email: string } | null;
   created_at: string;
   updated_at: string;
+}
+
+/** What a note from the ticket's notes reads sits on. */
+export type TicketNoteOwnerType =
+  | "ticket"
+  | "ticket_issue"
+  | "assignment"
+  | "assignment_delay"
+  | "diagnosis"
+  | "attendance_entry"
+  | "part_usage"
+  | "pay_entry"
+  | "warranty";
+
+export interface ApiTicketNoteWithOwner extends ApiTicketNote {
+  owner: { type: TicketNoteOwnerType | null; id: number };
+}
+
+export interface TicketNoteWithOwner extends TicketNote {
+  owner: { type: TicketNoteOwnerType | null; id: number };
 }
 
 export interface ApiTicketIssueDiagnosis {
@@ -1131,6 +1176,15 @@ export interface ApiTicketIssue {
   id: number;
   ticket_id: number;
   issue_id: number | null;
+  troubleshooting_confirmed_at?: string | null;
+  troubleshooting_snapshot?: {
+    guide_id: number;
+    version: number;
+    steps: string[];
+    link_url: string | null;
+    files?: { id: number; name: string }[];
+    confirmed_by?: number | null;
+  } | null;
   issue: { id: number; title: string; description: string | null } | null;
   display_title: string | null;
   other_title: string | null;
@@ -1252,4 +1306,166 @@ export interface ApiTicketsAnalytics {
 /** Envelope returned by the dedicated GET /tickets/analytics and GET /stores/{store}/tickets/analytics endpoints */
 export interface ApiTicketsAnalyticsResponse {
   data: ApiTicketsAnalytics;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Issue history: earlier tickets at a store for the same catalog issue     */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface ApiIssueHistoryIssue {
+  id: number;
+  parent_id: number | null;
+  status: ApiEnumField;
+  priority: ApiEnumField;
+  assigned_priority: ApiEnumField | null;
+  /** First 160 characters. */
+  description: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface ApiIssueHistoryRow {
+  ticket_id: number;
+  store_number: string;
+  created_at: string;
+  creator: { id: number; name: string; email: string | null } | null;
+  /** Where the newest of this ticket's rows for the issue stands now. */
+  status: ApiEnumField | null;
+  completed_at: string | null;
+  technicians: { id: number; name: string }[];
+  issues: ApiIssueHistoryIssue[];
+}
+
+/** Laravel's flat paginator, as the endpoint returns it. */
+export interface ApiIssueHistoryResponse {
+  data: ApiIssueHistoryRow[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface IssueHistoryIssue {
+  id: number;
+  parentId: number | null;
+  status: EnumField;
+  priority: EnumField;
+  assignedPriority: EnumField | null;
+  description: string;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+/** One earlier ticket that reported the same catalog issue at the store. */
+export interface IssueHistoryRow {
+  ticketId: number;
+  storeNumber: string;
+  createdAt: string;
+  creator: UserRef | null;
+  status: EnumField | null;
+  completedAt: string | null;
+  technicians: { id: number; name: string }[];
+  issues: IssueHistoryIssue[];
+}
+
+export interface IssueHistoryPage {
+  rows: IssueHistoryRow[];
+  page: number;
+  lastPage: number;
+  total: number;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Troubleshooting guides                                                    */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface ApiTroubleshootingGuide {
+  id: number;
+  issue_id: number;
+  steps: string[];
+  link_url: string | null;
+  version: number;
+  attachments?: ApiTicketAttachment[];
+  editor?: { id: number; name: string } | null;
+  updated_at: string;
+}
+
+/** What a store should try before opening a ticket for one catalog issue. */
+export interface TroubleshootingGuide {
+  id: number;
+  issueId: number;
+  /** In order: what to try first, then next. */
+  steps: string[];
+  linkUrl: string | null;
+  /** Goes up on every save; sent back with the confirmation. */
+  version: number;
+  attachments: TicketAttachment[];
+  editor: { id: number; name: string } | null;
+  updatedAt: string;
+}
+
+/** The guide as the manager saw it when they confirmed trying it. */
+export interface TroubleshootingSnapshot {
+  guideId: number;
+  version: number;
+  steps: string[];
+  linkUrl: string | null;
+  files: { id: number; name: string }[];
+  confirmedBy: number | null;
+}
+
+export interface TroubleshootingLibraryItem {
+  issueId: number;
+  title: string;
+  description: string | null;
+  troubleshooting: TroubleshootingGuide;
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Technician abilities                                                      */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export interface ApiTechnicianRating {
+  technician_id: number;
+  /** Absent on an overall rating. */
+  issue_id?: number;
+  rating: number | null;
+  notes: string | null;
+  call_first: boolean;
+  updated_by: number | null;
+  editor: { id: number; name: string } | null;
+  updated_at: string | null;
+}
+
+/**
+ * How good a technician is: at one catalog issue (issueId set) or overall
+ * (issueId null). 1-5 stars, notes, and whether they are the one to call
+ * first -- at most one technician per issue, and one overall.
+ */
+export interface TechnicianRating {
+  technicianId: number;
+  issueId: number | null;
+  rating: number | null;
+  notes: string | null;
+  callFirst: boolean;
+  editor: { id: number; name: string } | null;
+  updatedAt: string | null;
+}
+
+/** Every rating, as one read: the pickers and the editor both use it. */
+export interface TechnicianAbilityBoard {
+  overall: TechnicianRating[];
+  byIssue: TechnicianRating[];
+}
+
+export interface TechnicianRatingInput {
+  rating: number | null;
+  notes: string | null;
+  call_first: boolean;
+}
+
+/** A saved rating; movedFrom names whoever just lost the "call first" pin. */
+export interface TechnicianRatingSaved {
+  rating: TechnicianRating | null;
+  movedFrom: { id: number; name: string } | null;
 }

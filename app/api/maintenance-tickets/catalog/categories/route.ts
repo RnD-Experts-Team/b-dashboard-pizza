@@ -28,8 +28,15 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
   const authorization = getAuthorizationHeader(request)!;
   const { searchParams } = new URL(request.url);
+  // Forward paging as well as the trashed flag: without per_page the upstream
+  // default page (15) silently cut the list short.
+  const forwardParams = new URLSearchParams();
   const trashed = searchParams.get("trashed");
-  const upstreamUrl = `${BASE_URL}/categories${trashed ? `?trashed=${trashed}` : ""}`;
+  if (trashed) forwardParams.set("trashed", trashed);
+  const perPage = searchParams.get("per_page");
+  if (perPage) forwardParams.set("per_page", perPage);
+  const qs = forwardParams.toString();
+  const upstreamUrl = `${BASE_URL}/categories${qs ? `?${qs}` : ""}`;
 
   try {
     const res = await fetchWithTimeout(upstreamUrl, {

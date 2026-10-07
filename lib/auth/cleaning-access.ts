@@ -1,4 +1,5 @@
 import type { CanAccessParams } from "./can-access";
+import { STORE_MANAGER_ROLE } from "./roles";
 
 /**
  * Access rules for the Cleaning Chart page's tabs, defined one tab at a time
@@ -19,7 +20,7 @@ export const CLEANING_TAB_RULES: Partial<Record<CleaningTabId, CleaningTabRule>>
   // Due Today — Store Manager (own store) + Cleaning Specialist (permission-gated
   // via the backend Auth Rules on the QA service's /cleaning/stores/* routes).
   due: {
-    rolesAny: ["store_manager"],
+    rolesAny: [STORE_MANAGER_ROLE],
     requirements: (storeId) => [
       { service: "QA", method: "GET", path: "/cleaning/stores/*/dates/*/due", storeId },
       { service: "QA", method: "GET", path: "/cleaning/stores/*/due-range", storeId },
@@ -69,7 +70,7 @@ export const CLEANING_TAB_RULES: Partial<Record<CleaningTabId, CleaningTabRule>>
   // so the view can show its own "no access yet" state rather than the tab
   // just disappearing.
   "my-store": {
-    rolesAny: ["store_manager"],
+    rolesAny: [STORE_MANAGER_ROLE],
     requirements: (storeId) => [
       { service: "QA", method: "GET", path: "/cleaning/evaluations", storeId },
     ],
@@ -103,15 +104,10 @@ export function canAccessCleaningTab(
  * six requirements (including read-only ones), whereas this action writes.
  * A store_manager reaching Due via `rolesAny` therefore does not get it.
  *
- * Deliberately passes NO storeId. The backend rule for this route is
- * `store_scope_mode: "none"`, so the server authorizes it against the user's
- * GLOBAL permissions only and ignores store-level ones. `canAccess` (see
- * can-access.ts) does not mirror that for unscoped rules: given a storeId it
- * checks that store's permissions first and grants access on a match. Store
- * managers are commonly assigned "cleaning specialist" at store level while
- * holding nothing globally, so passing a storeId here showed the Evaluate
- * buttons to users the backend then rejected with 403. Omitting it makes this
- * check evaluate exactly what the server enforces.
+ * Passes NO storeId: the backend rule for this route is
+ * `store_scope_mode: "none"`, so it is decided on GLOBAL permissions only
+ * (`canAccess` ignores a storeId on such rules, as the server does). Store
+ * managers holding "cleaning specialist" only at store level don't get it.
  */
 export function canEvaluateCleaning(auth: {
   canAccessRoute: (params: CanAccessParams) => boolean;

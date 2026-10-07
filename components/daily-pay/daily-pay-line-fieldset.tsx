@@ -21,6 +21,7 @@ import {
 import { MoneyField } from "./daily-pay-num-field";
 import { DailyPayLabourControl } from "./daily-pay-labour-control";
 import { DailyPayNoteList } from "./daily-pay-note-list";
+import { ExistingAttachmentList } from "./existing-attachment-list";
 import { PayFieldset, PayFoldout } from "./daily-pay-fieldset";
 import type {
   LineForm,
@@ -276,8 +277,13 @@ export function DailyPayLineFieldset({
       <PayFoldout
         label="Attachments and notes"
         icon={Paperclip}
-        count={line.files.length + line.notes.length}
+        count={line.files.length + line.notes.length + line.existingAttachments.length}
       >
+      <ExistingAttachmentList
+        items={line.existingAttachments}
+        onChange={(existingAttachments) => onPatch({ existingAttachments })}
+        disabled={disabled}
+      />
       <div className="space-y-1.5">
         <Label className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">

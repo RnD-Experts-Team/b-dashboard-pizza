@@ -30,6 +30,8 @@ import {
   Landmark,
   Coffee,
   MessageSquareWarning,
+  BarChart3,
+  LifeBuoy,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
@@ -247,6 +249,26 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "maintenanceTickets",
     requirements: (storeId) => [
       { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenanceAnalytics",
+    href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
+    icon: BarChart3,
+    titleKey: "maintenanceAnalytics",
+    requirements: (storeId) => [
+      { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenanceTroubleshooting",
+    href: (locale) => `/${locale}/dashboard/maintenance-troubleshooting`,
+    icon: LifeBuoy,
+    titleKey: "maintenanceTroubleshooting",
+    requirements: (storeId) => [
+      { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId },
     ],
     groupKey: "maintenance",
   },

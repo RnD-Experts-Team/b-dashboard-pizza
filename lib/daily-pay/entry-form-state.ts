@@ -13,6 +13,7 @@
 /*  Form state is all STRINGS, so number inputs can be genuinely empty.       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+import type { TicketAttachment } from "@/types/maintenance-tickets.types";
 import type {
   DailyPayEntry,
   DailyPayEntryInput,
@@ -84,17 +85,26 @@ export function effectiveLineLabour(shape: PaymentPayShape, line: LineForm): Eff
 export interface NoteForm {
   body: string;
   type: string;
+  /** NEW files for a NEW note. An existing note keeps its own -- see `attachments`. */
   files: File[];
   /**
    * Edit-mode prefill only: the id of the note this row came from.
    *
-   * The /edit endpoint replaces the whole entry and accepts only NEW notes, so
-   * a prefilled note has to be re-sent by body to survive — which duplicates
-   * it and loses its attachments. Tracked here so the UI can at least say so.
-   * See the `keep` flag and OPEN QUESTION in the dialog.
+   * A kept note is sent back BY ID (keep_note_ids), never re-sent by body, so
+   * it survives the save as the same note: same author, same date, its own
+   * files still on it. Null for a note typed in this form.
    */
   existingId: number | null;
-  /** False ⇒ this prefilled note is not re-sent (and so disappears). */
+  /** Edit mode: false ⇒ this existing note is removed when the sheet is saved. */
+  keep: boolean;
+  /** Edit mode: the files already on this existing note. Display only. */
+  attachments: TicketAttachment[];
+}
+
+/** A file already on the sheet, shown in edit mode with a keep / remove toggle. */
+export interface ExistingAttachmentForm {
+  attachment: TicketAttachment;
+  /** False ⇒ removed from the sheet when it is saved. */
   keep: boolean;
 }
 
@@ -110,7 +120,10 @@ export interface LineForm {
   moneyOwed: string;
   ticketIssueIds: number[];
   notes: NoteForm[];
+  /** NEW files picked in this form. */
   files: File[];
+  /** Edit mode: files already on this line, each kept unless unticked. */
+  existingAttachments: ExistingAttachmentForm[];
   /** Edit mode only: the frozen figures shown behind the hours placeholder. */
   gathered: DailyPayGathered | null;
 }
@@ -124,7 +137,10 @@ export interface PaymentForm {
   gas: string;
   moneyOwed: string;
   notes: NoteForm[];
+  /** NEW files picked in this form. */
   files: File[];
+  /** Edit mode: files already on this payment, each kept unless unticked. */
+  existingAttachments: ExistingAttachmentForm[];
   lines: LineForm[];
   gathered: DailyPayGathered | null;
 }
@@ -149,7 +165,7 @@ export function todayIso(): string {
 }
 
 export function emptyNote(): NoteForm {
-  return { body: "", type: "", files: [], existingId: null, keep: true };
+  return { body: "", type: "", files: [], existingId: null, keep: true, attachments: [] };
 }
 
 export function emptyLine(): LineForm {
@@ -168,6 +184,7 @@ export function emptyLine(): LineForm {
     ticketIssueIds: [],
     notes: [],
     files: [],
+    existingAttachments: [],
     gathered: null,
   };
 }
@@ -182,6 +199,7 @@ export function emptyPayment(): PaymentForm {
     moneyOwed: "",
     notes: [],
     files: [],
+    existingAttachments: [],
     lines: [emptyLine()],
     gathered: null,
   };
@@ -258,6 +276,23 @@ function payShapeFor(payment: {
   return "hourly";
 }
 
+/** Prefill rows for the notes already on a payment or line. */
+function existingNotes(notes: { id: number; body: string; type: string | null; attachments: TicketAttachment[] }[] | null): NoteForm[] {
+  return (notes ?? []).map((note) => ({
+    body: note.body,
+    type: note.type ?? "",
+    files: [],
+    existingId: note.id,
+    keep: true,
+    attachments: note.attachments ?? [],
+  }));
+}
+
+/** Prefill rows for the files already on a payment or line -- all kept by default. */
+function existingAttachments(attachments: TicketAttachment[] | null): ExistingAttachmentForm[] {
+  return (attachments ?? []).map((attachment) => ({ attachment, keep: true }));
+}
+
 export function entryToFormState(entry: DailyPayEntry): EntryFormState {
   const payments = entry.payments ?? [];
 
@@ -272,14 +307,11 @@ export function entryToFormState(entry: DailyPayEntry): EntryFormState {
           hourlyPaymentRate: numToString(payment.hourlyPaymentRate),
           gas: numToString(payment.gas),
           moneyOwed: numToString(payment.moneyOwed),
-          notes: (payment.notes ?? []).map((note) => ({
-            body: note.body,
-            type: note.type ?? "",
-            files: [],
-            existingId: note.id,
-            keep: true,
-          })),
+          notes: existingNotes(payment.notes),
+          // New files only. What is already attached rides along by id, so an
+          // edit no longer silently drops it.
           files: [],
+          existingAttachments: existingAttachments(payment.attachments),
           gathered: payment.gathered,
           lines: (payment.lines ?? []).length
             ? (payment.lines ?? []).map((line) => {
@@ -298,14 +330,9 @@ export function entryToFormState(entry: DailyPayEntry): EntryFormState {
                   gas: numToString(line.gas),
                   moneyOwed: numToString(line.moneyOwed),
                   ticketIssueIds: (line.ticketIssues ?? []).map((ti) => ti.id),
-                  notes: (line.notes ?? []).map((note) => ({
-                    body: note.body,
-                    type: note.type ?? "",
-                    files: [],
-                    existingId: note.id,
-                    keep: true,
-                  })),
+                  notes: existingNotes(line.notes),
                   files: [],
+                  existingAttachments: existingAttachments(line.attachments),
                   gathered: line.gathered,
                 } satisfies LineForm;
               })
@@ -479,14 +506,17 @@ export function validateFormState(state: EntryFormState): DailyPayFormErrors {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Notes ARE compacted (blank bodies and un-kept prefills dropped), unlike
- * payments and lines. Acceptable because note-level 422s are rare and the
- * compaction is visible to the user, but it does mean note indexes in a server
- * error will not line up with the rows on screen.
+ * The NEW notes typed in this form. Existing notes are never re-sent by body --
+ * they travel as ids (see `keptNoteIds`) and keep their author, date and files.
+ *
+ * Notes ARE compacted (blank bodies dropped), unlike payments and lines.
+ * Acceptable because note-level 422s are rare and the compaction is visible to
+ * the user, but it does mean note indexes in a server error will not line up
+ * with the rows on screen.
  */
 function buildNotes(notes: NoteForm[]): DailyPayNoteInput[] | undefined {
   const built = notes
-    .filter((note) => note.keep && note.body.trim())
+    .filter((note) => note.existingId == null && note.body.trim())
     .map((note) => ({
       body: note.body.trim(),
       // Preserve the type so a migrated `legacy_invoices` note stays typed
@@ -495,6 +525,38 @@ function buildNotes(notes: NoteForm[]): DailyPayNoteInput[] | undefined {
       files: note.files,
     }));
   return built.length ? built : undefined;
+}
+
+/** Ids of the existing notes still ticked "Keep". */
+function keptNoteIds(notes: NoteForm[]): number[] | undefined {
+  const ids = notes.filter((n) => n.existingId != null && n.keep).map((n) => n.existingId as number);
+  return ids.length ? ids : undefined;
+}
+
+/** Ids of the existing files still ticked "Keep". */
+function keptAttachmentIds(attachments: ExistingAttachmentForm[]): number[] | undefined {
+  const ids = attachments.filter((a) => a.keep).map((a) => a.attachment.id);
+  return ids.length ? ids : undefined;
+}
+
+/**
+ * How many files one save uploads. PHP's `max_file_uploads` (20 by default)
+ * silently DROPS every file past the limit -- no error, the files are simply
+ * gone -- so the form refuses to send more than that in one save. Kept files
+ * are not re-uploaded and do not count.
+ */
+export const MAX_NEW_FILES_PER_SAVE = 20;
+
+export function countNewFiles(state: EntryFormState): number {
+  const notesFiles = (notes: NoteForm[]) => notes.reduce((n, note) => n + note.files.length, 0);
+  return state.payments.reduce(
+    (total, payment) =>
+      total +
+      payment.files.length +
+      notesFiles(payment.notes) +
+      payment.lines.reduce((sum, line) => sum + line.files.length + notesFiles(line.notes), 0),
+    0,
+  );
 }
 
 function buildLineLabour(shape: PaymentPayShape, line: LineForm): DailyPayLabourInput {
@@ -550,6 +612,8 @@ export function formStateToInput(
     moneyOwed: toNum(payment.moneyOwed),
     notes: buildNotes(payment.notes),
     files: payment.files.length ? payment.files : undefined,
+    keepNoteIds: keptNoteIds(payment.notes),
+    keepAttachmentIds: keptAttachmentIds(payment.existingAttachments),
     lines: payment.lines.map((line): DailyPayLineInput => ({
       location:
         line.locationKind === "store"
@@ -565,6 +629,8 @@ export function formStateToInput(
       ticketIssueIds: line.ticketIssueIds.length ? line.ticketIssueIds : undefined,
       notes: buildNotes(line.notes),
       files: line.files.length ? line.files : undefined,
+      keepNoteIds: keptNoteIds(line.notes),
+      keepAttachmentIds: keptAttachmentIds(line.existingAttachments),
     })),
   }));
 

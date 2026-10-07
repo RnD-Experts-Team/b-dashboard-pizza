@@ -514,7 +514,8 @@ export const useAuthStore = create<AuthState>()(
           params,
           state.globalPermissions,
           state.storePermissions,
-          state.authRules
+          state.authRules,
+          state.user?.globalRoles?.map((r) => r.name) ?? []
         );
       },
 

@@ -20,6 +20,7 @@ import {
   SprayCan,
   Coffee,
   MessageSquareWarning,
+  Wrench,
 } from "lucide-react";
 import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { useHiringActionStore, type HiringActionTab } from "@/lib/store/hiring-action.store";
@@ -138,10 +139,45 @@ function parseHiringActionUrl(
 }
 
 /**
+ * Where a maintenance notification goes: the ticket's own page, with its store
+ * so the page can authorise against it.
+ *
+ * Maintenance's notifications are role-based sends carrying type, title, body
+ * and `action_url` (`/dashboard/maintenance-tickets/{id}?store={number}`), so
+ * the ticket and store are read from that path; `ticket_id` / `store_number`
+ * win when a notification has them. Falls back to the tickets list.
+ */
+function maintenanceTicketHref(locale: string, notification: Notification): string {
+  const data = notification.data ?? ({} as Notification["data"]);
+  let ticketId = Number(data.ticket_id);
+  let store = typeof data.store_number === "string" ? data.store_number : "";
+
+  if (!Number.isFinite(ticketId) || ticketId <= 0) {
+    try {
+      const url = new URL(notification.action_url ?? "", "http://x");
+      const match = url.pathname.match(/\/maintenance-tickets\/(\d+)/);
+      ticketId = match ? Number(match[1]) : NaN;
+      store = store || url.searchParams.get("store") || "";
+    } catch {
+      ticketId = NaN;
+    }
+  }
+
+  if (!Number.isFinite(ticketId) || ticketId <= 0) {
+    return `/${locale}/dashboard/maintenance-tickets`;
+  }
+
+  return `/${locale}/dashboard/maintenance-tickets/${ticketId}${store ? `?store=${encodeURIComponent(store)}` : ""}`;
+}
+
+/**
  * Derive icon & color from the API notification type string.
  * Common types: "announcement.created", "announcement.updated", etc.
  */
 function getTypeVisuals(type: string) {
+  if (type.startsWith("maintenance_")) {
+    return { Icon: Wrench, bg: "bg-sky-500/10 text-sky-600 dark:text-sky-400" };
+  }
   if (type.startsWith("break_")) {
     return { Icon: Coffee, bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400" };
   }
@@ -244,6 +280,7 @@ export function NotificationItem({
   const isCleaningType = notification.type.startsWith("cleaning_");
   const isBreakType = notification.type.startsWith("break_");
   const isTicketType = notification.type.startsWith("ticket_");
+  const isMaintenanceType = notification.type.startsWith("maintenance_");
   // Only these explicitly-coded type families are clickable — an uncoded
   // type must never guess a navigation target, it just displays safely.
   const isClickable =
@@ -253,7 +290,8 @@ export function NotificationItem({
     isEmployeeType ||
     isCleaningType ||
     isBreakType ||
-    isTicketType;
+    isTicketType ||
+    isMaintenanceType;
 
   function handleClick() {
     if (!isClickable) return;
@@ -294,6 +332,11 @@ export function NotificationItem({
         openCleaningEvaluation(parsed.periodType, parsed.periodKey, parsed.store);
       }
       router.push(`/${locale}/dashboard/cleaning-chart`);
+      return;
+    }
+
+    if (isMaintenanceType) {
+      router.push(maintenanceTicketHref(locale, notification));
       return;
     }
 
@@ -371,6 +414,8 @@ export function NotificationItem({
                   ? "Breaks"
                   : isTicketType
                   ? "Tickets"
+                  : isMaintenanceType
+                  ? "Maintenance ticket"
                   : "Cleaning Chart"}
               </span>
             </>

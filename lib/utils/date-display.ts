@@ -161,3 +161,65 @@ export function formatWireDateTime(
     return iso;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Timestamps that SAY which clock they are in                             */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/** A timestamp rendered in the viewer's clock, plus what that clock is. */
+export interface LocalTimestamp {
+  /** e.g. "Oct 6, 2026 · 2:03 PM" — in the device's time zone. */
+  text: string;
+  /** Short offset of that zone at that instant, e.g. "GMT-4" (DST-correct). */
+  zone: string;
+  /** IANA name, e.g. "America/New_York"; "" when the runtime cannot say. */
+  zoneName: string;
+  /** The same instant in UTC, for a tooltip: "Oct 6, 2026 · 6:03 PM UTC". */
+  utc: string;
+}
+
+/**
+ * Format an API TIMESTAMP in the device's time zone AND name that zone.
+ *
+ * The API stores and sends UTC. Everywhere else the dashboard silently shows
+ * device time; for the places where the viewer has to know which clock they
+ * are reading (a ticket's opening time, "yesterday" on a report), this returns
+ * the label too, so the screen can say "(your time, GMT-4)".
+ *
+ * Same invariants as the helpers above: never throws, and returns null — not
+ * "Invalid Date" — so the caller can fall back to showing the raw input.
+ */
+export function formatLocalTimestamp(iso: string, pattern = "MMM d, yyyy · h:mm a"): LocalTimestamp | null {
+  if (!iso) return null;
+  try {
+    const parsed = parseISO(iso);
+    if (Number.isNaN(parsed.getTime())) return null;
+
+    let zoneName = "";
+    try {
+      zoneName = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+    } catch {
+      zoneName = "";
+    }
+
+    const utc = new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(parsed);
+
+    return {
+      text: format(parsed, pattern),
+      // "O" = short localized GMT offset ("GMT-4"), computed for THIS instant,
+      // so a January ticket says GMT-5 and a July one GMT-4.
+      zone: format(parsed, "O"),
+      zoneName,
+      utc: `${utc} UTC`,
+    };
+  } catch {
+    return null;
+  }
+}

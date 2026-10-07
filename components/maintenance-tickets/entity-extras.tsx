@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { ChevronDown, ChevronRight, Loader2, MessageSquarePlus, Paperclip, Plus, ClipboardPaste } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Lock, MessageSquarePlus, Paperclip, Plus, ClipboardPaste } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import type { TicketNote, TicketAttachment } from "@/types/maintenance-tickets.types";
-import { NotesList } from "./notes-list";
+import { NotesList, type NotePrivacy } from "./notes-list";
 import { AttachmentGallery } from "./attachment-gallery";
 
 interface EntityNotesAttachmentsProps {
@@ -32,6 +33,11 @@ interface EntityNotesAttachmentsProps {
   canAdd?: boolean;
   /** When true, content is always shown and the collapse toggle header is hidden. */
   alwaysOpen?: boolean;
+  /**
+   * Ticket-side notes only: who may lock, and where. With `canLock`, notes get
+   * a Lock/Unlock control and the add form a "Private (MOS only)" box.
+   */
+  privacy?: NotePrivacy;
   className?: string;
 }
 
@@ -54,6 +60,7 @@ export function EntityNotesAttachments({
   allowNoteType = false,
   canAdd = true,
   alwaysOpen = false,
+  privacy,
   className,
 }: EntityNotesAttachmentsProps) {
   const [open, setOpen] = useState(false);
@@ -153,7 +160,7 @@ export function EntityNotesAttachments({
 
       {isOpen && (
         <div className="px-2 pb-2 space-y-2">
-          <NotesList notes={notes} />
+          <NotesList notes={notes} privacy={privacy} />
           {attachments.length > 0 && (
             <div className="space-y-1">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Files</p>
@@ -176,6 +183,7 @@ export function EntityNotesAttachments({
             <AddNoteForm
               entityPath={entityPath}
               allowNoteType={allowNoteType}
+              canWritePrivate={privacy?.canLock ?? false}
               onClose={() => setMode(null)}
               onCreated={(note) => { onNoteAdded?.(note); setMode(null); onSuccess(); }}
             />
@@ -198,16 +206,20 @@ export function EntityNotesAttachments({
 function AddNoteForm({
   entityPath,
   allowNoteType,
+  canWritePrivate,
   onClose,
   onCreated,
 }: {
   entityPath: string;
   allowNoteType: boolean;
+  /** Offer the "Private (MOS only)" box. */
+  canWritePrivate: boolean;
   onClose: () => void;
   onCreated: (note: TicketNote) => void;
 }) {
   const [body, setBody] = useState("");
   const [type, setType] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,7 +231,11 @@ function AddNoteForm({
     try {
       const note = await maintenanceTicketsService.addNote(
         entityPath,
-        { body: body.trim(), ...(allowNoteType && type.trim() ? { type: type.trim() } : {}) },
+        {
+          body: body.trim(),
+          ...(allowNoteType && type.trim() ? { type: type.trim() } : {}),
+          ...(canWritePrivate && isPrivate ? { is_private: 1 as const } : {}),
+        },
         files,
       );
       onCreated(note);
@@ -245,6 +261,17 @@ function AddNoteForm({
         </div>
       )}
       <Input type="file" multiple className="h-7 text-xs" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} />
+      {canWritePrivate && (
+        <label className="flex cursor-pointer items-start gap-2 text-[11px] text-muted-foreground">
+          <Checkbox checked={isPrivate} onCheckedChange={(v) => setIsPrivate(v === true)} className="mt-px" />
+          <span>
+            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+              <Lock className="h-3 w-3" aria-hidden="true" /> Private (MOS only)
+            </span>
+            <span className="block">Only people with the private-notes permission will see this note and its files.</span>
+          </span>
+        </label>
+      )}
       {error && <p className="text-[11px] text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
