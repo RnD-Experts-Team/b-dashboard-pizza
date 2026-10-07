@@ -1,4 +1,5 @@
 import type { CanAccessParams } from "./can-access";
+import { STORE_MANAGER_ROLE } from "./roles";
 
 /**
  * Access rules for the Shirt Milestones views, in the same shape as
@@ -27,7 +28,7 @@ export const SHIRT_VIEW_RULES: Partial<Record<ShirtViewId, ShirtViewRule>> = {
   // The store manager's own queue. Store-scoped on the backend, so these pass
   // a storeId.
   store_queue: {
-    rolesAny: ["store_manager"],
+    rolesAny: [STORE_MANAGER_ROLE],
     requirements: (storeId) => [
       { service: "Hiring", method: "GET", path: "/v1/stores/*/shirt-milestones", storeId },
       {
@@ -48,11 +49,8 @@ export const SHIRT_VIEW_RULES: Partial<Record<ShirtViewId, ShirtViewRule>> = {
     ],
   },
 
-  // HQ fulfilment. NO storeId is passed, deliberately: these backend routes are
-  // unscoped, and canAccess() given a storeId checks that store's permissions
-  // first and grants on a match — which the server does not mirror. Passing one
-  // would show fulfilment buttons to store managers who then get a 403. Same
-  // caveat cleaning-access.ts documents on canEvaluateCleaning.
+  // HQ fulfilment. NO storeId is passed: these routes have no store in the
+  // path, so the server falls back to GLOBAL permissions (Employee Obsession).
   fulfilment: {
     rolesAny: [SHIRT_FULFILMENT_ROLE],
     requirements: () => [

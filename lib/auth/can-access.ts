@@ -12,8 +12,10 @@ export interface CanAccessParams {
   /** Path to test against path_regex, e.g. "/engine/keys" */
   path: string;
   /**
-   * Required when the matched rule has store_scope_mode === "scoped".
-   * Pass the currently-selected store's id.
+   * The store the request is for (numeric store id). A "scoped" rule checks
+   * only the permissions held at this store; with none given it checks global
+   * permissions if the rule allows an empty store, else denies. Rules in
+   * "none" mode ignore it, exactly as the server does.
    */
   storeId?: string;
 }
@@ -55,14 +57,16 @@ function buildRegex(raw: string): RegExp | null {
  * @param params        What resource the user wants to access
  * @param globalPerms   Set of global permission names for the current user
  * @param storePerms    Map of storeId → Set of permission names
- * @param authRules     The (currently mocked) list of auth rules
+ * @param authRules     The active auth rules from /auth/general-overview
+ * @param globalRoles   Names of the user's GLOBAL roles (for rules' roles_any)
  * @returns             `true` if the user is authorized, `false` otherwise
  */
 export function canAccess(
   params: CanAccessParams,
   globalPerms: Set<string>,
   storePerms: Record<string, Set<string>>,
-  authRules: AuthRule[]
+  authRules: AuthRule[],
+  globalRoles: string[] = []
 ): boolean {
   const { service, method, path, storeId } = params;
 
@@ -96,42 +100,46 @@ export function canAccess(
   const rule = candidates[0];
 
   // ------------------------------------------------------------------
-  // Step 2/3 — Determine scope and evaluate permissions
+  // Step 2/3 — Evaluate exactly as pizzasys AuthorizationResolver does,
+  // so a control shows only when the server will let the request through.
   // ------------------------------------------------------------------
+
+  // roles_any: a GLOBAL role named here passes in every scope mode.
+  const rolesAny = rule.rolesAny ?? rule.roles_any;
+  if (rolesAny && rolesAny.some((r) => globalRoles.includes(r))) return true;
+
   const scopeMode = rule.storeScopeMode ?? rule.store_scope_mode ?? "none";
+  const allowsEmpty = Boolean(rule.storeAllowsEmpty ?? rule.store_allows_empty);
 
   const any = rule.permissionsAny ?? rule.permissions_any;
   const all = rule.permissionsAll ?? rule.permissions_all;
 
+  // permissions_any OR permissions_all; a rule with neither lets anyone through.
   function passesAgainst(permSet: Set<string>): boolean {
-    if (any && any.length > 0) {
-      if (!any.some((p) => permSet.has(p))) return false;
-    }
-    if (all && all.length > 0) {
-      if (!all.every((p) => permSet.has(p))) return false;
-    }
-    return true;
+    const hasAny = !!any && any.length > 0;
+    const hasAll = !!all && all.length > 0;
+    if (!hasAny && !hasAll) return true;
+    if (hasAny && any.some((p) => permSet.has(p))) return true;
+    if (hasAll && all.every((p) => permSet.has(p))) return true;
+    return false;
   }
 
-  // Scoped rules require store-specific permissions only.
+  // Scoped: only the permissions held at that store. With no store, the server
+  // checks global permissions if the rule allows an empty store, else denies.
   if (scopeMode === "scoped") {
-    if (!storeId) return false; // scoped rule but no store selected
-    const storeSet = storePerms[String(storeId)] ?? new Set();
-    return passesAgainst(storeSet);
+    if (storeId) return passesAgainst(storePerms[String(storeId)] ?? new Set());
+    return allowsEmpty ? passesAgainst(globalPerms) : false;
   }
 
-  // Non-scoped rules: if a storeId is present, check store-specific perms first,
-  // and if that check fails, fall back to global permissions.
-  if (storeId) {
-    const storeSet = storePerms[String(storeId)];
-    if (storeSet !== undefined) {
-      if (passesAgainst(storeSet)) return true;
-      // else fall through to global perms
-    }
+  // none / all_stores: GLOBAL permissions only — a storeId is ignored, as on
+  // the server. (all_stores also requires a store role at every active store,
+  // which this check cannot see; no rule uses that mode today.)
+  if (scopeMode === "none" || scopeMode === "all_stores") {
+    return passesAgainst(globalPerms);
   }
 
-  // Default to global permissions for non-scoped rules (or when no store-specific set)
-  return passesAgainst(globalPerms);
+  // Unknown mode: the server denies.
+  return false;
 }
 
 // ---------------------------------------------------------------------------
