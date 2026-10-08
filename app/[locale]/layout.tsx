@@ -1,13 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
-import { Geist, Geist_Mono, Noto_Sans_Arabic, Space_Grotesk, Playfair_Display, IBM_Plex_Mono, Oswald, Instrument_Sans } from "next/font/google";
+import { Geist, Geist_Mono, Space_Grotesk, Playfair_Display, IBM_Plex_Mono, Oswald, Instrument_Sans } from "next/font/google";
 import { FeatureProviders } from "@/components/providers/feature-providers";
 import { Toaster } from "@/components/ui/sonner";
 import { locales, localeDirections, type Locale } from "@/lib/i18n/config";
 import { createFOUCPreventionScript } from "@/lib/theme";
 import { isFeatureEnabled } from "@/lib/config";
 import "../globals.css";
+// Self-hosted (not next/font/google) — see the header of this file for why.
+import "../fonts/noto-sans-arabic.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,12 +19,6 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-const notoSansArabic = Noto_Sans_Arabic({
-  variable: "--font-noto-arabic",
-  subsets: ["arabic"],
-  weight: ["400", "500", "600", "700"],
 });
 
 const spaceGrotesk = Space_Grotesk({
@@ -114,7 +110,7 @@ export default async function LocaleLayout({ children, params }: Props) {
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${notoSansArabic.variable} ${spaceGrotesk.variable} ${playfairDisplay.variable} ${ibmPlexMono.variable} ${oswald.variable} ${instrumentSans.variable} ${effectiveIsRtl ? "font-(family-name:--font-noto-arabic)" : ""} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} ${playfairDisplay.variable} ${ibmPlexMono.variable} ${oswald.variable} ${instrumentSans.variable} ${effectiveIsRtl ? "font-(family-name:--font-noto-arabic)" : ""} antialiased`}
         suppressHydrationWarning
       >
         <FeatureProviders messages={messages} locale={locale}>

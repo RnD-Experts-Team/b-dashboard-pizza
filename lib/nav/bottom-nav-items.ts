@@ -32,6 +32,8 @@ import {
   MessageSquareWarning,
   BarChart3,
   LifeBuoy,
+  CalendarDays,
+  Table2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
@@ -103,6 +105,9 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     href: (locale) => `/${locale}/dashboard/labor`,
     icon: Users,
     titleKey: "laborDashboard",
+    requirements: (storeId) => [
+      { service: "Hiring", method: "GET", path: "/v1/stores/*/labor/*", storeId },
+    ],
     groupKey: "dashboards",
   },
 
@@ -138,6 +143,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: ClipboardList,
     titleKey: "userStoreAssignment",
     requiredPermission: "manage user role assignments",
+    groupKey: "storeManagement",
+  },
+  {
+    id: "scheduling",
+    href: (locale) => `/${locale}/dashboard/scheduling`,
+    icon: CalendarDays,
+    titleKey: "scheduling",
+    requirements: (storeId) => [
+      { service: "Operations", method: "GET", path: "/v1/stores/*/schedule/week", storeId },
+    ],
     groupKey: "storeManagement",
   },
 
@@ -372,6 +387,17 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
 
   // Toolbox
   {
+    id: "workbooks",
+    href: (locale) => `/${locale}/dashboard/workbooks`,
+    icon: Table2,
+    titleKey: "workbooks",
+    // Zero-arg: neither Toolbox path carries a store, so none is threaded through.
+    requirements: () => [
+      { service: "Toolbox", method: "GET", path: "/v1/workbook-folders" },
+    ],
+    groupKey: "toolbox",
+  },
+  {
     id: "breaks",
     href: (locale) => `/${locale}/dashboard/break-logger`,
     icon: Coffee,
@@ -383,6 +409,9 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     href: (locale) => `/${locale}/dashboard/tickets`,
     icon: MessageSquareWarning,
     titleKey: "tickets",
+    requirements: () => [
+      { service: "Toolbox", method: "GET", path: "/v1/tickets" },
+    ],
     groupKey: "toolbox",
   },
 

@@ -2,7 +2,7 @@
 
 import { Eye, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-// ROLES (commented out): import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { tagGrantsEdit, visibilityAccent } from "./visibility-accent";
 
 interface VisibilityChipProps {
@@ -19,7 +19,7 @@ interface VisibilityChipProps {
 export function VisibilityChip({
   value,
   label,
-  // ROLES (commented out): roles,
+  roles,
   grantsEdit,
   size = "sm",
   className,
@@ -47,25 +47,20 @@ export function VisibilityChip({
       >
         {label}
       </span>
-      {/* ROLES (commented out)
       {roles && roles.length > 0 && (
         <span className="shrink-0 rounded bg-muted px-1 text-[10px] tabular-nums text-muted-foreground">
           {roles.length}
         </span>
       )}
-      */}
     </span>
   );
 
-  return chip;
+  if (!roles || roles.length === 0) return chip;
 
-  // ROLES (commented out):
-  // if (!roles || roles.length === 0) return chip;
-  //
-  // return (
-  //   <Tooltip>
-  //     <TooltipTrigger asChild>{chip}</TooltipTrigger>
-  //     <TooltipContent side="top">{roles.join(", ")}</TooltipContent>
-  //   </Tooltip>
-  // );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+      <TooltipContent side="top">{roles.join(", ")}</TooltipContent>
+    </Tooltip>
+  );
 }

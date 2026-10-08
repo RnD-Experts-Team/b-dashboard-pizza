@@ -3410,11 +3410,9 @@
       "canEdit": "can edit",
       "viewOnly": "view only",
       "rolesLabel": "Roles",
-      "rolesPlaceholder": "Type a role name, then press Enter",
-      "rolesAdd": "Add",
+      "rolesPlaceholder": "Choose roles",
       "rolesRemove": "Remove {role}",
       "rolesRequired": "Add at least one role.",
-      "rolesHintExact": "Role names must match pizzasys exactly. A typo matches nobody, and you won't see an error.",
       "rolesHintHierarchy": "There's no role hierarchy here: a GM only gets in if they hold one of these roles directly.",
       "rolesHintDelay": "A role granted in pizzasys a moment ago can take a little while to arrive here.",
       "parentTitle": "Sits inside",
@@ -3423,7 +3421,14 @@
       "sharedRoles": "Only these roles are on both lists, so only they get in: {roles}",
       "noSharedRoles": "These roles share nothing with the item above, so only the owners will be able to get in.",
       "ownerNote": "Whoever creates an item can always view and edit it.",
-      "saved": "Access updated"
+      "saved": "Access updated",
+      "rolesOfStore": "Your roles at {store}",
+      "rolesSearch": "Search roles…",
+      "rolesEmpty": "No roles match.",
+      "rolesNone": "You don't hold any roles at {store}, so there's nothing to choose. Pick another store in the sidebar, or a different access option.",
+      "rolesNoStore": "Select a store in the sidebar to see your roles.",
+      "rolesNotYours": "Not yours",
+      "rolesItemStoreNote": "This item belongs to {item}. Roles are matched there, but the list shows your roles at {store}."
     },
     "folderForm": {
       "createTitle": "New folder",

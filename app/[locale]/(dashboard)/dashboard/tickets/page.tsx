@@ -28,10 +28,11 @@ import type { TicketListFilters } from "@/types/toolbox-tickets.types";
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Tickets — ToolboxPizza's internal ticketing (inbox, store queue, admin). */
 /*                                                                            */
-/*  Not gated: the inbox is filtered upstream to what each caller can see,   */
-/*  the store queue hides rows the caller can't open, and the admin tab      */
-/*  explains its own 403. Tab + filters live in the URL so a filtered view    */
-/*  survives a reload and can be linked.                                     */
+/*  The page adds no gate of its own (the sidebar item is gated on the       */
+/*  Toolbox `GET /v1/tickets` rule): the inbox is filtered upstream to what   */
+/*  each caller can see, the store queue hides rows the caller can't open,   */
+/*  and the admin tab explains its own 403. Tab + filters live in the URL so  */
+/*  a filtered view survives a reload and can be linked.                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 type Tab = "inbox" | "store" | "admin";

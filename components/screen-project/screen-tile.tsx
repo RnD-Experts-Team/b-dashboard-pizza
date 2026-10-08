@@ -191,6 +191,8 @@ export interface ScreenTileProps {
   onDriveThruMicApi?: (api: ManagerMicApi | null) => void;
   /** Manager side: the station's reports — settings, status, levels and confirmations. */
   onDriveThruMicReport?: (report: StationMicReport) => void;
+  /** Flip the station's camera feed horizontally (the Drive Thru sheet shows it as the customer sees it). */
+  mirrorVideo?: boolean;
   /**
    * Fired when the room disconnects for a reason that isn't an intentional/
    * final end (station removed, room deleted, etc.) — see the reason enum.
@@ -277,6 +279,8 @@ interface InnerProps {
   driveThruMic?: boolean;
   onDriveThruMicApi?: (api: ManagerMicApi | null) => void;
   onDriveThruMicReport?: (report: StationMicReport) => void;
+  /** Flip the station's camera feed horizontally (the Drive Thru sheet shows it as the customer sees it). */
+  mirrorVideo?: boolean;
   onUnrecoverableDisconnect?: (reason?: DisconnectReason) => void;
   selectedAudioDeviceId?: string;
   selectedVideoDeviceId?: string;
@@ -375,6 +379,7 @@ function ScreenTileInner({
   driveThruMic = false,
   onDriveThruMicApi,
   onDriveThruMicReport,
+  mirrorVideo = false,
   onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
@@ -1144,7 +1149,7 @@ function ScreenTileInner({
       ) : videoTrack && isVideoEnabled ? (
         <VideoTrack
           trackRef={videoTrack}
-          className="absolute inset-0 h-full w-full object-cover"
+          className={cn("absolute inset-0 h-full w-full object-cover", mirrorVideo && "scale-x-[-1]")}
         />
       ) : viewerOnly ? (
         /* Station screen. When media is ready it is shown on its own (no logo).
@@ -1699,6 +1704,7 @@ export function ScreenTile({
   driveThruMic,
   onDriveThruMicApi,
   onDriveThruMicReport,
+  mirrorVideo,
   onUnrecoverableDisconnect,
   selectedAudioDeviceId,
   selectedVideoDeviceId,
@@ -1849,6 +1855,7 @@ export function ScreenTile({
         driveThruMic={driveThruMic}
         onDriveThruMicApi={onDriveThruMicApi}
         onDriveThruMicReport={onDriveThruMicReport}
+        mirrorVideo={mirrorVideo}
         onUnrecoverableDisconnect={onUnrecoverableDisconnect}
         selectedAudioDeviceId={selectedAudioDeviceId}
         selectedVideoDeviceId={selectedVideoDeviceId}

@@ -251,6 +251,7 @@ export function DriveThruOverlay() {
           onConnectionStateChange={setLive}
           onMediaPublisherReady={handleMediaPublisherReady}
           onDriveThruMicApi={setMicApi}
+          mirrorVideo
           onDriveThruMicReport={setMicReport}
           className="absolute inset-0 h-full w-full"
         />

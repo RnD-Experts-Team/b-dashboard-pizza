@@ -381,8 +381,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: "Labor Dashboard",
         href: `/${locale}/dashboard/labor`,
         icon: Users,
-        // No auth rule defined upstream yet — visible for any store the user
-        // can access, same as the Business Reports item.
+        requirements: [
+          { service: "Hiring", method: "GET", path: "/v1/stores/*/labor/*", storeId: effectiveStoreId },
+        ],
       },
     ],
   };
@@ -405,11 +406,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         requiredPermission: "manage user role assignments",
 
       },
-      // {
-      //   title: t("scheduling"),
-      //   href: `/${locale}/dashboard/scheduling`,
-      //   icon: CalendarDays,
-      // },
+      {
+        title: t("scheduling"),
+        href: `/${locale}/dashboard/scheduling`,
+        icon: CalendarDays,
+        requirements: [
+          { service: "Operations", method: "GET", path: "/v1/stores/*/schedule/week", storeId: effectiveStoreId },
+        ],
+      },
     ],
   };
 
@@ -713,20 +717,27 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
     ],
   };
-  // Toolbox (ToolboxPizza). No gates: Breaks is self-service, and Workbooks
-  // filters upstream — every list returns only what the caller may see, and
-  // each item's own viewer.can decides what they can do with it.
+  // Toolbox (ToolboxPizza). Breaks is self-service, so it has no gate. Workbooks
+  // and Tickets are gated on the one list rule each page opens with; the
+  // upstream still filters every list to what the caller may see, and each
+  // item's own viewer.can decides what they can do with it.
+  // NO storeId on purpose — neither path carries a store, so the server checks
+  // these with no store context and the probe must match. Same as storage above.
   const workbooksItem: NavItem = {
     title: t("workbooks"),
     href: `/${locale}/dashboard/workbooks`,
     icon: Table2,
+    requirements: [
+      { service: "Toolbox", method: "GET", path: "/v1/workbook-folders" },
+    ],
   };
-  // Tickets — no gate by design: the inbox is filtered upstream to what each
-  // caller can see, and the admin tab explains its own 403.
   const ticketsItem: NavItem = {
     title: t("tickets"),
     href: `/${locale}/dashboard/tickets`,
     icon: MessageSquareWarning,
+    requirements: [
+      { service: "Toolbox", method: "GET", path: "/v1/tickets" },
+    ],
   };
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),

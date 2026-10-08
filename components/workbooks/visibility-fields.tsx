@@ -1,14 +1,14 @@
 "use client";
 
-// ROLES (commented out): AlertTriangle, Info
-import { CornerLeftUp, Eye, Pencil } from "lucide-react";
+import { useMemo } from "react";
+import { AlertTriangle, CornerLeftUp, Eye, Info, Pencil, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-// ROLES (commented out): import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { normalizeRoles } from "@/lib/workbooks/roles"; // ROLES (commented out): sharedRoles
+import { normalizeRoles, sharedRoles } from "@/lib/workbooks/roles";
 import type { VisibilityOption, VisibilityPayload } from "@/types/workbooks.types";
-// ROLES (commented out): import { ChipInput } from "./chip-input";
+import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
+import { useMyStoreRoles } from "@/lib/hooks/use-my-store-roles";
 import { VisibilityChip } from "./visibility-chip";
 import { visibilityAccent } from "./visibility-accent";
 
@@ -49,6 +49,12 @@ interface VisibilityFieldsProps {
   visibilityError?: string | null;
   disabled?: boolean;
   idPrefix?: string;
+  /**
+   * The store the ITEM belongs to, when it already exists (retagging). Roles are
+   * matched at that store; the list shows the user's roles at the sidebar store,
+   * so a difference is called out rather than left to mislead.
+   */
+  itemStore?: { storeNumber: string; name: string } | null;
 }
 
 /**
@@ -62,18 +68,32 @@ export function VisibilityFields({
   options,
   loading,
   parent,
-  // ROLES (commented out): rolesError, idPrefix
+  rolesError,
   visibilityError,
   disabled,
+  idPrefix = "vis",
+  itemStore,
 }: VisibilityFieldsProps) {
   const t = useTranslations("workbooks.visibility");
   const selected = options.find((o) => o.value === value.visibility);
-  // ROLES (commented out):
-  // const needsRoles = Boolean(selected?.needsRoles);
-  // const parentRoles = parent?.roles ?? null;
-  // const overlap = needsRoles && parentRoles ? sharedRoles(normalizeRoles(value.roles), parentRoles) : null;
-  // Role-based tags can't be completed without the roles input, so they aren't offered.
-  const visibleOptions = options.filter((o) => !o.needsRoles);
+  const needsRoles = Boolean(selected?.needsRoles);
+
+  const parentRoles = parent?.roles ?? null;
+  const overlap = needsRoles && parentRoles ? sharedRoles(normalizeRoles(value.roles), parentRoles) : null;
+
+  // The user's own direct roles at the sidebar's store — picked, never typed.
+  const { storeCode, storeName, roles: myRoles } = useMyStoreRoles();
+  // Roles already on the item stay in the list (ticked, removable) even when the
+  // viewer doesn't hold them, instead of being silently dropped on save.
+  const roleOptions = useMemo<MultiSelectOption<string>[]>(() => {
+    const mine = new Set(myRoles);
+    const others = value.roles.filter((r) => !mine.has(r));
+    return [
+      ...myRoles.map((r) => ({ value: r, label: r })),
+      ...others.map((r) => ({ value: r, label: r, hint: t("rolesNotYours") })),
+    ];
+  }, [myRoles, value.roles, t]);
+  const itemStoreDiffers = Boolean(itemStore && storeCode && itemStore.storeNumber !== storeCode);
 
   if (loading) {
     return (
@@ -95,21 +115,19 @@ export function VisibilityFields({
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium">{parent.name}</span>
-            <VisibilityChip value={parent.visibility} label={parent.visibilityLabel} /* ROLES (commented out): roles={parent.roles} */ />
+            <VisibilityChip value={parent.visibility} label={parent.visibilityLabel} roles={parent.roles} />
           </div>
           <p className="mt-1.5 text-muted-foreground">{t("parentBody")}</p>
-          {/* ROLES (commented out)
           {parentRoles && parentRoles.length > 0 && (
             <p className="mt-1 text-muted-foreground">
               {t("parentRoles", { roles: parentRoles.join(", ") })}
             </p>
           )}
-          */}
         </div>
       )}
 
       <div role="radiogroup" aria-label={t("title")} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {visibleOptions.map((opt) => {
+        {options.map((opt) => {
           const isSelected = opt.value === value.visibility;
           const accent = visibilityAccent(opt.value);
           return (
@@ -151,28 +169,66 @@ export function VisibilityFields({
       </div>
       {visibilityError && <p className="text-[11px] text-destructive">{visibilityError}</p>}
 
-      {/* ROLES (commented out)
       {needsRoles && (
         <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 animate-in fade-in-0 slide-in-from-top-1">
-          <Label htmlFor={`${idPrefix}-roles`} className="text-xs">
-            {t("rolesLabel")} <span className="text-destructive">*</span>
-          </Label>
-          <ChipInput
-            id={`${idPrefix}-roles`}
-            value={value.roles}
-            onChange={(roles) => onChange({ ...value, roles })}
-            placeholder={t("rolesPlaceholder")}
-            addLabel={t("rolesAdd")}
-            removeLabel={(role) => t("rolesRemove", { role })}
-            invalid={Boolean(rolesError)}
-            disabled={disabled}
-          />
+          <div className="space-y-0.5">
+            <span id={`${idPrefix}-roles-label`} className="block text-xs font-medium">
+              {t("rolesLabel")} <span className="text-destructive">*</span>
+            </span>
+            <p className="text-[11px] text-muted-foreground">
+              {storeName ? t("rolesOfStore", { store: storeName }) : t("rolesNoStore")}
+            </p>
+          </div>
+          <div role="group" aria-labelledby={`${idPrefix}-roles-label`} className="space-y-2">
+            <MultiSelect<string>
+              options={roleOptions}
+              selected={value.roles}
+              onChange={(roles) => onChange({ ...value, roles })}
+              placeholder={t("rolesPlaceholder")}
+              searchPlaceholder={t("rolesSearch")}
+              emptyText={t("rolesEmpty")}
+              disabled={disabled || roleOptions.length === 0}
+              className={cn(rolesError && "border-destructive")}
+            />
+            {value.roles.length > 0 && (
+              <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+                {value.roles.map((role) => (
+                  <span
+                    key={role}
+                    className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-0.5 font-mono text-[11px] animate-in fade-in-0 zoom-in-95"
+                  >
+                    {role}
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onChange({ ...value, roles: value.roles.filter((r) => r !== role) })}
+                      className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      aria-label={t("rolesRemove", { role })}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          {roleOptions.length === 0 && (
+            <p className="flex gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              {storeCode ? t("rolesNone", { store: storeName ?? storeCode }) : t("rolesNoStore")}
+            </p>
+          )}
+          {itemStoreDiffers && itemStore && (
+            <p className="flex gap-1.5 rounded-md border bg-muted/40 px-2 py-1.5 text-[11px] text-muted-foreground">
+              <Info className="mt-0.5 h-3 w-3 shrink-0" />
+              {t("rolesItemStoreNote", {
+                item: itemStore.name || itemStore.storeNumber,
+                store: storeName ?? storeCode ?? "",
+              })}
+            </p>
+          )}
           {rolesError && <p className="text-[11px] text-destructive">{rolesError}</p>}
           <ul className="space-y-1 text-[11px] text-muted-foreground">
-            <li className="flex gap-1.5">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-              {t("rolesHintExact")}
-            </li>
             <li className="flex gap-1.5">
               <Info className="mt-0.5 h-3 w-3 shrink-0" />
               {t("rolesHintHierarchy")}
@@ -193,7 +249,6 @@ export function VisibilityFields({
           )}
         </div>
       )}
-      */}
 
       <p className="text-[11px] text-muted-foreground">{t("ownerNote")}</p>
     </div>
