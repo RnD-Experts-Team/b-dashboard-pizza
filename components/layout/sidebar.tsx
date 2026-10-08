@@ -372,6 +372,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   /* ---- Collapsible groups ---- */
   // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
   // entry is marked `exact` (that href prefixes every other dashboard route).
+  // ORDER MATTERS: signing in lands on the first of these the user can open
+  // (lib/nav/landing.ts, which reads the bottom-nav mirror of this list).
   const dashboardsGroup: NavGroup = {
     label: "Dashboards",
     icon: LayoutDashboard,
@@ -383,6 +385,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: Users,
         requirements: [
           { service: "Hiring", method: "GET", path: "/v1/stores/*/labor/*", storeId: effectiveStoreId },
+        ],
+      },
+      {
+        title: t("maintenanceAnalytics"),
+        href: `/${locale}/dashboard/maintenance-analytics`,
+        icon: BarChart3,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId: effectiveStoreId }
         ],
       },
     ],
@@ -674,19 +684,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         ],
       },
       {
-        title: t("maintenanceAnalytics"),
-        href: `/${locale}/dashboard/maintenance-analytics`,
-        icon: BarChart3,
-        requirements: [
-          { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId: effectiveStoreId }
-        ],
-      },
-      {
         title: t("maintenanceTroubleshooting"),
         href: `/${locale}/dashboard/maintenance-troubleshooting`,
         icon: LifeBuoy,
         requirements: [
           { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
+        ],
+      },
+      {
+        title: t("maintenanceTechnicians"),
+        href: `/${locale}/dashboard/maintenance-technicians`,
+        icon: HardHat,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/technicians" }
         ],
       },
       {

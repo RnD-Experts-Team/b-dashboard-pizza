@@ -1,26 +1,22 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AttachmentGallery } from "@/components/maintenance-tickets/attachment-gallery";
-import type { TicketAttachment } from "@/types/maintenance-tickets.types";
 
 /**
- * A troubleshooting guide, read-only: the steps in order, then the link and
- * files. Used in the new-ticket form, the library, and on a ticket to show
- * what the manager confirmed trying.
+ * Troubleshooting steps as a ticket kept them: the steps in order, each with
+ * the names of its files, then the guide's link and files. Read-only -- the
+ * guide may have changed since; this is what the manager tried.
  */
 export function TroubleshootingSteps({
   steps,
   linkUrl,
-  attachments = [],
   fileNames = [],
   className,
 }: {
-  steps: string[];
+  steps: { body: string; files?: { id: number; name: string }[] }[];
   linkUrl: string | null;
-  attachments?: TicketAttachment[];
-  /** Files known only by name (a ticket's snapshot of the guide). */
+  /** Files for the whole guide, known only by name. */
   fileNames?: string[];
   className?: string;
 }) {
@@ -28,7 +24,15 @@ export function TroubleshootingSteps({
     <div className={cn("space-y-2", className)}>
       <ol className="list-decimal space-y-1 ps-5 text-sm">
         {steps.map((step, i) => (
-          <li key={i} className="whitespace-pre-wrap">{step}</li>
+          <li key={i} className="whitespace-pre-wrap">
+            {step.body}
+            {step.files && step.files.length > 0 && (
+              <span className="ms-1.5 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Paperclip className="h-3 w-3" aria-hidden="true" />
+                {step.files.map((f) => f.name).join(", ")}
+              </span>
+            )}
+          </li>
         ))}
       </ol>
       {linkUrl && (
@@ -42,8 +46,7 @@ export function TroubleshootingSteps({
           Open the guide (video / manual)
         </a>
       )}
-      {attachments.length > 0 && <AttachmentGallery attachments={attachments} />}
-      {attachments.length === 0 && fileNames.length > 0 && (
+      {fileNames.length > 0 && (
         <p className="text-xs text-muted-foreground">Files: {fileNames.join(", ")}</p>
       )}
     </div>

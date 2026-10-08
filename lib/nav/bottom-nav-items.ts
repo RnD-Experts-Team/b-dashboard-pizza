@@ -34,6 +34,7 @@ import {
   LifeBuoy,
   CalendarDays,
   Table2,
+  HardHat,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
@@ -107,6 +108,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "laborDashboard",
     requirements: (storeId) => [
       { service: "Hiring", method: "GET", path: "/v1/stores/*/labor/*", storeId },
+    ],
+    groupKey: "dashboards",
+  },
+  {
+    id: "maintenanceAnalytics",
+    href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
+    icon: BarChart3,
+    titleKey: "maintenanceAnalytics",
+    requirements: (storeId) => [
+      { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId },
     ],
     groupKey: "dashboards",
   },
@@ -268,22 +279,22 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     groupKey: "maintenance",
   },
   {
-    id: "maintenanceAnalytics",
-    href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
-    icon: BarChart3,
-    titleKey: "maintenanceAnalytics",
-    requirements: (storeId) => [
-      { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId },
-    ],
-    groupKey: "maintenance",
-  },
-  {
     id: "maintenanceTroubleshooting",
     href: (locale) => `/${locale}/dashboard/maintenance-troubleshooting`,
     icon: LifeBuoy,
     titleKey: "maintenanceTroubleshooting",
     requirements: (storeId) => [
       { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenanceTechnicians",
+    href: (locale) => `/${locale}/dashboard/maintenance-technicians`,
+    icon: HardHat,
+    titleKey: "maintenanceTechnicians",
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/technicians" },
     ],
     groupKey: "maintenance",
   },

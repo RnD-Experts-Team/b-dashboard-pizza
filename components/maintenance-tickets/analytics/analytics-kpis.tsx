@@ -1,14 +1,15 @@
 "use client";
 
-import { CheckCircle2, Clock, FileText, Inbox, Repeat } from "lucide-react";
+import { CheckCircle2, Clock, FileText, Inbox, LifeBuoy, Repeat } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import type { AnalyticsSummary } from "@/types/maintenance-analytics.types";
 
-interface Kpi {
+export interface Kpi {
   label: string;
-  value: number;
+  /** A count, or already-formatted text ("$1,240"). */
+  value: number | string;
   icon: LucideIcon;
   /** Icon tile tint: the colour names the kind of number, the label says it. */
   tint: string;
@@ -16,6 +17,41 @@ interface Kpi {
   note: string;
   /** The table on the page this number counts. */
   target?: string;
+}
+
+/**
+ * One headline number: label and icon, the number, one short line. Every
+ * tile has the same three rows, so numbers line up across a row of them.
+ */
+export function KpiTile({ kpi }: { kpi: Kpi }) {
+  const Icon = kpi.icon;
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-sm font-medium text-muted-foreground">{kpi.label}</p>
+        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", kpi.tint)}>
+          <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+        </span>
+      </div>
+      <p className="mt-2 font-heading text-3xl font-semibold leading-none tabular-nums">
+        {typeof kpi.value === "number" ? kpi.value.toLocaleString() : kpi.value}
+      </p>
+      <p className="mt-2 truncate text-xs text-muted-foreground" title={kpi.note}>{kpi.note}</p>
+    </>
+  );
+  const shell = "block w-full rounded-xl border bg-card p-4 text-start shadow-sm";
+  return kpi.target ? (
+    <button
+      type="button"
+      onClick={() => scrollToSection(kpi.target!)}
+      className={cn(shell, "cursor-pointer transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+      aria-label={`${kpi.label}: ${kpi.value}. Show the list`}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={shell}>{body}</div>
+  );
 }
 
 /**
@@ -68,42 +104,20 @@ export function AnalyticsKpis({ summary, rangeLabel }: { summary: AnalyticsSumma
       note: `Issues, ${summary.recurring_window.min}+ in ${summary.recurring_window.days} days`,
       target: "recurring",
     },
+    {
+      label: "Fixed, no ticket",
+      value: k.fixed_by_troubleshooting,
+      icon: LifeBuoy,
+      tint: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+      note: `${rangeLabel} · by troubleshooting`,
+      target: "troubleshooting-fixes",
+    },
   ];
 
   return (
     <div className="@container">
-      <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-3 @4xl:grid-cols-5">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          const body = (
-            <>
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-sm font-medium text-muted-foreground">{kpi.label}</p>
-                <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", kpi.tint)}>
-                  <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-                </span>
-              </div>
-              <p className="mt-2 font-heading text-3xl font-semibold leading-none tabular-nums">{kpi.value.toLocaleString()}</p>
-              <p className="mt-2 truncate text-xs text-muted-foreground" title={kpi.note}>{kpi.note}</p>
-            </>
-          );
-          const shell = "block w-full rounded-xl border bg-card p-4 text-start shadow-sm";
-          return kpi.target ? (
-            <button
-              key={kpi.label}
-              type="button"
-              onClick={() => scrollToSection(kpi.target!)}
-              className={cn(shell, "cursor-pointer transition-colors duration-150 hover:border-foreground/20 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring")}
-              aria-label={`${kpi.label}: ${kpi.value}. Show the list`}
-            >
-              {body}
-            </button>
-          ) : (
-            <div key={kpi.label} className={shell}>
-              {body}
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-3 @5xl:grid-cols-6">
+        {kpis.map((kpi) => <KpiTile key={kpi.label} kpi={kpi} />)}
       </div>
     </div>
   );

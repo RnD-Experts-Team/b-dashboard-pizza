@@ -114,7 +114,8 @@
     "workbooks": "دفاتر العمل",
     "tickets": "التذاكر",
     "maintenanceAnalytics": "تحليلات الصيانة",
-    "maintenanceTroubleshooting": "استكشاف الأعطال"
+    "maintenanceTroubleshooting": "استكشاف الأعطال",
+    "maintenanceTechnicians": "الفنيون"
   },
   "breadcrumbs": {
     "dashboard": "لوحة التحكم",
@@ -168,7 +169,8 @@
     "workbooks": "دفاتر العمل",
     "tickets": "التذاكر",
     "maintenance-analytics": "تحليلات الصيانة",
-    "maintenance-troubleshooting": "استكشاف الأعطال"
+    "maintenance-troubleshooting": "استكشاف الأعطال",
+    "maintenance-technicians": "الفنيون"
   },
   "employees": {
     "title": "الموظفون",

@@ -439,8 +439,8 @@ export function AttendancePanel({
   const visibleTechnicians = useMemo(() => {
     const attached = new Set((issue.technicians ?? []).map((t) => t.id));
     const listed = hasExtras ? technicians : technicians.filter((t) => attached.size === 0 || attached.has(t.id));
-    return rankTechnicians(listed, abilities, hasExtras ? null : issue.issueId ?? null);
-  }, [technicians, issue.technicians, hasExtras, abilities, issue.issueId]);
+    return rankTechnicians(listed, abilities, hasExtras ? null : issue.issueId ?? null, storeId);
+  }, [technicians, issue.technicians, hasExtras, abilities, issue.issueId, storeId]);
 
   function patch(next: Partial<AttendanceFormValue>) {
     // Every field this form owns is a string on both sides, but indexing

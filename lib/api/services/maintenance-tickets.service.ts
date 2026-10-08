@@ -6,6 +6,7 @@ import type {
   AnalyticsSummary,
   AnalyticsWatchlist,
 } from "@/types/maintenance-analytics.types";
+import type { TechnicianAnalytics, TechnicianAnalyticsParams, TechniciansOverview } from "@/types/technician-analytics.types";
 import type {
   AttendanceDurations,
   AttendanceMinutes,
@@ -85,7 +86,12 @@ import type {
   ApiIssueHistoryResponse,
   ApiIssueHistoryRow,
   ApiTroubleshootingGuide,
+  ApiTroubleshootingSnapshot,
+  TechnicianInput,
+  IssueTroubleshooting,
   TroubleshootingGuide,
+  TroubleshootingGuideInput,
+  TroubleshootingSnapshot,
   ApiTicketNoteWithOwner,
   TicketNoteWithOwner,
   TroubleshootingLibraryItem,
@@ -243,6 +249,9 @@ function transformTechnician(raw: ApiCatalogTechnician): CatalogTechnician {
     id: raw.id,
     name: raw.name,
     phone: raw.phone ?? null,
+    location: raw.location ?? null,
+    coverageNotes: raw.coverage_notes ?? null,
+    coverageStores: raw.coverage_stores ? raw.coverage_stores.map((s) => ({ id: s.id, storeNumber: s.store_number })) : null,
     categoryId: raw.category_id,
     categoryName: raw.category?.name ?? null,
     deletedAt: raw.deleted_at ?? null,
@@ -293,16 +302,9 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     description: raw.description,
     parentId: raw.parent_id,
     troubleshootingConfirmedAt: raw.troubleshooting_confirmed_at ?? null,
-    troubleshootingSnapshot: raw.troubleshooting_snapshot
-      ? {
-          guideId: raw.troubleshooting_snapshot.guide_id,
-          version: raw.troubleshooting_snapshot.version,
-          steps: raw.troubleshooting_snapshot.steps ?? [],
-          linkUrl: raw.troubleshooting_snapshot.link_url ?? null,
-          files: raw.troubleshooting_snapshot.files ?? [],
-          confirmedBy: raw.troubleshooting_snapshot.confirmed_by ?? null,
-        }
-      : null,
+    troubleshootingOutcome: raw.troubleshooting_outcome ?? (raw.troubleshooting_confirmed_at ? "tried" : null),
+    troubleshootingGuideId: raw.troubleshooting_guide_id ?? null,
+    troubleshootingSnapshot: raw.troubleshooting_snapshot ? transformTroubleshootingSnapshot(raw.troubleshooting_snapshot) : null,
     assignments: (raw.assignments ?? []).map(transformAssignment),
     statusChanges: (raw.status_changes ?? []).map(transformStatusChange),
     technicians: (raw.technicians ?? []).map(transformTechnician),
@@ -442,12 +444,38 @@ export function transformTroubleshootingGuide(raw: ApiTroubleshootingGuide): Tro
   return {
     id: raw.id,
     issueId: raw.issue_id,
-    steps: raw.steps ?? [],
+    title: raw.title,
+    steps: (raw.steps ?? []).map((step) => ({
+      id: step.id,
+      position: step.position,
+      body: step.body,
+      attachments: (step.attachments ?? []).map(transformAttachment),
+    })),
     linkUrl: raw.link_url,
     version: raw.version,
     attachments: (raw.attachments ?? []).map(transformAttachment),
     editor: raw.editor ?? null,
     updatedAt: raw.updated_at,
+    fixedCount: raw.fixed_count ?? 0,
+    notFixedCount: raw.not_fixed_count ?? 0,
+  };
+}
+
+/**
+ * A ticket's frozen troubleshooting. Snapshots taken before 2026-10-08 (one
+ * guide per issue, steps as plain strings, no outcome) read as "tried".
+ */
+function transformTroubleshootingSnapshot(raw: ApiTroubleshootingSnapshot): TroubleshootingSnapshot {
+  return {
+    outcome: raw.outcome ?? "tried",
+    guideId: raw.guide_id ?? null,
+    guideTitle: raw.guide_title ?? null,
+    version: raw.version ?? null,
+    steps: (raw.steps ?? []).map((step) => (typeof step === "string" ? { body: step, files: [] } : { body: step.body, files: step.files ?? [] })),
+    linkUrl: raw.link_url ?? null,
+    files: raw.files ?? [],
+    guidesShown: raw.guides_shown ?? [],
+    confirmedBy: raw.confirmed_by ?? null,
   };
 }
 
@@ -456,7 +484,7 @@ function transformCatalogIssue(raw: ApiCatalogIssue): CatalogIssue {
     id: raw.id,
     title: raw.title,
     description: raw.description,
-    troubleshooting: raw.troubleshooting ? transformTroubleshootingGuide(raw.troubleshooting) : null,
+    troubleshootingGuidesCount: raw.troubleshooting_guides_count ?? null,
     deletedAt: raw.deleted_at,
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
@@ -563,9 +591,12 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
 
     (issue.files ?? []).forEach((file) => form.append(`issues[${i}][files][]`, file));
 
-    // The troubleshooting tick, and which version of the guide it was for.
-    if (issue.troubleshooting_confirmed) {
-      form.append(`issues[${i}][troubleshooting_confirmed]`, "1");
+    // How troubleshooting went, and which guide (and version) it was, if any.
+    if (issue.troubleshooting) {
+      form.append(`issues[${i}][troubleshooting]`, issue.troubleshooting);
+      if (issue.troubleshooting_guide_id != null) {
+        form.append(`issues[${i}][troubleshooting_guide_id]`, String(issue.troubleshooting_guide_id));
+      }
       if (issue.troubleshooting_version != null) {
         form.append(`issues[${i}][troubleshooting_version]`, String(issue.troubleshooting_version));
       }
@@ -982,6 +1013,29 @@ async function analyticsGet<T>(
 
   try {
     const res = await axios.get<T>(`/api/maintenance-tickets/analytics/${section}?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      timeout: 60_000,
+      signal,
+    });
+    return res.data;
+  } catch (err) {
+    return handleAxiosError(err);
+  }
+}
+
+async function technicianAnalyticsGet<T>(url: string, params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<T> {
+  const token = requireToken();
+  const qs = new URLSearchParams();
+  qs.set("from", params.from);
+  qs.set("to", params.to);
+  qs.set("date_from", params.dateFrom);
+  qs.set("date_to", params.dateTo);
+  (params.stores ?? []).forEach((store) => qs.append("stores[]", store));
+  (params.issueIds ?? []).forEach((id) => qs.append("issue_ids[]", String(id)));
+  (params.categoryIds ?? []).forEach((id) => qs.append("category_ids[]", String(id)));
+
+  try {
+    const res = await axios.get<T>(`${url}?${qs.toString()}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       timeout: 60_000,
       signal,
@@ -1482,6 +1536,31 @@ export const maintenanceTicketsService = {
     }
   },
 
+  /** One technician, with their coverage -- the technician page. */
+  async getTechnician(id: number, signal?: AbortSignal): Promise<CatalogTechnician> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: ApiCatalogTechnician }>(`/api/maintenance-tickets/catalog/technicians/${id}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeout: 15_000,
+        signal,
+      });
+      return transformTechnician(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Every technician's pay and work in a range -- the Technicians page. */
+  async getTechniciansAnalytics(params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<TechniciansOverview> {
+    return technicianAnalyticsGet<{ data: TechniciansOverview }>("/api/maintenance-tickets/technician-analytics", params, signal).then((r) => r.data);
+  },
+
+  /** One technician's pay and work in a range. */
+  async getTechnicianAnalytics(id: number, params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<TechnicianAnalytics> {
+    return technicianAnalyticsGet<{ data: TechnicianAnalytics }>(`/api/maintenance-tickets/catalog/technicians/${id}/analytics`, params, signal).then((r) => r.data);
+  },
+
   /** Load all catalog categories */
   async getCatalogCategories(signal?: AbortSignal): Promise<CatalogCategory[]> {
     const token = requireToken();
@@ -1558,7 +1637,7 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
-  async createCatalogTechnician(payload: { name: string; phone?: string; category_id?: number }): Promise<CatalogTechnician> {
+  async createCatalogTechnician(payload: TechnicianInput & { name: string }): Promise<CatalogTechnician> {
     const token = requireToken();
     try {
       const res = await axios.post<{ data: ApiCatalogTechnician }>(
@@ -1655,7 +1734,7 @@ export const maintenanceTicketsService = {
 
   async updateCatalogTechnician(
     id: number,
-    payload: { name?: string; phone?: string | null; category_id?: number | null },
+    payload: TechnicianInput,
   ): Promise<CatalogTechnician> {
     const token = requireToken();
     try {
@@ -1724,32 +1803,64 @@ export const maintenanceTicketsService = {
 
   /* ── Troubleshooting guides ────────────────────────────────────────────── */
 
-  /** Every catalog issue that has a guide -- the library. */
+  /** Every catalog issue that has guides -- the library (titles and counts). */
   async getTroubleshootingLibrary(storeId?: string, signal?: AbortSignal): Promise<TroubleshootingLibraryItem[]> {
     const token = requireToken();
     try {
-      const res = await axios.get<{ data: Array<{ issue_id: number; title: string; description: string | null; troubleshooting: ApiTroubleshootingGuide }> }>(
-        "/api/maintenance-tickets/troubleshooting",
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(storeId ? { "X-Store-Id": storeId } : {}) },
-          timeout: 15_000,
-          signal,
-        }
-      );
+      const res = await axios.get<{
+        data: Array<{
+          issue_id: number;
+          title: string;
+          description: string | null;
+          guides: Array<{ id: number; title: string; steps_count: number; version: number; fixed_count: number; not_fixed_count: number; updated_at: string }>;
+        }>;
+      }>("/api/maintenance-tickets/troubleshooting", {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(storeId ? { "X-Store-Id": storeId } : {}) },
+        timeout: 15_000,
+        signal,
+      });
       return (res.data.data ?? []).map((row) => ({
         issueId: row.issue_id,
         title: row.title,
         description: row.description,
-        troubleshooting: transformTroubleshootingGuide(row.troubleshooting),
+        guides: (row.guides ?? []).map((g) => ({
+          id: g.id,
+          title: g.title,
+          stepsCount: g.steps_count,
+          version: g.version,
+          fixedCount: g.fixed_count,
+          notFixedCount: g.not_fixed_count,
+          updatedAt: g.updated_at,
+        })),
       }));
     } catch (err) { return handleAxiosError(err); }
   },
 
-  /** Create or replace an issue's guide; every save is a new version. */
-  async saveTroubleshootingGuide(issueId: number, payload: { steps: string[]; link_url: string | null }): Promise<TroubleshootingGuide> {
+  /** One issue and all its guides -- the troubleshooting page. */
+  async getIssueTroubleshooting(issueId: number, signal?: AbortSignal): Promise<IssueTroubleshooting> {
     const token = requireToken();
     try {
-      const res = await axios.put<{ data: ApiTroubleshootingGuide }>(
+      const res = await axios.get<{
+        data: { issue_id: number; title: string; description: string | null; guides: ApiTroubleshootingGuide[] };
+      }>(`/api/maintenance-tickets/catalog/issues/${issueId}/troubleshooting`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeout: 15_000,
+        signal,
+      });
+      const d = res.data.data;
+      return {
+        issueId: d.issue_id,
+        title: d.title,
+        description: d.description,
+        guides: (d.guides ?? []).map(transformTroubleshootingGuide),
+      };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async createTroubleshootingGuide(issueId: number, payload: TroubleshootingGuideInput): Promise<TroubleshootingGuide> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTroubleshootingGuide }>(
         `/api/maintenance-tickets/catalog/issues/${issueId}/troubleshooting`,
         payload,
         { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
@@ -1758,15 +1869,29 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
-  async deleteTroubleshootingGuide(issueId: number): Promise<void> {
+  /** Replace a guide; every save is a new version. Steps keep their id (and files). */
+  async updateTroubleshootingGuide(guideId: number, payload: TroubleshootingGuideInput): Promise<TroubleshootingGuide> {
     const token = requireToken();
     try {
-      await axios.delete(`/api/maintenance-tickets/catalog/issues/${issueId}/troubleshooting`, {
+      const res = await axios.put<{ data: ApiTroubleshootingGuide }>(
+        `/api/maintenance-tickets/troubleshooting/${guideId}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformTroubleshootingGuide(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async deleteTroubleshootingGuide(guideId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`/api/maintenance-tickets/troubleshooting/${guideId}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
       });
     } catch (err) { return handleAxiosError(err); }
   },
 
+  /** Files for the whole guide. */
   async addTroubleshootingFiles(guideId: number, files: File[]): Promise<TicketAttachment[]> {
     const token = requireToken();
     const body = new FormData();
@@ -1787,6 +1912,45 @@ export const maintenanceTicketsService = {
       await axios.delete(`/api/maintenance-tickets/troubleshooting/${guideId}/attachments/${attachmentId}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
       });
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Files for one step. */
+  async addTroubleshootingStepFiles(stepId: number, files: File[]): Promise<TicketAttachment[]> {
+    const token = requireToken();
+    const body = new FormData();
+    files.forEach((file) => body.append("files[]", file));
+    try {
+      const res = await axios.post<{ data: ApiTicketAttachment[] }>(
+        `/api/maintenance-tickets/troubleshooting/steps/${stepId}/attachments`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
+      );
+      return (res.data.data ?? []).map(transformAttachment);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async removeTroubleshootingStepFile(stepId: number, attachmentId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`/api/maintenance-tickets/troubleshooting/steps/${stepId}/attachments/${attachmentId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
+      });
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * "This fixed it": troubleshooting solved the problem at this store, so no
+   * ticket is opened. Naming the guide is optional.
+   */
+  async logTroubleshootingFix(storeId: string, issueId: number, guideId: number | null): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/troubleshooting-fixes`,
+        { issue_id: issueId, troubleshooting_guide_id: guideId },
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
     } catch (err) { return handleAxiosError(err); }
   },
 

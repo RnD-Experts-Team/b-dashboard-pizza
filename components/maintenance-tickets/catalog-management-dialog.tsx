@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, RotateCcw, Loader2, AlertCircle, Pencil, Phone, LifeBuoy, Star } from "lucide-react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { Plus, Trash2, RotateCcw, Loader2, AlertCircle, Pencil, LifeBuoy, ChevronRight, HardHat } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,13 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
@@ -31,33 +26,15 @@ import {
 } from "@/lib/api/services/maintenance-tickets.service";
 import type {
   CatalogIssue,
-  CatalogTechnician,
   CatalogCategory,
   CatalogPart,
   TicketNote,
   TicketAttachment,
-  TroubleshootingGuide,
 } from "@/types/maintenance-tickets.types";
 import { EntityNotesAttachments } from "./entity-extras";
-import { GuideEditor } from "./troubleshooting/guide-editor";
-import { TechnicianAbilitiesEditor, TechnicianRatingSummary } from "./technician-abilities-editor";
-import { useAuth } from "@/lib/auth/use-auth";
-
-/** The Select's "no category" option. Never sent upstream -- it maps to null. */
-const NO_CATEGORY = "none";
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof MaintenanceTicketsError ? err.message : fallback;
-}
-
-/**
- * The category Select's value, converted for the API. "none" (and "") mean
- * no category -- they used to reach the API as Number("none"), i.e. NaN.
- */
-function categoryIdFromSelect(value: string): number | null {
-  if (!value || value === NO_CATEGORY) return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -206,38 +183,22 @@ function replaceItem<T extends { id: number }>(items: T[], updated: T): T[] {
 }
 
 /**
- * An issue's troubleshooting guide, from the catalog: a line saying whether it
- * has one, and the editor right under it when opened.
+ * An issue's troubleshooting, from the catalog: how many guides it has, and a
+ * link to its troubleshooting page, where guides are written and changed.
  */
-function TroubleshootingToggle({
-  issue,
-  onChange,
-}: {
-  issue: CatalogIssue;
-  onChange: (guide: TroubleshootingGuide | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const guide = issue.troubleshooting ?? null;
+function TroubleshootingLink({ issue }: { issue: CatalogIssue }) {
+  const params = useParams();
+  const locale = (params?.locale as string) ?? "en";
+  const count = issue.troubleshootingGuidesCount ?? 0;
 
   return (
-    <div className="space-y-2">
-      <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setOpen((v) => !v)}>
+    <Button asChild type="button" variant="outline" size="sm" className="h-7 text-xs">
+      <Link href={`/${locale}/dashboard/maintenance-troubleshooting/${issue.id}`}>
         <LifeBuoy className="me-1 h-3.5 w-3.5" />
-        {guide
-          ? `Troubleshooting: ${guide.steps.length} step${guide.steps.length === 1 ? "" : "s"} (v${guide.version})`
-          : "Add troubleshooting steps"}
-      </Button>
-      {open && (
-        <GuideEditor
-          issueId={issue.id}
-          issueTitle={issue.title}
-          guide={guide}
-          onSaved={(saved) => onChange(saved)}
-          onRemoved={() => { onChange(null); setOpen(false); }}
-          onCancel={() => setOpen(false)}
-        />
-      )}
-    </div>
+        {count > 0 ? `Troubleshooting: ${count} guide${count === 1 ? "" : "s"}` : "Add troubleshooting guides"}
+        <ChevronRight className="ms-0.5 h-3.5 w-3.5" aria-hidden="true" />
+      </Link>
+    </Button>
   );
 }
 
@@ -360,13 +321,7 @@ function IssuesTab({ onReloadCatalog, storeId }: { onReloadCatalog: () => void; 
             }
             extra={!item.deletedAt && (
               <div className="space-y-2">
-              <TroubleshootingToggle
-                issue={item}
-                onChange={(guide) => {
-                  setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, troubleshooting: guide } : i)));
-                  onReloadCatalog();
-                }}
-              />
+              <TroubleshootingLink issue={item} />
               <EntityNotesAttachments
                 entityPath={entityPaths.catalogIssue(item.id)}
                 notes={item.notes}
@@ -392,257 +347,25 @@ function IssuesTab({ onReloadCatalog, storeId }: { onReloadCatalog: () => void; 
 /*  Technicians tab                                                         */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/** Name, phone and trade category: everything about a technician that can change. */
-function TechnicianEditor({
-  technician,
-  categories,
-  onSave,
-  onCancel,
-}: {
-  technician: CatalogTechnician;
-  categories: CatalogCategory[];
-  onSave: (payload: { name: string; phone: string | null; category_id: number | null }) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const t = useTranslations("maintenanceTickets");
-  const [name, setName] = useState(technician.name);
-  const [phone, setPhone] = useState(technician.phone ?? "");
-  const [categoryId, setCategoryId] = useState<string>(technician.categoryId ? String(technician.categoryId) : NO_CATEGORY);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function save() {
-    setIsSaving(true); setError(null);
-    try {
-      await onSave({ name: name.trim(), phone: phone.trim() || null, category_id: categoryIdFromSelect(categoryId) });
-    } catch (err) {
-      setError(errorMessage(err, t("catalog.saveFailed")));
-    } finally { setIsSaving(false); }
-  }
-
-  return (
-    <div className="space-y-2 rounded-md border bg-background p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="space-y-1">
-          <Label className="text-xs">{t("catalog.nameLabel")}</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} className="text-sm" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">{t("catalog.phoneLabel")}</Label>
-          <Input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder={t("catalog.phonePlaceholder")}
-            inputMode="tel"
-            className="text-sm"
-          />
-        </div>
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">{t("catalog.categoryLabel")}</Label>
-        <Select value={categoryId} onValueChange={setCategoryId}>
-          <SelectTrigger className="text-sm"><SelectValue placeholder={t("catalog.categoryPlaceholder")} /></SelectTrigger>
-          <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
-            <SelectItem value={NO_CATEGORY}>{t("catalog.noCategory")}</SelectItem>
-            {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-      {error && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" />{error}</p>}
-      <EditorActions onSave={save} onCancel={onCancel} isSaving={isSaving} canSave={!!name.trim()} />
-    </div>
-  );
-}
-
-/** "Refrigeration · ☎ +1 234 567 8900" -- category and phone together, phone dialable. */
-function TechnicianSecondary({ technician }: { technician: CatalogTechnician }) {
-  const t = useTranslations("maintenanceTickets");
-  if (!technician.categoryName && !technician.phone) return null;
-
-  return (
-    <span className="flex items-center gap-1.5 truncate">
-      {technician.categoryName && <span className="truncate">{technician.categoryName}</span>}
-      {technician.categoryName && technician.phone && <span aria-hidden="true">·</span>}
-      {technician.phone && (
-        <a
-          href={`tel:${technician.phone.replace(/[^0-9+]/g, "")}`}
-          className="inline-flex items-center gap-1 text-foreground/80 hover:text-foreground hover:underline"
-          title={`${t("catalog.callTechnician")} ${technician.phone}`}
-        >
-          <Phone className="h-3 w-3" aria-hidden="true" />
-          <span className="tabular-nums">{technician.phone}</span>
-        </a>
-      )}
-    </span>
-  );
-}
-
 /**
- * A technician's ratings, from the catalog: everything rated about them on one
- * line, and the editor right under it when opened. Shown only to people who
- * may read ratings -- for anyone else the line would wrongly say "not rated".
+ * Technicians have their own page now -- profile, coverage, ratings, notes
+ * and their pay and work -- so the tab only points there.
  */
-function TechnicianRatingsToggle({ technician, canEdit }: { technician: CatalogTechnician; canEdit: boolean }) {
-  const [open, setOpen] = useState(false);
-
+function TechniciansPointer({ onNavigate }: { onNavigate: () => void }) {
+  const params = useParams();
+  const locale = (params?.locale as string) ?? "en";
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {canEdit && (
-          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setOpen((v) => !v)}>
-            <Star className="me-1 h-3.5 w-3.5" />
-            {open ? "Close ratings" : "Rate"}
-          </Button>
-        )}
-        <TechnicianRatingSummary technician={technician} />
-      </div>
-      {open && <TechnicianAbilitiesEditor technician={technician} />}
-    </div>
-  );
-}
-
-function TechniciansTab({ onReloadCatalog }: { onReloadCatalog: () => void }) {
-  const t = useTranslations("maintenanceTickets");
-  const { canAccessRoute } = useAuth();
-  const canReadRatings = canAccessRoute({ service: "Maintenance", method: "GET", path: "/technician-abilities" });
-  const canRate = canAccessRoute({ service: "Maintenance", method: "PATCH", path: "/technicians/placeholder/rating" });
-  const [items, setItems] = useState<CatalogTechnician[]>([]);
-  const [categories, setCategories] = useState<CatalogCategory[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showDeleted, setShowDeleted] = useState(false);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [actingId, setActingId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  const load = useCallback(async (quiet = false) => {
-    if (!quiet) setIsLoading(true);
-    setError(null);
-    try {
-      const [techs, cats] = await Promise.all([
-        maintenanceTicketsService.getCatalogTechnicians(undefined, { includeDeleted: true }),
-        maintenanceTicketsService.getCatalogCategories(),
-      ]);
-      setItems(techs); setCategories(cats);
-    } catch (err) {
-      setError(errorMessage(err, "Failed to load"));
-    } finally { if (!quiet) setIsLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function handleCreate() {
-    if (!name.trim()) return;
-    setIsCreating(true);
-    try {
-      const category = categoryIdFromSelect(categoryId);
-      await maintenanceTicketsService.createCatalogTechnician({
-        name: name.trim(),
-        phone: phone.trim() || undefined,
-        ...(category !== null ? { category_id: category } : {}),
-      });
-      setName(""); setPhone(""); setCategoryId("");
-      await load(); onReloadCatalog();
-    } catch (err) {
-      setError(errorMessage(err, "Failed to create"));
-    } finally { setIsCreating(false); }
-  }
-
-  async function handleDelete(id: number) {
-    setActingId(id);
-    try { await maintenanceTicketsService.deleteCatalogTechnician(id); await load(); onReloadCatalog(); }
-    catch (err) { setError(errorMessage(err, "Failed")); }
-    finally { setActingId(null); }
-  }
-
-  async function handleRestore(id: number) {
-    setActingId(id);
-    try { await maintenanceTicketsService.restoreCatalogTechnician(id); await load(); onReloadCatalog(); }
-    catch (err) { setError(errorMessage(err, "Failed")); }
-    finally { setActingId(null); }
-  }
-
-  async function handleSave(id: number, payload: { name: string; phone: string | null; category_id: number | null }) {
-    const updated = await maintenanceTicketsService.updateCatalogTechnician(id, payload);
-    setItems((prev) => replaceItem(prev, updated));
-    setEditingId(null);
-    onReloadCatalog();
-  }
-
-  const visible = showDeleted ? items : items.filter(i => !i.deletedAt);
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border p-3 space-y-2">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("catalog.addTechnician")}</Label>
-        <Input value={name} onChange={e => setName(e.target.value)} placeholder={t("catalog.namePlaceholder")} className="text-sm" />
-        <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder={t("catalog.phonePlaceholder")} inputMode="tel" className="text-sm" />
-        <Select value={categoryId} onValueChange={setCategoryId}>
-          <SelectTrigger className="text-sm"><SelectValue placeholder={t("catalog.categoryPlaceholder")} /></SelectTrigger>
-          <SelectContent position="popper" style={{ maxHeight: 240, overflowY: "auto" }}>
-            <SelectItem value={NO_CATEGORY}>{t("catalog.noCategory")}</SelectItem>
-            {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button size="sm" onClick={handleCreate} disabled={isCreating || !name.trim()}>
-          {isCreating ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="me-1.5 h-3.5 w-3.5" />}
-          {t("catalog.add")}
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">{visible.length} {t("catalog.items")}</span>
-        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowDeleted(v => !v)}>
-          {showDeleted ? t("catalog.hideDeleted") : t("catalog.showDeleted")}
-        </Button>
-      </div>
-
-      {error && <p className="text-sm text-destructive flex items-center gap-1"><AlertCircle className="h-4 w-4" />{error}</p>}
-      {isLoading && <div className="space-y-1">{Array.from({length:3}).map((_,i)=><div key={i} className="h-9 rounded-md bg-muted animate-pulse"/>)}</div>}
-
-      <div className="space-y-1 max-h-96 overflow-y-auto">
-        {visible.map(item => (
-          <ItemRow
-            key={item.id}
-            name={item.name}
-            secondary={<TechnicianSecondary technician={item} />}
-            isDeleted={!!item.deletedAt}
-            onDelete={() => handleDelete(item.id)}
-            onRestore={() => handleRestore(item.id)}
-            onEdit={() => setEditingId((cur) => (cur === item.id ? null : item.id))}
-            isEditing={editingId === item.id}
-            isActing={actingId === item.id}
-            editor={
-              <TechnicianEditor
-                technician={item}
-                categories={categories}
-                onSave={(payload) => handleSave(item.id, payload)}
-                onCancel={() => setEditingId(null)}
-              />
-            }
-            extra={!item.deletedAt && (
-              <div className="space-y-2">
-                {canReadRatings && <TechnicianRatingsToggle technician={item} canEdit={canRate} />}
-                <EntityNotesAttachments
-                  entityPath={entityPaths.technician(item.id)}
-                  notes={item.notes}
-                  attachments={item.attachments}
-                  onSuccess={() => { void load(true); }}
-                  onNoteAdded={(note: TicketNote) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, notes: [...(i.notes ?? []), note] } : i))}
-                  onAttachmentsAdded={(atts: TicketAttachment[]) => setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, attachments: [...(i.attachments ?? []), ...atts] } : i))}
-                  allowNoteType
-                />
-              </div>
-            )}
-          />
-        ))}
-        {!isLoading && visible.length === 0 && (
-          <p className="text-center text-sm text-muted-foreground py-6">{t("catalog.noItems")}</p>
-        )}
-      </div>
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center">
+      <HardHat className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+      <p className="text-sm font-medium">Technicians have their own page</p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        Add and edit technicians, set the stores they cover, rate them, and see what they were paid and the work they did.
+      </p>
+      <Button asChild>
+        <Link href={`/${locale}/dashboard/maintenance-technicians`} onClick={onNavigate}>
+          Open the Technicians page <ChevronRight className="ms-1 h-4 w-4" aria-hidden="true" />
+        </Link>
+      </Button>
     </div>
   );
 }
@@ -909,7 +632,7 @@ export function CatalogManagementDialog({ open, onClose, onReloadCatalog, storeI
               <IssuesTab onReloadCatalog={onReloadCatalog} storeId={storeId} />
             </TabsContent>
             <TabsContent value="technicians" className="mt-0">
-              <TechniciansTab onReloadCatalog={onReloadCatalog} />
+              <TechniciansPointer onNavigate={onClose} />
             </TabsContent>
             <TabsContent value="categories" className="mt-0">
               <CategoriesTab onReloadCatalog={onReloadCatalog} />

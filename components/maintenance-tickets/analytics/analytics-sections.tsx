@@ -14,6 +14,7 @@ import type {
   AnalyticsCreatedTicket,
   AnalyticsRecurring,
   AnalyticsSummary,
+  AnalyticsTroubleshootingFix,
   AnalyticsUntouchedTicket,
 } from "@/types/maintenance-analytics.types";
 
@@ -146,15 +147,15 @@ export function ReportTable({
   );
 }
 
-const TH = "whitespace-nowrap px-5 py-3 text-start text-sm font-medium text-muted-foreground";
-const TD = "px-5 py-3.5 align-middle";
+export const TH = "whitespace-nowrap px-5 py-3 text-start text-sm font-medium text-muted-foreground";
+export const TD = "px-5 py-3.5 align-middle";
 
 /** One fixed-height line inside a cell, so stacked values line up across columns. */
 function Line({ children }: { children: ReactNode }) {
   return <div className="flex h-8 items-center">{children}</div>;
 }
 
-function Empty({ children }: { children: ReactNode }) {
+export function Empty({ children }: { children: ReactNode }) {
   return <p className="px-5 py-10 text-center text-sm text-muted-foreground">{children}</p>;
 }
 
@@ -162,23 +163,23 @@ function Empty({ children }: { children: ReactNode }) {
 export const PAGE_SIZE = 5;
 
 /** One page of `items` at a time. `total` may run ahead of what is loaded. */
-function usePaged<T>(items: T[], total: number = items.length) {
+export function usePaged<T>(items: T[], total: number = items.length, size: number = PAGE_SIZE) {
   const [page, setPage] = useState(0);
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(total / size));
   const current = Math.min(page, pages - 1);
-  const start = current * PAGE_SIZE;
+  const start = current * size;
   return {
     page: current,
     pages,
     setPage,
-    rows: items.slice(start, start + PAGE_SIZE),
+    rows: items.slice(start, start + size),
     from: total === 0 ? 0 : start + 1,
-    to: Math.min(total, start + PAGE_SIZE),
+    to: Math.min(total, start + size),
     total,
   };
 }
 
-function Pager({
+export function Pager({
   page,
   pages,
   from,
@@ -575,6 +576,71 @@ export function Recurring({
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  By store                                                                   */
 /* ────────────────────────────────────────────────────────────────────────── */
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Fixed by troubleshooting                                                   */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+export function TroubleshootingFixes({
+  locale,
+  fixes,
+  rangeLabel,
+  error,
+}: {
+  locale: string;
+  fixes: AnalyticsTroubleshootingFix[];
+  rangeLabel: string;
+  error?: string;
+}) {
+  const pager = usePaged(fixes);
+  return (
+    <ReportTable
+      id="troubleshooting-fixes"
+      title={`Fixed by Troubleshooting · ${rangeLabel}`}
+      count={error ? undefined : fixes.length}
+      unit="problems"
+      description="The store tried the troubleshooting steps and they fixed it, so no ticket was opened."
+    >
+      {error ? (
+        <SectionError message={error} />
+      ) : fixes.length === 0 ? (
+        <Empty>No problems were fixed by troubleshooting in this range.</Empty>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="border-b bg-muted/40">
+            <tr>
+              <th scope="col" className={TH}>When</th>
+              <th scope="col" className={TH}>Store</th>
+              <th scope="col" className={TH}>Issue</th>
+              <th scope="col" className={TH}>The guide that fixed it</th>
+              <th scope="col" className={TH}>Logged by</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {pager.rows.map((f) => (
+              <tr key={f.id} className="transition-colors hover:bg-muted/30">
+                <td className={cn(TD, "whitespace-nowrap text-muted-foreground")}>
+                  <LocalTimestamp iso={f.at} pattern={WHEN} showZone={false} />
+                </td>
+                <td className={cn(TD, "whitespace-nowrap")}>{f.store_number ?? "-"}</td>
+                <td className={cn(TD, "font-medium")}>
+                  <Link href={`/${locale}/dashboard/maintenance-troubleshooting/${f.issue_id}`} className="hover:underline">
+                    {f.issue_title ?? "-"}
+                  </Link>
+                </td>
+                <td className={TD}>
+                  {f.guide_title ? <span>&ldquo;{f.guide_title}&rdquo;</span> : <span className="text-muted-foreground">Not said</span>}
+                </td>
+                <td className={cn(TD, "text-muted-foreground")}>{f.by?.name ?? "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <Pager {...pager} onPage={pager.setPage} />
+    </ReportTable>
+  );
+}
 
 export function ByStore({ rows }: { rows: AnalyticsSummary["by_store"] }) {
   // Busiest first: the stores with the most open work lead.

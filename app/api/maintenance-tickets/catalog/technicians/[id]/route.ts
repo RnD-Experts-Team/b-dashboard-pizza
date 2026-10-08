@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthorization, getAuthorizationHeader } from "@/app/api/_lib/auth";
-import { proxyJsonPatch } from "@/app/api/maintenance-tickets/_lib/proxy";
+import { proxyGet, proxyJsonPatch } from "@/app/api/maintenance-tickets/_lib/proxy";
 
 const BASE_URL =
   process.env.NEW_MAINTENANCE_API_URL ||
@@ -25,6 +25,12 @@ function errorJson(code: string, message: string, status: number) {
 }
 
 type Params = { params: Promise<{ id: string }> };
+
+/** One technician, with their coverage -- the technician page. */
+export async function GET(request: NextRequest, { params }: Params) {
+  const { id } = await params;
+  return proxyGet(request, `${BASE_URL}/technicians/${encodeURIComponent(id)}`);
+}
 
 export async function DELETE(request: NextRequest, { params }: Params) {
   const authError = requireAuthorization(request);

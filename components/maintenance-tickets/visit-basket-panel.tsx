@@ -59,9 +59,14 @@ export function VisitBasketPanel({ technicians, onLogged, className }: VisitBask
   const items = useVisitBasketStore((s) => s.items);
   const remove = useVisitBasketStore((s) => s.remove);
   const clear = useVisitBasketStore((s) => s.clear);
-  // A visit spans issues, so the overall ratings order the picker.
+  // A visit spans issues, so the overall ratings order the picker -- after
+  // those who cover the store, when every issue in the basket is at one store.
   const abilities = useMaintenanceTicketsCatalogStore((s) => s.abilities);
-  const rankedTechnicians = useMemo(() => rankTechnicians(technicians, abilities, null), [technicians, abilities]);
+  const basketStore = useMemo(() => {
+    const stores = new Set(items.map((i) => i.storeId));
+    return stores.size === 1 ? [...stores][0] : null;
+  }, [items]);
+  const rankedTechnicians = useMemo(() => rankTechnicians(technicians, abilities, null, basketStore), [technicians, abilities, basketStore]);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<AttendanceFormValue>(EMPTY_ATTENDANCE_FORM);

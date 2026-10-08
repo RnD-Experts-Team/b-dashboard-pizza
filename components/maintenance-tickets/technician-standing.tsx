@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 import type { TechnicianStanding } from "@/lib/maintenance-tickets/technician-ranking";
 
 /**
- * "Call first", "Go-to" and the stars, beside a technician's name in a picker.
- * Renders nothing for a technician nobody has rated.
+ * "Covers this store", "Call first", "Go-to" and the stars, beside a
+ * technician's name in a picker. Renders nothing when none applies.
  */
 export function TechnicianStandingBadges({
   standing,
@@ -15,10 +15,18 @@ export function TechnicianStandingBadges({
   standing: TechnicianStanding;
   className?: string;
 }) {
-  if (!standing.callFirst && !standing.goTo && standing.stars == null) return null;
+  if (!standing.coversStore && !standing.callFirst && !standing.goTo && standing.stars == null) return null;
 
   return (
     <span className={cn("flex shrink-0 items-center gap-1", className)}>
+      {standing.coversStore && (
+        <span
+          className="rounded-full bg-sky-500/15 px-1.5 py-px text-[10px] font-semibold text-sky-700 dark:bg-sky-500/20 dark:text-sky-300"
+          title="They cover this ticket's store"
+        >
+          Covers this store
+        </span>
+      )}
       {standing.callFirst && (
         <span
           className="rounded-full bg-emerald-500/15 px-1.5 py-px text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"

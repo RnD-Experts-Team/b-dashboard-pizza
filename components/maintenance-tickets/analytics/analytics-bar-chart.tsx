@@ -53,7 +53,9 @@ function valueAxis(top: number, whole: boolean): { max: number; tickAmount: numb
   const power = 10 ** Math.floor(Math.log10(raw));
   let step = [1, 2, 5, 10].map((m) => m * power).find((v) => v >= raw) ?? 10 * power;
   if (whole) step = Math.max(1, Math.round(step));
-  const max = (Math.floor(top / step) + 1) * step;
+  let max = (Math.floor(top / step) + 1) * step;
+  // Wide labels ("$1,840.50") need room too: the longest bar stops by 80%.
+  while (top > max * 0.8) max += step;
   return { max, tickAmount: Math.round(max / step) };
 }
 
