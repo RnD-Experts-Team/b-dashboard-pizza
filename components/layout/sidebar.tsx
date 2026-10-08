@@ -690,6 +690,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         ],
       },
       {
+        title: t("maintenanceTechnicians"),
+        href: `/${locale}/dashboard/maintenance-technicians`,
+        icon: HardHat,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/technicians" }
+        ],
+      },
+      {
         title: "Daily Pay",
         href: `/${locale}/dashboard/daily-pay`,
         icon: Wallet,

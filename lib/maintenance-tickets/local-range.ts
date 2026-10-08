@@ -1,4 +1,4 @@
-import { addDays, format, parseISO, startOfDay, subDays } from "date-fns";
+import { addDays, format, parseISO, startOfDay, startOfMonth, startOfYear, subDays } from "date-fns";
 
 /**
  * Date ranges for the maintenance analytics page, in the VIEWER'S clock.
@@ -10,13 +10,21 @@ import { addDays, format, parseISO, startOfDay, subDays } from "date-fns";
  * included) and converted only at the edge, here.
  */
 
-export type RangePreset = "yesterday" | "today" | "last7" | "last30";
+export type RangePreset = "yesterday" | "today" | "last7" | "last30" | "thisMonth" | "thisYear";
 
 export const RANGE_PRESETS: { id: RangePreset; label: string }[] = [
   { id: "yesterday", label: "Yesterday" },
   { id: "today", label: "Today" },
   { id: "last7", label: "Last 7 days" },
   { id: "last30", label: "Last 30 days" },
+];
+
+/** The Technicians page looks further back: pay is read by the month and the year. */
+export const LONG_RANGE_PRESETS: { id: RangePreset; label: string }[] = [
+  { id: "last7", label: "Last 7 days" },
+  { id: "last30", label: "Last 30 days" },
+  { id: "thisMonth", label: "This month" },
+  { id: "thisYear", label: "This year" },
 ];
 
 /** Local calendar day as "YYYY-MM-DD". */
@@ -34,6 +42,10 @@ export function presetDays(preset: RangePreset, now: Date = new Date()): { start
       return { startDate: localDay(subDays(today, 6)), endDate: localDay(today) };
     case "last30":
       return { startDate: localDay(subDays(today, 29)), endDate: localDay(today) };
+    case "thisMonth":
+      return { startDate: localDay(startOfMonth(today)), endDate: localDay(today) };
+    case "thisYear":
+      return { startDate: localDay(startOfYear(today)), endDate: localDay(today) };
     case "yesterday":
     default: {
       const y = subDays(today, 1);
@@ -60,8 +72,13 @@ export function daysToInstants(startDate: string, endDate: string): { from: stri
 }
 
 /** Which preset (if any) an inclusive day range is, for highlighting its button. */
-export function matchPreset(startDate: string, endDate: string, now: Date = new Date()): RangePreset | null {
-  for (const { id } of RANGE_PRESETS) {
+export function matchPreset(
+  startDate: string,
+  endDate: string,
+  now: Date = new Date(),
+  presets: { id: RangePreset }[] = RANGE_PRESETS,
+): RangePreset | null {
+  for (const { id } of presets) {
     const days = presetDays(id, now);
     if (days.startDate === startDate && days.endDate === endDate) return id;
   }

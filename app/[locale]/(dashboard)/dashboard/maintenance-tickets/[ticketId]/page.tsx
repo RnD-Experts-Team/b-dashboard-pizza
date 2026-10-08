@@ -705,25 +705,47 @@ function IssueCard({
         )}
       </header>
 
-      {/* What the store was asked to try before opening this -- and confirmed
-          trying. The guide as it read then, not as it reads now. */}
-      {issue.troubleshootingSnapshot && issue.troubleshootingConfirmedAt && (
-        <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-          <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-            <LifeBuoy className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            Troubleshooting tried before the ticket was opened
-            <span className="text-xs font-normal text-muted-foreground">
-              confirmed <LocalTimestamp iso={issue.troubleshootingConfirmedAt} showZone={false} /> · guide version {issue.troubleshootingSnapshot.version}
-            </span>
-          </p>
-          <TroubleshootingSteps
-            className="mt-2"
-            steps={issue.troubleshootingSnapshot.steps}
-            linkUrl={issue.troubleshootingSnapshot.linkUrl}
-            fileNames={issue.troubleshootingSnapshot.files.map((f) => f.name)}
-          />
-        </div>
-      )}
+      {/* How the store's troubleshooting went before it opened this: the
+          guide as it read then, not as it reads now. */}
+      {issue.troubleshootingSnapshot && issue.troubleshootingConfirmedAt && (() => {
+        const snap = issue.troubleshootingSnapshot;
+        const noMatch = snap.outcome === "none_match";
+        return (
+          <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+              <LifeBuoy className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              {noMatch
+                ? "Troubleshooting: none of the guides described the problem"
+                : snap.guideTitle
+                  ? `Troubleshooting tried before the ticket was opened: "${snap.guideTitle}"`
+                  : "Troubleshooting tried before the ticket was opened"}
+              <span className="text-xs font-normal text-muted-foreground">
+                <LocalTimestamp iso={issue.troubleshootingConfirmedAt} showZone={false} />
+                {snap.version !== null && !noMatch ? ` · guide version ${snap.version}` : ""}
+              </span>
+            </p>
+            {noMatch ? (
+              snap.guidesShown.length > 0 && (
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Guides they saw: {snap.guidesShown.map((g) => `"${g.title}"`).join(", ")}
+                </p>
+              )
+            ) : snap.steps.length > 0 ? (
+              <TroubleshootingSteps
+                className="mt-2"
+                steps={snap.steps}
+                linkUrl={snap.linkUrl}
+                fileNames={snap.files.map((f) => f.name)}
+              />
+            ) : (
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                They tried the steps without saying which problem matched.
+                {snap.guidesShown.length > 0 ? ` Guides shown: ${snap.guidesShown.map((g) => `"${g.title}"`).join(", ")}.` : ""}
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       <SectionGroup className="mt-3">
         {/* Every section on the ticket page starts folded (the owner's call):

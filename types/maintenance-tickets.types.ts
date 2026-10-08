@@ -153,8 +153,11 @@ export interface CatalogIssue {
   id: number;
   title: string;
   description: string | null;
-  /** What to try before opening a ticket for it. Null (or absent) when none. */
-  troubleshooting?: TroubleshootingGuide | null;
+  /**
+   * How many troubleshooting guides (with steps) it has -- a store goes
+   * through them before opening a ticket for it. Null when not counted.
+   */
+  troubleshootingGuidesCount: number | null;
   deletedAt: string | null;
   notes?: TicketNote[];
   attachments?: TicketAttachment[];
@@ -164,6 +167,12 @@ export interface CatalogTechnician {
   id: number;
   name: string;
   phone: string | null;
+  /** Where they are based ("Columbus, OH"). */
+  location: string | null;
+  /** About their coverage: "north stores only on weekends". */
+  coverageNotes: string | null;
+  /** The stores they can cover. Null when not read with the technician. */
+  coverageStores: { id: number; storeNumber: string }[] | null;
   categoryId: number | null;
   categoryName: string | null;
   deletedAt: string | null;
@@ -463,9 +472,13 @@ export interface TicketIssue {
   status: EnumField;
   description: string | null;
   parentId: number | null;
-  /** When the manager confirmed trying the troubleshooting steps before opening. */
+  /** When the manager finished troubleshooting and chose to open the ticket. */
   troubleshootingConfirmedAt: string | null;
-  /** Those steps, as they read then. */
+  /** How it ended: tried and still broken, or no guide described the problem. */
+  troubleshootingOutcome: TroubleshootingTicketOutcome | null;
+  /** The guide they said matched, when they picked one. */
+  troubleshootingGuideId: number | null;
+  /** The troubleshooting, as it read then. */
   troubleshootingSnapshot: TroubleshootingSnapshot | null;
   assignments: TicketAssignment[];
   statusChanges: TicketIssueStatusChange[];
@@ -638,10 +651,12 @@ export interface CreateTicketIssueRow {
   notes?: Array<{ body: string; type?: string | null }>;
   /** Files to attach directly to this issue (multipart only) */
   files?: File[];
-  /** The manager read the issue's troubleshooting steps and tried them. */
-  troubleshooting_confirmed?: boolean;
-  /** The guide version they were shown. */
-  troubleshooting_version?: number;
+  /** How troubleshooting went -- required when the issue has guides. */
+  troubleshooting?: TroubleshootingTicketOutcome;
+  /** The guide that matched, when they picked one ... */
+  troubleshooting_guide_id?: number | null;
+  /** ... and the version of it they read. */
+  troubleshooting_version?: number | null;
 }
 
 export interface CreateTicketPayload {
@@ -903,7 +918,7 @@ export interface ApiCatalogIssue {
   id: number;
   title: string;
   description: string | null;
-  troubleshooting?: ApiTroubleshootingGuide | null;
+  troubleshooting_guides_count?: number | null;
   deleted_at: string | null;
   notes?: ApiTicketNote[];
   attachments?: ApiTicketAttachment[];
@@ -913,6 +928,9 @@ export interface ApiCatalogTechnician {
   id: number;
   name: string;
   phone?: string | null;
+  location?: string | null;
+  coverage_notes?: string | null;
+  coverage_stores?: { id: number; store_number: string }[] | null;
   category_id: number | null;
   category: { id: number; name: string } | null;
   deleted_at?: string | null;
@@ -920,6 +938,17 @@ export interface ApiCatalogTechnician {
   creator?: { id: number; name: string; email: string } | null;
   notes?: ApiTicketNote[];
   attachments?: ApiTicketAttachment[];
+}
+
+/** A technician as the add / edit form sends it. Coverage replaces the stored list. */
+export interface TechnicianInput {
+  name?: string;
+  phone?: string | null;
+  category_id?: number | null;
+  location?: string | null;
+  coverage_notes?: string | null;
+  /** Store numbers, e.g. "03795-00001". */
+  coverage_stores?: string[];
 }
 
 export interface ApiCatalogPart {
@@ -1177,14 +1206,9 @@ export interface ApiTicketIssue {
   ticket_id: number;
   issue_id: number | null;
   troubleshooting_confirmed_at?: string | null;
-  troubleshooting_snapshot?: {
-    guide_id: number;
-    version: number;
-    steps: string[];
-    link_url: string | null;
-    files?: { id: number; name: string }[];
-    confirmed_by?: number | null;
-  } | null;
+  troubleshooting_outcome?: TroubleshootingTicketOutcome | null;
+  troubleshooting_guide_id?: number | null;
+  troubleshooting_snapshot?: ApiTroubleshootingSnapshot | null;
   issue: { id: number; title: string; description: string | null } | null;
   display_title: string | null;
   other_title: string | null;
@@ -1379,46 +1403,120 @@ export interface IssueHistoryPage {
 /*  Troubleshooting guides                                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
 
+export interface ApiTroubleshootingStep {
+  id: number;
+  position: number;
+  body: string;
+  attachments?: ApiTicketAttachment[];
+}
+
 export interface ApiTroubleshootingGuide {
   id: number;
   issue_id: number;
-  steps: string[];
+  title: string;
+  steps: ApiTroubleshootingStep[];
   link_url: string | null;
   version: number;
   attachments?: ApiTicketAttachment[];
   editor?: { id: number; name: string } | null;
   updated_at: string;
+  fixed_count?: number;
+  not_fixed_count?: number;
 }
 
-/** What a store should try before opening a ticket for one catalog issue. */
+export interface ApiTroubleshootingSnapshot {
+  outcome?: TroubleshootingOutcome;
+  guide_id: number | null;
+  guide_title?: string | null;
+  version: number | null;
+  /** Objects since 2026-10-08; plain strings before (one guide per issue). */
+  steps: Array<string | { body: string; files?: { id: number; name: string }[] }>;
+  link_url: string | null;
+  files?: { id: number; name: string }[];
+  guides_shown?: { id: number; title: string; version: number }[];
+  confirmed_by?: number | null;
+}
+
+/** How a store's troubleshooting ended. "fixed" never opens a ticket. */
+export type TroubleshootingOutcome = "fixed" | "tried" | "none_match";
+export type TroubleshootingTicketOutcome = Exclude<TroubleshootingOutcome, "fixed">;
+
+export interface TroubleshootingStep {
+  id: number;
+  position: number;
+  body: string;
+  /** This step's own files (a photo of the breaker, a short video). */
+  attachments: TicketAttachment[];
+}
+
+/**
+ * What to try for one specific problem with a catalog issue ("Oven" ->
+ * "Won't heat"). An issue can have several.
+ */
 export interface TroubleshootingGuide {
   id: number;
   issueId: number;
+  /** The specific problem: "Won't heat". */
+  title: string;
   /** In order: what to try first, then next. */
-  steps: string[];
+  steps: TroubleshootingStep[];
   linkUrl: string | null;
-  /** Goes up on every save; sent back with the confirmation. */
+  /** Goes up on every save; sent back when a ticket is opened after it. */
   version: number;
+  /** Files for the whole guide. */
   attachments: TicketAttachment[];
   editor: { id: number; name: string } | null;
   updatedAt: string;
+  /** Times it fixed the problem, so no ticket was opened. */
+  fixedCount: number;
+  /** Tickets opened after trying it. */
+  notFixedCount: number;
 }
 
-/** The guide as the manager saw it when they confirmed trying it. */
+/** One issue and all its guides -- the troubleshooting page. */
+export interface IssueTroubleshooting {
+  issueId: number;
+  title: string;
+  description: string | null;
+  guides: TroubleshootingGuide[];
+}
+
+/** The troubleshooting as the manager saw it, frozen onto the ticket issue. */
 export interface TroubleshootingSnapshot {
-  guideId: number;
-  version: number;
-  steps: string[];
+  outcome: TroubleshootingOutcome;
+  guideId: number | null;
+  guideTitle: string | null;
+  version: number | null;
+  steps: { body: string; files: { id: number; name: string }[] }[];
   linkUrl: string | null;
   files: { id: number; name: string }[];
+  /** Every guide the page listed, so "none of these" says what "these" were. */
+  guidesShown: { id: number; title: string; version: number }[];
   confirmedBy: number | null;
+}
+
+export interface TroubleshootingGuideSummary {
+  id: number;
+  title: string;
+  stepsCount: number;
+  version: number;
+  fixedCount: number;
+  notFixedCount: number;
+  updatedAt: string;
 }
 
 export interface TroubleshootingLibraryItem {
   issueId: number;
   title: string;
   description: string | null;
-  troubleshooting: TroubleshootingGuide;
+  guides: TroubleshootingGuideSummary[];
+}
+
+/** A guide as the editor sends it. Steps keep their id (and files) across edits. */
+export interface TroubleshootingGuideInput {
+  title: string;
+  steps: { id?: number; body: string }[];
+  link_url: string | null;
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { ArrowRight, CalendarDays, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -22,6 +23,8 @@ export function AnalyticsControls({
   endDate,
   onRangeChange,
   isUpdating,
+  presets = RANGE_PRESETS,
+  children,
 }: {
   storeOptions: StoreOption[];
   selection: StoreSelection;
@@ -31,8 +34,12 @@ export function AnalyticsControls({
   onRangeChange: (startDate: string, endDate: string) => void;
   /** A reload is in flight -- the controls stay usable, the bar says so. */
   isUpdating?: boolean;
+  /** The preset buttons; the analytics page's by default. */
+  presets?: { id: RangePreset; label: string }[];
+  /** More filters, after the stores. */
+  children?: ReactNode;
 }) {
-  const active = matchPreset(startDate, endDate);
+  const active = matchPreset(startDate, endDate, undefined, presets);
 
   function pick(preset: RangePreset) {
     const days = presetDays(preset);
@@ -42,7 +49,7 @@ export function AnalyticsControls({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
       <div role="group" aria-label="Date range" className="inline-flex flex-wrap rounded-lg border bg-muted/50 p-0.5">
-        {RANGE_PRESETS.map((p) => (
+        {presets.map((p) => (
           <button
             key={p.id}
             type="button"
@@ -78,6 +85,8 @@ export function AnalyticsControls({
       </div>
 
       <StoreMultiSelect options={storeOptions} value={selection} onChange={onSelectionChange} className="w-48" />
+
+      {children}
 
       {isUpdating && (
         <span className="ms-auto inline-flex items-center gap-1.5 text-sm text-muted-foreground" role="status" aria-live="polite">

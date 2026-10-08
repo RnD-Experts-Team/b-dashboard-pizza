@@ -37,6 +37,18 @@ export interface AnalyticsCreatedTicket {
   }[];
 }
 
+/** A problem the store fixed with troubleshooting, so no ticket was opened. */
+export interface AnalyticsTroubleshootingFix {
+  id: number;
+  store_number: string | null;
+  issue_id: number;
+  issue_title: string | null;
+  /** Null when they did not say which guide fixed it. */
+  guide_title: string | null;
+  by: { id: number; name: string } | null;
+  at: string;
+}
+
 export interface AnalyticsSummary {
   range: { from: string; to: string };
   stores: { id: number; store_number: string }[];
@@ -50,7 +62,10 @@ export interface AnalyticsSummary {
     avg_hours_to_complete: number | null;
     /** Tickets with any change in the range. */
     changed_tickets: number;
+    /** Problems troubleshooting fixed in the range -- no ticket was opened. */
+    fixed_by_troubleshooting: number;
   };
+  troubleshooting_fixes: AnalyticsTroubleshootingFix[];
   created: AnalyticsCreatedTicket[];
   by_issue: { issue_id: number | null; title: string; count: number }[];
   by_store: { store_number: string; created: number; completed: number; open: number }[];

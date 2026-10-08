@@ -329,6 +329,7 @@ export function AssignPanel({ issue, storeId, ticketId, technicians, issueIds, i
         <TechnicianCheckList
           technicians={technicians}
           catalogIssueId={issue.issueId ?? null}
+          store={storeId}
           selected={issueDraft.assignTechs}
           onToggle={toggleTech}
           emptyText={t("detailSheet.noTechnicians")}
@@ -740,6 +741,7 @@ export function AttachTechsPanel({ issue, storeId, ticketId, technicians, issueI
       <TechnicianCheckList
         technicians={technicians}
         catalogIssueId={issue.issueId ?? null}
+        store={storeId}
         selected={issueDraft.attachTechs}
         onToggle={toggleTech}
       />
@@ -867,6 +869,7 @@ export function ChangeTechsPanel({ issue, storeId, ticketId, technicians, issueD
       <TechnicianCheckList
         technicians={technicians}
         catalogIssueId={issue.issueId ?? null}
+        store={storeId}
         selected={issueDraft.changeTechs}
         onToggle={toggleTech}
       />

@@ -34,6 +34,7 @@ import {
   LifeBuoy,
   CalendarDays,
   Table2,
+  HardHat,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
@@ -284,6 +285,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "maintenanceTroubleshooting",
     requirements: (storeId) => [
       { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenanceTechnicians",
+    href: (locale) => `/${locale}/dashboard/maintenance-technicians`,
+    icon: HardHat,
+    titleKey: "maintenanceTechnicians",
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/technicians" },
     ],
     groupKey: "maintenance",
   },

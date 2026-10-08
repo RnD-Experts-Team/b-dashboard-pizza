@@ -114,7 +114,8 @@
     "workbooks": "Workbooks",
     "tickets": "Tickets",
     "maintenanceAnalytics": "Maintenance Analytics",
-    "maintenanceTroubleshooting": "Troubleshooting"
+    "maintenanceTroubleshooting": "Troubleshooting",
+    "maintenanceTechnicians": "Technicians"
   },
   "breadcrumbs": {
     "dashboard": "Dashboard",
@@ -168,7 +169,8 @@
     "workbooks": "Workbooks",
     "tickets": "Tickets",
     "maintenance-analytics": "Maintenance Analytics",
-    "maintenance-troubleshooting": "Troubleshooting"
+    "maintenance-troubleshooting": "Troubleshooting",
+    "maintenance-technicians": "Technicians"
   },
   "auth": {
     "login": {

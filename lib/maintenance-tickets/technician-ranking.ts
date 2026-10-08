@@ -16,6 +16,8 @@ export interface TechnicianStanding {
   starsForIssue: boolean;
   /** The notes behind those stars. */
   notes: string | null;
+  /** They cover the ticket's store (false when no store was given). */
+  coversStore: boolean;
 }
 
 export interface RankedTechnician {
@@ -46,7 +48,14 @@ export function standingFor(
     starsForIssue: issueRated,
     // The issue's own notes when it has any say for this issue; else overall.
     notes: issueRated || issueNotes ? issueNotes : overall?.notes ?? null,
+    coversStore: false,
   };
+}
+
+/** Whether a technician covers a store, given its number ("03795-00001") or id. */
+export function coversStore(technician: CatalogTechnician, store: string | number | null | undefined): boolean {
+  if (store == null || store === "") return false;
+  return (technician.coverageStores ?? []).some((s) => s.storeNumber === String(store) || s.id === Number(store));
 }
 
 /**
@@ -64,13 +73,19 @@ export function standingFor(
 export function rankTechnicians(
   technicians: CatalogTechnician[],
   board: TechnicianAbilityBoard,
-  catalogIssueId: number | null
+  catalogIssueId: number | null,
+  /** The ticket's store: technicians who cover it come first. */
+  store?: string | number | null,
 ): RankedTechnician[] {
   return technicians
-    .map((technician) => ({ technician, standing: standingFor(technician.id, board, catalogIssueId) }))
+    .map((technician) => ({
+      technician,
+      standing: { ...standingFor(technician.id, board, catalogIssueId), coversStore: coversStore(technician, store) },
+    }))
     .sort((a, b) => {
       const sa = a.standing;
       const sb = b.standing;
+      if (sa.coversStore !== sb.coversStore) return sa.coversStore ? -1 : 1;
       if (sa.callFirst !== sb.callFirst) return sa.callFirst ? -1 : 1;
       if (sa.goTo !== sb.goTo) return sa.goTo ? -1 : 1;
       const starsA = sa.stars ?? 0;
@@ -86,6 +101,7 @@ export function rankTechnicians(
  */
 export function standingWords(standing: TechnicianStanding): string[] {
   const words: string[] = [];
+  if (standing.coversStore) words.push("Covers this store");
   if (standing.callFirst) words.push("Call first");
   if (standing.goTo) words.push("Go-to");
   if (standing.stars != null) words.push(`★${standing.stars}${standing.starsForIssue ? "" : " overall"}`);
@@ -93,5 +109,5 @@ export function standingWords(standing: TechnicianStanding): string[] {
 }
 
 export function hasStanding(standing: TechnicianStanding): boolean {
-  return standing.callFirst || standing.goTo || standing.stars != null || !!standing.notes;
+  return standing.coversStore || standing.callFirst || standing.goTo || standing.stars != null || !!standing.notes;
 }

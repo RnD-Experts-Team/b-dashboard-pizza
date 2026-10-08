@@ -8,8 +8,9 @@ import type { CatalogTechnician } from "@/types/maintenance-tickets.types";
 import { TechnicianStandingBadges } from "./technician-standing";
 
 /**
- * Pick technicians to send: a checkable list, the one to call first for the
- * issue at the top, then the go-to, then by stars -- each with their badges,
+ * Pick technicians to send: a checkable list, those who cover the ticket's
+ * store first, then the one to call first for the issue, then the go-to, then
+ * by stars -- each with their badges,
  * trade, and the coordinator's note about them. Deleted technicians are left
  * out.
  *
@@ -22,18 +23,21 @@ export function TechnicianCheckList({
   selected,
   onToggle,
   emptyText = "No technicians.",
+  store,
 }: {
   technicians: CatalogTechnician[];
   /** The catalog issue being worked on; null ranks on overall ratings only. */
   catalogIssueId: number | null;
+  /** The ticket's store: technicians who cover it come first. */
+  store?: string | number | null;
   selected: number[];
   onToggle: (technicianId: number) => void;
   emptyText?: string;
 }) {
   const abilities = useMaintenanceTicketsCatalogStore((s) => s.abilities);
   const ranked = useMemo(
-    () => rankTechnicians(technicians.filter((tech) => !tech.deletedAt), abilities, catalogIssueId),
-    [technicians, abilities, catalogIssueId]
+    () => rankTechnicians(technicians.filter((tech) => !tech.deletedAt), abilities, catalogIssueId, store),
+    [technicians, abilities, catalogIssueId, store]
   );
 
   return (

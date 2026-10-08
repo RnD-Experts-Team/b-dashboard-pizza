@@ -1,14 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowDown, BarChart3, Clock, FileText, Gauge, History, Hourglass, Info, ListChecks, Repeat, Store as StoreIcon } from "lucide-react";
+import { ArrowDown, BarChart3, Clock, FileText, Gauge, History, Hourglass, Info, LifeBuoy, ListChecks, Repeat, Store as StoreIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import { AnalyticsCard } from "./analytics-card";
 import { AnalyticsKpis, hours } from "./analytics-kpis";
 import { AnalyticsBarChart } from "./analytics-bar-chart";
-import { ByStore, NewTickets, Recurring, SectionError, Untouched, WhatChanged } from "./analytics-sections";
+import { ByStore, NewTickets, Recurring, SectionError, TroubleshootingFixes, Untouched, WhatChanged } from "./analytics-sections";
 import type {
   AnalyticsActivityTicket,
   AnalyticsSummary,
@@ -129,6 +129,13 @@ export function AnalyticsView({
         error={errors.watchlist}
       />
 
+      <TroubleshootingFixes
+        locale={locale}
+        fixes={summary?.troubleshooting_fixes ?? []}
+        rangeLabel={rangeLabel}
+        error={errors.summary}
+      />
+
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Info className="h-4 w-4" aria-hidden="true" />
         Click a ticket number to open the ticket and follow up.
@@ -188,6 +195,7 @@ function AtAGlance({
   const oldest = untouched[0];
   const recurring = watchlist?.recurring ?? [];
   const top = recurring[0];
+  const fixes = summary?.troubleshooting_fixes ?? [];
   const span = watchlist && watchlist.untouched_days !== 1 ? `${watchlist.untouched_days}+ days` : "24+ hours";
 
   return (
@@ -228,6 +236,17 @@ function AtAGlance({
             )}
           </GlanceLine>
         )}
+        {summary && (
+          <GlanceLine icon={LifeBuoy} tint="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400" target="troubleshooting-fixes">
+            {fixes.length === 0 ? (
+              <>No problem was fixed by troubleshooting {range}.</>
+            ) : (
+              <>
+                <strong className="font-semibold">{plural(fixes.length, "problem", "problems")}</strong> fixed by troubleshooting {range}, with no ticket opened.
+              </>
+            )}
+          </GlanceLine>
+        )}
       </ul>
     </AnalyticsCard>
   );
@@ -237,8 +256,8 @@ function AtAGlance({
 export function AnalyticsSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true" aria-label="Loading the report">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Skeleton className="h-64 rounded-xl" />
