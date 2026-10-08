@@ -135,7 +135,7 @@ export default function TechnicianPage() {
 
       <PageHeader
         title={technician.name}
-        description={[technician.categoryName ?? "No trade", technician.deletedAt ? "Deleted" : null].filter(Boolean).join(" · ")}
+        description={[technician.categoryName ?? "No category", technician.deletedAt ? "Deleted" : null].filter(Boolean).join(" · ")}
       >
         {canEdit && !technician.deletedAt && (
           <Button variant="outline" onClick={() => setEditing(true)}>
@@ -160,7 +160,7 @@ export default function TechnicianPage() {
               </dd>
             </div>
             <div>
-              <dt className="flex items-center gap-1.5 text-muted-foreground"><HardHat className="h-3.5 w-3.5" aria-hidden="true" /> Trade</dt>
+              <dt className="flex items-center gap-1.5 text-muted-foreground"><HardHat className="h-3.5 w-3.5" aria-hidden="true" /> Category</dt>
               <dd className="mt-0.5 font-medium">{technician.categoryName ?? "—"}</dd>
             </div>
             <div className="sm:col-span-2">
@@ -237,7 +237,7 @@ export default function TechnicianPage() {
         </Button>
       </div>
 
-      <TechnicianFilters filters={filters} showTrade={false} isUpdating={report.isLoading && report.loadedParams !== null} />
+      <TechnicianFilters filters={filters} showCategory={false} isUpdating={report.isLoading && report.loadedParams !== null} />
 
       {!report.loadedParams ? (
         <div className="space-y-6" aria-busy="true" aria-label="Loading the report">

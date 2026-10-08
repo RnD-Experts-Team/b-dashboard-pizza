@@ -111,6 +111,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     ],
     groupKey: "dashboards",
   },
+  {
+    id: "maintenanceAnalytics",
+    href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
+    icon: BarChart3,
+    titleKey: "maintenanceAnalytics",
+    requirements: (storeId) => [
+      { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId },
+    ],
+    groupKey: "dashboards",
+  },
 
   // Flat items
   {
@@ -265,16 +275,6 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "maintenanceTickets",
     requirements: (storeId) => [
       { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId },
-    ],
-    groupKey: "maintenance",
-  },
-  {
-    id: "maintenanceAnalytics",
-    href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
-    icon: BarChart3,
-    titleKey: "maintenanceAnalytics",
-    requirements: (storeId) => [
-      { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId },
     ],
     groupKey: "maintenance",
   },

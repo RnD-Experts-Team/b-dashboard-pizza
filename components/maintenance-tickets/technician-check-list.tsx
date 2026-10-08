@@ -11,7 +11,7 @@ import { TechnicianStandingBadges } from "./technician-standing";
  * Pick technicians to send: a checkable list, those who cover the ticket's
  * store first, then the one to call first for the issue, then the go-to, then
  * by stars -- each with their badges,
- * trade, and the coordinator's note about them. Deleted technicians are left
+ * category, and the coordinator's note about them. Deleted technicians are left
  * out.
  *
  * Shared by assign, attach and change-technicians, which each used to render

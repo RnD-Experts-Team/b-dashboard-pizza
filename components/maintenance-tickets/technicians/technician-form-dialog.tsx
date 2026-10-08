@@ -31,10 +31,10 @@ import {
 import type { StoreSelection } from "@/types/business-reports.types";
 import type { CatalogCategory, CatalogTechnician } from "@/types/maintenance-tickets.types";
 
-const NO_TRADE = "none";
+const NO_CATEGORY = "none";
 
 /**
- * Add or edit a technician: who they are (name, phone, trade), where they are
+ * Add or edit a technician: who they are (name, phone, category), where they are
  * based, and which stores they can cover -- with notes about that coverage.
  * Technicians who cover a ticket's store are listed first when picking one.
  */
@@ -54,7 +54,7 @@ export function TechnicianFormDialog({
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [trade, setTrade] = useState<string>(NO_TRADE);
+  const [category, setCategory] = useState<string>(NO_CATEGORY);
   const [location, setLocation] = useState("");
   const [coverage, setCoverage] = useState<string[]>([]);
   const [coverageNotes, setCoverageNotes] = useState("");
@@ -65,7 +65,7 @@ export function TechnicianFormDialog({
     if (!open) return;
     setName(technician?.name ?? "");
     setPhone(technician?.phone ?? "");
-    setTrade(technician?.categoryId ? String(technician.categoryId) : NO_TRADE);
+    setCategory(technician?.categoryId ? String(technician.categoryId) : NO_CATEGORY);
     setLocation(technician?.location ?? "");
     setCoverage((technician?.coverageStores ?? []).map((s) => s.storeNumber));
     setCoverageNotes(technician?.coverageNotes ?? "");
@@ -99,7 +99,7 @@ export function TechnicianFormDialog({
     const payload = {
       name: name.trim(),
       phone: phone.trim() || null,
-      category_id: trade === NO_TRADE ? null : Number(trade),
+      category_id: category === NO_CATEGORY ? null : Number(category),
       location: location.trim() || null,
       coverage_notes: coverageNotes.trim() || null,
       coverage_stores: coverage,
@@ -140,11 +140,11 @@ export function TechnicianFormDialog({
               <Input id="tech-phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" maxLength={32} placeholder="(555) 010-0100" />
             </div>
             <div className="space-y-1.5">
-              <Label>Trade</Label>
-              <Select value={trade} onValueChange={setTrade}>
+              <Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent position="popper" style={{ maxHeight: 260, overflowY: "auto" }}>
-                  <SelectItem value={NO_TRADE}>No trade</SelectItem>
+                  <SelectItem value={NO_CATEGORY}>No category</SelectItem>
                   {categories.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                   ))}

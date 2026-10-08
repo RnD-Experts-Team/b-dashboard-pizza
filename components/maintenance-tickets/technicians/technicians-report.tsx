@@ -132,7 +132,7 @@ export function TechniciansReport({
             <span>Most paid first. Open one to see their pay, work, ratings and coverage.</span>
             <span className="relative">
               <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, trade, location…" className="h-8 w-56 ps-8" aria-label="Find a technician" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, category, location…" className="h-8 w-56 ps-8" aria-label="Find a technician" />
             </span>
             <span className="flex items-center gap-2">
               <Switch id="show-deleted-technicians" checked={showDeleted} onCheckedChange={setShowDeleted} />
@@ -165,7 +165,7 @@ export function TechniciansReport({
                       {t.name}
                     </Link>
                     <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                      <span className="inline-flex items-center gap-1"><HardHat className="h-3 w-3" aria-hidden="true" />{t.category?.name ?? "No trade"}</span>
+                      <span className="inline-flex items-center gap-1"><HardHat className="h-3 w-3" aria-hidden="true" />{t.category?.name ?? "No category"}</span>
                       {t.rating != null && <span className="inline-flex items-center gap-0.5"><Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden="true" />{t.rating}</span>}
                       {t.deleted_at && <span>Deleted</span>}
                     </span>

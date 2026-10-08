@@ -17,7 +17,7 @@ import { TechnicianFormDialog } from "@/components/maintenance-tickets/technicia
 /**
  * Technicians: every technician the MOS works with -- what each was paid
  * (from the daily pay sheets), the visits they made, the issues and stores
- * they worked -- for a range, stores, an issue and a trade. Each opens their
+ * they worked -- for a range, stores, an issue and a category. Each opens their
  * own page: profile, coverage, ratings, notes and their full report.
  */
 export default function MaintenanceTechniciansPage() {
@@ -63,7 +63,7 @@ export default function MaintenanceTechniciansPage() {
         )}
       </PageHeader>
 
-      <TechnicianFilters filters={filters} showTrade isUpdating={isLoading && loadedParams !== null} />
+      <TechnicianFilters filters={filters} showCategory isUpdating={isLoading && loadedParams !== null} />
 
       {!loadedParams ? (
         <div className="space-y-6" aria-busy="true" aria-label="Loading the technicians">

@@ -20,7 +20,7 @@ import type { TechnicianAnalyticsParams } from "@/types/technician-analytics.typ
 const ALL = "all";
 const PRESETS = [...LONG_RANGE_PRESETS];
 
-/** The Technicians pages' filters: days, stores, an issue and (on the list) a trade. */
+/** The Technicians pages' filters: days, stores, an issue and (on the list) a category. */
 export function useTechnicianFilters() {
   const overviewStores = useAuthStore((s) => s.overviewStores);
   const storeOptions: StoreOption[] = useMemo(
@@ -74,11 +74,11 @@ export function useTechnicianFilters() {
 
 export function TechnicianFilters({
   filters,
-  showTrade,
+  showCategory,
   isUpdating,
 }: {
   filters: ReturnType<typeof useTechnicianFilters>;
-  showTrade: boolean;
+  showCategory: boolean;
   isUpdating: boolean;
 }) {
   const [issues, setIssues] = useState<CatalogIssue[]>([]);
@@ -86,8 +86,8 @@ export function TechnicianFilters({
 
   useEffect(() => {
     maintenanceTicketsService.getCatalogIssues().then((all) => setIssues(all.filter((i) => !i.deletedAt).sort((a, b) => a.title.localeCompare(b.title)))).catch(() => setIssues([]));
-    if (showTrade) maintenanceTicketsService.getCatalogCategories().then(setCategories).catch(() => setCategories([]));
-  }, [showTrade]);
+    if (showCategory) maintenanceTicketsService.getCatalogCategories().then(setCategories).catch(() => setCategories([]));
+  }, [showCategory]);
 
   return (
     <AnalyticsControls
@@ -107,11 +107,11 @@ export function TechnicianFilters({
           {issues.map((i) => <SelectItem key={i.id} value={String(i.id)}>{i.title}</SelectItem>)}
         </SelectContent>
       </Select>
-      {showTrade && (
+      {showCategory && (
         <Select value={filters.categoryId} onValueChange={filters.setCategoryId}>
-          <SelectTrigger className="w-40" aria-label="Trade"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-40" aria-label="Category"><SelectValue /></SelectTrigger>
           <SelectContent position="popper" style={{ maxHeight: 300, overflowY: "auto" }}>
-            <SelectItem value={ALL}>All trades</SelectItem>
+            <SelectItem value={ALL}>All categories</SelectItem>
             {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
