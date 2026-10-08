@@ -18,11 +18,12 @@ interface MicLogState {
   entries: MicLogEntry[];
   status: MicStatus | null;
   settings: DriveThruMicSettings | null;
-  lastManagerChange: { time: number; text: string } | null;
+  /** `ok` false = the station could not fully apply it (shown amber, never as a success). */
+  lastManagerChange: { time: number; text: string; ok: boolean } | null;
   log: (level: MicLogLevel, text: string) => void;
   setStatus: (status: MicStatus) => void;
   setSettings: (settings: DriveThruMicSettings) => void;
-  setLastManagerChange: (text: string) => void;
+  setLastManagerChange: (text: string, ok?: boolean) => void;
 }
 
 let nextId = 1;
@@ -42,7 +43,7 @@ export const useMicLogStore = create<MicLogState>()((set) => ({
   },
   setStatus: (status) => set({ status }),
   setSettings: (settings) => set({ settings }),
-  setLastManagerChange: (text) => set({ lastManagerChange: { time: Date.now(), text } }),
+  setLastManagerChange: (text, ok = true) => set({ lastManagerChange: { time: Date.now(), text, ok } }),
 }));
 
 /** Shorthand for non-React callers (processor, hooks' event handlers). */

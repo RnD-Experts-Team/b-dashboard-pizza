@@ -1740,10 +1740,18 @@ export function ScreenTile({
   const roomOptions = useMemo(
     () => {
       // Only set what's needed, so other stations keep LiveKit's defaults untouched.
-      // Drive-thru: start the mic with the auto-volume setting the manager last chose.
+      // Drive-thru: start the mic with the browser-processing switches the manager last chose.
+      const saved = driveThruMic ? loadStoredMicSettings() : null;
       const audioCapture = {
         ...(selectedAudioDeviceId ? { deviceId: selectedAudioDeviceId } : {}),
-        ...(driveThruMic ? { autoGainControl: loadStoredMicSettings().autoGain } : {}),
+        ...(saved
+          ? {
+              autoGainControl: saved.autoGain,
+              noiseSuppression: saved.noiseSuppression,
+              echoCancellation: saved.echoCancellation,
+              voiceIsolation: saved.noiseSuppression,
+            }
+          : {}),
       };
       return {
         audioCaptureDefaults: Object.keys(audioCapture).length > 0 ? audioCapture : undefined,

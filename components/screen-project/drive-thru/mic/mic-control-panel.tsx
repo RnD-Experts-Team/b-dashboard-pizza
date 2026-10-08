@@ -7,13 +7,16 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
+  BROWSER_FX_LABELS,
   DEFAULT_MIC_SETTINGS,
   formatBoost,
+  formatOnOff,
   formatStrength,
   formatWindCut,
   MIC_RANGES,
   type DriveThruMicSettings,
 } from "./settings";
+import { MicTestGuide } from "./mic-test-guide";
 import type { ManagerMicApi, StationMicReport } from "./use-manager-mic";
 
 /** Slider changes are sent at most this often while dragging. */
@@ -26,14 +29,42 @@ const HELP = {
   strength: "How much of the cleaned sound is used. Lower it if the customer's voice sounds cut, choppy or robotic.",
   windCut: "Removes low rumble from wind. Higher removes more wind but makes the voice thinner. Off turns it off.",
   boost: "Makes the station mic louder. A safety limiter stops loud voices from distorting.",
-  autoGain: "The browser's automatic mic volume. It can turn wind up when nobody is talking — try it off if the wind keeps getting louder.",
+  autoGain: "The browser's automatic mic volume. It can turn wind up when nobody is talking — try it off if the wind keeps getting louder. The mic also has its own automatic volume inside.",
+  noiseSuppression: "The browser's own noise removal, applied on top of the one built into the mic. Two noise removers on top of each other can make the voice sound watery or robotic — try it off.",
+  echoCancellation: "Stops the speaker's sound from looping back into the mic. Turn it off only if the speaker is not near the mic. If you hear your own voice coming back, turn it on again.",
   testPanel: "Shows a test box on the station screen with what the filter is doing and every change you make here.",
 } as const;
 
 type Confirmation =
   | { kind: "waiting" }
   | { kind: "applied"; at: number }
+  | { kind: "partial"; at: number; detail: string }
   | { kind: "timeout" };
+
+const SETTING_LABELS: Record<keyof DriveThruMicSettings, string> = {
+  enabled: "Noise filter",
+  strength: "Filter strength",
+  windCutHz: "Wind cut",
+  boost: "Mic boost",
+  autoGain: BROWSER_FX_LABELS.autoGain,
+  noiseSuppression: BROWSER_FX_LABELS.noiseSuppression,
+  echoCancellation: BROWSER_FX_LABELS.echoCancellation,
+  testPanel: "Show test panel",
+};
+
+const settingValue = (key: keyof DriveThruMicSettings, s: DriveThruMicSettings) => {
+  if (key === "strength") return formatStrength(s.strength);
+  if (key === "windCutHz") return formatWindCut(s.windCutHz);
+  if (key === "boost") return formatBoost(s.boost);
+  return formatOnOff(s[key] as boolean);
+};
+
+/** Which settings the station did NOT take as sent (empty = everything landed). */
+function unappliedSettings(sent: DriveThruMicSettings, got: DriveThruMicSettings): string[] {
+  return (Object.keys(SETTING_LABELS) as (keyof DriveThruMicSettings)[])
+    .filter((k) => (typeof sent[k] === "number" ? Math.abs((sent[k] as number) - (got[k] as number)) > 1e-6 : sent[k] !== got[k]))
+    .map((k) => `${SETTING_LABELS[k]} ${settingValue(k, got)}`);
+}
 
 const time = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -83,6 +114,8 @@ export function MicControlPanel({
   const [draft, setDraft] = useState<DriveThruMicSettings>(report?.settings ?? DEFAULT_MIC_SETTINGS);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const pendingSeqRef = useRef<number | null>(null);
+  /** The settings sent with the pending change, to check what the station actually took. */
+  const pendingSettingsRef = useRef<DriveThruMicSettings | null>(null);
   const throttleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestRef = useRef(draft);
@@ -97,7 +130,14 @@ export function MicControlPanel({
       if (report.seq === pending) {
         pendingSeqRef.current = null;
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setConfirmation({ kind: "applied", at: report.at });
+        // A real success only if the station's settings are what we sent. Otherwise say what
+        // it kept (the browser refused, or the station page is an older version).
+        const kept = pendingSettingsRef.current ? unappliedSettings(pendingSettingsRef.current, report.settings) : [];
+        setConfirmation(
+          kept.length === 0
+            ? { kind: "applied", at: report.at }
+            : { kind: "partial", at: report.at, detail: kept.join(", ") },
+        );
         setDraft(report.settings);
       }
       return; // older confirmations / periodic reports don't override a change in flight
@@ -122,6 +162,7 @@ export function MicControlPanel({
       const seq = api?.send(settings) ?? null;
       if (seq === null) return;
       pendingSeqRef.current = seq;
+      pendingSettingsRef.current = settings;
       setConfirmation({ kind: "waiting" });
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
@@ -241,9 +282,31 @@ export function MicControlPanel({
           />
         </div>
 
-        <Row label="Auto volume" help={HELP.autoGain}>
-          <Switch checked={draft.autoGain} onCheckedChange={(v) => change({ autoGain: v })} aria-label="Auto volume" />
-        </Row>
+        <div className="space-y-2.5 rounded-lg border border-white/10 p-2.5">
+          <p className="text-[0.65rem] font-medium uppercase tracking-wide text-white/50">
+            {"Browser processing (added on top of the mic's own)"}
+          </p>
+          <Row label={BROWSER_FX_LABELS.autoGain} help={HELP.autoGain}>
+            <Switch checked={draft.autoGain} onCheckedChange={(v) => change({ autoGain: v })} aria-label={BROWSER_FX_LABELS.autoGain} />
+          </Row>
+          <Row label={BROWSER_FX_LABELS.noiseSuppression} help={HELP.noiseSuppression}>
+            <Switch
+              checked={draft.noiseSuppression}
+              onCheckedChange={(v) => change({ noiseSuppression: v })}
+              aria-label={BROWSER_FX_LABELS.noiseSuppression}
+            />
+          </Row>
+          <Row label={BROWSER_FX_LABELS.echoCancellation} help={HELP.echoCancellation}>
+            <Switch
+              checked={draft.echoCancellation}
+              onCheckedChange={(v) => change({ echoCancellation: v })}
+              aria-label={BROWSER_FX_LABELS.echoCancellation}
+            />
+          </Row>
+          {!draft.echoCancellation && (
+            <p className="text-xs text-amber-300">If you hear your own voice coming back, turn echo cancel on again.</p>
+          )}
+        </div>
 
         <Row label="Show test panel on station" help={HELP.testPanel}>
           <Switch checked={draft.testPanel} onCheckedChange={(v) => change({ testPanel: v })} aria-label="Show test panel on station" />
@@ -255,13 +318,18 @@ export function MicControlPanel({
           "min-h-4 text-xs",
           confirmation?.kind === "applied" && "text-emerald-400",
           confirmation?.kind === "waiting" && "text-white/50",
+          confirmation?.kind === "partial" && "text-amber-300",
           confirmation?.kind === "timeout" && "text-amber-300",
         )}
       >
         {confirmation?.kind === "applied" && `✓ Applied on the station at ${time(confirmation.at)}`}
         {confirmation?.kind === "waiting" && "Sending to the station…"}
+        {confirmation?.kind === "partial" &&
+          `⚠ The station kept ${confirmation.detail} — the browser didn't apply it, or the station page is an older version (reload it)`}
         {confirmation?.kind === "timeout" && "⚠ Not confirmed by the station — check that it's connected"}
       </p>
+
+      <MicTestGuide settings={report?.settings ?? null} capture={status?.capture} />
     </div>
   );
 }

@@ -90,7 +90,7 @@
     "dataManagement": "إدارة البيانات",
     "keys": "المفاتيح",
     "maintenanceTickets": "تذاكر الصيانة",
-    "dueKeys": "المفاتيح المستحقة",
+    "dueKeys": "مركز المدير",
     "employeeDebriefs": "ملاحظات إحاطة الموظفين",
     "exportImport": "تصدير / استيراد",
     "tags": "العلامات",
@@ -4139,6 +4139,251 @@
       "debrief": "زر الإحاطة",
       "screenPreview": "معاينة الشاشة",
       "settingsMenu": "قائمة الإعدادات"
+    }
+  },
+  "managerHub": {
+    "title": "مركز المدير",
+    "description": "مهام التنظيف والتقارير الخاصة بالمتجر — ما تم إنجازه وما لا يزال ناقصًا.",
+    "noStore": "لم يتم اختيار متجر",
+    "noStoreTitle": "اختر متجرًا للبدء",
+    "noStoreBody": "اختر متجرًا من الشريط الجانبي لعرض مهامه وتقاريره.",
+    "backToToday": "العودة إلى اليوم",
+    "refresh": "تحديث",
+    "updated": "آخر تحديث {time}",
+    "updating": "جارٍ التحديث…",
+    "viewingPastDay": "أنت تعرض يومًا آخر. قسم \"الفائت هذا الأسبوع\" يحسب الأيام السبعة التي تسبقه.",
+    "tabs": {
+      "overview": "نظرة عامة",
+      "tasks": "مهامي",
+      "debriefs": "تقاريري",
+      "employeeDebriefs": "تقارير الموظفين"
+    },
+    "search": {
+      "clear": "مسح البحث"
+    },
+    "days": {
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "daysAgo": "{count, plural, one {قبل يوم واحد} other {قبل # أيام}}"
+    },
+    "errors": {
+      "retry": "حاول مرة أخرى",
+      "refreshFailed": "تعذّر التحديث — تُعرض آخر بيانات تم تحميلها. {message}",
+      "partialFailed": "لم يُحمَّل جزء من هذه القائمة. {message}",
+      "forbidden": {
+        "title": "لا توجد صلاحية",
+        "body": "حسابك غير مسموح له برؤية هذا للمتجر المحدد."
+      },
+      "auth": {
+        "title": "تم تسجيل الخروج",
+        "body": "انتهت جلستك. سجّل الدخول مرة أخرى للمتابعة."
+      },
+      "network": {
+        "title": "تعذّر الوصول إلى الخادم",
+        "body": "تحقّق من اتصالك ثم حاول مرة أخرى."
+      },
+      "timeout": {
+        "title": "استغرق الخادم وقتًا طويلًا",
+        "body": "لم يستجب في الوقت المحدد. حاول مرة أخرى بعد قليل."
+      },
+      "server": {
+        "title": "حدثت مشكلة في الخادم",
+        "body": "حدث خطأ من جهة الخادم. حاول مرة أخرى بعد قليل."
+      },
+      "notFound": {
+        "title": "غير موجود",
+        "body": "لم يجد الخادم هذا للمتجر المحدد."
+      },
+      "generic": {
+        "title": "تعذّر تحميل هذا",
+        "body": "ردّ الخادم برسالة خطأ."
+      }
+    },
+    "status": {
+      "filled": "مُعبّأ",
+      "missing": "ناقص",
+      "missed": "فائت"
+    },
+    "kinds": {
+      "debrief": "تقرير",
+      "cleaning": "مهمة تنظيف",
+      "employee": "تقرير موظف"
+    },
+    "rows": {
+      "openDetail": "فتح تفاصيل {label}",
+      "corrected": "تم تصحيح هذه القيمة",
+      "edit": "تعديل",
+      "fill": "تعبئة",
+      "photoRequired": "الصورة مطلوبة",
+      "complete": "إنجاز"
+    },
+    "actions": {
+      "panelUnavailableTitle": "لوحة التقارير غير متاحة",
+      "panelUnavailableBody": "لا يستطيع حسابك إضافة تقارير لهذا المتجر، لذلك لا يمكن فتح هذا من هنا."
+    },
+    "alert": {
+      "loadingLabel": "جارٍ التحقق مما تبقّى…",
+      "reportLabel": "العناصر الناقصة",
+      "clearTitle": "كل شيء مكتمل",
+      "clearBodyToday": "تم إنجاز كل التقارير ومهام التنظيف لليوم، ولم يفُت شيء هذا الأسبوع.",
+      "clearBodyDay": "تم إنجاز كل التقارير ومهام التنظيف ليوم {date}، ولم يفُت شيء في الأسبوع الذي قبله.",
+      "clearBodyTodayDebriefs": "تمت تعبئة كل تقارير اليوم، ولم يفُت شيء هذا الأسبوع.",
+      "clearBodyDayDebriefs": "تمت تعبئة كل تقارير يوم {date}، ولم يفُت شيء في الأسبوع الذي قبله.",
+      "pendingTitleToday": "{count, plural, one {عنصر واحد لا يزال ناقصًا اليوم} other {# عناصر لا تزال ناقصة اليوم}}",
+      "pendingTitleDay": "{count, plural, one {عنصر واحد لا يزال ناقصًا في {date}} other {# عناصر لا تزال ناقصة في {date}}}",
+      "pendingBody": "أكملها قبل نهاية اليوم.",
+      "pendingBodyBacklog": "أكمل عناصر اليوم أولًا، ثم استدرك الأيام الفائتة.",
+      "overdueBody": "بعض مهام التنظيف متأخرة بالفعل — ابدأ بها.",
+      "backlogOnlyTitle": "{count, plural, one {اكتمل اليوم — فات عنصر واحد هذا الأسبوع} other {اكتمل اليوم — فاتت # عناصر هذا الأسبوع}}",
+      "backlogOnlyBody": "لم تُكمَل تلك الأيام أبدًا. لا يزال بإمكانك تعبئتها.",
+      "chipDebriefs": "{count, plural, one {تقرير واحد} other {# تقارير}}",
+      "chipTasks": "{count, plural, one {مهمة تنظيف واحدة} other {# مهام تنظيف}}",
+      "chipOverdue": "{count} متأخرة",
+      "chipMissed": "{count} فائتة هذا الأسبوع",
+      "partial": "لم تُحمَّل بعض الأقسام، لذا قد تكون هذه الأعداد غير مكتملة.",
+      "start": "ابدأ التعبئة",
+      "reviewMissed": "مراجعة الفائت",
+      "progressToday": "المنجز اليوم",
+      "progressDay": "المنجز في {date}",
+      "progressCount": "{done} من {total}"
+    },
+    "kpis": {
+      "debriefs": "التقارير المعبّأة",
+      "cleaning": "التنظيف المنجز",
+      "missed": "الفائت · 7 أيام",
+      "employeeDebriefs": "تقارير الموظفين · {days} يوم",
+      "noneDue": "لا شيء مستحق",
+      "missingCount": "{count} لا تزال ناقصة",
+      "allFilled": "الكل معبّأ",
+      "overdueCount": "{count} متأخرة",
+      "pendingCount": "{count} قيد الانتظار",
+      "allDone": "الكل منجز",
+      "nothingMissed": "لا شيء فائت",
+      "missedSplit": "{debriefs} تقارير · {tasks} مهام",
+      "missedDebriefs": "{count, plural, one {تقرير واحد} other {# تقارير}}",
+      "employeeToday": "{count} مكتوبة اليوم"
+    },
+    "overview": {
+      "todayTitle": "المتبقي لليوم",
+      "dayTitle": "المتبقي ليوم {date}",
+      "todaySubtitle": "التقارير ومهام التنظيف — المتأخر أولًا",
+      "fillAll": "تعبئة الكل",
+      "todayClearTitle": "لم يتبقَّ شيء لليوم",
+      "dayClearTitle": "لم يتبقَّ شيء لهذا اليوم",
+      "todayClearBody": "كل التقارير معبّأة وكل مهام التنظيف منجزة.",
+      "missedTitle": "الفائت هذا الأسبوع",
+      "missedSubtitle": "{from} – {to} · لم يُكمَل",
+      "missedClearTitle": "لا شيء فائت",
+      "missedClearBody": "اكتمل كل يوم في الأسبوع الماضي.",
+      "recentTitle": "أحدث تقارير الموظفين",
+      "recentSubtitle": "آخر الملاحظات المكتوبة عن الموظفين",
+      "addDebrief": "إضافة تقرير",
+      "seeAll": "عرض الكل",
+      "recentEmptyTitle": "لا توجد تقارير موظفين بعد",
+      "recentEmptyBody": "ستظهر هنا الملاحظات المكتوبة عن الموظفين في هذه الفترة."
+    },
+    "tasks": {
+      "noAccessTitle": "لا توجد صلاحية لمخطط التنظيف",
+      "noAccessBody": "لا يستطيع حسابك رؤية مهام التنظيف لهذا المتجر.",
+      "todayTitle": "مهام اليوم",
+      "dayTitle": "مهام يوم {date}",
+      "todaySubtitle": "من مخطط التنظيف",
+      "filters": {
+        "all": "الكل",
+        "overdue": "متأخرة",
+        "pending": "قيد الانتظار",
+        "done": "منجزة"
+      },
+      "searchPlaceholder": "ابحث في المهام…",
+      "openInPanel": "فتح في اللوحة",
+      "openChart": "مخطط التنظيف",
+      "noneTitle": "لا توجد مهام تنظيف مستحقة",
+      "noneBody": "لا شيء في مخطط التنظيف مستحق لهذا اليوم.",
+      "noMatchTitle": "لا توجد نتائج",
+      "noMatchBody": "جرّب بحثًا أو فلترًا مختلفًا.",
+      "missedTitle": "الفائت في آخر 7 أيام",
+      "missedSubtitle": "فترات انتهت دون إنجاز",
+      "missedClearTitle": "لا شيء فائت",
+      "missedClearBody": "اكتملت كل فترات التنظيف في الأسبوع الماضي."
+    },
+    "debriefs": {
+      "todayTitle": "تقارير اليوم",
+      "dayTitle": "تقارير يوم {date}",
+      "todaySubtitle": "قيم يجب تعبئتها للمتجر",
+      "filters": {
+        "all": "الكل",
+        "missing": "ناقصة",
+        "filled": "معبّأة"
+      },
+      "searchPlaceholder": "ابحث في التقارير…",
+      "fillAllInPanel": "تعبئة الكل في اللوحة",
+      "openInPanel": "فتح في اللوحة",
+      "allTags": "كل الوسوم",
+      "noneTitle": "لا توجد تقارير مستحقة",
+      "noneBody": "لا يوجد ما يجب تعبئته لهذا اليوم.",
+      "noMatchTitle": "لا توجد نتائج",
+      "noMatchBody": "جرّب بحثًا أو فلترًا أو وسمًا مختلفًا.",
+      "missedTitle": "الفائت في آخر 7 أيام",
+      "missedSubtitle": "أيام لم تُعبّأ",
+      "missedClearTitle": "لا شيء فائت",
+      "missedClearBody": "تمت تعبئة كل تقرير في الأسبوع الماضي.",
+      "fillDay": "تعبئة هذا اليوم"
+    },
+    "employeeDebriefs": {
+      "title": "تقارير الموظفين",
+      "subtitle": "{from} – {to} · {employees, plural, one {موظف واحد} other {# موظفين}}",
+      "employee": "موظف",
+      "by": "بواسطة {name}",
+      "lastDays": "آخر {count} يوم",
+      "searchPlaceholder": "ابحث بالموظف أو الكاتب أو الملاحظة…",
+      "history": "سجل الموظف",
+      "add": "إضافة تقرير",
+      "allTypes": "كل الأنواع",
+      "noType": "بدون نوع",
+      "emptyTitle": "لا توجد تقارير موظفين",
+      "emptyBody": "لم يُكتب شيء عن الموظفين في آخر {count} يوم.",
+      "noMatchTitle": "لا توجد نتائج",
+      "noMatchBody": "جرّب بحثًا أو نوعًا مختلفًا."
+    },
+    "detail": {
+      "value": "القيمة",
+      "noValue": "لم تُعبّأ قيمة لهذا اليوم بعد.",
+      "noValueMissed": "لم يُعبّأ هذا اليوم أبدًا. لا يزال بإمكانك تعبئته.",
+      "details": "التفاصيل",
+      "type": "النوع",
+      "tags": "الوسوم",
+      "filledBy": "عبّأه",
+      "filledAt": "وقت التعبئة",
+      "updatedAt": "آخر تحديث",
+      "corrected": "مُصحَّح",
+      "correctedBody": "استبدل قيمة سابقة — وهي محفوظة في السجل",
+      "note": "ملاحظة",
+      "attachments": "{count, plural, one {مرفق} other {المرفقات (#)}}",
+      "description": "الوصف",
+      "frequency": "التكرار",
+      "period": "الفترة",
+      "photo": "الصورة",
+      "photoRequired": "مطلوبة للإنجاز",
+      "photoOptional": "اختيارية",
+      "doneBy": "أنجزها",
+      "doneAt": "وقت الإنجاز",
+      "completions": "عدد مرات الإنجاز",
+      "photos": "{count, plural, one {صورة} other {الصور (#)}}",
+      "noType": "بدون نوع",
+      "notes": "الملاحظات",
+      "noNotes": "لم تُكتب ملاحظات.",
+      "employee": "الموظف",
+      "author": "كتبه",
+      "createdAt": "وقت الكتابة",
+      "viewHistory": "سجل القيمة",
+      "openDayInPanel": "كل هذا اليوم",
+      "fillInPanel": "تعبئة في اللوحة",
+      "editInPanel": "تعديل في اللوحة",
+      "openInCleaningChart": "فتح في مخطط التنظيف",
+      "completeInPanel": "إنجاز في اللوحة",
+      "undoInPanel": "تراجع في اللوحة",
+      "employeeHistory": "سجل الموظف",
+      "addEmployeeDebrief": "إضافة تقرير"
     }
   }
 }

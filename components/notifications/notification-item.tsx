@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useParams, usePathname } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@/types/notification.types";
 import { Button } from "@/components/ui/button";
@@ -261,12 +261,10 @@ export function NotificationItem({
 }: NotificationItemProps) {
   const router = useRouter();
   const params = useParams();
-  const pathname = usePathname();
   const locale = (params?.locale as string) || "en";
   const openDebriefKey = useDebriefActionStore((s) => s.openDebriefKey);
   const openHiringRequest = useHiringActionStore((s) => s.openHiringRequest);
   const openCleaningEvaluation = useCleaningActionStore((s) => s.openCleaningEvaluation);
-  const isOnDueKeysPage = pathname?.includes("/due-keys") ?? false;
 
   const { Icon, bg } = getTypeVisuals(notification.type);
   const isUnread = notification.read_at === null;
@@ -295,7 +293,6 @@ export function NotificationItem({
 
   function handleClick() {
     if (!isClickable) return;
-    if (isDebriefType && isOnDueKeysPage) return;
     if (isUnread) onMarkAsRead(notification.id);
     onNavigate?.();
 
