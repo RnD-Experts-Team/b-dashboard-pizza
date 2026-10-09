@@ -4,8 +4,11 @@ import type { CanAccessParams } from "@/lib/auth/can-access";
  * Who sees what in Dough & Sauce — decided by the pizzasys auth rules for the
  * 13 endpoints, never by role names.
  *
- *   Store Manager  holds `reports view`    (store-level)  → Daily plan only
- *   Specialist     holds `dough and sauce` (global)       → every page, every action
+ *   Worker      holds `dough and sauce` at a store (store role) → Daily plan for that store
+ *   Specialist  holds `dough and sauce` globally (global role)  → every page, every action
+ *
+ * `reports view` (Store Manager) opens nothing here: without `dough and sauce`
+ * there is no entry and no page.
  *
  * The rules are the single source of truth; this file only asks the rule engine
  * (`canAccessRoute`) the same question the server will be asked. The server still
