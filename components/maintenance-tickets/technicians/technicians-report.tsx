@@ -11,8 +11,20 @@ import { AnalyticsCard } from "@/components/maintenance-tickets/analytics/analyt
 import { AnalyticsBarChart } from "@/components/maintenance-tickets/analytics/analytics-bar-chart";
 import { KpiTile } from "@/components/maintenance-tickets/analytics/analytics-kpis";
 import { Empty, Pager, ReportTable, SectionError, TD, TH, usePaged } from "@/components/maintenance-tickets/analytics/analytics-sections";
-import { LocalTimestamp } from "@/components/maintenance-tickets/local-timestamp";
+import { formatDateOnly } from "@/lib/utils/date-display";
+import { localDay } from "@/lib/maintenance-tickets/local-range";
 import type { TechnicianHours, TechniciansOverview } from "@/types/technician-analytics.types";
+
+/**
+ * The latest day they worked: the later of their latest pay-sheet day and
+ * their latest unpaid visit (in the viewer's clock), as "YYYY-MM-DD".
+ */
+export function lastWorkedDay(lastVisitAt: string | null, lastPayDate: string | null): string | null {
+  const visitDay = lastVisitAt ? localDay(new Date(lastVisitAt)) : null;
+  if (!visitDay) return lastPayDate;
+  if (!lastPayDate) return visitDay;
+  return visitDay > lastPayDate ? visitDay : lastPayDate;
+}
 
 /** Paid hours: work, travel and parts runs. Breaks are tracked, never paid. */
 export function paidHours(h: TechnicianHours): number {
@@ -89,7 +101,7 @@ export function TechniciansReport({
             value: totals.visits,
             icon: Wrench,
             tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-            note: `${rangeLabel} · clocked in`,
+            note: "Days on pay sheets + unpaid visits",
           }} />
           <KpiTile kpi={{
             label: "Hours",
@@ -111,7 +123,7 @@ export function TechniciansReport({
               format={moneyFormat}
             />
           </AnalyticsCard>
-          <AnalyticsCard center icon={BarChart3} title="Hours by technician" description="Work, travel and parts runs, from their visits.">
+          <AnalyticsCard center icon={BarChart3} title="Hours by technician" description="Work, travel and parts runs: pay sheets plus unpaid visits.">
             <AnalyticsBarChart
               title="Paid hours by technician"
               rows={active.filter((t) => paidHours(t.hours) > 0).map((t) => ({ label: t.name, value: paidHours(t.hours) }))}
@@ -154,7 +166,7 @@ export function TechniciansReport({
                 <th scope="col" className={cn(TH, "text-end")}>Hours</th>
                 <th scope="col" className={cn(TH, "text-end")}>Issues</th>
                 <th scope="col" className={cn(TH, "text-end")}>Stores</th>
-                <th scope="col" className={TH}>Last visit</th>
+                <th scope="col" className={TH}>Last worked</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -180,7 +192,10 @@ export function TechniciansReport({
                   <td className={cn(TD, "text-end tabular-nums")}>{t.issues_worked}</td>
                   <td className={cn(TD, "text-end tabular-nums")}>{t.stores_served}</td>
                   <td className={cn(TD, "whitespace-nowrap text-muted-foreground")}>
-                    {t.last_worked_at ? <LocalTimestamp iso={t.last_worked_at} pattern="MMM d, yyyy" showZone={false} /> : "—"}
+                    {(() => {
+                      const day = lastWorkedDay(t.last_worked_at, t.last_pay_date);
+                      return day ? formatDateOnly(day, "MMM d, yyyy") : "—";
+                    })()}
                   </td>
                 </tr>
               ))}

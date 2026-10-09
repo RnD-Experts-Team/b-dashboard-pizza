@@ -9,7 +9,7 @@ import { AnalyticsBarChart } from "@/components/maintenance-tickets/analytics/an
 import { KpiTile } from "@/components/maintenance-tickets/analytics/analytics-kpis";
 import { Empty, Pager, ReportTable, SectionError, TD, TH, usePaged } from "@/components/maintenance-tickets/analytics/analytics-sections";
 import { LocalTimestamp } from "@/components/maintenance-tickets/local-timestamp";
-import { hoursText, money, paidHours } from "./technicians-report";
+import { hoursText, lastWorkedDay, money, paidHours } from "./technicians-report";
 import type { TechnicianAnalytics, TechnicianPaidByKind } from "@/types/technician-analytics.types";
 
 const KINDS: { key: keyof TechnicianPaidByKind; label: string; hint: string }[] = [
@@ -42,7 +42,7 @@ export function TechnicianReport({
   rangeLabel: string;
 }) {
   const sheets = usePaged(data?.pay_sheets ?? []);
-  const visits = usePaged(data?.work_log ?? [], undefined, 8);
+  const work = usePaged(data?.work_log ?? [], undefined, 8);
   const byIssue = usePaged(data?.work_by_issue ?? []);
 
   if (error) return <div className="rounded-xl border bg-card"><SectionError message={error} /></div>;
@@ -57,7 +57,7 @@ export function TechnicianReport({
       <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-3 @5xl:grid-cols-6">
         <KpiTile kpi={{ label: "Paid", value: money(k.paid), icon: Banknote, tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", note: filtered ? `${rangeLabel} · those stores / issues` : `${rangeLabel} · ${k.pay_days} pay ${k.pay_days === 1 ? "day" : "days"}`, target: "paid-by-kind" }} />
         <KpiTile kpi={{ label: "Paid all time", value: money(k.paid_all_time), icon: Wallet, tint: "bg-teal-500/10 text-teal-600 dark:text-teal-400", note: "Every pay sheet so far" }} />
-        <KpiTile kpi={{ label: "Visits", value: k.visits, icon: Wrench, tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400", note: k.last_worked_at ? `Last ${formatDateOnly(k.last_worked_at.slice(0, 10), "MMM d")}` : rangeLabel, target: "visits" }} />
+        <KpiTile kpi={{ label: "Visits", value: k.visits, icon: Wrench, tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400", note: (() => { const day = lastWorkedDay(k.last_worked_at, k.last_pay_date); return day ? `Last ${formatDateOnly(day, "MMM d")}` : rangeLabel; })(), target: "work" }} />
         <KpiTile kpi={{ label: "Hours", value: hoursText(paidHours(k.hours)), icon: Clock, tint: "bg-purple-500/10 text-purple-600 dark:text-purple-400", note: `+ ${hoursText(k.hours.break)} break, unpaid` }} />
         <KpiTile kpi={{ label: "Issues", value: k.issues_worked, icon: Layers, tint: "bg-blue-500/10 text-blue-600 dark:text-blue-400", note: `Worked · ${k.issues_assigned} assigned`, target: "work-by-issue" }} />
         <KpiTile kpi={{ label: "Stores", value: k.stores_served, icon: StoreIcon, tint: "bg-red-500/10 text-red-600 dark:text-red-400", note: k.parts_bought > 0 ? `Bought ${k.parts_bought} parts · ${money(k.parts_bought_amount)}` : "Worked at", target: "work-by-store" }} />
@@ -174,7 +174,7 @@ export function TechnicianReport({
       </ReportTable>
 
       <div className="grid gap-6 @4xl:grid-cols-2">
-        <ReportTable id="work-by-issue" title="Work by issue" count={data.work_by_issue.length} unit="issues" description="A visit that covered several issues counts toward each.">
+        <ReportTable id="work-by-issue" title="Work by issue" count={data.work_by_issue.length} unit="issues" description="Work that covered several issues counts toward each.">
           {data.work_by_issue.length === 0 ? (
             <Empty>No visits in this range.</Empty>
           ) : (
@@ -202,7 +202,7 @@ export function TechnicianReport({
           <Pager {...byIssue} onPage={byIssue.setPage} />
         </ReportTable>
 
-        <ReportTable id="work-by-store" title="Work by store" count={data.work_by_store.length} unit="stores" description="Where their visits were.">
+        <ReportTable id="work-by-store" title="Work by store" count={data.work_by_store.length} unit="stores" description="Where they worked.">
           {data.work_by_store.length === 0 ? (
             <Empty>No visits in this range.</Empty>
           ) : (
@@ -230,14 +230,20 @@ export function TechnicianReport({
         </ReportTable>
       </div>
 
-      <ReportTable id="visits" title={`Visits · ${rangeLabel}`} count={data.work_log.length} unit="visits" description="Newest first. Hours are work, travel and parts runs; breaks are not paid.">
+      <ReportTable
+        id="work"
+        title={`Work · ${rangeLabel}`}
+        count={data.work_log.length}
+        unit="visits"
+        description="Newest first: each day's work at a store from the pay sheets, and visits clocked in but not paid yet. Hours are work, travel and parts runs; breaks are not paid."
+      >
         {data.work_log.length === 0 ? (
-          <Empty>No visits in this range.</Empty>
+          <Empty>No work in this range.</Empty>
         ) : (
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40">
               <tr>
-                <th scope="col" className={TH}>Clocked in</th>
+                <th scope="col" className={TH}>When</th>
                 <th scope="col" className={TH}>Store</th>
                 <th scope="col" className={TH}>Tickets</th>
                 <th scope="col" className={cn(TH, "text-end")}>Hours</th>
@@ -245,10 +251,16 @@ export function TechnicianReport({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {visits.rows.map((v) => (
-                <tr key={v.attendance_entry_id} className="transition-colors hover:bg-muted/30">
+              {work.rows.map((v) => (
+                <tr key={`${v.source}:${v.attendance_entry_id ?? ""}:${v.daily_pay_entry_id ?? ""}:${v.stores.join(",")}`} className="transition-colors hover:bg-muted/30">
                   <td className={cn(TD, "whitespace-nowrap")}>
-                    <LocalTimestamp iso={v.start} pattern="MMM d · h:mm a" showZone={false} />
+                    {v.source === "visit" && v.start ? (
+                      <LocalTimestamp iso={v.start} pattern="MMM d · h:mm a" showZone={false} />
+                    ) : v.date ? (
+                      formatDateOnly(v.date, "EEE, MMM d")
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className={cn(TD, "whitespace-nowrap")}>{v.stores.join(", ") || "—"}</td>
                   <td className={TD}>
@@ -271,20 +283,27 @@ export function TechnicianReport({
                     {v.hours.break > 0 && <span className="block text-xs text-muted-foreground">+ {hoursText(v.hours.break)} break</span>}
                   </td>
                   <td className={TD}>
-                    <span className={cn(
-                      "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold",
-                      v.paid ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                    )}>
-                      {v.paid ? <CalendarCheck className="h-3 w-3" aria-hidden="true" /> : <Hourglass className="h-3 w-3" aria-hidden="true" />}
-                      {v.paid ? "On a pay sheet" : "Not paid yet"}
-                    </span>
+                    {v.paid && v.date ? (
+                      <Link
+                        href={`/${locale}/dashboard/daily-pay?technician_ids=${technicianId}&date=${v.date}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-400"
+                      >
+                        <CalendarCheck className="h-3 w-3" aria-hidden="true" />
+                        On a pay sheet
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                        <Hourglass className="h-3 w-3" aria-hidden="true" />
+                        Not paid yet
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-        <Pager {...visits} onPage={visits.setPage} />
+        <Pager {...work} onPage={work.setPage} />
       </ReportTable>
     </div>
   );

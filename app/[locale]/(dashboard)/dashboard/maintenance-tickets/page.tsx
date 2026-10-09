@@ -57,12 +57,24 @@ function MaintenanceTicketsPageInner() {
     path: "/stores/placeholder/tickets/placeholder/cancel",
   });
 
-  /** True when the current user may fetch all stores via GET /tickets */
+  /**
+   * True when the user may read every store's tickets: GET /tickets with no
+   * stores[] (the MOS head and super admins, per the pizzasys rule). Anyone
+   * else's "All stores" means every store in THEIR list, sent as stores[] --
+   * the server refuses them a read with no store.
+   */
   const canAccessAllStores = canAccessRoute({
     service: "Maintenance",
     method: "GET",
     path: "/tickets",
   });
+  const seesEveryStore = canAccessAllStores;
+
+  /** The stores[] a multi-store selection is sent with; null = unrestricted. */
+  function scopeFor(selection: string[]): string[] | null {
+    const isEveryStoreSelected = activeStores.length > 0 && selection.length === activeStores.length;
+    return seesEveryStore && isEveryStoreSelected ? null : selection;
+  }
 
   // ─── Available stores ─────────────────────────────────────────────────────
   const activeStores = useMemo(
@@ -76,7 +88,7 @@ function MaintenanceTicketsPageInner() {
    * string[] → one or more specific store ids the user has applied.
    *            length === 1 uses the per-store endpoint; length > 1 (or all
    *            of them) uses the global endpoint scoped via stores[] — unless
-   *            the user has blanket GET /tickets access, in which case
+   *            the user may read every store (the MOS head), in which case
    *            selecting every store is sent unrestricted.
    */
   const pageStoreSelection = useMaintenanceTicketsStore((s) => s.storeSelection);
@@ -95,7 +107,12 @@ function MaintenanceTicketsPageInner() {
       kept != null &&
       kept.length > 0 &&
       kept.every((id) => activeStores.some((s) => (s.storeId ?? s.id) === id));
-    if (keptIsValid) return;
+    if (keptIsValid) {
+      // The scope is re-derived for whoever is signed in now, never trusted
+      // from the store: it may have been set for an earlier session.
+      if (kept.length > 1) setScopedStoreIds(scopeFor(kept));
+      return;
+    }
 
     // Default to whichever store is selected in the sidebar, not "All Stores" —
     // only fall back to all-stores / first-active-store when the sidebar has no
@@ -110,8 +127,9 @@ function MaintenanceTicketsPageInner() {
       setScopedStoreIds(null);
       setMode("store");
     } else if (canAccessAllStores) {
-      setPageStoreSelection(activeStores.map((s) => s.storeId ?? s.id));
-      setScopedStoreIds(null);
+      const all = activeStores.map((s) => s.storeId ?? s.id);
+      setPageStoreSelection(all);
+      setScopedStoreIds(scopeFor(all));
       setMode("global");
     } else {
       const first = activeStores[0];
@@ -219,14 +237,12 @@ function MaintenanceTicketsPageInner() {
     // Changing store starts the filters clean (see the hook), so the URL must
     // not keep describing the old ones.
     router.replace(pathname, { scroll: false });
-    const isEveryStoreSelected =
-      activeStores.length > 0 && selection.length === activeStores.length;
     if (selection.length === 1) {
       setScopedStoreIds(null);
       setMode("store");
     } else {
-      // Unrestricted for users with blanket access when every store is picked; otherwise scope via stores[].
-      setScopedStoreIds(canAccessAllStores && isEveryStoreSelected ? null : selection);
+      // Unrestricted only for someone who may read every store; otherwise scoped via stores[].
+      setScopedStoreIds(scopeFor(selection));
       setMode("global");
     }
   }

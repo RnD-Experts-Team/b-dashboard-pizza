@@ -11,6 +11,7 @@ import {
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
 import { useIssueBasketStore } from "@/lib/store/issue-basket.store";
+import { useOwnTicketStores } from "@/lib/hooks/use-own-ticket-stores";
 import { payeeOf, usePayBasketStore } from "@/lib/store/pay-basket.store";
 import { StatusChip } from "./ticket-chips";
 import type { IssueStatus, Ticket, TicketsFilters } from "@/types/maintenance-tickets.types";
@@ -63,6 +64,10 @@ export function TicketRail({ locale, activeId, storeId, canAct = true, className
 
   const abortRef = useRef<AbortController | null>(null);
 
+  // With no store (an "Other" location ticket) the rail lists across stores:
+  // the viewer's own stores, as the tickets page does.
+  const ownStores = useOwnTicketStores();
+
   const load = useCallback(
     async (filters: TicketsFilters) => {
       abortRef.current?.abort();
@@ -73,7 +78,7 @@ export function TicketRail({ locale, activeId, storeId, canAct = true, className
       try {
         const res = storeId
           ? await maintenanceTicketsService.getTickets(storeId, filters, ctrl.signal)
-          : await maintenanceTicketsService.getGlobalTickets(filters, ctrl.signal);
+          : await maintenanceTicketsService.getGlobalTickets(ownStores ? { ...filters, stores: ownStores } : filters, ctrl.signal);
         setTickets(res.data);
         setError(null);
       } catch (err) {
@@ -83,7 +88,7 @@ export function TicketRail({ locale, activeId, storeId, canAct = true, className
         setIsLoading(false);
       }
     },
-    [storeId]
+    [storeId, ownStores]
   );
 
   // Debounced, because this is a second list request and every request here
