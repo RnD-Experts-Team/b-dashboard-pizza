@@ -18,6 +18,7 @@ import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
+import { useOwnTicketStores } from "@/lib/hooks/use-own-ticket-stores";
 import type { Ticket, TicketIssue } from "@/types/maintenance-tickets.types";
 
 interface TicketIssuePickerDialogProps {
@@ -81,6 +82,8 @@ export function TicketIssuePickerDialog({
 
   // Fetch tickets when the dialog opens. The technician_id filter narrows the
   // list to tickets that have at least one issue assigned to this technician.
+  const ownStores = useOwnTicketStores();
+
   useEffect(() => {
     if (!open) return;
 
@@ -101,7 +104,9 @@ export function TicketIssuePickerDialog({
         {
           per_page: 1000,
           technician_ids: [technicianId],
-          ...(storeNumber ? { stores: [storeNumber] } : {}),
+          // No store number: across the viewer's own stores, unless they may read
+          // every store (useOwnTicketStores).
+          ...(storeNumber ? { stores: [storeNumber] } : ownStores ? { stores: ownStores } : {}),
         },
         ctrl.signal
       )
@@ -122,7 +127,7 @@ export function TicketIssuePickerDialog({
 
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, ownStores]);
 
   // Fetch issues when a ticket is selected.
   useEffect(() => {

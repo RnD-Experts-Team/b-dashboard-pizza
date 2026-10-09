@@ -18,6 +18,7 @@ import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
+import { useOwnTicketStores } from "@/lib/hooks/use-own-ticket-stores";
 import type { Ticket, TicketIssue } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -91,6 +92,8 @@ export function IssuePickerDialog({
     () => new Set(selectedIssueIds)
   );
 
+  const ownStores = useOwnTicketStores();
+
   useEffect(() => {
     if (!open) return;
 
@@ -107,7 +110,9 @@ export function IssuePickerDialog({
       .getGlobalTickets(
         {
           per_page: 1000,
-          ...(storeNumber ? { stores: [storeNumber] } : {}),
+          // No store number: across the viewer's own stores, unless they may read
+          // every store (useOwnTicketStores).
+          ...(storeNumber ? { stores: [storeNumber] } : ownStores ? { stores: ownStores } : {}),
           ...(technicianId ? { technician_ids: [technicianId] } : {}),
         },
         ctrl.signal
@@ -132,7 +137,7 @@ export function IssuePickerDialog({
     // and re-running on every parent re-render would discard the user's picks.
     // technicianId IS included: it is part of the server query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, technicianId]);
+  }, [open, technicianId, ownStores]);
 
   useEffect(() => {
     if (!selectedTicket) return;

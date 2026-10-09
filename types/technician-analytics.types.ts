@@ -42,7 +42,10 @@ export interface TechnicianOverviewRow {
   hours: TechnicianHours;
   issues_worked: number;
   stores_served: number;
+  /** The latest clocked visit not paid yet (an instant). */
   last_worked_at: string | null;
+  /** The latest pay sheet with work on it ("YYYY-MM-DD"). */
+  last_pay_date: string | null;
 }
 
 export interface TechniciansOverview {
@@ -95,9 +98,18 @@ export interface TechnicianWorkByIssue {
   hours: number;
 }
 
+/**
+ * One piece of work: a day's work at a store from a pay sheet, or a visit
+ * clocked in and not on a pay sheet yet.
+ */
 export interface TechnicianWorkVisit {
-  attendance_entry_id: number;
-  start: string;
+  source: "pay_sheet" | "visit";
+  attendance_entry_id: number | null;
+  daily_pay_entry_id: number | null;
+  /** The pay sheet's day ("YYYY-MM-DD"); null for a visit. */
+  date: string | null;
+  /** A visit's clock-in; null for a pay-sheet day. */
+  start: string | null;
   end: string | null;
   stores: string[];
   tickets: { ticket_id: number; store_number: string | null; title: string }[];
@@ -121,6 +133,7 @@ export interface TechnicianAnalytics {
     parts_bought: number;
     parts_bought_amount: string;
     last_worked_at: string | null;
+    last_pay_date: string | null;
   };
   paid_by_store: TechnicianPaidByStore[];
   paid_by_kind: TechnicianPaidByKind;
