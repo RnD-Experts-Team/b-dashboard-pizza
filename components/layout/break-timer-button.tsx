@@ -112,7 +112,7 @@ export function BreakTimerButton() {
           )}
         </Tooltip>
 
-        <PopoverContent align="end" className="w-80 p-3">
+        <PopoverContent align="end" className="w-[26rem] max-w-[calc(100vw-1rem)] p-3">
           <BreakPopoverBody
             liveCountedMinutes={countedMinutes}
             runningSeconds={runningSeconds}

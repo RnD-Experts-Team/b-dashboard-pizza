@@ -62,6 +62,16 @@ export function useBreakErrorText() {
 
 /* ── Small shared pieces ─────────────────────────────────────────────── */
 
+/** A soft pulsing dot for "something is running". */
+export function PulseDot({ className }: { className?: string }) {
+  return (
+    <span aria-hidden className={cn("relative flex size-2 shrink-0", className)}>
+      <span className="absolute inline-flex size-full rounded-full bg-amber-500 opacity-60 motion-safe:animate-ping" />
+      <span className="relative inline-flex size-full rounded-full bg-amber-500" />
+    </span>
+  );
+}
+
 /** Counted vs excluded — read from the ENTRY's snapshot, never the type's group. */
 export function CountedBadge({ counted, className }: { counted: boolean; className?: string }) {
   const t = useTranslations("breaks.timer");
@@ -89,10 +99,11 @@ export function RunningBadge({ className }: { className?: string }) {
     <Badge
       data-slot="break-running-badge"
       className={cn(
-        "bg-amber-500/15 px-1.5 py-0 text-[10px] text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
+        "gap-1.5 bg-amber-500/15 px-1.5 py-0 text-[10px] text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
         className
       )}
     >
+      <PulseDot className="size-1.5" />
       {t("running")}
     </Badge>
   );
@@ -119,7 +130,6 @@ export function AllowanceBar({
   const scale = Math.max(allowanceMinutes, countedMinutes, 1);
   const fill = Math.min(100, (countedMinutes / scale) * 100);
   const allowanceAt = (allowanceMinutes / scale) * 100;
-  const warn = !over && countedMinutes >= allowanceMinutes * 0.8;
 
   return (
     <div
@@ -128,16 +138,13 @@ export function AllowanceBar({
       aria-valuemin={0}
       aria-valuemax={allowanceMinutes}
       aria-valuenow={countedMinutes}
-      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-muted", className)}
+      className={cn("relative h-1.5 w-full overflow-hidden rounded-full bg-muted", className)}
     >
+      {/* One accent: amber while within the allowance, red only once past it. */}
       <div
         className={cn(
           "absolute inset-y-0 start-0 rounded-full transition-[width] duration-500 motion-reduce:transition-none",
-          over
-            ? "bg-red-500 dark:bg-red-400"
-            : warn
-              ? "bg-amber-500 dark:bg-amber-400"
-              : "bg-emerald-500 dark:bg-emerald-400"
+          over ? "bg-red-500 dark:bg-red-400" : "bg-amber-500 dark:bg-amber-400"
         )}
         style={{ width: `${fill}%` }}
       />

@@ -21,6 +21,7 @@ import {
 import { MoneyField } from "./daily-pay-num-field";
 import { PayShapePicker } from "./pay-shape-picker";
 import { DailyPayNoteList } from "./daily-pay-note-list";
+import { ExistingAttachmentList } from "./existing-attachment-list";
 import { DailyPayLineFieldset } from "./daily-pay-line-fieldset";
 import { PayFieldset, PayFoldout } from "./daily-pay-fieldset";
 import { DailyPayWarningsPanel } from "./daily-pay-warnings-panel";
@@ -343,8 +344,13 @@ export function DailyPayPaymentCard({
         <PayFoldout
           label="Attachments and notes"
           icon={Paperclip}
-          count={payment.files.length + payment.notes.length}
+          count={payment.files.length + payment.notes.length + payment.existingAttachments.length}
         >
+        <ExistingAttachmentList
+          items={payment.existingAttachments}
+          onChange={(existingAttachments) => onPatch({ existingAttachments })}
+          disabled={disabled}
+        />
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Paperclip className="h-3.5 w-3.5" />

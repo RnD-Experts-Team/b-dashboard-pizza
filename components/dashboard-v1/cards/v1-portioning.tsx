@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { Scale } from "lucide-react";
 import { V1Card } from "../v1-card";
+import { SECTION_KEYS } from "@/lib/report-problem/pages";
 import { V1Empty } from "../v1-ui";
 import { fmt$2, fmtPct2, WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import type { Portioning } from "@/types/dashboard-report.types";
@@ -31,7 +32,7 @@ export function V1PortioningCard({
   if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data)
     return (
-      <V1Card title="Portioning" category="quality" period="W" span={span} className={className}>
+      <V1Card reportId="v1-portioning" ticketSection={SECTION_KEYS.inventoryMainDashboard} title="Portioning" category="quality" period="W" span={span} className={className}>
         <V1Empty>No data available for this period.</V1Empty>
       </V1Card>
     );
@@ -39,7 +40,7 @@ export function V1PortioningCard({
   const { theo_usage, variance_breakdown } = data;
 
   return (
-    <V1Card title="Portioning" category="quality" period="W" span={span} className={className}>
+    <V1Card reportId="v1-portioning" ticketSection={SECTION_KEYS.inventoryMainDashboard} title="Portioning" category="quality" period="W" span={span} className={className}>
       <div className="flex h-full flex-col gap-2">
         <div className="shrink-0 rounded-md bg-background/55 px-3 py-2">
           <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">

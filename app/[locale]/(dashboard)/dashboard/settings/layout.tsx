@@ -14,6 +14,7 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   const t = useTranslations("settings");
+  const tReport = useTranslations("reportProblem.regions");
   const pathname = usePathname();
   const params = useParams();
   const locale = params?.locale as string || "en";
@@ -44,7 +45,8 @@ export default function SettingsLayout({
       <Separator />
 
       <div className="flex flex-col space-y-8 lg:flex-row lg:space-y-0 lg:gap-12">
-        <aside className="lg:w-1/5">
+        {/* Too slim for the inspector's automatic section rule — named explicitly. */}
+        <aside className="lg:w-1/5" data-report-target="section" data-report-label={tReport("settingsMenu")}>
           <nav className="flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1 overflow-x-auto">
             {settingsTabs.map((tab) => {
               const isActive = pathname === tab.href || pathname.endsWith(tab.value);

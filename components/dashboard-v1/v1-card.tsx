@@ -5,6 +5,7 @@ import { Maximize2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { playSfx } from "@/lib/uisfx/play";
+import { reportAttrs } from "@/lib/report-problem/attributes";
 import { cn } from "@/lib/utils";
 import { CATEGORIES, PERIOD_LABEL, type CategoryKey, type Period } from "./category";
 
@@ -43,6 +44,16 @@ export interface V1CardProps {
   /** Override the default 280px card height, in pixels. */
   height?: number;
   className?: string;
+  /**
+   * "Report a problem": a stable id for engineers. Set it on cards whose
+   * title changes with a tab, so a report still says which card it was.
+   */
+  reportId?: string;
+  /**
+   * "Report a problem": route reports from this card to a different ticket
+   * area than the page's own (an `area.page` key from lib/report-problem/pages.ts).
+   */
+  ticketSection?: string;
   children: ReactNode;
 }
 
@@ -58,6 +69,8 @@ export function V1Card({
   bodyClassName,
   height,
   className,
+  reportId,
+  ticketSection,
   children,
 }: V1CardProps) {
   const cat = CATEGORIES[category];
@@ -72,6 +85,7 @@ export function V1Card({
 
   return (
     <Card
+      {...reportAttrs({ target: "card", label: title, id: reportId, section: ticketSection })}
       onClick={handleExpand}
       style={height ? { height } : undefined}
       className={cn(

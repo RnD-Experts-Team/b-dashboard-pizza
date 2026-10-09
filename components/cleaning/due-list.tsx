@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Camera, Check, History, Loader2, Undo2, X } from "lucide-react";
@@ -57,7 +57,12 @@ interface Props {
    *  editable, or the grid hasn't loaded yet — `lockInfo` below covers that
    *  gap reactively. */
   lockedTaskReasons?: Record<number, ChartLockReason>;
+  /** Deep-linked task — its row scrolls into view and flashes once. */
+  highlightTaskId?: number | null;
 }
+
+/** How long a deep-linked row stays highlighted. */
+const HIGHLIGHT_MS = 2400;
 
 export function DueList({
   storeId,
@@ -70,8 +75,24 @@ export function DueList({
   onEvaluate,
   evaluatedVerdicts,
   lockedTaskReasons,
+  highlightTaskId = null,
 }: Props) {
   const t = useTranslations("cleaningChart");
+  const [flashTaskId, setFlashTaskId] = useState<number | null>(null);
+  const flashedOnce = useRef(false);
+  const hasHighlightRow = highlightTaskId != null && items.some((i) => i.taskId === highlightTaskId);
+  useEffect(() => {
+    if (flashedOnce.current || !hasHighlightRow || highlightTaskId == null) return;
+    flashedOnce.current = true;
+    setFlashTaskId(highlightTaskId);
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-task-id="${highlightTaskId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const timer = setTimeout(() => setFlashTaskId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [hasHighlightRow, highlightTaskId]);
   const [completeItem, setCompleteItem] = useState<DueItem | null>(null);
   const [historyItem, setHistoryItem] = useState<DueItem | null>(null);
   const [undoTarget, setUndoTarget] = useState<DueItem | null>(null);
@@ -233,7 +254,14 @@ export function DueList({
                 const lockReason = lockedTaskReasons?.[item.taskId] ?? lockInfo[item.taskId]?.reason;
                 const lock = lockReason ? { reason: lockReason } : undefined;
                 return (
-                <TableRow key={item.taskId}>
+                <TableRow
+                  key={item.taskId}
+                  data-task-id={item.taskId}
+                  className={cn(
+                    "transition-colors duration-700",
+                    flashTaskId === item.taskId && "bg-primary/10 hover:bg-primary/10"
+                  )}
+                >
                   <TableCell className="max-w-[280px]">
                     <div className="flex items-center gap-2 font-medium">
                       <span className="truncate">{item.label}</span>

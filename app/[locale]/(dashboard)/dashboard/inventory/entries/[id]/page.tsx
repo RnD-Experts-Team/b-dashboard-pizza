@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EntryDetailItems } from "@/components/inventory/entry-detail-items";
+import { EntryPlanComparison } from "@/components/dough-sauce/entry-plan-comparison";
 import { useEntryDetail } from "@/lib/hooks/use-inventory-entries";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -160,6 +161,12 @@ export default function EntryDetailPage() {
               />
             </div>
           </Card>
+
+          <EntryPlanComparison
+            storeKey={entry.store?.store_number}
+            date={entry.date}
+            items={entry.items}
+          />
 
           <EntryDetailItems items={entry.items} canViewHistory={hasHistoryAccess} />
         </>

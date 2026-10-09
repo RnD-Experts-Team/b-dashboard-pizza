@@ -27,7 +27,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { cn } from "@/lib/utils";
 import { EMPLOYEE_COLORS, GRID_END_HOUR, GRID_START_HOUR, calcHours, formatTime, getTimeLabels, shiftToPosition } from "@/lib/scheduling/constants";
 import type {

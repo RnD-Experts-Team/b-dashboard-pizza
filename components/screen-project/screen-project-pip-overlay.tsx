@@ -5,7 +5,7 @@ import { motion, useMotionValue } from "framer-motion";
 import { X, Volume2, VolumeX, ExternalLink, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { VideoQuality } from "livekit-client";
 import { useRouter } from "next/navigation";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
 import { useSelectedStoreStore } from "@/lib/store";
 import { ScreenTile } from "@/components/screen-project/screen-tile";
@@ -38,6 +38,7 @@ export function ScreenProjectPiPOverlay() {
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
   const router = useRouter();
   const locale = useLocale();
+  const tReport = useTranslations("reportProblem.regions");
 
   // Framer-motion drag offset (relative to default top-right anchor)
   const x = useMotionValue(position.x);
@@ -70,6 +71,8 @@ export function ScreenProjectPiPOverlay() {
 
   return (
     <motion.div
+      data-report-target="overlay"
+      data-report-label={`${tReport("screenPreview")} · ${activeStation.name}`}
       drag
       dragMomentum={false}
       dragElastic={0.05}

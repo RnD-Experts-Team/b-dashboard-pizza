@@ -47,6 +47,7 @@ export function V1PortalGaugeCard({
 
   return (
       <V1Card
+        reportId="v1-portal"
         title={view === "wtd" ? (showingAvg ? "Portal (WTD Avg)" : "Portal (WTD)") : "Portal Performance"}
         category="operations"
         period="D·WTD"

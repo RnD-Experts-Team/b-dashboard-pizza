@@ -37,7 +37,6 @@ import {
   Megaphone,
   Monitor,
   Target,
-  LifeBuoy,
   Ticket,
   Wallet,
   Warehouse,
@@ -48,8 +47,11 @@ import {
   LogOut,
   UserSearch,
   Sparkles,
+  CookingPot,
   Coffee,
   Table2,
+  MessageSquareWarning,
+  LifeBuoy,
 } from "lucide-react";
 import {
   Dialog,
@@ -68,6 +70,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { UserMenu } from "./user-menu";
+import { ReportProblemSidebarButton } from "@/components/report-problem";
 import { ImpersonateDialog } from "./impersonate-dialog";
 import { useUIStore } from "@/lib/store/ui.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
@@ -75,6 +78,7 @@ import { useFeature, Feature } from "@/lib/config";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useAuth } from "@/lib/auth/use-auth";
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import { DS_ROUTES } from "@/lib/dough-sauce/access";
 import type { Store, StoreMetadata } from "@/types/store.types";
 import type { LucideIcon } from "lucide-react";
 import { useNotificationStore } from "@/lib/store/notification.store";
@@ -368,6 +372,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   /* ---- Collapsible groups ---- */
   // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
   // entry is marked `exact` (that href prefixes every other dashboard route).
+  // ORDER MATTERS: signing in lands on the first of these the user can open
+  // (lib/nav/landing.ts, which reads the bottom-nav mirror of this list).
   const dashboardsGroup: NavGroup = {
     label: "Dashboards",
     icon: LayoutDashboard,
@@ -377,8 +383,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: "Labor Dashboard",
         href: `/${locale}/dashboard/labor`,
         icon: Users,
-        // No auth rule defined upstream yet — visible for any store the user
-        // can access, same as the Business Reports item.
+        requirements: [
+          { service: "Hiring", method: "GET", path: "/v1/stores/*/labor/*", storeId: effectiveStoreId },
+        ],
+      },
+      {
+        title: t("maintenanceAnalytics"),
+        href: `/${locale}/dashboard/maintenance-analytics`,
+        icon: BarChart3,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId: effectiveStoreId }
+        ],
       },
     ],
   };
@@ -401,11 +416,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         requiredPermission: "manage user role assignments",
 
       },
-      // {
-      //   title: t("scheduling"),
-      //   href: `/${locale}/dashboard/scheduling`,
-      //   icon: CalendarDays,
-      // },
+      {
+        title: t("scheduling"),
+        href: `/${locale}/dashboard/scheduling`,
+        icon: CalendarDays,
+        requirements: [
+          { service: "Operations", method: "GET", path: "/v1/stores/*/schedule/week", storeId: effectiveStoreId },
+        ],
+      },
     ],
   };
 
@@ -479,7 +497,25 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("cleaningChart"),
         href: `/${locale}/dashboard/cleaning-chart`,
         icon: Sparkles,
-        // Role/permission gating deferred — visible to all for now.
+        // Cleaning Specialist head via the unscoped tasks rule, or anyone holding
+        // `cleaning specialist` at one of their stores (Store Manager, Cleaning
+        // Specialist workers) via the per-store due rule.
+        requirements: [
+          { service: "QA", method: "GET", path: "/cleaning/tasks" },
+          ...(overviewStores ?? []).map((s) => ({ service: "QA", method: "GET", path: "/cleaning/stores/*/due-range", storeId: s.id })),
+        ],
+      },
+      {
+        title: t("doughSauce"),
+        href: `/${locale}/dashboard/dough-sauce`,
+        icon: CookingPot,
+        // Specialist (`dough and sauce`) via the unscoped plans rule, or a Store Manager
+        // (`reports view`) via the per-store plan rule for any store they have.
+        // See lib/dough-sauce/access.ts / docs/DOUGH-SAUCE-ACCESS.md.
+        requirements: [
+          DS_ROUTES.plans(),
+          ...(overviewStores ?? []).map((s) => DS_ROUTES.planGet(s.id)),
+        ],
       },
     ],
   };
@@ -654,6 +690,22 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         ],
       },
       {
+        title: t("maintenanceTroubleshooting"),
+        href: `/${locale}/dashboard/maintenance-troubleshooting`,
+        icon: LifeBuoy,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
+        ],
+      },
+      {
+        title: t("maintenanceTechnicians"),
+        href: `/${locale}/dashboard/maintenance-technicians`,
+        icon: HardHat,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/technicians" }
+        ],
+      },
+      {
         title: "Daily Pay",
         href: `/${locale}/dashboard/daily-pay`,
         icon: Wallet,
@@ -681,20 +733,32 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       },
     ],
   };
-  // Toolbox (ToolboxPizza). Workbooks is SUPER-ADMIN ONLY for now — gated
-  // here by role, not by an auth rule, because the pizzasys rules for the
-  // toolbox are not seeded yet. Once they are, swap the role gate for a
-  // requirement such as { service: "Toolbox", method: "GET", path: "/workbook-options" }.
-  // Breaks is self-service, so it is shown to everyone.
+  // Toolbox (ToolboxPizza). Breaks is self-service, so it has no gate. Workbooks
+  // and Tickets are gated on the one list rule each page opens with; the
+  // upstream still filters every list to what the caller may see, and each
+  // item's own viewer.can decides what they can do with it.
+  // NO storeId on purpose — neither path carries a store, so the server checks
+  // these with no store context and the probe must match. Same as storage above.
   const workbooksItem: NavItem = {
     title: t("workbooks"),
     href: `/${locale}/dashboard/workbooks`,
     icon: Table2,
+    requirements: [
+      { service: "Toolbox", method: "GET", path: "/v1/workbook-folders" },
+    ],
+  };
+  const ticketsItem: NavItem = {
+    title: t("tickets"),
+    href: `/${locale}/dashboard/tickets`,
+    icon: MessageSquareWarning,
+    requirements: [
+      { service: "Toolbox", method: "GET", path: "/v1/tickets" },
+    ],
   };
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [...(isSuperAdmin() ? [workbooksItem] : []), breaksItem],
+    items: [workbooksItem, breaksItem, ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
@@ -1039,7 +1103,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             />
           )}
 
-          {/* 7c. Toolbox (Workbooks super-admin only for now) */}
+          {/* 7c. Toolbox */}
           {visibleToolboxGroup && (
             <SidebarNavGroup
               group={visibleToolboxGroup}
@@ -1076,24 +1140,10 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
       <Separator />
 
-      {/* Support Button */}
-      <div className={cn("px-2 sm:px-3 py-2", collapsed && "flex justify-center")}>
-        <a
-          href="https://tasks.rdexperts.tech/support-ticket"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors w-full",
-            "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
-          {!collapsed && <span className="truncate">Support</span>}
-        </a>
-      </div>
-
-      <Separator />
+      {/* Report a problem — replaced the external Support link. Tablets and
+          up; brings its own trailing separator so the phone drawer (where
+          it's hidden) doesn't show two in a row. */}
+      <ReportProblemSidebarButton collapsed={collapsed} onBeforeStart={onNavigate} />
 
       {/* Impersonate User — super admin only, or while impersonating (so
           the "exit" control stays available even after roles/menus have

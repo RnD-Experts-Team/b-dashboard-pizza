@@ -456,6 +456,7 @@ export function V1HourlyChannelsCard({
 
   return (
     <V1Card
+      reportId="v1-hourly-channels"
       title={isChannelTab ? "Sales by Channel" : "Hourly Sales by Channel"}
       category="sales"
       period={hasWeekly ? "D·WTD" : "D"}

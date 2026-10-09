@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound, Settings2, Mic, Video as VideoIcon } from "lucide-react";
+import { Monitor, ArrowLeft, AlertCircle, Loader2, KeyRound, Settings2, Mic, Video as VideoIcon, Eye, EyeOff } from "lucide-react";
 import { VideoQuality, DisconnectReason } from "livekit-client";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useNetworkStatus } from "@/lib/hooks/use-network-status";
 import { NetworkBadge } from "./network-badge";
 import { ScreenTile } from "./screen-tile";
+import { MicTestPanel } from "./drive-thru/mic/mic-test-panel";
 import type { Station, StationTokenResponse } from "@/types/screen-project.types";
 import type { StationMedia } from "@/types/screen-project-media.types";
 
@@ -39,6 +40,9 @@ interface StreamingState {
 interface PublicScreenViewProps {
   storeId: string;
 }
+
+/** Per-device preference: the employee hid their own camera preview. */
+const SELF_VIEW_HIDDEN_KEY = "station-self-view-hidden";
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 
@@ -61,6 +65,14 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
   /** Bumped to force a fresh <ScreenTile> mount (fresh LiveKitRoom, fresh
    * connection) with whatever token/serverUrl are currently in `streaming`. */
   const [connectionEpoch, setConnectionEpoch] = useState(0);
+  /** Kept in localStorage so an unattended kiosk that reloads keeps the choice. */
+  const [selfViewHidden, setSelfViewHidden] = useState(() => {
+    try {
+      return localStorage.getItem(SELF_VIEW_HIDDEN_KEY) === "1";
+    } catch {
+      return false; // server render, or storage blocked
+    }
+  });
   const reconnectingRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -244,6 +256,16 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
     [],
   );
 
+  function handleToggleSelfView() {
+    const next = !selfViewHidden;
+    setSelfViewHidden(next);
+    try {
+      localStorage.setItem(SELF_VIEW_HIDDEN_KEY, next ? "1" : "0");
+    } catch {
+      // storage blocked — the toggle still works for this session
+    }
+  }
+
   function handleChangeStation() {
     passwordRef.current = "";
     reconnectingRef.current = false;
@@ -425,10 +447,13 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
             initialMedia={streaming.media}
             onRetry={handleChangeStation}
             onActiveDeviceChange={handleActiveDeviceChange}
-            showSelfView={streaming.station.type !== "drive_through"}
+            showSelfView={streaming.station.type !== "drive_through" && !selfViewHidden}
+            driveThruMic={streaming.station.type === "drive_through"}
             onUnrecoverableDisconnect={handleStationDisconnected}
             className="h-full w-full"
           />
+          {/* TEST ONLY — shown while the manager's "Show test panel" switch is on */}
+          {streaming.station.type === "drive_through" && <MicTestPanel />}
         </div>
 
         {/* Bottom bar — station name + device settings + change station */}
@@ -449,6 +474,20 @@ export function PublicScreenView({ storeId }: PublicScreenViewProps) {
           <div className="flex items-center gap-2 shrink-0">
             {/* Network status badge */}
             <NetworkBadge status={networkStatus} />
+
+            {/* Show / hide the employee's own camera preview (drive-thru has none) */}
+            {streaming.station.type !== "drive_through" && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleToggleSelfView}
+                aria-label={selfViewHidden ? "Show self view" : "Hide self view"}
+                title={selfViewHidden ? "Show self view" : "Hide self view"}
+              >
+                {selfViewHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </Button>
+            )}
 
             {/* Device settings popover */}
             <Popover open={settingsOpen} onOpenChange={setSettingsOpen}>

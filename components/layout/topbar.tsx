@@ -12,6 +12,7 @@ import { ThemeToggleAnimated as ThemeToggle } from "@/components/shared/ThemeTog
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { DriveThruButton } from "@/components/screen-project/drive-thru/drive-thru-button";
 import { TopbarToolsCluster } from "./topbar-tools-cluster";
+import { ReportProblemTopbarButton } from "@/components/report-problem";
 import { LuminaEmbed } from "@/components/shared/lumina-embed";
 import { Breadcrumbs } from "./breadcrumbs";
 import { SoundToggle } from "@/components/uisfx/sound-toggle";
@@ -103,6 +104,7 @@ export function Topbar({ onMenuClick, showLogo, alwaysShowMenu }: TopbarProps) {
         {/* <LuminaEmbed /> */}
         <TopbarToolsCluster />
         <DriveThruButton />
+        <ReportProblemTopbarButton />
         <NotificationBell />
       </div>
 

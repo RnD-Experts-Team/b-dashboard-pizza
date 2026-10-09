@@ -106,7 +106,10 @@ export function StoreMultiSelect({
             All Stores
           </label>
         </div>
-        <div className="max-h-64 overflow-y-auto p-2">
+        {/* Inside a dialog (a technician's coverage), the dialog's scroll lock
+            swallows mouse-wheel events on this list, because the popover is
+            rendered outside the dialog: keep them here so the wheel scrolls. */}
+        <div className="max-h-64 overflow-y-auto overscroll-contain p-2" onWheel={(e) => e.stopPropagation()}>
           {options.length === 0 && (
             <p className="px-2 py-1.5 text-sm text-muted-foreground">
               No stores available

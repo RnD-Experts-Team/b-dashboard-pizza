@@ -8,6 +8,7 @@ import {
   UserCog,
   ShieldCheck,
   Sparkles,
+  CookingPot,
   ClipboardCheck,
   Lock,
   GitBranch,
@@ -28,9 +29,16 @@ import {
   Package,
   Landmark,
   Coffee,
+  MessageSquareWarning,
+  BarChart3,
+  LifeBuoy,
+  CalendarDays,
+  Table2,
+  HardHat,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { CanAccessParams } from "@/lib/auth/can-access";
+import { DS_ROUTES } from "@/lib/dough-sauce/access";
 
 /**
  * Mirrors components/layout/sidebar.tsx's nav item metadata/order 1:1 — every
@@ -98,6 +106,19 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     href: (locale) => `/${locale}/dashboard/labor`,
     icon: Users,
     titleKey: "laborDashboard",
+    requirements: (storeId) => [
+      { service: "Hiring", method: "GET", path: "/v1/stores/*/labor/*", storeId },
+    ],
+    groupKey: "dashboards",
+  },
+  {
+    id: "maintenanceAnalytics",
+    href: (locale) => `/${locale}/dashboard/maintenance-analytics`,
+    icon: BarChart3,
+    titleKey: "maintenanceAnalytics",
+    requirements: (storeId) => [
+      { service: "Maintenance", method: "GET", path: "/maintenance-analytics/summary", storeId },
+    ],
     groupKey: "dashboards",
   },
 
@@ -135,6 +156,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     requiredPermission: "manage user role assignments",
     groupKey: "storeManagement",
   },
+  {
+    id: "scheduling",
+    href: (locale) => `/${locale}/dashboard/scheduling`,
+    icon: CalendarDays,
+    titleKey: "scheduling",
+    requirements: (storeId) => [
+      { service: "Operations", method: "GET", path: "/v1/stores/*/schedule/week", storeId },
+    ],
+    groupKey: "storeManagement",
+  },
 
   // User Management
   {
@@ -169,6 +200,24 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: Sparkles,
     titleKey: "cleaningChart",
     groupKey: "qaManagement",
+    // Mirrors sidebar.tsx: Cleaning Specialist head (unscoped tasks rule) or
+    // `cleaning specialist` at the selected store (per-store due rule).
+    requirements: (storeId) => [
+      { service: "QA", method: "GET", path: "/cleaning/tasks" },
+      { service: "QA", method: "GET", path: "/cleaning/stores/*/due-range", storeId },
+    ],
+  },
+  {
+    id: "doughSauce",
+    href: (locale) => `/${locale}/dashboard/dough-sauce`,
+    icon: CookingPot,
+    titleKey: "doughSauce",
+    groupKey: "qaManagement",
+    // Specialist (unscoped plans rule) or a Store Manager (per-store plan rule).
+    requirements: (storeId) => [
+      DS_ROUTES.plans(),
+      ...(storeId ? [DS_ROUTES.planGet(storeId)] : []),
+    ],
   },
 
   // Data Management
@@ -232,6 +281,26 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "maintenanceTickets",
     requirements: (storeId) => [
       { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenanceTroubleshooting",
+    href: (locale) => `/${locale}/dashboard/maintenance-troubleshooting`,
+    icon: LifeBuoy,
+    titleKey: "maintenanceTroubleshooting",
+    requirements: (storeId) => [
+      { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId },
+    ],
+    groupKey: "maintenance",
+  },
+  {
+    id: "maintenanceTechnicians",
+    href: (locale) => `/${locale}/dashboard/maintenance-technicians`,
+    icon: HardHat,
+    titleKey: "maintenanceTechnicians",
+    requirements: () => [
+      { service: "Maintenance", method: "GET", path: "/technicians" },
     ],
     groupKey: "maintenance",
   },
@@ -335,10 +404,31 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
 
   // Toolbox
   {
+    id: "workbooks",
+    href: (locale) => `/${locale}/dashboard/workbooks`,
+    icon: Table2,
+    titleKey: "workbooks",
+    // Zero-arg: neither Toolbox path carries a store, so none is threaded through.
+    requirements: () => [
+      { service: "Toolbox", method: "GET", path: "/v1/workbook-folders" },
+    ],
+    groupKey: "toolbox",
+  },
+  {
     id: "breaks",
     href: (locale) => `/${locale}/dashboard/break-logger`,
     icon: Coffee,
     titleKey: "breaks",
+    groupKey: "toolbox",
+  },
+  {
+    id: "tickets",
+    href: (locale) => `/${locale}/dashboard/tickets`,
+    icon: MessageSquareWarning,
+    titleKey: "tickets",
+    requirements: () => [
+      { service: "Toolbox", method: "GET", path: "/v1/tickets" },
+    ],
     groupKey: "toolbox",
   },
 

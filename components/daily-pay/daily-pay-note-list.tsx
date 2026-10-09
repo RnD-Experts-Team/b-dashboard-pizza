@@ -1,25 +1,23 @@
 "use client";
 
+import { useRef } from "react";
 import { Plus, Receipt, StickyNote, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AttachmentGallery } from "@/components/maintenance-tickets/attachment-gallery";
 import { emptyNote, type NoteForm } from "@/lib/daily-pay/entry-form-state";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Repeatable note editor, used at both payment and line level               */
 /*                                                                            */
-/*  OPEN QUESTION WITH THE BACKEND — the /edit endpoint replaces the whole    */
-/*  entry and accepts only NEW notes, with no way to reference existing ones. */
-/*  So a prefilled note can only survive by being re-sent by body, which      */
-/*  duplicates it under the editing user's name and loses its attachments.    */
-/*                                                                            */
-/*  Rather than pick silently, prefilled notes are shown read-only with an    */
-/*  explicit keep/remove checkbox and a warning about the attachments. Once    */
-/*  /edit accepts existing note ids, this whole block collapses to a list.    */
+/*  Existing notes (edit mode) are shown read-only, with their files, and a    */
+/*  Keep checkbox. A kept note goes back to the server BY ID, so it survives   */
+/*  the save as the same note -- same author, same date, files still on it.   */
+/*  (It used to be re-sent by body, which duplicated it under the editor's    */
+/*  name and lost its attachments.) New notes are typed here as before.       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 const LEGACY_INVOICES_TYPE = "legacy_invoices";
@@ -78,64 +76,25 @@ export function DailyPayNoteList({
                 Keep
               </label>
             </div>
-            <p className="whitespace-pre-wrap text-xs">{note.body}</p>
+            <p className={note.keep ? "whitespace-pre-wrap text-xs" : "whitespace-pre-wrap text-xs text-muted-foreground line-through"}>
+              {note.body}
+            </p>
+            {note.attachments.length > 0 && <AttachmentGallery attachments={note.attachments} className="mt-1" />}
             {!note.keep && (
               <p className="text-[11px] text-destructive">
-                This note will be removed from the entry when you save.
+                This note{note.attachments.length > 0 ? " and its files" : ""} will be removed from the entry when you save.
               </p>
             )}
           </div>
         ) : (
-          /* ── New note ──────────────────────────────────────────────────── */
-          <div key={`new-${i}`} className="rounded-md border bg-muted/30 p-2.5 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <StickyNote className="h-3.5 w-3.5" />
-                New note
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 px-1.5 text-muted-foreground hover:text-destructive"
-                onClick={() => remove(i)}
-                disabled={disabled}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-            <Textarea
-              value={note.body}
-              onChange={(e) => patch(i, { body: e.target.value })}
-              placeholder="Note body…"
-              disabled={disabled}
-              className="min-h-16 resize-none text-sm"
-            />
-            <Input
-              type="file"
-              multiple
-              onChange={(e) => patch(i, { files: Array.from(e.target.files ?? []) })}
-              disabled={disabled}
-              className="h-8 text-xs"
-            />
-            {note.files.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {note.files.map((f, fi) => (
-                  <Badge key={fi} variant="secondary" className="font-normal">
-                    {f.name}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
+          <NewNoteRow
+            key={`new-${i}`}
+            note={note}
+            onPatch={(next) => patch(i, next)}
+            onRemove={() => remove(i)}
+            disabled={disabled}
+          />
         )
-      )}
-
-      {notes.some((n) => n.existingId != null && n.keep) && (
-        <p className="text-[11px] text-muted-foreground">
-          Kept notes are re-saved as new notes — their existing file attachments cannot be
-          carried over.
-        </p>
       )}
 
       <div className="flex items-center gap-2">
@@ -154,6 +113,84 @@ export function DailyPayNoteList({
           <Label className="text-[11px] text-muted-foreground">{label}</Label>
         )}
       </div>
+    </div>
+  );
+}
+
+function NewNoteRow({
+  note,
+  onPatch,
+  onRemove,
+  disabled,
+}: {
+  note: NoteForm;
+  onPatch: (next: Partial<NoteForm>) => void;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-2.5 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <StickyNote className="h-3.5 w-3.5" />
+          New note
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-6 px-1.5 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+          disabled={disabled}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+      <Textarea
+        value={note.body}
+        onChange={(e) => onPatch({ body: e.target.value })}
+        placeholder="Note body…"
+        disabled={disabled}
+        className="min-h-16 resize-none text-sm"
+      />
+      <Input
+        ref={inputRef}
+        type="file"
+        multiple
+        // ADDS to what was picked before. It used to replace it, so picking a
+        // second batch silently dropped the first.
+        onChange={(e) => {
+          const picked = Array.from(e.target.files ?? []);
+          if (picked.length) onPatch({ files: [...note.files, ...picked] });
+          // Clear the input so picking the same file again still fires.
+          if (inputRef.current) inputRef.current.value = "";
+        }}
+        disabled={disabled}
+        className="h-8 text-xs"
+      />
+      {note.files.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {note.files.map((f, fi) => (
+            <span
+              key={`${f.name}-${fi}`}
+              className="inline-flex items-center gap-1 rounded border bg-card px-1.5 py-0.5 text-xs"
+            >
+              {f.name}
+              <button
+                type="button"
+                className="ms-0.5 rounded-sm opacity-60 hover:opacity-100"
+                onClick={() => onPatch({ files: note.files.filter((_, idx) => idx !== fi) })}
+                disabled={disabled}
+                aria-label={`Remove ${f.name}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

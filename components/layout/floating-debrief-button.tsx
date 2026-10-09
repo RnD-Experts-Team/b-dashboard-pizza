@@ -164,6 +164,7 @@ export function FloatingDebriefButton() {
   const [isMobile, setIsMobile] = useState(false);
 
   const tNotepad = useTranslations("notepad");
+  const tReport = useTranslations("reportProblem.regions");
 
   // ── Cleaning Chart state ───────────────────────────────────────────────
   const t = useTranslations("cleaningChart");
@@ -196,8 +197,15 @@ export function FloatingDebriefButton() {
   const clearPendingDebriefKey = useDebriefActionStore((s) => s.clearPendingDebriefKey);
   const setSharedDebriefPos = useFabPositionStore((s) => s.setDebriefPos);
   const pendingPanelTab = useDebriefActionStore((s) => s.pendingPanelTab);
+  const pendingPanelOpts = useDebriefActionStore((s) => s.pendingPanelOpts);
   const clearPendingPanelTab = useDebriefActionStore((s) => s.clearPendingPanelTab);
+  const pendingCleaningTask = useDebriefActionStore((s) => s.pendingCleaningTask);
+  const clearPendingCleaningTask = useDebriefActionStore((s) => s.clearPendingCleaningTask);
+  const bumpRevision = useDebriefActionStore((s) => s.bumpRevision);
   const setTaskCounts = useDebriefActionStore((s) => s.setTaskCounts);
+
+  // A cleaning task waiting to be opened once the due list for its date loads.
+  const [cleaningTaskTarget, setCleaningTaskTarget] = useState<{ taskId: number; date: string } | null>(null);
 
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canCreateDebrief = canAccessRoute({
@@ -400,7 +408,7 @@ export function FloatingDebriefButton() {
       cleaningDate: cleaningDate,
       cleaningReady: !dueLoading && dueData != null,
       canSeeCleaning: canSeeCleaningChart,
-      panelAvailable: canCreateDebrief && !pathname?.includes("/due-keys"),
+      panelAvailable: canCreateDebrief,
     });
   }, [
     cleaningPendingCount,
@@ -410,20 +418,57 @@ export function FloatingDebriefButton() {
     dueData,
     canSeeCleaningChart,
     canCreateDebrief,
-    pathname,
     setTaskCounts,
   ]);
 
   // ── Effect F: open the panel on a requested tab (Manager Tasks card rows) ─
+  // Optional context (Manager Hub) — store + date are applied before opening so
+  // the panel lands on exactly the day the row was about.
   useEffect(() => {
     if (!pendingPanelTab) return;
+    if (pendingPanelOpts?.storeId) setSelectedStoreId(pendingPanelOpts.storeId);
+    if (pendingPanelOpts?.date) {
+      if (pendingPanelTab === "cleaning-chart") setCleaningDate(pendingPanelOpts.date);
+      else setSelectedDate(pendingPanelOpts.date);
+    }
+    if (pendingPanelTab === "cleaning-chart") setCleaningCompleteItem(null);
     setActiveNav(pendingPanelTab);
     setIsOpen(true);
     clearPendingPanelTab();
-  }, [pendingPanelTab, clearPendingPanelTab]);
+  }, [pendingPanelTab, pendingPanelOpts, clearPendingPanelTab]);
+
+  // ── Effect G: open the Cleaning tab on one task (Manager Hub rows) ────────
+  useEffect(() => {
+    if (!pendingCleaningTask) return;
+    setSelectedStoreId(pendingCleaningTask.storeId);
+    setCleaningDate(pendingCleaningTask.date);
+    setCleaningCompleteItem(null);
+    setCleaningTaskTarget({ taskId: pendingCleaningTask.taskId, date: pendingCleaningTask.date });
+    setActiveNav("cleaning-chart");
+    setIsOpen(true);
+    clearPendingCleaningTask();
+  }, [pendingCleaningTask, clearPendingCleaningTask]);
+
+  // ── Effect H: once that date's due list is in, open the task's form. A task
+  // that is already done stays on the list, where its Undo button is.
+  useEffect(() => {
+    if (!cleaningTaskTarget || dueLoading || !dueData || !cleaningStore) return;
+    if (dueData.date !== cleaningTaskTarget.date || dueData.storeId !== cleaningStore.id) return;
+    const item = dueData.items.find((i) => i.taskId === cleaningTaskTarget.taskId);
+    setCleaningTaskTarget(null);
+    if (item && item.status !== "done") setCleaningCompleteItem(item);
+  }, [cleaningTaskTarget, dueLoading, dueData, cleaningStore]);
+
+  // Position of the item currently shown in the sheet within the visible list, so the
+  // sheet can step to the previous/next debrief item without being closed first.
+  // Must stay above the early returns below — a hook after them changes the hook
+  // count on /due-keys ("Rendered fewer hooks than expected").
+  const dueKeySheetIndex = useMemo(() => {
+    if (!dueKeySheetItem) return -1;
+    return activeItems.findIndex((i) => i.keyId === dueKeySheetItem.keyId);
+  }, [activeItems, dueKeySheetItem]);
 
   if (!canCreateDebrief) return null;
-  if (pathname?.includes("/due-keys")) return null;
 
   // ── Drag handlers — free 2-D drag with viewport clamping ─────────────
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -469,13 +514,6 @@ export function FloatingDebriefButton() {
     setDueKeySheetOpen(true);
   };
 
-  // Position of the item currently shown in the sheet within the visible list, so the
-  // sheet can step to the previous/next debrief item without being closed first.
-  const dueKeySheetIndex = useMemo(() => {
-    if (!dueKeySheetItem) return -1;
-    return activeItems.findIndex((i) => i.keyId === dueKeySheetItem.keyId);
-  }, [activeItems, dueKeySheetItem]);
-
   const handleDueKeySheetNavigate = (direction: -1 | 1) => {
     if (dueKeySheetIndex < 0) return;
     const next = activeItems[dueKeySheetIndex + direction];
@@ -502,13 +540,17 @@ export function FloatingDebriefButton() {
     else toast.success("Key value updated.");
     // The sheet closes itself on success; refresh the list behind it in the background.
     refetchDueKeys();
+    bumpRevision();
     return result;
   };
 
   const handleBulkSubmit = async (payload: { items: DueKeyValuePayload[] }): Promise<boolean> => {
     if (!selectedStoreId) return false;
     const result = await setDueKeysBulk(selectedStoreId, selectedDate, payload.items);
-    if (result) refetchDueKeys();
+    if (result) {
+      refetchDueKeys();
+      bumpRevision();
+    }
     return !!result;
   };
 
@@ -526,6 +568,7 @@ export function FloatingDebriefButton() {
       await uncompleteTask(cleaningStore.id, item.taskId, cleaningDate);
       toast.success(t("due.toasts.reverted", { label: item.label }));
       setCleaningUndoTarget(null);
+      bumpRevision();
     } catch (err) {
       toast.error(err instanceof CleaningError ? err.message : t("due.toasts.undoFailed"));
     } finally {
@@ -681,6 +724,7 @@ export function FloatingDebriefButton() {
               if (result) {
                 toast.success("Debrief submitted successfully.");
                 playSfx("success");
+                bumpRevision();
               }
               return !!result;
             }}
@@ -873,9 +917,10 @@ export function FloatingDebriefButton() {
                 storeCode={cleaningStore.code}
                 date={cleaningDate}
                 item={cleaningCompleteItem}
-                onComplete={(payload) =>
-                  completeTask(cleaningStore.id, cleaningCompleteItem.taskId, payload)
-                }
+                onComplete={async (payload) => {
+                  await completeTask(cleaningStore.id, cleaningCompleteItem.taskId, payload);
+                  bumpRevision();
+                }}
                 onClose={() => setCleaningCompleteItem(null)}
               />
             </div>
@@ -1062,9 +1107,12 @@ export function FloatingDebriefButton() {
           "transition-all duration-300 ease-in-out",
           "cursor-grab active:cursor-grabbing select-none touch-none",
           "border",
+          // Keep the focus state neutral: the shared Button focus style uses the
+          // theme's --ring colour, which is blue in some themes (e.g. Ocean).
+          "focus-visible:ring-gray-500/30 dark:focus-visible:ring-gray-400/30",
           isOpen
-            ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300"
-            : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200",
+            ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 border-gray-700 dark:border-gray-300 focus-visible:border-gray-700 dark:focus-visible:border-gray-300"
+            : "bg-black text-white dark:bg-white dark:text-black border-gray-800 dark:border-gray-200 focus-visible:border-gray-800 dark:focus-visible:border-gray-200",
         )}
         size="sm"
       >
@@ -1111,6 +1159,8 @@ export function FloatingDebriefButton() {
 
       {pos && isMobile && (
         <div
+          data-report-target="floating"
+          data-report-label={tReport("debrief")}
           className="fixed z-50"
           style={{ left: pos.x, top: pos.y, touchAction: "none" }}
           onPointerDown={handlePointerDown}
@@ -1146,6 +1196,8 @@ export function FloatingDebriefButton() {
         >
           <PopoverTrigger asChild>
             <div
+              data-report-target="floating"
+              data-report-label={tReport("debrief")}
               className="fixed z-50"
               style={{ left: pos.x, top: pos.y, touchAction: "none" }}
               onPointerDown={handlePointerDown}

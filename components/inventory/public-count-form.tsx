@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- backend images are served via the
    same-origin /inventory-storage proxy; next/image remote config is unnecessary here. */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -44,10 +44,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { usePublicInventoryLink } from "@/lib/hooks/use-public-inventory";
+import { usePublicCountDraft } from "@/lib/hooks/use-public-count-draft";
 import { sortByReferenceOrder } from "@/lib/inventory/public-count-order";
 import type { PublicLinkItem, PublicSubmitItem } from "@/types/inventory.types";
 
-type Counts = Record<number, { u1: string; u2: string; u3: string }>;
 type Lang = "en" | "ar" | "es";
 
 const T: Record<
@@ -68,6 +68,8 @@ const T: Record<
     uncategorized: string;
     searchPlaceholder: string;
     noSearchResults: string;
+    draftRestored: string;
+    dismiss: string;
   }
 > = {
   en: {
@@ -87,6 +89,9 @@ const T: Record<
     uncategorized: "Uncategorized",
     searchPlaceholder: "Search items…",
     noSearchResults: "No items match your search.",
+    draftRestored:
+      "Your earlier entries were restored. Counts are saved on this device until you submit.",
+    dismiss: "Dismiss",
   },
   ar: {
     inventoryCount: "جرد المخزون",
@@ -105,6 +110,9 @@ const T: Record<
     uncategorized: "غير مصنّف",
     searchPlaceholder: "بحث عن عنصر…",
     noSearchResults: "لا توجد عناصر مطابقة لبحثك.",
+    draftRestored:
+      "تمت استعادة الكميات التي أدخلتها سابقاً. يتم حفظ الجرد على هذا الجهاز حتى تقوم بالإرسال.",
+    dismiss: "إغلاق",
   },
   es: {
     inventoryCount: "Conteo de Inventario",
@@ -124,6 +132,9 @@ const T: Record<
     uncategorized: "Sin categoría",
     searchPlaceholder: "Buscar artículos…",
     noSearchResults: "Ningún artículo coincide con tu búsqueda.",
+    draftRestored:
+      "Se restauraron los datos que ingresaste antes. El conteo se guarda en este dispositivo hasta que lo envíes.",
+    dismiss: "Cerrar",
   },
 };
 
@@ -317,7 +328,15 @@ export function PublicCountForm({ token }: { token: string }) {
   const { link, status, error, submit, isSubmitting, submitError, result } =
     usePublicInventoryLink(token);
 
-  const [counts, setCounts] = useState<Counts>({});
+  // Counts survive a refresh / the phone reloading the tab — see use-public-count-draft.ts.
+  const { counts, setCounts, restored, dismissRestored, clearDraft } =
+    usePublicCountDraft(token);
+
+  // Drop the draft once it can no longer be submitted.
+  useEffect(() => {
+    if (result || status === "submitted" || status === "not_found") clearDraft();
+  }, [result, status, clearDraft]);
+
   const [lightboxItem, setLightboxItem] = useState<PublicLinkItem | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
@@ -684,6 +703,23 @@ export function PublicCountForm({ token }: { token: string }) {
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
         {/* Scrollable item list */}
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+          {restored && total > 0 && (
+            <Alert dir={link.lang === "ar" ? "rtl" : undefined}>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription className="flex items-start justify-between gap-2">
+                <span>{T[link.lang].draftRestored}</span>
+                <button
+                  type="button"
+                  onClick={dismissRestored}
+                  aria-label={T[link.lang].dismiss}
+                  className="shrink-0 rounded-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {submitError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />

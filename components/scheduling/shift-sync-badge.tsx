@@ -6,7 +6,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { cn } from "@/lib/utils";
 import type { ShiftOrigin, ShiftSyncStatus } from "@/types/scheduling.types";
 

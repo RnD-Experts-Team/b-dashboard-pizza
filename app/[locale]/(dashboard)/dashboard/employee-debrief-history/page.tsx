@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmployeeDebriefDetailSheet } from "@/components/employee-debriefs/employee-debrief-detail-sheet";
 import { DebriefTypeBadge } from "@/components/employee-debriefs/debrief-type-badge";
@@ -138,6 +139,22 @@ function OperationalTableSkeleton() {
 }
 
 export default function EmployeeDebriefHistoryPage() {
+  return (
+    <Suspense fallback={null}>
+      <EmployeeDebriefHistoryScreen />
+    </Suspense>
+  );
+}
+
+function EmployeeDebriefHistoryScreen() {
+  // Deep link (Manager Hub → "Employee history"): ?store=CODE&employee=ID.
+  // Read once — afterwards the pickers below own the selection.
+  const searchParams = useSearchParams();
+  const linkedStore = useRef(searchParams.get("store"));
+  const linkedEmployeeId = useRef<number | null>(
+    /^\d+$/.test(searchParams.get("employee") ?? "") ? Number(searchParams.get("employee")) : null
+  );
+
   const [stores, setStores] = useState<StoreOption[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [storeSearch, setStoreSearch] = useState("");
@@ -164,7 +181,10 @@ export default function EmployeeDebriefHistoryPage() {
   useEffect(() => {
     const parsed = parseAuthUserStores();
     setStores(parsed);
-    if (parsed.length > 0) setSelectedStoreId(parsed[0].id);
+    const linked = parsed.find((s) => s.id === linkedStore.current);
+    if (linked) setSelectedStoreId(linked.id);
+    else if (parsed.length > 0) setSelectedStoreId(parsed[0].id);
+    linkedStore.current = null;
   }, []);
 
   // Reset both tabs when store changes
@@ -188,6 +208,14 @@ export default function EmployeeDebriefHistoryPage() {
   // Employee list from today's due-keys
   const { data: dueKeysData, isLoading: employeesLoading } = useDueKeys(selectedStoreId, today);
   const employees: Employee[] = dueKeysData?.employees ?? [];
+
+  // Pick the linked employee once their store's list has loaded.
+  useEffect(() => {
+    if (linkedEmployeeId.current == null || employeesLoading || !dueKeysData) return;
+    const match = dueKeysData.employees.find((e) => e.id === linkedEmployeeId.current);
+    linkedEmployeeId.current = null;
+    if (match) setSelectedEmployee(match);
+  }, [dueKeysData, employeesLoading]);
 
   const selectedStore = stores.find((s) => s.id === selectedStoreId) ?? null;
 

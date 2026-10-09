@@ -83,6 +83,10 @@ const hiringApiUrl =
 const hiringOrigin =
   getApiDomain(hiringApiUrl) || "https://hiring.lcportal.cloud";
 
+// Chat widget (rdexperts) loaded by app/[locale]/(dashboard)/dashboard/layout.tsx.
+// Allowed in script-src / connect-src / frame-src below. Remove with the <Script>.
+const CHAT_WIDGET_ORIGIN = "https://chat.rdexperts.tech";
+
 const nextConfig: NextConfig = {
   // Security headers
   async headers() {
@@ -124,7 +128,9 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+              // 'wasm-unsafe-eval' lets the drive-thru mic's RNNoise worklet compile its
+              // WebAssembly (not JS eval). Dev's 'unsafe-eval' would hide a missing one.
+              `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' ${CHAT_WIDGET_ORIGIN}${isDev ? " 'unsafe-eval'" : ""}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               // Station media plays from blob: object URLs (cached bytes) served
@@ -132,8 +138,8 @@ const nextConfig: NextConfig = {
               // default-src 'self' and blob: playback is blocked.
               "media-src 'self' blob:",
               "font-src 'self' data:",
-              `connect-src 'self'${apiDomain ? ` ${apiDomain}` : ""} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
-              `frame-src 'self' ${luminaBase}`,
+              `connect-src 'self' ${CHAT_WIDGET_ORIGIN}${apiDomain ? ` ${apiDomain}` : ""} ${livekitDomain} ${livekitWss}${reverbWss ? ` ${reverbWss}` : ""}${reverbAuthDomain ? ` ${reverbAuthDomain}` : ""}${isDev ? " ws://localhost:3000 wss://localhost:3000" : ""}`,
+              `frame-src 'self' ${luminaBase} ${CHAT_WIDGET_ORIGIN}`,
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

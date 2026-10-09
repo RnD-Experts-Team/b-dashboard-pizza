@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { Plus, Trash2, Loader2, Paperclip, X, Store, ChevronDown, Check, Search, ClipboardPaste } from "lucide-react";
+import { Plus, Trash2, Loader2, Paperclip, X, Store, ChevronDown, Check, Search, ClipboardPaste, ArrowLeft, CheckCircle2, Wrench } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,11 +25,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { SearchCreateCombobox } from "./search-create-combobox";
+import { IssueTroubleshooting, type TroubleshootingResult } from "./troubleshooting/issue-troubleshooting";
 import { useAuth } from "@/lib/auth/use-auth";
 import { toast } from "sonner";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
-import type { CatalogIssue, Priority, TicketType } from "@/types/maintenance-tickets.types";
+import type { CatalogIssue, Priority, TicketType, TroubleshootingTicketOutcome } from "@/types/maintenance-tickets.types";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                   */
@@ -43,6 +44,16 @@ interface IssueRow {
   description: string;
   note: string;
   files: File[];
+  /**
+   * How troubleshooting went, answered on the issue's troubleshooting page --
+   * needed before the ticket can be sent when the issue has guides.
+   */
+  troubleshooting: {
+    outcome: TroubleshootingTicketOutcome;
+    guideId: number | null;
+    guideTitle: string | null;
+    version: number | null;
+  } | null;
 }
 
 function makeRow(): IssueRow {
@@ -54,6 +65,7 @@ function makeRow(): IssueRow {
     description: "",
     note: "",
     files: [],
+    troubleshooting: null,
   };
 }
 
@@ -158,6 +170,14 @@ export function CreateTicketDialog({
   const [rows, setRows] = useState<IssueRow[]>([makeRow()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /** The form, or one row's troubleshooting page shown in its place. */
+  const [view, setView] = useState<{ kind: "form" } | { kind: "troubleshooting"; rowId: string }>({ kind: "form" });
+  const contentRef = useRef<HTMLDivElement>(null);
+  // Each view starts at its top -- the form is not left scrolled to where the
+  // troubleshooting page was.
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [view]);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // When storeId prop is empty (all-stores mode), the user picks a store inside the dialog.
@@ -227,6 +247,23 @@ export function CreateTicketDialog({
 
   const comboItems = localCatalogIssues.map((i) => ({ id: i.id, label: i.title }));
 
+  function issueTitle(row: IssueRow): string {
+    return localCatalogIssues.find((i) => i.id === row.issueId)?.title ?? "this issue";
+  }
+
+  /** How many troubleshooting guides the row's issue has (0 for "Other"). */
+  function guideCount(row: IssueRow): number {
+    if (isOtherStore || !row.issueId) return 0;
+    return localCatalogIssues.find((i) => i.id === row.issueId)?.troubleshootingGuidesCount ?? 0;
+  }
+
+  /** The row's issue has guides, and troubleshooting has not been answered yet. */
+  function troubleshootingPending(row: IssueRow): boolean {
+    return guideCount(row) > 0 && row.troubleshooting === null;
+  }
+
+  const pendingRows = rows.filter(troubleshootingPending);
+
   function updateRow(id: string, patch: Partial<IssueRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
@@ -270,7 +307,37 @@ export function CreateTicketDialog({
     if (isSubmitting) return;
     setRows([makeRow()]);
     setSubmitError(null);
+    setView({ kind: "form" });
     onClose();
+  }
+
+  /** The answer from a row's troubleshooting page. */
+  function handleTroubleshootingResult(rowId: string, result: TroubleshootingResult) {
+    const row = rows.find((r) => r.id === rowId);
+    setView({ kind: "form" });
+    if (!row) return;
+
+    if (result.outcome === "fixed") {
+      // Logged by the page; nothing to open a ticket for.
+      const rest = rows.filter((r) => r.id !== rowId);
+      if (rest.length === 0) {
+        toast.success(`Logged as fixed by troubleshooting — no ticket needed for ${issueTitle(row)}.`);
+        handleClose();
+        return;
+      }
+      setRows(rest);
+      toast.success(`${issueTitle(row)} is fixed and logged — it was taken off this ticket.`);
+      return;
+    }
+
+    updateRow(rowId, {
+      troubleshooting: {
+        outcome: result.outcome,
+        guideId: result.guide?.id ?? null,
+        guideTitle: result.guide?.title ?? null,
+        version: result.guide?.version ?? null,
+      },
+    });
   }
 
   /** Creates a catalog issue and returns the new id. Called by SearchCreateCombobox. */
@@ -302,6 +369,10 @@ export function CreateTicketDialog({
         setSubmitError(t("createDialog.validationDescriptionRequired"));
         return;
       }
+      if (troubleshootingPending(row)) {
+        setSubmitError(`Go through the troubleshooting for ${issueTitle(row)} first.`);
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -315,6 +386,13 @@ export function CreateTicketDialog({
           description: row.description.trim(),
           ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
           ...(row.files.length ? { files: row.files } : {}),
+          ...(guideCount(row) > 0 && row.troubleshooting
+            ? {
+                troubleshooting: row.troubleshooting.outcome,
+                troubleshooting_guide_id: row.troubleshooting.guideId,
+                troubleshooting_version: row.troubleshooting.version,
+              }
+            : {}),
         })),
         type: ticketType,
       };
@@ -327,6 +405,7 @@ export function CreateTicketDialog({
 
       setRows([makeRow()]);
       setSubmitError(null);
+      setView({ kind: "form" });
       toast.success(rows.length > 1 ? "Ticket created with all issues." : "Ticket created successfully.");
       onSuccess();
       onClose();
@@ -340,18 +419,38 @@ export function CreateTicketDialog({
     }
   }
 
+  const troubleshootingRow = view.kind === "troubleshooting" ? rows.find((r) => r.id === view.rowId) ?? null : null;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
-        className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto"
+        ref={contentRef}
+        className={cn("w-[95vw] max-h-[90vh] overflow-y-auto", troubleshootingRow ? "max-w-3xl sm:max-w-3xl" : "max-w-2xl")}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle>{t("createDialog.title")}</DialogTitle>
-          <DialogDescription>{t("createDialog.description")}</DialogDescription>
+          <DialogTitle>{troubleshootingRow ? `Troubleshooting · ${issueTitle(troubleshootingRow)}` : t("createDialog.title")}</DialogTitle>
+          <DialogDescription>
+            {troubleshootingRow ? "Try these first — many problems are fixed in a few minutes without a technician." : t("createDialog.description")}
+          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        {troubleshootingRow && troubleshootingRow.issueId !== null && (
+          <div className="space-y-4 py-2">
+            <Button type="button" variant="ghost" size="sm" className="-ms-2" onClick={() => setView({ kind: "form" })}>
+              <ArrowLeft className="me-1.5 h-4 w-4" aria-hidden="true" /> Back to the ticket
+            </Button>
+            <IssueTroubleshooting
+              issueId={troubleshootingRow.issueId}
+              mode="ticket"
+              storeCode={activeStoreId || null}
+              initialGuideId={troubleshootingRow.troubleshooting?.guideId ?? null}
+              onResult={(result) => handleTroubleshootingResult(troubleshootingRow.id, result)}
+            />
+          </div>
+        )}
+
+        <div className={cn("space-y-4 py-2", troubleshootingRow && "hidden")}>
           {/* Store selector — shown only when opened in all-stores mode */}
           {needsStorePick && (
             <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
@@ -503,7 +602,13 @@ export function CreateTicketDialog({
                   <SearchCreateCombobox
                     items={comboItems}
                     selectedId={row.issueId}
-                    onSelect={(id) => updateRow(row.id, { issueId: id })}
+                    // A different issue has different guides: troubleshooting
+                    // starts over, and opens straight away when it has any.
+                    onSelect={(id) => {
+                      updateRow(row.id, { issueId: id, troubleshooting: null });
+                      const count = localCatalogIssues.find((i) => i.id === id)?.troubleshootingGuidesCount ?? 0;
+                      if (count > 0) setView({ kind: "troubleshooting", rowId: row.id });
+                    }}
                     onCreate={canManageCatalog ? createCatalogIssue : undefined}
                     placeholder={
                       catalogLoading
@@ -515,6 +620,37 @@ export function CreateTicketDialog({
                   />
                 )}
               </div>
+
+              {/* Troubleshooting: answered on the issue's own page. */}
+              {guideCount(row) > 0 && (
+                row.troubleshooting ? (
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                    <p className="min-w-0 flex-1 text-sm">
+                      {row.troubleshooting.outcome === "none_match"
+                        ? guideCount(row) === 1
+                          ? "Troubleshooting done: the guide didn't describe the problem."
+                          : `Troubleshooting done: none of the ${guideCount(row)} guides described the problem.`
+                        : row.troubleshooting.guideTitle
+                          ? `Troubleshooting done: tried "${row.troubleshooting.guideTitle}", still broken.`
+                          : "Troubleshooting done: tried the steps, still broken."}
+                    </p>
+                    <Button type="button" variant="ghost" size="sm" className="h-7" onClick={() => setView({ kind: "troubleshooting", rowId: row.id })}>
+                      View the steps again
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+                    <Wrench className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                    <p className="min-w-0 flex-1 text-sm">
+                      {issueTitle(row)} has troubleshooting steps. Try them before this ticket can be sent.
+                    </p>
+                    <Button type="button" size="sm" className="h-7" onClick={() => setView({ kind: "troubleshooting", rowId: row.id })}>
+                      Go through troubleshooting
+                    </Button>
+                  </div>
+                )
+              )}
 
               {/* Priority */}
               <div className="space-y-1">
@@ -629,15 +765,22 @@ export function CreateTicketDialog({
           {submitError && <p className="text-sm text-destructive">{submitError}</p>}
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
-            {t("createDialog.cancel")}
-          </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-            {t("createDialog.submit")}
-          </Button>
-        </DialogFooter>
+        {!troubleshootingRow && (
+          <DialogFooter className="items-center gap-2">
+            {pendingRows.length > 0 && (
+              <p className="me-auto text-sm text-muted-foreground">
+                Go through the troubleshooting for {pendingRows.map(issueTitle).join(", ")} to send this ticket.
+              </p>
+            )}
+            <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+              {t("createDialog.cancel")}
+            </Button>
+            <Button onClick={handleSubmit} disabled={isSubmitting || pendingRows.length > 0}>
+              {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {t("createDialog.submit")}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

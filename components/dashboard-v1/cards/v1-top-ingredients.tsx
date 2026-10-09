@@ -7,6 +7,7 @@ import type { TopIngredient } from "@/types/dspr.types";
 import { WbrCardSkeleton } from "@/components/dspr/wbr-format";
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Toggle, V1Empty } from "@/components/dashboard-v1/v1-ui";
+import { SECTION_KEYS } from "@/lib/report-problem/pages";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1TopIngredientsCard — ranked ingredient usage across 5-Used / Main / Paper
@@ -73,7 +74,7 @@ export function V1TopIngredientsCard({
     !hasVarianceData
   ) {
     return (
-      <V1Card title="Top Ingredients" category="menu" period="D" span={span} className={className}>
+      <V1Card reportId="v1-top-ingredients" ticketSection={SECTION_KEYS.inventoryMainDashboard} title="Top Ingredients" category="menu" period="D" span={span} className={className}>
         <V1Empty>No data available for this period.</V1Empty>
       </V1Card>
     );
@@ -81,6 +82,8 @@ export function V1TopIngredientsCard({
 
   return (
     <V1Card
+      reportId="v1-top-ingredients"
+      ticketSection={SECTION_KEYS.inventoryMainDashboard}
       title="Top Ingredients"
       category="menu"
       period="D"

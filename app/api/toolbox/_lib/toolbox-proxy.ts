@@ -20,15 +20,21 @@ export const TOOLBOX_BASE_URL = (
 ).replace(/\/+$/, "");
 
 export const TOOLBOX_TIMEOUT_MS = Number(process.env.TOOLBOX_TIMEOUT_MS) || 20_000;
+/** Uploads (up to 10 files x 10 MB on tickets) get a longer leash than JSON calls. */
+export const TOOLBOX_UPLOAD_TIMEOUT_MS = Number(process.env.TOOLBOX_UPLOAD_TIMEOUT_MS) || 120_000;
 
 /** Store codes look like "03795-00001". Guard before they reach a URL. */
 const STORE_CODE_RE = /^[a-zA-Z0-9_-]{1,32}$/;
 /** Numeric ids only — anything else is a client bug, not an upstream 404. */
 const ID_RE = /^\d{1,12}$/;
 
-async function proxyFetch(url: string, init: RequestInit): Promise<NextResponse> {
+async function proxyFetch(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number = TOOLBOX_TIMEOUT_MS,
+): Promise<NextResponse> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TOOLBOX_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const upstream = await fetch(url, { ...init, signal: controller.signal, cache: "no-store" });
@@ -113,6 +119,36 @@ export async function toolboxPost(request: NextRequest, path: string): Promise<N
     },
     body: body || "{}",
   });
+}
+
+/**
+ * Raw POST passthrough — JSON or multipart/form-data. The bytes and the
+ * incoming Content-Type go through verbatim so a multipart boundary survives
+ * (re-parsing the form here would lose it). Same approach as
+ * app/api/_lib/hiring-proxy.ts proxyMultipart. Used by the ticket routes that
+ * accept `files[]`.
+ */
+export async function toolboxPostRaw(request: NextRequest, path: string): Promise<NextResponse> {
+  const denied = requireAuthorization(request);
+  if (denied) return denied;
+
+  const contentType = request.headers.get("content-type") || "application/json";
+  const body = await request.arrayBuffer();
+  const isJson = contentType.includes("application/json");
+
+  return proxyFetch(
+    `${TOOLBOX_BASE_URL}${path}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: authHeader(request),
+        Accept: "application/json",
+        "Content-Type": contentType,
+      },
+      body: body.byteLength > 0 ? body : isJson ? "{}" : body,
+    },
+    isJson ? TOOLBOX_TIMEOUT_MS : TOOLBOX_UPLOAD_TIMEOUT_MS,
+  );
 }
 
 /** DELETE, query string forwarded (folder delete takes `?force=true`). */

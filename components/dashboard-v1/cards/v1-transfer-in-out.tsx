@@ -8,6 +8,7 @@ import { fmt$, fmt$2, fmtDate, WbrCardSkeleton } from "@/components/dspr/wbr-for
 import { V1Card } from "@/components/dashboard-v1/v1-card";
 import { V1Metric, V1MetricGrid, V1Empty } from "@/components/dashboard-v1/v1-ui";
 import { WbrDetailDialog, DetailField } from "@/components/dspr/wbr-detail-dialog";
+import { SECTION_KEYS } from "@/lib/report-problem/pages";
 
 /* ──────────────────────────────────────────────────────────────────────────
  *  V1TransferInOutCard — weekly ingredient transfers. Body: in/out counts +
@@ -45,7 +46,7 @@ export function V1TransferInOutCard({
   if (isLoading) return <WbrCardSkeleton className={className} />;
   if (!data)
     return (
-      <V1Card title="Transfers In/Out" category="finance" period="W" span={span} className={className}>
+      <V1Card reportId="v1-transfer-in-out" ticketSection={SECTION_KEYS.inventoryMainDashboard} title="Transfers In/Out" category="finance" period="W" span={span} className={className}>
         <V1Empty>No data available for this period.</V1Empty>
       </V1Card>
     );
@@ -67,6 +68,8 @@ export function V1TransferInOutCard({
 
   return (
       <V1Card
+        reportId="v1-transfer-in-out"
+        ticketSection={SECTION_KEYS.inventoryMainDashboard}
         title="Transfers In/Out"
         category="finance"
         period="W"

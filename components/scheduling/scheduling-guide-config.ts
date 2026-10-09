@@ -9,6 +9,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  Users,
 } from "lucide-react";
 import type { GuideStep } from "@/components/shared/page-guide";
 
@@ -116,6 +117,26 @@ export const SCHEDULING_GUIDE: SchedulingGuideEntry[] = [
         "Publish the week once you are happy with it — that is what your team sees",
       ],
       placement: "top",
+    },
+    view: PLANNED,
+  },
+
+  {
+    step: {
+      id: "sched-staffing-guide",
+      icon: Users,
+      title: "Plan against a usual week",
+      description:
+        "The last four weeks, set against the week you are building: expected sales, the hours your team usually works, and your labor % as you plan.",
+      bullets: [
+        "Under each day in the grid: expected sales, hours planned of usual, and a bar per hour — grey is how many people usually work, colour is your plan",
+        "The words under the bars tell you what is left, like \"Short 2 · 5–7p\". They update as you place each shift",
+        "The day headers stay pinned while you scroll, so a check is always one glance up the column",
+        "Under each day's bars is a table with every hour's exact numbers. In the left cell, the Chart and Table switches put either one away on its own, and the arrow beside \"Plan vs usual\" folds the whole row down to its title. Each stays as you left it until you open it again",
+        "\"Odd days\" opens on a calendar of the last four weeks. A green arrow is a day above usual, red is below, blue is both, and the bar shows how far off it was. Hover the legend to light up those days, click a day for its hour-by-hour chart, and use the arrow to come back. The List switch gives the same days as sentences. They are left out of the numbers unless you choose Included",
+        "A day with no data, such as a closure, is left out of the averages",
+      ],
+      placement: "bottom",
     },
     view: PLANNED,
   },

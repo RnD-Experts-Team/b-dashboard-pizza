@@ -12,6 +12,8 @@ import {
 } from "@/lib/api/services/maintenance-tickets.service";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { useVisitBasketStore } from "@/lib/store/visit-basket.store";
+import { useMaintenanceTicketsCatalogStore } from "@/lib/store/maintenance-tickets-catalog.store";
+import { rankTechnicians, standingWords } from "@/lib/maintenance-tickets/technician-ranking";
 import { AttendanceStream } from "./attendance-stream";
 import { AttendanceDurationsStrip } from "./attendance-durations-strip";
 import {
@@ -57,6 +59,14 @@ export function VisitBasketPanel({ technicians, onLogged, className }: VisitBask
   const items = useVisitBasketStore((s) => s.items);
   const remove = useVisitBasketStore((s) => s.remove);
   const clear = useVisitBasketStore((s) => s.clear);
+  // A visit spans issues, so the overall ratings order the picker -- after
+  // those who cover the store, when every issue in the basket is at one store.
+  const abilities = useMaintenanceTicketsCatalogStore((s) => s.abilities);
+  const basketStore = useMemo(() => {
+    const stores = new Set(items.map((i) => i.storeId));
+    return stores.size === 1 ? [...stores][0] : null;
+  }, [items]);
+  const rankedTechnicians = useMemo(() => rankTechnicians(technicians, abilities, null, basketStore), [technicians, abilities, basketStore]);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<AttendanceFormValue>(EMPTY_ATTENDANCE_FORM);
@@ -256,10 +266,10 @@ export function VisitBasketPanel({ technicians, onLogged, className }: VisitBask
                 Who <span className="text-destructive">*</span>
               </Label>
               <SearchableSelect
-                options={technicians.map((t) => ({
+                options={rankedTechnicians.map(({ technician: t, standing }) => ({
                   value: String(t.id),
                   label: t.name,
-                  hint: t.categoryName ?? undefined,
+                  hint: [...standingWords(standing), t.categoryName].filter(Boolean).join(" · ") || undefined,
                 }))}
                 value={form.technicianId || undefined}
                 onChange={(v) => setForm((prev) => ({ ...prev, technicianId: v }))}

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useWorkbookOptions } from "@/lib/hooks/use-workbook-options";
 import { getWorkbookFieldErrors, hasServerCode, isCancelled } from "@/lib/workbooks/errors";
-import type { Breadcrumb, Tagged, VisibilityPayload } from "@/types/workbooks.types";
+import type { Breadcrumb, StoreRef, Tagged, VisibilityPayload } from "@/types/workbooks.types";
 import { DialogShell, FormError } from "./dialog-shell";
 import { useErrorText } from "./guarded";
 import {
@@ -24,7 +24,8 @@ interface VisibilityDialogProps {
   onOpenChange: (open: boolean) => void;
   /** What's being retagged, for the title. */
   itemName: string;
-  current: Tagged;
+  /** Folders, workbooks and rows all carry a `store`, so callers pass the whole item. */
+  current: Tagged & { store?: StoreRef | null };
   parent?: ParentAccess | null;
   /** Sends the retag. Resolve on success, throw a WorkbooksError on failure. */
   onSubmit: (payload: VisibilityPayload) => Promise<void>;
@@ -118,6 +119,7 @@ export function VisibilityDialog({
             rolesError={rolesError}
             disabled={saving}
             idPrefix="retag"
+            itemStore={current.store ? { storeNumber: current.store.storeNumber, name: current.store.name } : null}
           />
         </div>
       </DialogShell>

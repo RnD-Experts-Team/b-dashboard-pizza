@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
@@ -58,8 +59,24 @@ import {
   type StoreOption,
 } from "@/components/cleaning";
 
-const TAB_DEFS: { id: CleaningTabId; labelKey: string; icon: LucideIcon; render: () => React.ReactNode }[] = [
-  { id: "due", labelKey: "due", icon: CalendarDays, render: () => <DueTab /> },
+/** Deep-link context (Manager Hub → "Open in Cleaning Chart"). */
+interface TabLinkContext {
+  dueDate: string | null;
+  dueTaskId: number | null;
+}
+
+const TAB_DEFS: {
+  id: CleaningTabId;
+  labelKey: string;
+  icon: LucideIcon;
+  render: (link: TabLinkContext) => React.ReactNode;
+}[] = [
+  {
+    id: "due",
+    labelKey: "due",
+    icon: CalendarDays,
+    render: (link) => <DueTab initialDate={link.dueDate} highlightTaskId={link.dueTaskId} />,
+  },
   { id: "tasks", labelKey: "tasks", icon: ClipboardList, render: () => <TasksTab /> },
   { id: "evaluation", labelKey: "evaluation", icon: Grid3x3, render: () => <EvaluationTab /> },
   { id: "reports", labelKey: "reports", icon: FileBarChart, render: () => <ReportsTab /> },
@@ -67,7 +84,28 @@ const TAB_DEFS: { id: CleaningTabId; labelKey: string; icon: LucideIcon; render:
 ];
 
 export default function CleaningChartPage() {
+  return (
+    <Suspense fallback={<DueSkeleton />}>
+      <CleaningChartScreen />
+    </Suspense>
+  );
+}
+
+function CleaningChartScreen() {
   const t = useTranslations("cleaningChart");
+  // ?tab=due&date=YYYY-MM-DD&task=ID — read once on arrival; the tabs and the
+  // date picker own the view after that.
+  const searchParams = useSearchParams();
+  const [link] = useState<TabLinkContext & { tab: CleaningTabId | null }>(() => {
+    const rawTab = searchParams.get("tab");
+    const rawDate = searchParams.get("date") ?? "";
+    const rawTask = searchParams.get("task") ?? "";
+    return {
+      tab: TAB_DEFS.some((d) => d.id === rawTab) ? (rawTab as CleaningTabId) : null,
+      dueDate: /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null,
+      dueTaskId: /^\d+$/.test(rawTask) ? Number(rawTask) : null,
+    };
+  });
   const { selectedStore } = useSelectedStoreStore();
   const { overviewStores, canAccessRoute, hasAnyRole } = useAuthStore();
   const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
@@ -80,7 +118,7 @@ export default function CleaningChartPage() {
     [canAccessRoute, hasAnyRole, effectiveStoreId]
   );
 
-  const [activeTab, setActiveTab] = useState<CleaningTabId>("due");
+  const [activeTab, setActiveTab] = useState<CleaningTabId>(link.tab ?? "due");
 
   // If the active tab becomes hidden (e.g. permissions load after mount, or the
   // selected store changes what's scoped-accessible), fall back to the first
@@ -145,7 +183,7 @@ export default function CleaningChartPage() {
 
           {visibleTabs.map((tab) => (
             <TabsContent key={tab.id} value={tab.id} className="mt-4">
-              {tab.render()}
+              {tab.render(link)}
             </TabsContent>
           ))}
         </Tabs>
@@ -155,7 +193,13 @@ export default function CleaningChartPage() {
 }
 
 /* ── Due Today ── */
-function DueTab() {
+function DueTab({
+  initialDate = null,
+  highlightTaskId = null,
+}: {
+  initialDate?: string | null;
+  highlightTaskId?: number | null;
+} = {}) {
   const t = useTranslations("cleaningChart");
   // Same store list the sidebar's own switcher uses (overviewStores, loaded once
   // at login from /auth/general-overview) — already scoped to whatever stores
@@ -166,7 +210,7 @@ function DueTab() {
   const { dueData, dueLoading, dueError, fetchDue, setChartCell } = useCleaningStore();
 
   const [store, setStore] = useState<StoreOption | null>(null);
-  const [date, setDate] = useState<string>(todayIso());
+  const [date, setDate] = useState<string>(initialDate ?? todayIso());
   const [status, setStatus] = useState<"all" | DueStatus>("all");
 
   const canEvaluate = canEvaluateCleaning({ canAccessRoute });
@@ -437,6 +481,7 @@ function DueTab() {
               onEvaluate={evaluateForTask}
               evaluatedVerdicts={evaluatedVerdicts}
               lockedTaskReasons={lockedTaskReasons}
+              highlightTaskId={date === initialDate ? highlightTaskId : null}
             />
           )}
         </>

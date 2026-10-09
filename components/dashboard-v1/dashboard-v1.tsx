@@ -485,7 +485,7 @@ export function DashboardV1({
       )}
 
       {/* ── Header bar ──────────────────────────────────────────────────── */}
-      <div data-guide-id="v1-header" className="flex flex-wrap items-center gap-1">
+      <div data-guide-id="v1-header" data-report-target="header" className="flex flex-wrap items-center gap-1">
         <Badge variant="secondary" className="gap-1.5 px-3 py-1 text-xs font-medium">
           <Store className="h-3.5 w-3.5" />
           Store {selectedStore.storeId}

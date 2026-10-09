@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { reportAttrs } from "@/lib/report-problem/attributes";
 
 interface PageHeaderProps {
   title: string;
@@ -15,6 +16,7 @@ export function PageHeader({
 }: PageHeaderProps) {
   return (
     <div
+      {...reportAttrs({ target: "header", label: title })}
       className={cn(
         "flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
         className

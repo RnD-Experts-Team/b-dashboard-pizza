@@ -5,7 +5,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "./delayed-tooltip";
 import { cn } from "@/lib/utils";
 import { formatTime } from "@/lib/scheduling/constants";
 import { formatMinutes, offClockMinutes } from "@/lib/scheduling/utils";

@@ -1,6 +1,13 @@
 import axios from "axios";
 import { buildNestedFormData, payloadHasFiles } from "@/lib/api/form-data";
 import type {
+  AnalyticsActivityPage,
+  AnalyticsParams,
+  AnalyticsSummary,
+  AnalyticsWatchlist,
+} from "@/types/maintenance-analytics.types";
+import type { TechnicianAnalytics, TechnicianAnalyticsParams, TechniciansOverview } from "@/types/technician-analytics.types";
+import type {
   AttendanceDurations,
   AttendanceMinutes,
   ApiAttendanceDurations,
@@ -76,6 +83,25 @@ import type {
   ApiTicketsAnalytics,
   ApiTicketsAnalyticsDuration,
   ApiTicketsAnalyticsResponse,
+  ApiIssueHistoryResponse,
+  ApiIssueHistoryRow,
+  ApiTroubleshootingGuide,
+  ApiTroubleshootingSnapshot,
+  TechnicianInput,
+  IssueTroubleshooting,
+  TroubleshootingGuide,
+  TroubleshootingGuideInput,
+  TroubleshootingSnapshot,
+  ApiTicketNoteWithOwner,
+  TicketNoteWithOwner,
+  TroubleshootingLibraryItem,
+  ApiTechnicianRating,
+  TechnicianAbilityBoard,
+  TechnicianRating,
+  TechnicianRatingInput,
+  TechnicianRatingSaved,
+  IssueHistoryPage,
+  IssueHistoryRow,
   TicketsAnalytics,
   TicketsAnalyticsDuration,
 } from "@/types/maintenance-tickets.types";
@@ -96,6 +122,7 @@ export type TicketsErrorCode =
   | "NETWORK_ERROR"
   | "SERVER_ERROR"
   | "CANCELLED"
+  | "CONFLICT"
   | "UNKNOWN";
 
 export class MaintenanceTicketsError extends Error {
@@ -180,6 +207,12 @@ function handleAxiosError(err: unknown): never {
         data?.context
       );
     }
+    if (status === 409) {
+      throw new MaintenanceTicketsError(
+        message || "Someone else changed this at the same moment. Reload and try again.",
+        "CONFLICT"
+      );
+    }
     if (status === 429) throw new MaintenanceTicketsError("Too many requests.", "RATE_LIMITED");
     if (status != null && status >= 500) {
       throw new MaintenanceTicketsError("Server error. Please try again.", "SERVER_ERROR");
@@ -216,6 +249,9 @@ function transformTechnician(raw: ApiCatalogTechnician): CatalogTechnician {
     id: raw.id,
     name: raw.name,
     phone: raw.phone ?? null,
+    location: raw.location ?? null,
+    coverageNotes: raw.coverage_notes ?? null,
+    coverageStores: raw.coverage_stores ? raw.coverage_stores.map((s) => ({ id: s.id, storeNumber: s.store_number })) : null,
     categoryId: raw.category_id,
     categoryName: raw.category?.name ?? null,
     deletedAt: raw.deleted_at ?? null,
@@ -265,6 +301,10 @@ function transformIssue(raw: ApiTicketIssue): TicketIssue {
     status: transformEnumField(raw.status),
     description: raw.description,
     parentId: raw.parent_id,
+    troubleshootingConfirmedAt: raw.troubleshooting_confirmed_at ?? null,
+    troubleshootingOutcome: raw.troubleshooting_outcome ?? (raw.troubleshooting_confirmed_at ? "tried" : null),
+    troubleshootingGuideId: raw.troubleshooting_guide_id ?? null,
+    troubleshootingSnapshot: raw.troubleshooting_snapshot ? transformTroubleshootingSnapshot(raw.troubleshooting_snapshot) : null,
     assignments: (raw.assignments ?? []).map(transformAssignment),
     statusChanges: (raw.status_changes ?? []).map(transformStatusChange),
     technicians: (raw.technicians ?? []).map(transformTechnician),
@@ -388,11 +428,63 @@ function transformLinks(raw: ApiTicketsListResponse): LaravelPaginationLinks {
   };
 }
 
+function transformTechnicianRating(raw: ApiTechnicianRating): TechnicianRating {
+  return {
+    technicianId: raw.technician_id,
+    issueId: raw.issue_id ?? null,
+    rating: raw.rating ?? null,
+    notes: raw.notes ?? null,
+    callFirst: Boolean(raw.call_first),
+    editor: raw.editor ?? null,
+    updatedAt: raw.updated_at ?? null,
+  };
+}
+
+export function transformTroubleshootingGuide(raw: ApiTroubleshootingGuide): TroubleshootingGuide {
+  return {
+    id: raw.id,
+    issueId: raw.issue_id,
+    title: raw.title,
+    steps: (raw.steps ?? []).map((step) => ({
+      id: step.id,
+      position: step.position,
+      body: step.body,
+      attachments: (step.attachments ?? []).map(transformAttachment),
+    })),
+    linkUrl: raw.link_url,
+    version: raw.version,
+    attachments: (raw.attachments ?? []).map(transformAttachment),
+    editor: raw.editor ?? null,
+    updatedAt: raw.updated_at,
+    fixedCount: raw.fixed_count ?? 0,
+    notFixedCount: raw.not_fixed_count ?? 0,
+  };
+}
+
+/**
+ * A ticket's frozen troubleshooting. Snapshots taken before 2026-10-08 (one
+ * guide per issue, steps as plain strings, no outcome) read as "tried".
+ */
+function transformTroubleshootingSnapshot(raw: ApiTroubleshootingSnapshot): TroubleshootingSnapshot {
+  return {
+    outcome: raw.outcome ?? "tried",
+    guideId: raw.guide_id ?? null,
+    guideTitle: raw.guide_title ?? null,
+    version: raw.version ?? null,
+    steps: (raw.steps ?? []).map((step) => (typeof step === "string" ? { body: step, files: [] } : { body: step.body, files: step.files ?? [] })),
+    linkUrl: raw.link_url ?? null,
+    files: raw.files ?? [],
+    guidesShown: raw.guides_shown ?? [],
+    confirmedBy: raw.confirmed_by ?? null,
+  };
+}
+
 function transformCatalogIssue(raw: ApiCatalogIssue): CatalogIssue {
   return {
     id: raw.id,
     title: raw.title,
     description: raw.description,
+    troubleshootingGuidesCount: raw.troubleshooting_guides_count ?? null,
     deletedAt: raw.deleted_at,
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
@@ -418,6 +510,33 @@ function transformCatalogPart(raw: ApiCatalogPart): CatalogPart {
     notes: (raw.notes ?? []).map(transformNote),
     attachments: (raw.attachments ?? []).map(transformAttachment),
   };
+}
+
+function transformIssueHistoryRow(raw: ApiIssueHistoryRow): IssueHistoryRow {
+  return {
+    ticketId: raw.ticket_id,
+    storeNumber: raw.store_number,
+    createdAt: raw.created_at,
+    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email } : null,
+    status: raw.status ? transformEnumField(raw.status) : null,
+    completedAt: raw.completed_at,
+    technicians: raw.technicians ?? [],
+    issues: (raw.issues ?? []).map((i) => ({
+      id: i.id,
+      parentId: i.parent_id,
+      status: transformEnumField(i.status),
+      priority: transformEnumField(i.priority),
+      assignedPriority: i.assigned_priority ? transformEnumField(i.assigned_priority) : null,
+      description: i.description,
+      completedAt: i.completed_at,
+      createdAt: i.created_at,
+    })),
+  };
+}
+
+/** `&trashed=with` when the caller wants deleted catalog rows too (the catalog screen's "Show deleted"). */
+function trashedParam(opts?: { includeDeleted?: boolean }): string {
+  return opts?.includeDeleted ? "&trashed=with" : "";
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -471,6 +590,17 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
     });
 
     (issue.files ?? []).forEach((file) => form.append(`issues[${i}][files][]`, file));
+
+    // How troubleshooting went, and which guide (and version) it was, if any.
+    if (issue.troubleshooting) {
+      form.append(`issues[${i}][troubleshooting]`, issue.troubleshooting);
+      if (issue.troubleshooting_guide_id != null) {
+        form.append(`issues[${i}][troubleshooting_guide_id]`, String(issue.troubleshooting_guide_id));
+      }
+      if (issue.troubleshooting_version != null) {
+        form.append(`issues[${i}][troubleshooting_version]`, String(issue.troubleshooting_version));
+      }
+    }
   });
 
   (payload.notes ?? []).forEach((note, j) => {
@@ -567,6 +697,9 @@ export function transformNote(raw: ApiTicketNote): TicketNote {
     type: raw.type,
     typeLabel: raw.type_label,
     body: raw.body,
+    isPrivate: raw.is_private ?? false,
+    lockedAt: raw.locked_at ?? null,
+    locker: raw.locker ?? null,
     attachments: (raw.attachments ?? []).map(transformAttachment),
     createdBy: raw.created_by ?? null,
     creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
@@ -858,6 +991,61 @@ export const entityPaths = {
   stockMovement: (id: number) => `/stock-movements/${id}`,
 } as const;
 
+/**
+ * GET /maintenance-analytics/{section}. Stores go as repeated stores[] keys;
+ * the range as the two UTC instants the page computed from its local days.
+ */
+async function analyticsGet<T>(
+  section: "summary" | "activity" | "watchlist",
+  params: AnalyticsParams,
+  extra: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const token = requireToken();
+  const qs = new URLSearchParams();
+  params.stores.forEach((store) => qs.append("stores[]", store));
+  qs.set("from", params.from);
+  qs.set("to", params.to);
+  if (params.recurringMin) qs.set("recurring_min", String(params.recurringMin));
+  if (params.recurringDays) qs.set("recurring_days", String(params.recurringDays));
+  if (params.untouchedDays) qs.set("untouched_days", String(params.untouchedDays));
+  for (const [key, value] of Object.entries(extra)) qs.set(key, value);
+
+  try {
+    const res = await axios.get<T>(`/api/maintenance-tickets/analytics/${section}?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      timeout: 60_000,
+      signal,
+    });
+    return res.data;
+  } catch (err) {
+    return handleAxiosError(err);
+  }
+}
+
+async function technicianAnalyticsGet<T>(url: string, params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<T> {
+  const token = requireToken();
+  const qs = new URLSearchParams();
+  qs.set("from", params.from);
+  qs.set("to", params.to);
+  qs.set("date_from", params.dateFrom);
+  qs.set("date_to", params.dateTo);
+  (params.stores ?? []).forEach((store) => qs.append("stores[]", store));
+  (params.issueIds ?? []).forEach((id) => qs.append("issue_ids[]", String(id)));
+  (params.categoryIds ?? []).forEach((id) => qs.append("category_ids[]", String(id)));
+
+  try {
+    const res = await axios.get<T>(`${url}?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      timeout: 60_000,
+      signal,
+    });
+    return res.data;
+  } catch (err) {
+    return handleAxiosError(err);
+  }
+}
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Service                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -1003,7 +1191,9 @@ export const maintenanceTicketsService = {
     // all. Omitted for an other-store ticket, which has no store to name.
     const qs = storeNumber ? `?store_id=${encodeURIComponent(storeNumber)}` : "";
     try {
-      const res = await axios.get<ApiTicketIssuesResponse & { ticket: ApiTicket }>(
+      const res = await axios.get<
+        ApiTicketIssuesResponse & { ticket: ApiTicket }
+      >(
         `/api/maintenance-tickets/tickets/${ticketId}/issues${qs}`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -1247,6 +1437,42 @@ export const maintenanceTicketsService = {
     }
   },
 
+  /**
+   * Lock (private: MOS only) or unlock a note anywhere on a ticket. Needs the
+   * private-notes permission; the change is logged on the ticket.
+   */
+  /**
+   * Every note on a ticket -- its own, its issues', its records' -- each with
+   * what it sits on. `all` reads the locked ones too: ask for it only when the
+   * auth rules allow it (GET .../notes/all), the normal list otherwise.
+   */
+  async getTicketNotes(storeNumber: string, ticketId: number, all: boolean, signal?: AbortSignal): Promise<TicketNoteWithOwner[]> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: ApiTicketNoteWithOwner[] }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeNumber)}/tickets/${ticketId}/notes${all ? "/all" : ""}`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+      );
+      return (res.data.data ?? []).map((raw) => ({ ...transformNote(raw), owner: raw.owner }));
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  async setNotePrivacy(storeNumber: string, ticketId: number, noteId: number, isPrivate: boolean): Promise<TicketNote> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiTicketNote }>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeNumber)}/tickets/${ticketId}/notes/${noteId}/privacy`,
+        { is_private: isPrivate },
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformNote(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
   /** Upload one or more file attachments to ANY entity (multipart). */
   async addAttachments(
     entityPath: string,
@@ -1267,11 +1493,15 @@ export const maintenanceTicketsService = {
   },
 
   /** Load catalog issues (for dropdowns). Requests a large page so all issues come back in one shot. */
-  async getCatalogIssues(signal?: AbortSignal, storeId?: string): Promise<CatalogIssue[]> {
+  async getCatalogIssues(
+    signal?: AbortSignal,
+    storeId?: string,
+    opts?: { includeDeleted?: boolean },
+  ): Promise<CatalogIssue[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogIssue[] }>(
-        "/api/maintenance-tickets/catalog/issues?per_page=1000",
+        `/api/maintenance-tickets/catalog/issues?per_page=1000${trashedParam(opts)}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1289,11 +1519,11 @@ export const maintenanceTicketsService = {
   },
 
   /** Load catalog technicians (for dropdowns). Requests a large page so all technicians come back in one shot. */
-  async getCatalogTechnicians(signal?: AbortSignal): Promise<CatalogTechnician[]> {
+  async getCatalogTechnicians(signal?: AbortSignal, opts?: { includeDeleted?: boolean }): Promise<CatalogTechnician[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogTechnician[] }>(
-        "/api/maintenance-tickets/catalog/technicians?per_page=1000",
+        `/api/maintenance-tickets/catalog/technicians?per_page=1000${trashedParam(opts)}`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           timeout: 15_000,
@@ -1306,12 +1536,37 @@ export const maintenanceTicketsService = {
     }
   },
 
+  /** One technician, with their coverage -- the technician page. */
+  async getTechnician(id: number, signal?: AbortSignal): Promise<CatalogTechnician> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: ApiCatalogTechnician }>(`/api/maintenance-tickets/catalog/technicians/${id}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeout: 15_000,
+        signal,
+      });
+      return transformTechnician(res.data.data);
+    } catch (err) {
+      return handleAxiosError(err);
+    }
+  },
+
+  /** Every technician's pay and work in a range -- the Technicians page. */
+  async getTechniciansAnalytics(params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<TechniciansOverview> {
+    return technicianAnalyticsGet<{ data: TechniciansOverview }>("/api/maintenance-tickets/technician-analytics", params, signal).then((r) => r.data);
+  },
+
+  /** One technician's pay and work in a range. */
+  async getTechnicianAnalytics(id: number, params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<TechnicianAnalytics> {
+    return technicianAnalyticsGet<{ data: TechnicianAnalytics }>(`/api/maintenance-tickets/catalog/technicians/${id}/analytics`, params, signal).then((r) => r.data);
+  },
+
   /** Load all catalog categories */
   async getCatalogCategories(signal?: AbortSignal): Promise<CatalogCategory[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogCategory[] }>(
-        "/api/maintenance-tickets/catalog/categories",
+        "/api/maintenance-tickets/catalog/categories?per_page=1000",
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           timeout: 15_000,
@@ -1325,11 +1580,11 @@ export const maintenanceTicketsService = {
   },
 
   /** Load all catalog parts */
-  async getCatalogParts(signal?: AbortSignal): Promise<CatalogPart[]> {
+  async getCatalogParts(signal?: AbortSignal, opts?: { includeDeleted?: boolean }): Promise<CatalogPart[]> {
     const token = requireToken();
     try {
       const res = await axios.get<{ data: ApiCatalogPart[] }>(
-        "/api/maintenance-tickets/catalog/parts",
+        `/api/maintenance-tickets/catalog/parts?per_page=1000${trashedParam(opts)}`,
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           timeout: 15_000,
@@ -1382,7 +1637,7 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
-  async createCatalogTechnician(payload: { name: string; phone?: string; category_id?: number }): Promise<CatalogTechnician> {
+  async createCatalogTechnician(payload: TechnicianInput & { name: string }): Promise<CatalogTechnician> {
     const token = requireToken();
     try {
       const res = await axios.post<{ data: ApiCatalogTechnician }>(
@@ -1461,6 +1716,317 @@ export const maintenanceTicketsService = {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
       });
     } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Catalog edits (partial: only the fields sent change) ──────────────── */
+
+  async updateCatalogIssue(id: number, payload: { title?: string; description?: string | null }): Promise<CatalogIssue> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiCatalogIssue }>(
+        `/api/maintenance-tickets/catalog/issues/${id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformCatalogIssue(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async updateCatalogTechnician(
+    id: number,
+    payload: TechnicianInput,
+  ): Promise<CatalogTechnician> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiCatalogTechnician }>(
+        `/api/maintenance-tickets/catalog/technicians/${id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformTechnician(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async updateCatalogCategory(id: number, payload: { name?: string; description?: string | null }): Promise<CatalogCategory> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiCatalogCategory }>(
+        `/api/maintenance-tickets/catalog/categories/${id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformCatalogCategory(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async updateCatalogPart(id: number, payload: { name?: string; description?: string | null }): Promise<CatalogPart> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiCatalogPart }>(
+        `/api/maintenance-tickets/catalog/parts/${id}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformCatalogPart(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * Earlier tickets at a store that reported the same catalog issue
+   * ("this store's last Oven tickets"), newest first, one row per ticket.
+   */
+  async getIssueHistory(
+    storeNumber: string,
+    issueId: number,
+    opts: { excludeTicketId?: number; openOnly?: boolean; page?: number; perPage?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<IssueHistoryPage> {
+    const token = requireToken();
+    const params = new URLSearchParams();
+    if (opts.excludeTicketId) params.set("exclude_ticket", String(opts.excludeTicketId));
+    if (opts.openOnly) params.set("open_only", "1");
+    params.set("per_page", String(opts.perPage ?? 10));
+    params.set("page", String(opts.page ?? 1));
+    try {
+      const res = await axios.get<ApiIssueHistoryResponse>(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeNumber)}/issues/${issueId}/history?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+      );
+      return {
+        rows: (res.data.data ?? []).map(transformIssueHistoryRow),
+        page: res.data.current_page ?? 1,
+        lastPage: res.data.last_page ?? 1,
+        total: res.data.total ?? 0,
+      };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Troubleshooting guides ────────────────────────────────────────────── */
+
+  /** Every catalog issue that has guides -- the library (titles and counts). */
+  async getTroubleshootingLibrary(storeId?: string, signal?: AbortSignal): Promise<TroubleshootingLibraryItem[]> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{
+        data: Array<{
+          issue_id: number;
+          title: string;
+          description: string | null;
+          guides: Array<{ id: number; title: string; steps_count: number; version: number; fixed_count: number; not_fixed_count: number; updated_at: string }>;
+        }>;
+      }>("/api/maintenance-tickets/troubleshooting", {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(storeId ? { "X-Store-Id": storeId } : {}) },
+        timeout: 15_000,
+        signal,
+      });
+      return (res.data.data ?? []).map((row) => ({
+        issueId: row.issue_id,
+        title: row.title,
+        description: row.description,
+        guides: (row.guides ?? []).map((g) => ({
+          id: g.id,
+          title: g.title,
+          stepsCount: g.steps_count,
+          version: g.version,
+          fixedCount: g.fixed_count,
+          notFixedCount: g.not_fixed_count,
+          updatedAt: g.updated_at,
+        })),
+      }));
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** One issue and all its guides -- the troubleshooting page. */
+  async getIssueTroubleshooting(issueId: number, signal?: AbortSignal, storeId?: string | null): Promise<IssueTroubleshooting> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{
+        data: { issue_id: number; title: string; description: string | null; guides: ApiTroubleshootingGuide[] };
+      }>(`/api/maintenance-tickets/catalog/issues/${issueId}/troubleshooting`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(storeId ? { "X-Store-Id": storeId } : {}) },
+        timeout: 15_000,
+        signal,
+      });
+      const d = res.data.data;
+      return {
+        issueId: d.issue_id,
+        title: d.title,
+        description: d.description,
+        guides: (d.guides ?? []).map(transformTroubleshootingGuide),
+      };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async createTroubleshootingGuide(issueId: number, payload: TroubleshootingGuideInput): Promise<TroubleshootingGuide> {
+    const token = requireToken();
+    try {
+      const res = await axios.post<{ data: ApiTroubleshootingGuide }>(
+        `/api/maintenance-tickets/catalog/issues/${issueId}/troubleshooting`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformTroubleshootingGuide(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Replace a guide; every save is a new version. Steps keep their id (and files). */
+  async updateTroubleshootingGuide(guideId: number, payload: TroubleshootingGuideInput): Promise<TroubleshootingGuide> {
+    const token = requireToken();
+    try {
+      const res = await axios.put<{ data: ApiTroubleshootingGuide }>(
+        `/api/maintenance-tickets/troubleshooting/${guideId}`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return transformTroubleshootingGuide(res.data.data);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async deleteTroubleshootingGuide(guideId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`/api/maintenance-tickets/troubleshooting/${guideId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
+      });
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Files for the whole guide. */
+  async addTroubleshootingFiles(guideId: number, files: File[]): Promise<TicketAttachment[]> {
+    const token = requireToken();
+    const body = new FormData();
+    files.forEach((file) => body.append("files[]", file));
+    try {
+      const res = await axios.post<{ data: ApiTicketAttachment[] }>(
+        `/api/maintenance-tickets/troubleshooting/${guideId}/attachments`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
+      );
+      return (res.data.data ?? []).map(transformAttachment);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async removeTroubleshootingFile(guideId: number, attachmentId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`/api/maintenance-tickets/troubleshooting/${guideId}/attachments/${attachmentId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
+      });
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** Files for one step. */
+  async addTroubleshootingStepFiles(stepId: number, files: File[]): Promise<TicketAttachment[]> {
+    const token = requireToken();
+    const body = new FormData();
+    files.forEach((file) => body.append("files[]", file));
+    try {
+      const res = await axios.post<{ data: ApiTicketAttachment[] }>(
+        `/api/maintenance-tickets/troubleshooting/steps/${stepId}/attachments`,
+        body,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
+      );
+      return (res.data.data ?? []).map(transformAttachment);
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async removeTroubleshootingStepFile(stepId: number, attachmentId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`/api/maintenance-tickets/troubleshooting/steps/${stepId}/attachments/${attachmentId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
+      });
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * "This fixed it": troubleshooting solved the problem at this store, so no
+   * ticket is opened. Naming the guide is optional.
+   */
+  async logTroubleshootingFix(storeId: string, issueId: number, guideId: number | null): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.post(
+        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/troubleshooting-fixes`,
+        { issue_id: issueId, troubleshooting_guide_id: guideId },
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Technician abilities ──────────────────────────────────────────────── */
+
+  /**
+   * Every rating, overall and per issue. The server keeps these off the
+   * technician list, which store users read; a 403 here means this person
+   * does not see ratings.
+   */
+  async getTechnicianAbilities(signal?: AbortSignal): Promise<TechnicianAbilityBoard> {
+    const token = requireToken();
+    try {
+      const res = await axios.get<{ data: { overall?: ApiTechnicianRating[]; by_issue?: ApiTechnicianRating[] } }>(
+        "/api/maintenance-tickets/catalog/technician-abilities",
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
+      );
+      return {
+        overall: (res.data.data?.overall ?? []).map(transformTechnicianRating),
+        byIssue: (res.data.data?.by_issue ?? []).map(transformTechnicianRating),
+      };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /**
+   * Rate a technician on one issue. Replaces the entry; one with no stars,
+   * notes or pin is removed (rating comes back null).
+   */
+  async saveTechnicianAbility(technicianId: number, issueId: number, input: TechnicianRatingInput): Promise<TechnicianRatingSaved> {
+    const token = requireToken();
+    try {
+      const res = await axios.put<{ data: ApiTechnicianRating | null; moved_from: { id: number; name: string } | null }>(
+        `/api/maintenance-tickets/catalog/technicians/${technicianId}/abilities/${issueId}`,
+        input,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return { rating: res.data.data ? transformTechnicianRating(res.data.data) : null, movedFrom: res.data.moved_from ?? null };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  async removeTechnicianAbility(technicianId: number, issueId: number): Promise<void> {
+    const token = requireToken();
+    try {
+      await axios.delete(`/api/maintenance-tickets/catalog/technicians/${technicianId}/abilities/${issueId}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
+      });
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /** The overall rating, and the overall "call first" pin. */
+  async saveTechnicianRating(technicianId: number, input: TechnicianRatingInput): Promise<TechnicianRatingSaved> {
+    const token = requireToken();
+    try {
+      const res = await axios.patch<{ data: ApiTechnicianRating; moved_from: { id: number; name: string } | null }>(
+        `/api/maintenance-tickets/catalog/technicians/${technicianId}/rating`,
+        input,
+        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
+      );
+      return { rating: transformTechnicianRating(res.data.data), movedFrom: res.data.moved_from ?? null };
+    } catch (err) { return handleAxiosError(err); }
+  },
+
+  /* ── Analytics ─────────────────────────────────────────────────────────── */
+
+  async getAnalyticsSummary(params: AnalyticsParams, signal?: AbortSignal): Promise<AnalyticsSummary> {
+    const res = await analyticsGet<{ data: AnalyticsSummary }>("summary", params, {}, signal);
+    return res.data;
+  },
+
+  async getAnalyticsActivity(params: AnalyticsParams, page = 1, signal?: AbortSignal): Promise<AnalyticsActivityPage> {
+    return analyticsGet<AnalyticsActivityPage>("activity", params, { page: String(page), per_page: "25" }, signal);
+  },
+
+  async getAnalyticsWatchlist(params: AnalyticsParams, signal?: AbortSignal): Promise<AnalyticsWatchlist> {
+    const res = await analyticsGet<{ data: AnalyticsWatchlist }>("watchlist", params, {}, signal);
+    return res.data;
   },
 
   /* ── Ticket lifecycle ──────────────────────────────────────────────────── */

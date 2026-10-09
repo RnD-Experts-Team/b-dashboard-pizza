@@ -15,11 +15,19 @@ import {
   TrendingUp,
   UserMinus,
   Coffee,
+  MessageSquareWarning,
+  Wrench,
 } from "lucide-react";
 
 function getToastVisuals(type: string) {
+  if (type.startsWith("maintenance_")) {
+    return { Icon: Wrench, color: "text-sky-600 dark:text-sky-400" };
+  }
   if (type.startsWith("break_")) {
     return { Icon: Coffee, color: "text-amber-600 dark:text-amber-400" };
+  }
+  if (type.startsWith("ticket_")) {
+    return { Icon: MessageSquareWarning, color: "text-rose-600 dark:text-rose-400" };
   }
   if (type.startsWith("announcement")) {
     return { Icon: Megaphone, color: "text-purple-600 dark:text-purple-400" };

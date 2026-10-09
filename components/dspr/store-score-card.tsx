@@ -431,6 +431,9 @@ export function StoreScoreCard({
 
   return (
     <Card
+      data-report-target="card"
+      data-report-id="dspr-store-score"
+      data-report-label={tab === "score" ? "Store Score" : "Upselling"}
       className={cn(
         "relative flex flex-col h-[280px] overflow-hidden transition-shadow py-2 px-3",
         tab === "score"
