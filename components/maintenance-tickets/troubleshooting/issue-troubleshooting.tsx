@@ -155,12 +155,12 @@ export function IssueTroubleshooting({
   const load = useCallback(async (signal?: AbortSignal) => {
     setError(null);
     try {
-      setData(await maintenanceTicketsService.getIssueTroubleshooting(issueId, signal));
+      setData(await maintenanceTicketsService.getIssueTroubleshooting(issueId, signal, storeCode));
     } catch (err) {
       if (signal?.aborted) return;
       setError(err instanceof MaintenanceTicketsError ? err.message : "Could not load the troubleshooting.");
     }
-  }, [issueId]);
+  }, [issueId, storeCode]);
 
   useEffect(() => {
     const controller = new AbortController();

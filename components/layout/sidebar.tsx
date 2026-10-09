@@ -497,7 +497,13 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("cleaningChart"),
         href: `/${locale}/dashboard/cleaning-chart`,
         icon: Sparkles,
-        // Role/permission gating deferred — visible to all for now.
+        // Cleaning Specialist head via the unscoped tasks rule, or anyone holding
+        // `cleaning specialist` at one of their stores (Store Manager, Cleaning
+        // Specialist workers) via the per-store due rule.
+        requirements: [
+          { service: "QA", method: "GET", path: "/cleaning/tasks" },
+          ...(overviewStores ?? []).map((s) => ({ service: "QA", method: "GET", path: "/cleaning/stores/*/due-range", storeId: s.id })),
+        ],
       },
       {
         title: t("doughSauce"),

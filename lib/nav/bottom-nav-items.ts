@@ -200,6 +200,12 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: Sparkles,
     titleKey: "cleaningChart",
     groupKey: "qaManagement",
+    // Mirrors sidebar.tsx: Cleaning Specialist head (unscoped tasks rule) or
+    // `cleaning specialist` at the selected store (per-store due rule).
+    requirements: (storeId) => [
+      { service: "QA", method: "GET", path: "/cleaning/tasks" },
+      { service: "QA", method: "GET", path: "/cleaning/stores/*/due-range", storeId },
+    ],
   },
   {
     id: "doughSauce",

@@ -1837,13 +1837,13 @@ export const maintenanceTicketsService = {
   },
 
   /** One issue and all its guides -- the troubleshooting page. */
-  async getIssueTroubleshooting(issueId: number, signal?: AbortSignal): Promise<IssueTroubleshooting> {
+  async getIssueTroubleshooting(issueId: number, signal?: AbortSignal, storeId?: string | null): Promise<IssueTroubleshooting> {
     const token = requireToken();
     try {
       const res = await axios.get<{
         data: { issue_id: number; title: string; description: string | null; guides: ApiTroubleshootingGuide[] };
       }>(`/api/maintenance-tickets/catalog/issues/${issueId}/troubleshooting`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(storeId ? { "X-Store-Id": storeId } : {}) },
         timeout: 15_000,
         signal,
       });
