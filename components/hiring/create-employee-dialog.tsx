@@ -59,6 +59,7 @@ import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { UsStateSelect } from "@/components/hiring/us-state-select";
 import type {
   CreateEmployeeV1Payload,
   CreateEmployeeV1Address,
@@ -1039,11 +1040,9 @@ export function CreateEmployeeDialog({
                 <Label>
                   State <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <UsStateSelect
                   value={a.state ?? ""}
-                  onChange={(e) => updateItem(setAddresses, idx, "state", e.target.value)}
-                  maxLength={100}
-                  placeholder="State"
+                  onChange={(code) => updateItem(setAddresses, idx, "state", code)}
                 />
               </div>
               <div className="space-y-1.5">

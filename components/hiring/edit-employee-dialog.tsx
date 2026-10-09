@@ -44,6 +44,8 @@ import { toast } from "sonner";
 import { employeeService } from "@/lib/api/services/employee.service";
 import { useReferenceCatalogStore } from "@/lib/store/reference-catalog.store";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { toStateCode } from "@/lib/us-states";
+import { UsStateSelect } from "@/components/hiring/us-state-select";
 import type {
   CreateEmployeeV1Address,
   CreateEmployeeV1Availability,
@@ -366,7 +368,9 @@ export function EditEmployeeDialog({
         address_1: a.address_1 ?? "",
         address_2: a.address_2 ?? "",
         city: a.city ?? "",
-        state: a.state ?? "",
+        // Older rows hold free text ("Ohio", "oh"). An unrecognisable one
+        // loads blank, so the required check asks for a real state.
+        state: toStateCode(a.state) ?? "",
         zip_code: a.zip_code ?? "",
         country: a.country ?? "",
         is_primary: a.is_primary ?? false,
@@ -1073,11 +1077,9 @@ export function EditEmployeeDialog({
                 <Label>
                   State <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <UsStateSelect
                   value={a.state ?? ""}
-                  onChange={(e) => updateItem(setAddresses, idx, "state", e.target.value)}
-                  maxLength={100}
-                  placeholder="State"
+                  onChange={(code) => updateItem(setAddresses, idx, "state", code)}
                 />
               </div>
               <div className="space-y-1.5">
