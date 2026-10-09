@@ -6,6 +6,22 @@ interface PendingDebriefKey {
   storeId: string;
 }
 
+/** Optional context for `openDebriefPanel` — the panel switches to it first. */
+export interface DebriefPanelOpenOptions {
+  /** YYYY-MM-DD — applied to the tab's own date picker. */
+  date?: string;
+  /** Store CODE (e.g. "03795-00001"), the same id the panel's store select uses. */
+  storeId?: string;
+}
+
+/** A cleaning task the panel should open straight onto (Manager Hub rows). */
+export interface PendingCleaningTask {
+  taskId: number;
+  date: string;
+  /** Store CODE, as above. */
+  storeId: string;
+}
+
 /** Tabs of the floating debrief panel, in its own `activeNav` order. */
 export type DebriefPanelTab =
   | "debrief"
@@ -63,8 +79,22 @@ interface DebriefActionState {
 
   /** Set to request the floating panel open on a given tab. */
   pendingPanelTab: DebriefPanelTab | null;
-  openDebriefPanel: (tab: DebriefPanelTab) => void;
+  pendingPanelOpts: DebriefPanelOpenOptions | null;
+  openDebriefPanel: (tab: DebriefPanelTab, opts?: DebriefPanelOpenOptions) => void;
   clearPendingPanelTab: () => void;
+
+  /** Set to request the panel open on the Cleaning tab with this task's form. */
+  pendingCleaningTask: PendingCleaningTask | null;
+  openCleaningTask: (taskId: number, date: string, storeId: string) => void;
+  clearPendingCleaningTask: () => void;
+
+  /**
+   * Bumped after every successful write made from the panel (debrief value,
+   * bulk fill, cleaning complete/undo, employee debrief). Pages that show the
+   * same data (Manager Hub) watch it and refetch quietly.
+   */
+  revision: number;
+  bumpRevision: () => void;
 
   taskCounts: ManagerTaskCounts;
   setTaskCounts: (partial: Partial<ManagerTaskCounts>) => void;
@@ -77,8 +107,18 @@ export const useDebriefActionStore = create<DebriefActionState>()((set) => ({
   clearPendingDebriefKey: () => set({ pendingDebriefKey: null }),
 
   pendingPanelTab: null,
-  openDebriefPanel: (tab) => set({ pendingPanelTab: tab }),
-  clearPendingPanelTab: () => set({ pendingPanelTab: null }),
+  pendingPanelOpts: null,
+  openDebriefPanel: (tab, opts) =>
+    set({ pendingPanelTab: tab, pendingPanelOpts: opts ?? null }),
+  clearPendingPanelTab: () => set({ pendingPanelTab: null, pendingPanelOpts: null }),
+
+  pendingCleaningTask: null,
+  openCleaningTask: (taskId, date, storeId) =>
+    set({ pendingCleaningTask: { taskId, date, storeId } }),
+  clearPendingCleaningTask: () => set({ pendingCleaningTask: null }),
+
+  revision: 0,
+  bumpRevision: () => set((state) => ({ revision: state.revision + 1 })),
 
   taskCounts: EMPTY_TASK_COUNTS,
   setTaskCounts: (partial) =>

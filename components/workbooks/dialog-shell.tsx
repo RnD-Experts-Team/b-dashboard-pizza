@@ -34,16 +34,19 @@ interface DialogShellProps {
   bodyClassName?: string;
   /** Block closing while a request is in flight. */
   busy?: boolean;
+  /** Passed to Radix — e.g. to skip the focus hand-back when the close opens another surface. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 export const DialogShell = forwardRef<HTMLDivElement, DialogShellProps>(function DialogShell(
-  { title, description, footer, size = "md", children, toolbar, bodyClassName, busy },
+  { title, description, footer, size = "md", children, toolbar, bodyClassName, busy, onCloseAutoFocus },
   bodyRef,
 ) {
   return (
     <DialogContent
       className={cn("flex w-[95vw] flex-col gap-0 overflow-hidden p-0", SIZE[size])}
       onOpenAutoFocus={(e) => e.preventDefault()}
+      onCloseAutoFocus={onCloseAutoFocus}
       onInteractOutside={(e) => {
         if (busy) e.preventDefault();
       }}

@@ -4,13 +4,23 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMicLogStore, type MicLogLevel } from "./log-store";
-import { formatBoost, formatOnOff, formatStrength, formatWindCut, type MicEngineState } from "./settings";
+import {
+  BROWSER_FX_LABELS,
+  formatBoost,
+  formatOnOff,
+  formatStrength,
+  formatWindCut,
+  type MicEngineState,
+} from "./settings";
 
 /**
  * TEST ONLY — station-side readout of the drive-thru mic processing, so a change
  * made by the manager can be seen landing on the station. Shown while the
  * manager's "Show test panel on station" switch is on. Safe to delete together
  * with its one mount in public-screen-view.tsx.
+ *
+ * Layout: the title row and the "Last change from manager" box never scroll, so
+ * the success/failure message is always visible; everything else scrolls in one body.
  */
 
 const ENGINE_LABEL: Record<MicEngineState, string> = {
@@ -35,6 +45,8 @@ const LEVEL_CLASS: Record<MicLogLevel, string> = {
   warn: "text-amber-300",
   error: "text-red-300",
 };
+
+const BROWSER_KEYS = ["autoGain", "noiseSuppression", "echoCancellation"] as const;
 
 const time = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -65,7 +77,7 @@ export function MicTestPanel() {
   const [collapsed, setCollapsed] = useState(false);
   const [flash, setFlash] = useState(false);
 
-  // Highlight the "last change" line briefly whenever the manager changes something.
+  // Highlight the "last change" box briefly whenever the manager changes something.
   useEffect(() => {
     if (!lastManagerChange) return;
     setFlash(true);
@@ -78,6 +90,7 @@ export function MicTestPanel() {
   const engine = status?.engine ?? "starting";
   const levels = status?.levels;
   const clipping = !!levels && levels.inPeak >= 0.99;
+  const changeOk = lastManagerChange?.ok ?? true;
 
   return (
     <div
@@ -104,8 +117,31 @@ export function MicTestPanel() {
 
       {!collapsed && (
         <>
-          {/* Current state — fixed, never scrolls away */}
-          <div className="shrink-0 space-y-2 border-b border-white/10 px-3 py-2">
+          {/* Last change from the manager — fixed, so the result is always in view */}
+          <div
+            className={cn(
+              "shrink-0 border-b px-3 py-2 transition-colors duration-700",
+              flash
+                ? changeOk
+                  ? "border-emerald-400/60 bg-emerald-500/30"
+                  : "border-amber-400/60 bg-amber-500/30"
+                : "border-white/10 bg-white/5",
+            )}
+          >
+            <p className="text-[10px] uppercase tracking-wide text-white/50">Last change from manager</p>
+            {lastManagerChange ? (
+              <p className="break-words">
+                <span className="tabular-nums text-white/60">{time(lastManagerChange.time)} </span>
+                <span className={changeOk ? "text-emerald-300" : "text-amber-300"}>{changeOk ? "✓" : "⚠"} </span>
+                {lastManagerChange.text}
+              </p>
+            ) : (
+              <p className="text-white/50">None yet</p>
+            )}
+          </div>
+
+          {/* Everything else scrolls together */}
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-2">
             {engine === "failed" && status?.reason && (
               <p className="break-words text-red-300">{status.reason}</p>
             )}
@@ -139,8 +175,34 @@ export function MicTestPanel() {
               <span>{formatWindCut(settings.windCutHz)}</span>
               <span className="text-white/60">Mic boost</span>
               <span>{formatBoost(settings.boost)}</span>
-              <span className="text-white/60">Auto volume</span>
-              <span>{formatOnOff(settings.autoGain)}</span>
+            </div>
+
+            {/* Browser processing: what was asked vs what the browser itself reports */}
+            <div className="space-y-0.5 rounded border border-white/10 px-2 py-1.5">
+              <p className="text-[10px] uppercase tracking-wide text-white/50">Browser processing (browser reports)</p>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums">
+                {BROWSER_KEYS.map((k) => {
+                  const asked = settings[k];
+                  const reported = status?.capture?.[k];
+                  let text = "—";
+                  let cls = "text-white/50";
+                  if (reported !== undefined && reported !== null) {
+                    if (reported === asked) {
+                      text = `${formatOnOff(reported)} ✓`;
+                      cls = "text-emerald-300";
+                    } else {
+                      text = `${formatOnOff(reported)} ⚠ (asked ${formatOnOff(asked)})`;
+                      cls = "text-amber-300";
+                    }
+                  }
+                  return (
+                    <div key={k} className="contents">
+                      <span className="text-white/60">{BROWSER_FX_LABELS[k]}</span>
+                      <span className={cls}>{text}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {levels && (
@@ -160,34 +222,17 @@ export function MicTestPanel() {
               </div>
             )}
 
-            <div
-              className={cn(
-                "rounded border px-2 py-1.5 transition-colors duration-700",
-                flash ? "border-emerald-400/60 bg-emerald-500/30" : "border-white/10 bg-white/5",
-              )}
-            >
-              <p className="text-[10px] uppercase tracking-wide text-white/50">Last change from manager</p>
-              {lastManagerChange ? (
-                <p className="break-words">
-                  <span className="tabular-nums text-white/60">{time(lastManagerChange.time)} </span>
-                  {lastManagerChange.text} <span className="text-emerald-300">✓ applied</span>
-                </p>
-              ) : (
-                <p className="text-white/50">None yet</p>
-              )}
-            </div>
+            {/* Log — newest first, scrolls inside its own capped box */}
+            <ol className="max-h-36 space-y-0.5 overflow-y-auto rounded border border-white/10 bg-black/30 px-2 py-1.5 font-mono text-[11px] leading-snug">
+              {entries.length === 0 && <li className="text-white/50">No log yet</li>}
+              {entries.map((e) => (
+                <li key={e.id} className={cn("break-words", LEVEL_CLASS[e.level])}>
+                  <span className="text-white/40">{time(e.time)} </span>
+                  {e.text}
+                </li>
+              ))}
+            </ol>
           </div>
-
-          {/* Log — scrolls inside the panel, newest first */}
-          <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 py-2 font-mono text-[11px] leading-snug">
-            {entries.length === 0 && <li className="text-white/50">No log yet</li>}
-            {entries.map((e) => (
-              <li key={e.id} className={cn("break-words", LEVEL_CLASS[e.level])}>
-                <span className="text-white/40">{time(e.time)} </span>
-                {e.text}
-              </li>
-            ))}
-          </ol>
         </>
       )}
     </div>

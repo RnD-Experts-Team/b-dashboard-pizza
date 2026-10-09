@@ -16,6 +16,10 @@ export type DriveThruMicSettings = {
   boost: number;
   /** Browser automatic gain control on the capture. */
   autoGain: boolean;
+  /** Chrome's own noise suppression on the capture (on top of the mic's built-in one). */
+  noiseSuppression: boolean;
+  /** Chrome's own echo cancellation on the capture. */
+  echoCancellation: boolean;
   /** Show the test panel on the station screen. */
   testPanel: boolean;
 };
@@ -26,6 +30,8 @@ export const DEFAULT_MIC_SETTINGS: DriveThruMicSettings = {
   windCutHz: 80,
   boost: 1,
   autoGain: true,
+  noiseSuppression: true,
+  echoCancellation: true,
   testPanel: true,
 };
 
@@ -53,6 +59,13 @@ export type MicLevels = {
   vad: number | null;
 };
 
+/** What the browser itself reports for the capture (null = it doesn't report that flag). */
+export type MicCapture = {
+  autoGain: boolean | null;
+  noiseSuppression: boolean | null;
+  echoCancellation: boolean | null;
+};
+
 export type MicStatus = {
   engine: MicEngineState;
   reason?: string;
@@ -63,6 +76,8 @@ export type MicStatus = {
   /** true = processing the selected mic, false = a different one, null = default/unknown. */
   onSelectedMic: boolean | null;
   levels?: MicLevels;
+  /** The browser's own report of auto volume / noise suppression / echo cancel on the live capture. */
+  capture?: MicCapture;
 };
 
 export type MicMessage =
@@ -88,13 +103,22 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 const text = (v: unknown): string | undefined =>
   typeof v === "string" ? v.slice(0, MAX_TEXT) : undefined;
 
-/** Strict: every field must be present and the right type. Numbers are clamped. */
+/**
+ * Strict: every field must be present and the right type. Numbers are clamped.
+ * Exception: `noiseSuppression` / `echoCancellation` were added later, so a peer
+ * running an older page (a kiosk can stay open for days) may not send them —
+ * missing means "on" (the previous behaviour); present but not a boolean is rejected.
+ */
 export function sanitizeMicSettings(input: unknown): DriveThruMicSettings | null {
   if (!isObj(input)) return null;
   const { enabled, strength, windCutHz, boost, autoGain, testPanel } = input;
+  const noiseSuppression = input.noiseSuppression === undefined ? DEFAULT_MIC_SETTINGS.noiseSuppression : input.noiseSuppression;
+  const echoCancellation = input.echoCancellation === undefined ? DEFAULT_MIC_SETTINGS.echoCancellation : input.echoCancellation;
   if (
     typeof enabled !== "boolean" ||
     typeof autoGain !== "boolean" ||
+    typeof noiseSuppression !== "boolean" ||
+    typeof echoCancellation !== "boolean" ||
     typeof testPanel !== "boolean" ||
     !finite(strength) ||
     !finite(windCutHz) ||
@@ -106,6 +130,8 @@ export function sanitizeMicSettings(input: unknown): DriveThruMicSettings | null
   return {
     enabled,
     autoGain,
+    noiseSuppression,
+    echoCancellation,
     testPanel,
     strength: clamp(strength, r.strength.min, r.strength.max),
     windCutHz: windCutHz < r.windCutHz.min ? 0 : clamp(windCutHz, r.windCutHz.min, r.windCutHz.max),
@@ -131,6 +157,16 @@ function sanitizeLevels(input: unknown): MicLevels | undefined {
   };
 }
 
+function sanitizeCapture(input: unknown): MicCapture | undefined {
+  if (!isObj(input)) return undefined;
+  const flag = (v: unknown) => (typeof v === "boolean" ? v : null);
+  return {
+    autoGain: flag(input.autoGain),
+    noiseSuppression: flag(input.noiseSuppression),
+    echoCancellation: flag(input.echoCancellation),
+  };
+}
+
 function sanitizeStatus(input: unknown): MicStatus | null {
   if (!isObj(input)) return null;
   const engine = input.engine;
@@ -144,6 +180,7 @@ function sanitizeStatus(input: unknown): MicStatus | null {
     selectedDeviceId: text(input.selectedDeviceId),
     onSelectedMic: typeof onSelected === "boolean" ? onSelected : null,
     levels: sanitizeLevels(input.levels),
+    capture: sanitizeCapture(input.capture),
   };
 }
 
@@ -188,6 +225,13 @@ export const formatWindCut = (hz: number) => (hz === 0 ? "Off" : `${Math.round(h
 export const formatBoost = (v: number) => `${Math.round(v * 100)}%`;
 export const formatOnOff = (v: boolean) => (v ? "On" : "Off");
 
+/** Names of the three browser capture switches, as shown to people and in logs. */
+export const BROWSER_FX_LABELS = {
+  autoGain: "Auto volume",
+  noiseSuppression: "Browser noise suppression",
+  echoCancellation: "Browser echo cancel",
+} as const;
+
 /** Plain-language list of what changed, e.g. ["Wind cut 80 Hz → 120 Hz"]. */
 export function describeMicChanges(prev: DriveThruMicSettings, next: DriveThruMicSettings): string[] {
   const out: string[] = [];
@@ -196,6 +240,8 @@ export function describeMicChanges(prev: DriveThruMicSettings, next: DriveThruMi
   if (prev.windCutHz !== next.windCutHz) out.push(`Wind cut ${formatWindCut(prev.windCutHz)} → ${formatWindCut(next.windCutHz)}`);
   if (prev.boost !== next.boost) out.push(`Mic boost ${formatBoost(prev.boost)} → ${formatBoost(next.boost)}`);
   if (prev.autoGain !== next.autoGain) out.push(`Auto volume ${formatOnOff(prev.autoGain)} → ${formatOnOff(next.autoGain)}`);
+  if (prev.noiseSuppression !== next.noiseSuppression) out.push(`Browser noise suppression ${formatOnOff(prev.noiseSuppression)} → ${formatOnOff(next.noiseSuppression)}`);
+  if (prev.echoCancellation !== next.echoCancellation) out.push(`Browser echo cancel ${formatOnOff(prev.echoCancellation)} → ${formatOnOff(next.echoCancellation)}`);
   if (prev.testPanel !== next.testPanel) out.push(`Test panel ${formatOnOff(prev.testPanel)} → ${formatOnOff(next.testPanel)}`);
   return out;
 }

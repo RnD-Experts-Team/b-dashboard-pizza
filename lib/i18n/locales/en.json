@@ -90,7 +90,7 @@
     "dataManagement": "Data Management",
     "keys": "Keys",
     "maintenanceTickets": "Maintenance Tickets",
-    "dueKeys": "Debriefs",
+    "dueKeys": "Manager Hub",
     "employeeDebriefs": "Employee Debrief Notes",
     "exportImport": "Export / Import",
     "tags": "Tags",
@@ -4142,6 +4142,251 @@
       "debrief": "Debrief button",
       "screenPreview": "Screen preview",
       "settingsMenu": "Settings menu"
+    }
+  },
+  "managerHub": {
+    "title": "Manager Hub",
+    "description": "Your cleaning tasks and debriefs for the store — what's done and what's still missing.",
+    "noStore": "No store selected",
+    "noStoreTitle": "Pick a store to get started",
+    "noStoreBody": "Choose a store in the sidebar to see its tasks and debriefs.",
+    "backToToday": "Back to today",
+    "refresh": "Refresh",
+    "updated": "Updated {time}",
+    "updating": "Updating…",
+    "viewingPastDay": "You're viewing another day. \"Missed this week\" counts the 7 days before it.",
+    "tabs": {
+      "overview": "Overview",
+      "tasks": "My Tasks",
+      "debriefs": "My Debriefs",
+      "employeeDebriefs": "Employee Debriefs"
+    },
+    "search": {
+      "clear": "Clear search"
+    },
+    "days": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "daysAgo": "{count, plural, one {# day ago} other {# days ago}}"
+    },
+    "errors": {
+      "retry": "Try again",
+      "refreshFailed": "Couldn't refresh — showing the last data loaded. {message}",
+      "partialFailed": "Part of this list didn't load. {message}",
+      "forbidden": {
+        "title": "No access",
+        "body": "Your account isn't allowed to see this for the selected store."
+      },
+      "auth": {
+        "title": "Signed out",
+        "body": "Your session has ended. Sign in again to continue."
+      },
+      "network": {
+        "title": "Can't reach the server",
+        "body": "Check your connection, then try again."
+      },
+      "timeout": {
+        "title": "The server took too long",
+        "body": "It didn't answer in time. Try again in a moment."
+      },
+      "server": {
+        "title": "The server had a problem",
+        "body": "Something went wrong on the server's side. Try again in a moment."
+      },
+      "notFound": {
+        "title": "Not found",
+        "body": "The server couldn't find this for the selected store."
+      },
+      "generic": {
+        "title": "Couldn't load this",
+        "body": "The server answered with an error."
+      }
+    },
+    "status": {
+      "filled": "Filled",
+      "missing": "Missing",
+      "missed": "Missed"
+    },
+    "kinds": {
+      "debrief": "Debrief",
+      "cleaning": "Cleaning task",
+      "employee": "Employee debrief"
+    },
+    "rows": {
+      "openDetail": "Open details for {label}",
+      "corrected": "This value was corrected",
+      "edit": "Edit",
+      "fill": "Fill",
+      "photoRequired": "Photo required",
+      "complete": "Complete"
+    },
+    "actions": {
+      "panelUnavailableTitle": "The debrief panel isn't available",
+      "panelUnavailableBody": "Your account can't add debriefs for this store, so this can't be opened from here."
+    },
+    "alert": {
+      "loadingLabel": "Checking what's left…",
+      "reportLabel": "Missing items",
+      "clearTitle": "All caught up",
+      "clearBodyToday": "Every debrief and cleaning task for today is done, and nothing was missed this week.",
+      "clearBodyDay": "Every debrief and cleaning task for {date} is done, and nothing was missed the week before.",
+      "clearBodyTodayDebriefs": "Every debrief for today is filled, and nothing was missed this week.",
+      "clearBodyDayDebriefs": "Every debrief for {date} is filled, and nothing was missed the week before.",
+      "pendingTitleToday": "{count, plural, one {# item still missing today} other {# items still missing today}}",
+      "pendingTitleDay": "{count, plural, one {# item still missing on {date}} other {# items still missing on {date}}}",
+      "pendingBody": "Fill them before the day closes.",
+      "pendingBodyBacklog": "Fill today's first, then catch up on the days you missed.",
+      "overdueBody": "Some cleaning tasks are already overdue — start with those.",
+      "backlogOnlyTitle": "{count, plural, one {Today is done — # item was missed this week} other {Today is done — # items were missed this week}}",
+      "backlogOnlyBody": "Those days were never completed. You can still fill them in.",
+      "chipDebriefs": "{count, plural, one {# debrief} other {# debriefs}}",
+      "chipTasks": "{count, plural, one {# cleaning task} other {# cleaning tasks}}",
+      "chipOverdue": "{count} overdue",
+      "chipMissed": "{count} missed this week",
+      "partial": "Some sections didn't load, so these counts may be incomplete.",
+      "start": "Start filling",
+      "reviewMissed": "Review missed",
+      "progressToday": "Done today",
+      "progressDay": "Done on {date}",
+      "progressCount": "{done} of {total}"
+    },
+    "kpis": {
+      "debriefs": "Debriefs filled",
+      "cleaning": "Cleaning done",
+      "missed": "Missed · 7 days",
+      "employeeDebriefs": "Employee debriefs · {days}d",
+      "noneDue": "Nothing due",
+      "missingCount": "{count} still missing",
+      "allFilled": "All filled",
+      "overdueCount": "{count} overdue",
+      "pendingCount": "{count} pending",
+      "allDone": "All done",
+      "nothingMissed": "Nothing missed",
+      "missedSplit": "{debriefs} debriefs · {tasks} tasks",
+      "missedDebriefs": "{count, plural, one {# debrief} other {# debriefs}}",
+      "employeeToday": "{count} written today"
+    },
+    "overview": {
+      "todayTitle": "Still to do today",
+      "dayTitle": "Still to do on {date}",
+      "todaySubtitle": "Debriefs and cleaning tasks — overdue first",
+      "fillAll": "Fill all",
+      "todayClearTitle": "Nothing left for today",
+      "dayClearTitle": "Nothing left for this day",
+      "todayClearBody": "Every debrief is filled and every cleaning task is done.",
+      "missedTitle": "Missed this week",
+      "missedSubtitle": "{from} – {to} · never completed",
+      "missedClearTitle": "Nothing missed",
+      "missedClearBody": "Every day in the last week was completed.",
+      "recentTitle": "Recent employee debriefs",
+      "recentSubtitle": "The latest notes written about employees",
+      "addDebrief": "Add debrief",
+      "seeAll": "See all",
+      "recentEmptyTitle": "No employee debriefs yet",
+      "recentEmptyBody": "Notes written about employees in this period will show up here."
+    },
+    "tasks": {
+      "noAccessTitle": "No access to the cleaning chart",
+      "noAccessBody": "Your account can't see cleaning tasks for this store.",
+      "todayTitle": "Today's tasks",
+      "dayTitle": "Tasks for {date}",
+      "todaySubtitle": "From the cleaning chart",
+      "filters": {
+        "all": "All",
+        "overdue": "Overdue",
+        "pending": "Pending",
+        "done": "Done"
+      },
+      "searchPlaceholder": "Search tasks…",
+      "openInPanel": "Open in panel",
+      "openChart": "Cleaning Chart",
+      "noneTitle": "No cleaning tasks due",
+      "noneBody": "Nothing on the cleaning chart is due for this day.",
+      "noMatchTitle": "No matches",
+      "noMatchBody": "Try a different search or filter.",
+      "missedTitle": "Missed in the last 7 days",
+      "missedSubtitle": "Periods that ended without being done",
+      "missedClearTitle": "Nothing missed",
+      "missedClearBody": "Every cleaning period in the last week was completed."
+    },
+    "debriefs": {
+      "todayTitle": "Today's debriefs",
+      "dayTitle": "Debriefs for {date}",
+      "todaySubtitle": "Values to fill for the store",
+      "filters": {
+        "all": "All",
+        "missing": "Missing",
+        "filled": "Filled"
+      },
+      "searchPlaceholder": "Search debriefs…",
+      "fillAllInPanel": "Fill all in panel",
+      "openInPanel": "Open in panel",
+      "allTags": "All tags",
+      "noneTitle": "No debriefs due",
+      "noneBody": "There's nothing to fill for this day.",
+      "noMatchTitle": "No matches",
+      "noMatchBody": "Try a different search, filter or tag.",
+      "missedTitle": "Missed in the last 7 days",
+      "missedSubtitle": "Days left unfilled",
+      "missedClearTitle": "Nothing missed",
+      "missedClearBody": "Every debrief in the last week was filled.",
+      "fillDay": "Fill this day"
+    },
+    "employeeDebriefs": {
+      "title": "Employee debriefs",
+      "subtitle": "{from} – {to} · {employees, plural, one {# employee} other {# employees}}",
+      "employee": "Employee",
+      "by": "by {name}",
+      "lastDays": "Last {count} days",
+      "searchPlaceholder": "Search employee, author or note…",
+      "history": "Employee history",
+      "add": "Add debrief",
+      "allTypes": "All types",
+      "noType": "No type",
+      "emptyTitle": "No employee debriefs",
+      "emptyBody": "Nothing was written about employees in the last {count} days.",
+      "noMatchTitle": "No matches",
+      "noMatchBody": "Try a different search or type."
+    },
+    "detail": {
+      "value": "Value",
+      "noValue": "No value has been filled for this day yet.",
+      "noValueMissed": "This day was never filled. You can still fill it in.",
+      "details": "Details",
+      "type": "Type",
+      "tags": "Tags",
+      "filledBy": "Filled by",
+      "filledAt": "Filled at",
+      "updatedAt": "Last updated",
+      "corrected": "Corrected",
+      "correctedBody": "Replaced an earlier value — it's kept in the history",
+      "note": "Note",
+      "attachments": "{count, plural, one {Attachment} other {Attachments (#)}}",
+      "description": "Description",
+      "frequency": "Frequency",
+      "period": "Period",
+      "photo": "Photo",
+      "photoRequired": "Required to complete",
+      "photoOptional": "Optional",
+      "doneBy": "Done by",
+      "doneAt": "Done at",
+      "completions": "Times completed",
+      "photos": "{count, plural, one {Photo} other {Photos (#)}}",
+      "noType": "No type",
+      "notes": "Notes",
+      "noNotes": "No notes were written.",
+      "employee": "Employee",
+      "author": "Written by",
+      "createdAt": "Written at",
+      "viewHistory": "Value history",
+      "openDayInPanel": "All of this day",
+      "fillInPanel": "Fill in panel",
+      "editInPanel": "Edit in panel",
+      "openInCleaningChart": "Open in Cleaning Chart",
+      "completeInPanel": "Complete in panel",
+      "undoInPanel": "Undo in panel",
+      "employeeHistory": "Employee history",
+      "addEmployeeDebrief": "Add a debrief"
     }
   }
 }

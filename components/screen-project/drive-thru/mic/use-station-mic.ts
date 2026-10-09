@@ -17,6 +17,7 @@ import {
   type ProcessorEvent,
 } from "./processor";
 import {
+  BROWSER_FX_LABELS,
   decodeMicMessage,
   describeMicChanges,
   encodeMicMessage,
@@ -28,6 +29,7 @@ import {
   MIC_TOPIC,
   sanitizeStoredMicSettings,
   type DriveThruMicSettings,
+  type MicCapture,
   type MicLevels,
   type MicStatus,
 } from "./settings";
@@ -58,7 +60,22 @@ function saveMicSettings(settings: DriveThruMicSettings) {
 
 const summary = (s: DriveThruMicSettings) =>
   `filter ${formatOnOff(s.enabled)}, strength ${formatStrength(s.strength)}, wind cut ${formatWindCut(s.windCutHz)}, ` +
-  `boost ${formatBoost(s.boost)}, auto volume ${formatOnOff(s.autoGain)}`;
+  `boost ${formatBoost(s.boost)}, auto volume ${formatOnOff(s.autoGain)}, ` +
+  `browser noise suppression ${formatOnOff(s.noiseSuppression)}, browser echo cancel ${formatOnOff(s.echoCancellation)}`;
+
+/** The three switches that change how the browser captures the mic (each needs a capture restart). */
+const CAPTURE_KEYS = ["autoGain", "noiseSuppression", "echoCancellation"] as const;
+type CaptureFlags = Pick<DriveThruMicSettings, (typeof CAPTURE_KEYS)[number]>;
+
+/** What the browser itself says the live capture is doing (null = it does not report that flag). */
+function readCapture(track: LocalAudioTrack): MicCapture {
+  const s = track.getSourceTrackSettings();
+  return {
+    autoGain: s.autoGainControl ?? null,
+    noiseSuppression: s.noiseSuppression ?? null,
+    echoCancellation: s.echoCancellation ?? null,
+  };
+}
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -93,6 +110,8 @@ export function useStationMic({
   const statusRef = useRef<MicStatus>({ engine: "starting", onSelectedMic: null });
   const selectedRef = useRef(selectedDeviceId ?? "");
   selectedRef.current = selectedDeviceId ?? "";
+  // Track whose capture flags were already checked against the saved settings (once per track).
+  const healedSidRef = useRef<string | null>(null);
 
   // Load saved settings once.
   useEffect(() => {
@@ -134,7 +153,7 @@ export function useStationMic({
     const refreshMicInfo = async () => {
       const track = getMicTrack(room);
       if (!track) {
-        setStatus({ engine: "no-mic", micLabel: undefined, micDeviceId: undefined, onSelectedMic: null });
+        setStatus({ engine: "no-mic", micLabel: undefined, micDeviceId: undefined, onSelectedMic: null, capture: undefined });
         return;
       }
       const deviceId = track.getSourceTrackSettings().deviceId ?? "";
@@ -153,6 +172,7 @@ export function useStationMic({
         micDeviceId: deviceId,
         selectedDeviceId: selected,
         onSelectedMic,
+        capture: readCapture(track),
       });
       if (prevId !== deviceId) {
         if (onSelectedMic === false) {
@@ -225,6 +245,8 @@ export function useStationMic({
         return;
       }
       setStatus({ engine: "starting", reason: undefined });
+      await healCapture(track);
+      if (cancelled) return;
       await refreshMicInfo();
       const processor = createDriveThruMicProcessor(settings, (event) => eventHandlerRef.current(event));
       try {
@@ -243,49 +265,143 @@ export function useStationMic({
       queue = queue.then(attachOnce);
     };
 
-    // Restart capture with auto volume on/off, keeping every other constraint and
-    // the exact current device (restartTrack replaces constraints, it doesn't merge).
-    const applyAutoGain = async (on: boolean) => {
+    // Make the live capture match `want` (auto volume / noise suppression / echo cancel).
+    // One restart covers all three, and only happens if the browser's own report differs.
+    // restartTrack replaces constraints instead of merging them, so the current ones are
+    // spread back in and the exact current device is pinned (it stays on the selected mic).
+    // Returns the flags the browser REALLY ended up with: the caller stores those, so a
+    // flag the browser refused is never shown as applied.
+    const applyCapture = async (
+      want: CaptureFlags,
+    ): Promise<{ actual: CaptureFlags; matched: boolean; deferred: boolean }> => {
+      const remember = (flags: CaptureFlags) => {
+        // LiveKit reads these when it next starts the mic (the participant shares this object).
+        room.options.audioCaptureDefaults = {
+          ...room.options.audioCaptureDefaults,
+          autoGainControl: flags.autoGain,
+          noiseSuppression: flags.noiseSuppression,
+          echoCancellation: flags.echoCancellation,
+          voiceIsolation: flags.noiseSuppression,
+        };
+      };
       const track = getMicTrack(room);
-      if (!track) return;
+      if (!track) {
+        remember(want);
+        micLog("info", "Mic isn't on right now — saved; it applies when the mic starts");
+        return { actual: want, matched: true, deferred: true };
+      }
+      const before = readCapture(track);
+      const resolve = (c: MicCapture): CaptureFlags => ({
+        autoGain: c.autoGain ?? want.autoGain,
+        noiseSuppression: c.noiseSuppression ?? want.noiseSuppression,
+        echoCancellation: c.echoCancellation ?? want.echoCancellation,
+      });
+      if (CAPTURE_KEYS.every((k) => before[k] === want[k])) {
+        remember(want);
+        return { actual: want, matched: true, deferred: false };
+      }
       const deviceId = track.getSourceTrackSettings().deviceId;
       try {
         await track.restartTrack({
           ...(track.constraints as AudioCaptureOptions),
           ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-          autoGainControl: on,
+          autoGainControl: want.autoGain,
+          noiseSuppression: want.noiseSuppression,
+          echoCancellation: want.echoCancellation,
+          voiceIsolation: want.noiseSuppression,
         });
-        const actual = track.getSourceTrackSettings().autoGainControl;
-        if (actual === undefined || actual === on) {
-          micLog("ok", `Auto volume ${formatOnOff(on)} — mic restarted on the same device`);
-        } else {
-          micLog("warn", `Auto volume asked ${formatOnOff(on)}, but the browser reports ${formatOnOff(actual)}`);
-        }
       } catch (err) {
-        micLog("error", `Could not change auto volume: ${errorText(err)}`);
+        micLog("error", `Could not restart the mic to change browser processing: ${errorText(err)}`);
+        const actual = resolve(readCapture(track));
+        remember(actual);
+        return { actual, matched: false, deferred: false };
       }
-      await refreshMicInfo();
+      const after = readCapture(track);
+      const actual = resolve(after);
+      let matched = true;
+      for (const k of CAPTURE_KEYS) {
+        if (before[k] === want[k]) continue; // this one wasn't asked to change
+        if (after[k] === null || after[k] === want[k]) {
+          const said = after[k] === null ? "not reported" : formatOnOff(after[k]!).toLowerCase();
+          micLog("ok", `${BROWSER_FX_LABELS[k]} ${formatOnOff(want[k])} — browser confirms: ${said} ✓`);
+        } else {
+          matched = false;
+          micLog("warn", `${BROWSER_FX_LABELS[k]}: asked ${formatOnOff(want[k])}, but the browser reports ${formatOnOff(after[k]!)} ⚠`);
+        }
+      }
+      remember(actual);
+      return { actual, matched, deferred: false };
     };
 
-    const applyFromManager = async (next: DriveThruMicSettings, seq: number, from: string) => {
-      const prev = settingsRef.current ?? next;
-      const changes = describeMicChanges(prev, next);
+    // The mic just started: if the browser is capturing with different processing than the
+    // saved settings (an older run, a changed default), fix it once for this track.
+    // Done before the processor attaches so the restart doesn't go through it.
+    const healCapture = async (track: LocalAudioTrack) => {
+      const sid = track.sid ?? "";
+      if (healedSidRef.current === sid) return;
+      healedSidRef.current = sid;
+      const saved = settingsRef.current;
+      if (!saved) return;
+      const now = readCapture(track);
+      if (!CAPTURE_KEYS.some((k) => now[k] !== null && now[k] !== saved[k])) return;
+      micLog("info", "Mic started with different browser processing than saved — correcting it");
+      const result = await applyCapture(saved);
+      if (!result.matched) {
+        // The browser won't do what's saved: store what it really has, so every screen tells the truth.
+        const reconciled = { ...saved, ...result.actual };
+        settingsRef.current = reconciled;
+        saveMicSettings(reconciled);
+        useMicLogStore.getState().setSettings(reconciled);
+      }
+    };
+
+    const applyFromManager = async (requested: DriveThruMicSettings, seq: number, from: string) => {
+      const prev = settingsRef.current ?? requested;
+      const changes = describeMicChanges(prev, requested);
+      const changedKeys = CAPTURE_KEYS.filter((k) => prev[k] !== requested[k]);
+      processorRef.current?.update(requested);
+      if (statusRef.current.engine === "active" || statusRef.current.engine === "off") {
+        setStatus({ engine: requested.enabled ? "active" : "off" });
+      }
+
+      let next = requested;
+      let ok = true;
+      let verdict = "applied";
+      if (changedKeys.length > 0) {
+        const result = await applyCapture(requested);
+        next = { ...requested, ...result.actual };
+        ok = result.matched;
+        const named = (keys: typeof changedKeys) =>
+          keys.map((k) => `${BROWSER_FX_LABELS[k].toLowerCase().replace(/^browser /, "")} ${formatOnOff(result.actual[k]).toLowerCase()}`).join(", ");
+        if (result.deferred) {
+          verdict = "saved — applies when the mic starts";
+        } else if (result.matched) {
+          verdict = `applied, browser confirms: ${named(changedKeys)}`;
+        } else {
+          verdict = `NOT fully applied — the browser still reports ${named(changedKeys.filter((k) => result.actual[k] !== requested[k]))}`;
+        }
+      }
+
       settingsRef.current = next;
       saveMicSettings(next);
       useMicLogStore.getState().setSettings(next);
-      processorRef.current?.update(next);
-      if (statusRef.current.engine === "active" || statusRef.current.engine === "off") {
-        setStatus({ engine: next.enabled ? "active" : "off" });
-      }
-      if (prev.autoGain !== next.autoGain) await applyAutoGain(next.autoGain);
+      if (changedKeys.length > 0) await refreshMicInfo();
 
-      const text = changes.length ? changes.join(", ") : "same settings re-sent";
-      useMicLogStore.getState().setLastManagerChange(text);
-      micLog("ok", `Manager (${from}) changed: ${text} ✓ applied`);
+      const text = `${changes.length ? changes.join(", ") : "same settings re-sent"} — ${verdict}`;
+      useMicLogStore.getState().setLastManagerChange(text, ok);
+      micLog(ok ? "ok" : "warn", `Manager (${from}) changed: ${text}`);
       if (!processorRef.current && statusRef.current.engine === "failed") {
-        micLog("warn", "Saved, but noise processing isn't running — only auto volume takes effect");
+        micLog("warn", "Saved, but noise processing isn't running — only the browser mic switches take effect");
       }
       publishState(seq);
+    };
+
+    // Changes are applied one at a time: two quick switch clicks must not run two mic restarts at once.
+    let applyQueue: Promise<void> = Promise.resolve();
+    const queueApply = (requested: DriveThruMicSettings, seq: number, from: string) => {
+      applyQueue = applyQueue
+        .then(() => applyFromManager(requested, seq, from))
+        .catch((err) => micLog("error", `Could not apply the manager's change: ${errorText(err)}`));
     };
 
     const onData = (
@@ -305,7 +421,7 @@ export function useStationMic({
         micLog("info", `Manager (${from}) connected — sent current settings`);
         publishState(null);
       } else if (msg.kind === "set") {
-        void applyFromManager(msg.settings, msg.seq, from);
+        queueApply(msg.settings, msg.seq, from);
       }
       // "state" messages come from other stations' tiles — not for us.
     };

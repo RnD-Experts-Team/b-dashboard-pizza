@@ -834,6 +834,7 @@ selected mic → high-pass ×2 (Wind cut) → AudioWorklet: RNNoise v0.2 + stren
 ```
 
 - It is a LiveKit `TrackProcessor` (`processor.ts`) attached to the station's published mic track, so it always processes **the mic selected on the station**. A mic switch goes through the processor's `restart`.
+- **The processor sits after the browser's own processing.** LiveKit asks Chrome for echo cancellation, noise suppression and auto gain (all on by default), and the mic itself already runs AEC, noise cancel, AGC and a DNN. So the audio can be processed by the mic, then by Chrome, then by RNNoise. Stacked AGCs and denoisers can pump wind up and make voices sound robotic, which is why the three browser switches below exist: the manager can turn them off one by one and compare.
 - Added latency is 30 ms: RNNoise works in 480-sample frames and has 2 frames of internal delay. The original signal is delayed by the same amount, so the Filter strength mix never echoes.
 - **Noise filter off** is a passthrough inside the worklet. The processor stays attached, so Wind cut, Mic boost and the limiter still apply.
 - **Fail-open.** If the worklet, the WebAssembly or the audio context fails, the station sends the raw mic and reports `failed` with the reason. It never goes silent.
@@ -850,11 +851,15 @@ selected mic → high-pass ×2 (Wind cut) → AudioWorklet: RNNoise v0.2 + stren
 | Wind cut | `windCutHz` | 0 (off) or 60–250 Hz | 80 |
 | Mic boost | `boost` | 0.5–3 | 1 |
 | Auto volume (browser AGC) | `autoGain` | on/off | on |
+| Browser noise suppression | `noiseSuppression` | on/off | on |
+| Browser echo cancel | `echoCancellation` | on/off | on |
 | Show test panel on station | `testPanel` | on/off | on |
 
 - **The station is the source of truth.** It saves the settings in `localStorage` (`drive-thru-mic-settings`), so they survive a reload with no manager connected.
 - Every value from the network or storage goes through `sanitizeMicSettings` / `parseMicMessage` in `settings.ts`: strict types, clamped ranges, and a 200-character limit on text.
-- Changing Auto volume restarts the capture with `restartTrack`, keeping the full constraints and the exact current deviceId. That's why it stays on the same mic.
+- **Auto volume, Browser noise suppression and Browser echo cancel are the "browser processing" group.** Changing any of them restarts the capture once with `restartTrack` (about a 1 s gap), keeping the full constraints and the exact current deviceId, so it stays on the same mic. The restart is skipped when the browser already reports those values. When noise suppression is off, `voiceIsolation` is set to false too.
+- **Success is checked, not assumed.** After the restart the station reads `track.getSourceTrackSettings()` and compares it with what was asked. A match logs "✓ browser confirms"; a mismatch logs a warning, and the station stores what the browser really has. The manager panel then shows "⚠ The station kept …" instead of "✓ Applied", and the test box shows an amber "⚠ NOT fully applied". With no mic running, the values are saved into `room.options.audioCaptureDefaults` and apply when the mic starts. Changes are applied one at a time (a queue), and `ScreenTile` starts the room with the saved values so a reload needs no extra restart.
+- **Echo cancel needs care:** with the speaker near the mic, turning it off lets the manager hear their own voice come back. The mic's own AEC only works if its red/black wires (echo reference +/−) are wired in parallel with the speaker line.
 
 ### Protocol — LiveKit data topic `drive-thru-mic` (reliable, `v: 1`)
 
@@ -864,7 +869,9 @@ selected mic → high-pass ×2 (Wind cut) → AudioWorklet: RNNoise v0.2 + stren
 | `set { seq, settings }` | manager → station | Apply these full settings |
 | `state { seq \| null, settings, status, at }` | station → manager | Confirms `seq`, or reports spontaneously. The station also sends one every 2 s with mic levels. |
 
-The manager panel shows "✓ Applied on the station at …" only when a `state` with the matching `seq` arrives, and "⚠ Not confirmed" after 4 s. When two managers adjust at once, the last change wins.
+The manager panel shows "✓ Applied on the station at …" only when a `state` with the matching `seq` arrives **and** the station's settings equal what was sent, "⚠ The station kept …" when they differ (the browser refused, or the station page is an older version: reload it), and "⚠ Not confirmed" after 4 s. When two managers adjust at once, the last change wins.
+
+Compatibility: `noiseSuppression` and `echoCancellation` were added later, so they are optional in `set` / `state` (missing means on) so an older open page isn't rejected, and `status.capture` (what the browser reports for the three flags) is optional too. The protocol version stays 1.
 
 ### Files
 
@@ -877,7 +884,8 @@ The manager panel shows "✓ Applied on the station at …" only when a `state` 
 | `mic/use-station-mic.ts` | Station side: attach, apply `set`, report `state`, selected-mic check, logs |
 | `mic/use-manager-mic.ts` | Manager side: send/receive over the topic |
 | `mic/mic-control-panel.tsx` | Manager UI in the Drive Thru sheet (each control has an (i) explanation) |
-| `mic/mic-test-panel.tsx` + `mic/log-store.ts` | **Test only** — station overlay with state, levels and the log |
+| `mic/mic-test-panel.tsx` + `mic/log-store.ts` | **Test only** — station overlay with state, levels, what the browser reports for the three browser switches, and the log. The "Last change from manager" box stays fixed at the top; everything else scrolls |
+| `mic/mic-test-guide.tsx` | **Test only** — manager-side "What to do now" box under the controls; its ticks follow what the station confirmed |
 
 `ScreenTile` gains `driveThruMic` (station) and `onDriveThruMicApi` / `onDriveThruMicReport` (manager). With none of them set, other stations behave exactly as before.
 
@@ -896,7 +904,7 @@ Extract `package/dist/rnnoise.js` over `public/rnnoise-v2/rnnoise.js` unchanged,
 
 ### Removing the test panel later
 
-1. Delete `mic/mic-test-panel.tsx` and its one mount in `public-screen-view.tsx`.
+1. Delete `mic/mic-test-panel.tsx` and its one mount in `public-screen-view.tsx`, and `mic/mic-test-guide.tsx` with its one mount in `mic-control-panel.tsx`.
 2. Drop the "Show test panel on station" row from `mic-control-panel.tsx`.
 3. Leave `testPanel` in the settings type, or remove it. Stored values without it fall back to defaults either way.
 
