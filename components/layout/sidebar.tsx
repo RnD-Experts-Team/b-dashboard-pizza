@@ -509,8 +509,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         title: t("doughSauce"),
         href: `/${locale}/dashboard/dough-sauce`,
         icon: CookingPot,
-        // Specialist (`dough and sauce`) via the unscoped plans rule, or a Store Manager
-        // (`reports view`) via the per-store plan rule for any store they have.
+        // Specialist (`dough and sauce` globally) via the unscoped plans rule, or a
+        // worker holding `dough and sauce` at one of their stores via the per-store plan rule.
         // See lib/dough-sauce/access.ts / docs/DOUGH-SAUCE-ACCESS.md.
         requirements: [
           DS_ROUTES.plans(),

@@ -213,7 +213,7 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: CookingPot,
     titleKey: "doughSauce",
     groupKey: "qaManagement",
-    // Specialist (unscoped plans rule) or a Store Manager (per-store plan rule).
+    // Specialist (unscoped plans rule) or a dough & sauce worker at the selected store (per-store plan rule).
     requirements: (storeId) => [
       DS_ROUTES.plans(),
       ...(storeId ? [DS_ROUTES.planGet(storeId)] : []),
