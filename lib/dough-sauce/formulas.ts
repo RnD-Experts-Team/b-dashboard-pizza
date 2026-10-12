@@ -15,6 +15,15 @@ export function plannedQty(base: number, bufferPct: number): number {
   return base * (1 + bufferPct / 100);
 }
 
+/**
+ * The number before the buffer, recovered from a stored plan (the base is not stored — it is
+ * derived from `planned_qty` and `buffer_pct`). Display only: scoring still compares against
+ * `planned_qty`, never this.
+ */
+export function baseQty(planned: number, bufferPct: number): number {
+  return planned / (1 + bufferPct / 100);
+}
+
 /** §6.2 */
 export function variance(counted: number, planned: number): number {
   return counted - planned;

@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { BookOpen, CalendarCheck, Grid3x3, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -40,27 +40,40 @@ export default function DoughSaucePage() {
 }
 
 /**
- * The active tab lives in the URL (`?tab=weekly`), so leaving the page (e.g. to the
+ * The active tab is mirrored in the URL (`?tab=weekly`), so leaving the page (e.g. to the
  * full report) and coming Back — or refreshing — returns to the same tab.
+ *
+ * The URL only mirrors it: the tab itself is local state, so a click switches at once. Driving it
+ * from `router.replace` made every click wait on a server round trip for the new `?tab=` URL, and
+ * the Weekly tab's burst of requests could hold that up for a long time — the tab looked stuck.
  */
 function DoughSauceTabs() {
   const t = useTranslations("doughSauce");
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const access = useDoughSauceAccess();
   const visibleTabs = TABS.filter((tab) => access.tabs[tab.id]);
   const tabParam = params.get("tab");
   const requested = TABS.find((x) => x.id === tabParam)?.id;
+  const [tab, setTab] = useState<TabId | undefined>(requested);
+  // A URL change we didn't make (a sidebar link back to the plain page, say) wins over local state.
+  const [seenParam, setSeenParam] = useState(tabParam);
+  if (tabParam !== seenParam) {
+    setSeenParam(tabParam);
+    setTab(requested);
+  }
   // A ?tab= the user can't open (deep link, old bookmark) falls back to their first allowed tab.
-  const activeTab: TabId | null = requested && access.tabs[requested] ? requested : (visibleTabs[0]?.id ?? null);
+  const activeTab: TabId | null = tab && access.tabs[tab] ? tab : (visibleTabs[0]?.id ?? null);
 
   const setActiveTab = (next: TabId) => {
+    setTab(next);
     // A week only belongs to the weekly tab.
-    const q = new URLSearchParams(params.toString());
+    const q = new URLSearchParams(window.location.search);
     q.set("tab", next);
     if (next !== "weekly") q.delete("week");
-    router.replace(`${pathname}?${q.toString()}`, { scroll: false });
+    // history.replaceState, not router.replace: Next keeps useSearchParams in step with it and
+    // makes no server request, so the tab can't be held up behind in-flight Weekly calls.
+    window.history.replaceState(null, "", `${pathname}?${q.toString()}`);
   };
 
   if (!activeTab) {

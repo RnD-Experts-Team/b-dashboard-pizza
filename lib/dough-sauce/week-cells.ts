@@ -15,17 +15,19 @@ export type WeekCell =
       date: string;
       key: IngredientKey;
       planned: number;
+      /** The stored buffer — display only, so a cell can show the number before it. */
+      bufferPct: number;
       counted: number;
       variance: number;
       ok: boolean;
       edited: boolean;
       duplicates: number;
     }
-  | { kind: "missing"; date: string; key: IngredientKey; planned: number }
+  | { kind: "missing"; date: string; key: IngredientKey; planned: number; bufferPct: number }
   /** Planned for today or a later day — not counted YET. Not a gap, and not a zero. */
-  | { kind: "awaiting"; date: string; key: IngredientKey; planned: number }
+  | { kind: "awaiting"; date: string; key: IngredientKey; planned: number; bufferPct: number }
   | { kind: "no-plan"; date: string; key: IngredientKey; counted: number | null }
-  | { kind: "unavailable"; date: string; key: IngredientKey; planned: number | null };
+  | { kind: "unavailable"; date: string; key: IngredientKey; planned: number | null; bufferPct: number | null };
 
 export interface WeekCells {
   days: string[];
@@ -85,7 +87,13 @@ export function buildWeekCells(
       const id = `${date}|${key}`;
       const plan = planByCell.get(id);
       if (counts === null) {
-        cells.push({ kind: "unavailable", date, key, planned: plan?.planned_qty ?? null });
+        cells.push({
+          kind: "unavailable",
+          date,
+          key,
+          planned: plan?.planned_qty ?? null,
+          bufferPct: plan?.buffer_pct ?? null,
+        });
         continue;
       }
       const count = counts.get(id);
@@ -97,10 +105,10 @@ export function buildWeekCells(
       if (!count) {
         if (date >= today) {
           awaitingCount++;
-          cells.push({ kind: "awaiting", date, key, planned: plan.planned_qty });
+          cells.push({ kind: "awaiting", date, key, planned: plan.planned_qty, bufferPct: plan.buffer_pct });
         } else {
           missingCount++;
-          cells.push({ kind: "missing", date, key, planned: plan.planned_qty });
+          cells.push({ kind: "missing", date, key, planned: plan.planned_qty, bufferPct: plan.buffer_pct });
         }
         continue;
       }
@@ -112,6 +120,7 @@ export function buildWeekCells(
         date,
         key,
         planned: plan.planned_qty,
+        bufferPct: plan.buffer_pct,
         counted: count.total_in_unit_1,
         variance: v,
         ok,

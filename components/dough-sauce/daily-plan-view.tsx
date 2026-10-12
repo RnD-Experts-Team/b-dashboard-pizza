@@ -11,6 +11,7 @@ import {
   ChevronDown,
   CircleDashed,
   ImageDown,
+  Info,
   Loader2,
   Lock,
   Pencil,
@@ -24,6 +25,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { StorePicker, type StoreOption } from "@/components/cleaning";
 import { useAuthStore } from "@/lib/auth/auth.store";
@@ -48,6 +50,7 @@ import {
   exportNodeAsPng,
   fmtQty,
   personName,
+  round2,
   round4,
   useDateTimeFormatter,
   useDayFormatter,
@@ -62,6 +65,15 @@ const EMPTY_BUFFERS: Buffers = { dough_18oz: "", dough_10oz: "", sauce: "" };
 const UNMAPPED_PREVIEW = 5;
 /** Table row order: sauce first, then the small dough, then the large. */
 const ROW_ORDER: IngredientKey[] = ["sauce", "dough_10oz", "dough_18oz"];
+
+/**
+ * Only the sauce row is shown in its own unit (containers: raw portions ÷ 80). The 10 OZ dough
+ * keeps its raw daily values, so its BASE still carries the "÷ divisor" hint that explains the
+ * step from the AVERAGE. Display only — the plan always comes from the server's `base`.
+ */
+const CONVERTED_KEYS: IngredientKey[] = ["sauce"];
+const displayDivisor = (k: IngredientKey, base?: BaseIngredient) =>
+  CONVERTED_KEYS.includes(k) && base && base.divisor > 0 ? base.divisor : 1;
 
 /** A store's key for every Dough & Sauce path is its TEXT code, not the numeric id. */
 function useStoreOptions(): StoreOption[] {
@@ -400,6 +412,13 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                       {t("fewerDays", { found: base.data.days_found, lookback: base.data.lookback })}
                     </span>
                   )}
+                  {/* The daily columns only exist on an unconfirmed plan, and only a converted row has the dotted numbers. */}
+                  {!showFrozen && ROW_ORDER.some((k) => displayDivisor(k, baseByKey[k]) > 1) && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Info className="h-3.5 w-3.5" />
+                      {t("unitNote")}
+                    </span>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -708,6 +727,10 @@ function PlanTable({
         {keys.map((k) => {
           const label = labelOf(k);
           const base = baseByKey[k];
+          // The API's daily values and average are raw portions; the server's `base` is already
+          // divided. For a converted row (sauce) the daily cells are shown in containers, so the row
+          // reads in one unit all the way to PLANNED. Display only — `base.base` still feeds the plan.
+          const divisor = displayDivisor(k, base);
           const line = lines.find((l) => l.ingredient_key === k);
           const buffer = buffers[k];
           const bufferError = bufferErrors[k];
@@ -756,19 +779,44 @@ function PlanTable({
               {showSources &&
                 sourceDates.map((d, i) => {
                   const v = base?.values?.[i];
+                  const shown = v == null ? "" : fmtQty(round2(v / divisor));
                   return (
                     <TableCell key={d} className={cn(NUM, "text-muted-foreground")}>
-                      {v == null ? <MissingValue reason={t("noSalesThatDay")} /> : fmtQty(v)}
+                      {v == null ? (
+                        <MissingValue reason={t("noSalesThatDay")} />
+                      ) : divisor > 1 ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            {/* Dotted underline = "hover for the original portions". */}
+                            <span className="cursor-help underline decoration-muted-foreground/40 decoration-dotted underline-offset-4">
+                              {shown}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t("dailyCellTitle", {
+                              raw: fmtQty(v),
+                              divisor: fmtQty(divisor),
+                              result: shown,
+                              unit: base?.unit ?? "",
+                            })}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        shown
+                      )}
                     </TableCell>
                   );
                 })}
               {showSources && (
-                <TableCell className={NUM}>{base?.average != null ? fmtQty(base.average) : <MissingValue />}</TableCell>
+                <TableCell className={NUM}>
+                  {base?.average != null ? fmtQty(round2(base.average / divisor)) : <MissingValue />}
+                </TableCell>
               )}
 
               <TableCell className={NUM}>
                 {baseValue != null ? fmtQty(baseValue) : <MissingValue />}
-                {!frozen && base && base.divisor > 1 && (
+                {/* A row whose daily cells stay raw still shows the step from AVERAGE to BASE. */}
+                {!frozen && base && base.divisor > 1 && divisor === 1 && (
                   <span className="ms-1 text-[10px] font-normal text-muted-foreground">{t("divisor", { divisor: base.divisor })}</span>
                 )}
               </TableCell>
