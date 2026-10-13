@@ -67,6 +67,13 @@ export const fmtSignedGlanceQty = (n: number) =>
 /** Planned quantities are sent at 4-decimal precision, matching the contract's examples. */
 export const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
+/**
+ * Display rounding to 2 decimals. The `1e-9` nudge keeps float noise from rounding a true .xx5
+ * down (`386 / 80` is 4.825 and must show 4.83). Round only what is shown — never feed a rounded
+ * figure back into an average or a plan.
+ */
+export const round2 = (n: number) => Math.round(n * 100 + 1e-9) / 100;
+
 /* ── People ────────────────────────────────────────────────────────────── */
 
 /**
