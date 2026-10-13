@@ -743,6 +743,7 @@ function PlanTable({
           const bufferShown = frozen ? line?.buffer_pct ?? null : bufferError ? null : Number(buffer);
           const prev = prevRows?.find((r) => r.key === k);
           const isShort = prev?.variance != null && prev.variance < 0;
+          const isOver = prev?.variance != null && prev.variance > 0;
           const makeUp = makeUpByKey[k] ?? 0;
 
           return (
@@ -768,7 +769,12 @@ function PlanTable({
                           isShort ? "font-medium text-rose-700 dark:text-rose-400" : "text-muted-foreground"
                         )}
                       >
-                        {isShort ? t("prevShort", { by: fmtQty(Math.abs(prev.variance!)) }) : t("prevMet")}
+                        {/* Both directions show, as in the weekly grid: short is the one to act on, over is for information. */}
+                        {isShort
+                          ? t("prevShort", { by: fmtQty(Math.abs(prev.variance!)) })
+                          : isOver
+                            ? t("prevOver", { by: fmtQty(prev.variance!) })
+                            : t("prevMet")}
                       </p>
                     </>
                   )}

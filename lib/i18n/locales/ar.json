@@ -2652,6 +2652,7 @@
       "prevCounted": "جُرد {counted} من أصل {planned} مخطط",
       "prevMet": "حقق الخطة",
       "prevShort": "ناقص {by}",
+      "prevOver": "زائد {by}",
       "prevNotCounted": "لم يُجرد بعد",
       "prevPastHint": "انتهى ذلك اليوم — النقص معروض للاطلاع فقط.",
       "makeUpHint": "يُضاف كل نقص إلى الخطة أدناه كتعويض. الأرقام المخططة تبقى كما أُكدت.",

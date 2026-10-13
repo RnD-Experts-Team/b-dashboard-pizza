@@ -2653,6 +2653,7 @@
       "prevCounted": "Counted {counted} of {planned} planned",
       "prevMet": "Met plan",
       "prevShort": "Short by {by}",
+      "prevOver": "Over by {by}",
       "prevNotCounted": "Not counted yet",
       "prevPastHint": "That day is over — the shortage is shown for reference.",
       "makeUpHint": "Each shortage is added to the plan below as make-up. The planned numbers stay as confirmed.",
