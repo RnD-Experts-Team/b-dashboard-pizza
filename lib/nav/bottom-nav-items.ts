@@ -421,14 +421,13 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "breaks",
     groupKey: "toolbox",
   },
-  // Hidden together with the sidebar's Calendar item (this list mirrors it 1:1).
-  // {
-  //   id: "calendar",
-  //   href: (locale) => `/${locale}/dashboard/calendar`,
-  //   icon: CalendarDays,
-  //   titleKey: "calendar",
-  //   groupKey: "toolbox",
-  // },
+  {
+    id: "calendar",
+    href: (locale) => `/${locale}/dashboard/calendar`,
+    icon: CalendarDays,
+    titleKey: "calendar",
+    groupKey: "toolbox",
+  },
   {
     id: "tickets",
     href: (locale) => `/${locale}/dashboard/tickets`,

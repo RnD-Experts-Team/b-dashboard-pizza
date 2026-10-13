@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { AlertTriangle, Check, Clock, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, Clock, Moon, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WeekCell, WeekCells } from "@/lib/dough-sauce/week-cells";
 import { baseQty } from "@/lib/dough-sauce/formulas";
@@ -107,6 +107,12 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
 
       {/* Legend: only the states actually on screen, drawn with the same marks the cells use. */}
       <div className="flex flex-wrap gap-x-5 gap-y-1.5 border-t pt-3 text-[11px] text-muted-foreground">
+        {/* Each plan is scored against the night-before count, so a count appears one column after its date. */}
+        {cells.cells.some((c) => c.kind !== "no-plan" && c.kind !== "unavailable") && (
+          <span className="inline-flex items-center gap-1.5">
+            <Moon className="h-3.5 w-3.5" /> {t("legendCountDay")}
+          </span>
+        )}
         {kinds.has("counted") && (
           <>
             <span className="inline-flex items-center gap-1.5">
@@ -185,6 +191,7 @@ function BaseLine({ planned, bufferPct }: { planned: number; bufferPct: number |
 
 function Cell({ cell }: { cell: WeekCell }) {
   const t = useTranslations("doughSauce.weekly.cells");
+  const day = useDayFormatter();
 
   /** A cell's hover text, with the number before the buffer underneath when there is a stored plan. */
   const titled = (head: string, planned: number | null, bufferPct: number | null) =>
@@ -198,7 +205,11 @@ function Cell({ cell }: { cell: WeekCell }) {
         <div
           className={STACK}
           title={titled(
-            t("countedTitle", { counted: fmtQty(cell.counted), planned: fmtQty(cell.planned) }),
+            t("countedTitle", {
+              counted: fmtQty(cell.counted),
+              on: day.monthDay(cell.countDate),
+              planned: fmtQty(cell.planned),
+            }),
             cell.planned,
             cell.bufferPct
           )}

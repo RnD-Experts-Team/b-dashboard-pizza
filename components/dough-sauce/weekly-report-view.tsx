@@ -464,6 +464,7 @@ function ReportHead({
 /** One day × ingredient: the variance (actual − plan). Anything uncountable is N/A, never 0 (rule 2). */
 function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
   const t = useTranslations("doughSauce.weekly.cells");
+  const day = useDayFormatter();
   // `first` = first ingredient of a day: a left rule groups the three cells of each day.
   const edge = first && "border-s border-border/60";
   const na = (cls?: string, title?: string) => (
@@ -482,7 +483,11 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
             edge,
             cell.ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-rose-500/20 text-rose-700 dark:text-rose-400"
           )}
-          title={t("countedTitle", { counted: fmtQty(cell.counted), planned: fmtQty(cell.planned) })}
+          title={t("countedTitle", {
+            counted: fmtQty(cell.counted),
+            on: day.monthDay(cell.countDate),
+            planned: fmtQty(cell.planned),
+          })}
         >
           {cell.ok ? (
             <Check role="img" aria-label={t("legendOk")} className="mx-auto block h-3.5 w-3.5" strokeWidth={3} />
