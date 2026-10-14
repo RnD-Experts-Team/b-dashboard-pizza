@@ -52,6 +52,7 @@ import {
   Table2,
   MessageSquareWarning,
   LifeBuoy,
+  Activity,
 } from "lucide-react";
 import {
   Dialog,
@@ -313,6 +314,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     icon: Monitor,
     requirements: [
       { service: "Screens", method: "POST", path: `/*/tokens/supervisor`, storeId: effectiveStoreId },
+    ],
+  };
+
+  const screenMonitoringItem: NavItem = {
+    title: t("screenMonitoring"),
+    href: `/${locale}/dashboard/screen-project/monitoring`,
+    icon: Activity,
+    requirements: [
+      { service: "Screens", method: "GET", path: `/*/usage/segments`, storeId: effectiveStoreId },
     ],
   };
 
@@ -1019,6 +1029,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
           {/* 1b. Screen Project */}
           {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
+          {isNavItemVisible(screenMonitoringItem) && renderNavLink(screenMonitoringItem)}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (

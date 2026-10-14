@@ -26,6 +26,7 @@ This document explains the end-to-end architecture of the Screen Project feature
 13. [File Map](#13-file-map)
 14. [Addendum: Media Library & Drive Thru (2026-08-04)](#14-addendum-media-library--drive-thru-2026-08-04)
 15. [Drive Thru Station Mic Noise Filter (2026-10-07)](#15-drive-thru-station-mic-noise-filter-2026-10-07)
+16. [Usage Monitoring (2026-10-14)](#16-usage-monitoring-2026-10-14)
 
 ---
 
@@ -909,3 +910,67 @@ Extract `package/dist/rnnoise.js` over `public/rnnoise-v2/rnnoise.js` unchanged,
 3. Leave `testPanel` in the settings type, or remove it. Stored values without it fall back to defaults either way.
 
 The log store can stay, since it feeds the console.
+
+---
+
+## 16. Usage Monitoring (2026-10-14)
+
+HQ can see how **managers** use Screen Project: time on it, present vs away, camera
+covered, mic open/talking/dead, Talk to All, mini-player, favorite screens, the hours
+they are around, and sessions cut by a duplicate LiveKit identity. Stations, observers
+and the drive-thru hotline are not tracked.
+
+**Why the browser reports it.** LiveKit can't tell managers apart (every manager at a
+store shares the identity `supervisor:{storeId}`) and its webhooks don't report mute or
+speaking, so the LiveKit server is untouched. The manager's browser records segments and
+sends them to ScreensPizza, which takes the user from the token.
+
+### Definitions
+
+| Term | Meaning |
+|---|---|
+| On Screen Project | connected to at least one station (`session` segments, page or mini-player) |
+| Present | a **face in front of the camera** (camera state `visible`). The camera decides; mouse/keyboard are ignored |
+| No face | camera on and uncovered, but nobody in front of it (`no_face`) |
+| Away | on Screen Project and not present: camera off, covered or no face |
+| Camera covered | a 32×18 frame sampled every 3 s is very dark (mean luma < 20) or flat (stddev < 3) |
+| Face detection | every 3 s, when not covered: Google MediaPipe BlazeFace (short range) on the manager's own camera track, in the browser, confidence ≥ 0.5. No image leaves the device. Loaded lazily the first time a camera is on (engine + model ≈ 3.7 MB compressed, served from `public/mediapipe/`, see its README). If it can't load, an uncovered camera counts as `visible` |
+| State changes | need two identical readings in a row (≈ 6 s) |
+| Dead mic | mic on but RMS ≈ -70 dBFS (no signal at all) for 20 s: muted at the device or covered |
+| Talking | LiveKit's own speaker detection (`participant.isSpeaking`), counted per second while the mic segment is open |
+| Favorite screen | the station in the big main tile for the most time (the mini-player's station counts as main) |
+| Kicked | session ended with `DisconnectReason.DUPLICATE_IDENTITY`: another login opened the same store |
+
+### Flow
+
+```
+ScreenTile (usage prop) → UsageProbe (inside <LiveKitRoom>, read-only)
+  → usageRecorder (lib/screen-usage/recorder.ts, module singleton)
+  → POST /api/screen-project/{storeId}/usage/segments → ScreensPizza POST /{storeId}/usage/segments
+```
+
+- Segment kinds: `session`, `main`, `camera` (`visible`|`covered`), `mic` (`open`|`dead`), `talk_all`.
+  A state change closes the segment and opens a new one.
+- The segment id is a ULID made in the browser. Every **5 minutes** the browser sends one batch (one request
+  per manager tab, none while nothing is open); open segments are re-sent with `ended_at = now` and the server
+  upserts on the id, so a crashed tab loses at most 5 minutes. Pending segments are also flushed once on
+  `pagehide` (tab closed, reload, leaving the app) with `fetch(keepalive)` — sendBeacon can't send `Authorization`.
+  Switching tabs sends nothing. Load: N managers online ≈ N requests per 5 min to ScreensPizza, each also
+  verifying the token with pizzasys.
+- Talk to All publishes the mic into every room. Only the **main** tile records it, once, as `talk_all`.
+  The other tiles skip their mic while it's held.
+- Fail-safe: the probe never enables, mutes or publishes anything; every entry point swallows its errors.
+  The backlog is capped at 1000 segments, and rows the server permanently rejects (4xx) are dropped instead of retried.
+- `usage` is passed only by manager tiles (`screen-project-view.tsx`, page) and the mini-player
+  (`screen-project-pip-overlay.tsx`, pip). Observer, station and drive-thru tiles don't pass it.
+
+### Report
+
+`/dashboard/screen-project/monitoring` (`components/screen-project/monitoring/*`), linked from the
+sidebar and the station-select header. Needs the Screens `GET /*/usage/segments` rule (`screens manager`,
+scoped — the same permission as the observer view). Store = the selected store. Range ≤ 62 days.
+The API returns raw UTC segments; `lib/screen-usage/aggregate.ts` builds the summary, the weekday × hour
+heatmap, the per-screen breakdown and the day timeline **in the viewer's time zone**.
+
+Writing usage is `screens user` / `screens manager`, scoped. Rules live in pizzasys
+`ScreensAuthRulesSeeder`.

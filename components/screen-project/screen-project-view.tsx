@@ -4,6 +4,9 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Mic, MicOff, UserCircle2, AlertCircle, RefreshCw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Radio, Camera, CameraOff, Eye, Monitor, MonitorOff, HelpCircle, LogOut, Check, Maximize, Minimize, AudioLines } from "lucide-react";
 import { VideoQuality } from "livekit-client";
+import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
+import { Activity } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -186,6 +189,14 @@ export function ScreenProjectView() {
     path: `/${storeId || "store"}/tokens/supervisor`,
     storeId: selectedStore?.id,
   });
+  const canMonitor = useCanAccessRoute({
+    service: "Screens",
+    method: "GET",
+    path: `/${storeId || "store"}/usage/segments`,
+    storeId: selectedStore?.id,
+  });
+  const locale = useLocale();
+  const tMonitoring = useTranslations("screenMonitoring");
   const { isSuperAdmin } = useAuthStore();
 
   const networkStatus = useNetworkStatus();
@@ -967,6 +978,14 @@ export function ScreenProjectView() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+            {canMonitor && (
+              <Button asChild variant="ghost" size="sm" className="shrink-0 gap-1.5 text-xs">
+                <Link href={`/${locale}/dashboard/screen-project/monitoring`}>
+                  <Activity className="h-4 w-4" />
+                  {tMonitoring("openLink")}
+                </Link>
+              </Button>
+            )}
             <StationsDialog
               storeId={storeId}
               stations={stations}
@@ -1212,6 +1231,7 @@ export function ScreenProjectView() {
                   onStationDeviceChange={(kind, deviceId) => handleStationDeviceChange(s.room_name, kind, deviceId)}
                   onStationVolumeChange={(target, level) => handleStationVolumeChange(s.room_name, target, level)}
                   onStationStateReceived={(state) => handleStationStateReceived(s.room_name, state)}
+                  usage={{ storeId, surface: "page", isMain: s.isMain, talkAll: broadcastToAll }}
                 />
               </motion.div>
             );
