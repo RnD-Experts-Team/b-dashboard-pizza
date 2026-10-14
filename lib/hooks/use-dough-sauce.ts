@@ -330,11 +330,14 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
       prevRefsRef.current = prevRefs;
 
       // One counts window, covering the oldest previous week through this
-      // week — 28 days, inside inventory's 31-day cap.
+      // week — 28 days, plus one: a plan is scored against the count dated the
+      // day BEFORE it, so the first plan day of the oldest week needs the count
+      // from the night before that week began. 29 days, inside inventory's
+      // 31-day cap.
       const starts = [current.week.week_start, ...prevRefs.map((w) => w.week_start)].sort();
-      let from = starts[0];
+      let from = addDaysIso(starts[0], -1);
       const to = current.week.week_end;
-      if (daysBetween(from, to).length > MAX_COUNT_RANGE_DAYS) from = current.week.week_start;
+      if (daysBetween(from, to).length > MAX_COUNT_RANGE_DAYS) from = addDaysIso(current.week.week_start, -1);
       rangeRef.current = { from, to, ids: idsKey.split(","), signal };
 
       setWeekly({ data: current, error: null });

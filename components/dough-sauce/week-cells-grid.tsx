@@ -1,13 +1,21 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { AlertTriangle, Check, Clock, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, Clock, Moon, Pencil, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WeekCell, WeekCells } from "@/lib/dough-sauce/week-cells";
+import { baseQty } from "@/lib/dough-sauce/formulas";
 import { todayIso } from "@/lib/dough-sauce/dates";
 import type { Ingredient } from "@/types/dough-sauce.types";
 import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
-import { fmtGlanceQty, fmtQty, fmtSignedGlanceQty, useDayFormatter, useIngredientLabel } from "./ds-ui";
+import {
+  fmtGlanceQty,
+  fmtQty,
+  fmtSignedGlanceQty,
+  round2,
+  useDayFormatter,
+  useIngredientLabel,
+} from "./ds-ui";
 
 // Two accents only, both meaning "act on this": rose for short, amber for never counted.
 // On target is the normal state, so it stays in neutral ink.
@@ -28,6 +36,12 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
   const byId = new Map(cells.cells.map((c) => [`${c.date}|${c.key}`, c]));
   const kinds = new Set(cells.cells.map((c) => c.kind));
   const allUnavailable = cells.cells.length > 0 && cells.cells.every((c) => c.kind === "unavailable");
+  // Any stored plan will do: the legend explains the second line using the grid's own numbers.
+  const sampleCell = cells.cells.find((c) => "bufferPct" in c && c.bufferPct != null && c.planned != null);
+  const legendSample =
+    sampleCell && "bufferPct" in sampleCell && sampleCell.planned != null && sampleCell.bufferPct != null
+      ? beforeBuffer(sampleCell.planned, sampleCell.bufferPct)
+      : null;
 
   return (
     <div className="space-y-4">
@@ -93,6 +107,12 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
 
       {/* Legend: only the states actually on screen, drawn with the same marks the cells use. */}
       <div className="flex flex-wrap gap-x-5 gap-y-1.5 border-t pt-3 text-[11px] text-muted-foreground">
+        {/* Each plan is scored against the night-before count, so a count appears one column after its date. */}
+        {cells.cells.some((c) => c.kind !== "no-plan" && c.kind !== "unavailable") && (
+          <span className="inline-flex items-center gap-1.5">
+            <Moon className="h-3.5 w-3.5" /> {t("legendCountDay")}
+          </span>
+        )}
         {kinds.has("counted") && (
           <>
             <span className="inline-flex items-center gap-1.5">
@@ -126,6 +146,13 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
             <span className="text-[10px] font-semibold">{t("na")}</span> {t("legendUnavailable")}
           </span>
         )}
+        {/* The small number under the plan, drawn with a real example from this grid. */}
+        {legendSample && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="whitespace-nowrap rounded border px-1 py-0.5 text-[10px] tabular-nums">{legendSample}</span>
+            {t("legendCalc")}
+          </span>
+        )}
         {cells.cells.some((c) => c.kind === "counted" && c.edited) && (
           <span className="inline-flex items-center gap-1.5">
             <Pencil className="h-3 w-3" /> {t("legendEdited")}
@@ -143,15 +170,49 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
 
 const STACK = "flex flex-col items-center gap-1 leading-none tabular-nums";
 
+/**
+ * The number before the buffer, from the RAW stored values and rounded only here, for display.
+ * It is never taken from the rounded plan (433.675 ÷ 1.10, not 433.68 ÷ 1.10). Score, variance
+ * and "on target" still compare against `planned_qty`, not this.
+ */
+function beforeBuffer(planned: number, bufferPct: number): string {
+  return fmtQty(round2(baseQty(planned, bufferPct)));
+}
+
+/** Line 2 of a planned cell — just the number before the buffer. Nothing when there is no stored plan. */
+function BaseLine({ planned, bufferPct }: { planned: number; bufferPct: number | null }) {
+  if (bufferPct == null) return null;
+  return (
+    <span className="whitespace-nowrap text-[10px] font-normal text-muted-foreground">
+      {beforeBuffer(planned, bufferPct)}
+    </span>
+  );
+}
+
 function Cell({ cell }: { cell: WeekCell }) {
   const t = useTranslations("doughSauce.weekly.cells");
+  const day = useDayFormatter();
+
+  /** A cell's hover text, with the number before the buffer underneath when there is a stored plan. */
+  const titled = (head: string, planned: number | null, bufferPct: number | null) =>
+    planned == null || bufferPct == null
+      ? head
+      : `${head}\n${t("beforeBuffer", { base: beforeBuffer(planned, bufferPct) })}`;
 
   switch (cell.kind) {
     case "counted": {
       return (
         <div
           className={STACK}
-          title={t("countedTitle", { counted: fmtQty(cell.counted), planned: fmtQty(cell.planned) })}
+          title={titled(
+            t("countedTitle", {
+              counted: fmtQty(cell.counted),
+              on: day.monthDay(cell.countDate),
+              planned: fmtQty(cell.planned),
+            }),
+            cell.planned,
+            cell.bufferPct
+          )}
         >
           <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
             {cell.ok ? (
@@ -169,29 +230,32 @@ function Cell({ cell }: { cell: WeekCell }) {
             )}
           </span>
           <span className="text-[11px] text-muted-foreground">
-            {t("plan", { n: fmtGlanceQty(cell.planned) })}
+            {t("plan", { n: fmtQty(round2(cell.planned)) })}
             <span className={cn("ms-1.5", !cell.ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGlanceQty(cell.variance)}</span>
           </span>
+          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
         </div>
       );
     }
     case "missing":
       return (
-        <div className={STACK} title={t("neverCounted")}>
+        <div className={STACK} title={titled(t("neverCounted"), cell.planned, cell.bufferPct)}>
           <span className="inline-flex items-center gap-1 text-xs font-medium">
             <AlertTriangle className={cn("h-3 w-3", WARN_TEXT)} />
             {t("notCounted")}
           </span>
-          <span className="text-[11px] text-muted-foreground">{t("plan", { n: fmtGlanceQty(cell.planned) })}</span>
+          <span className="text-[11px] text-muted-foreground">{t("plan", { n: fmtQty(round2(cell.planned)) })}</span>
+          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
         </div>
       );
     case "awaiting":
       return (
-        <div className={STACK} title={t("awaiting")}>
+        <div className={STACK} title={titled(t("awaiting"), cell.planned, cell.bufferPct)}>
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
-            {t("plan", { n: fmtGlanceQty(cell.planned) })}
+            {t("plan", { n: fmtQty(round2(cell.planned)) })}
           </span>
+          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
         </div>
       );
     case "no-plan":
@@ -208,10 +272,13 @@ function Cell({ cell }: { cell: WeekCell }) {
       );
     case "unavailable":
       return (
-        <div className={STACK} title={t("unavailable")}>
+        <div className={STACK} title={titled(t("unavailable"), cell.planned, cell.bufferPct)}>
           <span className="text-xs font-semibold text-muted-foreground">{t("na")}</span>
           {cell.planned != null && (
-            <span className="text-[11px] text-muted-foreground/70">{t("plan", { n: fmtGlanceQty(cell.planned) })}</span>
+            <>
+              <span className="text-[11px] text-muted-foreground/70">{t("plan", { n: fmtQty(round2(cell.planned)) })}</span>
+              <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
+            </>
           )}
         </div>
       );

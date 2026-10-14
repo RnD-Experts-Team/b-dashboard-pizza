@@ -28,6 +28,30 @@
   opacity: 1;
 }
 
+/* Calendar (components/calendar): hour lines and the quiet weekend hatch.
+   Tokens only, never a colour. --cal-hour is set inline by the hour grid. */
+.cal-hours {
+  background-image: linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 100% var(--cal-hour, 48px);
+}
+.cal-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--border) 50%, transparent) 0 1px,
+    transparent 1px 8px
+  );
+}
+/* Unlayered on purpose: the global `*` scrollbar rule further down is unlayered,
+   so a Tailwind utility (layered) could never hide the bar. */
+.cal-no-scrollbar { scrollbar-width: none; }
+.cal-no-scrollbar::-webkit-scrollbar { display: none; }
+.cal-hours.cal-hatch {
+  background-image:
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px),
+    repeating-linear-gradient(135deg, color-mix(in oklab, var(--border) 50%, transparent) 0 1px, transparent 1px 8px);
+  background-size: 100% var(--cal-hour, 48px), auto;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

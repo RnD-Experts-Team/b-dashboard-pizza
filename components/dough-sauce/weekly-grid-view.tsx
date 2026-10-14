@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { useDoughSauceAccess } from "@/lib/hooks/use-dough-sauce-access";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
@@ -58,17 +58,17 @@ export function WeeklyGridView() {
   const tr = useTranslations("doughSauce.report");
   const locale = useLocale();
   const systemLabel = useSystemLabel();
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // The week is kept in the URL so the full report's Back button can return to it.
   const [weekStart, setWeekStartState] = useState<string | undefined>(searchParams.get("week") ?? undefined);
   const setWeekStart = (w: string) => {
     setWeekStartState(w);
-    const q = new URLSearchParams(searchParams.toString());
+    const q = new URLSearchParams(window.location.search);
     q.set("tab", "weekly");
     q.set("week", w);
-    router.replace(`${pathname}?${q.toString()}`, { scroll: false });
+    // Local state already drives the view, so the URL is only a mirror — no server round trip.
+    window.history.replaceState(null, "", `${pathname}?${q.toString()}`);
   };
   const [expanded, setExpanded] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);

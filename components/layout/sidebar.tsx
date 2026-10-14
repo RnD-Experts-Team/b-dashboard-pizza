@@ -379,6 +379,17 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     icon: Coffee,
   };
 
+  // Store calendar (birthdays, cleaning, shifts, maintenance, meetings). Reads
+  // the selected store and serves mock data for now, so there is no gate.
+  // Hidden for now: the page at /dashboard/calendar still exists. To bring it
+  // back, uncomment this, the item in `toolboxGroup`, and the matching entry in
+  // lib/nav/bottom-nav-items.ts (the two lists must stay 1:1).
+  // const calendarItem: NavItem = {
+  //   title: t("calendar"),
+  //   href: `/${locale}/dashboard/calendar`,
+  //   icon: CalendarDays,
+  // };
+
   /* ---- Collapsible groups ---- */
   // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
   // entry is marked `exact` (that href prefixes every other dashboard route).
@@ -768,7 +779,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [workbooksItem, breaksItem, ticketsItem],
+    items: [workbooksItem, breaksItem, /* calendarItem, */ ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];

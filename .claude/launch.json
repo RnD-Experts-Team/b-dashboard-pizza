@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "calendar-template",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5178", "--directory", "../calendar-template"],
+      "port": 5178
     }
   ]
 }
