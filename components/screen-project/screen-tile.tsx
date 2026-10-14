@@ -11,6 +11,7 @@ import {
   useSpeakingParticipants,
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent, DisconnectReason } from "livekit-client";
+import { UsageProbe, type UsageProbeProps } from "./usage/usage-probe";
 import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -245,6 +246,12 @@ export interface ScreenTileProps {
    * public-screen-view.tsx) stay in sync with whatever the supervisor switched to.
    */
   onActiveDeviceChange?:    (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string, label?: string) => void;
+  /**
+   * Manager side only: records how the manager uses this tile (mic, camera,
+   * main screen, session) for the Screen Project monitoring report. Omit on
+   * station, observer and drive-thru tiles.
+   */
+  usage?: Omit<UsageProbeProps, "room">;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */
@@ -1728,6 +1735,7 @@ export function ScreenTile({
   onStationVolumeChange,
   onStationStateReceived,
   onActiveDeviceChange,
+  usage,
 }: ScreenTileProps) {
   // Hooks must run unconditionally on every render (rules of hooks) — the
   // token/serverUrl guard below only affects what gets returned, not which
@@ -1835,6 +1843,7 @@ export function ScreenTile({
       style={{ display: "contents" }}
       onError={(err) => setConnectError(err.message || "Unable to connect to the station stream.")}
     >
+      {usage && <UsageProbe {...usage} room={_roomName} />}
       <ScreenTileInner
         name={name}
         isMain={isMain}

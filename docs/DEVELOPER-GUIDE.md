@@ -93,7 +93,8 @@ These areas are designed for customization:
 | `lib/api/services/**` | Your API service files |
 | `components/dashboard-v1/**` | Dashboard V1 re-skin components — reuses DSPR's hooks/services, no new data layer |
 | `components/dspr/**` | DSPR dashboard components (data source for the classic dashboard and Dashboard V1) |
-| `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay) |
+| `components/screen-project/**` | Screen Project live-video monitoring (incl. `drive-thru/**` global hotline overlay, `usage/**` per-tile usage probe, `monitoring/**` HQ usage report) |
+| `lib/screen-usage/**` | Screen Project usage monitoring pure logic: fire-and-forget recorder (managers' mic/camera/main-screen segments → ScreensPizza) and report aggregation in the viewer's time zone — see `docs/SCREEN-PROJECT.md` §16 |
 | `components/scheduling/**` | Weekly scheduling grid, wired to the OperationsPizza API. `day-view.tsx` / `month-overview.tsx` are PARKED — kept on disk but not mounted; the week grid is the only live view |
 | `lib/scheduling/**` | Scheduling support: presentation constants, week identity + date-display helpers, snake_case API adapters, error parsing |
 | `components/cleaning/**` | Cleaning Chart feature (task scheduling/completion, evaluation grid, reports) — tab visibility gated by `lib/auth/cleaning-access.ts`, not a feature flag |
