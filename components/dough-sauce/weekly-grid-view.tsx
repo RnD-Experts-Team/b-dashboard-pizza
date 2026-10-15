@@ -33,7 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import { useIngredients, useWeeklyGrid, type JudgementPatch, type StoreWeekResult } from "@/lib/hooks/use-dough-sauce";
-import { CELLS_PER_WEEK, WEIGHTS } from "@/lib/dough-sauce/formulas";
+import { WEIGHTS } from "@/lib/dough-sauce/formulas";
 import { todayIso } from "@/lib/dough-sauce/dates";
 import type { JudgementPayload, QualityVerdict, StickersVerdict } from "@/types/dough-sauce.types";
 import {
@@ -397,7 +397,7 @@ function StoreRow({
         {row.countsStatus === "loading" ? (
           <Loader2 className="ms-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />
         ) : !row.needsCounts ? (
-          <span className="text-muted-foreground">0/{CELLS_PER_WEEK}</span>
+          <span className="text-xs text-muted-foreground">—</span>
         ) : row.countsStatus === "idle" ? (
           <span className="text-xs text-muted-foreground">—</span>
         ) : row.countsUnavailable ? (
@@ -407,7 +407,8 @@ function StoreRow({
           </span>
         ) : (
           <span className={cn(!row.cells.hasPlans && "text-muted-foreground")}>
-            {row.cells.cellsOk}/{CELLS_PER_WEEK}
+            {/* Only planned days count: x of the cells that were planned and are due a count. */}
+            {row.cells.cellsScored > 0 ? `${row.cells.cellsOk}/${row.cells.cellsScored}` : "—"}
             {row.cells.missingCount > 0 && (
               <span className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
                 <AlertTriangle className="h-3 w-3 text-amber-600 dark:text-amber-400" />
@@ -570,9 +571,11 @@ export function JudgementNote({ row, weekStart, onSave }: { row: StoreWeekResult
         <dl className="mt-2 divide-y">
           <BreakdownLine
             label={
-              row.scored
-                ? t("breakdownVariance", { ok: row.cells.cellsOk, total: CELLS_PER_WEEK })
-                : t("breakdownVarianceUnknown")
+              !row.scored
+                ? t("breakdownVarianceUnknown")
+                : row.cells.cellsScored > 0
+                  ? t("breakdownVariance", { ok: row.cells.cellsOk, total: row.cells.cellsScored })
+                  : t("breakdownVarianceNone")
             }
             part={b.variancePart}
             max={WEIGHTS.variance}

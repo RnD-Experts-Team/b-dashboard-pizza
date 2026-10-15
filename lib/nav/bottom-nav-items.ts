@@ -3,6 +3,7 @@ import {
   Users,
   Megaphone,
   Monitor,
+  Activity,
   Building2,
   ClipboardList,
   UserCog,
@@ -136,6 +137,15 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "screenProject",
     requirements: (storeId) => [
       { service: "Screens", method: "POST", path: "/*/tokens/supervisor", storeId },
+    ],
+  },
+  {
+    id: "screenMonitoring",
+    href: (locale) => `/${locale}/dashboard/screen-project/monitoring`,
+    icon: Activity,
+    titleKey: "screenMonitoring",
+    requirements: (storeId) => [
+      { service: "Screens", method: "GET", path: "/usage/report", storeId },
     ],
   },
 
@@ -421,13 +431,14 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "breaks",
     groupKey: "toolbox",
   },
-  {
-    id: "calendar",
-    href: (locale) => `/${locale}/dashboard/calendar`,
-    icon: CalendarDays,
-    titleKey: "calendar",
-    groupKey: "toolbox",
-  },
+  // Hidden together with the sidebar's Calendar item (this list mirrors it 1:1).
+  // {
+  //   id: "calendar",
+  //   href: (locale) => `/${locale}/dashboard/calendar`,
+  //   icon: CalendarDays,
+  //   titleKey: "calendar",
+  //   groupKey: "toolbox",
+  // },
   {
     id: "tickets",
     href: (locale) => `/${locale}/dashboard/tickets`,

@@ -48,6 +48,7 @@ import {
   fmtPct,
   fmtQty,
   fmtSignedPct,
+  round2,
   useDayFormatter,
   useIngredientLabel,
   useStoreNames,
@@ -111,7 +112,12 @@ export function WeeklyReportView() {
   const [removedDays, setRemovedDays] = useState<ReadonlySet<string>>(new Set());
   const dataDays = useMemo(() => {
     const s = new Set<string>();
-    for (const r of results) for (const c of r.cells.cells) if (c.kind === "counted" || c.kind === "missing") s.add(c.date);
+    for (const r of results) {
+      for (const c of r.cells.cells) {
+        // A day with no plan still carries data when its night-before count was judged against a base.
+        if (c.kind === "counted" || c.kind === "missing" || (c.kind === "no-plan" && c.ok != null)) s.add(c.date);
+      }
+    }
     return s;
   }, [results]);
   // Only a day with nothing recorded for any store can go, and only once every store's counts are in
@@ -461,7 +467,11 @@ function ReportHead({
   );
 }
 
-/** One day × ingredient: the variance (actual − plan). Anything uncountable is N/A, never 0 (rule 2). */
+/**
+ * One day × ingredient: did the count meet the BASE (the plan before its buffer)? Anything uncountable
+ * is N/A, never 0 (rule 2). A day with no plan can still show ✓/✕ when its base was supplied — drawn
+ * lighter with a dashed edge, because it is shown for information and never scored.
+ */
 function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
   const t = useTranslations("doughSauce.weekly.cells");
   const day = useDayFormatter();
@@ -486,7 +496,8 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
           title={t("countedTitle", {
             counted: fmtQty(cell.counted),
             on: day.monthDay(cell.countDate),
-            planned: fmtQty(cell.planned),
+            base: fmtQty(round2(cell.base)),
+            planned: fmtQty(round2(cell.planned)),
           })}
         >
           {cell.ok ? (
@@ -501,7 +512,29 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
     case "awaiting":
       return na(undefined, t("awaiting"));
     case "no-plan":
-      return na(undefined, t("noPlan"));
+      if (cell.ok == null || cell.counted == null || cell.base == null) return na(undefined, t("noPlan"));
+      return (
+        <td
+          className={cn(
+            "px-0.5 py-1 text-center outline-1 -outline-offset-2 outline-dashed",
+            edge,
+            cell.ok
+              ? "bg-emerald-500/10 text-emerald-700/70 outline-emerald-500/30 dark:text-emerald-400/70"
+              : "bg-rose-500/10 text-rose-700/70 outline-rose-500/30 dark:text-rose-400/70"
+          )}
+          title={t("unplannedTitle", {
+            counted: fmtQty(cell.counted),
+            on: day.monthDay(cell.countDate),
+            base: fmtQty(round2(cell.base)),
+          })}
+        >
+          {cell.ok ? (
+            <Check role="img" aria-label={t("legendOk")} className="mx-auto block h-3.5 w-3.5" strokeWidth={3} />
+          ) : (
+            <X role="img" aria-label={t("legendShort")} className="mx-auto block h-3.5 w-3.5" strokeWidth={3} />
+          )}
+        </td>
+      );
     default:
       return na(undefined, t("unavailable"));
   }
@@ -712,6 +745,10 @@ function Legend({
         </span>
         <span>
           <b className="text-foreground/70">{"\u2013"}</b> = {t("legendNa")}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-sm bg-emerald-500/10 outline-1 -outline-offset-1 outline-dashed outline-emerald-500/40" />{" "}
+          {t("legendUnplanned")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> {t("legendPending")}

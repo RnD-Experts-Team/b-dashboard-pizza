@@ -52,6 +52,7 @@ import {
   Table2,
   MessageSquareWarning,
   LifeBuoy,
+  Activity,
 } from "lucide-react";
 import {
   Dialog,
@@ -316,6 +317,28 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     ],
   };
 
+  const screenMonitoringItem: NavItem = {
+    title: t("screenMonitoring"),
+    href: `/${locale}/dashboard/screen-project/monitoring`,
+    icon: Activity,
+    // The report spans stores: shown when it is allowed at any of the user's stores.
+    requirements: (overviewStores ?? []).map((s) => ({
+      service: "Screens",
+      method: "GET",
+      path: "/usage/report",
+      storeId: s.id,
+    })),
+  };
+
+  // Screen Project collapses into a group only when both of its pages are
+  // reachable; with just one, that page stays a flat link.
+  const screenProjectGroup: NavGroup = {
+    label: t("screenProject"),
+    icon: Monitor,
+    // `exact`: the screens page is a prefix of the monitoring page's URL.
+    items: [{ ...screenProjectItem, title: t("screens"), exact: true }, screenMonitoringItem],
+  };
+
   const dashboardItem: NavItem = {
     title: t("dashboard"),
     href: `/${locale}/dashboard`,
@@ -371,11 +394,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   // Store calendar (birthdays, cleaning, shifts, maintenance, meetings). Reads
   // the selected store and serves mock data for now, so there is no gate.
-  const calendarItem: NavItem = {
-    title: t("calendar"),
-    href: `/${locale}/dashboard/calendar`,
-    icon: CalendarDays,
-  };
+  // Hidden for now: the page at /dashboard/calendar still exists. To bring it
+  // back, uncomment this, the item in `toolboxGroup`, and the matching entry in
+  // lib/nav/bottom-nav-items.ts (the two lists must stay 1:1).
+  // const calendarItem: NavItem = {
+  //   title: t("calendar"),
+  //   href: `/${locale}/dashboard/calendar`,
+  //   icon: CalendarDays,
+  // };
 
   /* ---- Collapsible groups ---- */
   // Dashboards — the DSPR dashboard keeps its existing `/dashboard` URL, so its
@@ -766,7 +792,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const toolboxGroup: NavGroup = {
     label: t("toolbox"),
     icon: Boxes,
-    items: [workbooksItem, breaksItem, calendarItem, ticketsItem],
+    items: [workbooksItem, breaksItem, /* calendarItem, */ ticketsItem],
   };
   // Dev tools navigation (controlled by feature flags)
   const devToolsItems: NavItem[] = [];
@@ -1025,8 +1051,22 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* 1a. Announcements */}
           {renderNavLink(announcementsItem)}
 
-          {/* 1b. Screen Project */}
-          {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
+          {/* 1b. Screen Project — a group when both pages are reachable, else the one flat link */}
+          {isNavItemVisible(screenProjectItem) && isNavItemVisible(screenMonitoringItem) ? (
+            <SidebarNavGroup
+              group={screenProjectGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
+            />
+          ) : (
+            <>
+              {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
+              {isNavItemVisible(screenMonitoringItem) && renderNavLink(screenMonitoringItem)}
+            </>
+          )}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (

@@ -105,6 +105,7 @@ export function ScreenProjectPiPOverlay() {
             videoQuality={VideoQuality.LOW}
             viewerOnly={true}
             className="absolute inset-0 h-full w-full"
+            usage={{ storeId: activeStation.storeId, surface: "pip", isMain: true }}
           />
         </div>
 
