@@ -220,6 +220,26 @@ export const ColorfulReportSheet = forwardRef<HTMLDivElement, Props>(function Co
                         </td>
                       );
                     }
+                    if (c?.kind === "no-plan" && c.ok != null) {
+                      // No confirmed plan: judged against that day's base for information, drawn faint — never scored.
+                      return (
+                        <td
+                          key={`${d}-${k}`}
+                          style={{
+                            ...cellBase,
+                            fontWeight: 800,
+                            fontSize: 15,
+                            opacity: 0.55,
+                            background: c.ok ? C.okBg : C.badBg,
+                            color: c.ok ? C.okFg : C.badFg,
+                            outline: `1px dashed ${c.ok ? C.okFg : C.badFg}`,
+                            outlineOffset: -2,
+                          }}
+                        >
+                          {c.ok ? "✓" : "✗"}
+                        </td>
+                      );
+                    }
                     return (
                       <td key={`${d}-${k}`} style={cellBase}>
                         {na}
@@ -293,7 +313,7 @@ export const ColorfulReportSheet = forwardRef<HTMLDivElement, Props>(function Co
         <div>
           {t("legendCell")} <b style={{ color: C.okFg }}>{t("legendOk")}</b> {"·"}{" "}
           <b style={{ color: C.badFg }}>{t("legendShort")}</b> {"·"} <b style={{ color: C.warnFg }}>?</b> {t("legendMissing")}{" "}
-          {"·"} <b>{"–"}</b> {t("legendNa")}
+          {"·"} <b>{"–"}</b> {t("legendNa")} {"·"} <b style={{ color: C.okFg, opacity: 0.6 }}>{"✓ ✗"}</b> {t("legendUnplanned")}
         </div>
         <div>
           {t("sheetFormula")} {"·"} {rangeLabel}

@@ -7,7 +7,7 @@
 
 export const WEIGHTS = { variance: 0.6, stickers: 0.2, quality: 0.2 } as const;
 
-/** 7 days × 3 ingredients. */
+/** 7 days × 3 ingredients — the most a week can hold. The score divides by the cells actually planned. */
 export const CELLS_PER_WEEK = 21;
 
 /** §6.1 — the plan. Only ever for a NEW plan; a stored plan renders its own planned_qty (rule 4). */
@@ -17,16 +17,31 @@ export function plannedQty(base: number, bufferPct: number): number {
 
 /**
  * The number before the buffer, recovered from a stored plan (the base is not stored — it is
- * derived from `planned_qty` and `buffer_pct`). Display only: scoring still compares against
- * `planned_qty`, never this.
+ * derived from `planned_qty` and `buffer_pct`).
  */
 export function baseQty(planned: number, bufferPct: number): number {
   return planned / (1 + bufferPct / 100);
 }
 
-/** §6.2 */
-export function variance(counted: number, planned: number): number {
-  return counted - planned;
+/** 4-decimal precision, the same as the plan payload. Kept here so this file stays free of UI imports. */
+const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+
+/**
+ * What a count is judged against: the BASE, before the buffer. The buffer is a production margin
+ * on top of the plan, not what inventory is held to (e.g. 388, not 481.12).
+ *
+ * Uses the server's `base_qty` when the plan line carries one, otherwise derives it from the stored
+ * plan. Always rounded: 336 ÷ 1.12 is 299.99999999999994 in floating point, and a count exactly on the
+ * base must not read "Over by 0".
+ */
+export function targetQty(planned: number, bufferPct: number, serverBase?: number | null): number {
+  const base = typeof serverBase === "number" && Number.isFinite(serverBase) ? serverBase : baseQty(planned, bufferPct);
+  return round4(base);
+}
+
+/** §6.2 — `target` is the base (see `targetQty`). */
+export function variance(counted: number, target: number): number {
+  return counted - target;
 }
 
 /** §6.3 / rule 5 — hitting the target exactly is a pass: `>=`, never `>`. */
@@ -36,6 +51,8 @@ export function isOk(v: number): boolean {
 
 export interface ScoreInput {
   cellsOk: number;
+  /** The cells that were actually planned and are due a count — the denominator. Not 21. */
+  cellsScored: number;
   stickers: "yes" | "no" | null | undefined;
   quality: "pass" | "fail" | null | undefined;
 }
@@ -47,9 +64,12 @@ export interface ScoreBreakdown {
   score: number;
 }
 
-/** §6.4 */
-export function score({ cellsOk, stickers, quality }: ScoreInput): ScoreBreakdown {
-  const variancePart = WEIGHTS.variance * (cellsOk / CELLS_PER_WEEK);
+/**
+ * §6.4 — only the days that were actually planned are scored: with 2 planned days the variance part is
+ * over 6 cells, not 21. No planned cell at all means no variance part (never a division by zero).
+ */
+export function score({ cellsOk, cellsScored, stickers, quality }: ScoreInput): ScoreBreakdown {
+  const variancePart = cellsScored > 0 ? WEIGHTS.variance * (cellsOk / cellsScored) : 0;
   const stickersPart = stickers === "yes" ? WEIGHTS.stickers : 0;
   const qualityPart = quality === "pass" ? WEIGHTS.quality : 0;
   return { variancePart, stickersPart, qualityPart, score: variancePart + stickersPart + qualityPart };

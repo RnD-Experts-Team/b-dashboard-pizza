@@ -32,7 +32,7 @@ import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import { useIngredients, useStoreDailyPlan } from "@/lib/hooks/use-dough-sauce";
-import { plannedQty, variance } from "@/lib/dough-sauce/formulas";
+import { plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
 import { indexCounts } from "@/lib/dough-sauce/week-cells";
 import { addDaysIso, todayIso, tomorrowIso } from "@/lib/dough-sauce/dates";
 import {
@@ -124,7 +124,7 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
   const canConfirmHere = !!store && access.can.confirmPlan(store.id);
   const { ingredients, map, loaded: mapReady } = useIngredients();
   const labelOf = useIngredientLabel(ingredients);
-  const { plan, base, counts, prevPlan, loading, reload, confirm } = useStoreDailyPlan(
+  const { plan, base, counts, loading, reload, confirm } = useStoreDailyPlan(
     store?.code ?? null,
     date,
     map,
@@ -249,24 +249,39 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
     }
   };
 
-  /* ── Shortage in the PREVIOUS day's count vs that day's confirmed plan ── */
+  /*
+   * ── The night-before count vs THIS day's base ──
+   * The inventory taken on the night of the 12th is what has to meet the plan for the 13th, and it is
+   * judged against that plan's BASE (before the buffer): the buffer is a production margin, not the
+   * inventory target. A confirmed plan's own line is used; before confirming, the base the server has
+   * just computed for this day.
+   */
   const today = todayIso();
   const tomorrow = tomorrowIso();
   const prevDay = addDaysIso(date, -1);
-  const shortage = useMemo(() => {
-    const tp = prevPlan.data;
-    if (!counts.data || !tp?.confirmed) return null;
+  const shortage = useMemo<PrevRow[] | null>(() => {
+    if (!counts.data) return null;
     const idx = indexCounts(counts.data.data ?? [], map);
-    return tp.lines.map((l) => {
-      const row = idx.get(`${prevDay}|${l.ingredient_key}`);
-      return {
-        key: l.ingredient_key,
-        planned: l.planned_qty,
+    const rows: PrevRow[] = [];
+    for (const k of ROW_ORDER) {
+      const line = planData?.confirmed ? planData.lines.find((l) => l.ingredient_key === k) : undefined;
+      const serverBase = baseByKey[k]?.base;
+      const target = line
+        ? targetQty(line.planned_qty, line.buffer_pct, line.base_qty)
+        : Number.isFinite(serverBase)
+          ? round4(serverBase!)
+          : null;
+      if (target == null) continue;
+      const row = idx.get(`${prevDay}|${k}`);
+      rows.push({
+        key: k,
+        base: target,
         counted: row ? row.total_in_unit_1 : null,
-        variance: row ? variance(row.total_in_unit_1, l.planned_qty) : null,
-      };
-    });
-  }, [prevPlan.data, counts.data, map, prevDay]);
+        variance: row ? variance(row.total_in_unit_1, target) : null,
+      });
+    }
+    return rows.length > 0 ? rows : null;
+  }, [counts.data, planData, baseByKey, map, prevDay]);
   const shortLines = shortage?.filter((s) => s.variance != null && s.variance < 0) ?? [];
   // A plan for today or later is still to be produced, so the previous day's
   // shortage is owed to it. For a day already gone it's just history.
@@ -566,7 +581,8 @@ function Notice({
 
 interface PrevRow {
   key: IngredientKey;
-  planned: number;
+  /** The target the count is judged against: this day's base, before the buffer. */
+  base: number;
   counted: number | null;
   variance: number | null;
 }
@@ -696,7 +712,7 @@ function PlanTable({
           <TableHead className="ps-4 text-[10px] font-semibold uppercase tracking-wider sm:ps-5">{t("colIngredient")}</TableHead>
           {showCounted && (
             <TableHead className={cn(NUM, HEAD)}>
-              {t("colCounted", { date: prevDateLabel })}
+              <HeadHint hint={t("hintCounted")}>{t("colCounted", { date: prevDateLabel })}</HeadHint>
             </TableHead>
           )}
           {showSources &&

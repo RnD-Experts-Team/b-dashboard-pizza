@@ -52,6 +52,7 @@ import {
   Table2,
   MessageSquareWarning,
   LifeBuoy,
+  Activity,
 } from "lucide-react";
 import {
   Dialog,
@@ -314,6 +315,28 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     requirements: [
       { service: "Screens", method: "POST", path: `/*/tokens/supervisor`, storeId: effectiveStoreId },
     ],
+  };
+
+  const screenMonitoringItem: NavItem = {
+    title: t("screenMonitoring"),
+    href: `/${locale}/dashboard/screen-project/monitoring`,
+    icon: Activity,
+    // The report spans stores: shown when it is allowed at any of the user's stores.
+    requirements: (overviewStores ?? []).map((s) => ({
+      service: "Screens",
+      method: "GET",
+      path: "/usage/report",
+      storeId: s.id,
+    })),
+  };
+
+  // Screen Project collapses into a group only when both of its pages are
+  // reachable; with just one, that page stays a flat link.
+  const screenProjectGroup: NavGroup = {
+    label: t("screenProject"),
+    icon: Monitor,
+    // `exact`: the screens page is a prefix of the monitoring page's URL.
+    items: [{ ...screenProjectItem, title: t("screens"), exact: true }, screenMonitoringItem],
   };
 
   const dashboardItem: NavItem = {
@@ -1028,8 +1051,22 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           {/* 1a. Announcements */}
           {renderNavLink(announcementsItem)}
 
-          {/* 1b. Screen Project */}
-          {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
+          {/* 1b. Screen Project — a group when both pages are reachable, else the one flat link */}
+          {isNavItemVisible(screenProjectItem) && isNavItemVisible(screenMonitoringItem) ? (
+            <SidebarNavGroup
+              group={screenProjectGroup}
+              pathname={pathname}
+              locale={locale}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              getUnreadCount={getUnreadCount}
+            />
+          ) : (
+            <>
+              {isNavItemVisible(screenProjectItem) && renderNavLink(screenProjectItem)}
+              {isNavItemVisible(screenMonitoringItem) && renderNavLink(screenMonitoringItem)}
+            </>
+          )}
 
           {/* 2. Store Management */}
           {visibleStoreManagementGroup && (

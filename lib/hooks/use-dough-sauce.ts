@@ -6,6 +6,7 @@ import { buildIngredientMap, type IngredientMap } from "@/lib/dough-sauce/ingred
 import { buildWeekCells, indexCounts, type WeekCells } from "@/lib/dough-sauce/week-cells";
 import { progress, rankBy, score, type ScoreBreakdown } from "@/lib/dough-sauce/formulas";
 import { addDaysIso, daysBetween, todayIso } from "@/lib/dough-sauce/dates";
+import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
 import type {
   CountRow,
   CountsResponse,
@@ -84,10 +85,11 @@ export interface StoreDailyPlanState {
   key: string | null;
   plan: Panel<Plan>;
   base: Panel<DailyPlanBase>;
-  /** The count for the day BEFORE `date` — any shortage in it is owed to this day's batch. */
+  /**
+   * The count for the day BEFORE `date` — the night-before inventory. It is measured against THIS
+   * day's base (the plan before its buffer), and any shortage in it is owed to this day's batch.
+   */
   counts: Panel<CountsResponse>;
-  /** The previous day's plan — what that day's counts are measured against. */
-  prevPlan: Panel<Plan>;
 }
 
 export function useStoreDailyPlan(storeKey: string | null, date: string, map: IngredientMap, mapReady: boolean) {
@@ -96,7 +98,6 @@ export function useStoreDailyPlan(storeKey: string | null, date: string, map: In
     plan: EMPTY,
     base: EMPTY,
     counts: EMPTY,
-    prevPlan: EMPTY,
   });
   const [loading, setLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -107,24 +108,22 @@ export function useStoreDailyPlan(storeKey: string | null, date: string, map: In
     if (!storeKey || !mapReady) return;
     const controller = new AbortController();
     const loadedKey = `${storeKey}|${date}`;
-    // A shortage is owed to the NEXT day's batch, so this screen reads the day before `date`.
+    // The count taken the night before is what has to meet this day's plan, so this screen reads the day before `date`.
     const prev = addDaysIso(date, -1);
     setLoading(true);
-    // Fire all four in PARALLEL — contract §0.1 / §8.1.
+    // Fire all three in PARALLEL — contract §0.1 / §8.1.
     Promise.allSettled([
       doughSauceService.getPlan(storeKey, date, controller.signal),
       doughSauceService.getDailyPlanBase(storeKey, date, {}, controller.signal),
       doughSauceService.getCounts(storeKey, prev, prev, idsKey.split(","), controller.signal),
-      doughSauceService.getPlan(storeKey, prev, controller.signal),
-    ]).then(([plan, base, counts, prevPlan]) => {
+    ]).then(([plan, base, counts]) => {
       if (controller.signal.aborted) return;
-      if ([plan, base, counts, prevPlan].some((r) => r.status === "rejected" && isAbort(r.reason))) return;
+      if ([plan, base, counts].some((r) => r.status === "rejected" && isAbort(r.reason))) return;
       setState({
         key: loadedKey,
         plan: settle(plan, "audit"),
         base: settle(base, "data"),
         counts: settle(counts, "inv"),
-        prevPlan: settle(prevPlan, "audit"),
       });
       setLoading(false);
     });
@@ -152,7 +151,7 @@ export function useStoreDailyPlan(storeKey: string | null, date: string, map: In
   // Panels loaded for another store/date are never shown under this one: the
   // header would say one thing and the numbers another, and Confirm would post
   // the old base under the new key.
-  const live = state.key === key ? state : { ...state, plan: EMPTY, base: EMPTY, counts: EMPTY, prevPlan: EMPTY };
+  const live = state.key === key ? state : { ...state, plan: EMPTY, base: EMPTY, counts: EMPTY };
 
   return { ...live, loading, reload, confirm };
 }
@@ -280,6 +279,11 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
   // promise, so concurrent callers share it.
   const prevRefsRef = useRef<{ week_start: string }[]>([]);
   const prevPromiseRef = useRef<Promise<void> | null>(null);
+  // The base of days that have a count but NO plan, per store, keyed `${date}|${ingredientKey}`. It lets
+  // the report still show ✓/✕ for such a day. Display only — it never enters the score. Each
+  // (store, day) is requested at most once per week view.
+  const [bases, setBases] = useState<Record<string, Map<string, number>>>({});
+  const basesRequestedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!mapReady) return;
@@ -292,8 +296,10 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     prevRefsRef.current = [];
     prevPromiseRef.current = null;
     bulkStartedRef.current = false;
+    basesRequestedRef.current = new Set();
     setPrevious([]);
     setCounts({});
+    setBases({});
     setBulk({ status: "idle" });
 
     (async () => {
@@ -479,6 +485,49 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     void loadAllStores((data.stores ?? []).map((st) => ({ store: st.store, hasPlans: st.plans.length > 0 })));
   }, [weekly.data, loadAllStores]);
 
+  /**
+   * A day with NO confirmed plan has no stored base, so a count taken for it can't be judged — unless
+   * the base is asked for. That is one call per store per day, so it is made only where it can change
+   * what is shown: the night-before count already exists and the day has no plan. Bounded parallelism;
+   * a failed call just leaves that day as "–".
+   */
+  useEffect(() => {
+    const data = weekly.data;
+    const range = rangeRef.current;
+    if (!data || !range || range.signal.aborted) return;
+    const days = daysBetween(data.week.week_start, data.week.week_end);
+    const jobs: { store: string; date: string }[] = [];
+    for (const s of data.stores ?? []) {
+      const sc = counts[s.store];
+      const countMap = sc?.status === "ready" ? sc.map : null;
+      if (!countMap) continue;
+      const planned = new Set(s.plans.map((p) => p.plan_date));
+      for (const date of days) {
+        if (planned.has(date)) continue;
+        const countDate = addDaysIso(date, -1);
+        if (!INGREDIENT_KEYS.some((k) => countMap.has(`${countDate}|${k}`))) continue;
+        const id = `${s.store}|${date}`;
+        if (basesRequestedRef.current.has(id)) continue;
+        basesRequestedRef.current.add(id);
+        jobs.push({ store: s.store, date });
+      }
+    }
+    if (jobs.length === 0) return;
+    void pool(jobs, 3, async ({ store, date }) => {
+      try {
+        const res = await doughSauceService.getDailyPlanBase(store, date, {}, range.signal);
+        if (range.signal.aborted) return;
+        setBases((b) => {
+          const next = new Map(b[store] ?? []);
+          for (const i of res.ingredients ?? []) if (Number.isFinite(i.base)) next.set(`${date}|${i.key}`, i.base);
+          return { ...b, [store]: next };
+        });
+      } catch {
+        // Aborted or refused: the day simply stays "–".
+      }
+    });
+  }, [weekly.data, counts]);
+
   const results: StoreWeekResult[] = useMemo(() => {
     const data = weekly.data;
     if (!data) return [];
@@ -495,10 +544,12 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         data.week.week_end,
         s.plans,
         storeCounts ?? (needsCounts ? null : NO_COUNTS),
-        today
+        today,
+        bases[s.store]
       );
       const breakdown = score({
         cellsOk: cells.cellsOk,
+        cellsScored: cells.cellsScored,
         stickers: s.judgement?.stickers_compliance,
         quality: s.judgement?.dough_quality,
       });
@@ -512,6 +563,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         const prevCells = buildWeekCells(p.week.week_start, p.week.week_end, row.plans, storeCounts, today);
         return score({
           cellsOk: prevCells.cellsOk,
+          cellsScored: prevCells.cellsScored,
           stickers: row.judgement?.stickers_compliance,
           quality: row.judgement?.dough_quality,
         }).score;
@@ -545,7 +597,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     const ranked = withRank.filter((r) => r.rank > 0).sort((a, b) => a.rank - b.rank);
     const rest = withRank.filter((r) => r.rank === 0);
     return [...ranked, ...rest];
-  }, [weekly.data, previous, counts]);
+  }, [weekly.data, previous, counts, bases]);
 
   const countsSummary = useMemo(() => {
     // Stores whose score depends on counts. In bulk mode every store is loaded,

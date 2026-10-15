@@ -3,6 +3,7 @@ import {
   Users,
   Megaphone,
   Monitor,
+  Activity,
   Building2,
   ClipboardList,
   UserCog,
@@ -136,6 +137,15 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "screenProject",
     requirements: (storeId) => [
       { service: "Screens", method: "POST", path: "/*/tokens/supervisor", storeId },
+    ],
+  },
+  {
+    id: "screenMonitoring",
+    href: (locale) => `/${locale}/dashboard/screen-project/monitoring`,
+    icon: Activity,
+    titleKey: "screenMonitoring",
+    requirements: (storeId) => [
+      { service: "Screens", method: "GET", path: "/usage/report", storeId },
     ],
   },
 
