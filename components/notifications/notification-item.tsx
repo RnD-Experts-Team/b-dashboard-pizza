@@ -251,6 +251,9 @@ interface NotificationItemProps {
   /** Clamp the body preview to 2 lines (default). Set false to let the full
    * description wrap — used by the mobile bottom-sheet notification panel. */
   compact?: boolean;
+  /** Position in the rendered list — staggers the entrance animation so rows
+   * cascade in when the panel opens or a filter changes. Omit for no stagger. */
+  index?: number;
 }
 
 export function NotificationItem({
@@ -258,6 +261,7 @@ export function NotificationItem({
   onMarkAsRead,
   onNavigate,
   compact = true,
+  index,
 }: NotificationItemProps) {
   const router = useRouter();
   const params = useParams();
@@ -363,12 +367,21 @@ export function NotificationItem({
       role={isClickable ? "button" : "listitem"}
       tabIndex={isClickable ? 0 : undefined}
       className={cn(
-        "flex items-start gap-3 p-3 rounded-md transition-colors group",
+        "group flex items-start gap-3 border-s-2 p-3 transition-colors",
+        // Rows cascade in on mount; fill-mode-backwards holds the first frame
+        // through the stagger delay so they don't flash before animating.
+        index !== undefined &&
+          "animate-in fade-in-0 slide-in-from-bottom-1 duration-200 fill-mode-backwards motion-reduce:animate-none",
         isClickable
           ? "cursor-pointer hover:bg-muted/80"
           : "cursor-default",
-        isUnread && "bg-muted/50"
+        isUnread ? "border-s-primary bg-muted/50" : "border-s-transparent"
       )}
+      style={
+        index !== undefined
+          ? { animationDelay: `${Math.min(index, 8) * 25}ms` }
+          : undefined
+      }
       onClick={handleClick}
       onKeyDown={(e) => {
         if (isClickable && (e.key === "Enter" || e.key === " ")) handleClick();
@@ -381,23 +394,36 @@ export function NotificationItem({
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className={cn(
-          "text-sm leading-tight",
-          isUnread ? "font-semibold" : "font-normal text-muted-foreground"
-        )}>
-          {notification.title}
-        </p>
-        <p className={cn("text-xs text-muted-foreground mt-0.5", compact && "line-clamp-2")}>
+        <div className="flex items-center gap-1.5">
+          <p
+            className={cn(
+              "min-w-0 text-[13px] leading-snug",
+              isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/80"
+            )}
+          >
+            {notification.title}
+          </p>
+          {isUnread && (
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
+          )}
+        </div>
+        <p
+          className={cn(
+            "mt-0.5 text-[13px] leading-snug",
+            isUnread ? "text-foreground/80" : "text-foreground/65",
+            compact && "line-clamp-2"
+          )}
+        >
           {stripHtml(notification.body)}
         </p>
-        <div className="flex items-center gap-1.5 mt-1">
-          <p className="text-xs text-muted-foreground/70">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <p className="text-xs text-muted-foreground">
             {getRelativeTime(notification.created_at)}
           </p>
           {isClickable && (
             <>
-              <span className="text-muted-foreground/40 text-xs">·</span>
-              <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/70">
+              <span className="text-xs text-muted-foreground/50">·</span>
+              <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground/70">
                 <ExternalLink className="h-2.5 w-2.5" />
                 {isAnnouncementType
                   ? "Announcements"
