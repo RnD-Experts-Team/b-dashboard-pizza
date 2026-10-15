@@ -2903,6 +2903,20 @@
       "tipPrev": "Score in week {n}",
       "tipPrevAll": "scores of the previous weeks",
       "tipProgress": "Progress: score minus the average of the last 3 weeks",
+      "sort": {
+        "label": "Sort",
+        "scoreDesc": "Best score first",
+        "scoreAsc": "Lowest score first",
+        "storeAsc": "Store number, low to high",
+        "storeDesc": "Store number, high to low",
+        "next": "Sort: {order}",
+        "short": {
+          "scoreDesc": "Best score",
+          "scoreAsc": "Lowest score",
+          "storeAsc": "Store no. ↑",
+          "storeDesc": "Store no. ↓"
+        }
+      },
       "hideDay": "Remove {day} from the report — nothing recorded",
       "hiddenDays": "{n, plural, one {# day removed} other {# days removed}}",
       "showAllDays": "Show all days",
@@ -2924,6 +2938,7 @@
       "kpiJudged": "Judged",
       "kpiPendingJudgement": "Pending judgement",
       "loadingCounts": "Loading inventory counts…",
+      "loadingCountsFor": "Loading inventory counts for {n, plural, one {1 store} other {# stores}}…",
       "noCountsAtAll": "{n, plural, one {1 store has} other {# stores have}} no count at all in this window.",
       "exportNeedsScores": "Counts are still loading — the report needs every store scored.",
       "openToScore": "Counts failed — open to retry",
