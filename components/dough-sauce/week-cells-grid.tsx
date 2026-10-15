@@ -172,19 +172,35 @@ const STACK = "flex flex-col items-center gap-1 leading-none tabular-nums";
 
 /**
  * The number before the buffer, from the RAW stored values and rounded only here, for display.
- * It is never taken from the rounded plan (433.675 ÷ 1.10, not 433.68 ÷ 1.10). Score, variance
- * and "on target" still compare against `planned_qty`, not this.
+ * It is never taken from the rounded plan (433.675 ÷ 1.10, not 433.68 ÷ 1.10). This is the target
+ * a count is judged against (`WeekCell.base`), so the variance shown beside it is the scored one.
  */
 function beforeBuffer(planned: number, bufferPct: number): string {
   return fmtQty(round2(baseQty(planned, bufferPct)));
 }
 
-/** Line 2 of a planned cell — just the number before the buffer. Nothing when there is no stored plan. */
-function BaseLine({ planned, bufferPct }: { planned: number; bufferPct: number | null }) {
+/**
+ * The scored line of a planned cell: the number before the buffer, and — once counted — how far the
+ * count is from it. Nothing when there is no stored plan.
+ */
+function BaseLine({
+  planned,
+  bufferPct,
+  variance,
+  ok,
+}: {
+  planned: number;
+  bufferPct: number | null;
+  variance?: number;
+  ok?: boolean;
+}) {
   if (bufferPct == null) return null;
   return (
-    <span className="whitespace-nowrap text-[10px] font-normal text-muted-foreground">
+    <span className="whitespace-nowrap text-[11px] font-normal text-muted-foreground">
       {beforeBuffer(planned, bufferPct)}
+      {variance != null && (
+        <span className={cn("ms-1.5", !ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGlanceQty(variance)}</span>
+      )}
     </span>
   );
 }
@@ -204,15 +220,12 @@ function Cell({ cell }: { cell: WeekCell }) {
       return (
         <div
           className={STACK}
-          title={titled(
-            t("countedTitle", {
-              counted: fmtQty(cell.counted),
-              on: day.monthDay(cell.countDate),
-              planned: fmtQty(cell.planned),
-            }),
-            cell.planned,
-            cell.bufferPct
-          )}
+          title={t("countedTitle", {
+            counted: fmtQty(cell.counted),
+            on: day.monthDay(cell.countDate),
+            base: fmtQty(round2(cell.base)),
+            planned: fmtQty(round2(cell.planned)),
+          })}
         >
           <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
             {cell.ok ? (
@@ -229,11 +242,8 @@ function Cell({ cell }: { cell: WeekCell }) {
               </span>
             )}
           </span>
-          <span className="text-[11px] text-muted-foreground">
-            {t("plan", { n: fmtQty(round2(cell.planned)) })}
-            <span className={cn("ms-1.5", !cell.ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGlanceQty(cell.variance)}</span>
-          </span>
-          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
+          <span className="text-[11px] text-muted-foreground">{t("plan", { n: fmtQty(round2(cell.planned)) })}</span>
+          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} variance={cell.variance} ok={cell.ok} />
         </div>
       );
     }
