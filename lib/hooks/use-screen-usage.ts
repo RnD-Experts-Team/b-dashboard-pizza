@@ -2,44 +2,56 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { screenUsageService } from "@/lib/api/services/screen-usage.service";
-import type { UsageSegmentsResponse } from "@/lib/screen-usage/types";
+import type { UsageReport, UsageReportParams, UsageTimelineSegment } from "@/lib/screen-usage/types";
 
-interface Result {
+interface Loaded<T> {
   key: string;
-  data: UsageSegmentsResponse | null;
+  data: T | null;
   error: string | null;
 }
 
-/** Raw usage segments for a store and [from, to) — the report aggregates them itself. */
-export function useScreenUsage(storeId: string | undefined, from: Date, to: Date) {
-  const [reloadKey, setReloadKey] = useState(0);
-  const [result, setResult] = useState<Result>({ key: "", data: null, error: null });
-
-  const fromMs = from.getTime();
-  const toMs = to.getTime();
-  const key = storeId ? `${storeId}|${fromMs}|${toMs}|${reloadKey}` : "";
+/**
+ * Loads one keyed request at a time: a new key aborts the previous one; the
+ * last data stays on screen while the next loads (the page dims it).
+ */
+function useKeyedLoad<T>(key: string | null, load: (signal: AbortSignal) => Promise<T>) {
+  const [reload, setReload] = useState(0);
+  const [result, setResult] = useState<Loaded<T>>({ key: "", data: null, error: null });
+  const fullKey = key === null ? "" : `${key}#${reload}`;
 
   useEffect(() => {
-    if (!storeId) return;
+    if (key === null) return;
     const controller = new AbortController();
-    screenUsageService
-      .getSegments(storeId, new Date(fromMs), new Date(toMs), controller.signal)
-      .then((data) => setResult({ key, data, error: null }))
+    load(controller.signal)
+      .then((data) => setResult({ key: fullKey, data, error: null }))
       .catch((err: unknown) => {
         if (controller.signal.aborted) return;
-        // Keep the last data on screen; only the error changes.
-        setResult((prev) => ({ key, data: prev.data, error: err instanceof Error ? err.message : String(err) }));
+        setResult((prev) => ({ key: fullKey, data: prev.data, error: err instanceof Error ? err.message : String(err) }));
       });
     return () => controller.abort();
-  }, [storeId, fromMs, toMs, key]);
+    // `load` is rebuilt every render; the key says when the request changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullKey]);
 
-  const refetch = useCallback(() => setReloadKey((k) => k + 1), []);
-
+  const refetch = useCallback(() => setReload((n) => n + 1), []);
   return {
     data: result.data,
-    // Loading = the latest finished request isn't for the current store/range yet.
-    isLoading: !!storeId && result.key !== key,
-    error: result.key === key ? result.error : null,
+    isLoading: key !== null && result.key !== fullKey,
+    error: result.key === fullKey ? result.error : null,
     refetch,
   };
+}
+
+/** The monitoring report across stores; null params = nothing to load yet. */
+export function useScreenUsageReport(params: UsageReportParams | null) {
+  return useKeyedLoad<UsageReport>(params ? JSON.stringify(params) : null, (signal) =>
+    screenUsageService.getReport(params!, signal),
+  );
+}
+
+/** One manager's segments over one day. */
+export function useScreenUsageTimeline(params: { stores: string[]; userId: number; from: string; to: string } | null) {
+  return useKeyedLoad<UsageTimelineSegment[]>(params ? JSON.stringify(params) : null, (signal) =>
+    screenUsageService.getTimeline(params!, signal),
+  );
 }

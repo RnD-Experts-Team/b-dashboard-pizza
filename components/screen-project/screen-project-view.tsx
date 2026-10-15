@@ -192,7 +192,7 @@ export function ScreenProjectView() {
   const canMonitor = useCanAccessRoute({
     service: "Screens",
     method: "GET",
-    path: `/${storeId || "store"}/usage/segments`,
+    path: "/usage/report",
     storeId: selectedStore?.id,
   });
   const locale = useLocale();

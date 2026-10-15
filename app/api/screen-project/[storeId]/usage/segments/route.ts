@@ -12,25 +12,34 @@ const SCREEN_PROJECT_BASE_URL =
 
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
-async function forward(request: NextRequest, storeId: string, init: RequestInit & { search?: string }) {
+/**
+ * POST /api/screen-project/[storeId]/usage/segments
+ * Proxy → POST {SCREEN_PROJECT_BASE_URL}/{storeId}/usage/segments
+ * The manager's browser reporting its own Screen Project usage.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ storeId: string }> },
+) {
+  const authError = requireAuthorization(request);
+  if (authError) return authError;
+
   const authorization = getAuthorizationHeader(request)!;
+  const { storeId } = await params;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(
-      `${SCREEN_PROJECT_BASE_URL}/${encodeURIComponent(storeId)}/usage/segments${init.search ?? ""}`,
-      {
-        method: init.method,
-        body: init.body,
-        headers: {
-          Authorization: authorization,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
+    const upstream = await fetch(`${SCREEN_PROJECT_BASE_URL}/${encodeURIComponent(storeId)}/usage/segments`, {
+      method: "POST",
+      body: await request.text(),
+      headers: {
+        Authorization: authorization,
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
-    );
+      signal: controller.signal,
+    });
 
     const body = upstream.status === 204 ? null : await upstream.text();
 
@@ -49,34 +58,4 @@ async function forward(request: NextRequest, storeId: string, init: RequestInit 
   } finally {
     clearTimeout(timer);
   }
-}
-
-/**
- * GET /api/screen-project/[storeId]/usage/segments?from&to
- * Proxy → GET {SCREEN_PROJECT_BASE_URL}/{storeId}/usage/segments
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ storeId: string }> },
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const { storeId } = await params;
-  return forward(request, storeId, { method: "GET", search: request.nextUrl.search });
-}
-
-/**
- * POST /api/screen-project/[storeId]/usage/segments
- * Proxy → POST {SCREEN_PROJECT_BASE_URL}/{storeId}/usage/segments
- */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ storeId: string }> },
-) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-
-  const { storeId } = await params;
-  return forward(request, storeId, { method: "POST", body: await request.text() });
 }

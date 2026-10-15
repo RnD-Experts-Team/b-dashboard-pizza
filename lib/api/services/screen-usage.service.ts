@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { UsageSegmentReport, UsageSegmentsResponse } from "@/lib/screen-usage/types";
+import type { UsageReport, UsageReportParams, UsageSegmentReport, UsageTimelineSegment } from "@/lib/screen-usage/types";
 
 /* Reads the Zustand-persisted token, same as screen-project.service.ts */
 function getToken(): string | null {
@@ -31,11 +31,17 @@ export const screenUsageService = {
    * sendBeacon can't carry the Authorization header. Resolves when the
    * segments are recorded or permanently rejected; rejects when worth retrying.
    */
-  async reportSegments(storeId: string, segments: UsageSegmentReport[], keepalive = false): Promise<void> {
+  async reportSegments(
+    storeId: string,
+    segments: UsageSegmentReport[],
+    /** The browser's clock when the batch was built — the server corrects for a wrong client clock. */
+    sentAt: string,
+    keepalive = false,
+  ): Promise<void> {
     const res = await fetch(`/api/screen-project/${encodeURIComponent(storeId)}/usage/segments`, {
       method: "POST",
       headers: { ...buildHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ segments }),
+      body: JSON.stringify({ sent_at: sentAt, segments }),
       keepalive,
     });
     if (res.ok || PERMANENT_REJECTIONS.has(res.status)) return;
@@ -43,24 +49,36 @@ export const screenUsageService = {
   },
 
   /**
-   * Raw usage segments overlapping [from, to] plus the store's stations.
-   * Proxied through GET /api/screen-project/{storeId}/usage/segments
+   * The monitoring report across stores, aggregated upstream.
+   * Proxied through GET /api/screen-project/usage/report
    */
-  async getSegments(
-    storeId: string,
-    from: Date,
-    to: Date,
-    signal?: AbortSignal,
-  ): Promise<UsageSegmentsResponse> {
-    const { data } = await axios.get<UsageSegmentsResponse>(
-      `/api/screen-project/${encodeURIComponent(storeId)}/usage/segments`,
-      {
-        params: { from: from.toISOString(), to: to.toISOString() },
-        headers: buildHeaders(),
-        timeout: 30_000,
-        signal,
-      },
-    );
+  async getReport(params: UsageReportParams, signal?: AbortSignal): Promise<UsageReport> {
+    const query = new URLSearchParams({ from: params.from, to: params.to, tz: params.tz });
+    params.stores.forEach((s) => query.append("stores[]", s));
+    params.users?.forEach((u) => query.append("users[]", String(u)));
+    const { data } = await axios.get<UsageReport>(`/api/screen-project/usage/report?${query}`, {
+      headers: buildHeaders(),
+      timeout: 60_000,
+      signal,
+    });
     return data;
+  },
+
+  /**
+   * One manager's raw segments over a day — the timeline.
+   * Proxied through GET /api/screen-project/usage/timeline
+   */
+  async getTimeline(
+    params: { stores: string[]; userId: number; from: string; to: string },
+    signal?: AbortSignal,
+  ): Promise<UsageTimelineSegment[]> {
+    const query = new URLSearchParams({ user_id: String(params.userId), from: params.from, to: params.to });
+    params.stores.forEach((s) => query.append("stores[]", s));
+    const { data } = await axios.get<{ segments: UsageTimelineSegment[] }>(`/api/screen-project/usage/timeline?${query}`, {
+      headers: buildHeaders(),
+      timeout: 30_000,
+      signal,
+    });
+    return data.segments;
   },
 };

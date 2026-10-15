@@ -12,13 +12,18 @@
  *  - main      the station is in the big main tile (PiP: always)
  *  - camera    the manager's camera is on: visible (a face is there) | no_face | covered
  *              (brightness check + on-device MediaPipe face detection, see lib/screen-usage/face-detector.ts)
- *  - mic       the manager's mic is on: open | dead (no signal at all); talking is counted
+ *  - mic       the manager's mic is on: open | dead (no signal at all); exact talking time
  *  - talk_all  same as mic, but while "Talk to All" is held — recorded by the main tile only
+ *
+ * Every state change is recorded at the moment it actually began: a camera or
+ * mic state confirmed after a few samples is back-dated to the first sample
+ * that showed it. Talking time comes from LiveKit's speaking start/stop events,
+ * not from sampling (background tabs throttle timers to once a minute).
  */
 
 import { useEffect, useRef, useState } from "react";
 import { useConnectionState, useLocalParticipant, useRoomContext } from "@livekit/components-react";
-import { ConnectionState, DisconnectReason, RoomEvent, type LocalParticipant } from "livekit-client";
+import { ConnectionState, DisconnectReason, ParticipantEvent, RoomEvent } from "livekit-client";
 import type { FaceDetector } from "@mediapipe/tasks-vision";
 import { usageRecorder } from "@/lib/screen-usage/recorder";
 import { detectFace, loadFaceDetector } from "@/lib/screen-usage/face-detector";
@@ -47,6 +52,12 @@ const MIC_SAMPLE_MS = 1_000;
 const DEAD_MIC_RMS = 0.0003;
 const DEAD_MIC_AFTER_MS = 20_000;
 
+/** A state and the moment it actually started. */
+interface Timed<T> {
+  value: T;
+  since: number;
+}
+
 function endReasonOf(reason?: DisconnectReason): string {
   if (reason === DisconnectReason.DUPLICATE_IDENTITY) return "duplicate_identity";
   if (reason === DisconnectReason.CLIENT_INITIATED) return "left";
@@ -54,25 +65,52 @@ function endReasonOf(reason?: DisconnectReason): string {
   return name ? name.toLowerCase().slice(0, 32) : "network";
 }
 
-/** Keeps one segment open while `active`; any change of its identity closes it and opens a new one. */
+/**
+ * Keeps one segment open while `active`. A change of `state` doesn't reopen
+ * it from "now": the segment is cut at `state.since`, when the new state
+ * really began, and continues from there.
+ */
 function useSegment(
   idRef: React.RefObject<string | null>,
   active: boolean,
   storeId: string,
   room: string | null,
   kind: UsageKind,
-  state: UsageState,
   surface: UsageSurface,
+  state: Timed<UsageState> | null = null,
+  speaking: () => boolean = () => false,
 ) {
+  // The state at the moment the segment opens; later changes go through transition().
+  const stateRef = useRef(state);
+  const speakingRef = useRef(speaking);
+  useEffect(() => {
+    stateRef.current = state;
+    speakingRef.current = speaking;
+  });
+
   useEffect(() => {
     if (!active) return;
-    const id = usageRecorder.open({ storeId, room, kind, state, surface });
+    const id = usageRecorder.open({
+      storeId,
+      room,
+      kind,
+      surface,
+      state: stateRef.current?.value ?? null,
+      speaking: speakingRef.current(),
+    });
     idRef.current = id;
     return () => {
-      usageRecorder.close(id);
-      if (idRef.current === id) idRef.current = null;
+      usageRecorder.close(idRef.current);
+      idRef.current = null;
     };
-  }, [idRef, active, storeId, room, kind, state, surface]);
+  }, [idRef, active, storeId, room, kind, surface]);
+
+  const value = state?.value ?? null;
+  const since = state?.since ?? 0;
+  useEffect(() => {
+    if (!idRef.current || value === null) return;
+    idRef.current = usageRecorder.transition(idRef.current, value, since);
+  }, [idRef, value, since]);
 }
 
 /**
@@ -80,14 +118,15 @@ function useSegment(
  * face / no face from the on-device detector. Until the detector has loaded —
  * or if it can't load at all — an uncovered camera counts as visible.
  */
-function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): CameraState {
-  const [state, setState] = useState<CameraState>("visible");
+function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): Timed<CameraState> {
+  const [state, setState] = useState<Timed<CameraState>>(() => ({ value: "visible", since: 0 }));
 
   useEffect(() => {
     if (!enabled || !track) return;
     let disposed = false;
     let current: CameraState = "visible";
     let pending: CameraState = "visible";
+    let pendingSince = 0;
     let streak = 0;
     let detector: FaceDetector | null = null;
     loadFaceDetector().then((d) => {
@@ -111,6 +150,7 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
     const timer = setInterval(() => {
       try {
         if (disposed || !ctx || video.readyState < 2) return;
+        const sampledAt = Date.now();
         ctx.drawImage(video, 0, 0, 32, 18);
         const px = ctx.getImageData(0, 0, 32, 18).data;
         let sum = 0;
@@ -136,12 +176,17 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
           streak = 0;
           return;
         }
-        streak = reading === pending ? streak + 1 : 1;
-        pending = reading;
+        if (reading === pending && streak > 0) {
+          streak += 1;
+        } else {
+          pending = reading;
+          pendingSince = sampledAt; // the first sample that showed the new state
+          streak = 1;
+        }
         if (streak >= CAMERA_FLIP_SAMPLES) {
           current = reading;
           streak = 0;
-          setState(current);
+          setState({ value: current, since: pendingSince });
         }
       } catch {
         /* never break the call */
@@ -151,7 +196,7 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
     return () => {
       disposed = true;
       clearInterval(timer);
-      setState("visible");
+      setState({ value: "visible", since: 0 });
       try {
         video.pause();
         video.srcObject = null;
@@ -165,16 +210,11 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
 }
 
 /**
- * Watches the local mic: reports "dead" after a long stretch of no signal at
- * all, and counts talking time (LiveKit's server-side speaker detection).
+ * Watches the local mic for a "dead" signal: no sound at all for a long
+ * stretch. The dead state is back-dated to when the silence began.
  */
-function useMicWatch(
-  track: MediaStreamTrack | undefined,
-  enabled: boolean,
-  participant: LocalParticipant,
-  segmentId: React.RefObject<string | null>,
-): boolean {
-  const [dead, setDead] = useState(false);
+function useMicState(track: MediaStreamTrack | undefined, enabled: boolean): Timed<"open" | "dead"> {
+  const [state, setState] = useState<Timed<"open" | "dead">>(() => ({ value: "open", since: 0 }));
 
   useEffect(() => {
     if (!enabled || !track) return;
@@ -197,8 +237,6 @@ function useMicWatch(
 
     const timer = setInterval(() => {
       try {
-        if (participant.isSpeaking) usageRecorder.addTalking(segmentId.current, MIC_SAMPLE_MS);
-
         // A suspended context reads silence — no verdict rather than a false "dead".
         if (!analyser || audioCtx?.state !== "running") return;
         analyser.getFloatTimeDomainData(buf);
@@ -211,13 +249,13 @@ function useMicWatch(
           silentSince ??= now;
           if (!isDead && now - silentSince >= DEAD_MIC_AFTER_MS) {
             isDead = true;
-            setDead(true);
+            setState({ value: "dead", since: silentSince });
           }
         } else {
           silentSince = null;
           if (isDead) {
             isDead = false;
-            setDead(false);
+            setState({ value: "open", since: now });
           }
         }
       } catch {
@@ -228,11 +266,11 @@ function useMicWatch(
     return () => {
       clearInterval(timer);
       audioCtx?.close().catch(() => {});
-      setDead(false);
+      setState({ value: "open", since: 0 });
     };
-  }, [track, enabled, participant, segmentId]);
+  }, [track, enabled]);
 
-  return dead;
+  return state;
 }
 
 export function UsageProbe({ storeId, room, surface, isMain, talkAll = false }: UsageProbeProps) {
@@ -252,13 +290,17 @@ export function UsageProbe({ storeId, room, surface, isMain, talkAll = false }: 
   const cameraId = useRef<string | null>(null);
   const micId = useRef<string | null>(null);
 
-  useSegment(sessionId, connected, storeId, room, "session", null, surface);
-  useSegment(mainId, connected && (isMain || surface === "pip"), storeId, room, "main", null, surface);
+  useSegment(sessionId, connected, storeId, room, "session", surface);
+  useSegment(mainId, connected && (isMain || surface === "pip"), storeId, room, "main", surface);
 
-  // Close the session with the real reason before the effect cleanup closes it as a plain end.
+  // Close the session with the real reason (this also pushes the journal right away).
   useEffect(() => {
     const onDisconnected = (reason?: DisconnectReason) => {
-      usageRecorder.close(sessionId.current, endReasonOf(reason));
+      const at = Date.now();
+      usageRecorder.close(micId.current, { at });
+      usageRecorder.close(cameraId.current, { at });
+      usageRecorder.close(mainId.current, { at });
+      usageRecorder.close(sessionId.current, { endReason: endReasonOf(reason), at });
     };
     lkRoom.on(RoomEvent.Disconnected, onDisconnected);
     return () => {
@@ -267,14 +309,23 @@ export function UsageProbe({ storeId, room, surface, isMain, talkAll = false }: 
   }, [lkRoom]);
 
   const camOn = connected && isCameraEnabled;
-  const cameraState = useCameraState(cameraTrack?.track?.mediaStreamTrack, camOn);
-  useSegment(cameraId, camOn, storeId, room, "camera", cameraState, surface);
+  const camera = useCameraState(cameraTrack?.track?.mediaStreamTrack, camOn);
+  useSegment(cameraId, camOn, storeId, room, "camera", surface, camOn ? camera : null);
 
   // Talk to All publishes the mic into every room: only the main tile records it, once, as talk_all.
   const micKind: UsageKind = talkAll ? "talk_all" : "mic";
   const micOn = connected && isMicrophoneEnabled && (!talkAll || isMain);
-  const dead = useMicWatch(microphoneTrack?.track?.mediaStreamTrack, micOn, localParticipant, micId);
-  useSegment(micId, micOn, storeId, talkAll ? null : room, micKind, dead ? "dead" : "open", surface);
+  const mic = useMicState(microphoneTrack?.track?.mediaStreamTrack, micOn);
+  useSegment(micId, micOn, storeId, talkAll ? null : room, micKind, surface, micOn ? mic : null, () => localParticipant.isSpeaking);
+
+  // Exact talking time: every speaking start/stop, at the moment it happens.
+  useEffect(() => {
+    const onSpeaking = (speaking: boolean) => usageRecorder.setSpeaking(micId.current, speaking);
+    localParticipant.on(ParticipantEvent.IsSpeakingChanged, onSpeaking);
+    return () => {
+      localParticipant.off(ParticipantEvent.IsSpeakingChanged, onSpeaking);
+    };
+  }, [localParticipant]);
 
   return null;
 }

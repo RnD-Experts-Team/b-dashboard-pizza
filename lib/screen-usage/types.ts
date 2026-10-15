@@ -26,12 +26,109 @@ export interface UsageSegmentReport {
   end_reason: string | null;
 }
 
-/** What the report reads back (UTC ISO strings). */
-export interface UsageSegment {
-  id: string;
-  station_id: number | null;
+/* ── The report (GET /usage/report) — every duration in SECONDS ──────────── */
+
+export interface UsageUserRow {
   user_id: number;
-  user_name: string | null;
+  name: string;
+  /** Store numbers the manager was seen in. */
+  stores: string[];
+  on_screen: number;
+  present: number;
+  away: number;
+  no_face: number;
+  covered: number;
+  camera_off: number;
+  mic_open: number;
+  talking: number;
+  silent: number;
+  dead_mic: number;
+  talk_all: number;
+  talk_all_talking: number;
+  pip: number;
+  /** Separate stretches on Screen Project. */
+  visits: number;
+  /** Sessions cut because another login used the same store's identity. */
+  kicks: number;
+  last_seen: string;
+  favorite: { station_id: number; name: string; store: string | null; seconds: number } | null;
+}
+
+export interface UsageStoreRow {
+  store: string;
+  managers: number;
+  on_screen: number;
+  present: number;
+  talking: number;
+  kicks: number;
+}
+
+export interface UsageScreenRow {
+  station_id: number;
+  name: string;
+  store: string | null;
+  /** Time in the big main tile (all managers). */
+  main: number;
+  mic: number;
+  camera: number;
+  managers: number;
+}
+
+export interface UsageDayRow {
+  /** Local day "YYYY-MM-DD" in the viewer's time zone. */
+  date: string;
+  on_screen: number;
+  present: number;
+  talking: number;
+  managers: number;
+}
+
+export interface UsageReport {
+  range: { from: string; to: string; tz: string };
+  totals: {
+    managers: number;
+    on_screen: number;
+    present: number;
+    away: number;
+    no_face: number;
+    covered: number;
+    mic_open: number;
+    talking: number;
+    dead_mic: number;
+    talk_all: number;
+    pip: number;
+    visits: number;
+    kicks: number;
+    screens: number;
+    screens_watched: number;
+  };
+  users: UsageUserRow[];
+  stores: UsageStoreRow[];
+  screens: UsageScreenRow[];
+  days: UsageDayRow[];
+  /** [weekday 0=Mon..6=Sun][hour 0..23] → seconds, viewer's clock. */
+  hours: { present: number[][]; away: number[][] };
+  camera: { present: number; no_face: number; covered: number; off: number };
+  mic: { talking: number; silent: number; dead: number; off: number };
+  /** Everyone seen in these stores and dates — the manager filter's options. */
+  managers: { user_id: number; name: string }[];
+}
+
+export interface UsageReportParams {
+  /** Store NUMBERS. */
+  stores: string[];
+  from: string;
+  to: string;
+  tz: string;
+  users?: number[];
+}
+
+/* ── One manager's day (GET /usage/timeline) ─────────────────────────────── */
+
+export interface UsageTimelineSegment {
+  id: string;
+  store: string | null;
+  station: string | null;
   kind: UsageKind;
   state: UsageState;
   surface: UsageSurface;
@@ -39,16 +136,4 @@ export interface UsageSegment {
   ended_at: string;
   talking_seconds: number;
   end_reason: string | null;
-}
-
-export interface UsageStation {
-  id: number;
-  name: string;
-  room_name: string;
-  type: string;
-}
-
-export interface UsageSegmentsResponse {
-  stations: UsageStation[];
-  segments: UsageSegment[];
 }

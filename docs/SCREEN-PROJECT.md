@@ -935,9 +935,9 @@ sends them to ScreensPizza, which takes the user from the token.
 | Away | on Screen Project and not present: camera off, covered or no face |
 | Camera covered | a 32×18 frame sampled every 3 s is very dark (mean luma < 20) or flat (stddev < 3) |
 | Face detection | every 3 s, when not covered: Google MediaPipe BlazeFace (short range) on the manager's own camera track, in the browser, confidence ≥ 0.5. No image leaves the device. Loaded lazily the first time a camera is on (engine + model ≈ 3.7 MB compressed, served from `public/mediapipe/`, see its README). If it can't load, an uncovered camera counts as `visible` |
-| State changes | need two identical readings in a row (≈ 6 s) |
-| Dead mic | mic on but RMS ≈ -70 dBFS (no signal at all) for 20 s: muted at the device or covered |
-| Talking | LiveKit's own speaker detection (`participant.isSpeaking`), counted per second while the mic segment is open |
+| State changes | need two identical readings in a row, and are **back-dated** to the first reading that showed the new state |
+| Dead mic | mic on but RMS ≈ -70 dBFS (no signal at all) for 20 s: muted at the device or covered — back-dated to when the silence began |
+| Talking | LiveKit's own speaker detection: exact start/stop times from `ParticipantEvent.IsSpeakingChanged` (never sampled — background tabs throttle timers to once a minute) |
 | Favorite screen | the station in the big main tile for the most time (the mini-player's station counts as main) |
 | Kicked | session ended with `DisconnectReason.DUPLICATE_IDENTITY`: another login opened the same store |
 
@@ -945,32 +945,61 @@ sends them to ScreensPizza, which takes the user from the token.
 
 ```
 ScreenTile (usage prop) → UsageProbe (inside <LiveKitRoom>, read-only)
-  → usageRecorder (lib/screen-usage/recorder.ts, module singleton)
+  → usageRecorder (lib/screen-usage/recorder.ts, module singleton, journal in localStorage)
   → POST /api/screen-project/{storeId}/usage/segments → ScreensPizza POST /{storeId}/usage/segments
 ```
 
-- Segment kinds: `session`, `main`, `camera` (`visible`|`covered`), `mic` (`open`|`dead`), `talk_all`.
-  A state change closes the segment and opens a new one.
-- The segment id is a ULID made in the browser. Every **5 minutes** the browser sends one batch (one request
-  per manager tab, none while nothing is open); open segments are re-sent with `ended_at = now` and the server
-  upserts on the id, so a crashed tab loses at most 5 minutes. Pending segments are also flushed once on
-  `pagehide` (tab closed, reload, leaving the app) with `fetch(keepalive)` — sendBeacon can't send `Authorization`.
-  Switching tabs sends nothing. Load: N managers online ≈ N requests per 5 min to ScreensPizza, each also
-  verifying the token with pizzasys.
+- Segment kinds: `session`, `main`, `camera` (`visible`|`no_face`|`covered`), `mic` (`open`|`dead`), `talk_all`.
+  A state change cuts the segment at the moment the new state began (`usageRecorder.transition`) and continues it from there.
+- **Journal.** Every segment, with exact timestamps, is kept in a per-tab localStorage journal
+  (`screen-usage:journal:<tab>`), saved within a second of each change and every 30 s ("last seen alive").
+  Nothing between two pushes is lost: a journal left by a crashed/closed tab is **adopted** by the next page load,
+  its open segments end at the moment they were last seen alive, and it is pushed.
+- **Pushes** — the whole journal in one request per store:
+  - every **5 minutes**;
+  - **~1.5 s after a station disconnects** (a session segment closes: room drop, Exit session, leaving the page) —
+    sibling tiles closing together go in the same push;
+  - on `pagehide`: a real unload ends everything open at that moment, saves the journal, and pushes with
+    `fetch(keepalive)` (sendBeacon can't send `Authorization`); what doesn't arrive is pushed by the next load.
+  Switching tabs sends nothing. Load: N managers online ≈ N requests per 5 min, each also verifying the token with pizzasys.
+- Open segments are pushed with `ended_at` = the push moment (what was observed so far); the server upserts on the
+  browser-made ULID, so one segment is one row. Segments open longer than 6 h are split (no unbounded rows).
+- Each push carries `sent_at` (the browser clock); ScreensPizza shifts the batch by the difference to server time
+  when it exceeds 5 s, so a PC with a wrong clock records the right times.
 - Talk to All publishes the mic into every room. Only the **main** tile records it, once, as `talk_all`.
   The other tiles skip their mic while it's held.
 - Fail-safe: the probe never enables, mutes or publishes anything; every entry point swallows its errors.
-  The backlog is capped at 1000 segments, and rows the server permanently rejects (4xx) are dropped instead of retried.
+  The journal is capped at 3000 segments; rows the server permanently rejects (4xx) are dropped instead of retried.
 - `usage` is passed only by manager tiles (`screen-project-view.tsx`, page) and the mini-player
   (`screen-project-pip-overlay.tsx`, pip). Observer, station and drive-thru tiles don't pass it.
 
 ### Report
 
-`/dashboard/screen-project/monitoring` (`components/screen-project/monitoring/*`), linked from the
-sidebar and the station-select header. Needs the Screens `GET /*/usage/segments` rule (`screens manager`,
-scoped — the same permission as the observer view). Store = the selected store. Range ≤ 62 days.
-The API returns raw UTC segments; `lib/screen-usage/aggregate.ts` builds the summary, the weekday × hour
-heatmap, the per-screen breakdown and the day timeline **in the viewer's time zone**.
+`/dashboard/screen-project/monitoring` (`components/screen-project/monitoring/*`) — built like Maintenance
+Analytics and on its kit (`AnalyticsControls`, `KpiTile`, `AnalyticsCard`, `AnalyticsBarChart`, `ReportTable`,
+`usePaged`/`Pager`):
 
-Writing usage is `screens user` / `screens manager`, scoped. Rules live in pizzasys
-`ScreensAuthRulesSeeder`.
+- **Filters:** date presets / range (≤ 92 days, days in the viewer's clock), stores (multi-select of every store
+  where the viewer passes the report rule — one refused store would refuse the whole request), managers (searchable
+  multi-select, options = everyone seen in those stores and days).
+- **KPIs:** managers (visits), connected time, present %, away, talking (% of mic time), kicked.
+- **Charts:** presence by day (present/away stacked + talking line, one hours axis), weekday × hour heatmap
+  (present/away), camera breakdown (face / no face / covered / off), mic breakdown (talking / silent / dead / off).
+- **At a glance:** plain-language findings (most/least present, peak hour, top screen, never-watched screens, camera
+  and mic trouble), each jumping to its section.
+- **Managers table:** every number per manager, sortable + searchable + paged; a row opens a sheet with that
+  manager's figures, favorite screen, camera breakdown and any day's **timeline** (lanes, kicks marked).
+- **Most watched screens** (bar chart), **by store**, and **screens** (incl. never in the main tile).
+
+Data: `useScreenUsageReport` → `screenUsageService.getReport` → `GET /api/screen-project/usage/report`
+→ ScreensPizza `GET /usage/report?stores[]=&from&to&tz&users[]` (`ScreenUsageReport` service — aggregated
+server-side, overlapping segments of a manager merged before summing, buckets in `tz`). The timeline:
+`GET /usage/timeline?stores[]=&user_id&from&to` (raw segments, ≤ 2 days). Chart colours are in
+`lib/screen-usage/format.ts` (`USAGE_COLORS`, validated for colour-blind separation and contrast in both themes).
+
+Access: the report rules are `GET /usage/report` and `GET /usage/timeline`, `scoped` with `sources: query stores`,
+`screens manager` (same permission as the observer view). Writing usage is `screens user` / `screens manager`,
+scoped. Rules live in pizzasys `ScreensAuthRulesSeeder`.
+
+Sidebar: when the user can open both Screen Project and the monitoring report, they are grouped under a
+collapsible **Screen Project** entry (Screens + Screen Monitoring); with only one, it stays a flat link.

@@ -145,7 +145,7 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: Activity,
     titleKey: "screenMonitoring",
     requirements: (storeId) => [
-      { service: "Screens", method: "GET", path: "/*/usage/segments", storeId },
+      { service: "Screens", method: "GET", path: "/usage/report", storeId },
     ],
   },
 
