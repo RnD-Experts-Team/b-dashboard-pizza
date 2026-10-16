@@ -22,6 +22,18 @@ import {
 const OK_TEXT = "text-muted-foreground";
 const SHORT_TEXT = "text-rose-600 dark:text-rose-400";
 const WARN_TEXT = "text-amber-600 dark:text-amber-400";
+/** The dashed edge the full report gives a day with no confirmed plan: checked against its base, never scored. */
+const UNCONFIRMED_EDGE = "rounded-md border border-dashed border-muted-foreground/40";
+
+/** A day with no confirmed plan whose night-before count could still be checked against that day's base. */
+type CheckedNoPlan = Extract<WeekCell, { kind: "no-plan" }> & {
+  counted: number;
+  base: number;
+  variance: number;
+  ok: boolean;
+};
+const isCheckedNoPlan = (c: WeekCell): c is CheckedNoPlan =>
+  c.kind === "no-plan" && c.counted != null && c.base != null && c.variance != null && c.ok != null;
 
 /**
  * The 7 × 3 variance cells of one store-week. Missing ≠ zero (rule 2); not-yet ≠ missing.
@@ -136,7 +148,12 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
             <Clock className="h-3.5 w-3.5" /> {t("legendAwaiting")}
           </span>
         )}
-        {kinds.has("no-plan") && (
+        {cells.cells.some(isCheckedNoPlan) && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className={cn("h-3 w-3.5", UNCONFIRMED_EDGE)} /> {t("legendUnconfirmed")}
+          </span>
+        )}
+        {cells.cells.some((c) => c.kind === "no-plan" && !isCheckedNoPlan(c)) && (
           <span className="inline-flex items-center gap-1.5">
             <span className="w-3.5 text-center">{"–"}</span> {t("noPlan")}
           </span>
@@ -179,9 +196,21 @@ function beforeBuffer(planned: number, bufferPct: number): string {
   return fmtQty(round2(baseQty(planned, bufferPct)));
 }
 
+/** The number a count is judged against, and — once counted — how far the count is from it (+ over, − short). */
+function DiffLine({ base, variance, ok }: { base: string; variance?: number; ok?: boolean }) {
+  return (
+    <span className="whitespace-nowrap text-[11px] font-normal text-muted-foreground">
+      {base}
+      {variance != null && (
+        <span className={cn("ms-1.5", !ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGlanceQty(variance)}</span>
+      )}
+    </span>
+  );
+}
+
 /**
- * The scored line of a planned cell: the number before the buffer, and — once counted — how far the
- * count is from it. Nothing when there is no stored plan.
+ * The scored line of a planned cell: the number before the buffer, and how far the count is from it.
+ * Nothing when there is no stored plan.
  */
 function BaseLine({
   planned,
@@ -195,14 +224,7 @@ function BaseLine({
   ok?: boolean;
 }) {
   if (bufferPct == null) return null;
-  return (
-    <span className="whitespace-nowrap text-[11px] font-normal text-muted-foreground">
-      {beforeBuffer(planned, bufferPct)}
-      {variance != null && (
-        <span className={cn("ms-1.5", !ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGlanceQty(variance)}</span>
-      )}
-    </span>
-  );
+  return <DiffLine base={beforeBuffer(planned, bufferPct)} variance={variance} ok={ok} />;
 }
 
 function Cell({ cell }: { cell: WeekCell }) {
@@ -269,6 +291,31 @@ function Cell({ cell }: { cell: WeekCell }) {
         </div>
       );
     case "no-plan":
+      // Same reading as a planned day — count, then base ± difference — but inside the dashed edge the
+      // report uses, labelled "Not confirmed": there is no buffer to show, and the day is never scored.
+      if (isCheckedNoPlan(cell)) {
+        return (
+          <div
+            className={cn(STACK, UNCONFIRMED_EDGE, "mx-auto w-fit px-2 py-1.5")}
+            title={t("unplannedTitle", {
+              counted: fmtQty(cell.counted),
+              on: day.monthDay(cell.countDate),
+              base: fmtQty(round2(cell.base)),
+            })}
+          >
+            <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
+              {cell.ok ? (
+                <Check className={cn("h-3 w-3", OK_TEXT)} strokeWidth={2.5} />
+              ) : (
+                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+              )}
+              {fmtGlanceQty(cell.counted)}
+            </span>
+            <span className="text-[11px] text-muted-foreground">{t("notConfirmed")}</span>
+            <DiffLine base={fmtQty(round2(cell.base))} variance={cell.variance} ok={cell.ok} />
+          </div>
+        );
+      }
       return cell.counted != null ? (
         <div className={STACK} title={t("noPlan")}>
           <span className="text-sm font-semibold">{fmtGlanceQty(cell.counted)}</span>
