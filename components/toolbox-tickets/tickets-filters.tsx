@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CircleDot, Layers, Search, Store, UserRound, X } from "lucide-react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
+import type { MultiSelectOption } from "@/components/daily-pay/multi-select";
 import { activeFilterCount } from "@/lib/toolbox-tickets/filters-url";
 import { useDebouncedValue } from "@/lib/hooks/use-toolbox-tickets-poll";
+import { AllMultiSelect } from "./filter-multi-select";
 import { useStatusLabel } from "./ticket-status-badge";
 import {
   TICKET_STATUSES,
@@ -25,8 +27,15 @@ interface TicketsFiltersProps {
   sections: TicketSection[] | null;
   storeOptions: MultiSelectOption<string>[];
   currentUserId: number | null;
+  /** Extra buttons at the end of the row (e.g. Refresh). */
+  actions?: ReactNode;
 }
 
+/**
+ * One row of controls, like the /employees top bar: search, the filters,
+ * then Clear all and Refresh. An empty selection is drawn as "All …" with
+ * everything checked (see AllMultiSelect) — the real state stays `[]`.
+ */
 export function TicketsFilters({
   filters,
   onChange,
@@ -34,9 +43,11 @@ export function TicketsFilters({
   sections,
   storeOptions,
   currentUserId,
+  actions,
 }: TicketsFiltersProps) {
   const t = useTranslations("toolboxTickets.filters");
   const statusLabel = useStatusLabel();
+  const searchId = useId();
 
   // Search is typed locally and committed debounced — one request per pause.
   const [search, setSearch] = useState(filters.search);
@@ -60,17 +71,30 @@ export function TicketsFilters({
 
   const count = activeFilterCount(filters, { includeStores: showStores });
   const mine = currentUserId !== null && filters.reportedBy === currentUserId;
+  const anyReporter = filters.reportedBy === null;
+
+  const segment = (active: boolean) =>
+    cn(
+      "truncate rounded-md px-3 text-xs transition-all",
+      active ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+    );
+
+  const clearAll = () => {
+    setSearch("");
+    onChange({ ...filters, statuses: [], sectionKeys: [], stores: [], reportedBy: null, search: "", page: 1 });
+  };
 
   return (
-    <div className="flex flex-col gap-2 lg:flex-row lg:items-center" data-slot="tickets-filters">
-      <div className="relative min-w-0 flex-1">
-        <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+    <div className="flex flex-wrap items-center gap-2" data-slot="tickets-filters">
+      <div className="relative min-w-48 flex-1">
+        <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
+          id={searchId}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("search")}
-          className="h-9 ps-8 pe-8"
-          aria-label={t("search")}
+          aria-label={t("field.search")}
+          className="h-9 ps-9 pe-9"
         />
         {search && (
           <button
@@ -84,71 +108,79 @@ export function TicketsFilters({
         )}
       </div>
 
-      <div
-        className={cn(
-          "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center",
-          "[&>*]:min-w-0 sm:[&>*]:w-44",
-        )}
-      >
-        <MultiSelect<TicketStatus>
+      <div className="w-full sm:w-44">
+        <AllMultiSelect<TicketStatus>
           options={statusOptions}
           selected={filters.statuses}
           onChange={(statuses) => set({ statuses })}
-          placeholder={t("status")}
+          allLabel={t("all.statuses")}
+          countLabel={(n) => t("n.statuses", { count: n })}
           searchPlaceholder={t("searchIn")}
           emptyText={t("noMatches")}
-          icon={<CircleDot className="h-3.5 w-3.5 text-muted-foreground" />}
+          aria-label={t("field.status")}
         />
-        <MultiSelect<string>
+      </div>
+      <div className="w-full sm:w-44">
+        <AllMultiSelect<string>
           options={sectionOptions}
           selected={filters.sectionKeys}
           onChange={(sectionKeys) => set({ sectionKeys })}
-          placeholder={t("section")}
+          allLabel={t("all.areas")}
+          countLabel={(n) => t("n.areas", { count: n })}
           searchPlaceholder={t("searchIn")}
           emptyText={t("noMatches")}
           disabled={!sections}
-          icon={<Layers className="h-3.5 w-3.5 text-muted-foreground" />}
+          loadingLabel={t("loading")}
+          aria-label={t("field.area")}
         />
-        {showStores && (
-          <MultiSelect<string>
+      </div>
+      {showStores && (
+        <div className="w-full sm:w-44">
+          <AllMultiSelect<string>
             options={storeOptions}
             selected={filters.stores}
             onChange={(stores) => set({ stores })}
-            placeholder={t("store")}
+            allLabel={t("all.stores")}
+            countLabel={(n) => t("n.stores", { count: n })}
             searchPlaceholder={t("searchIn")}
             emptyText={t("noMatches")}
-            icon={<Store className="h-3.5 w-3.5 text-muted-foreground" />}
+            aria-label={t("field.store")}
           />
-        )}
-        {currentUserId !== null && (
-          <Button
+        </div>
+      )}
+      {currentUserId !== null && (
+        <div role="group" aria-label={t("field.reportedBy")} className="flex h-9 gap-0.5 rounded-lg bg-muted/60 p-0.5">
+          <button
             type="button"
-            variant="outline"
-            size="sm"
+            aria-pressed={anyReporter}
+            onClick={() => !anyReporter && set({ reportedBy: null })}
+            className={segment(anyReporter)}
+          >
+            {t("all.reporters")}
+          </button>
+          <button
+            type="button"
             aria-pressed={mine}
-            onClick={() => set({ reportedBy: mine ? null : currentUserId })}
-            className={cn("h-9 justify-start gap-1.5 font-normal", mine && "border-primary/40 bg-primary/5")}
+            onClick={() => !mine && set({ reportedBy: currentUserId })}
+            className={segment(mine)}
           >
-            <UserRound className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="truncate">{t("reportedByMe")}</span>
+            {t("reportedByMe")}
+          </button>
+        </div>
+      )}
+
+      {count > 0 && (
+        <>
+          <Badge variant="secondary" className="h-6 px-2 text-xs tabular-nums">
+            {t("active", { count })}
+          </Badge>
+          <Button type="button" variant="ghost" className="h-9 text-muted-foreground" onClick={clearAll}>
+            <X className="me-1 h-4 w-4" />
+            {t("reset")}
           </Button>
-        )}
-        {count > 0 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-9 justify-start text-muted-foreground sm:w-auto!"
-            onClick={() => {
-              setSearch("");
-              onChange({ ...filters, statuses: [], sectionKeys: [], stores: [], reportedBy: null, search: "", page: 1 });
-            }}
-          >
-            <X className="me-1 h-3.5 w-3.5" />
-            {t("clear", { count })}
-          </Button>
-        )}
-      </div>
+        </>
+      )}
+      {actions}
     </div>
   );
 }

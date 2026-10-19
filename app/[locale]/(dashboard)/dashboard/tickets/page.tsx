@@ -28,15 +28,16 @@ import type { TicketListFilters } from "@/types/toolbox-tickets.types";
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Tickets — ToolboxPizza's internal ticketing (inbox, store queue, admin). */
 /*                                                                            */
-/*  The page adds no gate of its own (the sidebar item is gated on the       */
-/*  Toolbox `GET /v1/tickets` rule): the inbox is filtered upstream to what   */
-/*  each caller can see, the store queue hides rows the caller can't open,   */
-/*  and the admin tab explains its own 403. Tab + filters live in the URL so  */
-/*  a filtered view survives a reload and can be linked.                     */
+/*  The page itself has no gate (the sidebar item is gated on the Toolbox     */
+/*  `GET /v1/tickets` rule): the inbox and store queue are filtered upstream  */
+/*  to what each caller can see. The Admin tab is gated on the Toolbox        */
+/*  `POST /v1/ticket-sections` rule, and its panels still explain a 403.      */
+/*  Tab + filters live in the URL so a filtered view survives a reload.       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 type Tab = "inbox" | "store" | "admin";
 const TABS: Tab[] = ["inbox", "store", "admin"];
+const ADMIN_RULE = { service: "Toolbox", method: "POST", path: "/v1/ticket-sections" } as const;
 
 export default function ToolboxTicketsPage() {
   return (
@@ -54,8 +55,15 @@ function TicketsScreen() {
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
+  // The Admin tab is the catalogue (areas, levels, assignments): shown only to
+  // someone the Toolbox `POST /v1/ticket-sections` rule lets through. NO storeId —
+  // the rule's store scope is "none", so the server checks global permissions only.
+  // The selector re-runs when the auth rules load, so the tab appears once they do.
+  const canAdmin = useAuthStore((s) => s.canAccessRoute(ADMIN_RULE));
+
   const rawTab = searchParams.get("tab") as Tab | null;
-  const tab: Tab = rawTab && TABS.includes(rawTab) ? rawTab : "inbox";
+  // A `?tab=admin` link without the rule falls back to the inbox.
+  const tab: Tab = rawTab && TABS.includes(rawTab) && (rawTab !== "admin" || canAdmin) ? rawTab : "inbox";
   const filters = useMemo(() => filtersFromParams(new URLSearchParams(searchParams.toString())), [searchParams]);
 
   const selectedStore = useSelectedStoreStore((s) => s.selectedStore);
@@ -99,8 +107,8 @@ function TicketsScreen() {
   return (
     <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")}>
-        <Button onClick={() => setCreateOpen(true)} size="sm">
-          <Plus className="me-1.5 h-4 w-4" />
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="me-2 h-4 w-4" />
           {t("newTicket")}
         </Button>
       </PageHeader>
@@ -126,10 +134,12 @@ function TicketsScreen() {
               <Store className="h-3.5 w-3.5" />
               {t("tabs.store")}
             </TabsTrigger>
-            <TabsTrigger value="admin" className="gap-1.5">
-              <Settings2 className="h-3.5 w-3.5" />
-              {t("tabs.admin")}
-            </TabsTrigger>
+            {canAdmin && (
+              <TabsTrigger value="admin" className="gap-1.5">
+                <Settings2 className="h-3.5 w-3.5" />
+                {t("tabs.admin")}
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -156,7 +166,6 @@ function TicketsScreen() {
                 filters={filters}
                 onFiltersChange={setFilters}
                 storeCode={storeCode}
-                storeName={selectedStore?.name ?? storeCode}
                 sections={sections}
                 storeOptions={storeOptions}
                 currentUserId={currentUserId}
@@ -167,9 +176,11 @@ function TicketsScreen() {
             ))}
         </TabsContent>
 
-        <TabsContent value="admin" className="mt-4">
-          {tab === "admin" && <TicketsAdmin onCatalogChanged={() => void reloadSections()} />}
-        </TabsContent>
+        {canAdmin && (
+          <TabsContent value="admin" className="mt-4">
+            {tab === "admin" && <TicketsAdmin onCatalogChanged={() => void reloadSections()} />}
+          </TabsContent>
+        )}
       </Tabs>
 
       <CreateTicketDialog
@@ -191,7 +202,6 @@ interface TicketsQueueProps {
   filters: TicketListFilters;
   onFiltersChange: (next: TicketListFilters) => void;
   storeCode: string | null;
-  storeName?: string;
   sections: ReturnType<typeof useTicketSections>["sections"];
   storeOptions: { value: string; label: string; hint?: string }[];
   currentUserId: number | null;
@@ -203,7 +213,6 @@ function TicketsQueue({
   filters,
   onFiltersChange,
   storeCode,
-  storeName,
   sections,
   storeOptions,
   currentUserId,
@@ -225,28 +234,27 @@ function TicketsQueue({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {mode === "inbox" ? t("queue.inboxHint") : t("queue.storeHint", { store: storeName ?? "" })}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={async () => {
-            const err = await list.refresh();
-            if (err) reportError(err);
-          }}
-          disabled={list.loading || list.refreshing}
-        >
-          <RefreshCw className={cn("me-1.5 h-3.5 w-3.5", list.refreshing && "animate-spin")} />
-          {t("refresh")}
-        </Button>
-      </div>
-
       <TicketsFilters
         filters={filters}
         onChange={onFiltersChange}
         showStores={mode === "inbox"}
+        actions={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            aria-label={t("refresh")}
+            title={t("refresh")}
+            onClick={async () => {
+              const err = await list.refresh();
+              if (err) reportError(err);
+            }}
+            disabled={list.loading || list.refreshing}
+          >
+            <RefreshCw className={cn("h-4 w-4", list.refreshing && "animate-spin")} />
+          </Button>
+        }
         sections={sections}
         storeOptions={storeOptions}
         currentUserId={currentUserId}
@@ -281,14 +289,18 @@ function TicketsQueue({
           }
         />
       ) : (
-        <TicketsList
-          page={list.page}
-          hideUnviewable={mode === "store"}
-          showStore={mode === "inbox"}
-          refreshing={list.refreshing || list.loading}
-          onPageChange={(page) => onFiltersChange({ ...filters, page })}
-          onPerPageChange={(perPage) => onFiltersChange({ ...filters, perPage, page: 1 })}
-        />
+        <>
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {t("queue.showing", { from: list.page.from ?? 1, to: list.page.to ?? list.page.items.length, count: list.page.total })}
+          </p>
+          <TicketsList
+            page={list.page}
+            showStore={mode === "inbox"}
+            refreshing={list.refreshing || list.loading}
+            onPageChange={(page) => onFiltersChange({ ...filters, page })}
+            onPerPageChange={(perPage) => onFiltersChange({ ...filters, perPage, page: 1 })}
+          />
+        </>
       )}
     </div>
   );
