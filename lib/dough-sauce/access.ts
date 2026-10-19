@@ -2,7 +2,7 @@ import type { CanAccessParams } from "@/lib/auth/can-access";
 
 /**
  * Who sees what in Dough & Sauce — decided by the pizzasys auth rules for the
- * 13 endpoints, never by role names.
+ * 14 endpoints, never by role names.
  *
  *   Worker      holds `dough and sauce` at a store (store role) → Daily plan for that store
  *   Specialist  holds `dough and sauce` globally (global role)  → every page, every action
@@ -20,7 +20,7 @@ export type DoughSauceTab = "daily" | "weekly" | "recipes" | "report";
 
 export type RouteCheck = (params: CanAccessParams) => boolean;
 
-/* ── The 13 endpoints as rule-engine inputs ──────────────────────────────── */
+/* ── The 14 endpoints as rule-engine inputs ──────────────────────────────── */
 
 const QA = "QA"; // AuditApp
 const DATA = "Data"; // LC_PIZZA_DATA
@@ -58,6 +58,7 @@ export const DS_ROUTES = {
     storeId: id,
   }),
   /* 13 */ countsAll: (): CanAccessParams => ({ service: INV, method: "GET", path: "/inventory/counts" }),
+  /* 14 */ dailyPlansAll: (): CanAccessParams => ({ service: DATA, method: "GET", path: "/dough-sauce/daily-plans" }), // every store at once: stores come from `query.store_ids`, policy `all` (not #6: that ends in `daily-plan$`)
 } as const;
 
 /* ── Access model ────────────────────────────────────────────────────────── */

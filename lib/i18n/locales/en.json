@@ -4116,26 +4116,43 @@
       "admin": "Admin"
     },
     "queue": {
-      "inboxHint": "Every ticket you raised, own, or were added to — across all your stores.",
-      "storeHint": "Every ticket at {store}. Tickets you can't open are hidden.",
       "noStoreTitle": "No store selected",
       "noStoreBody": "Pick a store in the sidebar to see its whole ticket queue.",
       "emptyTitle": "No tickets yet",
       "emptyBody": "When a problem is reported, it shows up here.",
       "emptyFilteredTitle": "No tickets match these filters",
-      "emptyFilteredBody": "Try removing a filter or searching for something else."
+      "emptyFilteredBody": "Try removing a filter or searching for something else.",
+      "showing": "{count, plural, one {Showing # ticket} other {Showing {from}–{to} of # tickets}}"
     },
     "filters": {
       "search": "Search title or description…",
       "clearSearch": "Clear search",
-      "status": "Status",
-      "section": "Area",
-      "store": "Store",
       "searchIn": "Search…",
       "noMatches": "No matches.",
       "reportedByMe": "Reported by me",
-      "clear": "Clear ({count})",
-      "clearAll": "Clear all filters"
+      "clearAll": "Clear all filters",
+      "field": {
+        "search": "Search",
+        "status": "Status",
+        "area": "Area",
+        "store": "Store",
+        "reportedBy": "Reported by"
+      },
+      "all": {
+        "statuses": "All statuses",
+        "areas": "All areas",
+        "stores": "All stores",
+        "reporters": "All reporters"
+      },
+      "n": {
+        "statuses": "{count, plural, one {# status} other {# statuses}}",
+        "areas": "{count, plural, one {# area} other {# areas}}",
+        "stores": "{count, plural, one {# store} other {# stores}}"
+      },
+      "apply": "Apply",
+      "active": "{count} active",
+      "reset": "Clear all",
+      "loading": "Loading…"
     },
     "status": {
       "pending": "Pending",
@@ -4144,7 +4161,6 @@
       "closed": "Closed"
     },
     "list": {
-      "hidden": "{count, plural, one {# ticket} other {# tickets}} at this store you don't have access to {count, plural, one {is} other {are}} hidden.",
       "ticket": "Ticket",
       "status": "Status",
       "section": "Area",
@@ -4157,8 +4173,7 @@
       "perPageSearch": "Page size…",
       "prev": "Previous page",
       "next": "Next page",
-      "pageOf": "{page} / {last}",
-      "allHidden": "Every ticket on this page is one you don't have access to. Try the next page, or use My inbox to see only your tickets."
+      "pageOf": "{page} / {last}"
     },
     "errors": {
       "title": "Something went wrong",
@@ -4540,6 +4555,11 @@
         "restored": "Area {key} restored",
         "fallbackNote": "The fallback: reports from a part with no area of its own come here.",
         "generalFirst": "Create {key} first — it's where reports go when their own area isn't set up yet."
+      },
+      "filters": {
+        "field": {
+          "search": "Search"
+        }
       }
     }
   },

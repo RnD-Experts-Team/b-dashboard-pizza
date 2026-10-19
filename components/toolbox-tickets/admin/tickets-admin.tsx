@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FolderTree, Layers, ShieldCheck, UserCheck } from "lucide-react";
+import { FolderTree, Info, Layers, ShieldCheck, UserCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { AssignmentsPanel } from "./assignments-panel";
@@ -50,7 +50,15 @@ export function TicketsAdmin({ onCatalogChanged }: { onCatalogChanged: () => voi
           ))}
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">{t(`intro.${tab}`)}</p>
+      <div className="flex items-start gap-3 rounded-lg border bg-card/40 px-4 py-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 dark:bg-blue-500/20">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div className="min-w-0">
+          <p className="font-heading text-sm font-semibold">{t(`tabs.${tab}`)}</p>
+          <p className="text-sm text-foreground/80 text-pretty">{t(`intro.${tab}`)}</p>
+        </div>
+      </div>
 
       {tab === "sections" && <SectionsPanel onChanged={onCatalogChanged} />}
       {tab === "levels" && <LevelsPanel onChanged={onCatalogChanged} />}
