@@ -7,6 +7,7 @@ import type {
   StoreWeekResponse,
   JudgementPayload,
   DailyPlanBase,
+  DailyPlansAll,
   Ingredient,
   Recipe,
   CreateRecipePayload,
@@ -258,6 +259,33 @@ export const doughSauceService = {
         url: `${storePath(storeKey)}/daily-plan`,
         params: {
           date,
+          ...(opts.lookback && { lookback: opts.lookback }),
+          include_refunded: boolParam(opts.includeRefunded ?? false),
+        },
+      },
+      signal
+    );
+  },
+
+  /**
+   * §4.1 all stores — the same figures as `getDailyPlanBase`, for many stores and many production dates in
+   * a SINGLE call (up to 60 stores × 62 dates). The answer is the full store × date grid. A store the user
+   * may not see fails the whole call with a 403, and any malformed value with a 422.
+   */
+  getDailyPlansAll(
+    storeKeys: string[],
+    dates: string[],
+    opts: { lookback?: number; includeRefunded?: boolean } = {},
+    signal?: AbortSignal
+  ): Promise<DailyPlansAll> {
+    return call(
+      "data",
+      {
+        method: "GET",
+        url: "/api/dough-sauce/daily-plans",
+        params: {
+          store_ids: storeKeys.join(","),
+          dates: dates.join(","),
           ...(opts.lookback && { lookback: opts.lookback }),
           include_refunded: boolParam(opts.includeRefunded ?? false),
         },

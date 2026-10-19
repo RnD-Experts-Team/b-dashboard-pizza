@@ -1,6 +1,6 @@
 # Dough & Sauce — Roles & Permissions Workflow
 
-_Last updated: 2026-10-09 — source of truth for who sees what. Code: `lib/dough-sauce/access.ts`
+_Last updated: 2026-10-19 (rule #14, the all-stores `daily-plans`) — source of truth for who sees what. Code: `lib/dough-sauce/access.ts`
 (+ hook `lib/hooks/use-dough-sauce-access.ts`). The rules themselves live in **pizzasys**, not in this repo._
 
 > **2026-10-09:** `reports view` no longer opens Dough & Sauce. Only `dough and sauce` does: a
@@ -22,7 +22,7 @@ _Last updated: 2026-10-09 — source of truth for who sees what. Code: `lib/doug
 A user holding **neither** permission sees nothing. Super admins bypass everything (`canAccessRoute`).
 The frontend never decides by role *name* — it asks the pizzasys rules (contract §2).
 
-## 2. Role × endpoint matrix (13 endpoints)
+## 2. Role × endpoint matrix (14 endpoints)
 
 | # | System | Method & path | Page / action | Store Manager | Specialist |
 |---|---|---|---|:-:|:-:|
@@ -39,8 +39,11 @@ The frontend never decides by role *name* — it asks the pizzasys rules (contra
 | 11 | data | `DELETE /dough-sauce/recipes/{recipe}` | Close a recipe | ❌ | ✅ |
 | 12 | inventory | `GET /inventory/stores/{store_id}/counts` | Daily plan — plan vs count; per-store fallback | ✅ own store | ✅ |
 | 13 | inventory | `GET /inventory/counts` _(new)_ | Weekly grid / report — every store in one call | ❌ `403` by design | ✅ |
+| 14 | data | `GET /dough-sauce/daily-plans?store_ids=…&dates=…` _(new)_ | Full report — base of every counted, unplanned day of EVERY store in one call | ❌ `403` by design (needs every listed store) | ✅ |
 
-Manager endpoints = **#1 #2 #6 #7 #12**. Everything else is Specialist.
+Manager endpoints = **#1 #2 #6 #7 #12**. Everything else is Specialist. (The Specialist-only report asks #14 first; when
+that call fails — 404 not deployed, 403 rule not registered or a store not allowed, too slow — it falls back to #6, one call
+per day. Same numbers either way, only far more requests: ~1 instead of ~1,000 on a full chain.)
 
 ## 3. Pizzasys rules to register (copy-paste)
 
@@ -61,6 +64,7 @@ All: **Priority 1**, **Route Name** `-` (except #13, see below). "Scoped" = `sto
 | 11 | Data | DELETE | `/dough-sauce/recipes/*` | `#^/dough\-sauce/recipes/[^/]+$#` | `dough and sauce` | None |
 | 12 | Inventory | GET | `/inventory/stores/*/counts` | `#^/inventory/stores/[^/]+/counts$#` | `dough and sauce` | Scoped |
 | 13 | Inventory | GET | `/inventory/counts` | `#^/inventory/counts$#` | `dough and sauce` | **All stores** _(was None — finding 2)_, route name `inventory.counts.index` |
+| 14 | Data | GET | `/dough-sauce/daily-plans` | `#^/dough\-sauce/daily\-plans$#` | `dough and sauce` | Scoped, stores from `query.store_ids`, `store_match_policy = all`, route name `dough-sauce.daily-plans` _(not covered by #6, which ends in `daily\-plan$`)_ |
 
 ## 4. Findings in the rules as pasted (to fix in pizzasys)
 
@@ -104,7 +108,7 @@ The server stays the authority: a `403` still renders the existing no-access sta
 
 ## 6. Test it
 
-- `node --experimental-strip-types` script feeding the 13 rules above + fixture users into `buildDoughSauceAccess`
+- `node --experimental-strip-types` script feeding the 14 rules above + fixture users into `buildDoughSauceAccess`
   (manager / specialist / none / store-level-only) — all expectations are in section 1–2.
 - In the app, with real accounts: a Store Manager sees the sidebar entry → Daily plan, no tab bar,
   `?tab=weekly` and `/dough-sauce/report` show "no access"; a Specialist sees all four pages and every action.

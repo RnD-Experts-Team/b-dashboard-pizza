@@ -175,6 +175,26 @@ export interface DailyPlanBase {
   unmapped: UnmappedItem[];
 }
 
+/**
+ * One store-day inside an all-stores answer. It has the single-day shape; the report reads only `days_found` and
+ * each ingredient's `key` and `base`, so the rest is left out here. An entry can be `{}` (nothing to read).
+ */
+export interface DailyPlanEntry {
+  date?: string;
+  days_found?: number;
+  ingredients?: Pick<BaseIngredient, "key" | "base">[];
+}
+
+/**
+ * §4.1 all stores — `daily-plans?store_ids=a,b&dates=x,y`: every store × every date in ONE call. The answer is
+ * the full grid, including pairs a caller didn't need, so read only the ones you asked for.
+ */
+export interface DailyPlansAll {
+  lookback: number;
+  include_refunded: boolean;
+  stores: Record<string, Record<string, DailyPlanEntry>>;
+}
+
 export interface Ingredient {
   key: IngredientKey;
   name: string;

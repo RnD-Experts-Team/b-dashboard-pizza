@@ -253,8 +253,26 @@ async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>
 
 const MAX_COUNT_RANGE_DAYS = 31;
 
-/** How many previous weeks the page loads for the Progress column — the same cut the loader makes. */
-const expectedPreviousWeeks = (d: WeeklyPlansResponse) => Math.min(3, d.previous_weeks?.length ?? 0);
+/** The previous weeks' plans are in (or there are none to load) — the same cut of 3 the loader makes. */
+const previousWeeksLoaded = (d: WeeklyPlansResponse | null, previous: unknown[]) =>
+  d != null && previous.length === Math.min(3, d.previous_weeks?.length ?? 0);
+
+/** What one batch request may carry (the API's limits). A 4-week window needs 28 dates; the chain has 44 stores. */
+const MAX_BATCH_DATES = 62;
+const MAX_BATCH_STORES = 60;
+
+/**
+ * `${date}|${key}` → base for one day's lookup, or null when there is nothing to judge a count against:
+ * the store has no sales history for that weekday (`days_found` 0 — a base of 0 would pass any count),
+ * or the answer carried no usable base. Both forms of lookup (all stores, per day) go through here, so
+ * they agree.
+ */
+function basesOf(date: string, daysFound: number | undefined, ingredients: { key: string; base: number }[] | undefined) {
+  if (daysFound === 0) return null;
+  const out = new Map<string, number>();
+  for (const i of ingredients ?? []) if (Number.isFinite(i.base)) out.set(`${date}|${i.key}`, i.base);
+  return out.size > 0 ? out : null;
+}
 
 interface BasesState {
   /** Per store: `${date}|${ingredientKey}` → base. */
@@ -292,6 +310,11 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
   // most once per week view; a day's lookup is shared by whichever week it belongs to.
   const [bases, setBases] = useState<BasesState>(NO_BASES);
   const basesRequestedRef = useRef<Set<string>>(new Set());
+  // How base lookups are asked: "all" = ONE request for every store (the normal way), "day" = one request
+  // per store-day. "all" drops to "day" for the rest of the view when it fails (not deployed, rule not
+  // registered, a store not allowed, too slow).
+  const baseTierRef = useRef<"all" | "day">("all");
+  const previousLoaded = previousWeeksLoaded(weekly.data, previous);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -305,6 +328,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     prevPromiseRef.current = null;
     bulkStartedRef.current = false;
     basesRequestedRef.current = new Set();
+    baseTierRef.current = "all";
     setPrevious([]);
     setCounts({});
     setBases(NO_BASES);
@@ -517,45 +541,96 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
 
   /**
    * A day with NO confirmed plan has no stored base, so a count taken for it can't be judged — unless
-   * the base is asked for. That is one call per store per day, made only where it changes the result:
-   * the night-before count exists and the day has no plan. Bounded parallelism. A lookup that fails is
-   * recorded as failed (never left pending, which would spin forever): that day stays "–" and unscored.
+   * the base is asked for. ONE request (`daily-plans`) carries every counted, unplanned day of every store,
+   * this week and the previous ones, sent once counts and the previous weeks' plans are in so nothing is
+   * asked twice. Every date ends `ok` or `failed` (never left pending, which would spin forever): a failed
+   * day stays "–" and unscored, and its row flags it. If that call fails (not deployed, rule not registered,
+   * a store not allowed, too slow) the page asks day by day instead (`daily-plan`) and keeps doing so for
+   * this view.
    */
   useEffect(() => {
     const range = rangeRef.current;
-    if (!range || range.signal.aborted) return;
-    const jobs: { store: string; date: string }[] = [];
+    if (!range || range.signal.aborted || !previousLoaded) return;
+    const byStore = new Map<string, string[]>();
     for (const l of baseLookups) {
       const id = `${l.store}|${l.date}`;
       if (basesRequestedRef.current.has(id)) continue;
       basesRequestedRef.current.add(id);
-      jobs.push(l);
+      const dates = byStore.get(l.store);
+      if (dates) dates.push(l.date);
+      else byStore.set(l.store, [l.date]);
     }
-    if (jobs.length === 0) return;
-    void pool(jobs, 3, async ({ store, date }) => {
-      const id = `${store}|${date}`;
-      try {
-        const res = await doughSauceService.getDailyPlanBase(store, date, {}, range.signal);
-        if (range.signal.aborted) return;
-        setBases((b) => {
-          const next = new Map(b.values[store] ?? []);
-          for (const i of res.ingredients ?? []) if (Number.isFinite(i.base)) next.set(`${date}|${i.key}`, i.base);
-          return { values: { ...b.values, [store]: next }, settled: { ...b.settled, [id]: "ok" } };
-        });
-      } catch {
-        if (range.signal.aborted) return;
-        setBases((b) => ({ ...b, settled: { ...b.settled, [id]: "failed" } }));
+    if (byStore.size === 0) return;
+
+    const { signal } = range;
+    const record = (store: string, found: Map<string, number>, outcome: Record<string, "ok" | "failed">) =>
+      setBases((b) => ({
+        values: found.size ? { ...b.values, [store]: new Map([...(b.values[store] ?? []), ...found]) } : b.values,
+        settled: {
+          ...b.settled,
+          ...Object.fromEntries(Object.entries(outcome).map(([date, end]) => [`${store}|${date}`, end])),
+        },
+      }));
+    // The fallback: one request per day, one at a time per store (the stores themselves run in parallel).
+    const oneByOne = (store: string, dates: string[]) =>
+      pool(dates, 1, async (date) => {
+        try {
+          const res = await doughSauceService.getDailyPlanBase(store, date, {}, signal);
+          if (signal.aborted) return;
+          const found = basesOf(date, res.days_found, res.ingredients);
+          record(store, found ?? new Map(), { [date]: found ? "ok" : "failed" });
+        } catch {
+          if (!signal.aborted) record(store, new Map(), { [date]: "failed" });
+        }
+      });
+    // ONE request for every store: up to 60 stores × 62 dates a call (a 44-store, 4-week window is one call).
+    // The answer is the whole store × date grid, so only the pairs asked for are read, by store, date and key.
+    const allStores = async (entries: [string, string[]][]) => {
+      for (let s = 0; s < entries.length; s += MAX_BATCH_STORES) {
+        const group = entries.slice(s, s + MAX_BATCH_STORES);
+        const groupDates = [...new Set(group.flatMap(([, dates]) => dates))].sort();
+        for (let d = 0; d < groupDates.length; d += MAX_BATCH_DATES) {
+          const dateChunk = groupDates.slice(d, d + MAX_BATCH_DATES);
+          const inChunk = new Set(dateChunk);
+          const asked = group
+            .map(([store, dates]) => [store, dates.filter((date) => inChunk.has(date))] as [string, string[]])
+            .filter(([, dates]) => dates.length > 0);
+          if (asked.length === 0) continue;
+          try {
+            const res = await doughSauceService.getDailyPlansAll(asked.map(([store]) => store), dateChunk, {}, signal);
+            if (signal.aborted) return;
+            for (const [store, dates] of asked) {
+              const found = new Map<string, number>();
+              const outcome: Record<string, "ok" | "failed"> = {};
+              for (const date of dates) {
+                // A store or date the answer left out, or an empty `{}` entry, can't be checked.
+                const entry = res.stores?.[store]?.[date];
+                const bases = entry ? basesOf(date, entry.days_found, entry.ingredients) : null;
+                if (bases) for (const [key, base] of bases) found.set(key, base);
+                outcome[date] = bases ? "ok" : "failed";
+              }
+              record(store, found, outcome);
+            }
+          } catch (err) {
+            if (signal.aborted || isAbort(err)) return;
+            // Not deployed (404), rule not registered or a store not allowed (403), too slow, or any other error:
+            // ask day by day instead — for this call's pairs now, and for everything after it.
+            baseTierRef.current = "day";
+            await pool(asked, 4, ([store, dates]) => oneByOne(store, dates));
+          }
+        }
       }
-    });
-  }, [baseLookups]);
+    };
+    void (baseTierRef.current === "all"
+      ? allStores([...byStore])
+      : pool([...byStore], 4, ([store, dates]) => oneByOne(store, dates)));
+  }, [baseLookups, previousLoaded]);
 
   const results: StoreWeekResult[] = useMemo(() => {
     const data = weekly.data;
     if (!data) return [];
     const today = todayIso();
     const lookup = (store: string, date: string) => bases.settled[`${store}|${date}`];
-    // Until the previous weeks have loaded, Progress has nothing to compare against.
-    const previousLoaded = previous.length === expectedPreviousWeeks(data);
     const rows = (data.stores ?? []).map((s) => {
       const sc = counts[s.store];
       const countsStatus: CountsStatus = sc?.status ?? "idle";
@@ -585,6 +660,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         stickers: s.judgement?.stickers_compliance,
         quality: s.judgement?.dough_quality,
       });
+      // Until the previous weeks have loaded, Progress has nothing to compare against.
       let previousPending = !previousLoaded;
       const previousScores = previous.map((p) => {
         const row = p?.stores.find((r) => r.store === s.store);
@@ -642,7 +718,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     const ranked = withRank.filter((r) => r.rank > 0).sort((a, b) => a.rank - b.rank);
     const rest = withRank.filter((r) => r.rank === 0);
     return [...ranked, ...rest];
-  }, [weekly.data, previous, counts, bases]);
+  }, [weekly.data, previous, previousLoaded, counts, bases]);
 
   const countsSummary = useMemo(() => {
     // Every store's score depends on its counts: a day nobody planned still scores once it was counted.
@@ -661,7 +737,6 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     const storesWithData = bulk.status === "ready" ? bulk.storesWithData : null;
     // Counted, unplanned days still waiting for their base — this week's and the previous weeks'.
     const basesPending = baseLookups.filter((l) => bases.settled[`${l.store}|${l.date}`] == null).length;
-    const previousLoaded = weekly.data ? previous.length === expectedPreviousWeeks(weekly.data) : false;
     return {
       total: needing.length,
       ready,
@@ -675,7 +750,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
       storesWithoutCounts:
         storesTotal != null && storesWithData != null ? Math.max(0, storesTotal - storesWithData) : null,
     };
-  }, [counts, weekly.data, bulk, baseLookups, bases, previous]);
+  }, [counts, weekly.data, bulk, baseLookups, bases, previousLoaded]);
 
   // The PUT replaces the whole judgement. Savers send only what changed; here it is
   // merged onto the LATEST known judgement and writes for one store run one at a time,
