@@ -67,11 +67,12 @@ const UNMAPPED_PREVIEW = 5;
 const ROW_ORDER: IngredientKey[] = ["sauce", "dough_10oz", "dough_18oz"];
 
 /**
- * Only the sauce row is shown in its own unit (containers: raw portions ÷ 80). The 10 OZ dough
- * keeps its raw daily values, so its BASE still carries the "÷ divisor" hint that explains the
- * step from the AVERAGE. Display only — the plan always comes from the server's `base`.
+ * Rows shown in their own unit all the way across: sauce (containers: raw portions ÷ 80) and the
+ * 10 OZ dough (raw portions ÷ 12), each using the server's `divisor`. A row left out keeps its raw
+ * daily values, and its BASE carries the "÷ divisor" hint that explains the step from the AVERAGE.
+ * Display only — the plan always comes from the server's `base`.
  */
-const CONVERTED_KEYS: IngredientKey[] = ["sauce"];
+const CONVERTED_KEYS: IngredientKey[] = ["sauce", "dough_10oz"];
 const displayDivisor = (k: IngredientKey, base?: BaseIngredient) =>
   CONVERTED_KEYS.includes(k) && base && base.divisor > 0 ? base.divisor : 1;
 
@@ -744,7 +745,7 @@ function PlanTable({
           const label = labelOf(k);
           const base = baseByKey[k];
           // The API's daily values and average are raw portions; the server's `base` is already
-          // divided. For a converted row (sauce) the daily cells are shown in containers, so the row
+          // divided. For a converted row (sauce, 10 OZ) the daily cells are shown in its unit, so the row
           // reads in one unit all the way to PLANNED. Display only — `base.base` still feeds the plan.
           const divisor = displayDivisor(k, base);
           const line = lines.find((l) => l.ingredient_key === k);
