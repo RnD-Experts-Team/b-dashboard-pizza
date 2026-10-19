@@ -54,6 +54,7 @@ export type AuthErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "RATE_LIMITED"
+  | "SERVICE_BUSY"
   | "UPSTREAM_ERROR"
   | "TIMEOUT"
   | "NETWORK_ERROR"
@@ -84,6 +85,16 @@ export function errorResponse(
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Fetch with timeout                                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Whether a retry loop should try an upstream status again: 5xx only, and
+ * never 503. A 503 (like a 429) means "overloaded, come back after
+ * Retry-After", so retrying at once only multiplies the load; it goes back to
+ * the caller as is.
+ */
+export function isRetryableStatus(status: number): boolean {
+  return status >= 500 && status !== 503;
+}
 
 /**
  * Wrapper around `fetch` that aborts after `timeoutMs` milliseconds.
@@ -165,6 +176,29 @@ export async function mapUpstreamError(
           },
         },
         { status: 429, headers },
+      );
+    }
+
+    // The auth server is overloaded, not refusing the token: keep the status
+    // and Retry-After so the client waits instead of logging the user out.
+    case 503: {
+      const retryAfter = response.headers.get("Retry-After");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+      };
+      if (retryAfter) headers["Retry-After"] = retryAfter;
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "SERVICE_BUSY" as AuthErrorCode,
+            message: "The server is busy. Please try again in a moment.",
+            ...(retryAfter && { retryAfter: Number(retryAfter) || retryAfter }),
+          },
+        },
+        { status: 503, headers },
       );
     }
 

@@ -6,6 +6,7 @@ import type {
   TagsListResponse,
   CreateTagPayload,
 } from "@/types/tag.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Error Handling                                                          */
@@ -107,7 +108,7 @@ function handleAxiosError(err: unknown): never {
       );
     }
     if (status && status >= 500) {
-      throw new TagsError("Server error. Please try again later.", "SERVER_ERROR");
+      throw new TagsError(status === 503 ? BUSY_MESSAGE : "Server error. Please try again later.", "SERVER_ERROR");
     }
     throw new TagsError(msg, "UNKNOWN");
   }

@@ -13,6 +13,7 @@ import type {
   DebriefTypeSummaryEntry,
   PaginatedDebriefResult,
 } from "@/types/employee-debrief.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 export type EmployeeDebriefErrorCode =
   | "NOT_AUTHENTICATED"
@@ -167,7 +168,7 @@ function handleAxiosError(err: unknown): never {
     }
 
     if (status && status >= 500) {
-      throw new EmployeeDebriefError("Server error. Please try again later.", "SERVER_ERROR");
+      throw new EmployeeDebriefError(status === 503 ? BUSY_MESSAGE : "Server error. Please try again later.", "SERVER_ERROR");
     }
 
     throw new EmployeeDebriefError(message, "UNKNOWN");

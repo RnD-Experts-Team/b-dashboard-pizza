@@ -11,6 +11,7 @@ import type {
   UpdateGoalPayload,
   CreateGoalMetricPayload,
 } from "@/types/goal.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Error Handling                                                          */
@@ -132,7 +133,7 @@ function handleAxiosError(err: unknown): never {
       throw new GoalsError("Network error. Please check your connection.", "NETWORK_ERROR");
     }
     if (status && status >= 500) {
-      throw new GoalsError("Server error. Please try again later.", "SERVER_ERROR");
+      throw new GoalsError(status === 503 ? BUSY_MESSAGE : "Server error. Please try again later.", "SERVER_ERROR");
     }
     throw new GoalsError(msg, "UNKNOWN");
   }

@@ -8,7 +8,9 @@ const noopStorage = {
   removeItem: () => {},
 };
 import type { AxiosError } from "axios";
+import { toast } from "sonner";
 import { authService } from "@/lib/api/services/auth.service";
+import { BUSY_MESSAGE, isBusyStatus, retryAfterSeconds } from "@/lib/api/utils/error";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { useDsprStore } from "@/lib/store/dspr.store";
 import { useScreenProjectPiPStore } from "@/lib/store/screen-project-pip.store";
@@ -23,6 +25,9 @@ import {
   normalizeAuthPermissions,
   type CanAccessParams,
 } from "./can-access";
+
+/** Pending re-check after a busy/unreachable auth server (one at a time). */
+let authRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 interface AuthState {
   // User data
@@ -137,6 +142,12 @@ function getLoginErrorMessage(error: unknown): string {
   const responseMessage = axiosError?.response?.data?.message;
   const responseError = axiosError?.response?.data?.error;
 
+  if (isBusyStatus(axiosError?.response?.status)) {
+    const seconds = retryAfterSeconds(error);
+    return seconds
+      ? `The server is busy. Please try again in ${seconds} seconds.`
+      : BUSY_MESSAGE;
+  }
   if (responseMessage) return responseMessage;
   if (responseError) return responseError;
   if (axiosError?.code === "ECONNABORTED") {
@@ -421,7 +432,25 @@ export const useAuthStore = create<AuthState>()(
             });
             persistUserData(null);
           }
-        } catch {
+        } catch (error) {
+          // A busy (429/503), failing (5xx) or unreachable auth server says
+          // nothing about the token, so it must not end the session: keep the
+          // token and check again. Any other answer still logs out, as before.
+          const status = (error as AxiosError)?.response?.status;
+          if (status === undefined || status >= 500 || isBusyStatus(status)) {
+            toast.warning(BUSY_MESSAGE, { id: "auth-check-busy" });
+            if (get().isAuthenticated) {
+              set({ isLoading: false });
+            } else if (!authRetryTimer) {
+              // Not signed in yet: the layout keeps its loader up meanwhile.
+              const delaySeconds = Math.min(retryAfterSeconds(error) ?? 5, 60);
+              authRetryTimer = setTimeout(() => {
+                authRetryTimer = null;
+                get().checkAuth();
+              }, delaySeconds * 1000);
+            }
+            return;
+          }
           set({
             user: null,
             token: null,

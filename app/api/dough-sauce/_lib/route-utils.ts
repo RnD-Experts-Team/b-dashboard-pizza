@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requireAuthorization,
   getAuthorizationHeader,
+  isRetryableStatus,
 } from "@/app/api/_lib/auth";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -110,7 +111,7 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
     const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
     try {
       const res = await fetch(url, { ...init, signal: controller.signal });
-      if (res.status < 500 || attempt === retries) return res;
+      if (!isRetryableStatus(res.status) || attempt === retries) return res;
       lastError = new Error(`Upstream ${res.status}`);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requireAuthorization,
   getAuthorizationHeader,
+  isRetryableStatus,
 } from "@/app/api/_lib/auth";
 
 const MAINTENANCE_BASE_URL =
@@ -69,7 +70,7 @@ async function fetchWithRetry(
     try {
       const res = await fetchWithTimeout(url, init, timeoutMs);
 
-      if (res.ok || (res.status >= 400 && res.status < 500)) {
+      if (!isRetryableStatus(res.status)) {
         return res;
       }
 

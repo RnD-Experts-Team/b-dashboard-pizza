@@ -35,6 +35,7 @@ import type {
   WorkbookRow,
   WorkbooksErrorCode,
 } from "@/types/workbooks.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Workbooks service — ToolboxPizza via /api/toolbox/*                      */
@@ -159,7 +160,7 @@ function handleAxiosError(err: unknown): never {
     }
     if (status === 429) throw new WorkbooksError("Too many requests. Wait a moment.", "RATE_LIMITED", opts);
     if (status != null && status >= 500) {
-      throw new WorkbooksError("The toolbox service had a problem. Please try again.", "SERVER_ERROR", opts);
+      throw new WorkbooksError(status === 503 ? BUSY_MESSAGE : "The toolbox service had a problem. Please try again.", "SERVER_ERROR", opts);
     }
     if (!err.response) {
       throw new WorkbooksError("Network error. Check your connection.", "NETWORK_ERROR", opts);
