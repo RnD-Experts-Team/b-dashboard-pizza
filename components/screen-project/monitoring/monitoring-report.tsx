@@ -16,6 +16,7 @@ import type { UsageReport, UsageUserRow } from "@/lib/screen-usage/types";
 import { BreakdownChart, DailyPresenceChart, HoursHeatmap } from "./usage-charts";
 import { ManagersTable } from "./managers-table";
 import { ManagerSheet } from "./manager-sheet";
+import { MetricDefinitions, MetricNote } from "./metric-definitions";
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 /** Below this, a manager's share of time is noise, not a finding. */
@@ -141,18 +142,38 @@ export function MonitoringReport({
         {kpis.map((kpi) => <KpiTile key={kpi.label} kpi={kpi} />)}
       </div>
 
+      <MetricDefinitions />
+
       <div className="grid gap-6 @4xl:grid-cols-2">
         <AnalyticsCard id="presence" icon={CalendarClock} title={t("sections.daily")} description={t("sections.dailyHint")}>
           {report.days.length > 0 ? <DailyPresenceChart days={report.days} /> : <CardEmpty icon={CalendarClock}>{t("empty")}</CardEmpty>}
+          <div className="mt-4 space-y-1.5 border-t pt-4">
+            <MetricNote metric="present" />
+            <MetricNote metric="away" />
+          </div>
         </AnalyticsCard>
         <AnalyticsCard id="hours" icon={Clock} title={t("sections.hours")} description={t("sections.hoursHint")}>
           <HoursHeatmap present={report.hours.present} away={report.hours.away} />
+          <div className="mt-4 space-y-1.5 border-t pt-4">
+            <MetricNote metric="timeZone" />
+          </div>
         </AnalyticsCard>
         <AnalyticsCard id="camera" icon={Camera} title={t("sections.camera")} description={t("sections.cameraHint")} center>
           {onScreen > 0 ? <BreakdownChart slices={cameraSlices} totalLabel={t("columns.onScreen")} /> : <CardEmpty icon={Camera}>{t("empty")}</CardEmpty>}
+          <div className="mt-4 space-y-1.5 border-t pt-4">
+            <MetricNote metric="present" />
+            <MetricNote metric="noFace" />
+            <MetricNote metric="covered" />
+            <MetricNote metric="cameraOff" />
+          </div>
         </AnalyticsCard>
         <AnalyticsCard id="mic" icon={Mic} title={t("sections.mic")} description={t("sections.micHint")} center>
           {onScreen > 0 ? <BreakdownChart slices={micSlices} totalLabel={t("columns.onScreen")} /> : <CardEmpty icon={Mic}>{t("empty")}</CardEmpty>}
+          <div className="mt-4 space-y-1.5 border-t pt-4">
+            <MetricNote metric="talking" />
+            <MetricNote metric="silent" />
+            <MetricNote metric="deadMic" />
+          </div>
         </AnalyticsCard>
       </div>
 

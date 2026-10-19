@@ -25,8 +25,8 @@ import { useEffect, useRef, useState } from "react";
 import { useConnectionState, useLocalParticipant, useRoomContext } from "@livekit/components-react";
 import { ConnectionState, DisconnectReason, ParticipantEvent, RoomEvent } from "livekit-client";
 import type { FaceDetector } from "@mediapipe/tasks-vision";
-import { usageRecorder } from "@/lib/screen-usage/recorder";
-import { detectFace, loadFaceDetector } from "@/lib/screen-usage/face-detector";
+import { usageDebug, usageRecorder } from "@/lib/screen-usage/recorder";
+import { FACE_MIN_CONFIDENCE, detectFace, loadFaceDetector } from "@/lib/screen-usage/face-detector";
 import type { UsageKind, UsageState, UsageSurface } from "@/lib/screen-usage/types";
 
 export interface UsageProbeProps {
@@ -118,7 +118,7 @@ function useSegment(
  * face / no face from the on-device detector. Until the detector has loaded —
  * or if it can't load at all — an uncovered camera counts as visible.
  */
-function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): Timed<CameraState> {
+function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean, debugKey: string): Timed<CameraState> {
   const [state, setState] = useState<Timed<CameraState>>(() => ({ value: "visible", since: 0 }));
 
   useEffect(() => {
@@ -129,9 +129,12 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
     let pendingSince = 0;
     let streak = 0;
     let detector: FaceDetector | null = null;
+    let detectorStatus: "loading" | "ready" | "unavailable" = "loading";
     loadFaceDetector().then((d) => {
       detector = d;
+      detectorStatus = d ? "ready" : "unavailable";
     });
+    usageDebug.setProbe(debugKey, { camera: { on: true, state: "visible", mean: null, stddev: null, faceScore: null, detector: detectorStatus, pending: null, streak: 0, sampledAt: null } });
     const video = document.createElement("video");
     const canvas = document.createElement("canvas");
     canvas.width = 32;
@@ -164,16 +167,24 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
         const mean = sum / n;
         const stddev = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
         let reading: CameraState;
+        let faceScore: number | null = null;
         if (mean < COVERED_MEAN_LUMA || stddev < COVERED_LUMA_STDDEV) {
           reading = "covered";
+        } else if (detector) {
+          faceScore = detectFace(detector, video, track.id);
+          if (faceScore === null) return; // can't tell this time — keep the current state
+          reading = faceScore >= FACE_MIN_CONFIDENCE ? "visible" : "no_face";
         } else {
-          const face = detector ? detectFace(detector, video, track.id) : true;
-          if (face === null) return; // can't tell this time — keep the current state
-          reading = face ? "visible" : "no_face";
+          reading = "visible"; // no face detector (yet): an uncovered camera counts as visible
         }
+        const publish = () =>
+          usageDebug.setProbe(debugKey, {
+            camera: { on: true, state: current, mean, stddev, faceScore, detector: detectorStatus, pending: reading === current ? null : pending, streak, sampledAt },
+          });
 
         if (reading === current) {
           streak = 0;
+          publish();
           return;
         }
         if (reading === pending && streak > 0) {
@@ -188,6 +199,7 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
           streak = 0;
           setState({ value: current, since: pendingSince });
         }
+        publish();
       } catch {
         /* never break the call */
       }
@@ -197,6 +209,7 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
       disposed = true;
       clearInterval(timer);
       setState({ value: "visible", since: 0 });
+      usageDebug.setProbe(debugKey, { camera: { on: false } });
       try {
         video.pause();
         video.srcObject = null;
@@ -204,7 +217,7 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
         /* ignore */
       }
     };
-  }, [track, enabled]);
+  }, [track, enabled, debugKey]);
 
   return state;
 }
@@ -213,7 +226,7 @@ function useCameraState(track: MediaStreamTrack | undefined, enabled: boolean): 
  * Watches the local mic for a "dead" signal: no sound at all for a long
  * stretch. The dead state is back-dated to when the silence began.
  */
-function useMicState(track: MediaStreamTrack | undefined, enabled: boolean): Timed<"open" | "dead"> {
+function useMicState(track: MediaStreamTrack | undefined, enabled: boolean, debugKey: string): Timed<"open" | "dead"> {
   const [state, setState] = useState<Timed<"open" | "dead">>(() => ({ value: "open", since: 0 }));
 
   useEffect(() => {
@@ -235,10 +248,15 @@ function useMicState(track: MediaStreamTrack | undefined, enabled: boolean): Tim
       analyser = null;
     }
 
+    usageDebug.setProbe(debugKey, { mic: { on: true, state: "open", rms: null, silentSince: null, audio: audioCtx?.state ?? "unavailable", sampledAt: null } });
+
     const timer = setInterval(() => {
       try {
         // A suspended context reads silence — no verdict rather than a false "dead".
-        if (!analyser || audioCtx?.state !== "running") return;
+        if (!analyser || audioCtx?.state !== "running") {
+          usageDebug.setProbe(debugKey, { mic: { audio: audioCtx?.state ?? "unavailable" } });
+          return;
+        }
         analyser.getFloatTimeDomainData(buf);
         let sumSq = 0;
         for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i];
@@ -258,6 +276,7 @@ function useMicState(track: MediaStreamTrack | undefined, enabled: boolean): Tim
             setState({ value: "open", since: now });
           }
         }
+        usageDebug.setProbe(debugKey, { mic: { state: isDead ? "dead" : "open", rms, silentSince, audio: "running", sampledAt: now } });
       } catch {
         /* never break the call */
       }
@@ -267,8 +286,9 @@ function useMicState(track: MediaStreamTrack | undefined, enabled: boolean): Tim
       clearInterval(timer);
       audioCtx?.close().catch(() => {});
       setState({ value: "open", since: 0 });
+      usageDebug.setProbe(debugKey, { mic: { on: false } });
     };
-  }, [track, enabled]);
+  }, [track, enabled, debugKey]);
 
   return state;
 }
@@ -308,24 +328,34 @@ export function UsageProbe({ storeId, room, surface, isMain, talkAll = false }: 
     };
   }, [lkRoom]);
 
+  // What this tile measures, for the live debug panel.
+  const debugKey = `${surface}:${room}`;
+  useEffect(() => {
+    usageDebug.setProbe(debugKey, { room, surface, isMain, connected, talkAll });
+  }, [debugKey, room, surface, isMain, connected, talkAll]);
+  useEffect(() => () => usageDebug.removeProbe(debugKey), [debugKey]);
+
   const camOn = connected && isCameraEnabled;
-  const camera = useCameraState(cameraTrack?.track?.mediaStreamTrack, camOn);
+  const camera = useCameraState(cameraTrack?.track?.mediaStreamTrack, camOn, debugKey);
   useSegment(cameraId, camOn, storeId, room, "camera", surface, camOn ? camera : null);
 
   // Talk to All publishes the mic into every room: only the main tile records it, once, as talk_all.
   const micKind: UsageKind = talkAll ? "talk_all" : "mic";
   const micOn = connected && isMicrophoneEnabled && (!talkAll || isMain);
-  const mic = useMicState(microphoneTrack?.track?.mediaStreamTrack, micOn);
+  const mic = useMicState(microphoneTrack?.track?.mediaStreamTrack, micOn, debugKey);
   useSegment(micId, micOn, storeId, talkAll ? null : room, micKind, surface, micOn ? mic : null, () => localParticipant.isSpeaking);
 
   // Exact talking time: every speaking start/stop, at the moment it happens.
   useEffect(() => {
-    const onSpeaking = (speaking: boolean) => usageRecorder.setSpeaking(micId.current, speaking);
+    const onSpeaking = (speaking: boolean) => {
+      usageRecorder.setSpeaking(micId.current, speaking);
+      usageDebug.setProbe(debugKey, { speaking });
+    };
     localParticipant.on(ParticipantEvent.IsSpeakingChanged, onSpeaking);
     return () => {
       localParticipant.off(ParticipantEvent.IsSpeakingChanged, onSpeaking);
     };
-  }, [localParticipant]);
+  }, [localParticipant, debugKey]);
 
   return null;
 }
