@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAuthorizationHeader,
   requireAuthorization,
+  isRetryableStatus,
 } from "@/app/api/_lib/auth";
 
 const DATA_BASE_URL =
@@ -70,7 +71,7 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetchWithTimeout(url, init, timeoutMs);
-      if (response.ok || (response.status >= 400 && response.status < 500)) {
+      if (!isRetryableStatus(response.status)) {
         return response;
       }
       lastError = new Error(`Upstream ${response.status}`);

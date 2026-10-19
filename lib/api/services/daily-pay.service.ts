@@ -30,6 +30,7 @@ import type {
   LaravelPaginationMeta,
   LaravelPaginationLinks,
 } from "@/types/maintenance-tickets.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Error Handling                                                          */
@@ -142,7 +143,7 @@ function handleAxiosError(err: unknown): never {
     }
     if (status === 429) throw new DailyPayError("Too many requests.", "RATE_LIMITED");
     if (status != null && status >= 500) {
-      throw new DailyPayError("Server error. Please try again.", "SERVER_ERROR");
+      throw new DailyPayError(status === 503 ? BUSY_MESSAGE : "Server error. Please try again.", "SERVER_ERROR");
     }
     if (!err.response) {
       throw new DailyPayError("Network error. Check your connection.", "NETWORK_ERROR");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAuthorizationHeader,
   requireAuthorization,
+  isRetryableStatus,
 } from "@/app/api/_lib/auth";
 
 /**
@@ -87,7 +88,7 @@ async function fetchWithRetry(
     try {
       const response = await fetchWithTimeout(url, init, timeoutMs);
       // Only retry on 5xx/network failures — a 4xx won't change on retry.
-      if (response.ok || (response.status >= 400 && response.status < 500)) {
+      if (!isRetryableStatus(response.status)) {
         return response;
       }
       lastError = new Error(`Upstream ${response.status}`);

@@ -13,7 +13,7 @@ const UPSTREAM_TIMEOUT_MS = 15_000;
  * Forwards to GET {SCREEN_PROJECT_BASE_URL}/{storeId}/stations
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ storeId: string }> },
 ) {
   const { storeId } = await params;

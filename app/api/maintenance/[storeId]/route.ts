@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requireAuthorization,
   getAuthorizationHeader,
+  isRetryableStatus,
 } from "@/app/api/_lib/auth";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -113,7 +114,7 @@ async function fetchWithRetry(
       const res = await fetchWithTimeout(url, init, timeoutMs);
 
       // Don't retry on client errors (4xx) — only on 5xx
-      if (res.ok || (res.status >= 400 && res.status < 500)) {
+      if (!isRetryableStatus(res.status)) {
         return res;
       }
 

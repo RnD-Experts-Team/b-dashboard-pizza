@@ -14,6 +14,7 @@ const UPSTREAM_TIMEOUT_MS =
   Number(process.env.HIRING_TIMEOUT_MS) || 15_000;
 
 async function proxyRequest(
+  request: NextRequest,
   method: string,
   authorization: string,
   url: string,
@@ -64,6 +65,7 @@ export async function GET(
 
   try {
     return await proxyRequest(
+      request,
       "GET",
       authorization,
       `${HIRING_BASE_URL}/stores/${storeId}/employees/${employeeId}`,
@@ -93,6 +95,7 @@ export async function POST(
     const contentType = request.headers.get("Content-Type") || "application/json";
     const body = await request.arrayBuffer();
     return await proxyRequest(
+      request,
       "POST",
       authorization,
       `${HIRING_BASE_URL}/stores/${storeId}/employees/${employeeId}`,
@@ -122,6 +125,7 @@ export async function DELETE(
 
   try {
     return await proxyRequest(
+      request,
       "DELETE",
       authorization,
       `${HIRING_BASE_URL}/stores/${storeId}/employees/${employeeId}`,

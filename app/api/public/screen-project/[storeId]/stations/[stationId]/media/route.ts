@@ -14,7 +14,7 @@ const UPSTREAM_TIMEOUT_MS = 15_000;
  * fallback shown when the supervisor's camera is off.
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ storeId: string; stationId: string }> },
 ) {
   const { storeId, stationId } = await params;
