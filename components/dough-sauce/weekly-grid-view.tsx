@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useDoughSauceAccess } from "@/lib/hooks/use-dough-sauce-access";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
-  ImageDown,
   LayoutList,
   Loader2,
   RefreshCw,
@@ -39,7 +38,6 @@ import type { JudgementPayload, QualityVerdict, StickersVerdict } from "@/types/
 import {
   DsErrorState,
   WeekPicker,
-  exportNodeAsPng,
   fmtPct,
   fmtSignedPct,
   personName,
@@ -71,8 +69,6 @@ export function WeeklyGridView() {
     window.history.replaceState(null, "", `${pathname}?${q.toString()}`);
   };
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
   const { ingredients, map, loaded } = useIngredients();
   const {
     weekly,
@@ -86,7 +82,6 @@ export function WeeklyGridView() {
     saveJudgement,
     reload,
   } = useWeeklyGrid(weekStart, map, loaded);
-  const allScored = countsSummary.allReady;
 
   const selectedWeek = weekStart ?? weekly?.week.week_start;
   const [filter, setFilter] = useState<WeekFilter>("all");
@@ -113,19 +108,6 @@ export function WeeklyGridView() {
     [results]
   );
 
-  const onExport = async () => {
-    if (!reportRef.current) return;
-    setExporting(true);
-    try {
-      await exportNodeAsPng(reportRef.current, `dough-sauce-week-${selectedWeek}.png`);
-      toast.success(t("imageDownloaded"));
-    } catch {
-      toast.error(t("imageFailed"));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,16 +126,6 @@ export function WeeklyGridView() {
               <LayoutList className="me-2 h-4 w-4" />
               {tr("openFull")}
             </Link>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExport}
-            disabled={exporting || !weekly || !allScored}
-            title={allScored ? undefined : t("exportNeedsScores")}
-          >
-            {exporting ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ImageDown className="me-2 h-4 w-4" />}
-            {t("exportImage")}
           </Button>
           <Button variant="outline" size="icon" onClick={reload} disabled={loading} aria-label={tc("refresh")}>
             <RefreshCw className={cn("h-4 w-4", (loading || countsLoading) && "animate-spin")} />
@@ -222,7 +194,7 @@ export function WeeklyGridView() {
               <p className="text-sm text-muted-foreground">{results.length === 0 ? t("empty") : t("emptyFiltered")}</p>
             </div>
           ) : (
-            <Card ref={reportRef} className="overflow-hidden">
+            <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="border-b px-4 py-3">
                   <p className="font-heading text-base font-semibold">

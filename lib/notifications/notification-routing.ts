@@ -14,9 +14,10 @@ import type { Notification } from "@/types/notification.types";
 export function getNotificationPageSegment(notification: Notification): string | null {
   const { type } = notification;
   if (type.startsWith("announcement")) return "announcements";
-  // data_entry_key notifications open a debrief modal, not a dedicated page —
-  // "keys" is the closest related sidebar item.
-  if (type.startsWith("data_entry_key")) return "keys";
+  // data_entry_key notifications (debrief due soon) open the floating debrief
+  // panel, not a dedicated page — the Manager Hub (`/dashboard/due-keys`) is
+  // the page that tracks what's due, so the sidebar dot goes there.
+  if (type.startsWith("data_entry_key")) return "due-keys";
   if (
     type.startsWith("hiring_request") ||
     type.startsWith("shirt_milestone") ||
