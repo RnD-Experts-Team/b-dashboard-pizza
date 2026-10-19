@@ -1001,5 +1001,30 @@ Access: the report rules are `GET /usage/report` and `GET /usage/timeline`, `sco
 `screens manager` (same permission as the observer view). Writing usage is `screens user` / `screens manager`,
 scoped. Rules live in pizzasys `ScreensAuthRulesSeeder`.
 
+How each number is measured is written on the page itself (`metric-definitions.tsx`: the collapsible
+"How each number is calculated" card under the KPIs, and short notes under each chart and in the manager sheet).
+The wording lives in i18n `screenMonitoring.how.*` and quotes the probe's real thresholds — change both together.
+
+### Live debug panel
+
+People who can read the report (the `GET /usage/report` rule at the selected store) get a **Live monitoring**
+button — in the supervisor's bottom control bar (before the page-guide button) and in the observer header (next to
+"Supervisor View") — that opens a panel on the right of the Screen Project view
+(`components/screen-project/usage/usage-debug-panel.tsx`). Read-only, it shows in real time:
+
+- **This tab, as the report will count it** — present gauge and every total (connected, present, no face, covered,
+  camera off, away, mic open, talking, silent, dead mic, Talk to All, mini-player), computed by
+  `lib/screen-usage/live-totals.ts` with the same rules as `ScreenUsageReport.php`, each with its rule.
+- **What each screen measures now** — per tile: connected / main / speaking, the camera's brightness, contrast and
+  face score against their thresholds, the face detector's status, a pending state change ("1 of 2 checks"), the mic
+  level in dB and how long it has been silent against the 20 s dead-mic rule.
+- **Saving** — countdown to the next push (or the post-disconnect push), the last push result, what's waiting in
+  the journal, and a **Push now** button.
+- **The data being saved** — the exact segment rows the next push sends (open rows end "now"), plus rows already
+  saved from this page.
+
+It reads `usageDebug` (in `recorder.ts`): `subscribe` / `snapshot()` / `setProbe()` (probes publish their readings) /
+`pushNow()`. Observer mode records nothing; the panel says so.
+
 Sidebar: when the user can open both Screen Project and the monitoring report, they are grouped under a
 collapsible **Screen Project** entry (Screens + Screen Monitoring); with only one, it stays a flat link.

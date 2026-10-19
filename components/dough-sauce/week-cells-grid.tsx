@@ -22,7 +22,7 @@ import {
 const OK_TEXT = "text-muted-foreground";
 const SHORT_TEXT = "text-rose-600 dark:text-rose-400";
 const WARN_TEXT = "text-amber-600 dark:text-amber-400";
-/** The dashed edge the full report gives a day with no confirmed plan: checked against its base, never scored. */
+/** The dashed edge the full report gives a day with no confirmed plan: checked against its base, scored like any other. */
 const UNCONFIRMED_EDGE = "rounded-md border border-dashed border-muted-foreground/40";
 
 /** A day with no confirmed plan whose night-before count could still be checked against that day's base. */
@@ -90,8 +90,11 @@ export function WeekCellsGrid({ cells, ingredients }: { cells: WeekCells; ingred
           <tbody>
             {INGREDIENT_KEYS.map((k) => {
               const row = cells.cells.filter((c) => c.key === k);
-              const ok = row.filter((c) => c.kind === "counted" && c.ok).length;
-              const planned = row.filter((c) => c.kind !== "no-plan").length;
+              // An unplanned day that was counted and checked against its base scores like a planned one,
+              // so it belongs in this row's tally — the same cells the score breakdown beside it counts.
+              const checked = row.filter(isCheckedNoPlan);
+              const ok = row.filter((c) => c.kind === "counted" && c.ok).length + checked.filter((c) => c.ok).length;
+              const planned = row.filter((c) => c.kind !== "no-plan").length + checked.length;
               return (
                 <tr key={k} className="border-t">
                   <th scope="row" className="py-2.5 pe-2 text-start font-normal">
@@ -292,7 +295,7 @@ function Cell({ cell }: { cell: WeekCell }) {
       );
     case "no-plan":
       // Same reading as a planned day — count, then base ± difference — but inside the dashed edge the
-      // report uses, labelled "Not confirmed": there is no buffer to show, and the day is never scored.
+      // report uses, labelled "Not confirmed": there is no buffer to show. It is scored like a planned day.
       if (isCheckedNoPlan(cell)) {
         return (
           <div

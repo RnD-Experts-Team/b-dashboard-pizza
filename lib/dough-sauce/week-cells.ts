@@ -35,7 +35,8 @@ export type WeekCell =
   | { kind: "awaiting"; date: string; key: IngredientKey; planned: number; bufferPct: number }
   /**
    * No confirmed plan for this day. If the night-before count exists and the day's base was
-   * supplied, the count is still judged against that base (`ok`/`variance`) — shown, never scored.
+   * supplied, the count is judged against that base (`ok`/`variance`) and, like a planned cell,
+   * scored. Without a base (or without a count) there is nothing to judge: it stays out of the score.
    */
   | {
       kind: "no-plan";
@@ -54,9 +55,10 @@ export interface WeekCells {
   cells: WeekCell[];
   cellsOk: number;
   /**
-   * The cells that count toward the score: planned, and either counted or past due a count. A plan
-   * still `awaiting` its count is not in it (so planning tomorrow doesn't lower today's score), and a
-   * day with no plan never is. This is the score's denominator — not 21.
+   * The cells that count toward the score: planned cells that were counted or are past due a count,
+   * plus unplanned cells that were counted and judged against their base. A plan still `awaiting` its
+   * count is not in it (so planning tomorrow doesn't lower today's score), and neither is an unplanned
+   * day nobody counted. This is the score's denominator — not 21.
    */
   cellsScored: number;
   /** Past days that were planned but never counted — the real gaps. */
@@ -83,6 +85,22 @@ export function indexCounts(rows: CountRow[], map: IngredientMap): Map<string, C
 }
 
 /**
+ * The days of a store-week that have NO plan but whose night-before count exists: the days whose base
+ * has to be looked up before the count can be judged — and scored.
+ */
+export function unplannedCountedDays(
+  weekStart: string,
+  weekEnd: string,
+  plans: StoredPlanRow[],
+  counts: Map<string, CountRow>
+): string[] {
+  const planned = new Set(plans.map((p) => p.plan_date));
+  return daysBetween(weekStart, weekEnd).filter(
+    (date) => !planned.has(date) && INGREDIENT_KEYS.some((k) => counts.has(`${addDaysIso(date, -1)}|${k}`))
+  );
+}
+
+/**
  * Build a store-week grid. `counts` null means the inventory system was
  * unreachable — every cell shows as unavailable, never as zero (§9).
  *
@@ -95,8 +113,9 @@ export function indexCounts(rows: CountRow[], map: IngredientMap): Map<string, C
  * The count is judged against the plan's BASE (before its buffer), derived from the stored
  * `planned_qty` and `buffer_pct` — the buffer is a production margin, not the inventory target.
  *
- * `bases` (optional, keyed `${date}|${ingredientKey}`) carries the base of days that have NO plan, so
- * those days can still show a ✓/✕. They are display only: they never enter `cellsOk` or `cellsScored`.
+ * `bases` (optional, keyed `${date}|${ingredientKey}`) carries the base of days that have NO plan, so a
+ * count taken for such a day is still judged: it shows ✓/✕ and enters `cellsOk` / `cellsScored` like a
+ * planned cell. Until the base is supplied the cell stays "–" and unscored.
  */
 export function buildWeekCells(
   weekStart: string,
@@ -141,16 +160,13 @@ export function buildWeekCells(
         const counted = count ? count.total_in_unit_1 : null;
         const base = bases?.get(id) ?? null;
         const v = counted != null && base != null ? variance(counted, base) : null;
-        cells.push({
-          kind: "no-plan",
-          date,
-          key,
-          countDate,
-          counted,
-          base,
-          variance: v,
-          ok: v != null ? isOk(v) : null,
-        });
+        const ok = v != null ? isOk(v) : null;
+        // A counted day with a base is judged exactly like a planned one — it must not slip out of the score.
+        if (ok != null) {
+          cellsScored++;
+          if (ok) cellsOk++;
+        }
+        cells.push({ kind: "no-plan", date, key, countDate, counted, base, variance: v, ok });
         continue;
       }
       if (!count) {

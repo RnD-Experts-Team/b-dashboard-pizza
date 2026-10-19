@@ -71,6 +71,8 @@ let started = false;
 let disconnectFlushTimer: ReturnType<typeof setTimeout> | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let flushing = false;
+let intervalStartedAt = 0;
+let disconnectPushAt: number | null = null;
 
 /* ── Ids (ULID: 10 time chars + 16 random chars, Crockford base32) ────── */
 
@@ -100,6 +102,7 @@ function storageKey(id = tabId) {
 }
 
 function persistNow() {
+  notify();
   try {
     if (persistTimer) {
       clearTimeout(persistTimer);
@@ -116,6 +119,7 @@ function persistNow() {
 }
 
 function persistSoon() {
+  notify();
   if (persistTimer) return;
   persistTimer = setTimeout(persistNow, 1_000);
 }
@@ -181,6 +185,7 @@ function ensureStarted() {
   started = true;
   adoptOrphans();
   // Module-lifetime timers: the recorder lives as long as the page.
+  intervalStartedAt = Date.now();
   setInterval(() => flush(false), FLUSH_INTERVAL_MS);
   setInterval(heartbeat, HEARTBEAT_MS);
   window.addEventListener("pagehide", onPageHide);
@@ -198,8 +203,10 @@ function trim() {
 
 function scheduleDisconnectFlush() {
   if (disconnectFlushTimer) clearTimeout(disconnectFlushTimer);
+  disconnectPushAt = Date.now() + DISCONNECT_FLUSH_DELAY_MS;
   disconnectFlushTimer = setTimeout(() => {
     disconnectFlushTimer = null;
+    disconnectPushAt = null;
     flush(false);
   }, DISCONNECT_FLUSH_DELAY_MS);
 }
@@ -371,21 +378,174 @@ function flush(keepalive: boolean) {
     const sends = [...byStore].map(([storeId, group]) =>
       screenUsageService
         .reportSegments(storeId, group.reports, new Date(now).toISOString(), keepalive)
-        .then(() => {
+        .then((status) => {
+          lastPush = { at: Date.now(), ok: status < 300, status, count: group.reports.length, keepalive };
           // Delivered: closed segments are done; open ones stay and are extended next time.
           for (const [id, endedAt] of group.sent) {
-            if (endedAt !== null && entries.get(id)?.endedAt === endedAt) entries.delete(id);
+            const e = entries.get(id);
+            if (endedAt !== null && e?.endedAt === endedAt) {
+              rememberDelivered(e, storeId);
+              entries.delete(id);
+            }
           }
           persistNow();
         })
-        .catch(() => {
-          /* still in the journal — the next push retries */
+        .catch((err: unknown) => {
+          // Still in the journal — the next push retries.
+          lastPush = { at: Date.now(), ok: false, status: null, count: group.reports.length, keepalive, error: String(err) };
+          notify();
         }),
     );
+    notify();
     Promise.allSettled(sends).finally(() => {
       flushing = false;
+      notify();
     });
   } catch {
     flushing = false;
   }
 }
+
+/* ── Live debug feed (read-only) ────────────────────────────────────────
+ * For the Screen Project debug panel: what is recorded right now and what
+ * the next push will send. Costs nothing unless a panel is subscribed.
+ */
+
+export interface DebugSegment extends UsageSegmentReport {
+  storeId: string;
+  open: boolean;
+  speaking: boolean;
+  /** Already saved by ScreensPizza (closed and delivered from this page). */
+  delivered: boolean;
+}
+
+export interface CameraDiagnostics {
+  on: boolean;
+  state: "visible" | "no_face" | "covered";
+  /** Mean brightness 0-255 of the last sample, and its spread (contrast). */
+  mean: number | null;
+  stddev: number | null;
+  /** Best face score 0-1 of the last sample (null: not checked). */
+  faceScore: number | null;
+  detector: "loading" | "ready" | "unavailable";
+  /** The reading waiting for confirmation, and how many in a row so far. */
+  pending: string | null;
+  streak: number;
+  sampledAt: number | null;
+}
+
+export interface MicDiagnostics {
+  on: boolean;
+  state: "open" | "dead";
+  /** RMS level 0-1 of the last sample. */
+  rms: number | null;
+  silentSince: number | null;
+  audio: string;
+  sampledAt: number | null;
+}
+
+/** What one tile's probe is measuring right now. */
+export interface ProbeDiagnostics {
+  key: string;
+  room: string;
+  surface: UsageSurface;
+  isMain: boolean;
+  connected: boolean;
+  talkAll: boolean;
+  speaking: boolean;
+  camera?: CameraDiagnostics;
+  mic?: MicDiagnostics;
+}
+
+export interface RecorderSnapshot {
+  tabId: string;
+  now: number;
+  nextPushAt: number | null;
+  disconnectPushAt: number | null;
+  pushing: boolean;
+  lastPush: { at: number; ok: boolean; status: number | null; count: number; keepalive: boolean; error?: string } | null;
+  pending: DebugSegment[];
+  delivered: DebugSegment[];
+  probes: ProbeDiagnostics[];
+}
+
+const listeners = new Set<() => void>();
+const delivered: DebugSegment[] = [];
+const probes = new Map<string, ProbeDiagnostics>();
+let lastPush: RecorderSnapshot["lastPush"] = null;
+const MAX_DELIVERED = 500;
+
+function notify() {
+  for (const l of listeners) {
+    try {
+      l();
+    } catch {
+      /* a broken listener never breaks recording */
+    }
+  }
+}
+
+function rememberDelivered(e: Entry, storeId: string) {
+  delivered.push({ ...report(e, Date.now()), storeId, open: false, speaking: false, delivered: true });
+  if (delivered.length > MAX_DELIVERED) delivered.splice(0, delivered.length - MAX_DELIVERED);
+}
+
+export const usageDebug = {
+  subscribe(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  },
+
+  snapshot(): RecorderSnapshot {
+    const now = Date.now();
+    return {
+      tabId,
+      now,
+      nextPushAt: intervalStartedAt
+        ? intervalStartedAt + Math.ceil((now - intervalStartedAt + 1) / FLUSH_INTERVAL_MS) * FLUSH_INTERVAL_MS
+        : null,
+      disconnectPushAt,
+      pushing: flushing,
+      lastPush,
+      pending: [...entries.values()].map((e) => ({
+        ...report(e, now),
+        storeId: e.storeId,
+        open: e.endedAt === null,
+        speaking: e.speakingSince !== null,
+        delivered: false,
+      })),
+      delivered: [...delivered],
+      probes: [...probes.values()],
+    };
+  },
+
+  /** Probes call this with what they just measured (merged into the tile's entry). */
+  setProbe(key: string, patch: Partial<Omit<ProbeDiagnostics, "camera" | "mic">> & { camera?: Partial<CameraDiagnostics>; mic?: Partial<MicDiagnostics> }) {
+    try {
+      const prev = probes.get(key) ?? ({ key } as ProbeDiagnostics);
+      const { camera, mic, ...rest } = patch;
+      probes.set(key, {
+        ...prev,
+        ...rest,
+        camera: camera ? ({ ...prev.camera, ...camera } as CameraDiagnostics) : prev.camera,
+        mic: mic ? ({ ...prev.mic, ...mic } as MicDiagnostics) : prev.mic,
+        key,
+      });
+      if (listeners.size > 0) notify();
+    } catch {
+      /* never break the call */
+    }
+  },
+
+  removeProbe(key: string) {
+    probes.delete(key);
+    if (listeners.size > 0) notify();
+  },
+
+  /** Push the journal now (the debug panel's button). */
+  pushNow() {
+    flush(false);
+  },
+};

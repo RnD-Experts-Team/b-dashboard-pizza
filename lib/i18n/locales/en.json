@@ -2022,7 +2022,8 @@
       "stores": "By store",
       "screens": "Screens",
       "screensHint": "{watched} of {total} screens were in the main tile at least once.",
-      "dayTimeline": "Day timeline"
+      "dayTimeline": "Day timeline",
+      "figures": "Figures"
     },
     "units": {
       "managers": "managers",
@@ -2103,6 +2104,178 @@
       "open": "Mic open",
       "dead": "Mic dead",
       "talkAll": "Talk to All"
+    },
+    "how": {
+      "title": "How each number is calculated",
+      "subtitle": "What counts as present, away, talking or a dead mic — and when the data is saved.",
+      "connected": {
+        "term": "Connected",
+        "how": "Time with at least one station open in Screen Project (the page or the mini-player). Several stations open at once count once."
+      },
+      "present": {
+        "term": "Present",
+        "how": "The camera is on, not covered, and a face is detected in front of it. Face detection runs on the manager's own computer every 3 seconds (a face counts at 50% confidence or more); no image leaves the device."
+      },
+      "noFace": {
+        "term": "No face",
+        "how": "The camera is on and not covered, but no face is detected in front of it — the manager stepped away or looked off camera."
+      },
+      "covered": {
+        "term": "Camera covered",
+        "how": "The camera picture is very dark (average brightness below 20 of 255) or flat (contrast below 3): a finger, tape or a privacy shutter."
+      },
+      "cameraOff": {
+        "term": "Camera off",
+        "how": "Connected with the camera turned off."
+      },
+      "away": {
+        "term": "Away",
+        "how": "Connected but not present: the camera is off, covered, or shows no face."
+      },
+      "micOpen": {
+        "term": "Mic open",
+        "how": "The manager's own mic is turned on into a station."
+      },
+      "talking": {
+        "term": "Talking",
+        "how": "LiveKit's speech detection on the manager's mic: the exact moments speech starts and stops are recorded and added up."
+      },
+      "silent": {
+        "term": "Silent",
+        "how": "Mic open with sound in the room but no speech from the manager."
+      },
+      "deadMic": {
+        "term": "Dead mic",
+        "how": "Mic open but no sound at all (level below −70 dB) for 20 seconds in a row — muted on the headset or device, or covered. Counted from the moment the silence began."
+      },
+      "talkAll": {
+        "term": "Talk to All",
+        "how": "Time holding Talk to All (the mic goes to every screen at once). Counted once, not once per screen."
+      },
+      "pip": {
+        "term": "Mini-player",
+        "how": "Time watching a station in the floating mini-player while on other dashboard pages."
+      },
+      "favorite": {
+        "term": "Favorite screen",
+        "how": "The station that spent the most time in the big main tile."
+      },
+      "visits": {
+        "term": "Visits",
+        "how": "Separate stretches of being connected; reconnecting after a break starts a new visit."
+      },
+      "kicked": {
+        "term": "Kicked",
+        "how": "Disconnected because another login opened the same store's Screen Project (all managers of a store share one LiveKit identity)."
+      },
+      "timeZone": {
+        "term": "Days and hours",
+        "how": "Counted in your own time zone; times are stored in UTC."
+      },
+      "saving": {
+        "term": "When data is saved",
+        "how": "Every change is recorded with the exact time it began, kept safely in the browser, and sent every 5 minutes, right after a station disconnects, and when the page closes. If the browser crashes, the next visit sends what was left."
+      }
+    },
+    "debug": {
+      "toggle": "Live monitoring",
+      "title": "Monitoring debug — live",
+      "live": "live",
+      "close": "Close",
+      "loading": "Reading the recorder…",
+      "observerNote": "Observer mode is not recorded. Anything else recording in this tab (for example the mini-player) still shows here.",
+      "totalsTitle": "This tab, as the report will count it",
+      "totalsHint": "Totals since this page opened, from the exact segments below, with the same rules as the report.",
+      "tilesTitle": "What each screen measures now",
+      "tilesHint": "Checked every few seconds. A state changes after {samples} matching checks and is dated from the first one.",
+      "noTiles": "No screen is connected in this tab.",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "main": "Main tile",
+      "pip": "Mini-player",
+      "talkAll": "Talk to All",
+      "speaking": "Speaking",
+      "camera": "Camera",
+      "mic": "Mic",
+      "off": "Off",
+      "cameraStates": {
+        "visible": "Present",
+        "no_face": "No face",
+        "covered": "Covered"
+      },
+      "micStates": {
+        "open": "Open",
+        "dead": "Dead"
+      },
+      "brightness": "Brightness",
+      "contrast": "Contrast",
+      "faceScore": "Face score",
+      "detector": "Face detector",
+      "detectorStates": {
+        "loading": "loading",
+        "ready": "ready",
+        "unavailable": "unavailable"
+      },
+      "detectorRule": "without it, an uncovered camera counts as present",
+      "coveredIfBelow": "covered below {value}",
+      "faceIfAtLeast": "face at {value}% or more",
+      "pending": "Changing to “{state}”: {streak} of {samples} checks",
+      "sampledAt": "last check {at}",
+      "level": "Level",
+      "silentIfBelow": "no sound below {value}",
+      "silentFor": "No sound for",
+      "deadAfter": "dead at {seconds}s",
+      "speakingLabel": "Speech detected",
+      "speakingRule": "LiveKit, exact start/stop",
+      "yes": "yes",
+      "no": "no",
+      "audioSuspended": "Audio check paused by the browser ({state}) — no dead-mic verdict until it resumes.",
+      "savingTitle": "Saving",
+      "savingHint": "Pushed every 5 minutes, ~1.5 s after a station disconnects, and when the page closes.",
+      "nextPush": "Next push in",
+      "afterDisconnect": "{in} (disconnect)",
+      "lastPush": "Last push",
+      "saved": "{count, plural, one {# segment saved} other {# segments saved}}",
+      "failed": "failed ({status}) — will retry",
+      "network": "network",
+      "notYet": "not yet",
+      "waiting": "Waiting in the journal",
+      "waitingCount": "{open} open · {closed} closed",
+      "savedThisPage": "Saved from this page",
+      "tab": "tab {id}",
+      "pushNow": "Push now",
+      "pushing": "Pushing…",
+      "segmentsTitle": "The data being saved",
+      "segmentsHint": "Exactly the rows the next push sends (open rows end at “now”), newest first; already saved rows are greyed.",
+      "noSegments": "Nothing recorded yet in this tab.",
+      "segmentsFoot": "Open rows are re-sent with a later end on every push; the server keeps one row per segment.",
+      "col": {
+        "what": "What",
+        "screen": "Screen",
+        "from": "From",
+        "to": "To",
+        "length": "Length",
+        "status": "Status"
+      },
+      "kinds": {
+        "session": "Connected",
+        "main": "Main tile",
+        "camera": "Camera",
+        "mic": "Mic",
+        "talk_all": "Talk to All"
+      },
+      "segStates": {
+        "visible": "present",
+        "no_face": "no face",
+        "covered": "covered",
+        "open": "open",
+        "dead": "dead"
+      },
+      "talkS": "talking {s}s",
+      "now": "now",
+      "statusSaved": "saved",
+      "statusOpen": "open",
+      "statusWaiting": "waiting"
     }
   },
   "cleaningChart": {
@@ -2875,7 +3048,7 @@
       "back": "Back to Weekly grid",
       "sheetTitle": "Weekly Dough & Sauce Report",
       "sheetStores": "stores",
-      "sheetFormula": "Score = 60% cells on target (planned days only) + 20% stickers + 20% dough quality",
+      "sheetFormula": "Score = 50% cells on target (planned days, plus counted unplanned days) + 10% plan confirmed all week (7/7) + 20% stickers + 20% dough quality",
       "yes": "Yes",
       "no": "No",
       "pass": "Pass",
@@ -2925,7 +3098,7 @@
       "legendShort": "short",
       "legendMissing": "past day never counted",
       "legendNa": "no plan, no count yet, or counts unavailable",
-      "legendUnplanned": "dashed = no confirmed plan, checked against the base, not scored",
+      "legendUnplanned": "dashed = no confirmed plan, checked against that day's base and scored like any other",
       "legendPending": "Judgement pending: stickers or dough quality not set yet",
       "legendInProgress": "This week is still in progress."
     },
@@ -2944,12 +3117,14 @@
       "openToScore": "Counts failed — open to retry",
       "retryCounts": "Try loading counts again",
       "breakdownVarianceUnknown": "Variance (counts not loaded)",
-      "breakdownVarianceNone": "Variance (no planned day to score yet)",
+      "breakdownVarianceNone": "Variance (no day to score yet)",
       "countsForbidden": "You don't have access to inventory counts, so variance can't be scored.",
       "countsUnavailable": "{system} is unavailable for some stores ({message}). Their counts show as unknown, not zero.",
       "empty": "No stores for this week.",
       "reportTitle": "Dough & Sauce report · {week}",
-      "formula": "Score = 60% cells on target (planned days only) + 20% stickers + 20% dough quality",
+      "formula": "Score = 50% cells on target (planned days, plus counted unplanned days) + 10% plan confirmed all week (7/7) + 20% stickers + 20% dough quality",
+      "checkingUnplanned": "Checking {n, plural, one {1 unplanned day} other {# unplanned days}} against their base…",
+      "scoreIncomplete": "{n, plural, one {1 counted day} other {# counted days}} with no plan couldn't be checked against a base, so this score may be incomplete.",
       "colRank": "Rank",
       "colStore": "Store",
       "colDays": "Days planned",
@@ -2972,6 +3147,7 @@
       "noHistory": "No history",
       "breakdown": "Score breakdown",
       "breakdownVariance": "Variance ({ok}/{total} cells)",
+      "breakdownPlanning": "Plan confirmed all week ({confirmed}/{total} days)",
       "breakdownStickers": "Stickers compliance",
       "breakdownQuality": "Dough quality",
       "previousScores": "Previous weeks: {scores}",
@@ -2987,13 +3163,13 @@
         "legendDuplicates": "Counted more than once that day (latest shown)",
         "countedTitle": "Counted {counted} on {on} · base {base} · plan {planned}",
         "legendCountDay": "Each day is compared with the count taken the night before, against the base (before the buffer).",
-        "unplannedTitle": "No confirmed plan — counted {counted} on {on} against the base {base}. Shown for information, not scored.",
+        "unplannedTitle": "No confirmed plan — counted {counted} on {on} against the base {base}. Counts toward the score.",
         "duplicates": "{n} extra count(s) that day — showing the latest",
         "neverCounted": "Never counted — not zero",
         "noPlan": "No confirmed plan for this day",
         "noPlanShort": "No plan",
         "notConfirmed": "Not confirmed",
-        "legendUnconfirmed": "Not confirmed: checked against that day's base (no buffer), not scored",
+        "legendUnconfirmed": "Not confirmed: checked against that day's base (no buffer) and scored",
         "unavailable": "Counts unavailable",
         "unavailableBanner": "Inventory counts couldn't be loaded for this store, so every cell shows N/A. That does not mean zero — refresh to try again.",
         "legendUnavailable": "N/A — counts couldn't be loaded",

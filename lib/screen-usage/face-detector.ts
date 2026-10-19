@@ -17,13 +17,14 @@
 import type { FaceDetector } from "@mediapipe/tasks-vision";
 
 const BASE = "/mediapipe";
-const MIN_CONFIDENCE = 0.5;
+/** A face counts when the detector is at least this sure (0–1). */
+export const FACE_MIN_CONFIDENCE = 0.5;
 /** Several tiles can sample the same camera; reuse a recent answer for the same track. */
 const RESULT_TTL_MS = 2_500;
 
 let detectorPromise: Promise<FaceDetector | null> | null = null;
 let lastTimestamp = 0;
-const recent = new Map<string, { at: number; face: boolean }>();
+const recent = new Map<string, { at: number; score: number }>();
 
 export function loadFaceDetector(): Promise<FaceDetector | null> {
   detectorPromise ??= (async () => {
@@ -37,7 +38,8 @@ export function loadFaceDetector(): Promise<FaceDetector | null> {
         {
           baseOptions: { modelAssetPath: `${BASE}/blaze_face_short_range.tflite`, delegate: "CPU" },
           runningMode: "VIDEO",
-          minDetectionConfidence: MIN_CONFIDENCE,
+          // Report every candidate: the caller compares the best score to FACE_MIN_CONFIDENCE.
+          minDetectionConfidence: 0.2,
         },
       );
     } catch {
@@ -48,22 +50,23 @@ export function loadFaceDetector(): Promise<FaceDetector | null> {
 }
 
 /**
- * True/false when a face is (not) detected in the current frame; null when it
+ * The best face score in the current frame (0 = no face at all); null when it
  * can't tell (frame not ready, detector error) — the caller keeps its state.
+ * A face counts at FACE_MIN_CONFIDENCE or above.
  */
-export function detectFace(detector: FaceDetector, video: HTMLVideoElement, trackId: string): boolean | null {
+export function detectFace(detector: FaceDetector, video: HTMLVideoElement, trackId: string): number | null {
   try {
     const now = performance.now();
     const cached = recent.get(trackId);
-    if (cached && now - cached.at < RESULT_TTL_MS) return cached.face;
+    if (cached && now - cached.at < RESULT_TTL_MS) return cached.score;
     if (video.readyState < 2 || video.videoWidth === 0) return null;
 
     // VIDEO mode requires strictly increasing timestamps across every call on this detector.
     lastTimestamp = Math.max(now, lastTimestamp + 1);
     const result = detector.detectForVideo(video, lastTimestamp);
-    const face = result.detections.some((d) => (d.categories[0]?.score ?? 0) >= MIN_CONFIDENCE);
-    recent.set(trackId, { at: now, face });
-    return face;
+    const score = Math.max(0, ...result.detections.map((d) => d.categories[0]?.score ?? 0));
+    recent.set(trackId, { at: now, score });
+    return score;
   } catch {
     return null;
   }

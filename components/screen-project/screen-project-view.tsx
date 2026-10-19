@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ScreenTile } from "./screen-tile";
+import { UsageDebugPanel, UsageDebugToggle } from "./usage/usage-debug-panel";
 import type { StationStateMsg, ScreenShareMode } from "./screen-tile";
 import { StationsDialog } from "./stations-dialog";
 import { ObserverDialog } from "./observer-dialog";
@@ -232,6 +233,12 @@ export function ScreenProjectView() {
 
   const { stations, serverUrl, tokenMap, isLoading, error, refetch } =
     useScreenProject(activeTokenType, selectedStationIds.length ? selectedStationIds : undefined);
+  // Readable labels for the live monitoring debug panel (shown to report viewers only).
+  const stationNames = useMemo(
+    () => Object.fromEntries((stations ?? []).map((s) => [s.room_name, s.name])),
+    [stations],
+  );
+  const [debugOpen, setDebugOpen] = useState(false);
 
   // Drive-through stations get their own dedicated UI elsewhere — exclude them
   // from the supervisor tile view, station selection, and observer view.
@@ -1085,6 +1092,8 @@ export function ScreenProjectView() {
               Passive · listen only
             </span>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+          {canMonitor && <UsageDebugToggle open={debugOpen} onToggle={() => setDebugOpen((o) => !o)} />}
           {canSupervisor && (
             <Button
               variant="ghost"
@@ -1102,7 +1111,9 @@ export function ScreenProjectView() {
               Supervisor View
             </Button>
           )}
+          </div>
         </div>
+        {canMonitor && <UsageDebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} stationNames={stationNames} observer />}
 
         {/* Station cards grid */}
         {nonDriveThruStations.length === 0 ? (
@@ -1162,6 +1173,7 @@ export function ScreenProjectView() {
         isViewerFullscreen ? "fixed inset-0 z-50 bg-background p-3" : "h-full",
       )}
     >
+      {canMonitor && <UsageDebugPanel open={debugOpen} onClose={() => setDebugOpen(false)} stationNames={stationNames} />}
       {/*
        * Single tile area — ALL ScreenTile instances live here permanently.
        * Clicking a side tile only changes `mainId` state. Each tile's
@@ -1612,6 +1624,14 @@ export function ScreenProjectView() {
           </Tooltip>
 
           <div className="w-px h-5 bg-white/10 mx-1" />
+
+          {/* Live monitoring debug — only for people who can read the monitoring report */}
+          {canMonitor && (
+            <>
+              <UsageDebugToggle open={debugOpen} onToggle={() => setDebugOpen((o) => !o)} tone="dark" />
+              <div className="w-px h-5 bg-white/10 mx-1" />
+            </>
+          )}
 
           {/* Guide button */}
           <Tooltip>

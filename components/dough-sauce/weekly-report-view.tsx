@@ -334,7 +334,7 @@ export function WeeklyReportView() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" size="icon" onClick={reload} disabled={loading} aria-label={tc("refresh")}>
-            <RefreshCw className={cn("h-4 w-4", (loading || countsLoading) && "animate-spin")} />
+            <RefreshCw className={cn("h-4 w-4", (loading || countsLoading || countsSummary.basesPending > 0) && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -346,6 +346,13 @@ export function WeeklyReportView() {
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {tw("loadingCountsFor", { n: countsSummary.total - countsSummary.ready })}
+        </p>
+      )}
+      {/* Counts are in, but unplanned days are still being checked against their base — scores are not final. */}
+      {!countsLoading && countsSummary.basesPending > 0 && (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {tw("checkingUnplanned", { n: countsSummary.basesPending })}
         </p>
       )}
       {countsError && (
@@ -412,7 +419,7 @@ export function WeeklyReportView() {
                         onToggle={() => {
                           const opening = expanded !== r.store;
                           setExpanded(opening ? r.store : null);
-                          if (opening && r.needsCounts) void loadCounts(r.store);
+                          if (opening) void loadCounts(r.store);
                         }}
                         onSave={saveJudgement}
                       />
@@ -421,7 +428,7 @@ export function WeeklyReportView() {
                           <td colSpan={colCount} className="p-3 sm:p-4">
                             <div className="grid gap-x-6 gap-y-5 lg:grid-cols-[1fr_280px]">
                               <div className="min-w-0">
-                                {!r.needsCounts || r.countsStatus === "ready" || r.countsStatus === "error" ? (
+                                {r.countsStatus === "ready" || r.countsStatus === "error" ? (
                                   <WeekCellsGrid cells={r.cells} ingredients={ingredients} />
                                 ) : (
                                   <Skeleton className="h-44 w-full" />
@@ -596,8 +603,8 @@ function ReportHead({
 
 /**
  * One day × ingredient: did the count meet the BASE (the plan before its buffer)? Anything uncountable
- * is N/A, never 0 (rule 2). A day with no plan can still show ✓/✕ when its base was supplied — drawn
- * lighter with a dashed edge, because it is shown for information and never scored.
+ * is N/A, never 0 (rule 2). A day with no plan is judged the same way once its base is known and counts
+ * toward the score like any other; its dashed edge is the only thing that says "nobody planned this".
  */
 function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
   const t = useTranslations("doughSauce.weekly.cells");
@@ -646,8 +653,8 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
             "px-0.5 py-1 text-center outline-1 -outline-offset-2 outline-dashed",
             edge,
             cell.ok
-              ? "bg-emerald-500/10 text-emerald-700/70 outline-emerald-500/30 dark:text-emerald-400/70"
-              : "bg-rose-500/10 text-rose-700/70 outline-rose-500/30 dark:text-rose-400/70"
+              ? "bg-emerald-500/15 text-emerald-700 outline-emerald-500/40 dark:text-emerald-400"
+              : "bg-rose-500/20 text-rose-700 outline-rose-500/40 dark:text-rose-400"
           )}
           title={t("unplannedTitle", {
             counted: fmtQty(cell.counted),
@@ -781,6 +788,16 @@ function ReportRow({
         ) : (
           <>
             <span className="text-sm font-bold leading-4">{fmtPct(row.breakdown.score)}</span>
+            {/* Some counted, unplanned days couldn't be checked against a base: the score leaves them out. */}
+            {row.uncheckedDays > 0 && (
+              <AlertTriangle
+                role="img"
+                aria-label={t("scoreIncomplete", { n: row.uncheckedDays })}
+                className="absolute start-0.5 top-0.5 h-2.5 w-2.5 text-amber-600 dark:text-amber-400"
+              >
+                <title>{t("scoreIncomplete", { n: row.uncheckedDays })}</title>
+              </AlertTriangle>
+            )}
             {/* A corner dot, not a second line — a pending judgement must not make its row taller. */}
             {pending && (
               <span
