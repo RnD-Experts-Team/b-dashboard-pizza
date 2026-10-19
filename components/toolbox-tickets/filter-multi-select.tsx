@@ -161,7 +161,8 @@ export function AllMultiSelect<TValue extends string | number>({
           <>
             <button
               type="button"
-              onClick={() => setDraft(allValues)}
+              // A toggle: ticked → untick everything; otherwise tick everything.
+              onClick={() => setDraft(draftIsAll ? [] : allValues)}
               className="flex w-full items-center gap-2 px-3 py-2 text-start text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <CheckBox checked={draftIsAll} />
@@ -190,15 +191,16 @@ export function AllMultiSelect<TValue extends string | number>({
           )}
         </div>
 
-        <div className="space-y-1.5 border-t p-1.5">
-          {draft.length === 0 && <p className="px-1 text-[11px] text-muted-foreground">{t("pickOne")}</p>}
+        <div className="border-t p-1.5">
           <Button
             type="button"
             size="sm"
             className="h-8 w-full"
-            disabled={draft.length === 0 || !pending}
+            // Nothing ticked can't be applied. Everything ticked CAN: `next` is `[]` then,
+            // the same request as no filter at all.
+            disabled={draft.length === 0}
             onClick={() => {
-              onChange(next);
+              if (pending) onChange(next);
               setOpen(false);
             }}
           >

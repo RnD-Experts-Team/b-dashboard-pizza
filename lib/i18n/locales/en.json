@@ -4150,7 +4150,6 @@
         "stores": "{count, plural, one {# store} other {# stores}}"
       },
       "apply": "Apply",
-      "pickOne": "Pick at least one, or choose “All”.",
       "active": "{count} active",
       "reset": "Clear all",
       "loading": "Loading…"
