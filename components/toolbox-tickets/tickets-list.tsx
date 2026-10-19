@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, EyeOff, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -47,8 +47,6 @@ function RoleChip({ ticket }: { ticket: ToolboxTicket }) {
 
 interface TicketsListProps {
   page: TicketPage<ToolboxTicket>;
-  /** Store queue: rows the caller can't open are hidden and counted. */
-  hideUnviewable: boolean;
   showStore: boolean;
   refreshing?: boolean;
   onPageChange: (page: number) => void;
@@ -57,7 +55,6 @@ interface TicketsListProps {
 
 export function TicketsList({
   page,
-  hideUnviewable,
   showStore,
   refreshing,
   onPageChange,
@@ -67,26 +64,11 @@ export function TicketsList({
   const params = useParams();
   const locale = (params?.locale as string) || "en";
 
-  const rows = hideUnviewable ? page.items.filter((r) => r.viewer?.can.view !== false) : page.items;
-  const hidden = page.items.length - rows.length;
+  // Every row the server sends is one this user may open — show them all.
+  const rows = page.items;
 
   return (
     <div className={cn("space-y-3 transition-opacity", refreshing && "opacity-70")} data-slot="tickets-list">
-      {hidden > 0 && (
-        <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
-          <EyeOff className="h-3.5 w-3.5 shrink-0" />
-          {t("hidden", { count: hidden })}
-        </div>
-      )}
-
-      {/* Every row on this page is one the caller can't open — say so instead of an empty table. */}
-      {rows.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-12 text-center">
-          <EyeOff className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
-          <p className="max-w-sm text-xs text-muted-foreground">{t("allHidden")}</p>
-        </div>
-      )}
-
       {/* md+: compact table */}
       <div className={cn("hidden overflow-hidden rounded-xl border bg-card", rows.length > 0 && "md:block")}>
         <div className="overflow-x-auto">

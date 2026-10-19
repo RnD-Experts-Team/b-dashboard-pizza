@@ -112,59 +112,62 @@ export function AssignmentsPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
-        <TicketUserPicker
-          value={user}
-          onChange={(u) => {
-            setUser(u);
-            setPage(1);
-          }}
-          placeholder={t("filterUser")}
-        />
-        <SearchableSelect<string>
-          options={sectionOptions}
-          value={sectionId}
-          onChange={(v) => {
-            setSectionId(v);
-            setPage(1);
-          }}
-          placeholder={t("filterSection")}
-          loading={sections.loading && !sections.data}
-          icon={<Layers className="h-3.5 w-3.5 text-muted-foreground" />}
-        />
-        <SearchableSelect<string>
-          options={levelOptions}
-          value={levelId}
-          onChange={(v) => {
-            setLevelId(v);
-            setPage(1);
-          }}
-          placeholder={t("filterLevel")}
-          loading={levels.loading && !levels.data}
-          icon={<FolderTree className="h-3.5 w-3.5 text-muted-foreground" />}
-        />
-        <div className="flex gap-2">
-          {filtered && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9"
-              onClick={() => {
-                setUser(null);
-                setSectionId("");
-                setLevelId("");
-                setPage(1);
-              }}
-            >
-              <X className="me-1 h-3.5 w-3.5" />
-              {t("clear")}
-            </Button>
-          )}
-          <Button size="sm" className="h-9 flex-1 sm:flex-none" onClick={() => setCreating(true)}>
-            <Plus className="me-1 h-4 w-4" />
-            {t("new")}
-          </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-56">
+          <TicketUserPicker
+            value={user}
+            onChange={(u) => {
+              setUser(u);
+              setPage(1);
+            }}
+            placeholder={t("filterUser")}
+          />
         </div>
+        <div className="w-full sm:w-44">
+          <SearchableSelect<string>
+            options={sectionOptions}
+            value={sectionId}
+            onChange={(v) => {
+              setSectionId(v);
+              setPage(1);
+            }}
+            placeholder={t("filterSection")}
+            loading={sections.loading && !sections.data}
+            icon={<Layers className="h-3.5 w-3.5 text-muted-foreground" />}
+          />
+        </div>
+        <div className="w-full sm:w-44">
+          <SearchableSelect<string>
+            options={levelOptions}
+            value={levelId}
+            onChange={(v) => {
+              setLevelId(v);
+              setPage(1);
+            }}
+            placeholder={t("filterLevel")}
+            loading={levels.loading && !levels.data}
+            icon={<FolderTree className="h-3.5 w-3.5 text-muted-foreground" />}
+          />
+        </div>
+        {filtered && (
+          <Button
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={() => {
+              setUser(null);
+              setSectionId("");
+              setLevelId("");
+              setPage(1);
+            }}
+          >
+            <X className="me-1 h-4 w-4" />
+            {t("clear")}
+          </Button>
+        )}
+        <Button className="sm:ms-auto" onClick={() => setCreating(true)}>
+          <Plus className="me-2 h-4 w-4" />
+          {t("new")}
+        </Button>
       </div>
 
       {list.loading && !list.data ? (

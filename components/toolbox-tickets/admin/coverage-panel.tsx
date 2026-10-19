@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArchiveRestore, CheckCircle2, CircleDashed, Loader2, Plus, Search, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArchiveRestore,
+  CheckCircle2,
+  CircleDashed,
+  Loader2,
+  Plus,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -51,6 +60,7 @@ const STATUS_STYLE: Record<Status, { icon: typeof CheckCircle2; badge: string }>
  */
 export function CoveragePanel({ onChanged }: { onChanged: () => void }) {
   const t = useTranslations("toolboxTickets.admin.coverage");
+  const tf = useTranslations("toolboxTickets.admin.filters");
   const { data, loading, error, reload } = useAdminSections();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -147,10 +157,16 @@ export function CoveragePanel({ onChanged }: { onChanged: () => void }) {
         </div>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")} className="h-9 ps-8" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-48 flex-1">
+          <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("search")}
+            aria-label={tf("field.search")}
+            className="h-9 ps-9"
+          />
         </div>
         <div className="w-full sm:w-44">
           <SearchableSelect<Filter>
