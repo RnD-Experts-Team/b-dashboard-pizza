@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useDoughSauceAccess } from "@/lib/hooks/use-dough-sauce-access";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
-  ImageDown,
   LayoutList,
   Loader2,
   RefreshCw,
@@ -39,7 +38,6 @@ import type { JudgementPayload, QualityVerdict, StickersVerdict } from "@/types/
 import {
   DsErrorState,
   WeekPicker,
-  exportNodeAsPng,
   fmtPct,
   fmtSignedPct,
   personName,
@@ -71,8 +69,6 @@ export function WeeklyGridView() {
     window.history.replaceState(null, "", `${pathname}?${q.toString()}`);
   };
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
   const { ingredients, map, loaded } = useIngredients();
   const {
     weekly,
@@ -86,7 +82,6 @@ export function WeeklyGridView() {
     saveJudgement,
     reload,
   } = useWeeklyGrid(weekStart, map, loaded);
-  const allScored = countsSummary.allReady;
 
   const selectedWeek = weekStart ?? weekly?.week.week_start;
   const [filter, setFilter] = useState<WeekFilter>("all");
@@ -113,19 +108,6 @@ export function WeeklyGridView() {
     [results]
   );
 
-  const onExport = async () => {
-    if (!reportRef.current) return;
-    setExporting(true);
-    try {
-      await exportNodeAsPng(reportRef.current, `dough-sauce-week-${selectedWeek}.png`);
-      toast.success(t("imageDownloaded"));
-    } catch {
-      toast.error(t("imageFailed"));
-    } finally {
-      setExporting(false);
-    }
-  };
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -144,16 +126,6 @@ export function WeeklyGridView() {
               <LayoutList className="me-2 h-4 w-4" />
               {tr("openFull")}
             </Link>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExport}
-            disabled={exporting || !weekly || !allScored}
-            title={allScored ? undefined : t("exportNeedsScores")}
-          >
-            {exporting ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <ImageDown className="me-2 h-4 w-4" />}
-            {t("exportImage")}
           </Button>
           <Button variant="outline" size="icon" onClick={reload} disabled={loading} aria-label={tc("refresh")}>
             <RefreshCw className={cn("h-4 w-4", (loading || countsLoading) && "animate-spin")} />
@@ -174,6 +146,11 @@ export function WeeklyGridView() {
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               {t("loadingCounts")}
+            </p>
+          ) : countsSummary.basesPending > 0 ? (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t("checkingUnplanned", { n: countsSummary.basesPending })}
             </p>
           ) : (
             countsSummary.storesWithoutCounts != null &&
@@ -222,7 +199,7 @@ export function WeeklyGridView() {
               <p className="text-sm text-muted-foreground">{results.length === 0 ? t("empty") : t("emptyFiltered")}</p>
             </div>
           ) : (
-            <Card ref={reportRef} className="overflow-hidden">
+            <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="border-b px-4 py-3">
                   <p className="font-heading text-base font-semibold">
@@ -260,7 +237,7 @@ export function WeeklyGridView() {
                             onToggle={() => {
                               const opening = expanded !== r.store;
                               setExpanded(opening ? r.store : null);
-                              if (opening && r.needsCounts) void loadCounts(r.store);
+                              if (opening) void loadCounts(r.store);
                             }}
                             onSave={saveJudgement}
                           />
@@ -269,7 +246,7 @@ export function WeeklyGridView() {
                               <td colSpan={9} className="p-3 sm:p-4">
                                 <div className="grid gap-x-6 gap-y-5 lg:grid-cols-[1fr_280px]">
                                   <div className="min-w-0">
-                                    {!r.needsCounts || r.countsStatus === "ready" || r.countsStatus === "error" ? (
+                                    {r.countsStatus === "ready" || r.countsStatus === "error" ? (
                                       <>
                                         <WeekCellsGrid cells={r.cells} ingredients={ingredients} />
                                         {r.countsStatus === "error" && (
@@ -396,8 +373,6 @@ function StoreRow({
       <td className="p-2 text-end tabular-nums">
         {row.countsStatus === "loading" ? (
           <Loader2 className="ms-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />
-        ) : !row.needsCounts ? (
-          <span className="text-xs text-muted-foreground">—</span>
         ) : row.countsStatus === "idle" ? (
           <span className="text-xs text-muted-foreground">—</span>
         ) : row.countsUnavailable ? (
@@ -407,7 +382,7 @@ function StoreRow({
           </span>
         ) : (
           <span className={cn(!row.cells.hasPlans && "text-muted-foreground")}>
-            {/* Only planned days count: x of the cells that were planned and are due a count. */}
+            {/* x of the cells that were judged: planned ones due a count, plus unplanned days that were counted. */}
             {row.cells.cellsScored > 0 ? `${row.cells.cellsOk}/${row.cells.cellsScored}` : "—"}
             {row.cells.missingCount > 0 && (
               <span className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
@@ -472,7 +447,19 @@ function StoreRow({
           )
         ) : (
           <>
-            <span className="text-base font-semibold tabular-nums">{fmtPct(row.breakdown.score)}</span>
+            <span className="inline-flex items-center justify-end gap-1">
+              {/* Some counted, unplanned days couldn't be checked against a base: the score leaves them out. */}
+              {row.uncheckedDays > 0 && (
+                <AlertTriangle
+                  role="img"
+                  aria-label={t("scoreIncomplete", { n: row.uncheckedDays })}
+                  className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400"
+                >
+                  <title>{t("scoreIncomplete", { n: row.uncheckedDays })}</title>
+                </AlertTriangle>
+              )}
+              <span className="text-base font-semibold tabular-nums">{fmtPct(row.breakdown.score)}</span>
+            </span>
             {/* Neutral on purpose: the rank already orders stores, colour is kept for what needs action. */}
             <span className="ms-auto mt-1 block h-1 w-20 overflow-hidden rounded-full bg-muted">
               <span
@@ -563,6 +550,7 @@ export function JudgementNote({ row, weekStart, onSave }: { row: StoreWeekResult
           <BreakdownBar
             parts={[
               { part: b.variancePart, max: WEIGHTS.variance, unknown: !row.scored },
+              { part: b.planningPart, max: WEIGHTS.planning },
               { part: b.stickersPart, max: WEIGHTS.stickers },
               { part: b.qualityPart, max: WEIGHTS.quality },
             ]}
@@ -580,6 +568,12 @@ export function JudgementNote({ row, weekStart, onSave }: { row: StoreWeekResult
             part={b.variancePart}
             max={WEIGHTS.variance}
             unknown={!row.scored}
+          />
+          {/* All or nothing: only a week confirmed on every day earns it, however close 6/7 is. */}
+          <BreakdownLine
+            label={t("breakdownPlanning", { confirmed: row.daysConfirmed, total: row.cells.days.length })}
+            part={b.planningPart}
+            max={WEIGHTS.planning}
           />
           <BreakdownLine label={t("breakdownStickers")} part={b.stickersPart} max={WEIGHTS.stickers} />
           <BreakdownLine label={t("breakdownQuality")} part={b.qualityPart} max={WEIGHTS.quality} />

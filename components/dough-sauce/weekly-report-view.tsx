@@ -7,7 +7,10 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
   Check,
   ChevronDown,
   EyeOff,
@@ -68,6 +71,63 @@ const W = { store: 124, plan: 46, cell: 36, stk: 46, dq: 48, score: 52, prev: 40
 const SHRINK = 0.95;
 const NO_DAYS: ReadonlySet<string> = new Set();
 
+type SortKey = "store" | "score";
+type SortDir = "asc" | "desc";
+interface SortState {
+  key: SortKey;
+  dir: SortDir;
+}
+/** Today's order: best score first — the order the hook already returns, so the default changes nothing. */
+const DEFAULT_SORT: SortState = { key: "score", dir: "desc" };
+
+type SortId = `${SortKey}-${SortDir}`;
+const sortId = (s: SortState): SortId => `${s.key}-${s.dir}`;
+/** Every order the Sort menu offers, the default first. */
+const SORT_OPTIONS: SortState[] = [
+  DEFAULT_SORT,
+  { key: "score", dir: "asc" },
+  { key: "store", dir: "asc" },
+  { key: "store", dir: "desc" },
+];
+/** `label` is the full wording (menu, tooltips); `short` keeps the toolbar trigger narrow enough not to wrap the row. */
+const SORT_LABEL = {
+  "score-desc": { label: "sort.scoreDesc", short: "sort.short.scoreDesc" },
+  "score-asc": { label: "sort.scoreAsc", short: "sort.short.scoreAsc" },
+  "store-asc": { label: "sort.storeAsc", short: "sort.short.storeAsc" },
+  "store-desc": { label: "sort.storeDesc", short: "sort.short.storeDesc" },
+} as const satisfies Record<SortId, { label: string; short: string }>;
+
+/**
+ * What a header click does. Score (the default column) flips between best and lowest first. Store goes
+ * low → high, high → low, then back to the default, so the ranked view is never more than a click away.
+ */
+function nextSort(s: SortState, key: SortKey): SortState {
+  if (s.key !== key) return key === "store" ? { key, dir: "asc" } : DEFAULT_SORT;
+  if (key === "score") return { key, dir: s.dir === "desc" ? "asc" : "desc" };
+  return s.dir === "asc" ? { key, dir: "desc" } : DEFAULT_SORT;
+}
+
+/** A row's score, or null when it has none to compare (not started, or counts still loading). */
+const sortScore = (r: StoreWeekResult) => (r.scored && !r.inactive ? r.breakdown.score : null);
+
+/**
+ * Store sorts on the store number (03795-00001…), compared numerically. Score sorts keep rows with
+ * no score last in both directions — "no score" is not a low score. Equal values keep the incoming
+ * (rank) order, since `sort` is stable.
+ */
+function sortRows(rows: StoreWeekResult[], { key, dir }: SortState): StoreWeekResult[] {
+  const sign = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (key === "store") return sign * a.store.localeCompare(b.store, undefined, { numeric: true });
+    const sa = sortScore(a);
+    const sb = sortScore(b);
+    if (sa == null || sb == null) return sa == null ? (sb == null ? 0 : 1) : -1;
+    // Float noise (0.6 × 7/21 vs 0.2) is a tie, the same rule the ranking uses.
+    const d = sa - sb;
+    return Math.abs(d) < 1e-9 ? 0 : sign * d;
+  });
+}
+
 const toneBg = (score: number) =>
   score >= 0.8
     ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"
@@ -91,6 +151,7 @@ export function WeeklyReportView() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const reportRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -142,6 +203,8 @@ export function WeeklyReportView() {
       (r) => r.store.toLowerCase().includes(q) || (storeNames.get(r.store) ?? "").toLowerCase().includes(q)
     );
   }, [results, query, storeNames]);
+  const sorted = useMemo(() => sortRows(visible, sort), [visible, sort]);
+  const onSort = (key: SortKey) => setSort((s) => nextSort(s, key));
 
   const onExport = async (style: "colorful" | "current") => {
     setExporting(true);
@@ -183,59 +246,75 @@ export function WeeklyReportView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/${locale}/dashboard/dough-sauce?tab=weekly${selectedWeek ? `&week=${selectedWeek}` : ""}`}>
-              <ArrowLeft className="me-1.5 h-4 w-4 rtl:rotate-180" />
-              {t("back")}
-            </Link>
-          </Button>
-          <WeekPicker
-            weeks={weekly?.weeks ?? []}
-            value={selectedWeek}
-            onChange={(w) => {
-              setWeekStart(w);
-              setExpanded(null);
-              setRemovedDays(new Set());
-            }}
-            disabled={loading}
-          />
-          <div className="relative w-full sm:w-52">
-            <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tw("searchPlaceholder")} className="ps-8" />
-          </div>
-          {removedList.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <EyeOff className="me-1.5 h-4 w-4" />
-                  {t("hiddenDays", { n: removedList.length })}
-                  <ChevronDown className="ms-1.5 h-3.5 w-3.5 opacity-70" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {removedList.map((d) => (
-                  <DropdownMenuItem
-                    key={d}
-                    onSelect={() =>
-                      setRemovedDays((s) => {
-                        const next = new Set(s);
-                        next.delete(d);
-                        return next;
-                      })
-                    }
-                  >
-                    {day.short(d)}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setRemovedDays(new Set())}>{t("showAllDays")}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+      {/* One wrapping row: when space runs out only the controls that don't fit move down, and the export
+          group stays pinned to the end (ms-auto) instead of the whole right side dropping as a block. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/${locale}/dashboard/dough-sauce?tab=weekly${selectedWeek ? `&week=${selectedWeek}` : ""}`}>
+            <ArrowLeft className="me-1.5 h-4 w-4 rtl:rotate-180" />
+            {t("back")}
+          </Link>
+        </Button>
+        <WeekPicker
+          weeks={weekly?.weeks ?? []}
+          value={selectedWeek}
+          onChange={(w) => {
+            setWeekStart(w);
+            setExpanded(null);
+            setRemovedDays(new Set());
+          }}
+          disabled={loading}
+        />
+        <div className="relative w-full sm:w-52">
+          <Search className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tw("searchPlaceholder")} className="ps-8" />
         </div>
-        <div className="flex items-center gap-2">
+        <Select
+          value={sortId(sort)}
+          onValueChange={(v) => setSort(SORT_OPTIONS.find((o) => sortId(o) === v) ?? DEFAULT_SORT)}
+        >
+          <SelectTrigger size="sm" aria-label={t("sort.label")} title={t(SORT_LABEL[sortId(sort)].label)}>
+            <ArrowUpDown />
+            <SelectValue>{t(SORT_LABEL[sortId(sort)].short)}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((o) => (
+              <SelectItem key={sortId(o)} value={sortId(o)}>
+                {t(SORT_LABEL[sortId(o)].label)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {removedList.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <EyeOff className="me-1.5 h-4 w-4" />
+                {t("hiddenDays", { n: removedList.length })}
+                <ChevronDown className="ms-1.5 h-3.5 w-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {removedList.map((d) => (
+                <DropdownMenuItem
+                  key={d}
+                  onSelect={() =>
+                    setRemovedDays((s) => {
+                      const next = new Set(s);
+                      next.delete(d);
+                      return next;
+                    })
+                  }
+                >
+                  {day.short(d)}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setRemovedDays(new Set())}>{t("showAllDays")}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        <div className="ms-auto flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -255,7 +334,7 @@ export function WeeklyReportView() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" size="icon" onClick={reload} disabled={loading} aria-label={tc("refresh")}>
-            <RefreshCw className={cn("h-4 w-4", (loading || countsLoading) && "animate-spin")} />
+            <RefreshCw className={cn("h-4 w-4", (loading || countsLoading || countsSummary.basesPending > 0) && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -267,6 +346,13 @@ export function WeeklyReportView() {
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
           {tw("loadingCountsFor", { n: countsSummary.total - countsSummary.ready })}
+        </p>
+      )}
+      {/* Counts are in, but unplanned days are still being checked against their base — scores are not final. */}
+      {!countsLoading && countsSummary.basesPending > 0 && (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {tw("checkingUnplanned", { n: countsSummary.basesPending })}
         </p>
       )}
       {countsError && (
@@ -318,9 +404,11 @@ export function WeeklyReportView() {
                   // The "current" export photographs this card — keep the remove buttons out of the picture.
                   removable={exporting ? NO_DAYS : removable}
                   onRemove={(d) => setRemovedDays((s) => new Set(s).add(d))}
+                  sort={sort}
+                  onSort={onSort}
                 />
                 <tbody>
-                  {visible.map((r) => (
+                  {sorted.map((r) => (
                     <Fragment key={r.store}>
                       <ReportRow
                         row={r}
@@ -331,7 +419,7 @@ export function WeeklyReportView() {
                         onToggle={() => {
                           const opening = expanded !== r.store;
                           setExpanded(opening ? r.store : null);
-                          if (opening && r.needsCounts) void loadCounts(r.store);
+                          if (opening) void loadCounts(r.store);
                         }}
                         onSave={saveJudgement}
                       />
@@ -340,7 +428,7 @@ export function WeeklyReportView() {
                           <td colSpan={colCount} className="p-3 sm:p-4">
                             <div className="grid gap-x-6 gap-y-5 lg:grid-cols-[1fr_280px]">
                               <div className="min-w-0">
-                                {!r.needsCounts || r.countsStatus === "ready" || r.countsStatus === "error" ? (
+                                {r.countsStatus === "ready" || r.countsStatus === "error" ? (
                                   <WeekCellsGrid cells={r.cells} ingredients={ingredients} />
                                 ) : (
                                   <Skeleton className="h-44 w-full" />
@@ -364,7 +452,7 @@ export function WeeklyReportView() {
         <div aria-hidden style={{ position: "fixed", left: -100000, top: 0, pointerEvents: "none" }}>
           <ColorfulReportSheet
             ref={sheetRef}
-            rows={visible}
+            rows={sorted}
             storeNames={storeNames}
             days={shownDays}
             dayCount={days.length}
@@ -385,6 +473,44 @@ const tableWidth = (days: number, prev: number) =>
 const GROUP_TH = "border-s border-border/60 px-0.5 py-1 text-center text-[10px] font-semibold uppercase tracking-wider";
 const SUB_TH = "px-0.5 py-1 text-center text-[9px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground";
 
+/**
+ * A header label that sorts its column: ↑/↓ on the sorted column, a faint ↕ on the others. Its tooltip
+ * names the order the click will switch to, so the way back to the default is never a guess.
+ */
+function SortButton({
+  column,
+  sort,
+  onSort,
+  label,
+}: {
+  column: SortKey;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
+  label: string;
+}) {
+  const t = useTranslations("doughSauce.report");
+  const title = t("sort.next", { order: t(SORT_LABEL[sortId(nextSort(sort, column))].label) });
+  const active = sort.key === column;
+  const Icon = !active ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(column)}
+      title={title}
+      className={cn(
+        "inline-flex cursor-pointer items-center gap-0.5 uppercase transition-colors hover:text-foreground",
+        active && "text-foreground"
+      )}
+    >
+      {label}
+      <Icon className={cn("h-2.5 w-2.5 shrink-0", !active && "opacity-50")} />
+    </button>
+  );
+}
+
+const ariaSort = (sort: SortState, column: SortKey) =>
+  sort.key !== column ? "none" : sort.dir === "asc" ? "ascending" : "descending";
+
 /** Two header rows: the group (day / Quality / Progress), then the abbreviated columns inside it. */
 function ReportHead({
   days,
@@ -392,6 +518,8 @@ function ReportHead({
   labelOf,
   removable,
   onRemove,
+  sort,
+  onSort,
 }: {
   days: string[];
   previous: number[];
@@ -399,14 +527,20 @@ function ReportHead({
   /** Days with nothing recorded — the only ones that get a remove button. */
   removable: ReadonlySet<string>;
   onRemove: (day: string) => void;
+  sort: SortState;
+  onSort: (key: SortKey) => void;
 }) {
   const t = useTranslations("doughSauce.report");
   const day = useDayFormatter();
   return (
     <thead className="bg-muted/40">
       <tr>
-        <th rowSpan={2} className={cn(SUB_TH, "sticky start-0 z-10 bg-muted px-2 text-start")}>
-          {t("colStore")}
+        <th
+          rowSpan={2}
+          aria-sort={ariaSort(sort, "store")}
+          className={cn(SUB_TH, "sticky start-0 z-10 bg-muted px-2 text-start")}
+        >
+          <SortButton column="store" sort={sort} onSort={onSort} label={t("colStore")} />
         </th>
         <th rowSpan={2} className={SUB_TH} title={t("tipPlan")}>
           {t("colPlan")}
@@ -451,8 +585,8 @@ function ReportHead({
         <th className={SUB_TH} title={t("tipDq")}>
           {t("colDq")}
         </th>
-        <th className={cn(SUB_TH, "border-s border-border/60")} title={t("tipScore")}>
-          {t("colScore")}
+        <th aria-sort={ariaSort(sort, "score")} className={cn(SUB_TH, "border-s border-border/60")}>
+          <SortButton column="score" sort={sort} onSort={onSort} label={t("colScore")} />
         </th>
         {previous.map((n) => (
           <th key={n} className={SUB_TH} title={t("tipPrev", { n })}>
@@ -469,8 +603,8 @@ function ReportHead({
 
 /**
  * One day × ingredient: did the count meet the BASE (the plan before its buffer)? Anything uncountable
- * is N/A, never 0 (rule 2). A day with no plan can still show ✓/✕ when its base was supplied — drawn
- * lighter with a dashed edge, because it is shown for information and never scored.
+ * is N/A, never 0 (rule 2). A day with no plan is judged the same way once its base is known and counts
+ * toward the score like any other; its dashed edge is the only thing that says "nobody planned this".
  */
 function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
   const t = useTranslations("doughSauce.weekly.cells");
@@ -519,8 +653,8 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
             "px-0.5 py-1 text-center outline-1 -outline-offset-2 outline-dashed",
             edge,
             cell.ok
-              ? "bg-emerald-500/10 text-emerald-700/70 outline-emerald-500/30 dark:text-emerald-400/70"
-              : "bg-rose-500/10 text-rose-700/70 outline-rose-500/30 dark:text-rose-400/70"
+              ? "bg-emerald-500/15 text-emerald-700 outline-emerald-500/40 dark:text-emerald-400"
+              : "bg-rose-500/20 text-rose-700 outline-rose-500/40 dark:text-rose-400"
           )}
           title={t("unplannedTitle", {
             counted: fmtQty(cell.counted),
@@ -654,6 +788,16 @@ function ReportRow({
         ) : (
           <>
             <span className="text-sm font-bold leading-4">{fmtPct(row.breakdown.score)}</span>
+            {/* Some counted, unplanned days couldn't be checked against a base: the score leaves them out. */}
+            {row.uncheckedDays > 0 && (
+              <AlertTriangle
+                role="img"
+                aria-label={t("scoreIncomplete", { n: row.uncheckedDays })}
+                className="absolute start-0.5 top-0.5 h-2.5 w-2.5 text-amber-600 dark:text-amber-400"
+              >
+                <title>{t("scoreIncomplete", { n: row.uncheckedDays })}</title>
+              </AlertTriangle>
+            )}
             {/* A corner dot, not a second line — a pending judgement must not make its row taller. */}
             {pending && (
               <span

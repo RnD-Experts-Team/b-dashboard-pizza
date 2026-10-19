@@ -28,8 +28,9 @@ export const screenUsageService = {
    * Proxied through POST /api/screen-project/{storeId}/usage/segments
    *
    * Plain fetch (not axios) so it can use `keepalive` while the page unloads —
-   * sendBeacon can't carry the Authorization header. Resolves when the
-   * segments are recorded or permanently rejected; rejects when worth retrying.
+   * sendBeacon can't carry the Authorization header. Resolves (with the HTTP
+   * status) when the segments are recorded or permanently rejected; rejects
+   * when worth retrying.
    */
   async reportSegments(
     storeId: string,
@@ -37,14 +38,14 @@ export const screenUsageService = {
     /** The browser's clock when the batch was built — the server corrects for a wrong client clock. */
     sentAt: string,
     keepalive = false,
-  ): Promise<void> {
+  ): Promise<number> {
     const res = await fetch(`/api/screen-project/${encodeURIComponent(storeId)}/usage/segments`, {
       method: "POST",
       headers: { ...buildHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ sent_at: sentAt, segments }),
       keepalive,
     });
-    if (res.ok || PERMANENT_REJECTIONS.has(res.status)) return;
+    if (res.ok || PERMANENT_REJECTIONS.has(res.status)) return res.status;
     throw new Error(`Usage report failed (${res.status})`);
   },
 

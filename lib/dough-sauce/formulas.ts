@@ -5,7 +5,7 @@
  * the contract, this file, and the Excel workbook people still check against.
  */
 
-export const WEIGHTS = { variance: 0.6, stickers: 0.2, quality: 0.2 } as const;
+export const WEIGHTS = { variance: 0.5, planning: 0.1, stickers: 0.2, quality: 0.2 } as const;
 
 /** 7 days × 3 ingredients — the most a week can hold. The score divides by the cells actually planned. */
 export const CELLS_PER_WEEK = 21;
@@ -49,30 +49,49 @@ export function isOk(v: number): boolean {
   return v >= 0;
 }
 
+/**
+ * The planning share is all or nothing: every day of the week has a confirmed plan (the report's Plan
+ * column reads 7/7). 6/7 earns nothing — a week is either fully planned or it is not.
+ */
+export function isPlanComplete(daysConfirmed: number, dayCount: number): boolean {
+  return dayCount > 0 && daysConfirmed >= dayCount;
+}
+
 export interface ScoreInput {
   cellsOk: number;
-  /** The cells that were actually planned and are due a count — the denominator. Not 21. */
+  /** The cells that were judged — planned and due a count, or unplanned and counted — the denominator. Not 21. */
   cellsScored: number;
+  /** See `isPlanComplete`. */
+  planComplete: boolean;
   stickers: "yes" | "no" | null | undefined;
   quality: "pass" | "fail" | null | undefined;
 }
 
 export interface ScoreBreakdown {
   variancePart: number;
+  planningPart: number;
   stickersPart: number;
   qualityPart: number;
   score: number;
 }
 
 /**
- * §6.4 — only the days that were actually planned are scored: with 2 planned days the variance part is
- * over 6 cells, not 21. No planned cell at all means no variance part (never a division by zero).
+ * §6.4 — only cells that can be judged are scored: planned cells, plus unplanned days that were counted
+ * (judged against that day's base). With 2 planned days and nothing else counted the variance part is
+ * over 6 cells, not 21. No scorable cell at all means no variance part (never a division by zero).
  */
-export function score({ cellsOk, cellsScored, stickers, quality }: ScoreInput): ScoreBreakdown {
+export function score({ cellsOk, cellsScored, planComplete, stickers, quality }: ScoreInput): ScoreBreakdown {
   const variancePart = cellsScored > 0 ? WEIGHTS.variance * (cellsOk / cellsScored) : 0;
+  const planningPart = planComplete ? WEIGHTS.planning : 0;
   const stickersPart = stickers === "yes" ? WEIGHTS.stickers : 0;
   const qualityPart = quality === "pass" ? WEIGHTS.quality : 0;
-  return { variancePart, stickersPart, qualityPart, score: variancePart + stickersPart + qualityPart };
+  return {
+    variancePart,
+    planningPart,
+    stickersPart,
+    qualityPart,
+    score: variancePart + planningPart + stickersPart + qualityPart,
+  };
 }
 
 /**
