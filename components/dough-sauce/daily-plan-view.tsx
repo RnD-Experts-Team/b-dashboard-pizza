@@ -33,6 +33,7 @@ import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import { useIngredients, useStoreDailyPlan } from "@/lib/hooks/use-dough-sauce";
 import { plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
+import { COUNT_DIVIDED_KEYS } from "@/lib/dough-sauce/ingredient-map";
 import { indexCounts } from "@/lib/dough-sauce/week-cells";
 import { addDaysIso, todayIso, tomorrowIso } from "@/lib/dough-sauce/dates";
 import {
@@ -274,11 +275,17 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
           : null;
       if (target == null) continue;
       const row = idx.get(`${prevDay}|${k}`);
+      // The 10 OZ dough is counted in single balls but its base is in units of 12 (the server's divisor), so
+      // the count is divided the same way before it is compared. The sauce is counted in containers already.
+      const divisor = COUNT_DIVIDED_KEYS.includes(k) && (baseByKey[k]?.divisor ?? 0) > 0 ? baseByKey[k]!.divisor : 1;
+      const counted = row ? round4(row.total_in_unit_1 / divisor) : null;
       rows.push({
         key: k,
         base: target,
-        counted: row ? row.total_in_unit_1 : null,
-        variance: row ? variance(row.total_in_unit_1, target) : null,
+        counted,
+        rawCounted: row ? row.total_in_unit_1 : null,
+        divisor,
+        variance: counted != null ? variance(counted, target) : null,
       });
     }
     return rows.length > 0 ? rows : null;
@@ -585,6 +592,9 @@ interface PrevRow {
   /** The target the count is judged against: this day's base, before the buffer. */
   base: number;
   counted: number | null;
+  /** The count as inventory recorded it, and what it was divided by to match the base (1 = not converted). */
+  rawCounted: number | null;
+  divisor: number;
   variance: number | null;
 }
 
@@ -779,7 +789,27 @@ function PlanTable({
                     </span>
                   ) : (
                     <>
-                      <p className="font-semibold">{fmtQty(prev.counted)}</p>
+                      {prev.divisor > 1 && prev.rawCounted != null ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            {/* Dotted underline = "hover for the original count", like the converted daily numbers. */}
+                            <p className="inline-block cursor-help font-semibold underline decoration-muted-foreground/40 decoration-dotted underline-offset-4">
+                              {fmtQty(prev.counted)}
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-64">
+                            {t("countedCellTitle", {
+                              raw: fmtQty(prev.rawCounted),
+                              divisor: fmtQty(prev.divisor),
+                              result: fmtQty(prev.counted),
+                              unit: base?.unit ?? "",
+                              base: fmtQty(prev.base),
+                            })}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <p className="font-semibold">{fmtQty(prev.counted)}</p>
+                      )}
                       <p
                         className={cn(
                           "text-[11px]",

@@ -22,6 +22,8 @@ import {
 const OK_TEXT = "text-muted-foreground";
 const SHORT_TEXT = "text-rose-600 dark:text-rose-400";
 const WARN_TEXT = "text-amber-600 dark:text-amber-400";
+/** Dotted underline = "hover for the original count" (a count converted to the base's unit). */
+const CONVERTED = "cursor-help underline decoration-muted-foreground/40 decoration-dotted underline-offset-4";
 /** The dashed edge the full report gives a day with no confirmed plan: checked against its base, scored like any other. */
 const UNCONFIRMED_EDGE = "rounded-md border border-dashed border-muted-foreground/40";
 
@@ -240,17 +242,25 @@ function Cell({ cell }: { cell: WeekCell }) {
       ? head
       : `${head}\n${t("beforeBuffer", { base: beforeBuffer(planned, bufferPct) })}`;
 
+  /** Why a count differs from what inventory recorded — only when it was divided to match the base. */
+  const converted = (raw: number | null, divisor: number, result: number | null) =>
+    raw != null && result != null && divisor > 1
+      ? `\n${t("convertedTitle", { raw: fmtQty(raw), divisor: fmtQty(divisor), result: fmtQty(result) })}`
+      : "";
+
   switch (cell.kind) {
     case "counted": {
       return (
         <div
           className={STACK}
-          title={t("countedTitle", {
-            counted: fmtQty(cell.counted),
-            on: day.monthDay(cell.countDate),
-            base: fmtQty(round2(cell.base)),
-            planned: fmtQty(round2(cell.planned)),
-          })}
+          title={
+            t("countedTitle", {
+              counted: fmtQty(cell.counted),
+              on: day.monthDay(cell.countDate),
+              base: fmtQty(round2(cell.base)),
+              planned: fmtQty(round2(cell.planned)),
+            }) + converted(cell.rawCounted, cell.divisor, cell.counted)
+          }
         >
           <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
             {cell.ok ? (
@@ -258,8 +268,8 @@ function Cell({ cell }: { cell: WeekCell }) {
             ) : (
               <X className="h-3.5 w-3.5" strokeWidth={2.5} />
             )}
-            {fmtGlanceQty(cell.counted)}
-            {cell.edited && <Pencil className="h-2.5 w-2.5 opacity-70" aria-label={t("legendEdited")} />}
+            <span className={cn(cell.divisor > 1 && CONVERTED)}>{fmtGlanceQty(cell.counted)}</span>
+            {cell.edited &&<Pencil className="h-2.5 w-2.5 opacity-70" aria-label={t("legendEdited")} />}
             {cell.duplicates > 0 && (
               <span className="text-[10px] font-normal text-muted-foreground" title={t("duplicates", { n: cell.duplicates })}>
                 {"×"}
@@ -300,11 +310,13 @@ function Cell({ cell }: { cell: WeekCell }) {
         return (
           <div
             className={cn(STACK, UNCONFIRMED_EDGE, "mx-auto w-fit px-2 py-1.5")}
-            title={t("unplannedTitle", {
-              counted: fmtQty(cell.counted),
-              on: day.monthDay(cell.countDate),
-              base: fmtQty(round2(cell.base)),
-            })}
+            title={
+              t("unplannedTitle", {
+                counted: fmtQty(cell.counted),
+                on: day.monthDay(cell.countDate),
+                base: fmtQty(round2(cell.base)),
+              }) + converted(cell.rawCounted, cell.divisor, cell.counted)
+            }
           >
             <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
               {cell.ok ? (
@@ -312,7 +324,7 @@ function Cell({ cell }: { cell: WeekCell }) {
               ) : (
                 <X className="h-3.5 w-3.5" strokeWidth={2.5} />
               )}
-              {fmtGlanceQty(cell.counted)}
+              <span className={cn(cell.divisor > 1 && CONVERTED)}>{fmtGlanceQty(cell.counted)}</span>
             </span>
             <span className="text-[11px] text-muted-foreground">{t("notConfirmed")}</span>
             <DiffLine base={fmtQty(round2(cell.base))} variance={cell.variance} ok={cell.ok} />
@@ -320,8 +332,8 @@ function Cell({ cell }: { cell: WeekCell }) {
         );
       }
       return cell.counted != null ? (
-        <div className={STACK} title={t("noPlan")}>
-          <span className="text-sm font-semibold">{fmtGlanceQty(cell.counted)}</span>
+        <div className={STACK} title={t("noPlan") + converted(cell.rawCounted, cell.divisor, cell.counted)}>
+          <span className={cn("text-sm font-semibold", cell.divisor > 1 && CONVERTED)}>{fmtGlanceQty(cell.counted)}</span>
           <span className="text-[11px] text-muted-foreground">{t("noPlanShort")}</span>
         </div>
       ) : (

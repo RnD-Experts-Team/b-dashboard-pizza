@@ -11,20 +11,38 @@ const FALLBACK_REFS: Record<IngredientKey, string> = {
   sauce: "00002",
 };
 
+/**
+ * Ingredients whose inventory COUNT is in raw portions while their base is in units of `divisor` (the 10 OZ
+ * dough: counted in single balls, planned in units of 12). The count is divided by the divisor before it is
+ * compared with a base. The sauce's count is already in containers, so it is not here.
+ */
+export const COUNT_DIVIDED_KEYS: IngredientKey[] = ["dough_10oz"];
+/** Used only when the ingredients list carries no divisor. */
+const FALLBACK_COUNT_DIVISOR = 12;
+
+/** Raw count → the unit the base is in, rounded like the plan payload (4 decimals). */
+export const toBaseUnit = (raw: number, divisor: number) =>
+  divisor > 1 ? Math.round((raw / divisor) * 10_000) / 10_000 : raw;
+
 export interface IngredientMap {
   /** ingredient key → ultimatrix id */
   refOf: Record<IngredientKey, string>;
   /** ultimatrix id → ingredient key */
   keyOf: Record<string, IngredientKey>;
   ultimatrixIds: string[];
+  /** What a count of this ingredient is divided by before it meets a base. Absent = compared as is. */
+  countDivisor: Partial<Record<IngredientKey, number>>;
 }
 
 export function buildIngredientMap(ingredients: Ingredient[] | null | undefined): IngredientMap {
   const refOf = { ...FALLBACK_REFS };
+  const countDivisor: Partial<Record<IngredientKey, number>> = {};
+  for (const key of COUNT_DIVIDED_KEYS) countDivisor[key] = FALLBACK_COUNT_DIVISOR;
   for (const ing of ingredients ?? []) {
     if (ing.inventory_ref && ing.key in refOf) refOf[ing.key] = ing.inventory_ref;
+    if (COUNT_DIVIDED_KEYS.includes(ing.key) && ing.divisor && ing.divisor > 0) countDivisor[ing.key] = ing.divisor;
   }
   const keyOf: Record<string, IngredientKey> = {};
   for (const [key, ref] of Object.entries(refOf) as [IngredientKey, string][]) keyOf[ref] = key;
-  return { refOf, keyOf, ultimatrixIds: Object.values(refOf) };
+  return { refOf, keyOf, ultimatrixIds: Object.values(refOf), countDivisor };
 }

@@ -1,6 +1,6 @@
 import type { CountRow, IngredientKey, StoredPlanRow } from "@/types/dough-sauce.types";
 import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
-import type { IngredientMap } from "./ingredient-map";
+import { toBaseUnit, type IngredientMap } from "./ingredient-map";
 import { isOk, targetQty, variance } from "./formulas";
 import { addDaysIso, daysBetween } from "./dates";
 
@@ -24,7 +24,11 @@ export type WeekCell =
       bufferPct: number;
       /** The target: the plan before its buffer. `variance` and `ok` are measured from this. */
       base: number;
+      /** The count in the base's unit (the raw count ÷ `divisor`). `variance` and `ok` are measured with it. */
       counted: number;
+      /** The count as inventory recorded it, and what it was divided by (1 = not converted). */
+      rawCounted: number;
+      divisor: number;
       variance: number;
       ok: boolean;
       edited: boolean;
@@ -44,6 +48,9 @@ export type WeekCell =
       key: IngredientKey;
       countDate: string;
       counted: number | null;
+      /** As recorded by inventory, and the divisor `counted` was converted with (1 = not converted). */
+      rawCounted: number | null;
+      divisor: number;
       base: number | null;
       variance: number | null;
       ok: boolean | null;
@@ -113,6 +120,9 @@ export function unplannedCountedDays(
  * The count is judged against the plan's BASE (before its buffer), derived from the stored
  * `planned_qty` and `buffer_pct` — the buffer is a production margin, not the inventory target.
  *
+ * `countDivisor` converts a count that inventory records in raw portions (the 10 OZ dough, in single balls)
+ * into the unit the base is in (units of 12) BEFORE it is compared — otherwise a raw 10 would "beat" a base of 5.7.
+ *
  * `bases` (optional, keyed `${date}|${ingredientKey}`) carries the base of days that have NO plan, so a
  * count taken for such a day is still judged: it shows ✓/✕ and enters `cellsOk` / `cellsScored` like a
  * planned cell. Until the base is supplied the cell stays "–" and unscored.
@@ -123,7 +133,8 @@ export function buildWeekCells(
   plans: StoredPlanRow[],
   counts: Map<string, CountRow> | null,
   today: string,
-  bases?: Map<string, number>
+  bases?: Map<string, number>,
+  countDivisor?: IngredientMap["countDivisor"]
 ): WeekCells {
   const days = daysBetween(weekStart, weekEnd);
   const planByCell = new Map<string, StoredPlanRow>();
@@ -157,7 +168,9 @@ export function buildWeekCells(
       const count = counts.get(`${countDate}|${key}`);
       if (!plan) {
         noPlanCount++;
-        const counted = count ? count.total_in_unit_1 : null;
+        const divisor = countDivisor?.[key] ?? 1;
+        const rawCounted = count ? count.total_in_unit_1 : null;
+        const counted = rawCounted != null ? toBaseUnit(rawCounted, divisor) : null;
         const base = bases?.get(id) ?? null;
         const v = counted != null && base != null ? variance(counted, base) : null;
         const ok = v != null ? isOk(v) : null;
@@ -166,7 +179,7 @@ export function buildWeekCells(
           cellsScored++;
           if (ok) cellsOk++;
         }
-        cells.push({ kind: "no-plan", date, key, countDate, counted, base, variance: v, ok });
+        cells.push({ kind: "no-plan", date, key, countDate, counted, rawCounted, divisor, base, variance: v, ok });
         continue;
       }
       if (!count) {
@@ -181,7 +194,9 @@ export function buildWeekCells(
         continue;
       }
       const base = targetQty(plan.planned_qty, plan.buffer_pct);
-      const v = variance(count.total_in_unit_1, base);
+      const divisor = countDivisor?.[key] ?? 1;
+      const counted = toBaseUnit(count.total_in_unit_1, divisor);
+      const v = variance(counted, base);
       const ok = isOk(v);
       cellsScored++;
       if (ok) cellsOk++;
@@ -193,7 +208,9 @@ export function buildWeekCells(
         planned: plan.planned_qty,
         bufferPct: plan.buffer_pct,
         base,
-        counted: count.total_in_unit_1,
+        counted,
+        rawCounted: count.total_in_unit_1,
+        divisor,
         variance: v,
         ok,
         edited: count.is_edited,
