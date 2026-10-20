@@ -69,6 +69,7 @@ import type {
   ApiAllocationRemoveResult,
   AllocationRemoveResult,
 } from "@/types/cleaning.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Error handling                                                            */
@@ -324,7 +325,7 @@ function toCleaningError(err: unknown): CleaningError {
     }
     if (status && status >= 500) {
       return new CleaningError(
-        serverMessage || "The server encountered an error. Please try again.",
+        status === 503 ? BUSY_MESSAGE : serverMessage || "The server encountered an error. Please try again.",
         "SERVER_ERROR"
       );
     }

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 export type ExportErrorCode =
   | "NOT_AUTHENTICATED"
@@ -71,7 +72,7 @@ function handleAxiosError(err: unknown): never {
 
     if (status && status >= 500) {
       throw new DataExportError(
-        "Server error. Please try again later.",
+        status === 503 ? BUSY_MESSAGE : "Server error. Please try again later.",
         "SERVER_ERROR"
       );
     }

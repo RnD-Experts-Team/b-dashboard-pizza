@@ -10,6 +10,7 @@ import type {
   ApiEmployee,
   Employee,
 } from "@/types/due-key.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 export type DueKeysErrorCode =
   | "NOT_AUTHENTICATED"
@@ -195,7 +196,7 @@ function handleAxiosError(err: unknown): never {
     }
 
     if (status && status >= 500) {
-      throw new DueKeysError("Server error. Please try again later.", "SERVER_ERROR");
+      throw new DueKeysError(status === 503 ? BUSY_MESSAGE : "Server error. Please try again later.", "SERVER_ERROR");
     }
 
     throw new DueKeysError(message, "UNKNOWN");

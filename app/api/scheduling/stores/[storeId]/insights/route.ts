@@ -44,6 +44,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STORE_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
 async function fetchJson<T>(
+  request: NextRequest,
   url: string,
   authorization: string,
   signal: AbortSignal,
@@ -89,11 +90,13 @@ export async function GET(
 
   const [sales, staffing] = await Promise.all([
     fetchJson<RawSalesInsights>(
+      request,
       `${DATA_API_URL}/reports/scheduling-insights/${id}?${query}`,
       authorization,
       request.signal,
     ),
     fetchJson<{ data: RawStaffingInsights }>(
+      request,
       `${OPERATIONS_API_URL}/v1/stores/${id}/schedule/insights?${query}`,
       authorization,
       request.signal,

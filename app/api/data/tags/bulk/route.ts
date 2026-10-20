@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuthorization, getAuthorizationHeader } from "@/app/api/_lib/auth";
+import { requireAuthorization, getAuthorizationHeader, isRetryableStatus } from "@/app/api/_lib/auth";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Configuration                                                           */
@@ -71,7 +71,7 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetchWithTimeout(url, init, timeoutMs);
-      if (res.ok || (res.status >= 400 && res.status < 500)) return res;
+      if (!isRetryableStatus(res.status)) return res;
       lastError = new Error(`Upstream ${res.status}`);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));

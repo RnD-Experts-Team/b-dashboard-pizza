@@ -16,6 +16,7 @@ import type {
   CountsResponse,
   IngredientKey,
 } from "@/types/dough-sauce.types";
+import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Errors                                                                    */
@@ -113,7 +114,7 @@ function toError(err: unknown, system: DoughSauceSystem): DoughSauceError {
     if (!err.response || err.code === "ERR_NETWORK")
       return new DoughSauceError("Unable to connect.", "NETWORK_ERROR", system);
     if (status && status >= 500)
-      return new DoughSauceError(message || "The server encountered an error.", "SERVER_ERROR", system, status);
+      return new DoughSauceError(status === 503 ? BUSY_MESSAGE : message || "The server encountered an error.", "SERVER_ERROR", system, status);
     return new DoughSauceError(message || "Something went wrong.", "UNKNOWN", system, status);
   }
   return new DoughSauceError("An unexpected error occurred.", "UNKNOWN", system);

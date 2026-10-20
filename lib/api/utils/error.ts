@@ -1,5 +1,22 @@
 import axios from "axios";
 
+/**
+ * Shown for 429 (rate limited) and 503 (a backend or its auth server is
+ * overloaded). Neither means the session is bad, so neither logs anyone out.
+ */
+export const BUSY_MESSAGE = "The server is busy. Please try again in a moment.";
+
+export function isBusyStatus(status: number | null | undefined): boolean {
+  return status === 429 || status === 503;
+}
+
+/** Seconds from a `Retry-After` header (seconds form only), or null. */
+export function retryAfterSeconds(err: unknown): number | null {
+  if (!axios.isAxiosError(err)) return null;
+  const seconds = Number(err.response?.headers?.["retry-after"]);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
 export interface ParsedApiError {
   message: string;
   details: string[];

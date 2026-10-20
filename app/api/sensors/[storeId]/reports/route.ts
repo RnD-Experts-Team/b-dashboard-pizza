@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requireAuthorization,
   getAuthorizationHeader,
+  isRetryableStatus,
 } from "@/app/api/_lib/auth";
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -60,7 +61,7 @@ async function fetchWithRetry(url: string, init: RequestInit, retries = MAX_RETR
     try {
       const res = await fetch(url, { ...init, signal: controller.signal });
       clearTimeout(timer);
-      if (res.status >= 500 && attempt < retries) {
+      if (isRetryableStatus(res.status) && attempt < retries) {
         await new Promise((r) => setTimeout(r, RETRY_BASE_MS * 2 ** attempt));
         continue;
       }
