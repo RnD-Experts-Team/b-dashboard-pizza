@@ -601,6 +601,18 @@ function ReportHead({
   );
 }
 
+/** Why the number in a cell's tooltip isn't what inventory recorded — only when it was divided to match the base. */
+function convertedNote(
+  t: ReturnType<typeof useTranslations>,
+  raw: number | null,
+  divisor: number,
+  result: number | null
+): string {
+  return raw != null && result != null && divisor > 1
+    ? `\n${t("convertedTitle", { raw: fmtQty(raw), divisor: fmtQty(divisor), result: fmtQty(result) })}`
+    : "";
+}
+
 /**
  * One day × ingredient: did the count meet the BASE (the plan before its buffer)? Anything uncountable
  * is N/A, never 0 (rule 2). A day with no plan is judged the same way once its base is known and counts
@@ -627,12 +639,14 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
             edge,
             cell.ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-rose-500/20 text-rose-700 dark:text-rose-400"
           )}
-          title={t("countedTitle", {
-            counted: fmtQty(cell.counted),
-            on: day.monthDay(cell.countDate),
-            base: fmtQty(round2(cell.base)),
-            planned: fmtQty(round2(cell.planned)),
-          })}
+          title={
+            t("countedTitle", {
+              counted: fmtQty(cell.counted),
+              on: day.monthDay(cell.countDate),
+              base: fmtQty(round2(cell.base)),
+              planned: fmtQty(round2(cell.planned)),
+            }) + convertedNote(t, cell.rawCounted, cell.divisor, cell.counted)
+          }
         >
           {cell.ok ? (
             <Check role="img" aria-label={t("legendOk")} className="mx-auto block h-3.5 w-3.5" strokeWidth={3} />
@@ -656,11 +670,13 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
               ? "bg-emerald-500/15 text-emerald-700 outline-emerald-500/40 dark:text-emerald-400"
               : "bg-rose-500/20 text-rose-700 outline-rose-500/40 dark:text-rose-400"
           )}
-          title={t("unplannedTitle", {
-            counted: fmtQty(cell.counted),
-            on: day.monthDay(cell.countDate),
-            base: fmtQty(round2(cell.base)),
-          })}
+          title={
+            t("unplannedTitle", {
+              counted: fmtQty(cell.counted),
+              on: day.monthDay(cell.countDate),
+              base: fmtQty(round2(cell.base)),
+            }) + convertedNote(t, cell.rawCounted, cell.divisor, cell.counted)
+          }
         >
           {cell.ok ? (
             <Check role="img" aria-label={t("legendOk")} className="mx-auto block h-3.5 w-3.5" strokeWidth={3} />

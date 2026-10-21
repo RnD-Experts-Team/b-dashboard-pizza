@@ -644,7 +644,8 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         s.plans,
         storeCounts,
         today,
-        storeBases
+        storeBases,
+        map.countDivisor
       );
       // Counted days with no plan are scored too, but only once their base is known: until every one of
       // them has ended its lookup the variance part is unknown, never a score that is about to change.
@@ -672,7 +673,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         }
         // A day that couldn't be checked would leave a score that is wrong, not just late: no data instead.
         if (days.some((d) => lookup(s.store, d) === "failed")) return null;
-        const prevCells = buildWeekCells(p.week.week_start, p.week.week_end, row.plans, storeCounts, today, storeBases);
+        const prevCells = buildWeekCells(p.week.week_start, p.week.week_end, row.plans, storeCounts, today, storeBases, map.countDivisor);
         // A week with no plan, nothing counted and no judgement has no score to compare
         // against — it's "no data", not 0% (rule 2), or it would inflate progress.
         const judged = row.judgement?.stickers_compliance != null || row.judgement?.dough_quality != null;
@@ -718,7 +719,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     const ranked = withRank.filter((r) => r.rank > 0).sort((a, b) => a.rank - b.rank);
     const rest = withRank.filter((r) => r.rank === 0);
     return [...ranked, ...rest];
-  }, [weekly.data, previous, previousLoaded, counts, bases]);
+  }, [weekly.data, previous, previousLoaded, counts, bases, map.countDivisor]);
 
   const countsSummary = useMemo(() => {
     // Every store's score depends on its counts: a day nobody planned still scores once it was counted.
