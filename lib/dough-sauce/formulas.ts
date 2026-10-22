@@ -5,7 +5,9 @@
  * the contract, this file, and the Excel workbook people still check against.
  */
 
-export const WEIGHTS = { variance: 0.5, planning: 0.1, stickers: 0.2, quality: 0.2 } as const;
+import type { IngredientKey } from "@/types/dough-sauce.types";
+
+export const WEIGHTS ={ variance: 0.5, planning: 0.1, stickers: 0.2, quality: 0.2 } as const;
 
 /** 7 days × 3 ingredients — the most a week can hold. The score divides by the cells actually planned. */
 export const CELLS_PER_WEEK = 21;
@@ -48,6 +50,21 @@ export function variance(counted: number, target: number): number {
 export function isOk(v: number): boolean {
   return v >= 0;
 }
+
+/**
+ * How far a count is from its base, as people read it: in plain steps, always rounded DOWN — whole numbers for the
+ * sauce and the 18 OZ, halves for the 10 OZ (2.64 → 2.5, 0.8 → 0.5, 0.6 of a container → 0). Used by every screen
+ * that shows "short by / over by", so they agree.
+ */
+export const GAP_STEP: Record<IngredientKey, number> = { sauce: 1, dough_18oz: 1, dough_10oz: 0.5 };
+export const gapOf = (key: IngredientKey, v: number): number =>
+  Math.floor(Math.abs(v) / GAP_STEP[key] + 1e-9) * GAP_STEP[key];
+
+/**
+ * A count passes when it meets the base OR falls short by less than one step (its gap rounds to 0). The cell, the
+ * "on target" tally and the score all use this call, so what is drawn is what is scored.
+ */
+export const isOkWithinStep = (key: IngredientKey, v: number): boolean => isOk(v) || gapOf(key, v) === 0;
 
 /**
  * The planning share is all or nothing: every day of the week has a confirmed plan (the report's Plan
