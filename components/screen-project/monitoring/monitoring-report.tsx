@@ -21,6 +21,8 @@ import { MetricDefinitions, MetricNote } from "./metric-definitions";
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 /** Below this, a manager's share of time is noise, not a finding. */
 const MIN_ON_SCREEN_FOR_RANKING = 30 * 60;
+/** Matches the bars the top-screens chart shows (its MAX_ROWS), so the two cards line up. */
+const STORES_PAGE_SIZE = 8;
 
 /**
  * The monitoring report, laid out like the maintenance analytics page: the
@@ -237,7 +239,9 @@ export function MonitoringReport({
 
 function StoresCard({ report }: { report: UsageReport }) {
   const t = useTranslations("screenMonitoring");
-  const rows = [...report.stores].sort((a, b) => b.on_screen - a.on_screen);
+  const rows = useMemo(() => [...report.stores].sort((a, b) => b.on_screen - a.on_screen), [report.stores]);
+  // Same page size as the top-screens chart beside it, so both show the same number of rows.
+  const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
   return (
     <AnalyticsCard icon={Store} title={t("sections.stores")} count={rows.length} flush>
       <div className="overflow-x-auto">
@@ -253,7 +257,7 @@ function StoresCard({ report }: { report: UsageReport }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {rows.map((s) => (
+            {paged.rows.map((s) => (
               <tr key={s.store} className="hover:bg-muted/30">
                 <td className={cn(TD, "font-medium")}>{s.store}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{s.managers}</td>
@@ -266,6 +270,7 @@ function StoresCard({ report }: { report: UsageReport }) {
           </tbody>
         </table>
       </div>
+      <Pager page={paged.page} pages={paged.pages} from={paged.from} to={paged.to} total={paged.total} onPage={paged.setPage} />
     </AnalyticsCard>
   );
 }
