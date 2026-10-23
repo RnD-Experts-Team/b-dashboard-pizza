@@ -1,5 +1,12 @@
 import axios from "axios";
 import type { ScheduleMode, SchedulingInsights } from "@/types/scheduling.types";
+import type {
+  EmployeeSkillRating,
+  EmployeeSkills,
+  Skill,
+  SkillDraft,
+  StoreSkillsOverview,
+} from "@/types/skills.types";
 
 /**
  * Client for the scheduling proxy at `/api/scheduling/...`.
@@ -557,6 +564,89 @@ export const schedulingService = {
     );
   },
 
+  /* ── Employee skills ─────────────────────────────────────────────────────── */
+
+  /** The shared list. Any signed-in user may read it; only the head edits it. */
+  async getSkills(signal?: AbortSignal): Promise<Skill[]> {
+    const { data } = await axios.get<DataEnvelope<Skill[]>>(
+      "/api/scheduling/skills",
+      { headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
+    );
+    return data.data;
+  },
+
+  async createSkill(payload: SkillDraft): Promise<Skill> {
+    const { data } = await axios.post<DataEnvelope<Skill>>(
+      "/api/scheduling/skills",
+      payload,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  async updateSkill(skillId: string, payload: SkillDraft): Promise<Skill> {
+    const { data } = await axios.post<DataEnvelope<Skill>>(
+      `/api/scheduling/skills/${encodeURIComponent(skillId)}`,
+      payload,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  /** Removes every employee's rating on it too. */
+  async deleteSkill(skillId: string) {
+    await axios.delete(`/api/scheduling/skills/${encodeURIComponent(skillId)}`, {
+      headers: buildHeaders(),
+      timeout: TIMEOUT_MS,
+    });
+  },
+
+  /**
+   * Every skill with this employee's rating. The rating is the employee's,
+   * not the store's: any of their stores reads and writes the same one.
+   */
+  async getEmployeeSkills(
+    storeId: string,
+    employeeId: string,
+    signal?: AbortSignal,
+  ): Promise<EmployeeSkills> {
+    const { data } = await axios.get<DataEnvelope<EmployeeSkills>>(
+      `${base(storeId)}/employees/${encodeURIComponent(employeeId)}/skills`,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
+    );
+    return data.data;
+  },
+
+  /** Create or replace. A minor on a restricted skill is saved, with `alert`. */
+  async rateEmployeeSkill(
+    storeId: string,
+    employeeId: string,
+    skillId: string,
+    payload: { rating: number; notes: string | null },
+  ): Promise<EmployeeSkillRating> {
+    const { data } = await axios.post<DataEnvelope<EmployeeSkillRating>>(
+      `${base(storeId)}/employees/${encodeURIComponent(employeeId)}/skills/${encodeURIComponent(skillId)}`,
+      payload,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+    return data.data;
+  },
+
+  async deleteEmployeeSkill(storeId: string, employeeId: string, skillId: string) {
+    await axios.delete(
+      `${base(storeId)}/employees/${encodeURIComponent(employeeId)}/skills/${encodeURIComponent(skillId)}`,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS },
+    );
+  },
+
+  async getSkillsOverview(storeId: string, signal?: AbortSignal): Promise<StoreSkillsOverview> {
+    const { data } = await axios.get<DataEnvelope<StoreSkillsOverview>>(
+      `${base(storeId)}/skills/overview`,
+      { headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
+    );
+    return data.data;
+  },
+
   /* ── Publishing ──────────────────────────────────────────────────────────── */
 
   /**
@@ -635,8 +725,10 @@ export const schedulingService = {
  * from the hooks' error paths so an expired token still ends the session
  * instead of surfacing as a confusing scheduling error.
  */
+const HTTP_UNAUTHORIZED = 401;
+
 export function handleUnauthorized(status: number | null): boolean {
-  if (status !== 401 || typeof window === "undefined") return false;
+  if (status !== HTTP_UNAUTHORIZED || typeof window === "undefined") return false;
   localStorage.removeItem("auth-token");
   localStorage.removeItem("auth-user");
   if (!window.location.pathname.includes("/auth")) {
