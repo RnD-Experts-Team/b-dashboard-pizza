@@ -3097,7 +3097,7 @@
       "hiddenDays": "{n, plural, one {# day removed} other {# days removed}}",
       "showAllDays": "Show all days",
       "legendCell": "Day cells show whether the count met the base (the plan before its buffer):",
-      "legendOk": "on or over base",
+      "legendOk": "on or over base (or short by less than 1 — less than ½ for the 10 OZ)",
       "legendShort": "short",
       "legendMissing": "past day never counted",
       "legendNa": "no plan, no count yet, or counts unavailable",
@@ -3159,7 +3159,7 @@
       "saveNote": "Save note",
       "cells": {
         "ingredient": "Ingredient",
-        "legendOk": "On target (counted ≥ base)",
+        "legendOk": "On target (counted ≥ base, or short by less than 1 — less than ½ for the 10 OZ)",
         "legendShort": "Short",
         "legendMissing": "Never counted",
         "legendEdited": "Count edited after submission",

@@ -32,7 +32,7 @@ import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import { useIngredients, useStoreDailyPlan } from "@/lib/hooks/use-dough-sauce";
-import { plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
+import { gapOf, plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
 import { COUNT_DIVIDED_KEYS } from "@/lib/dough-sauce/ingredient-map";
 import { indexCounts } from "@/lib/dough-sauce/week-cells";
 import { addDaysIso, todayIso, tomorrowIso } from "@/lib/dough-sauce/dates";
@@ -49,6 +49,7 @@ import {
   PENDING_PILL,
   StepperInput,
   exportNodeAsPng,
+  fmtGap,
   fmtQty,
   personName,
   round2,
@@ -769,8 +770,9 @@ function PlanTable({
           const baseValue = frozen ? line?.base_qty ?? null : base?.base ?? null;
           const bufferShown = frozen ? line?.buffer_pct ?? null : bufferError ? null : Number(buffer);
           const prev = prevRows?.find((r) => r.key === k);
-          const isShort = prev?.variance != null && prev.variance < 0;
-          const isOver = prev?.variance != null && prev.variance > 0;
+          // Only a gap that survives the rounding counts: "short by 0" is a pass, not a shortage.
+          const isShort = prev?.variance != null && prev.variance < 0 && gapOf(k, prev.variance) > 0;
+          const isOver = prev?.variance != null && prev.variance > 0 && gapOf(k, prev.variance) > 0;
           const makeUp = makeUpByKey[k] ?? 0;
 
           return (
@@ -818,9 +820,9 @@ function PlanTable({
                       >
                         {/* Both directions show, as in the weekly grid: short is the one to act on, over is for information. */}
                         {isShort
-                          ? t("prevShort", { by: fmtQty(Math.abs(prev.variance!)) })
+                          ? t("prevShort", { by: fmtGap(k, Math.abs(prev.variance!)) })
                           : isOver
-                            ? t("prevOver", { by: fmtQty(prev.variance!) })
+                            ? t("prevOver", { by: fmtGap(k, prev.variance!) })
                             : t("prevMet")}
                       </p>
                     </>

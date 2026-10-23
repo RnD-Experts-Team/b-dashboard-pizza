@@ -31,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import type { DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import type { Ingredient, IngredientKey, PersonRef, Week } from "@/types/dough-sauce.types";
+import { gapOf } from "@/lib/dough-sauce/formulas";
 
 /* ── Number formatting ─────────────────────────────────────────────────── */
 
@@ -63,6 +64,15 @@ export const fmtSignedGlanceQty = (n: number) =>
   n !== 0 && Math.abs(n) < 0.05
     ? signedQtyFmt.format(n)
     : (Math.abs(n) >= 100 ? glanceWholeSigned : glanceOneSigned).format(n);
+
+/** "Short by / Over by" in plain steps, rounded down (see `gapOf`): 1.55 sauce → 1, 2.64 of the 10 OZ → 2.5. */
+export const fmtGap = (key: IngredientKey, v: number) => fmtQty(gapOf(key, v));
+const signedGap = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, signDisplay: "exceptZero" });
+/** The same, signed for a cell: -64, +29, 0 (a gap that rounds to 0 is no gap). */
+export const fmtSignedGap = (key: IngredientKey, v: number) => {
+  const g = gapOf(key, v);
+  return signedGap.format(v < 0 ? -g : g);
+};
 
 /** Planned quantities are sent at 4-decimal precision, matching the contract's examples. */
 export const round4 = (n: number) => Math.round(n * 10_000) / 10_000;

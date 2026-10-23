@@ -6,12 +6,12 @@ import { cn } from "@/lib/utils";
 import type { WeekCell, WeekCells } from "@/lib/dough-sauce/week-cells";
 import { baseQty } from "@/lib/dough-sauce/formulas";
 import { todayIso } from "@/lib/dough-sauce/dates";
-import type { Ingredient } from "@/types/dough-sauce.types";
+import type { Ingredient, IngredientKey } from "@/types/dough-sauce.types";
 import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
 import {
   fmtGlanceQty,
   fmtQty,
-  fmtSignedGlanceQty,
+  fmtSignedGap,
   round2,
   useDayFormatter,
   useIngredientLabel,
@@ -202,12 +202,22 @@ function beforeBuffer(planned: number, bufferPct: number): string {
 }
 
 /** The number a count is judged against, and — once counted — how far the count is from it (+ over, − short). */
-function DiffLine({ base, variance, ok }: { base: string; variance?: number; ok?: boolean }) {
+function DiffLine({
+  ingredient,
+  base,
+  variance,
+  ok,
+}: {
+  ingredient: IngredientKey;
+  base: string;
+  variance?: number;
+  ok?: boolean;
+}) {
   return (
     <span className="whitespace-nowrap text-[11px] font-normal text-muted-foreground">
       {base}
       {variance != null && (
-        <span className={cn("ms-1.5", !ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGlanceQty(variance)}</span>
+        <span className={cn("ms-1.5", !ok && cn("font-medium", SHORT_TEXT))}>{fmtSignedGap(ingredient, variance)}</span>
       )}
     </span>
   );
@@ -218,18 +228,20 @@ function DiffLine({ base, variance, ok }: { base: string; variance?: number; ok?
  * Nothing when there is no stored plan.
  */
 function BaseLine({
+  ingredient,
   planned,
   bufferPct,
   variance,
   ok,
 }: {
+  ingredient: IngredientKey;
   planned: number;
   bufferPct: number | null;
   variance?: number;
   ok?: boolean;
 }) {
   if (bufferPct == null) return null;
-  return <DiffLine base={beforeBuffer(planned, bufferPct)} variance={variance} ok={ok} />;
+  return <DiffLine ingredient={ingredient} base={beforeBuffer(planned, bufferPct)} variance={variance} ok={ok} />;
 }
 
 function Cell({ cell }: { cell: WeekCell }) {
@@ -278,7 +290,7 @@ function Cell({ cell }: { cell: WeekCell }) {
             )}
           </span>
           <span className="text-[11px] text-muted-foreground">{t("plan", { n: fmtQty(round2(cell.planned)) })}</span>
-          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} variance={cell.variance} ok={cell.ok} />
+          <BaseLine ingredient={cell.key} planned={cell.planned} bufferPct={cell.bufferPct} variance={cell.variance} ok={cell.ok} />
         </div>
       );
     }
@@ -290,7 +302,7 @@ function Cell({ cell }: { cell: WeekCell }) {
             {t("notCounted")}
           </span>
           <span className="text-[11px] text-muted-foreground">{t("plan", { n: fmtQty(round2(cell.planned)) })}</span>
-          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
+          <BaseLine ingredient={cell.key} planned={cell.planned} bufferPct={cell.bufferPct} />
         </div>
       );
     case "awaiting":
@@ -300,7 +312,7 @@ function Cell({ cell }: { cell: WeekCell }) {
             <Clock className="h-3 w-3" />
             {t("plan", { n: fmtQty(round2(cell.planned)) })}
           </span>
-          <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
+          <BaseLine ingredient={cell.key} planned={cell.planned} bufferPct={cell.bufferPct} />
         </div>
       );
     case "no-plan":
@@ -327,7 +339,7 @@ function Cell({ cell }: { cell: WeekCell }) {
               <span className={cn(cell.divisor > 1 && CONVERTED)}>{fmtGlanceQty(cell.counted)}</span>
             </span>
             <span className="text-[11px] text-muted-foreground">{t("notConfirmed")}</span>
-            <DiffLine base={fmtQty(round2(cell.base))} variance={cell.variance} ok={cell.ok} />
+            <DiffLine ingredient={cell.key} base={fmtQty(round2(cell.base))} variance={cell.variance} ok={cell.ok} />
           </div>
         );
       }
@@ -349,7 +361,7 @@ function Cell({ cell }: { cell: WeekCell }) {
           {cell.planned != null && (
             <>
               <span className="text-[11px] text-muted-foreground/70">{t("plan", { n: fmtQty(round2(cell.planned)) })}</span>
-              <BaseLine planned={cell.planned} bufferPct={cell.bufferPct} />
+              <BaseLine ingredient={cell.key} planned={cell.planned} bufferPct={cell.bufferPct} />
             </>
           )}
         </div>
