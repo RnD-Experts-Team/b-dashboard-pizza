@@ -48,8 +48,13 @@ export interface EmployeeSkills {
 }
 
 export interface SkillsOverviewEmployee extends SkillsEmployee {
+  /** Their stores among the ones asked for: where they may be rated from. */
+  store_numbers: string[];
   /** Keyed by skill id; unrated skills are absent. */
   ratings: Record<string, { rating: number; notes: string | null }>;
+  /** Skills they are under the minimum age for, rated or not. */
+  restricted_skill_ids: string[];
+  /** Restricted AND rated. */
   alert_skill_ids: string[];
 }
 

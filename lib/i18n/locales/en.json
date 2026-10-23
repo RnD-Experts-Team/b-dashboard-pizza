@@ -4929,11 +4929,11 @@
   },
   "skills": {
     "title": "Skills",
-    "description": "How each employee rates on the store's skills, and the shared skills list.",
+    "description": "How employees rate on each skill across your stores, and the shared skills list.",
     "overviewTab": "Store overview",
     "listTab": "Skills list",
-    "selectStore": "Select a store to see its employees' skills.",
-    "noOverviewAccess": "You can't view employee skills for this store.",
+    "selectStore": "Pick at least one store to see its employees' skills.",
+    "noOverviewAccess": "You can't view employee skills at any of your stores.",
     "noEmployees": "No active employees at this store.",
     "employee": "Employee",
     "loadFailed": "Couldn't load skills",
@@ -4966,6 +4966,42 @@
     "skillSaved": "Skill saved.",
     "skillDeleted": "Skill deleted.",
     "deleteTitle": "Delete {skill}?",
-    "deleteDescription": "Every employee's rating on this skill is removed too. This can't be undone."
+    "deleteDescription": "Every employee's rating on this skill is removed too. This can't be undone.",
+    "searchPlaceholder": "Search employees...",
+    "status": {
+      "all": "All employees",
+      "alerts": "Under-18 alerts",
+      "minors": "Under 18",
+      "incomplete": "Not fully rated",
+      "unrated": "No ratings yet"
+    },
+    "allSkills": "All skills",
+    "rating": {
+      "any": "Any rating",
+      "none": "Not rated",
+      "atLeast": "{stars}★ or more"
+    },
+    "activeFilters": "{count, plural, one {# filter} other {# filters}}",
+    "clearAll": "Clear all",
+    "refresh": "Refresh",
+    "noMatches": "No employees match these filters.",
+    "showingCount": "Showing {shown} of {total} employees",
+    "stores": "Stores",
+    "columnNone": "not rated yet",
+    "columnStats": "avg {average} · {rated} rated",
+    "rateCell": "Rate {employee} on {skill}",
+    "kpiEmployees": "Employees",
+    "kpiCoverage": "Rated",
+    "kpiCoverageHint": "of every employee × {skills} skills",
+    "kpiAverage": "Average",
+    "kpiAverageHint": "stars across all ratings",
+    "kpiFullyRated": "Fully rated",
+    "kpiFullyRatedHint": "rated on every skill",
+    "kpiMinors": "Under 18",
+    "kpiNoBirthDate": "{count} with no birth date",
+    "kpiAlerts": "Alerts",
+    "kpiAlertsHint": "minors on restricted skills",
+    "scheduleChipLabel": "{count, plural, one {Rated on # skill} other {Rated on # skills}}",
+    "scheduleAlertHint": "Under 18 and rated on a restricted skill: don't place them on or near it."
   }
 }

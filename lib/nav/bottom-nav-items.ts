@@ -183,7 +183,7 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     icon: Award,
     titleKey: "skills",
     requirements: (storeId) => [
-      { service: "Operations", method: "GET", path: "/v1/stores/*/skills/overview", storeId },
+      { service: "Operations", method: "GET", path: "/v1/skills/overview", storeId },
     ],
     groupKey: "storeManagement",
   },

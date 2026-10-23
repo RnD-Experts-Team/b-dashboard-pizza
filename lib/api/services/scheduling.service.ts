@@ -639,9 +639,16 @@ export const schedulingService = {
     );
   },
 
-  async getSkillsOverview(storeId: string, signal?: AbortSignal): Promise<StoreSkillsOverview> {
+  /**
+   * Employees of several stores (store CODES) against every skill. Every store
+   * sent must be one the caller may read, or the whole call is a 403 — so pass
+   * only stores that passed `canAccessRoute`.
+   */
+  async getSkillsOverview(storeIds: string[], signal?: AbortSignal): Promise<StoreSkillsOverview> {
+    const query = new URLSearchParams();
+    storeIds.forEach((id) => query.append("storeIds[]", id));
     const { data } = await axios.get<DataEnvelope<StoreSkillsOverview>>(
-      `${base(storeId)}/skills/overview`,
+      `/api/scheduling/skills/overview?${query.toString()}`,
       { headers: buildHeaders(), timeout: TIMEOUT_MS, signal },
     );
     return data.data;

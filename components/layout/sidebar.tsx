@@ -464,7 +464,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         href: `/${locale}/dashboard/skills`,
         icon: Award,
         requirements: [
-          { service: "Operations", method: "GET", path: "/v1/stores/*/skills/overview", storeId: effectiveStoreId },
+          { service: "Operations", method: "GET", path: "/v1/skills/overview", storeId: effectiveStoreId },
         ],
       },
     ],

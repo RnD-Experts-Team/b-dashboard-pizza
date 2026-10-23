@@ -4928,11 +4928,11 @@
   },
   "skills": {
     "title": "المهارات",
-    "description": "تقييم كل موظف في مهارات المتجر، وقائمة المهارات المشتركة.",
+    "description": "تقييم الموظفين في كل مهارة عبر متاجرك، وقائمة المهارات المشتركة.",
     "overviewTab": "نظرة على المتجر",
     "listTab": "قائمة المهارات",
-    "selectStore": "اختر متجرًا لعرض مهارات موظفيه.",
-    "noOverviewAccess": "لا يمكنك عرض مهارات الموظفين في هذا المتجر.",
+    "selectStore": "اختر متجرًا واحدًا على الأقل لعرض مهارات موظفيه.",
+    "noOverviewAccess": "لا يمكنك عرض مهارات الموظفين في أي من متاجرك.",
     "noEmployees": "لا يوجد موظفون نشطون في هذا المتجر.",
     "employee": "الموظف",
     "loadFailed": "تعذّر تحميل المهارات",
@@ -4965,6 +4965,42 @@
     "skillSaved": "تم حفظ المهارة.",
     "skillDeleted": "تم حذف المهارة.",
     "deleteTitle": "حذف {skill}؟",
-    "deleteDescription": "سيتم حذف تقييم كل موظف في هذه المهارة أيضًا. لا يمكن التراجع عن ذلك."
+    "deleteDescription": "سيتم حذف تقييم كل موظف في هذه المهارة أيضًا. لا يمكن التراجع عن ذلك.",
+    "searchPlaceholder": "ابحث عن موظف...",
+    "status": {
+      "all": "جميع الموظفين",
+      "alerts": "تنبيهات دون 18",
+      "minors": "دون 18",
+      "incomplete": "غير مُقيَّم بالكامل",
+      "unrated": "بلا تقييمات بعد"
+    },
+    "allSkills": "جميع المهارات",
+    "rating": {
+      "any": "أي تقييم",
+      "none": "غير مُقيَّم",
+      "atLeast": "{stars}★ أو أكثر"
+    },
+    "activeFilters": "{count, plural, one {# فلتر} other {# فلاتر}}",
+    "clearAll": "مسح الكل",
+    "refresh": "تحديث",
+    "noMatches": "لا يوجد موظفون يطابقون هذه الفلاتر.",
+    "showingCount": "عرض {shown} من {total} موظف",
+    "stores": "المتاجر",
+    "columnNone": "لم يُقيَّم بعد",
+    "columnStats": "متوسط {average} · {rated} مُقيَّم",
+    "rateCell": "قيّم {employee} في {skill}",
+    "kpiEmployees": "الموظفون",
+    "kpiCoverage": "المُقيَّم",
+    "kpiCoverageHint": "من كل موظف × {skills} مهارات",
+    "kpiAverage": "المتوسط",
+    "kpiAverageHint": "نجوم عبر كل التقييمات",
+    "kpiFullyRated": "مُقيَّم بالكامل",
+    "kpiFullyRatedHint": "مُقيَّم في كل مهارة",
+    "kpiMinors": "دون 18",
+    "kpiNoBirthDate": "{count} بلا تاريخ ميلاد",
+    "kpiAlerts": "التنبيهات",
+    "kpiAlertsHint": "قاصرون في مهارات مقيّدة",
+    "scheduleChipLabel": "{count, plural, one {مُقيَّم في # مهارة} other {مُقيَّم في # مهارات}}",
+    "scheduleAlertHint": "دون 18 ومُقيَّم في مهارة مقيّدة: لا تضعه عليها أو بالقرب منها."
   }
 }
