@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
-  AlertTriangle, CalendarClock, Camera, Clock, EyeOff, Lightbulb, Mic, MonitorOff, MonitorPlay, Store, UserCheck, Users,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, Camera, Clock, EyeOff, Lightbulb, Mic, MonitorOff, MonitorPlay, Store, UserCheck, Users,
 } from "lucide-react";
 import { AnalyticsCard, CardEmpty } from "@/components/maintenance-tickets/analytics/analytics-card";
 import { AnalyticsBarChart } from "@/components/maintenance-tickets/analytics/analytics-bar-chart";
@@ -12,7 +12,7 @@ import { Pager, ReportTable, TD, TH, usePaged } from "@/components/maintenance-t
 import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import { cn } from "@/lib/utils";
 import { USAGE_COLORS, formatDuration, percent, share, toHours } from "@/lib/screen-usage/format";
-import type { UsageReport, UsageUserRow } from "@/lib/screen-usage/types";
+import type { UsageReport, UsageStoreRow, UsageUserRow } from "@/lib/screen-usage/types";
 import { BreakdownChart, DailyPresenceChart, HoursHeatmap } from "./usage-charts";
 import { ManagersTable } from "./managers-table";
 import { ManagerSheet } from "./manager-sheet";
@@ -237,23 +237,53 @@ export function MonitoringReport({
   );
 }
 
+type StoreSortKey = keyof UsageStoreRow;
+
 function StoresCard({ report }: { report: UsageReport }) {
   const t = useTranslations("screenMonitoring");
-  const rows = useMemo(() => [...report.stores].sort((a, b) => b.on_screen - a.on_screen), [report.stores]);
+  const [sort, setSort] = useState<{ key: StoreSortKey; desc: boolean }>({ key: "on_screen", desc: true });
+  const rows = useMemo(() => {
+    const get = (s: UsageStoreRow) => (sort.key === "store" ? s.store.toLowerCase() : s[sort.key]);
+    return [...report.stores].sort((a, b) => {
+      const x = get(a);
+      const y = get(b);
+      const c = x < y ? -1 : Number(x > y);
+      return sort.desc ? -c : c;
+    });
+  }, [report.stores, sort]);
   // Same page size as the top-screens chart beside it, so both show the same number of rows.
   const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
+
+  const head = (key: StoreSortKey, label: string, end = true) => {
+    const active = sort.key === key;
+    const direction = sort.desc ? { Icon: ArrowDown, aria: "descending" as const } : { Icon: ArrowUp, aria: "ascending" as const };
+    const { Icon, aria } = active ? direction : { Icon: ArrowUpDown, aria: "none" as const };
+    return (
+      <th className={cn(TH, end && "text-end")} aria-sort={aria}>
+        <button
+          type="button"
+          onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : key !== "store" }))}
+          className={cn("inline-flex cursor-pointer items-center gap-1 hover:text-foreground", active && "text-foreground")}
+        >
+          {label}
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </th>
+    );
+  };
+
   return (
     <AnalyticsCard icon={Store} title={t("sections.stores")} count={rows.length} flush>
       <div className="overflow-x-auto">
         <table className="w-full text-sm [&_td]:whitespace-nowrap [&_td]:px-3 [&_th]:px-3">
           <thead className="border-b bg-muted/40">
             <tr>
-              <th className={TH}>{t("columns.store")}</th>
-              <th className={cn(TH, "text-end")}>{t("columns.managers")}</th>
-              <th className={cn(TH, "text-end")}>{t("columns.onScreen")}</th>
-              <th className={cn(TH, "text-end")}>{t("columns.present")}</th>
-              <th className={cn(TH, "text-end")}>{t("columns.talking")}</th>
-              <th className={cn(TH, "text-end")}>{t("columns.kicks")}</th>
+              {head("store", t("columns.store"), false)}
+              {head("managers", t("columns.managers"))}
+              {head("on_screen", t("columns.onScreen"))}
+              {head("present", t("columns.present"))}
+              {head("talking", t("columns.talking"))}
+              {head("kicks", t("columns.kicks"))}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -262,7 +292,7 @@ function StoresCard({ report }: { report: UsageReport }) {
                 <td className={cn(TD, "font-medium")}>{s.store}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{s.managers}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.on_screen)}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>{percent(s.present, s.on_screen)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.present)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.talking)}</td>
                 <td className={cn(TD, "text-end tabular-nums", s.kicks > 0 && "text-red-600 dark:text-red-400")}>{s.kicks || "—"}</td>
               </tr>
