@@ -10,17 +10,19 @@ import { formatDuration, percent, share } from "@/lib/screen-usage/format";
 import type { UsageUserRow } from "@/lib/screen-usage/types";
 
 type SortKey =
-  | "name" | "on_screen" | "present_share" | "away" | "no_face" | "covered" | "mic_open"
-  | "talk_share" | "dead_mic" | "talk_all" | "pip" | "kicks" | "last_seen";
+  | "name" | "on_screen" | "present" | "present_share" | "away" | "no_face" | "covered" | "mic_open"
+  | "talking" | "talk_share" | "dead_mic" | "talk_all" | "pip" | "kicks" | "last_seen";
 
 const ACCESSORS: Record<SortKey, (u: UsageUserRow) => number | string> = {
   name: (u) => u.name.toLowerCase(),
   on_screen: (u) => u.on_screen,
+  present: (u) => u.present,
   present_share: (u) => share(u.present, u.on_screen),
   away: (u) => u.away,
   no_face: (u) => u.no_face,
   covered: (u) => u.covered,
   mic_open: (u) => u.mic_open,
+  talking: (u) => u.talking,
   talk_share: (u) => share(u.talking, u.mic_open),
   dead_mic: (u) => u.dead_mic,
   talk_all: (u) => u.talk_all,
@@ -97,12 +99,14 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
           <tr>
             {head("name", t("columns.manager"), false)}
             {head("on_screen", t("columns.onScreen"))}
-            {head("present_share", t("columns.present"))}
+            {head("present", t("columns.present"))}
+            {head("present_share", t("columns.presentPct"))}
             {head("away", t("columns.away"))}
             {head("no_face", t("columns.noFace"))}
             {head("covered", t("columns.covered"))}
             {head("mic_open", t("columns.micOpen"))}
-            {head("talk_share", t("columns.talking"))}
+            {head("talking", t("columns.talking"))}
+            {head("talk_share", t("columns.talkingPct"))}
             {head("dead_mic", t("columns.deadMic"))}
             {head("talk_all", t("columns.talkAll"))}
             {head("pip", t("columns.pip"))}
@@ -115,7 +119,7 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
         <tbody className="divide-y">
           {paged.rows.length === 0 && (
             <tr>
-              <td colSpan={15} className="px-5 py-10 text-center text-muted-foreground">{t("noMatches")}</td>
+              <td colSpan={17}className="px-5 py-10 text-center text-muted-foreground">{t("noMatches")}</td>
             </tr>
           )}
           {paged.rows.map((u) => {
@@ -140,6 +144,7 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
                   <div className="max-w-56 whitespace-normal text-xs text-muted-foreground">{u.stores.join(", ")}</div>
                 </td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.on_screen)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.present)}</td>
                 <td className={cn(TD, "text-end")}>
                   <div className="ms-auto flex w-32 items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -150,7 +155,6 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
                     </div>
                     <span className="w-9 text-end text-xs tabular-nums">{percent(u.present, u.on_screen)}</span>
                   </div>
-                  <div className="text-xs tabular-nums text-muted-foreground">{formatDuration(u.present)}</div>
                 </td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.away)}</td>
                 <td className={cn(TD, "text-end tabular-nums", u.no_face > 0 && "text-amber-600 dark:text-amber-400")}>
@@ -160,10 +164,8 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
                   {u.covered > 0 ? formatDuration(u.covered) : "—"}
                 </td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.mic_open)}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>
-                  {formatDuration(u.talking)}
-                  <div className="text-xs text-muted-foreground">{percent(u.talking, u.mic_open)}</div>
-                </td>
+                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.talking)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{percent(u.talking, u.mic_open)}</td>
                 <td className={cn(TD, "text-end tabular-nums", u.dead_mic > 0 && "text-red-600 dark:text-red-400")}>
                   {u.dead_mic > 0 ? formatDuration(u.dead_mic) : "—"}
                 </td>
