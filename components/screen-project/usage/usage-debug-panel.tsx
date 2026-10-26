@@ -6,7 +6,9 @@ import { Activity, Bug, Info, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usageDebug, type DebugSegment, type ProbeDiagnostics, type RecorderSnapshot } from "@/lib/screen-usage/recorder";
-import { liveTotals, type LiveTotals } from "@/lib/screen-usage/live-totals";
+import type { LiveTotals } from "@/lib/screen-usage/live-totals";
+import { toDebugView, type DebugView } from "@/lib/screen-usage/debug-view";
+import { useRemoteUsageDebugStore } from "@/lib/store/screen-usage-remote-debug.store";
 import { FACE_MIN_CONFIDENCE } from "@/lib/screen-usage/face-detector";
 import { formatDuration, percent, share } from "@/lib/screen-usage/format";
 
@@ -24,6 +26,8 @@ const COVERED_STDDEV = 3;
 const DEAD_RMS = 0.0003;
 const DEAD_AFTER_S = 20;
 const FLIP_SAMPLES = 2;
+/** Segment rows the table shows. */
+const SEGMENT_ROWS = 60;
 
 function useRecorderSnapshot(active: boolean): RecorderSnapshot | null {
   const [snap, setSnap] = useState<RecorderSnapshot | null>(null);
@@ -98,12 +102,21 @@ export function UsageDebugPanel({
   onClose: () => void;
   /** room_name → station name, for readable labels. */
   stationNames?: Record<string, string>;
-  /** Observer mode records nothing; the panel says so. */
+  /** Observer mode records nothing: the panel shows the manager connected to the open screen instead. */
   observer?: boolean;
 }) {
   const t = useTranslations("screenMonitoring.debug");
-  const snap = useRecorderSnapshot(open);
+  const snap = useRecorderSnapshot(open && !observer);
+  const localView = useMemo(() => (snap ? toDebugView(snap, SEGMENT_ROWS) : null), [snap]);
+  const remoteViews = useRemoteUsageDebugStore((s) => s.views);
+  const remote = useMemo(() => {
+    const latest = Object.entries(remoteViews).sort((a, b) => b[1].at - a[1].at)[0];
+    return latest ? { room: latest[0], view: latest[1].view } : null;
+  }, [remoteViews]);
   if (!open) return null;
+
+  const name = (room: string | null) => (room ? (stationNames[room] ?? room) : "—");
+  const view = observer ? remote?.view : localView;
 
   return (
     <div className="fixed end-4 top-20 z-[60] flex max-h-[calc(100vh-7rem)] w-[460px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-2xl">
@@ -124,25 +137,23 @@ export function UsageDebugPanel({
         </button>
       </header>
       <div className="space-y-4 overflow-y-auto p-4 text-sm">
-        {observer && <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">{t("observerNote")}</p>}
-        {snap ? <PanelBody snap={snap} stationNames={stationNames} /> : <p className="text-muted-foreground">{t("loading")}</p>}
+        {observer && (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs">
+            {remote ? t("observerNote", { station: name(remote.room) }) : t("observerWaiting")}
+          </p>
+        )}
+        {view ? (
+          <>
+            <TotalsSection totals={view.totals} />
+            <TilesSection probes={view.probes} name={name} now={view.now} />
+            <SavingSection view={view} canPush={!observer} />
+            <SegmentsSection segments={view.segments} name={name} />
+          </>
+        ) : (
+          !observer && <p className="text-muted-foreground">{t("loading")}</p>
+        )}
       </div>
     </div>
-  );
-}
-
-function PanelBody({ snap, stationNames }: { snap: RecorderSnapshot; stationNames: Record<string, string> }) {
-  const all = useMemo(() => [...snap.delivered, ...snap.pending], [snap]);
-  const totals = useMemo(() => liveTotals(all), [all]);
-  const name = (room: string | null) => (room ? (stationNames[room] ?? room) : "—");
-
-  return (
-    <>
-      <TotalsSection totals={totals} />
-      <TilesSection probes={snap.probes} name={name} now={snap.now} />
-      <SavingSection snap={snap} />
-      <SegmentsSection segments={all} name={name} />
-    </>
   );
 }
 
@@ -326,10 +337,8 @@ function TilesSection({ probes, name, now }: { probes: ProbeDiagnostics[]; name:
   );
 }
 
-function SavingSection({ snap }: { snap: RecorderSnapshot }) {
+function SavingSection({ view: snap, canPush }: { view: DebugView; canPush: boolean }) {
   const t = useTranslations("screenMonitoring.debug");
-  const open = snap.pending.filter((s) => s.open).length;
-  const closed = snap.pending.length - open;
   const last = snap.lastPush;
   return (
     <Section title={t("savingTitle")} hint={t("savingHint")}>
@@ -349,16 +358,23 @@ function SavingSection({ snap }: { snap: RecorderSnapshot }) {
             : t("notYet")}
         </dd>
         <dt className="text-muted-foreground">{t("waiting")}</dt>
-        <dd className="text-end font-semibold tabular-nums">{t("waitingCount", { open, closed })}</dd>
+        <dd className="text-end font-semibold tabular-nums">{t("waitingCount", { open: snap.pendingOpen, closed: snap.pendingClosed })}</dd>
         <dt className="text-muted-foreground">{t("savedThisPage")}</dt>
-        <dd className="text-end font-semibold tabular-nums">{snap.delivered.length}</dd>
+        <dd className="text-end font-semibold tabular-nums">{snap.deliveredCount}</dd>
       </dl>
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="text-[10px] text-muted-foreground">{t("tab", { id: snap.tabId })}</span>
-        <Button size="sm" variant="outline" onClick={() => usageDebug.pushNow()} disabled={snap.pushing || snap.pending.length === 0}>
-          <Send className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          {snap.pushing ? t("pushing") : t("pushNow")}
-        </Button>
+        {canPush && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => usageDebug.pushNow()}
+            disabled={snap.pushing || snap.pendingOpen + snap.pendingClosed === 0}
+          >
+            <Send className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            {snap.pushing ? t("pushing") : t("pushNow")}
+          </Button>
+        )}
       </div>
     </Section>
   );
@@ -366,7 +382,7 @@ function SavingSection({ snap }: { snap: RecorderSnapshot }) {
 
 function SegmentsSection({ segments, name }: { segments: DebugSegment[]; name: (room: string | null) => string }) {
   const t = useTranslations("screenMonitoring.debug");
-  const rows = [...segments].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at)).slice(0, 60);
+  const rows = segments;
   return (
     <Section title={t("segmentsTitle")} hint={t("segmentsHint")}>
       {rows.length === 0 ? (
