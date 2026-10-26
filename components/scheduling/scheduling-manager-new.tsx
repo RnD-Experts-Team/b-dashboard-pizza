@@ -107,6 +107,8 @@ import { PublishedSchedules } from "./published-schedules";
 import { DataFreshness } from "./data-freshness";
 import { WeekOutlook } from "./week-outlook";
 import { useSchedulingInsights } from "@/lib/hooks/use-scheduling-insights";
+import { useSkillsOverview } from "@/lib/hooks/use-skills-overview";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { buildWeekPlan, compactMoney, type Basis } from "@/lib/scheduling/day-plan";
 import { ShiftLegend } from "./shift-legend";
 import { pendingActualKey, pendingShiftKey } from "./shift-pending";
@@ -562,6 +564,18 @@ export function SchedulingManager() {
    */
   const [insightsBasis, setInsightsBasis] = useState<Basis>("typical");
   const insights = useSchedulingInsights(storeId, week.start, isPlannedOnly);
+
+  // Skill ratings beside each name, for whoever may read them. Loaded apart
+  // from the week, so a slow or refused skills call never holds up the grid.
+  const { canAccessRoute } = useAuthStore();
+  const canSeeSkills =
+    !!storeId &&
+    canAccessRoute({ service: "Operations", method: "GET", path: "/v1/skills/overview", storeId });
+  const skillsOverview = useSkillsOverview(canSeeSkills && storeId ? [storeId] : null);
+  const skillsByEmployee = useMemo(
+    () => new Map((skillsOverview.data?.employees ?? []).map((e) => [String(e.id), e])),
+    [skillsOverview.data],
+  );
   const weekPlan = useMemo(
     () =>
       insights.data
@@ -2616,6 +2630,8 @@ export function SchedulingManager() {
             onDeleteDraft={handleDeleteDraft}
             weekPlan={isPlannedOnly ? weekPlan : null}
             weekPlanLoading={isPlannedOnly && insights.isLoading && !weekPlan}
+            skillsByEmployee={skillsByEmployee}
+            skills={skillsOverview.data?.skills}
           />
 
         </div>

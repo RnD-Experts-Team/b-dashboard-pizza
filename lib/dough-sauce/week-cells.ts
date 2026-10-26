@@ -1,7 +1,7 @@
 import type { CountRow, IngredientKey, StoredPlanRow } from "@/types/dough-sauce.types";
 import { INGREDIENT_KEYS } from "@/types/dough-sauce.types";
 import { toBaseUnit, type IngredientMap } from "./ingredient-map";
-import { isOk, targetQty, variance } from "./formulas";
+import { isOkWithinStep, targetQty, variance } from "./formulas";
 import { addDaysIso, daysBetween } from "./dates";
 
 /**
@@ -173,7 +173,7 @@ export function buildWeekCells(
         const counted = rawCounted != null ? toBaseUnit(rawCounted, divisor) : null;
         const base = bases?.get(id) ?? null;
         const v = counted != null && base != null ? variance(counted, base) : null;
-        const ok = v != null ? isOk(v) : null;
+        const ok = v != null ? isOkWithinStep(key, v) : null;
         // A counted day with a base is judged exactly like a planned one — it must not slip out of the score.
         if (ok != null) {
           cellsScored++;
@@ -197,7 +197,7 @@ export function buildWeekCells(
       const divisor = countDivisor?.[key] ?? 1;
       const counted = toBaseUnit(count.total_in_unit_1, divisor);
       const v = variance(counted, base);
-      const ok = isOk(v);
+      const ok = isOkWithinStep(key, v);
       cellsScored++;
       if (ok) cellsOk++;
       cells.push({

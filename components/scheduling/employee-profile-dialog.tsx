@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DAYS_OF_WEEK, formatTime } from "@/lib/scheduling/constants";
+import { EmployeeSkillsList } from "./employee-skills-summary";
+import type { Skill, SkillsOverviewEmployee } from "@/types/skills.types";
 import type {
   ScheduleEmployee,
   Shift,
@@ -40,6 +42,9 @@ interface EmployeeProfileDialogProps {
   timeOff: TimeOffEntry[];
   isOvertime: boolean;
   overtimeThreshold: number;
+  /** Their skill ratings, when the viewer may read them. */
+  skillsRow?: SkillsOverviewEmployee | null;
+  skills?: Skill[];
 }
 
 export function EmployeeProfileDialog({
@@ -51,6 +56,8 @@ export function EmployeeProfileDialog({
   timeOff,
   isOvertime,
   overtimeThreshold,
+  skillsRow = null,
+  skills = [],
 }: EmployeeProfileDialogProps) {
   if (!employee) return null;
 
@@ -133,6 +140,13 @@ export function EmployeeProfileDialog({
         </div>
 
         <Separator />
+
+        {skillsRow && skills.length > 0 && (
+          <>
+            <EmployeeSkillsList row={skillsRow} skills={skills} />
+            <Separator />
+          </>
+        )}
 
         {/* This week's schedule */}
         <div className="space-y-2 py-2">

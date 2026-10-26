@@ -34,6 +34,7 @@ import {
   BarChart3,
   LifeBuoy,
   CalendarDays,
+  Award,
   Table2,
   HardHat,
 } from "lucide-react";
@@ -173,6 +174,16 @@ export const BOTTOM_NAV_ELIGIBLE_ITEMS: BottomNavItem[] = [
     titleKey: "scheduling",
     requirements: (storeId) => [
       { service: "Operations", method: "GET", path: "/v1/stores/*/schedule/week", storeId },
+    ],
+    groupKey: "storeManagement",
+  },
+  {
+    id: "skills",
+    href: (locale) => `/${locale}/dashboard/skills`,
+    icon: Award,
+    titleKey: "skills",
+    requirements: (storeId) => [
+      { service: "Operations", method: "GET", path: "/v1/skills/overview", storeId },
     ],
     groupKey: "storeManagement",
   },

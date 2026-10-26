@@ -12,6 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EmployeeSkillsPanel } from "@/components/skills/employee-skills-panel";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import {
   Table,
   TableBody,
@@ -208,6 +210,11 @@ function EmployeeProfileContent() {
     employeeIdNum !== null &&
     !isNaN(employeeIdNum) &&
     employeeIdNum > 0;
+
+  const { canAccessRoute } = useAuthStore();
+  const canSeeSkills =
+    isValidParams &&
+    canAccessRoute({ service: "Operations", method: "GET", path: "/v1/stores/*/employees/*/skills", storeId: storeId ?? undefined });
 
   const [opPage, setOpPage] = useState(1);
   const [debriefPage, setDebriefPage] = useState(1);
@@ -422,6 +429,7 @@ function EmployeeProfileContent() {
               <Badge variant="secondary" className="ms-2 text-xs">{debriefTotal}</Badge>
             )}
           </TabsTrigger>
+          {canSeeSkills && <TabsTrigger value="skills">Skills</TabsTrigger>}
         </TabsList>
 
         {/* ── Operational History ── */}
@@ -587,6 +595,13 @@ function EmployeeProfileContent() {
             />
           )}
         </TabsContent>
+
+        {/* ── Skills (OperationsPizza) ── */}
+        {canSeeSkills && storeId && (
+          <TabsContent value="skills" className="mt-4" tabIndex={-1}>
+            <EmployeeSkillsPanel storeCode={storeId} employeeId={String(employeeIdNum)} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <EmployeeDebriefDetailSheet
