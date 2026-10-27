@@ -12,7 +12,7 @@ import { Pager, ReportTable, TD, TH, usePaged } from "@/components/maintenance-t
 import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import { cn } from "@/lib/utils";
 import { USAGE_COLORS, formatDuration, percent, share, toHours } from "@/lib/screen-usage/format";
-import type { UsageReport, UsageStoreRow, UsageUserRow } from "@/lib/screen-usage/types";
+import type { UsageReport, UsageScreenRow, UsageStoreRow, UsageUserRow } from "@/lib/screen-usage/types";
 import { BreakdownChart, DailyPresenceChart, HoursHeatmap } from "./usage-charts";
 import { ManagersTable } from "./managers-table";
 import { ManagerSheet } from "./manager-sheet";
@@ -237,32 +237,34 @@ export function MonitoringReport({
   );
 }
 
-type StoreSortKey = keyof UsageStoreRow;
-
-function StoresCard({ report }: { report: UsageReport }) {
-  const t = useTranslations("screenMonitoring");
-  const [sort, setSort] = useState<{ key: StoreSortKey; desc: boolean }>({ key: "on_screen", desc: true });
-  const rows = useMemo(() => {
-    const get = (s: UsageStoreRow) => (sort.key === "store" ? s.store.toLowerCase() : s[sort.key]);
-    return [...report.stores].sort((a, b) => {
+/**
+ * Click-to-sort for the report's tables: numbers start highest first, text
+ * columns (`textKeys`) A to Z; clicking the active column reverses it.
+ */
+function useSortable<T, K extends keyof T & string>(rows: T[], initial: K, textKeys: K[]) {
+  const [sort, setSort] = useState<{ key: K; desc: boolean }>({ key: initial, desc: !textKeys.includes(initial) });
+  const sorted = useMemo(() => {
+    const get = (r: T) => {
+      const v = r[sort.key];
+      return typeof v === "string" ? v.toLowerCase() : (v ?? "");
+    };
+    return [...rows].sort((a, b) => {
       const x = get(a);
       const y = get(b);
       const c = x < y ? -1 : Number(x > y);
       return sort.desc ? -c : c;
     });
-  }, [report.stores, sort]);
-  // Same page size as the top-screens chart beside it, so both show the same number of rows.
-  const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
+  }, [rows, sort]);
 
-  const head = (key: StoreSortKey, label: string, end = true) => {
+  const head = (key: K, label: string, className?: string) => {
     const active = sort.key === key;
     const direction = sort.desc ? { Icon: ArrowDown, aria: "descending" as const } : { Icon: ArrowUp, aria: "ascending" as const };
     const { Icon, aria } = active ? direction : { Icon: ArrowUpDown, aria: "none" as const };
     return (
-      <th className={cn(TH, end && "text-end")} aria-sort={aria}>
+      <th className={cn(TH, className)} aria-sort={aria}>
         <button
           type="button"
-          onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : key !== "store" }))}
+          onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : !textKeys.includes(key) }))}
           className={cn("inline-flex cursor-pointer items-center gap-1 hover:text-foreground", active && "text-foreground")}
         >
           {label}
@@ -272,18 +274,30 @@ function StoresCard({ report }: { report: UsageReport }) {
     );
   };
 
+  return { rows: sorted, head };
+}
+
+const STORE_TEXT_KEYS: (keyof UsageStoreRow)[] = ["store"];
+const SCREEN_TEXT_KEYS: (keyof UsageScreenRow & string)[] = ["name", "store"];
+
+function StoresCard({ report }: { report: UsageReport }) {
+  const t = useTranslations("screenMonitoring");
+  const { rows, head } = useSortable(report.stores, "on_screen", STORE_TEXT_KEYS);
+  // Same page size as the top-screens chart beside it, so both show the same number of rows.
+  const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
+
   return (
     <AnalyticsCard icon={Store} title={t("sections.stores")} count={rows.length} flush>
       <div className="overflow-x-auto">
         <table className="w-full text-sm [&_td]:whitespace-nowrap [&_td]:px-3 [&_th]:px-3">
           <thead className="border-b bg-muted/40">
             <tr>
-              {head("store", t("columns.store"), false)}
-              {head("managers", t("columns.managers"))}
-              {head("on_screen", t("columns.onScreen"))}
-              {head("present", t("columns.present"))}
-              {head("talking", t("columns.talking"))}
-              {head("kicks", t("columns.kicks"))}
+              {head("store", t("columns.store"))}
+              {head("managers", t("columns.managers"), "text-end")}
+              {head("on_screen", t("columns.onScreen"), "text-end")}
+              {head("present", t("columns.present"), "text-end")}
+              {head("talking", t("columns.talking"), "text-end")}
+              {head("kicks", t("columns.kicks"), "text-end")}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -307,7 +321,8 @@ function StoresCard({ report }: { report: UsageReport }) {
 
 function ScreensTable({ report }: { report: UsageReport }) {
   const t = useTranslations("screenMonitoring");
-  const paged = usePaged(report.screens, report.screens.length, 10);
+  const { rows, head } = useSortable(report.screens, "main", SCREEN_TEXT_KEYS);
+  const paged = usePaged(rows, rows.length, 10);
   const maxMain = Math.max(1, ...report.screens.map((s) => s.main));
   return (
     <ReportTable
@@ -320,12 +335,12 @@ function ScreensTable({ report }: { report: UsageReport }) {
       <table className="w-full text-sm [&_td]:whitespace-nowrap">
         <thead className="border-b bg-muted/40">
           <tr>
-            <th className={TH}>{t("columns.screen")}</th>
-            <th className={TH}>{t("columns.store")}</th>
-            <th className={cn(TH, "w-1/3")}>{t("columns.mainTile")}</th>
-            <th className={cn(TH, "text-end")}>{t("columns.micOpen")}</th>
-            <th className={cn(TH, "text-end")}>{t("columns.camera")}</th>
-            <th className={cn(TH, "text-end")}>{t("columns.managers")}</th>
+            {head("name", t("columns.screen"))}
+            {head("store", t("columns.store"))}
+            {head("main", t("columns.mainTile"), "w-1/3")}
+            {head("mic", t("columns.micOpen"), "text-end")}
+            {head("camera", t("columns.camera"), "text-end")}
+            {head("managers", t("columns.managers"), "text-end")}
           </tr>
         </thead>
         <tbody className="divide-y">
