@@ -34,6 +34,7 @@ import {
   Tag,
   BarChart3,
   CalendarDays,
+  Award,
   Megaphone,
   Monitor,
   Target,
@@ -456,6 +457,14 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         icon: CalendarDays,
         requirements: [
           { service: "Operations", method: "GET", path: "/v1/stores/*/schedule/week", storeId: effectiveStoreId },
+        ],
+      },
+      {
+        title: t("skills"),
+        href: `/${locale}/dashboard/skills`,
+        icon: Award,
+        requirements: [
+          { service: "Operations", method: "GET", path: "/v1/skills/overview", storeId: effectiveStoreId },
         ],
       },
     ],

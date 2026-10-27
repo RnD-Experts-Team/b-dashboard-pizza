@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 import { calcHours, formatTime } from "@/lib/scheduling/constants";
 import { todayIndexIn } from "@/lib/scheduling/week";
 import { EmployeeSyncBadge } from "./employee-sync-notice";
+import { EmployeeSkillsChip } from "./employee-skills-summary";
+import type { Skill, SkillsOverviewEmployee } from "@/types/skills.types";
 import { DraftShiftCard } from "./draft-shift-card";
 import type { DraftShift } from "@/lib/scheduling/draft.store";
 
@@ -99,6 +101,12 @@ interface ScheduleGridProps {
    */
   weekPlan?: WeekPlan | null;
   weekPlanLoading?: boolean;
+  /**
+   * Skill ratings by employee id, when the viewer may read them. Shown as a
+   * chip by the name; never in the employee-facing image.
+   */
+  skillsByEmployee?: Map<string, SkillsOverviewEmployee>;
+  skills?: Skill[];
 }
 
 /**
@@ -186,6 +194,8 @@ export function ScheduleGrid({
   onDeleteDraft,
   weekPlan,
   weekPlanLoading,
+  skillsByEmployee,
+  skills = [],
 }: ScheduleGridProps) {
   const [profileEmp, setProfileEmp] = useState<ScheduleEmployee | null>(null);
   const isActualMode = scheduleMode === "actual" && !comparisonMode;
@@ -431,6 +441,7 @@ export function ScheduleGrid({
               const empHours = hoursMap[emp.id] ?? 0;
               const empShiftCount = shiftCountMap[emp.id] ?? 0;
               const isOvertime = overtimeEmpIds.has(emp.id);
+              const empSkills = employeeView ? undefined : skillsByEmployee?.get(emp.id);
 
               return (
                 <tr
@@ -466,6 +477,7 @@ export function ScheduleGrid({
                             {emp.name}
                           </button>
                           {!emp.synced && <EmployeeSyncBadge className="shrink-0" />}
+                          {empSkills && <EmployeeSkillsChip row={empSkills} skills={skills} />}
                           {isOvertime && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -953,6 +965,8 @@ export function ScheduleGrid({
         timeOff={timeOff}
         isOvertime={profileEmp ? overtimeEmpIds.has(profileEmp.id) : false}
         overtimeThreshold={overtimeThreshold}
+        skillsRow={profileEmp && !employeeView ? skillsByEmployee?.get(profileEmp.id) ?? null : null}
+        skills={skills}
       />
     </div>
   );

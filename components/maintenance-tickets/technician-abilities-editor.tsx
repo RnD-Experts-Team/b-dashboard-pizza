@@ -1,13 +1,13 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { Loader2, Plus, Star, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { StarPicker } from "@/components/shared/star-picker";
 import {
   Select,
   SelectContent,
@@ -31,48 +31,6 @@ const NOTES_MAX = 2000;
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof MaintenanceTicketsError ? err.message : fallback;
-}
-
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Stars                                                                     */
-/* ────────────────────────────────────────────────────────────────────────── */
-
-/** 1-5 stars, or none. Clicking the current star again clears it. */
-function StarPicker({
-  value,
-  onChange,
-  disabled,
-  label,
-}: {
-  value: number | null;
-  onChange: (value: number | null) => void;
-  disabled?: boolean;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-1" role="radiogroup" aria-label={label}>
-      {[1, 2, 3, 4, 5].map((n) => {
-        const on = value != null && n <= value;
-        return (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={value === n}
-            aria-label={`${n} star${n === 1 ? "" : "s"}`}
-            disabled={disabled}
-            onClick={() => onChange(value === n ? null : n)}
-            className="rounded p-0.5 transition-colors hover:bg-muted disabled:opacity-50"
-          >
-            <Star className={cn("h-4 w-4", on ? "fill-amber-400 text-amber-400" : "text-muted-foreground/50")} />
-          </button>
-        );
-      })}
-      <span className="ms-1 text-xs tabular-nums text-muted-foreground">
-        {value == null ? "No stars" : `${value} of 5`}
-      </span>
-    </div>
-  );
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */

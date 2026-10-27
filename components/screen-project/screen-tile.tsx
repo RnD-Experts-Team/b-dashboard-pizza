@@ -12,6 +12,7 @@ import {
 } from "@livekit/components-react";
 import { Track, ConnectionState, VideoQuality, RemoteTrackPublication, RoomEvent, ParticipantEvent, DisconnectReason } from "livekit-client";
 import { UsageProbe, type UsageProbeProps } from "./usage/usage-probe";
+import { UsageDebugReceiver, UsageDebugSender } from "./usage/usage-debug-relay";
 import { Video, VideoOff, Volume2, VolumeX, Camera, CameraOff, AlertTriangle, RefreshCw, SlidersHorizontal, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -1844,6 +1845,8 @@ export function ScreenTile({
       onError={(err) => setConnectError(err.message || "Unable to connect to the station stream.")}
     >
       {usage && <UsageProbe {...usage} room={_roomName} />}
+      {usage && <UsageDebugSender />}
+      {observerMode && <UsageDebugReceiver roomName={_roomName} />}
       <ScreenTileInner
         name={name}
         isMain={isMain}
