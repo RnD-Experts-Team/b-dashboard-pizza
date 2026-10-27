@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmployeeSkillsPanel } from "@/components/skills/employee-skills-panel";
 import { useAuthStore } from "@/lib/auth/auth.store";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import {
   Table,
   TableBody,
@@ -211,10 +212,12 @@ function EmployeeProfileContent() {
     !isNaN(employeeIdNum) &&
     employeeIdNum > 0;
 
-  const { canAccessRoute } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const canSeeSkills =
     isValidParams &&
-    canAccessRoute({ service: "Operations", method: "GET", path: "/v1/stores/*/employees/*/skills", storeId: storeId ?? undefined });
+    canAccessRoute({ service: "Operations", method: "GET", path: "/v1/stores/*/employees/*/skills", storeId: effectiveStoreId });
 
   const [opPage, setOpPage] = useState(1);
   const [debriefPage, setDebriefPage] = useState(1);

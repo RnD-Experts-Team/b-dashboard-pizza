@@ -41,25 +41,23 @@ const AVERAGE_DIGITS = 1;
 /**
  * The Skills page's overview: employees of the picked stores against every
  * skill, with the employees-page store picker and filter row, a KPI strip, and
- * every cell editable in place for whoever may rate at that employee's store.
+ * every cell editable in place for whoever may rate.
  */
 export function SkillsOverview() {
   const t = useTranslations("skills");
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
-  const { canAccessRoute, overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
 
-  // Only stores the caller may read: one refused store would refuse the call.
+  // Permission checks — mirror sidebar auth-rule requirements
+  const canViewSkills = canAccessRoute({ service: "Operations", method: "GET", path: "/v1/skills/overview", storeId: effectiveStoreId });
+  const canRateSkills = canAccessRoute({ service: "Operations", method: "POST", path: "/v1/stores/*/employees/*/skills/*", storeId: effectiveStoreId });
+
   const storeOptions = useMemo(
-    () =>
-      (overviewStores ?? []).flatMap((s) =>
-        s.storeId &&
-        canAccessRoute({ service: "Operations", method: "GET", path: "/v1/skills/overview", storeId: s.storeId })
-          ? [{ storeId: s.storeId, name: s.name || s.storeId }]
-          : [],
-      ),
-    [overviewStores, canAccessRoute],
+    () => (overviewStores ?? []).flatMap((s) => (s.storeId ? [{ storeId: s.storeId, name: s.name || s.storeId }] : [])),
+    [overviewStores],
   );
   const allowed = useMemo(() => new Set(storeOptions.map((s) => s.storeId)), [storeOptions]);
 
@@ -73,8 +71,8 @@ export function SkillsOverview() {
     }
   });
 
-  // The pick, clamped to what they may read now; with nothing usable picked,
-  // the sidebar store, else every allowed store.
+  // The pick, clamped to the viewer's stores; with nothing usable picked, the
+  // sidebar store, else all of them.
   const selectedStoreIds = useMemo(() => {
     if (picked !== null && picked.length === 0) return [];
     const kept = (picked ?? []).filter((id) => allowed.has(id));
@@ -108,13 +106,15 @@ export function SkillsOverview() {
   const multiStore = selectedStoreIds.length > 1;
   const storeNames = useMemo(() => new Map(storeOptions.map((s) => [s.storeId, s.name])), [storeOptions]);
 
-  // Rating writes through a store the employee works at and the caller may rate at.
-  const rateStoreFor = (e: SkillsOverviewEmployee): string | null =>
-    e.store_numbers.find((code) =>
-      canAccessRoute({ service: "Operations", method: "POST", path: "/v1/stores/*/employees/*/skills/*", storeId: code }),
-    ) ?? null;
+  // A rating is saved through a store the employee works at: the sidebar store
+  // when they work there, else their first one among the picked stores.
+  const rateStoreFor = (e: SkillsOverviewEmployee): string | null => {
+    if (!canRateSkills) return null;
+    const sidebar = selectedStore?.storeId;
+    return sidebar && e.store_numbers.includes(sidebar) ? sidebar : e.store_numbers[0] ?? null;
+  };
 
-  if (storeOptions.length === 0) {
+  if (!canViewSkills) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
         <Store className="h-8 w-8 text-muted-foreground" />

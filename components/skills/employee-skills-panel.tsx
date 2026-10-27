@@ -11,6 +11,7 @@ import { StarPicker } from "@/components/shared/star-picker";
 import { MinAgeBadge, MinorBadge } from "@/components/skills/skill-badges";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useEmployeeSkills } from "@/lib/hooks/use-employee-skills";
+import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { SchedulingError } from "@/lib/scheduling/errors";
 import { cn } from "@/lib/utils";
 import type { EmployeeSkillRating } from "@/types/skills.types";
@@ -36,14 +37,16 @@ export function EmployeeSkillsPanel({
   employeeId: string;
 }) {
   const t = useTranslations("skills");
-  const { canAccessRoute } = useAuthStore();
+  const { selectedStore } = useSelectedStoreStore();
+  const { canAccessRoute, overviewStores } = useAuthStore();
+  const effectiveStoreId = selectedStore?.id ?? overviewStores?.[0]?.id;
   const { data, isLoading, error, refetch, rate, remove } = useEmployeeSkills(storeCode, employeeId);
 
   const canRate = canAccessRoute({
     service: "Operations",
     method: "POST",
     path: "/v1/stores/*/employees/*/skills/*",
-    storeId: storeCode,
+    storeId: effectiveStoreId,
   });
 
   if (isLoading && !data) {
