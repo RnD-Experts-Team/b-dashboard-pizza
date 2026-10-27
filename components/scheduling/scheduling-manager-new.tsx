@@ -570,7 +570,7 @@ export function SchedulingManager() {
   const { canAccessRoute } = useAuthStore();
   const canSeeSkills =
     !!storeId &&
-    canAccessRoute({ service: "Operations", method: "GET", path: "/v1/skills/overview", storeId });
+    canAccessRoute({ service: "Operations", method: "GET", path: "/v1/skills/overview", storeId: selectedStore?.id });
   const skillsOverview = useSkillsOverview(canSeeSkills && storeId ? [storeId] : null);
   const skillsByEmployee = useMemo(
     () => new Map((skillsOverview.data?.employees ?? []).map((e) => [String(e.id), e])),
