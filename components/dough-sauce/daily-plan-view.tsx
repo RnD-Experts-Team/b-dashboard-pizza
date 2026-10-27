@@ -30,10 +30,11 @@ import { cn } from "@/lib/utils";
 import { StorePicker, type StoreOption } from "@/components/cleaning";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
+import { useDebriefActionStore } from "@/lib/store/debrief-action.store";
 import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import { useIngredients, useStoreDailyPlan } from "@/lib/hooks/use-dough-sauce";
 import { gapOf, plannedQty, targetQty, variance } from "@/lib/dough-sauce/formulas";
-import { COUNT_DIVIDED_KEYS } from "@/lib/dough-sauce/ingredient-map";
+import { COUNT_DIVIDED_KEYS, MORNING_DIVIDED_KEYS } from "@/lib/dough-sauce/ingredient-map";
 import { indexCounts } from "@/lib/dough-sauce/week-cells";
 import { addDaysIso, todayIso, tomorrowIso } from "@/lib/dough-sauce/dates";
 import {
@@ -105,6 +106,7 @@ export interface DailyFocus {
 export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
   const t = useTranslations("doughSauce.daily");
   const tc = useTranslations("doughSauce.common");
+  const openDebriefPanel = useDebriefActionStore((s) => s.openDebriefPanel);
   const systemLabel = useSystemLabel();
   const day = useDayFormatter();
   const dateTime = useDateTimeFormatter();
@@ -279,18 +281,29 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
       // The 10 OZ dough is counted in single balls but its base is in units of 12 (the server's divisor), so
       // the count is divided the same way before it is compared. The sauce is counted in containers already.
       const divisor = COUNT_DIVIDED_KEYS.includes(k) && (baseByKey[k]?.divisor ?? 0) > 0 ? baseByKey[k]!.divisor : 1;
-      const counted = row ? round4(row.total_in_unit_1 / divisor) : null;
+      const night = row ? round4(row.total_in_unit_1 / divisor) : null;
+      // The first-shift manager's count of THIS day is typed in raw portions: the 10 OZ dough is divided by 12 and the
+      // sauce by 80 (the base's divisor) before it is added to the night count; the 18 OZ dough is added as typed.
+      // No answer adds nothing; it is not a 0. Without a night count there is nothing to add to.
+      const morningDivisor = MORNING_DIVIDED_KEYS.includes(k) && (baseByKey[k]?.divisor ?? 0) > 0 ? baseByKey[k]!.divisor : 1;
+      const rawMorning = base.data?.morning_count?.[k] ?? null;
+      const morning = rawMorning != null ? round4(rawMorning / morningDivisor) : null;
+      const counted = night != null ? round4(night + (morning ?? 0)) : null;
       rows.push({
         key: k,
         base: target,
         counted,
+        night,
+        morning,
+        rawMorning,
+        morningDivisor,
         rawCounted: row ? row.total_in_unit_1 : null,
         divisor,
         variance: counted != null ? variance(counted, target) : null,
       });
     }
     return rows.length > 0 ? rows : null;
-  }, [counts.data, planData, baseByKey, map, prevDay]);
+  }, [counts.data, planData, baseByKey, map, prevDay, base.data?.morning_count]);
   const shortLines = shortage?.filter((s) => s.variance != null && s.variance < 0) ?? [];
   // A plan for today or later is still to be produced, so the previous day's
   // shortage is owed to it. For a day already gone it's just history.
@@ -406,13 +419,51 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
                 onBuffer={(k, v) => setBuffers((s) => ({ ...s, [k]: v }))}
                 bufferErrors={bufferErrors}
                 maxPct={maxPct}
-                shortDay={day.short}
+                shortDay={day.monthDay}
                 makeUpByKey={showFrozen ? makeUpByKey : {}}
                 prevRows={counts.error ? null : shortage}
                 prevDateLabel={day.short(prevDay)}
+                morningCount={base.data?.morning_count}
+                morningDateLabel={day.short(date)}
                 weekday={base.data?.weekday}
                 lookback={base.data?.lookback}
               />
+
+              {/* How the check is made, in plain words — the morning count is new to people. One formula line stays
+                  visible; the rest opens on demand so the card isn't a wall of text. */}
+              {base.data?.morning_count != null && (
+                <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-t bg-muted/20 px-4 py-3 text-xs text-muted-foreground sm:px-5">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="flex items-start gap-1.5 text-foreground">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{t("explainFormula")}</span>
+                    </p>
+                    <details className="ps-5">
+                      <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
+                        {t("explainMore")}
+                      </summary>
+                      <ul className="mt-1.5 list-disc space-y-1 ps-4">
+                        <li>{t("explainNight")}</li>
+                        <li>{t("explainMorning")}</li>
+                        <li>{t("explainNotCounted")}</li>
+                      </ul>
+                    </details>
+                  </div>
+                  {/* The answer is given in the Debrief, not typed here: this opens it on this store and day. A day
+                      that hasn't started has no morning count to enter yet. */}
+                  {store && date <= today && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDebriefPanel("debrief", { date, storeId: store.code })}
+                    >
+                      <Pencil className="me-1.5 h-3.5 w-3.5" />
+                      {t("enterMorning")}
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {shortLines.length > 0 && (
                 <p className="border-t bg-muted/20 px-4 py-2 text-xs text-muted-foreground sm:px-5">
@@ -592,8 +643,15 @@ interface PrevRow {
   key: IngredientKey;
   /** The target the count is judged against: this day's base, before the buffer. */
   base: number;
+  /** What was on hand: night count + morning count, in the base's unit. `variance` is measured from it. */
   counted: number | null;
-  /** The count as inventory recorded it, and what it was divided by to match the base (1 = not converted). */
+  /** The night-before count alone (÷ divisor), and the morning count of this day (null = not counted). */
+  night: number | null;
+  morning: number | null;
+  /** The morning count as typed, and what it was divided by (1 = not converted). */
+  rawMorning: number | null;
+  morningDivisor: number;
+  /** The night count as inventory recorded it, and what it was divided by to match the base (1 = not converted). */
   rawCounted: number | null;
   divisor: number;
   variance: number | null;
@@ -649,9 +707,12 @@ const CONFIRM_BAR = "flex flex-wrap items-center justify-end gap-2 rounded-xl bo
 /** Column title with a one-line "what is this" under it. */
 function HeadHint({ hint, children }: { hint: string; children: React.ReactNode }) {
   return (
-    <span className="flex flex-col items-end gap-0.5">
+    <span className="flex flex-col items-end gap-0.5 whitespace-normal">
       <span>{children}</span>
-      <span className="text-[9px] font-normal normal-case tracking-normal text-muted-foreground">{hint}</span>
+      {/* May wrap: a long title or hint must never be what widens a column and pushes the table into a sideways scroll. */}
+      <span className="max-w-28 text-end text-[9px] font-normal normal-case leading-tight tracking-normal text-muted-foreground">
+        {hint}
+      </span>
     </span>
   );
 }
@@ -676,6 +737,8 @@ function PlanTable({
   makeUpByKey,
   prevRows,
   prevDateLabel,
+  morningCount,
+  morningDateLabel,
   weekday,
   lookback,
 }: {
@@ -695,11 +758,16 @@ function PlanTable({
   /** Null when the previous day can't be checked (no counts, or its plan wasn't confirmed). */
   prevRows: PrevRow[] | null;
   prevDateLabel: string;
+  /** The first-shift manager's morning count for THIS day, per ingredient; undefined until the API serves it. */
+  morningCount?: Partial<Record<IngredientKey, number | null>>;
+  morningDateLabel: string;
   weekday?: string;
   lookback?: number;
 }) {
   const t = useTranslations("doughSauce.daily");
   const showCounted = prevRows != null;
+  // The morning count rides along with the base call, so it shows even when the night counts couldn't load.
+  const showMorning = morningCount != null;
   const showSources = !frozen && sourceDates.length > 0 && Object.keys(baseByKey).length > 0;
   const showMakeUp = frozen && keys.some((k) => (makeUpByKey[k] ?? 0) > 0);
 
@@ -708,7 +776,7 @@ function PlanTable({
       <TableHeader>
         {/* Group labels — say what each block of columns is for. */}
         <TableRow className="hover:bg-transparent">
-          <TableHead colSpan={showCounted ? 2 : 1} className={cn(GROUP, "ps-4 sm:ps-5")}>
+          <TableHead colSpan={1 + (showCounted ? 1 : 0)} className={cn(GROUP, "ps-4 sm:ps-5")}>
             {showCounted ? t("groupCheck") : ""}
           </TableHead>
           {showSources && (
@@ -724,12 +792,20 @@ function PlanTable({
           <TableHead className="ps-4 text-[10px] font-semibold uppercase tracking-wider sm:ps-5">{t("colIngredient")}</TableHead>
           {showCounted && (
             <TableHead className={cn(NUM, HEAD)}>
-              <HeadHint hint={t("hintCounted")}>{t("colCounted", { date: prevDateLabel })}</HeadHint>
+              <HeadHint
+                hint={
+                  showMorning
+                    ? t("hintOnHand", { night: prevDateLabel, morning: morningDateLabel })
+                    : t("hintOnHandNight", { night: prevDateLabel })
+                }
+              >
+                {t("colOnHand")}
+              </HeadHint>
             </TableHead>
           )}
           {showSources &&
             sourceDates.map((d) => (
-              <TableHead key={d} className={cn(NUM, "text-[10px] font-semibold tracking-wider")}>
+              <TableHead key={d} className={cn(NUM, "px-1.5 text-[10px] font-semibold tracking-wider")}>
                 {shortDay(d)}
               </TableHead>
             ))}
@@ -782,50 +858,75 @@ function PlanTable({
                 {base?.unit && <p className="text-[11px] text-muted-foreground">{base.unit}</p>}
               </TableCell>
 
+              {/* The day-before check in ONE cell: what was on hand (big), how it adds up (small), and how far it is
+                  from this day's base (the chip). Hover for the arithmetic and any unit conversion. */}
               {showCounted && (
-                <TableCell className={NUM}>
+                <TableCell className="whitespace-normal text-end">
                   {!prev || prev.counted == null ? (
                     <span className="inline-flex items-center justify-end gap-1.5 text-xs text-muted-foreground">
                       <CircleDashed className="h-3.5 w-3.5" />
                       {t("prevNotCounted")}
                     </span>
                   ) : (
-                    <>
-                      {prev.divisor > 1 && prev.rawCounted != null ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            {/* Dotted underline = "hover for the original count", like the converted daily numbers. */}
-                            <p className="inline-block cursor-help font-semibold underline decoration-muted-foreground/40 decoration-dotted underline-offset-4">
-                              {fmtQty(prev.counted)}
-                            </p>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-64">
-                            {t("countedCellTitle", {
-                              raw: fmtQty(prev.rawCounted),
-                              divisor: fmtQty(prev.divisor),
-                              result: fmtQty(prev.counted),
-                              unit: base?.unit ?? "",
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="inline-flex cursor-help flex-col items-end gap-1">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                isShort ? "bg-rose-500/15 text-rose-700 dark:text-rose-400" : "bg-muted text-muted-foreground"
+                              )}
+                            >
+                              {/* Both directions show, as in the weekly grid: short is the one to act on, over is for information. */}
+                              {isShort
+                                ? t("prevShort", { by: fmtGap(k, Math.abs(prev.variance!)) })
+                                : isOver
+                                  ? t("prevOver", { by: fmtGap(k, prev.variance!) })
+                                  : t("prevMet")}
+                            </span>
+                            <span className="font-heading text-lg font-semibold leading-none tabular-nums">{fmtQty(prev.counted)}</span>
+                          </div>
+                          <span className="text-[11px] tabular-nums text-muted-foreground">
+                            {!showMorning
+                              ? t("sumNightOnly", { night: fmtQty(prev.night!) })
+                              : prev.morning != null
+                                ? t("sumLine", { night: fmtQty(prev.night!), morning: fmtQty(prev.morning) })
+                                : t("sumNoMorning", { night: fmtQty(prev.night!) })}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-72 whitespace-pre-line text-start">
+                        {(prev.morning != null
+                          ? t("onHandTitle", {
+                              night: fmtQty(prev.night!),
+                              morning: fmtQty(prev.morning),
+                              total: fmtQty(prev.counted),
                               base: fmtQty(prev.base),
-                            })}
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <p className="font-semibold">{fmtQty(prev.counted)}</p>
-                      )}
-                      <p
-                        className={cn(
-                          "text-[11px]",
-                          isShort ? "font-medium text-rose-700 dark:text-rose-400" : "text-muted-foreground"
-                        )}
-                      >
-                        {/* Both directions show, as in the weekly grid: short is the one to act on, over is for information. */}
-                        {isShort
-                          ? t("prevShort", { by: fmtGap(k, Math.abs(prev.variance!)) })
-                          : isOver
-                            ? t("prevOver", { by: fmtGap(k, prev.variance!) })
-                            : t("prevMet")}
-                      </p>
-                    </>
+                            })
+                          : t("onHandTitleNoMorning", {
+                              night: fmtQty(prev.night!),
+                              total: fmtQty(prev.counted),
+                              base: fmtQty(prev.base),
+                            })) +
+                          (prev.divisor > 1 && prev.rawCounted != null
+                            ? "\n" +
+                              t("nightConverted", {
+                                raw: fmtQty(prev.rawCounted),
+                                divisor: fmtQty(prev.divisor),
+                                result: fmtQty(prev.night!),
+                              })
+                            : "") +
+                          (prev.morningDivisor > 1 && prev.rawMorning != null
+                            ? "\n" +
+                              t("morningConverted", {
+                                raw: fmtQty(prev.rawMorning),
+                                divisor: fmtQty(prev.morningDivisor),
+                                result: fmtQty(prev.morning!),
+                              })
+                            : "")}
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </TableCell>
               )}
@@ -836,7 +937,7 @@ function PlanTable({
                   const v = base?.values?.[i];
                   const shown = v == null ? "" : fmtQty(round2(v / divisor));
                   return (
-                    <TableCell key={d} className={cn(NUM, "text-muted-foreground")}>
+                    <TableCell key={d} className={cn(NUM, "px-1.5 text-muted-foreground")}>
                       {v == null ? (
                         <MissingValue reason={t("noSalesThatDay")} />
                       ) : divisor > 1 ? (

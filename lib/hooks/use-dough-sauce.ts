@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { doughSauceService, DoughSauceError } from "@/lib/api/services/dough-sauce.service";
 import { buildIngredientMap, type IngredientMap } from "@/lib/dough-sauce/ingredient-map";
-import { buildWeekCells, indexCounts, unplannedCountedDays, type WeekCells } from "@/lib/dough-sauce/week-cells";
+import { buildWeekCells, indexCounts, lookupDays, unplannedCountedDays, type WeekCells } from "@/lib/dough-sauce/week-cells";
 import { isPlanComplete, progress, rankBy, score, type ScoreBreakdown } from "@/lib/dough-sauce/formulas";
 import { addDaysIso, daysBetween, todayIso } from "@/lib/dough-sauce/dates";
 import type {
@@ -274,13 +274,28 @@ function basesOf(date: string, daysFound: number | undefined, ingredients: { key
   return out.size > 0 ? out : null;
 }
 
+/** `${date}|${key}` → the morning count, for the answered keys only (null = no answer is simply absent). */
+function morningsOf(date: string, morning: Partial<Record<string, number | null>> | undefined) {
+  const out = new Map<string, number>();
+  for (const [key, v] of Object.entries(morning ?? {})) if (typeof v === "number" && Number.isFinite(v)) out.set(`${date}|${key}`, v);
+  return out;
+}
+
 interface BasesState {
   /** Per store: `${date}|${ingredientKey}` → base. */
   values: Record<string, Map<string, number>>;
+  /** Per store: `${date}|${ingredientKey}` → the first-shift morning count (answered ones only). */
+  mornings: Record<string, Map<string, number>>;
   /** `${store}|${date}` → how that day's lookup ended. A day that isn't here is still pending. */
   settled: Record<string, "ok" | "failed">;
 }
-const NO_BASES: BasesState = { values: {}, settled: {} };
+const NO_BASES: BasesState = { values: {}, mornings: {}, settled: {} };
+
+/**
+ * In the day-by-day fallback, a planned day's morning count costs one request per store-day. Past this many stores
+ * (a whole chain) it is skipped — judged on the night count alone — instead of firing a thousand requests.
+ */
+const DAY_TIER_PLANNED_STORES = 5;
 
 export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap, mapReady: boolean) {
   const [weekly, setWeekly] = useState<Panel<WeeklyPlansResponse>>(EMPTY);
@@ -524,13 +539,15 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
   const baseLookups = useMemo(() => {
     const data = weekly.data;
     if (!data) return [];
-    const out: { store: string; date: string }[] = [];
+    const today = todayIso();
+    // `needsBase`: an unplanned counted day (base + morning count). Otherwise a planned day, read only for its morning count.
+    const out: { store: string; date: string; needsBase: boolean }[] = [];
     const add = (week: { week_start: string; week_end: string }, stores: { store: string; plans: StoredPlanRow[] }[]) => {
       for (const s of stores) {
         const sc = counts[s.store];
         if (sc?.status !== "ready" || !sc.map) continue;
-        for (const date of unplannedCountedDays(week.week_start, week.week_end, s.plans, sc.map)) {
-          out.push({ store: s.store, date });
+        for (const l of lookupDays(week.week_start, week.week_end, s.plans, sc.map, today)) {
+          out.push({ store: s.store, date: l.date, needsBase: l.needsBase });
         }
       }
     };
@@ -552,10 +569,12 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     const range = rangeRef.current;
     if (!range || range.signal.aborted || !previousLoaded) return;
     const byStore = new Map<string, string[]>();
+    const needsBase = new Set<string>();
     for (const l of baseLookups) {
       const id = `${l.store}|${l.date}`;
       if (basesRequestedRef.current.has(id)) continue;
       basesRequestedRef.current.add(id);
+      if (l.needsBase) needsBase.add(id);
       const dates = byStore.get(l.store);
       if (dates) dates.push(l.date);
       else byStore.set(l.store, [l.date]);
@@ -563,9 +582,15 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     if (byStore.size === 0) return;
 
     const { signal } = range;
-    const record = (store: string, found: Map<string, number>, outcome: Record<string, "ok" | "failed">) =>
+    const record = (
+      store: string,
+      found: Map<string, number>,
+      outcome: Record<string, "ok" | "failed">,
+      morning: Map<string, number> = new Map()
+    ) =>
       setBases((b) => ({
         values: found.size ? { ...b.values, [store]: new Map([...(b.values[store] ?? []), ...found]) } : b.values,
+        mornings: morning.size ? { ...b.mornings, [store]: new Map([...(b.mornings[store] ?? []), ...morning]) } : b.mornings,
         settled: {
           ...b.settled,
           ...Object.fromEntries(Object.entries(outcome).map(([date, end]) => [`${store}|${date}`, end])),
@@ -574,11 +599,17 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     // The fallback: one request per day, one at a time per store (the stores themselves run in parallel).
     const oneByOne = (store: string, dates: string[]) =>
       pool(dates, 1, async (date) => {
+        // A planned day only wants its morning count: skipped (night count alone) when it would be a chain-wide flood.
+        if (!needsBase.has(`${store}|${date}`) && byStore.size > DAY_TIER_PLANNED_STORES) {
+          record(store, new Map(), { [date]: "ok" });
+          return;
+        }
         try {
           const res = await doughSauceService.getDailyPlanBase(store, date, {}, signal);
           if (signal.aborted) return;
           const found = basesOf(date, res.days_found, res.ingredients);
-          record(store, found ?? new Map(), { [date]: found ? "ok" : "failed" });
+          const ok = needsBase.has(`${store}|${date}`) ? found != null : true;
+          record(store, found ?? new Map(), { [date]: ok ? "ok" : "failed" }, morningsOf(date, res.morning_count));
         } catch {
           if (!signal.aborted) record(store, new Map(), { [date]: "failed" });
         }
@@ -601,15 +632,19 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
             if (signal.aborted) return;
             for (const [store, dates] of asked) {
               const found = new Map<string, number>();
+              const morning = new Map<string, number>();
               const outcome: Record<string, "ok" | "failed"> = {};
               for (const date of dates) {
                 // A store or date the answer left out, or an empty `{}` entry, can't be checked.
                 const entry = res.stores?.[store]?.[date];
                 const bases = entry ? basesOf(date, entry.days_found, entry.ingredients) : null;
                 if (bases) for (const [key, base] of bases) found.set(key, base);
-                outcome[date] = bases ? "ok" : "failed";
+                if (entry) for (const [key, v] of morningsOf(date, entry.morning_count)) morning.set(key, v);
+                // An unplanned day needs its base; a planned day only needs the store-day to be in the answer.
+                const answered = needsBase.has(`${store}|${date}`) ? bases != null : entry != null && Object.keys(entry).length > 0;
+                outcome[date] = answered ? "ok" : "failed";
               }
-              record(store, found, outcome);
+              record(store, found, outcome, morning);
             }
           } catch (err) {
             if (signal.aborted || isAbort(err)) return;
@@ -638,6 +673,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
       // that skipped the fetch must not score them against an empty set.
       const storeCounts = countsStatus === "ready" ? sc!.map : null;
       const storeBases = bases.values[s.store];
+      const storeMornings = bases.mornings[s.store];
       const cells = buildWeekCells(
         data.week.week_start,
         data.week.week_end,
@@ -645,14 +681,22 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         storeCounts,
         today,
         storeBases,
-        map.countDivisor
+        map.countDivisor,
+        storeMornings,
+        map.morningDivisor
       );
-      // Counted days with no plan are scored too, but only once their base is known: until every one of
-      // them has ended its lookup the variance part is unknown, never a score that is about to change.
+      // Counted days with no plan are scored too, but only once their base is known, and every judged day waits
+      // for its morning count: until every one of them has ended its lookup the variance part is unknown, never
+      // a score that is about to change.
       const unplanned = storeCounts
         ? unplannedCountedDays(data.week.week_start, data.week.week_end, s.plans, storeCounts)
         : [];
-      const basesPending = unplanned.some((d) => lookup(s.store, d) == null);
+      const toLookUp = storeCounts
+        ? lookupDays(data.week.week_start, data.week.week_end, s.plans, storeCounts, today).map((l) => l.date)
+        : [];
+      const basesPending = toLookUp.some((d) => lookup(s.store, d) == null);
+      // Only an unplanned day left unread is left out of the score; a planned day whose morning count couldn't be
+      // read is judged on its night count alone.
       const uncheckedDays = unplanned.filter((d) => lookup(s.store, d) === "failed").length;
       const breakdown = score({
         cellsOk: cells.cellsOk,
@@ -667,13 +711,24 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
         const row = p?.stores.find((r) => r.store === s.store);
         if (!p?.week || !row || !storeCounts) return null;
         const days = unplannedCountedDays(p.week.week_start, p.week.week_end, row.plans, storeCounts);
-        if (days.some((d) => lookup(s.store, d) == null)) {
+        const prevLookUp = lookupDays(p.week.week_start, p.week.week_end, row.plans, storeCounts, today).map((l) => l.date);
+        if (prevLookUp.some((d) => lookup(s.store, d) == null)) {
           previousPending = true;
           return null;
         }
         // A day that couldn't be checked would leave a score that is wrong, not just late: no data instead.
         if (days.some((d) => lookup(s.store, d) === "failed")) return null;
-        const prevCells = buildWeekCells(p.week.week_start, p.week.week_end, row.plans, storeCounts, today, storeBases, map.countDivisor);
+        const prevCells = buildWeekCells(
+          p.week.week_start,
+          p.week.week_end,
+          row.plans,
+          storeCounts,
+          today,
+          storeBases,
+          map.countDivisor,
+          storeMornings,
+          map.morningDivisor
+        );
         // A week with no plan, nothing counted and no judgement has no score to compare
         // against — it's "no data", not 0% (rule 2), or it would inflate progress.
         const judged = row.judgement?.stickers_compliance != null || row.judgement?.dough_quality != null;
@@ -719,7 +774,7 @@ export function useWeeklyGrid(weekStart: string | undefined, map: IngredientMap,
     const ranked = withRank.filter((r) => r.rank > 0).sort((a, b) => a.rank - b.rank);
     const rest = withRank.filter((r) => r.rank === 0);
     return [...ranked, ...rest];
-  }, [weekly.data, previous, previousLoaded, counts, bases, map.countDivisor]);
+  }, [weekly.data, previous, previousLoaded, counts, bases, map.countDivisor, map.morningDivisor]);
 
   const countsSummary = useMemo(() => {
     // Every store's score depends on its counts: a day nobody planned still scores once it was counted.

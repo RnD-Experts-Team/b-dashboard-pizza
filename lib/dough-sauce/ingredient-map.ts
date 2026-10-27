@@ -20,6 +20,14 @@ export const COUNT_DIVIDED_KEYS: IngredientKey[] = ["dough_10oz"];
 /** Used only when the ingredients list carries no divisor. */
 const FALLBACK_COUNT_DIVISOR = 12;
 
+/**
+ * The first-shift MORNING count is typed in raw portions for both the 10 OZ dough (balls, ÷12) and the sauce (÷80),
+ * unlike the night count, whose sauce is already in containers. Confirmed by the user 2026-10-27, so it is divided
+ * before it is added to the night count. The 18 OZ dough is not divided.
+ */
+export const MORNING_DIVIDED_KEYS: IngredientKey[] = ["dough_10oz", "sauce"];
+const FALLBACK_MORNING_DIVISOR: Partial<Record<IngredientKey, number>> = { dough_10oz: 12, sauce: 80 };
+
 /** Raw count → the unit the base is in, rounded like the plan payload (4 decimals). */
 export const toBaseUnit = (raw: number, divisor: number) =>
   divisor > 1 ? Math.round((raw / divisor) * 10_000) / 10_000 : raw;
@@ -32,17 +40,21 @@ export interface IngredientMap {
   ultimatrixIds: string[];
   /** What a count of this ingredient is divided by before it meets a base. Absent = compared as is. */
   countDivisor: Partial<Record<IngredientKey, number>>;
+  /** What a MORNING count of this ingredient is divided by before it is added to the night count. */
+  morningDivisor: Partial<Record<IngredientKey, number>>;
 }
 
 export function buildIngredientMap(ingredients: Ingredient[] | null | undefined): IngredientMap {
   const refOf = { ...FALLBACK_REFS };
   const countDivisor: Partial<Record<IngredientKey, number>> = {};
+  const morningDivisor: Partial<Record<IngredientKey, number>> = { ...FALLBACK_MORNING_DIVISOR };
   for (const key of COUNT_DIVIDED_KEYS) countDivisor[key] = FALLBACK_COUNT_DIVISOR;
   for (const ing of ingredients ?? []) {
     if (ing.inventory_ref && ing.key in refOf) refOf[ing.key] = ing.inventory_ref;
     if (COUNT_DIVIDED_KEYS.includes(ing.key) && ing.divisor && ing.divisor > 0) countDivisor[ing.key] = ing.divisor;
+    if (MORNING_DIVIDED_KEYS.includes(ing.key) && ing.divisor && ing.divisor > 0) morningDivisor[ing.key] = ing.divisor;
   }
   const keyOf: Record<string, IngredientKey> = {};
   for (const [key, ref] of Object.entries(refOf) as [IngredientKey, string][]) keyOf[ref] = key;
-  return { refOf, keyOf, ultimatrixIds: Object.values(refOf), countDivisor };
+  return { refOf, keyOf, ultimatrixIds: Object.values(refOf), countDivisor, morningDivisor };
 }

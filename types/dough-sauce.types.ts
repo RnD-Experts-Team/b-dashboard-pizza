@@ -173,6 +173,12 @@ export interface DailyPlanBase {
   include_refunded: boolean;
   ingredients: BaseIngredient[];
   unmapped: UnmappedItem[];
+  /**
+   * What the first-shift manager counted in the morning Debrief, per ingredient: a FULL count of everything on
+   * hand, in the PLAN's own unit (never divided by 12 or 80). A number is exactly what was typed, `0` is a real
+   * zero answer, `null` means no answer. Absent until the backend serves it.
+   */
+  morning_count?: Partial<Record<IngredientKey, number | null>>;
 }
 
 /**
@@ -183,6 +189,8 @@ export interface DailyPlanEntry {
   date?: string;
   days_found?: number;
   ingredients?: Pick<BaseIngredient, "key" | "base">[];
+  /** The first-shift morning count of this day (see `DailyPlanBase.morning_count`); null = no answer. */
+  morning_count?: Partial<Record<IngredientKey, number | null>>;
 }
 
 /**
