@@ -283,12 +283,12 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
       const divisor = COUNT_DIVIDED_KEYS.includes(k) && (baseByKey[k]?.divisor ?? 0) > 0 ? baseByKey[k]!.divisor : 1;
       const night = row ? round4(row.total_in_unit_1 / divisor) : null;
       // The first-shift manager's count of THIS day is typed in raw portions: the 10 OZ dough is divided by 12 and the
-      // sauce by 80 (the base's divisor) before it is added to the night count; the 18 OZ dough is added as typed.
-      // No answer adds nothing; it is not a 0. Without a night count there is nothing to add to.
+      // sauce by 80 (the base's divisor); the 18 OZ dough is used as typed. An answer (a real 0 included) REPLACES the
+      // night count as what the day is judged on; no answer (null) means the night count is used.
       const morningDivisor = MORNING_DIVIDED_KEYS.includes(k) && (baseByKey[k]?.divisor ?? 0) > 0 ? baseByKey[k]!.divisor : 1;
       const rawMorning = base.data?.morning_count?.[k] ?? null;
       const morning = rawMorning != null ? round4(rawMorning / morningDivisor) : null;
-      const counted = night != null ? round4(night + (morning ?? 0)) : null;
+      const counted = morning ?? night;
       rows.push({
         key: k,
         base: target,
@@ -888,28 +888,27 @@ function PlanTable({
                             <span className="font-heading text-lg font-semibold leading-none tabular-nums">{fmtQty(prev.counted)}</span>
                           </div>
                           <span className="text-[11px] tabular-nums text-muted-foreground">
-                            {!showMorning
-                              ? t("sumNightOnly", { night: fmtQty(prev.night!) })
-                              : prev.morning != null
-                                ? t("sumLine", { night: fmtQty(prev.night!), morning: fmtQty(prev.morning) })
-                                : t("sumNoMorning", { night: fmtQty(prev.night!) })}
+                            {prev.morning != null
+                              ? prev.night != null
+                                ? t("sumLine", { night: fmtQty(prev.night), morning: fmtQty(prev.morning) })
+                                : t("sumMorningOnly", { morning: fmtQty(prev.morning) })
+                              : showMorning
+                                ? t("sumNoMorning", { night: fmtQty(prev.night!) })
+                                : t("sumNightOnly", { night: fmtQty(prev.night!) })}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-72 whitespace-pre-line text-start">
                         {(prev.morning != null
-                          ? t("onHandTitle", {
-                              night: fmtQty(prev.night!),
-                              morning: fmtQty(prev.morning),
-                              total: fmtQty(prev.counted),
-                              base: fmtQty(prev.base),
-                            })
-                          : t("onHandTitleNoMorning", {
-                              night: fmtQty(prev.night!),
-                              total: fmtQty(prev.counted),
-                              base: fmtQty(prev.base),
-                            })) +
-                          (prev.divisor > 1 && prev.rawCounted != null
+                          ? prev.night != null
+                            ? t("onHandTitle", {
+                                night: fmtQty(prev.night),
+                                morning: fmtQty(prev.morning),
+                                base: fmtQty(prev.base),
+                              })
+                            : t("onHandTitleNoNight", { morning: fmtQty(prev.morning), base: fmtQty(prev.base) })
+                          : t("onHandTitleNoMorning", { night: fmtQty(prev.night!), base: fmtQty(prev.base) })) +
+                          (prev.morning == null && prev.divisor > 1 && prev.rawCounted != null
                             ? "\n" +
                               t("nightConverted", {
                                 raw: fmtQty(prev.rawCounted),
