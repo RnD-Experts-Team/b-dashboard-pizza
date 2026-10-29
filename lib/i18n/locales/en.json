@@ -2001,7 +2001,8 @@
       "openCoveredNote": "{connected} of {open} open hours, {count, plural, one {# store} other {# stores}}",
       "openCoveredNone": "No opening hours set for these stores",
       "managerTarget": "Manager target",
-      "managerTargetNote": "{avg} per manager of {target} (8h a day)"
+      "managerTargetNote": "{avg} per manager of {target} (8h a day)",
+      "openCoveredNoteSoFar": "{connected} of {open} open hours so far (today until now), {count, plural, one {# store} other {# stores}}"
     },
     "glance": {
       "mostPresent": "{name} is the most present: a face on camera {share} of the time.",
@@ -2062,7 +2063,8 @@
       "camera": "Camera",
       "openHours": "Open hours",
       "openShare": "Of open hours",
-      "ofTarget": "Of {target} target"
+      "ofTarget": "Of {target} target",
+      "openHoursSoFar": "Open hours so far"
     },
     "legend": {
       "present": "Present",

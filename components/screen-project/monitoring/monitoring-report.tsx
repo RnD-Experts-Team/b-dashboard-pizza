@@ -49,18 +49,21 @@ export function MonitoringReport({
   const k = report.totals;
 
   // Store opening hours come from the stores' metadata the auth calls already loaded.
-  const openByStore = useMemo(() => {
+  const { openByStore, openSoFar } = useMemo(() => {
     const from = Date.parse(report.range.from);
+    const end = Date.parse(report.range.to);
     // Hours still to come are not owed yet; a refetched report (new range object) moves "now" on.
     // eslint-disable-next-line react-hooks/purity
-    const to = Math.min(Date.parse(report.range.to), Date.now());
+    const now = Date.now();
+    const to = Math.min(end, now);
     const hours = new Map((overviewStores ?? []).map((s) => [s.storeId, storeOpenHours(s.metadata)]));
-    return Object.fromEntries(
+    const byStore = Object.fromEntries(
       stores.flatMap((code) => {
         const h = hours.get(code);
         return h ? [[code, openSeconds(h, from, to)]] : [];
       }),
     ) as Record<string, number>;
+    return { openByStore: byStore, openSoFar: end > now };
   }, [overviewStores, stores, report.range]);
   const openTotal = Object.values(openByStore).reduce((a, b) => a + b, 0);
   const openConnected = report.stores.filter((s) => s.store in openByStore).reduce((a, s) => a + s.on_screen, 0);
@@ -90,7 +93,7 @@ export function MonitoringReport({
       tint: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
       note:
         openTotal > 0
-          ? t("kpi.openCoveredNote", {
+          ? t(openSoFar ? "kpi.openCoveredNoteSoFar" : "kpi.openCoveredNote", {
               connected: formatDuration(openConnected),
               open: formatDuration(openTotal),
               count: Object.keys(openByStore).length,
@@ -265,7 +268,7 @@ export function MonitoringReport({
             <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
           )}
         </AnalyticsCard>
-        <StoresCard report={report} openByStore={openByStore} />
+        <StoresCard report={report} openByStore={openByStore} openSoFar={openSoFar} />
       </div>
 
       <ScreensTable report={report} />
@@ -328,7 +331,16 @@ type StoreRowView = UsageStoreRow & { open_hours: number | null; open_share: num
 const STORE_TEXT_KEYS: (keyof StoreRowView)[] = ["store"];
 const SCREEN_TEXT_KEYS: (keyof UsageScreenRow & string)[] = ["name", "store"];
 
-function StoresCard({ report, openByStore }: { report: UsageReport; openByStore: Record<string, number> }) {
+function StoresCard({
+  report,
+  openByStore,
+  openSoFar,
+}: {
+  report: UsageReport;
+  openByStore: Record<string, number>;
+  /** The range runs past now: open hours count only up to now. */
+  openSoFar: boolean;
+}) {
   const t = useTranslations("screenMonitoring");
   const withOpen = useMemo<StoreRowView[]>(
     () =>
@@ -351,7 +363,7 @@ function StoresCard({ report, openByStore }: { report: UsageReport; openByStore:
               {head("store", t("columns.store"))}
               {head("managers", t("columns.managers"), "text-end")}
               {head("on_screen", t("columns.onScreen"), "text-end")}
-              {head("open_hours", t("columns.openHours"), "text-end")}
+              {head("open_hours", t(openSoFar ? "columns.openHoursSoFar" : "columns.openHours"), "text-end")}
               {head("open_share", t("columns.openShare"), "text-end")}
               {head("present", t("columns.present"), "text-end")}
               {head("talking", t("columns.talking"), "text-end")}
