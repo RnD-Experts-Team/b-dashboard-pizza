@@ -162,7 +162,7 @@ export function lookupDays(
  * planned cell. Until the base is supplied the cell stays "–" and unscored.
  *
  * What a day is judged on: the first-shift MORNING count of the plan's own day when one was entered — a real 0
- * included, typed in raw portions so ÷ `morningDivisor` (12 for the 10 OZ dough, 80 for the sauce) — and it REPLACES the
+ * included, typed in raw portions so ÷ `morningDivisor` (12 for the 10 OZ dough only; the sauce and the 18 OZ are as typed) — and it REPLACES the
  * night count; when nobody answered, the night-before count (÷ `countDivisor`) is used. `mornings` (keyed
  * `${date}|${ingredientKey}`) holds only answers; a missing entry = not counted. A morning count also stands in for a
  * night count nobody took.
