@@ -1990,11 +1990,9 @@
       "onScreen": "Connected",
       "onScreenNote": "{avg} per manager",
       "present": "Present",
-      "presentNote": "{duration} face on camera",
       "away": "Away",
       "awayNote": "Camera off, covered or no face",
       "talking": "Talking",
-      "talkingNote": "{share} of mic time",
       "kicks": "Kicked",
       "kicksNote": "Same-store login took over",
       "openCovered": "Open hours covered",
@@ -2002,7 +2000,12 @@
       "openCoveredNone": "No opening hours set for these stores",
       "managerTarget": "Manager target",
       "managerTargetNote": "{avg} per manager of {target} (8h a day)",
-      "openCoveredNoteSoFar": "{connected} of {open} open hours so far (today until now), {count, plural, one {# store} other {# stores}}"
+      "openCoveredNoteSoFar": "{connected} of {open} open hours so far (today until now), {count, plural, one {# store} other {# stores}}",
+      "ofOpen": "Of open hours",
+      "ofOpenSoFar": "Of open hours so far",
+      "ofConnected": "Of connected",
+      "partOf": "{part} of {whole}",
+      "noOpenHours": "No opening hours set"
     },
     "glance": {
       "mostPresent": "{name} is the most present: a face on camera {share} of the time.",
@@ -2062,9 +2065,13 @@
       "mainTile": "Main tile",
       "camera": "Camera",
       "openHours": "Open hours",
-      "openShare": "Of open hours",
-      "ofTarget": "Of {target} target",
-      "openHoursSoFar": "Open hours so far"
+      "openShare": "Connected % of open",
+      "ofTarget": "Connected % of {target}",
+      "presentOfTarget": "Present % of {target}",
+      "talkingOfTarget": "Talking % of {target}",
+      "openHoursSoFar": "Open hours so far",
+      "presentOpenShare": "Present % of open",
+      "talkingOpenShare": "Talking % of open"
     },
     "legend": {
       "present": "Present",
@@ -2075,9 +2082,11 @@
       "cameraOff": "Camera off",
       "silent": "Silent",
       "deadMic": "Dead mic",
-      "micOff": "Mic off"
+      "micOff": "Mic off",
+      "notConnected": "Not connected"
     },
     "charts": {
+      "basis": "Charts show shares",
       "dailyCaption": "Hours present, away and talking per day.",
       "hourOfDay": "Hour of day",
       "heatmapMode": "Show present or away",

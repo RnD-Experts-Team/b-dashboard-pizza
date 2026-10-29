@@ -1989,11 +1989,9 @@
       "onScreen": "متصل",
       "onScreenNote": "{avg} لكل مدير",
       "present": "حاضر",
-      "presentNote": "{duration} وجه أمام الكاميرا",
       "away": "غائب",
       "awayNote": "كاميرا مطفأة أو مغطاة أو بلا وجه",
       "talking": "التحدث",
-      "talkingNote": "{share} من وقت الميكروفون",
       "kicks": "تم الفصل",
       "kicksNote": "تسجيل دخول آخر لنفس المتجر",
       "openCovered": "تغطية ساعات العمل",
@@ -2001,7 +1999,12 @@
       "openCoveredNone": "لا توجد ساعات عمل محددة لهذه المتاجر",
       "managerTarget": "هدف المدير",
       "managerTargetNote": "{avg} لكل مدير من {target} (8 ساعات يومياً)",
-      "openCoveredNoteSoFar": "{connected} من {open} ساعات عمل حتى الآن (اليوم حتى هذه اللحظة)، {count, plural, one {متجر واحد} other {# متاجر}}"
+      "openCoveredNoteSoFar": "{connected} من {open} ساعات عمل حتى الآن (اليوم حتى هذه اللحظة)، {count, plural, one {متجر واحد} other {# متاجر}}",
+      "ofOpen": "من ساعات العمل",
+      "ofOpenSoFar": "من ساعات العمل حتى الآن",
+      "ofConnected": "من وقت الاتصال",
+      "partOf": "{part} من {whole}",
+      "noOpenHours": "لا توجد ساعات عمل محددة"
     },
     "glance": {
       "mostPresent": "{name} الأكثر حضورًا: وجه أمام الكاميرا {share} من الوقت.",
@@ -2061,9 +2064,13 @@
       "mainTile": "المربع الرئيسي",
       "camera": "الكاميرا",
       "openHours": "ساعات العمل",
-      "openShare": "من ساعات العمل",
-      "ofTarget": "من هدف {target}",
-      "openHoursSoFar": "ساعات العمل حتى الآن"
+      "openShare": "متصل % من ساعات العمل",
+      "ofTarget": "متصل % من هدف {target}",
+      "presentOfTarget": "حاضر % من هدف {target}",
+      "talkingOfTarget": "يتحدث % من هدف {target}",
+      "openHoursSoFar": "ساعات العمل حتى الآن",
+      "presentOpenShare": "حاضر % من ساعات العمل",
+      "talkingOpenShare": "يتحدث % من ساعات العمل"
     },
     "legend": {
       "present": "حاضر",
@@ -2074,9 +2081,11 @@
       "cameraOff": "الكاميرا مطفأة",
       "silent": "صامت",
       "deadMic": "ميكروفون معطّل",
-      "micOff": "الميكروفون مطفأ"
+      "micOff": "الميكروفون مطفأ",
+      "notConnected": "غير متصل"
     },
     "charts": {
+      "basis": "النسب في الرسوم",
       "dailyCaption": "ساعات الحضور والغياب والتحدث لكل يوم.",
       "hourOfDay": "ساعة اليوم",
       "heatmapMode": "عرض الحضور أو الغياب",

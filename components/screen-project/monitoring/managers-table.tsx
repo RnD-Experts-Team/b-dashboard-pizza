@@ -11,7 +11,8 @@ import type { UsageUserRow } from "@/lib/screen-usage/types";
 
 type SortKey =
   | "name" | "on_screen" | "present" | "present_share" | "away" | "no_face" | "covered" | "mic_open"
-  | "talking" | "talk_share" | "dead_mic" | "talk_all" | "pip" | "kicks" | "last_seen" | "target_share";
+  | "talking" | "talk_share" | "dead_mic" | "talk_all" | "pip" | "kicks" | "last_seen" | "target_share"
+  | "present_target" | "talking_target";
 
 const ACCESSORS: Record<SortKey, (u: UsageUserRow) => number | string> = {
   name: (u) => u.name.toLowerCase(),
@@ -29,8 +30,10 @@ const ACCESSORS: Record<SortKey, (u: UsageUserRow) => number | string> = {
   pip: (u) => u.pip,
   kicks: (u) => u.kicks,
   last_seen: (u) => u.last_seen,
-  // Every manager has the same target, so on-screen time orders them the same way.
+  // Every manager has the same target, so the times themselves order them the same way.
   target_share: (u) => u.on_screen,
+  present_target: (u) => u.present,
+  talking_target: (u) => u.talking,
 };
 
 const PAGE = 10;
@@ -48,7 +51,7 @@ export function ManagersTable({
 }) {
   const t = useTranslations("screenMonitoring");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "on_screen", desc: true });
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "present_target", desc: true });
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,16 +112,18 @@ export function ManagersTable({
         <thead className="border-b bg-muted/40">
           <tr>
             {head("name", t("columns.manager"), false)}
-            {head("on_screen", t("columns.onScreen"))}
+            {head("present_target", t("columns.presentOfTarget", { target: formatDuration(targetSeconds) }))}
+            {head("talking_target", t("columns.talkingOfTarget", { target: formatDuration(targetSeconds) }))}
             {head("target_share", t("columns.ofTarget", { target: formatDuration(targetSeconds) }))}
             {head("present", t("columns.present"))}
             {head("present_share", t("columns.presentPct"))}
+            {head("talking", t("columns.talking"))}
+            {head("talk_share", t("columns.talkingPct"))}
+            {head("on_screen", t("columns.onScreen"))}
             {head("away", t("columns.away"))}
             {head("no_face", t("columns.noFace"))}
             {head("covered", t("columns.covered"))}
             {head("mic_open", t("columns.micOpen"))}
-            {head("talking", t("columns.talking"))}
-            {head("talk_share", t("columns.talkingPct"))}
             {head("dead_mic", t("columns.deadMic"))}
             {head("talk_all", t("columns.talkAll"))}
             {head("pip", t("columns.pip"))}
@@ -131,7 +136,7 @@ export function ManagersTable({
         <tbody className="divide-y">
           {paged.rows.length === 0 && (
             <tr>
-              <td colSpan={18} className="px-5 py-10 text-center text-muted-foreground">{t("noMatches")}</td>
+              <td colSpan={20} className="px-5 py-10 text-center text-muted-foreground">{t("noMatches")}</td>
             </tr>
           )}
           {paged.rows.map((u) => {
@@ -155,7 +160,8 @@ export function ManagersTable({
                   </button>
                   <div className="max-w-56 whitespace-normal text-xs text-muted-foreground">{u.stores.join(", ")}</div>
                 </td>
-                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.on_screen)}</td>
+                <td className={cn(TD, "text-end font-semibold tabular-nums")}>{percent(u.present, targetSeconds)}</td>
+                <td className={cn(TD, "text-end font-semibold tabular-nums")}>{percent(u.talking, targetSeconds)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{percent(u.on_screen, targetSeconds)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.present)}</td>
                 <td className={cn(TD, "text-end")}>
@@ -169,6 +175,9 @@ export function ManagersTable({
                     <span className="w-9 text-end text-xs tabular-nums">{percent(u.present, u.on_screen)}</span>
                   </div>
                 </td>
+                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.talking)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{percent(u.talking, u.mic_open)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.on_screen)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.away)}</td>
                 <td className={cn(TD, "text-end tabular-nums", u.no_face > 0 && "text-amber-600 dark:text-amber-400")}>
                   {u.no_face > 0 ? formatDuration(u.no_face) : "—"}
@@ -177,8 +186,6 @@ export function ManagersTable({
                   {u.covered > 0 ? formatDuration(u.covered) : "—"}
                 </td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.mic_open)}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.talking)}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>{percent(u.talking, u.mic_open)}</td>
                 <td className={cn(TD, "text-end tabular-nums", u.dead_mic > 0 && "text-red-600 dark:text-red-400")}>
                   {u.dead_mic > 0 ? formatDuration(u.dead_mic) : "—"}
                 </td>
