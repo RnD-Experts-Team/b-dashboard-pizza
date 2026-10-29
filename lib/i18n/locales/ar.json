@@ -1995,7 +1995,12 @@
       "talking": "التحدث",
       "talkingNote": "{share} من وقت الميكروفون",
       "kicks": "تم الفصل",
-      "kicksNote": "تسجيل دخول آخر لنفس المتجر"
+      "kicksNote": "تسجيل دخول آخر لنفس المتجر",
+      "openCovered": "تغطية ساعات العمل",
+      "openCoveredNote": "{connected} من {open} ساعات عمل، {count, plural, one {متجر واحد} other {# متاجر}}",
+      "openCoveredNone": "لا توجد ساعات عمل محددة لهذه المتاجر",
+      "managerTarget": "هدف المدير",
+      "managerTargetNote": "{avg} لكل مدير من {target} (8 ساعات يومياً)"
     },
     "glance": {
       "mostPresent": "{name} الأكثر حضورًا: وجه أمام الكاميرا {share} من الوقت.",
@@ -2053,7 +2058,10 @@
       "managers": "المديرون",
       "screen": "الشاشة",
       "mainTile": "المربع الرئيسي",
-      "camera": "الكاميرا"
+      "camera": "الكاميرا",
+      "openHours": "ساعات العمل",
+      "openShare": "من ساعات العمل",
+      "ofTarget": "من هدف {target}"
     },
     "legend": {
       "present": "حاضر",
