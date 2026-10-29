@@ -2961,7 +2961,7 @@
       "morningNotCounted": "Not counted",
       "explainTitle": "How to read the day-before check",
       "explainNight": "Night count: last night's inventory. The 10 OZ dough balls are divided by 12 to match the base (the sauce is already in containers).",
-      "explainMorning": "Morning count: typed by the first-shift manager in the Debrief. The 10 OZ dough is divided by 12 and the sauce by 80 to match the base; the 18 OZ dough is used as typed. When it exists it replaces the night count.",
+      "explainMorning": "Morning count: typed by the first-shift manager in the Debrief. The 10 OZ dough is divided by 12 to match the base; the sauce and the 18 OZ dough are used as typed. When it exists it replaces the night count.",
       "explainNotCounted": "\"Not counted\" means nobody has answered yet. It is not zero: the night count is used instead.",
       "enterMorning": "Enter the morning count in the Debrief",
       "colMakeUp": "Make-up",

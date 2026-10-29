@@ -136,6 +136,17 @@ export function DailyPlanView({ focus }: { focus?: DailyFocus | null }) {
     mapReady
   );
 
+  // The morning count is answered in the Debrief panel, which bumps `revision` after every write. Without this the
+  // plan keeps the answer it loaded before the panel was filled and still says "Not counted yet".
+  const debriefRevision = useDebriefActionStore((s) => s.revision);
+  const seenRevision = useRef(debriefRevision);
+  useEffect(() => {
+    // Not while the buffers are being edited — reloading would throw those edits away; it runs once editing ends.
+    if (seenRevision.current === debriefRevision || editing) return;
+    seenRevision.current = debriefRevision;
+    reload();
+  }, [debriefRevision, editing, reload]);
+
   // Default to the globally-selected store, else the first accessible one.
   useEffect(() => {
     if (store) return;
