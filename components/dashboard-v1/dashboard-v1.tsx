@@ -46,6 +46,13 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WeekSelect } from "@/components/shared/week-select";
+import {
+  businessWeekOptions,
+  businessWeekStart,
+  clampWeekEnd,
+  type BusinessWeek,
+} from "@/lib/utils/business-week";
 import { buildDsprReportHtml } from "@/components/dspr/dspr-report-template";
 import { buildDsprDailyReportHtml } from "@/components/dspr/dspr-daily-report-template";
 import {
@@ -175,6 +182,14 @@ export function DashboardV1({
       refetch(toApiDate(date));
     },
     [refetch, setSelectedDate],
+  );
+
+  // Week picker: a week means its Monday, or yesterday (the latest selectable day) if it's still running.
+  const latestDay = toApiDate(subDays(new Date(), 1));
+  const weekOptions = useMemo(() => businessWeekOptions(latestDay), [latestDay]);
+  const handleWeekSelect = useCallback(
+    (week: BusinessWeek) => handleDateSelect(parseISO(clampWeekEnd(week, latestDay))),
+    [handleDateSelect, latestDay],
   );
 
   const storeId = selectedStore?.storeId ?? selectedStore?.id ?? null;
@@ -509,13 +524,13 @@ export function DashboardV1({
           </PopoverContent>
         </Popover>
 
-        <Badge variant="outline" className="gap-1 px-2.5 py-1 text-xs">
-          <CalendarIcon className="h-3 w-3" />
-          Week {getISOWeek(parseISO(filtering.week_start))}
-          <span className="text-muted-foreground">
-            ({filtering.week_start} → {filtering.week_end})
-          </span>
-        </Badge>
+        <WeekSelect
+          weeks={weekOptions}
+          value={businessWeekStart(toApiDate(selectedDate))}
+          onChange={handleWeekSelect}
+          placeholder="Week"
+          compact
+        />
 
         <div className="flex-1" />
 

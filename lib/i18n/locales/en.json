@@ -1958,6 +1958,8 @@
     "title": "Screen Monitoring",
     "description": "How managers use Screen Project: presence, camera, mic and favorite screens",
     "openLink": "Monitoring",
+    "fromWeek": "From week",
+    "toWeek": "To week",
     "refresh": "Refresh",
     "retry": "Try again",
     "timeZoneNote": "days in your time zone ({zone})",
