@@ -21,12 +21,12 @@ export const COUNT_DIVIDED_KEYS: IngredientKey[] = ["dough_10oz"];
 const FALLBACK_COUNT_DIVISOR = 12;
 
 /**
- * The first-shift MORNING count is typed in raw portions for both the 10 OZ dough (balls, ÷12) and the sauce (÷80),
- * unlike the night count, whose sauce is already in containers. Confirmed by the user 2026-10-27, so it is divided
- * before it is added to the night count. The 18 OZ dough is not divided.
+ * The first-shift MORNING count is typed in raw balls for the 10 OZ dough, so it is divided by 12 before it meets the
+ * base. The sauce is already typed in containers and the 18 OZ dough as typed — neither is divided (user, 2026-10-29:
+ * the sauce is NOT ÷80, which overrides 2026-10-27).
  */
-export const MORNING_DIVIDED_KEYS: IngredientKey[] = ["dough_10oz", "sauce"];
-const FALLBACK_MORNING_DIVISOR: Partial<Record<IngredientKey, number>> = { dough_10oz: 12, sauce: 80 };
+export const MORNING_DIVIDED_KEYS: IngredientKey[] = ["dough_10oz"];
+const FALLBACK_MORNING_DIVISOR: Partial<Record<IngredientKey, number>> = { dough_10oz: 12 };
 
 /** Raw count → the unit the base is in, rounded like the plan payload (4 decimals). */
 export const toBaseUnit = (raw: number, divisor: number) =>
