@@ -24,6 +24,7 @@ export function AnalyticsControls({
   onRangeChange,
   isUpdating,
   presets = RANGE_PRESETS,
+  weekControls,
   children,
 }: {
   storeOptions: StoreOption[];
@@ -36,6 +37,8 @@ export function AnalyticsControls({
   isUpdating?: boolean;
   /** The preset buttons; the analytics page's by default. */
   presets?: { id: RangePreset; label: string }[];
+  /** Optional week pickers, placed right after the date range and before the stores. */
+  weekControls?: ReactNode;
   /** More filters, after the stores. */
   children?: ReactNode;
 }) {
@@ -83,6 +86,8 @@ export function AnalyticsControls({
           className="w-36"
         />
       </div>
+
+      {weekControls}
 
       <StoreMultiSelect options={storeOptions} value={selection} onChange={onSelectionChange} className="w-48" />
 

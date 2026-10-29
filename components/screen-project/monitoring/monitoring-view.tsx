@@ -13,9 +13,20 @@ import type { StoreOption } from "@/components/business-reports/store-multi-sele
 import type { StoreSelection } from "@/types/business-reports.types";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { useScreenUsageReport } from "@/lib/hooks/use-screen-usage";
-import { daysToInstants, matchPreset, presetDays, RANGE_PRESETS, viewerTimeZone } from "@/lib/maintenance-tickets/local-range";
+import { daysToInstants, localDay, matchPreset, presetDays, RANGE_PRESETS, viewerTimeZone } from "@/lib/maintenance-tickets/local-range";
+import { WeekSelect } from "@/components/shared/week-select";
+import {
+  businessWeekOptions,
+  businessWeekStart,
+  clampWeekEnd,
+  isWholeWeeks,
+  type BusinessWeek,
+} from "@/lib/utils/business-week";
 import { formatDateOnly } from "@/lib/utils/date-display";
 import { MonitoringReport } from "./monitoring-report";
+
+/** Only these are buttons; the page still opens on "Last 7 days" (named in the subtitle, not offered). */
+const QUICK_PRESETS = RANGE_PRESETS.filter((p) => p.id === "yesterday" || p.id === "today");
 
 /**
  * Screen Project monitoring — how managers use Screen Project, across the
@@ -65,6 +76,23 @@ export function MonitoringView() {
     [report],
   );
 
+  // Week pickers: from-week's Tuesday through to-week's Monday (cut at today while that week runs).
+  const today = localDay(new Date());
+  const weekOptions = useMemo(() => businessWeekOptions(today), [today]);
+  const wholeWeeks = isWholeWeeks(startDate, endDate, today);
+  const fromWeek = wholeWeeks ? startDate : "";
+  const toWeek = wholeWeeks ? businessWeekStart(endDate) : "";
+  const pickFromWeek = (week: BusinessWeek) => {
+    const keepEnd = wholeWeeks && endDate >= week.start;
+    setStartDate(week.start);
+    if (!keepEnd) setEndDate(clampWeekEnd(week, today));
+  };
+  const pickToWeek = (week: BusinessWeek) => {
+    const end = clampWeekEnd(week, today);
+    setEndDate(end);
+    if (!wholeWeeks || week.start < startDate) setStartDate(week.start);
+  };
+
   const preset = matchPreset(startDate, endDate);
   const presetLabel = RANGE_PRESETS.find((p) => p.id === preset)?.label;
   const days =
@@ -106,6 +134,13 @@ export function MonitoringView() {
               setEndDate(end);
             }}
             isUpdating={isLoading && report !== null}
+            presets={QUICK_PRESETS}
+            weekControls={
+              <>
+                <WeekSelect weeks={weekOptions} value={fromWeek} onChange={pickFromWeek} placeholder={t("fromWeek")} />
+                <WeekSelect weeks={weekOptions} value={toWeek} onChange={pickToWeek} placeholder={t("toWeek")} />
+              </>
+            }
           >
             <MultiSelect<number>
               options={managerOptions}
