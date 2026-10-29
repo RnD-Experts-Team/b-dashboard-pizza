@@ -24,10 +24,20 @@ export type WeekCell =
       bufferPct: number;
       /** The target: the plan before its buffer. `variance` and `ok` are measured from this. */
       base: number;
-      /** The count in the base's unit (the raw count ÷ `divisor`). `variance` and `ok` are measured with it. */
+      /**
+       * What the day is judged on, in the base's unit: the morning count when one was entered (0 included),
+       * otherwise the night count (÷ `divisor`). `variance` and `ok` are measured with it.
+       */
       counted: number;
-      /** The count as inventory recorded it, and what it was divided by (1 = not converted). */
-      rawCounted: number;
+      /** The night-before count in the base's unit; null when nobody took it (only possible with a morning count). */
+      night: number | null;
+      /** The first-shift morning count of `date` in the base's unit (typed ÷ `morningDivisor`); null = not counted, never shown as 0. */
+      morning: number | null;
+      /** The morning count as typed, and what it was divided by (1 = not converted). */
+      rawMorning: number | null;
+      morningDivisor: number;
+      /** The night count as inventory recorded it, and what it was divided by (1 = not converted). */
+      rawCounted: number | null;
       divisor: number;
       variance: number;
       ok: boolean;
@@ -47,8 +57,13 @@ export type WeekCell =
       date: string;
       key: IngredientKey;
       countDate: string;
+      /** Morning count if entered, else the night count, as for a planned cell; null while there is neither. */
       counted: number | null;
-      /** As recorded by inventory, and the divisor `counted` was converted with (1 = not converted). */
+      night: number | null;
+      morning: number | null;
+      rawMorning: number | null;
+      morningDivisor: number;
+      /** The night count as recorded by inventory, and the divisor it was converted with (1 = not converted). */
       rawCounted: number | null;
       divisor: number;
       base: number | null;
@@ -108,6 +123,25 @@ export function unplannedCountedDays(
 }
 
 /**
+ * Every (day, needsBase) of a store-week whose `daily-plans` answer has to be read before its cells can be judged:
+ * unplanned counted days need the base AND the morning count; planned days up to today need only the morning
+ * count (the morning count of a later day can't exist yet).
+ */
+export function lookupDays(
+  weekStart: string,
+  weekEnd: string,
+  plans: StoredPlanRow[],
+  counts: Map<string, CountRow>,
+  today: string
+): { date: string; needsBase: boolean }[] {
+  const planned = new Set(plans.map((p) => p.plan_date));
+  const unplanned = new Set(unplannedCountedDays(weekStart, weekEnd, plans, counts));
+  return daysBetween(weekStart, weekEnd)
+    .filter((date) => unplanned.has(date) || (planned.has(date) && date <= today))
+    .map((date) => ({ date, needsBase: unplanned.has(date) }));
+}
+
+/**
  * Build a store-week grid. `counts` null means the inventory system was
  * unreachable — every cell shows as unavailable, never as zero (§9).
  *
@@ -126,6 +160,12 @@ export function unplannedCountedDays(
  * `bases` (optional, keyed `${date}|${ingredientKey}`) carries the base of days that have NO plan, so a
  * count taken for such a day is still judged: it shows ✓/✕ and enters `cellsOk` / `cellsScored` like a
  * planned cell. Until the base is supplied the cell stays "–" and unscored.
+ *
+ * What a day is judged on: the first-shift MORNING count of the plan's own day when one was entered — a real 0
+ * included, typed in raw portions so ÷ `morningDivisor` (12 for the 10 OZ dough, 80 for the sauce) — and it REPLACES the
+ * night count; when nobody answered, the night-before count (÷ `countDivisor`) is used. `mornings` (keyed
+ * `${date}|${ingredientKey}`) holds only answers; a missing entry = not counted. A morning count also stands in for a
+ * night count nobody took.
  */
 export function buildWeekCells(
   weekStart: string,
@@ -134,7 +174,9 @@ export function buildWeekCells(
   counts: Map<string, CountRow> | null,
   today: string,
   bases?: Map<string, number>,
-  countDivisor?: IngredientMap["countDivisor"]
+  countDivisor?: IngredientMap["countDivisor"],
+  mornings?: Map<string, number>,
+  morningDivisors?: IngredientMap["morningDivisor"]
 ): WeekCells {
   const days = daysBetween(weekStart, weekEnd);
   const planByCell = new Map<string, StoredPlanRow>();
@@ -170,7 +212,11 @@ export function buildWeekCells(
         noPlanCount++;
         const divisor = countDivisor?.[key] ?? 1;
         const rawCounted = count ? count.total_in_unit_1 : null;
-        const counted = rawCounted != null ? toBaseUnit(rawCounted, divisor) : null;
+        const night = rawCounted != null ? toBaseUnit(rawCounted, divisor) : null;
+        const rawMorning = mornings?.get(id) ?? null;
+        const morningDivisor = morningDivisors?.[key] ?? 1;
+        const morning = rawMorning != null ? toBaseUnit(rawMorning, morningDivisor) : null;
+        const counted = morning ?? night;
         const base = bases?.get(id) ?? null;
         const v = counted != null && base != null ? variance(counted, base) : null;
         const ok = v != null ? isOkWithinStep(key, v) : null;
@@ -179,10 +225,11 @@ export function buildWeekCells(
           cellsScored++;
           if (ok) cellsOk++;
         }
-        cells.push({ kind: "no-plan", date, key, countDate, counted, rawCounted, divisor, base, variance: v, ok });
+        cells.push({ kind: "no-plan", date, key, countDate, counted, night, morning, rawMorning, morningDivisor, rawCounted, divisor, base, variance: v, ok });
         continue;
       }
-      if (!count) {
+      const rawMorning = mornings?.get(id) ?? null;
+      if (!count && rawMorning == null) {
         if (countDate >= today) {
           awaitingCount++;
           cells.push({ kind: "awaiting", date, key, planned: plan.planned_qty, bufferPct: plan.buffer_pct });
@@ -195,7 +242,11 @@ export function buildWeekCells(
       }
       const base = targetQty(plan.planned_qty, plan.buffer_pct);
       const divisor = countDivisor?.[key] ?? 1;
-      const counted = toBaseUnit(count.total_in_unit_1, divisor);
+      const night = count ? toBaseUnit(count.total_in_unit_1, divisor) : null;
+      const morningDivisor = morningDivisors?.[key] ?? 1;
+      const morning = rawMorning != null ? toBaseUnit(rawMorning, morningDivisor) : null;
+      // Either the morning count or the night count exists here (the guard above). A morning answer wins.
+      const counted = (morning ?? night)!;
       const v = variance(counted, base);
       const ok = isOkWithinStep(key, v);
       cellsScored++;
@@ -209,12 +260,16 @@ export function buildWeekCells(
         bufferPct: plan.buffer_pct,
         base,
         counted,
-        rawCounted: count.total_in_unit_1,
+        night,
+        morning,
+        rawMorning,
+        morningDivisor,
+        rawCounted: count ? count.total_in_unit_1 : null,
         divisor,
         variance: v,
         ok,
-        edited: count.is_edited,
-        duplicates: count.duplicate_entries,
+        edited: count?.is_edited ?? false,
+        duplicates: count?.duplicate_entries ?? 0,
       });
     }
   }
