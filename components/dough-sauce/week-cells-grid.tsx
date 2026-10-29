@@ -260,6 +260,19 @@ function Cell({ cell }: { cell: WeekCell }) {
       ? `\n${t("convertedTitle", { raw: fmtQty(raw), divisor: fmtQty(divisor), result: fmtQty(result) })}`
       : "";
 
+  /** How the on-hand number was made, when a morning count was added to the night count. */
+  const withMorning = (night: number | null, morning: number | null, rawMorning: number | null, morningDivisor: number) =>
+    morning == null
+      ? ""
+      : `\n${
+          night != null
+            ? t("morningNote", { night: fmtQty(night), morning: fmtQty(morning) })
+            : t("morningOnlyNote", { morning: fmtQty(morning) })
+        }` +
+        (morningDivisor > 1 && rawMorning != null
+          ? `\n${t("morningConvertedTitle", { raw: fmtQty(rawMorning), divisor: fmtQty(morningDivisor), result: fmtQty(morning) })}`
+          : "");
+
   switch (cell.kind) {
     case "counted": {
       return (
@@ -271,7 +284,9 @@ function Cell({ cell }: { cell: WeekCell }) {
               on: day.monthDay(cell.countDate),
               base: fmtQty(round2(cell.base)),
               planned: fmtQty(round2(cell.planned)),
-            }) + converted(cell.rawCounted, cell.divisor, cell.counted)
+            }) +
+            converted(cell.morning == null ? cell.rawCounted : null, cell.divisor, cell.night) +
+            withMorning(cell.night, cell.morning, cell.rawMorning, cell.morningDivisor)
           }
         >
           <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
@@ -327,7 +342,9 @@ function Cell({ cell }: { cell: WeekCell }) {
                 counted: fmtQty(cell.counted),
                 on: day.monthDay(cell.countDate),
                 base: fmtQty(round2(cell.base)),
-              }) + converted(cell.rawCounted, cell.divisor, cell.counted)
+              }) +
+              converted(cell.morning == null ? cell.rawCounted : null, cell.divisor, cell.night) +
+              withMorning(cell.night, cell.morning, cell.rawMorning, cell.morningDivisor)
             }
           >
             <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", !cell.ok && SHORT_TEXT)}>
@@ -344,7 +361,7 @@ function Cell({ cell }: { cell: WeekCell }) {
         );
       }
       return cell.counted != null ? (
-        <div className={STACK} title={t("noPlan") + converted(cell.rawCounted, cell.divisor, cell.counted)}>
+        <div className={STACK} title={t("noPlan") + converted(cell.morning == null ? cell.rawCounted : null, cell.divisor, cell.night) + withMorning(cell.night, cell.morning, cell.rawMorning, cell.morningDivisor)}>
           <span className={cn("text-sm font-semibold", cell.divisor > 1 && CONVERTED)}>{fmtGlanceQty(cell.counted)}</span>
           <span className="text-[11px] text-muted-foreground">{t("noPlanShort")}</span>
         </div>

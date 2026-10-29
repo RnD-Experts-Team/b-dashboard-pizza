@@ -613,6 +613,24 @@ function convertedNote(
     : "";
 }
 
+/** How the on-hand number was made, when a morning count was added to the night count. */
+function morningNote(
+  t: ReturnType<typeof useTranslations>,
+  night: number | null,
+  morning: number | null,
+  rawMorning: number | null,
+  morningDivisor: number
+): string {
+  if (morning == null) return "";
+  const head = night != null ? t("morningNote", { night: fmtQty(night), morning: fmtQty(morning) }) : t("morningOnlyNote", { morning: fmtQty(morning) });
+  return (
+    `\n${head}` +
+    (morningDivisor > 1 && rawMorning != null
+      ? `\n${t("morningConvertedTitle", { raw: fmtQty(rawMorning), divisor: fmtQty(morningDivisor), result: fmtQty(morning) })}`
+      : "")
+  );
+}
+
 /**
  * One day × ingredient: did the count meet the BASE (the plan before its buffer)? Anything uncountable
  * is N/A, never 0 (rule 2). A day with no plan is judged the same way once its base is known and counts
@@ -645,7 +663,9 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
               on: day.monthDay(cell.countDate),
               base: fmtQty(round2(cell.base)),
               planned: fmtQty(round2(cell.planned)),
-            }) + convertedNote(t, cell.rawCounted, cell.divisor, cell.counted)
+            }) +
+            convertedNote(t, cell.morning == null ? cell.rawCounted : null, cell.divisor, cell.night) +
+            morningNote(t, cell.night, cell.morning, cell.rawMorning, cell.morningDivisor)
           }
         >
           {cell.ok ? (
@@ -675,7 +695,9 @@ function ReportCell({ cell, first }: { cell?: WeekCell; first?: boolean }) {
               counted: fmtQty(cell.counted),
               on: day.monthDay(cell.countDate),
               base: fmtQty(round2(cell.base)),
-            }) + convertedNote(t, cell.rawCounted, cell.divisor, cell.counted)
+            }) +
+            convertedNote(t, cell.morning == null ? cell.rawCounted : null, cell.divisor, cell.night) +
+            morningNote(t, cell.night, cell.morning, cell.rawMorning, cell.morningDivisor)
           }
         >
           {cell.ok ? (
