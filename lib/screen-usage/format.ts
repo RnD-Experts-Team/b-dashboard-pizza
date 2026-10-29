@@ -37,6 +37,8 @@ export const USAGE_COLORS = {
   problem: "#dc2626",
   info: "#2563eb",
   off: "#94a3b8",
+  /** Open hours nobody was connected for: lighter than "off", which is time connected with the device off. */
+  gap: "#cbd5e1",
 } as const;
 
 /** Chart text, grid and tooltip in the page's own colours, whatever the theme (same as the maintenance analytics charts). */

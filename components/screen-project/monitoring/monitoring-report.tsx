@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { eachDayOfInterval, format, parseISO } from "date-fns";
 import {
   AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, Camera, Clock, EyeOff, Lightbulb, Mic, MonitorOff, MonitorPlay, Store, UserCheck, Users,
 } from "lucide-react";
@@ -15,7 +16,9 @@ import { USAGE_COLORS, formatDuration, percent, share, toHours } from "@/lib/scr
 import type { UsageReport, UsageScreenRow, UsageStoreRow, UsageUserRow } from "@/lib/screen-usage/types";
 import { MANAGER_DAILY_TARGET_S, openSeconds, startedDays, storeOpenHours } from "@/lib/screen-usage/open-hours";
 import { useAuthStore } from "@/lib/auth/auth.store";
-import { BreakdownChart, DailyPresenceChart, HoursHeatmap } from "./usage-charts";
+import { daysToInstants } from "@/lib/maintenance-tickets/local-range";
+import { BreakdownChart, DailyPresenceChart, HoursHeatmap, SegmentedToggle, type ChartBasis } from "./usage-charts";
+import { SplitKpiTile, type SplitKpi, type SplitKpiHalf } from "./split-kpi-tile";
 import { ManagersTable } from "./managers-table";
 import { ManagerSheet } from "./manager-sheet";
 import { MetricDefinitions, MetricNote } from "./metric-definitions";
@@ -49,7 +52,7 @@ export function MonitoringReport({
   const k = report.totals;
 
   // Store opening hours come from the stores' metadata the auth calls already loaded.
-  const { openByStore, openSoFar } = useMemo(() => {
+  const { openByStore, openByDay, chartDays, openSoFar } = useMemo(() => {
     const from = Date.parse(report.range.from);
     const end = Date.parse(report.range.to);
     // Hours still to come are not owed yet; a refetched report (new range object) moves "now" on.
@@ -57,35 +60,71 @@ export function MonitoringReport({
     const now = Date.now();
     const to = Math.min(end, now);
     const hours = new Map((overviewStores ?? []).map((s) => [s.storeId, storeOpenHours(s.metadata)]));
-    const byStore = Object.fromEntries(
-      stores.flatMap((code) => {
-        const h = hours.get(code);
-        return h ? [[code, openSeconds(h, from, to)]] : [];
+    const inScope = stores.flatMap((code) => {
+      const h = hours.get(code);
+      return h ? [[code, h] as const] : [];
+    });
+    const byStore = Object.fromEntries(inScope.map(([code, h]) => [code, openSeconds(h, from, to)])) as Record<string, number>;
+    // The report lists only days with activity; a day nobody connected still owed its open hours.
+    const seen = new Map(report.days.map((d) => [d.date, d]));
+    const lastDay = format(new Date(Math.min(end - 1, now)), "yyyy-MM-dd");
+    const days = lastDay < startDate
+      ? report.days
+      : eachDayOfInterval({ start: parseISO(startDate), end: parseISO(lastDay) }).map((date) => {
+          const key = format(date, "yyyy-MM-dd");
+          return seen.get(key) ?? { date: key, on_screen: 0, present: 0, talking: 0, managers: 0 };
+        });
+    // The daily chart's days are the viewer's local days, like the report's own.
+    const byDay = Object.fromEntries(
+      days.map((d) => {
+        const day = daysToInstants(d.date, d.date);
+        const dayFrom = day ? Math.max(Date.parse(day.from), from) : 0;
+        const dayTo = day ? Math.min(Date.parse(day.to), to) : 0;
+        return [d.date, inScope.reduce((sum, [, h]) => sum + openSeconds(h, dayFrom, dayTo), 0)];
       }),
     ) as Record<string, number>;
-    return { openByStore: byStore, openSoFar: end > now };
-  }, [overviewStores, stores, report.range]);
+    return { openByStore: byStore, openByDay: byDay, chartDays: days, openSoFar: end > now };
+  }, [overviewStores, stores, report.range, report.days, startDate]);
   const openTotal = Object.values(openByStore).reduce((a, b) => a + b, 0);
-  const openConnected = report.stores.filter((s) => s.store in openByStore).reduce((a, s) => a + s.on_screen, 0);
+  const withHours = report.stores.filter((s) => s.store in openByStore);
+  const openConnected = withHours.reduce((a, s) => a + s.on_screen, 0);
+  const openPresent = withHours.reduce((a, s) => a + s.present, 0);
+  const openTalking = withHours.reduce((a, s) => a + s.talking, 0);
+  const hasOpenHours = openTotal > 0;
+  const [basis, setBasis] = useState<ChartBasis>("open");
+  const chartBasis: ChartBasis = hasOpenHours ? basis : "connected";
   const managerTarget = MANAGER_DAILY_TARGET_S * startedDays(startDate, endDate);
   const avgOnScreen = k.managers ? k.on_screen / k.managers : 0;
 
+  // The priority numbers: present and talking out of the stores' open hours, then out of connected time.
+  const ofOpen = (part: number): SplitKpiHalf => ({
+    caption: t(openSoFar ? "kpi.ofOpenSoFar" : "kpi.ofOpen"),
+    value: percent(part, openTotal),
+    note: hasOpenHours ? t("kpi.partOf", { part: formatDuration(part), whole: formatDuration(openTotal) }) : t("kpi.noOpenHours"),
+  });
+  const ofConnected = (part: number): SplitKpiHalf => ({
+    caption: t("kpi.ofConnected"),
+    value: percent(part, k.on_screen),
+    note: t("kpi.partOf", { part: formatDuration(part), whole: formatDuration(k.on_screen) }),
+  });
+  const splitKpis: SplitKpi[] = [
+    {
+      label: t("kpi.present"),
+      icon: UserCheck,
+      tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      halves: [ofOpen(openPresent), ofConnected(k.present)],
+      target: "presence",
+    },
+    {
+      label: t("kpi.talking"),
+      icon: Mic,
+      tint: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+      halves: [ofOpen(openTalking), ofConnected(k.talking)],
+      target: "mic",
+    },
+  ];
+
   const kpis: Kpi[] = [
-    {
-      label: t("kpi.managers"),
-      value: k.managers,
-      icon: Users,
-      tint: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-      note: t("kpi.managersNote", { visits: k.visits }),
-      target: "managers",
-    },
-    {
-      label: t("kpi.onScreen"),
-      value: formatDuration(k.on_screen),
-      icon: MonitorPlay,
-      tint: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
-      note: t("kpi.onScreenNote", { avg: formatDuration(avgOnScreen) }),
-    },
     {
       label: t("kpi.openCovered"),
       value: percent(openConnected, openTotal),
@@ -110,12 +149,19 @@ export function MonitoringReport({
       target: "managers",
     },
     {
-      label: t("kpi.present"),
-      value: percent(k.present, k.on_screen),
-      icon: UserCheck,
-      tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-      note: t("kpi.presentNote", { duration: formatDuration(k.present) }),
-      target: "presence",
+      label: t("kpi.managers"),
+      value: k.managers,
+      icon: Users,
+      tint: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      note: t("kpi.managersNote", { visits: k.visits }),
+      target: "managers",
+    },
+    {
+      label: t("kpi.onScreen"),
+      value: formatDuration(k.on_screen),
+      icon: MonitorPlay,
+      tint: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
+      note: t("kpi.onScreenNote", { avg: formatDuration(avgOnScreen) }),
     },
     {
       label: t("kpi.away"),
@@ -124,14 +170,6 @@ export function MonitoringReport({
       tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
       note: t("kpi.awayNote", { noFace: formatDuration(k.no_face), covered: formatDuration(k.covered) }),
       target: "camera",
-    },
-    {
-      label: t("kpi.talking"),
-      value: formatDuration(k.talking),
-      icon: Mic,
-      tint: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
-      note: t("kpi.talkingNote", { share: percent(k.talking, k.mic_open) }),
-      target: "mic",
     },
     {
       label: t("kpi.kicks"),
@@ -173,30 +211,58 @@ export function MonitoringReport({
   }, [report, k, t]);
 
   const onScreen = k.on_screen;
+  const byOpen = chartBasis === "open";
+  // Of open hours, the donuts gain the open time nobody was connected for, so they add up to the open hours.
+  const notConnected = byOpen
+    ? [{ label: t("legend.notConnected"), seconds: Math.max(0, openTotal - onScreen), color: USAGE_COLORS.gap }]
+    : [];
+  const totalLabel = t(byOpen ? "columns.openHours" : "columns.onScreen");
   const cameraSlices = [
     { label: t("legend.present"), seconds: report.camera.present, color: USAGE_COLORS.good },
     { label: t("legend.noFace"), seconds: report.camera.no_face, color: USAGE_COLORS.attention },
     { label: t("legend.covered"), seconds: report.camera.covered, color: USAGE_COLORS.problem },
     { label: t("legend.cameraOff"), seconds: report.camera.off, color: USAGE_COLORS.off },
+    ...notConnected,
   ];
   const micSlices = [
     { label: t("legend.talking"), seconds: report.mic.talking, color: USAGE_COLORS.good },
     { label: t("legend.silent"), seconds: report.mic.silent, color: USAGE_COLORS.attention },
     { label: t("legend.deadMic"), seconds: report.mic.dead, color: USAGE_COLORS.problem },
     { label: t("legend.micOff"), seconds: report.mic.off, color: USAGE_COLORS.off },
+    ...notConnected,
   ];
 
   return (
     <div className="@container space-y-6">
       <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-4">
+        {splitKpis.map((kpi) => <SplitKpiTile key={kpi.label} kpi={kpi} />)}
         {kpis.map((kpi) => <KpiTile key={kpi.label} kpi={kpi} />)}
       </div>
 
       <MetricDefinitions />
 
+      {hasOpenHours && (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">{t("charts.basis")}</span>
+          <SegmentedToggle
+            label={t("charts.basis")}
+            value={basis}
+            onChange={setBasis}
+            options={[
+              { value: "open", label: t(openSoFar ? "kpi.ofOpenSoFar" : "kpi.ofOpen") },
+              { value: "connected", label: t("kpi.ofConnected") },
+            ]}
+          />
+        </div>
+      )}
+
       <div className="grid gap-6 @4xl:grid-cols-2">
         <AnalyticsCard id="presence" icon={CalendarClock} title={t("sections.daily")} description={t("sections.dailyHint")}>
-          {report.days.length > 0 ? <DailyPresenceChart days={report.days} /> : <CardEmpty icon={CalendarClock}>{t("empty")}</CardEmpty>}
+          {report.days.length > 0 || byOpen ? (
+            <DailyPresenceChart days={chartDays} openByDay={byOpen ? openByDay : null} />
+          ) : (
+            <CardEmpty icon={CalendarClock}>{t("empty")}</CardEmpty>
+          )}
           <div className="mt-4 space-y-1.5 border-t pt-4">
             <MetricNote metric="present" />
             <MetricNote metric="away" />
@@ -209,7 +275,7 @@ export function MonitoringReport({
           </div>
         </AnalyticsCard>
         <AnalyticsCard id="camera" icon={Camera} title={t("sections.camera")} description={t("sections.cameraHint")} center>
-          {onScreen > 0 ? <BreakdownChart slices={cameraSlices} totalLabel={t("columns.onScreen")} /> : <CardEmpty icon={Camera}>{t("empty")}</CardEmpty>}
+          {onScreen > 0 || byOpen ? <BreakdownChart slices={cameraSlices} totalLabel={totalLabel} /> : <CardEmpty icon={Camera}>{t("empty")}</CardEmpty>}
           <div className="mt-4 space-y-1.5 border-t pt-4">
             <MetricNote metric="present" />
             <MetricNote metric="noFace" />
@@ -218,7 +284,7 @@ export function MonitoringReport({
           </div>
         </AnalyticsCard>
         <AnalyticsCard id="mic" icon={Mic} title={t("sections.mic")} description={t("sections.micHint")} center>
-          {onScreen > 0 ? <BreakdownChart slices={micSlices} totalLabel={t("columns.onScreen")} /> : <CardEmpty icon={Mic}>{t("empty")}</CardEmpty>}
+          {onScreen > 0 || byOpen ? <BreakdownChart slices={micSlices} totalLabel={totalLabel} /> : <CardEmpty icon={Mic}>{t("empty")}</CardEmpty>}
           <div className="mt-4 space-y-1.5 border-t pt-4">
             <MetricNote metric="talking" />
             <MetricNote metric="silent" />
@@ -325,8 +391,13 @@ function useSortable<T, K extends keyof T & string>(rows: T[], initial: K, textK
   return { rows: sorted, head };
 }
 
-/** A store row with its opening hours in the range (null: none set in the store's metadata). */
-type StoreRowView = UsageStoreRow & { open_hours: number | null; open_share: number | null };
+/** A store row with its opening hours in the range and shares of them (null: none set in the store's metadata). */
+type StoreRowView = UsageStoreRow & {
+  open_hours: number | null;
+  open_share: number | null;
+  present_open_share: number | null;
+  talking_open_share: number | null;
+};
 
 const STORE_TEXT_KEYS: (keyof StoreRowView)[] = ["store"];
 const SCREEN_TEXT_KEYS: (keyof UsageScreenRow & string)[] = ["name", "store"];
@@ -346,11 +417,18 @@ function StoresCard({
     () =>
       report.stores.map((s) => {
         const open = openByStore[s.store] ?? null;
-        return { ...s, open_hours: open, open_share: open === null ? null : share(s.on_screen, open) };
+        const ofOpen = (seconds: number) => (open === null ? null : share(seconds, open));
+        return {
+          ...s,
+          open_hours: open,
+          open_share: ofOpen(s.on_screen),
+          present_open_share: ofOpen(s.present),
+          talking_open_share: ofOpen(s.talking),
+        };
       }),
     [report.stores, openByStore],
   );
-  const { rows, head } = useSortable(withOpen, "on_screen", STORE_TEXT_KEYS);
+  const { rows, head } = useSortable(withOpen, "present_open_share", STORE_TEXT_KEYS);
   // Same page size as the top-screens chart beside it, so both show the same number of rows.
   const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
 
@@ -361,12 +439,14 @@ function StoresCard({
           <thead className="border-b bg-muted/40">
             <tr>
               {head("store", t("columns.store"))}
-              {head("managers", t("columns.managers"), "text-end")}
-              {head("on_screen", t("columns.onScreen"), "text-end")}
-              {head("open_hours", t(openSoFar ? "columns.openHoursSoFar" : "columns.openHours"), "text-end")}
+              {head("present_open_share", t("columns.presentOpenShare"), "text-end")}
+              {head("talking_open_share", t("columns.talkingOpenShare"), "text-end")}
               {head("open_share", t("columns.openShare"), "text-end")}
               {head("present", t("columns.present"), "text-end")}
               {head("talking", t("columns.talking"), "text-end")}
+              {head("on_screen", t("columns.onScreen"), "text-end")}
+              {head("open_hours", t(openSoFar ? "columns.openHoursSoFar" : "columns.openHours"), "text-end")}
+              {head("managers", t("columns.managers"), "text-end")}
               {head("kicks", t("columns.kicks"), "text-end")}
             </tr>
           </thead>
@@ -374,12 +454,14 @@ function StoresCard({
             {paged.rows.map((s) => (
               <tr key={s.store} className="hover:bg-muted/30">
                 <td className={cn(TD, "font-medium")}>{s.store}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>{s.managers}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.on_screen)}</td>
-                <td className={cn(TD, "text-end tabular-nums")}>{s.open_hours === null ? "—" : formatDuration(s.open_hours)}</td>
+                <td className={cn(TD, "text-end font-semibold tabular-nums")}>{s.open_hours === null ? "—" : percent(s.present, s.open_hours)}</td>
+                <td className={cn(TD, "text-end font-semibold tabular-nums")}>{s.open_hours === null ? "—" : percent(s.talking, s.open_hours)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{s.open_hours === null ? "—" : percent(s.on_screen, s.open_hours)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.present)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.talking)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.on_screen)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{s.open_hours === null ? "—" : formatDuration(s.open_hours)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{s.managers}</td>
                 <td className={cn(TD, "text-end tabular-nums", s.kicks > 0 && "text-red-600 dark:text-red-400")}>{s.kicks || "—"}</td>
               </tr>
             ))}
