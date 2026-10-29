@@ -11,7 +11,7 @@ import type { UsageUserRow } from "@/lib/screen-usage/types";
 
 type SortKey =
   | "name" | "on_screen" | "present" | "present_share" | "away" | "no_face" | "covered" | "mic_open"
-  | "talking" | "talk_share" | "dead_mic" | "talk_all" | "pip" | "kicks" | "last_seen";
+  | "talking" | "talk_share" | "dead_mic" | "talk_all" | "pip" | "kicks" | "last_seen" | "target_share";
 
 const ACCESSORS: Record<SortKey, (u: UsageUserRow) => number | string> = {
   name: (u) => u.name.toLowerCase(),
@@ -29,12 +29,23 @@ const ACCESSORS: Record<SortKey, (u: UsageUserRow) => number | string> = {
   pip: (u) => u.pip,
   kicks: (u) => u.kicks,
   last_seen: (u) => u.last_seen,
+  // Every manager has the same target, so on-screen time orders them the same way.
+  target_share: (u) => u.on_screen,
 };
 
 const PAGE = 10;
 
 /** Every manager in scope with every number — sort, search, click a row for the full picture. */
-export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen: (u: UsageUserRow) => void }) {
+export function ManagersTable({
+  users,
+  targetSeconds,
+  onOpen,
+}: {
+  users: UsageUserRow[];
+  /** Each manager's connected-time target for the range (8 h a day). */
+  targetSeconds: number;
+  onOpen: (u: UsageUserRow) => void;
+}) {
   const t = useTranslations("screenMonitoring");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "on_screen", desc: true });
@@ -99,6 +110,7 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
           <tr>
             {head("name", t("columns.manager"), false)}
             {head("on_screen", t("columns.onScreen"))}
+            {head("target_share", t("columns.ofTarget", { target: formatDuration(targetSeconds) }))}
             {head("present", t("columns.present"))}
             {head("present_share", t("columns.presentPct"))}
             {head("away", t("columns.away"))}
@@ -119,7 +131,7 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
         <tbody className="divide-y">
           {paged.rows.length === 0 && (
             <tr>
-              <td colSpan={17}className="px-5 py-10 text-center text-muted-foreground">{t("noMatches")}</td>
+              <td colSpan={18} className="px-5 py-10 text-center text-muted-foreground">{t("noMatches")}</td>
             </tr>
           )}
           {paged.rows.map((u) => {
@@ -144,6 +156,7 @@ export function ManagersTable({ users, onOpen }: { users: UsageUserRow[]; onOpen
                   <div className="max-w-56 whitespace-normal text-xs text-muted-foreground">{u.stores.join(", ")}</div>
                 </td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.on_screen)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{percent(u.on_screen, targetSeconds)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(u.present)}</td>
                 <td className={cn(TD, "text-end")}>
                   <div className="ms-auto flex w-32 items-center gap-2">

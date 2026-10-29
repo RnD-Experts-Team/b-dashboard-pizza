@@ -13,6 +13,8 @@ import { scrollToSection } from "@/lib/maintenance-tickets/scroll-to-section";
 import { cn } from "@/lib/utils";
 import { USAGE_COLORS, formatDuration, percent, share, toHours } from "@/lib/screen-usage/format";
 import type { UsageReport, UsageScreenRow, UsageStoreRow, UsageUserRow } from "@/lib/screen-usage/types";
+import { MANAGER_DAILY_TARGET_S, openSeconds, startedDays, storeOpenHours } from "@/lib/screen-usage/open-hours";
+import { useAuthStore } from "@/lib/auth/auth.store";
 import { BreakdownChart, DailyPresenceChart, HoursHeatmap } from "./usage-charts";
 import { ManagersTable } from "./managers-table";
 import { ManagerSheet } from "./manager-sheet";
@@ -43,7 +45,27 @@ export function MonitoringReport({
 }) {
   const t = useTranslations("screenMonitoring");
   const [openUser, setOpenUser] = useState<UsageUserRow | null>(null);
+  const overviewStores = useAuthStore((s) => s.overviewStores);
   const k = report.totals;
+
+  // Store opening hours come from the stores' metadata the auth calls already loaded.
+  const openByStore = useMemo(() => {
+    const from = Date.parse(report.range.from);
+    // Hours still to come are not owed yet; a refetched report (new range object) moves "now" on.
+    // eslint-disable-next-line react-hooks/purity
+    const to = Math.min(Date.parse(report.range.to), Date.now());
+    const hours = new Map((overviewStores ?? []).map((s) => [s.storeId, storeOpenHours(s.metadata)]));
+    return Object.fromEntries(
+      stores.flatMap((code) => {
+        const h = hours.get(code);
+        return h ? [[code, openSeconds(h, from, to)]] : [];
+      }),
+    ) as Record<string, number>;
+  }, [overviewStores, stores, report.range]);
+  const openTotal = Object.values(openByStore).reduce((a, b) => a + b, 0);
+  const openConnected = report.stores.filter((s) => s.store in openByStore).reduce((a, s) => a + s.on_screen, 0);
+  const managerTarget = MANAGER_DAILY_TARGET_S * startedDays(startDate, endDate);
+  const avgOnScreen = k.managers ? k.on_screen / k.managers : 0;
 
   const kpis: Kpi[] = [
     {
@@ -59,7 +81,30 @@ export function MonitoringReport({
       value: formatDuration(k.on_screen),
       icon: MonitorPlay,
       tint: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400",
-      note: t("kpi.onScreenNote", { avg: formatDuration(k.managers ? k.on_screen / k.managers : 0) }),
+      note: t("kpi.onScreenNote", { avg: formatDuration(avgOnScreen) }),
+    },
+    {
+      label: t("kpi.openCovered"),
+      value: percent(openConnected, openTotal),
+      icon: Store,
+      tint: "bg-teal-500/10 text-teal-600 dark:text-teal-400",
+      note:
+        openTotal > 0
+          ? t("kpi.openCoveredNote", {
+              connected: formatDuration(openConnected),
+              open: formatDuration(openTotal),
+              count: Object.keys(openByStore).length,
+            })
+          : t("kpi.openCoveredNone"),
+      target: "stores",
+    },
+    {
+      label: t("kpi.managerTarget"),
+      value: percent(avgOnScreen, managerTarget),
+      icon: Clock,
+      tint: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+      note: t("kpi.managerTargetNote", { avg: formatDuration(avgOnScreen), target: formatDuration(managerTarget) }),
+      target: "managers",
     },
     {
       label: t("kpi.present"),
@@ -140,7 +185,7 @@ export function MonitoringReport({
 
   return (
     <div className="@container space-y-6">
-      <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-3 @5xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 @2xl:grid-cols-4">
         {kpis.map((kpi) => <KpiTile key={kpi.label} kpi={kpi} />)}
       </div>
 
@@ -205,7 +250,7 @@ export function MonitoringReport({
         </AnalyticsCard>
       )}
 
-      <ManagersTable users={report.users} onOpen={setOpenUser} />
+      <ManagersTable users={report.users} targetSeconds={managerTarget} onOpen={setOpenUser} />
 
       <div className="grid gap-6 @4xl:grid-cols-2">
         <AnalyticsCard icon={MonitorPlay} title={t("sections.topScreens")} description={t("sections.topScreensHint")} center>
@@ -220,7 +265,7 @@ export function MonitoringReport({
             <CardEmpty icon={MonitorOff}>{t("noScreenTime")}</CardEmpty>
           )}
         </AnalyticsCard>
-        <StoresCard report={report} />
+        <StoresCard report={report} openByStore={openByStore} />
       </div>
 
       <ScreensTable report={report} />
@@ -277,17 +322,28 @@ function useSortable<T, K extends keyof T & string>(rows: T[], initial: K, textK
   return { rows: sorted, head };
 }
 
-const STORE_TEXT_KEYS: (keyof UsageStoreRow)[] = ["store"];
+/** A store row with its opening hours in the range (null: none set in the store's metadata). */
+type StoreRowView = UsageStoreRow & { open_hours: number | null; open_share: number | null };
+
+const STORE_TEXT_KEYS: (keyof StoreRowView)[] = ["store"];
 const SCREEN_TEXT_KEYS: (keyof UsageScreenRow & string)[] = ["name", "store"];
 
-function StoresCard({ report }: { report: UsageReport }) {
+function StoresCard({ report, openByStore }: { report: UsageReport; openByStore: Record<string, number> }) {
   const t = useTranslations("screenMonitoring");
-  const { rows, head } = useSortable(report.stores, "on_screen", STORE_TEXT_KEYS);
+  const withOpen = useMemo<StoreRowView[]>(
+    () =>
+      report.stores.map((s) => {
+        const open = openByStore[s.store] ?? null;
+        return { ...s, open_hours: open, open_share: open === null ? null : share(s.on_screen, open) };
+      }),
+    [report.stores, openByStore],
+  );
+  const { rows, head } = useSortable(withOpen, "on_screen", STORE_TEXT_KEYS);
   // Same page size as the top-screens chart beside it, so both show the same number of rows.
   const paged = usePaged(rows, rows.length, STORES_PAGE_SIZE);
 
   return (
-    <AnalyticsCard icon={Store} title={t("sections.stores")} count={rows.length} flush>
+    <AnalyticsCard id="stores" icon={Store} title={t("sections.stores")} count={rows.length} flush>
       <div className="overflow-x-auto">
         <table className="w-full text-sm [&_td]:whitespace-nowrap [&_td]:px-3 [&_th]:px-3">
           <thead className="border-b bg-muted/40">
@@ -295,6 +351,8 @@ function StoresCard({ report }: { report: UsageReport }) {
               {head("store", t("columns.store"))}
               {head("managers", t("columns.managers"), "text-end")}
               {head("on_screen", t("columns.onScreen"), "text-end")}
+              {head("open_hours", t("columns.openHours"), "text-end")}
+              {head("open_share", t("columns.openShare"), "text-end")}
               {head("present", t("columns.present"), "text-end")}
               {head("talking", t("columns.talking"), "text-end")}
               {head("kicks", t("columns.kicks"), "text-end")}
@@ -306,6 +364,8 @@ function StoresCard({ report }: { report: UsageReport }) {
                 <td className={cn(TD, "font-medium")}>{s.store}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{s.managers}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.on_screen)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{s.open_hours === null ? "—" : formatDuration(s.open_hours)}</td>
+                <td className={cn(TD, "text-end tabular-nums")}>{s.open_hours === null ? "—" : percent(s.on_screen, s.open_hours)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.present)}</td>
                 <td className={cn(TD, "text-end tabular-nums")}>{formatDuration(s.talking)}</td>
                 <td className={cn(TD, "text-end tabular-nums", s.kicks > 0 && "text-red-600 dark:text-red-400")}>{s.kicks || "—"}</td>
