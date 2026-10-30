@@ -42,10 +42,6 @@ interface NoteInput {
   files?: File[];
 }
 
-function withTrashed(include?: boolean) {
-  return include ? { withTrashed: true } : {};
-}
-
 export const maintenanceCatalogService = {
   /* ── Technicians ───────────────────────────────────────────────────── */
 
@@ -138,22 +134,23 @@ export const maintenanceCatalogService = {
   /* ── Parts ──────────────────────────────────────────────────────────── */
 
   /**
-   * The whole parts catalog. The API paginates parts at 15 by default and
-   * filters retired ones with `trashed=with`, so both are sent explicitly:
-   * without `per_page` every picker silently showed only the newest 15.
-   * (`search` is not read upstream yet; pickers filter on the client.)
+   * The parts catalog, or the parts matching `search` (name, brand, model or
+   * part number, ignoring capitals — filtered upstream). The API paginates
+   * parts at 15 by default and keeps retired ones out unless `trashed=with`,
+   * so both are sent explicitly: without `per_page` every picker silently
+   * showed only the newest 15.
    */
   listParts(opts: { search?: string; includeDeleted?: boolean } = {}, signal?: AbortSignal): Promise<Part[]> {
     return http.rows<Part>(`${CATALOG}/parts`, {
       query: {
-        search: opts.search,
+        search: opts.search?.trim() || undefined,
         perPage: PARTS_PAGE_SIZE,
         trashed: opts.includeDeleted ? "with" : undefined,
-        ...withTrashed(opts.includeDeleted),
       },
       signal,
     });
   },
+  /** One part (deleted ones too): the list row plus `unitsCount`. */
   getPart(id: number, signal?: AbortSignal): Promise<Part> {
     return http.get<Part>(`${CATALOG}/parts/${seg(id)}`, { signal });
   },

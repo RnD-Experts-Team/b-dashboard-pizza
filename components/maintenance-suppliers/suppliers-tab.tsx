@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 import { useSuppliers } from "@/lib/hooks/use-maintenance-catalog";
 import { formatMoney } from "@/lib/maintenance/money";
 import type { Supplier, SupplierFilters } from "@/types/maintenance-v2";
-import { usePaidByPayee } from "@/components/maintenance-technicians/use-paid-by-payee";
 import { useQueryParams } from "@/components/maintenance-technicians/use-query-params";
 import { SupplierSheet, websiteHref } from "./supplier-sheet";
 
@@ -24,17 +23,15 @@ export const SUPPLIER_QUERY_KEYS = ["sq", "supplier"] as const;
 
 /**
  * Suppliers tab (docs/MAINTENANCE-V2-UI.md §7): search, then the list (name,
- * phone, website, paid this year). A row opens the supplier's sheet — its id
+ * phone, website, total paid). A row opens the supplier's sheet — its id
  * goes in the URL (`?supplier=`) so the sheet can be linked to.
  *
- * "Total paid" ever is only on one supplier's read (the API's list carries no
- * money), so the list shows what was paid THIS YEAR (from the Finances
- * report) and the sheet shows the all-time total.
+ * "Total paid" comes on every list row (`total_paid`), so it shows for
+ * people without access to the Finances report too.
  */
 export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: string; onAdd: () => void; canAdd: boolean; reloadKey: number }) {
   const t = useTranslations("maintenanceV2");
   const { get, set } = useQueryParams();
-  const paid = usePaidByPayee("thisYear");
 
   const q = get("sq");
   const openId = Number(get("supplier")) || null;
@@ -61,7 +58,8 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
   }, [reloadKey, refresh]);
 
   const open = (s: Supplier) => set({ supplier: String(s.id) }, { push: true });
-  const paidOf = (id: number) => (paid.bySupplier ? formatMoney(paid.bySupplier.get(id) ?? "0") : "—");
+  // Every list row carries the total paid to the supplier so far (mistakes left out).
+  const paidOf = (s: Supplier) => formatMoney(s.totalPaid ?? null);
 
   return (
     <div className="space-y-4">
@@ -119,7 +117,7 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
                   <th scope="col" className="px-4 py-3 text-start font-medium text-muted-foreground">{t("common.name")}</th>
                   <th scope="col" className="px-4 py-3 text-start font-medium text-muted-foreground">{t("common.phone")}</th>
                   <th scope="col" className="px-4 py-3 text-start font-medium text-muted-foreground">{t("technicians.website")}</th>
-                  <th scope="col" className="px-4 py-3 text-end font-medium text-muted-foreground">{t("suppliers.paidThisYear")}</th>
+                  <th scope="col" className="px-4 py-3 text-end font-medium text-muted-foreground">{t("technicians.totalPaid")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -161,7 +159,7 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-end font-medium tabular-nums">{paidOf(s.id)}</td>
+                    <td className="px-4 py-3 text-end font-medium tabular-nums">{paidOf(s)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -178,7 +176,7 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate font-medium">{s.name}</p>
-                    <span className="shrink-0 font-medium tabular-nums">{paidOf(s.id)}</span>
+                    <span className="shrink-0 font-medium tabular-nums">{paidOf(s)}</span>
                   </div>
                   <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">
                     <Phone className="h-3 w-3 shrink-0" aria-hidden="true" />
@@ -189,7 +187,7 @@ export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: str
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-muted-foreground">{t("suppliers.paidThisYearNote")}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{t("suppliers.totalPaidNote")}</p>
         </div>
       )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FileText, Paperclip, ShoppingBag, Stamp, Wallet, type LucideIcon } from "lucide-react";
+import { Download, FileText, Paperclip, ShoppingBag, Stamp, Wallet, type LucideIcon } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -63,7 +63,19 @@ export function CostsTab({
   const latest = approvals[0] ?? null;
   const pendingLevel = issue.status.value === "waiting_approval" ? issue.workflow?.approvalLevelFor ?? null : null;
   const unpaid = issue.purchases.filter((p) => !p.mistaken && !p.paid);
-  const invoices = issue.payments.filter((p) => p.hasInvoice || p.invoiceNumber);
+  const invoices = issue.payments.filter((p) => p.hasInvoice || p.invoiceNumber || p.invoices?.length);
+  // A payment can name the issue on several lines: each file once, then payments with only a number (or no files sent).
+  const seenFiles = new Set<number>();
+  const invoiceFiles = invoices.flatMap((p) =>
+    (p.invoices ?? [])
+      .filter((file) => (seenFiles.has(file.id) ? false : (seenFiles.add(file.id), true)))
+      .map((file) => ({ file, payment: p })),
+  );
+  const filedPayments = new Set(invoiceFiles.map((f) => f.payment.paymentId));
+  const seenPayments = new Set<number>();
+  const numberOnly = invoices.filter((p) =>
+    filedPayments.has(p.paymentId) || seenPayments.has(p.paymentId) ? false : (seenPayments.add(p.paymentId), true),
+  );
   const stockValue = decimalOr0(c?.stockUsedValue);
   const otherSpend = decimalOr0(c?.inspection) + decimalOr0(c?.gas) + decimalOr0(c?.other);
 
@@ -128,9 +140,27 @@ export function CostsTab({
         {invoices.length === 0 ? <Empty text={t("tickets.costs.noInvoices")} /> : null}
         {invoices.length ? (
           <div className="flex flex-wrap gap-2">
-            {invoices.map((p) => (
+            {invoiceFiles.map(({ file, payment: p }) => (
+              <a
+                key={`file-${file.id}`}
+                href={file.url}
+                download={file.originalName}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={t("tickets.costs.downloadInvoice", { name: file.originalName })}
+                className="inline-flex max-w-full items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs hover:bg-muted"
+              >
+                <Download className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{file.originalName}</span>
+                <span className="shrink-0 text-muted-foreground">
+                  · {p.invoiceNumber ? `${t("tickets.costs.invoiceNumber", { number: p.invoiceNumber })} · ` : ""}
+                  {p.paidTo.name}
+                </span>
+              </a>
+            ))}
+            {numberOnly.map((p) => (
               <Link
-                key={`${p.paymentId}-${p.lineId}`}
+                key={`payment-${p.paymentId}`}
                 href={paymentHref(p.paymentId)}
                 className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs hover:bg-muted"
               >

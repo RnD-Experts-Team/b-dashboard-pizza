@@ -55,7 +55,7 @@ export function minutesSince(iso: string | null | undefined, now: number = Date.
   return Number.isFinite(t) ? Math.max(0, Math.floor((now - t) / MS_PER_MINUTE)) : 0;
 }
 
-/* ── State (office side: the list does not carry `state`) ───────────────── */
+/* ── State (office side: the server's `state`, else read from the events) ─ */
 
 const SPAN_OF: Record<TripEventKind, { span: "break" | "travel" | "parts_run"; start: boolean }> = {
   break_start: { span: "break", start: true },
@@ -76,10 +76,13 @@ export function liveOpenSession(trip: Pick<Trip, "sessions" | "openSessionId">):
 }
 
 /**
- * What the technician is doing now, read from the open session's events the
- * way the server's `state` is (break wins over a parts run over driving).
+ * What the technician is doing now: the server's `state` (list rows and show
+ * carry it, the same reading as his link). Without it (an older server), read
+ * from the open session's events the way the server does (break wins over a
+ * parts run over driving).
  */
-export function officeTripState(trip: Pick<Trip, "sessions" | "openSessionId">): TripState {
+export function officeTripState(trip: Pick<Trip, "sessions" | "openSessionId" | "state">): TripState {
+  if (trip.state) return trip.state;
   const open = liveOpenSession(trip);
   if (!open) return "off_clock";
   const running = { break: false, travel: false, parts_run: false };

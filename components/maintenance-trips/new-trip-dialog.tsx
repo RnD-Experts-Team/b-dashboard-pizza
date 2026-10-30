@@ -1,90 +1,26 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
-import { Loader2, MapPin, Plus, Search, Store, X } from "lucide-react";
+import { useDeferredValue, useState } from "react";
+import { Loader2, Plus, Search, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker, FieldError, Segmented } from "@/components/maintenance-tickets/form-bits";
-import { PriorityChip } from "@/components/maintenance-tickets/ticket-chips";
 import { TechnicianCheckList } from "@/components/maintenance-tickets/technician-check-list";
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { getTicketsFieldErrors } from "@/lib/api/maintenance-tickets-errors";
 import { useTechnicians } from "@/lib/hooks/use-maintenance-catalog";
-import { maintenanceTripsService, usePlannerTickets } from "@/lib/hooks/use-maintenance-trips";
-import { isTrippable, todayLocal } from "@/lib/maintenance-trips";
-import { ISSUE_STATUSES, PRIORITIES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import { cn } from "@/lib/utils";
-import type { Priority, SchedulePurpose, TripPlannerTicket, TripWithLink } from "@/types/maintenance-v2";
+import { maintenanceTripsService } from "@/lib/hooks/use-maintenance-trips";
+import { todayLocal } from "@/lib/maintenance-trips";
+import type { SchedulePurpose, TripWithLink } from "@/types/maintenance-v2";
 import { GuardedDialog } from "./guarded-dialog";
-
-/* ── Stores and their open issues, from the ticket list ─────────────────── */
-
-interface PlannerIssue {
-  id: number;
-  ticketId: number;
-  title: string;
-  status: string;
-  priority: Priority | null;
-}
-
-interface PlannerStore {
-  /** "s:12" (store id) or "o:Warehouse" (a place with no store). */
-  key: string;
-  storeId: number | null;
-  storeNumber: string | null;
-  otherStore: string | null;
-  issues: PlannerIssue[];
-}
-
-function groupByStore(tickets: readonly TripPlannerTicket[]): PlannerStore[] {
-  const byKey = new Map<string, PlannerStore>();
-  tickets.forEach((ticket) => {
-    const storeId = ticket.storeId ?? ticket.store?.id ?? null;
-    const key = storeId != null ? `s:${storeId}` : `o:${ticket.otherStore ?? ""}`;
-    if (storeId == null && !ticket.otherStore) return;
-    const row =
-      byKey.get(key) ??
-      ({
-        key,
-        storeId,
-        storeNumber: ticket.store?.storeNumber ?? null,
-        otherStore: storeId == null ? ticket.otherStore : null,
-        issues: [],
-      } satisfies PlannerStore);
-    (ticket.issues ?? [])
-      .filter((i) => isTrippable(i.status))
-      .forEach((i) =>
-        row.issues.push({
-          id: i.id,
-          ticketId: i.ticketId ?? ticket.id,
-          title: i.displayTitle ?? i.title ?? `#${i.id}`,
-          status: i.status,
-          priority: i.assignedPriority?.value ?? i.priority?.value ?? null,
-        }),
-      );
-    if (row.issues.length) byKey.set(key, row);
-  });
-  return [...byKey.values()].sort((a, b) =>
-    (a.storeNumber ?? a.otherStore ?? "").localeCompare(b.storeNumber ?? b.otherStore ?? "", undefined, { numeric: true }),
-  );
-}
+import { draftFor, otherDraft, StopIssueList, StoreChoices, useTripStores, type PlannerStore, type StopDraft } from "./stop-picker";
 
 /* ── The dialog ──────────────────────────────────────────────────────────── */
-
-interface StopDraft {
-  key: string;
-  storeId: number | null;
-  storeNumber: string | null;
-  otherStore: string | null;
-  issueIds: number[];
-  purpose: SchedulePurpose;
-}
 
 const TECH_PAGE_SIZE = 50;
 
@@ -313,10 +249,6 @@ function NewTripForm({
 
 /* ── Stops picker ────────────────────────────────────────────────────────── */
 
-function defaultPurpose(issues: readonly PlannerIssue[]): SchedulePurpose {
-  return issues.length && issues.every((i) => i.status === "inspection") ? "inspection" : "work";
-}
-
 function StopsPicker({
   stops,
   onChange,
@@ -330,26 +262,12 @@ function StopsPicker({
   const [search, setSearch] = useState("");
   const [other, setOther] = useState("");
   const deferred = useDeferredValue(search);
-  const { tickets, isLoading, error: loadError, refresh } = usePlannerTickets(deferred);
-  const stores = useMemo(() => groupByStore(tickets), [tickets]);
+  const { stores, all, isLoading, error: loadError, refresh } = useTripStores(deferred);
   const chosen = new Set(stops.map((s) => s.key));
+  const knownByKey = new Map(all.map((s) => [s.key, s.issues]));
 
   function toggleStore(store: PlannerStore): void {
-    if (chosen.has(store.key)) {
-      onChange(stops.filter((s) => s.key !== store.key));
-      return;
-    }
-    onChange([
-      ...stops,
-      {
-        key: store.key,
-        storeId: store.storeId,
-        storeNumber: store.storeNumber,
-        otherStore: store.otherStore,
-        issueIds: store.issues.map((i) => i.id),
-        purpose: defaultPurpose(store.issues),
-      },
-    ]);
+    onChange(chosen.has(store.key) ? stops.filter((s) => s.key !== store.key) : [...stops, draftFor(store)]);
   }
 
   function update(key: string, patch: Partial<StopDraft>): void {
@@ -359,14 +277,9 @@ function StopsPicker({
   function addOther(): void {
     const name = other.trim();
     if (!name) return;
-    const key = `o:${name}`;
-    if (!chosen.has(key)) {
-      onChange([...stops, { key, storeId: null, storeNumber: null, otherStore: name, issueIds: [], purpose: "work" }]);
-    }
+    if (!chosen.has(`o:${name}`)) onChange([...stops, otherDraft(name)]);
     setOther("");
   }
-
-  const storeByKey = new Map(stores.map((s) => [s.key, s]));
 
   return (
     <fieldset className="space-y-2">
@@ -375,72 +288,37 @@ function StopsPicker({
 
       {!!stops.length && (
         <ol className="space-y-2">
-          {stops.map((stop, index) => {
-            const store = storeByKey.get(stop.key);
-            return (
-              <li key={stop.key} className="space-y-2 rounded-md border bg-card p-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground tabular-nums">
-                    {index + 1}
-                  </span>
-                  <span className="text-sm font-medium">
-                    {stop.storeNumber ? t("trips.storeN", { number: stop.storeNumber }) : stop.otherStore}
-                  </span>
-                  <Segmented<SchedulePurpose>
-                    className="ms-auto"
-                    value={stop.purpose}
-                    options={[
-                      { value: "work", label: t("trips.purposeWork") },
-                      { value: "inspection", label: t("trips.purposeInspection") },
-                    ]}
-                    onChange={(purpose) => update(stop.key, { purpose })}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t("trips.newTripDialog.removeStop")}
-                    onClick={() => onChange(stops.filter((s) => s.key !== stop.key))}
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                </div>
-                {!!store?.issues.length && (
-                  <ul className="space-y-1">
-                    {store.issues.map((issue) => {
-                      const on = stop.issueIds.includes(issue.id);
-                      const priority = vocabEntry(PRIORITIES, issue.priority);
-                      const status = vocabEntry(ISSUE_STATUSES, issue.status);
-                      return (
-                        <li key={issue.id}>
-                          <label className="flex cursor-pointer items-start gap-2 rounded px-1 py-1 text-xs hover:bg-muted/40">
-                            <Checkbox
-                              checked={on}
-                              onCheckedChange={(v) =>
-                                update(stop.key, {
-                                  issueIds: v ? [...stop.issueIds, issue.id] : stop.issueIds.filter((id) => id !== issue.id),
-                                })
-                              }
-                              className="mt-0.5"
-                            />
-                            <span className="min-w-0 flex-1">
-                              <span className="font-medium">
-                                #{issue.ticketId} · {issue.title}
-                              </span>
-                              <span className="ms-2 inline-flex flex-wrap items-center gap-2 text-muted-foreground">
-                                {status && vocabText(t, status)}
-                                {priority && <PriorityChip value={priority.value} label={vocabText(t, priority)} prefix="" />}
-                              </span>
-                            </span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
+          {stops.map((stop, index) => (
+            <li key={stop.key} className="space-y-2 rounded-md border bg-card p-2.5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground tabular-nums">
+                  {index + 1}
+                </span>
+                <span className="text-sm font-medium">
+                  {stop.storeNumber ? t("trips.storeN", { number: stop.storeNumber }) : stop.otherStore}
+                </span>
+                <Segmented<SchedulePurpose>
+                  className="ms-auto"
+                  value={stop.purpose}
+                  options={[
+                    { value: "work", label: t("trips.purposeWork") },
+                    { value: "inspection", label: t("trips.purposeInspection") },
+                  ]}
+                  onChange={(purpose) => update(stop.key, { purpose })}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t("trips.newTripDialog.removeStop")}
+                  onClick={() => onChange(stops.filter((s) => s.key !== stop.key))}
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </div>
+              <StopIssueList stop={stop} known={knownByKey.get(stop.key) ?? []} onChange={(issueIds) => update(stop.key, { issueIds })} />
+            </li>
+          ))}
         </ol>
       )}
 
@@ -487,77 +365,5 @@ function StopsPicker({
       </div>
       <FieldError message={error} />
     </fieldset>
-  );
-}
-
-function StoreChoices({
-  stores,
-  chosen,
-  loading,
-  failed,
-  onRetry,
-  onToggle,
-}: {
-  stores: PlannerStore[];
-  chosen: ReadonlySet<string>;
-  loading: boolean;
-  failed: boolean;
-  onRetry: () => void;
-  onToggle: (store: PlannerStore) => void;
-}) {
-  const t = useTranslations("maintenanceV2");
-  if (loading && !stores.length) {
-    return (
-      <div className="space-y-1 p-2">
-        <Skeleton className="h-7 w-full" />
-        <Skeleton className="h-7 w-full" />
-        <Skeleton className="h-7 w-full" />
-      </div>
-    );
-  }
-  if (failed) {
-    return (
-      <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
-        {t("common.loadError")}
-        <Button type="button" variant="outline" size="xs" onClick={onRetry}>
-          {t("common.retry")}
-        </Button>
-      </div>
-    );
-  }
-  if (!stores.length) {
-    return <p className="px-3 py-2 text-xs text-muted-foreground">{t("trips.newTripDialog.noOpenIssues")}</p>;
-  }
-  return (
-    <ul className="divide-y">
-      {stores.map((store) => {
-        const on = chosen.has(store.key);
-        const Icon = store.storeNumber ? Store : MapPin;
-        return (
-          <li key={store.key}>
-            <button
-              type="button"
-              aria-pressed={on}
-              onClick={() => onToggle(store)}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 text-start text-xs transition-colors hover:bg-muted/40",
-                on && "bg-accent",
-              )}
-            >
-              <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              <span className="font-medium">
-                {store.storeNumber ? t("trips.storeN", { number: store.storeNumber }) : store.otherStore}
-              </span>
-              <span className="text-muted-foreground tabular-nums">
-                {t("trips.newTripDialog.openIssues", { count: store.issues.length })}
-              </span>
-              <span className="ms-auto text-[11px] text-primary">
-                {on ? t("trips.newTripDialog.added") : t("common.add")}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }

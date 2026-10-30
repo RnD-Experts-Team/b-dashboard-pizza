@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { isCancelled } from "@/lib/api/maintenance-tickets-errors";
 import { storageService } from "@/lib/api/services/storage.service";
+import { usePart } from "@/lib/hooks/use-maintenance-catalog";
 import { usePartPriceHistory, usePartStockAt, useStoragePartUnits } from "@/lib/hooks/use-storage";
 import { formatMoney, formatQuantity } from "@/lib/maintenance/money";
 import { PART_SERIAL_STATUSES, PART_UNITS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
@@ -61,7 +62,10 @@ export function PartSheet({
 }: PartSheetProps) {
   const t = useTranslations("maintenanceV2");
   const [editing, setEditing] = useState(false);
-  const part = parts.find((p) => p.id === partId) ?? null;
+  const listed = parts.find((p) => p.id === partId) ?? null;
+  // A part the page's catalog does not hold (a deleted one, from a link): read it on its own.
+  const { part: fetched } = usePart(partId, !listed);
+  const part = listed ?? fetched ?? null;
   const unit = vocabText(t, vocabEntry(PART_UNITS, part?.unit ?? "each"));
 
   return (

@@ -62,6 +62,14 @@ export function useParts(opts: { search?: string; includeDeleted?: boolean } = {
   return { ...res, parts: res.data ?? [] };
 }
 
+/** One part, deleted ones too (with `unitsCount`). */
+export function usePart(id: number | null, enabled = true) {
+  const res = useMaintenanceResource(enabled && id ? `part:${id}` : null, (signal) =>
+    maintenanceCatalogService.getPart(id as number, signal),
+  );
+  return { ...res, part: res.data };
+}
+
 export function usePartUnits(partId: number | null, status?: PartSerialStatus) {
   const res = useMaintenanceResource(partId ? keyOf(`part-units:${partId}`, { status }) : null, (signal) =>
     maintenanceCatalogService.listPartUnits(partId as number, status, signal),

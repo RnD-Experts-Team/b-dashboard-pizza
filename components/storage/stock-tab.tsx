@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useParts } from "@/lib/hooks/use-maintenance-catalog";
 import { useStockTotals } from "@/lib/hooks/use-storage";
 import { formatMoney, formatQuantity } from "@/lib/maintenance/money";
 import { PART_UNITS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import { partHint, partMatches } from "@/lib/storage/stock-forms";
+import { partHint } from "@/lib/storage/stock-forms";
 import { PlacePickerDialog } from "./place-picker-dialog";
 import {
   PaginationBar,
@@ -33,8 +34,9 @@ import type { PartStockLocation, StockPlaceLine, StorageLocation } from "@/types
  * spot ("Zone A › Shelf S"), the total, and what it is worth. Click a part for
  * its sheet (details, serials, price history).
  *
- * The API has no text search on stock, so the search runs over the parts
- * catalog (name, brand, model, part number) and asks for those part ids.
+ * Stock balances have no text search, so the search asks the parts catalog
+ * (`GET parts?search=`: name, brand, model, part number, matched upstream)
+ * and then asks for those part ids.
  */
 
 const PER_PAGE = 50;
@@ -56,7 +58,6 @@ export interface StockTabProps {
   locationId?: number;
   onFiltersChange: (patch: { q?: string | null; loc?: number | null }) => void;
   parts: readonly Part[];
-  partsLoading: boolean;
   locations: readonly StorageLocation[];
   onOpenPart: (partId: number) => void;
   onAddPart?: () => void;
@@ -70,7 +71,6 @@ export function StockTab({
   locationId,
   onFiltersChange,
   parts,
-  partsLoading,
   locations,
   onOpenPart,
   onAddPart,
@@ -102,7 +102,9 @@ export function StockTab({
   }
 
   const q = search.trim();
-  const matching = useMemo(() => (q ? parts.filter((p) => partMatches(p, q)) : null), [parts, q]);
+  const partSearch = useParts({ search: q }, Boolean(q));
+  const searching = partSearch.isLoading || partSearch.isRefreshing;
+  const matching = q && !searching ? partSearch.parts : null;
   const idFilter = matching && matching.length <= MAX_ID_FILTER ? matching.map((p) => p.id) : undefined;
   const noMatch = matching !== null && matching.length === 0;
 
@@ -116,7 +118,7 @@ export function StockTab({
     }),
     [idFilter, locationId, page],
   );
-  const { rows, meta, isLoading, isRefreshing, error, refresh } = useStockTotals(filters, !noMatch && !(q && partsLoading), revision);
+  const { rows, meta, isLoading, isRefreshing, error, refresh } = useStockTotals(filters, !noMatch && !(q && searching), revision);
 
   const partsById = useMemo(() => new Map(parts.map((p) => [p.id, p])), [parts]);
   const visible = useMemo(() => {

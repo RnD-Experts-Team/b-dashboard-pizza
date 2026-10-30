@@ -31,8 +31,9 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
     </span>
   );
 
-  const mistakeBadge = (
-    <Badge variant="outline" className="border-destructive/40 px-1.5 py-0 text-[10px] text-destructive">
+  // The reason it was marked a mistake shows on hover; the detail sheet shows it in full.
+  const mistakeBadge = (row: PaymentListRow) => (
+    <Badge variant="outline" className="border-destructive/40 px-1.5 py-0 text-[10px] text-destructive" title={row.mistakenReason ?? undefined}>
       {t("common.mistaken")}
     </Badge>
   );
@@ -60,7 +61,7 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
                 </div>
                 <div className="shrink-0 text-end">
                   <p className={cn("text-base font-semibold tabular-nums", row.mistaken && "line-through")}>{formatMoney(row.total)}</p>
-                  {row.mistaken && mistakeBadge}
+                  {row.mistaken && mistakeBadge(row)}
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
@@ -105,7 +106,7 @@ export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen
                 <TableCell>
                   <span className="flex items-center gap-1.5">
                     <span className={cn("font-medium", row.mistaken && "line-through")}>{row.paidTo.name}</span>
-                    {row.mistaken && mistakeBadge}
+                    {row.mistaken && mistakeBadge(row)}
                   </span>
                   {categoryName(row) && <span className="block text-[11px] text-muted-foreground">{categoryName(row)}</span>}
                 </TableCell>

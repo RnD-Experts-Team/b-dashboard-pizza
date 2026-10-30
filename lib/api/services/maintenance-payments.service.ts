@@ -12,12 +12,14 @@
 /*  (`lines[0][type]`), which the contract allows.                           */
 /*                                                                            */
 /*  Internal routes: payments/[[...path]], unpaid-work,                      */
-/*  technician-purchases/[[...path]].                                        */
+/*  technician-purchases/[[...path]], issue-inspections.                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import { http, seg } from "@/lib/api/maintenance-v2/http";
 import type {
   EditPaymentInput,
+  IssueInspectionLookupFilters,
+  IssueInspectionLookupRow,
   Payment,
   PaymentFilters,
   PaymentInput,
@@ -77,5 +79,12 @@ export const maintenancePaymentsService = {
   },
   markTechnicianPurchaseMistaken(id: number, payload?: Partial<ReasonPayload>): Promise<TechnicianPurchase> {
     return http.post<TechnicianPurchase>(`/technician-purchases/${seg(id)}/mistaken`, payload);
+  },
+
+  /* ── Inspection lookup (the Inspection line's picker) ────────────────── */
+
+  /** Inspections across every store, newest first, each saying whether a payment already pays it. */
+  lookupInspections(filters: IssueInspectionLookupFilters = {}, signal?: AbortSignal): Promise<IssueInspectionLookupRow[]> {
+    return http.rows<IssueInspectionLookupRow>("/issue-inspections", { query: filters, signal });
   },
 };

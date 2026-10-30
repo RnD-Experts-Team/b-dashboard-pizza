@@ -14,6 +14,7 @@
 /*                                                                            */
 /*  The ticket list and ticket creation stay in maintenance-tickets.service. */
 /*  Internal route: stores/[store]/tickets/[ticket]/issues/[issue]/[...action] */
+/*  (+ ticket-issues, the global issue lookup the pickers search).           */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import { http, request, seg } from "@/lib/api/maintenance-v2/http";
@@ -33,6 +34,8 @@ import type {
   RecordApprovalPayload,
   ReviewPayload,
   ScheduleWorkPayload,
+  TicketIssueLookupFilters,
+  TicketIssueLookupRow,
   TicketIssueV2,
   TripLinkIssued,
   WorkDonePayload,
@@ -202,9 +205,30 @@ function normaliseTicketHeader(raw: RawTicketHeader): TicketHeaderV2 {
   };
 }
 
+type RawLookupRow = Omit<TicketIssueLookupRow, "priority" | "statusLabel"> & { priority?: RawEnum; statusLabel?: string | null };
+
+function normaliseLookupRow(raw: RawLookupRow): TicketIssueLookupRow {
+  return {
+    ...raw,
+    statusLabel: raw.statusLabel ?? raw.status,
+    priority: toMEnum<Priority>(raw.priority),
+    store: raw.store ?? null,
+    otherStore: raw.otherStore ?? null,
+  };
+}
+
 /* ── Service ─────────────────────────────────────────────────────────────── */
 
 export const maintenanceWorkflowService = {
+  /**
+   * The issue pickers' lookup (`GET ticket-issues`): light rows across every
+   * store, newest first. Internal route: ticket-issues.
+   */
+  async lookupIssues(filters: TicketIssueLookupFilters = {}, signal?: AbortSignal): Promise<TicketIssueLookupRow[]> {
+    const rows = await http.rows<RawLookupRow>("/ticket-issues", { query: filters, signal });
+    return rows.map(normaliseLookupRow);
+  },
+
   /**
    * A ticket and every issue on it, without a store segment (other-store
    * tickets have none). `storeNumber` only scopes the auth rule

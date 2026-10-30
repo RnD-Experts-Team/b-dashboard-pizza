@@ -58,6 +58,8 @@ export interface Technician extends WithNotesAndFiles {
   userId: number | null;
   /** Only when the list was ranked. */
   standing?: TechnicianStanding;
+  /** List rows only: non-mistaken payments to him with paid_at in this calendar month. */
+  paidThisMonth?: Money;
   deletedAt: IsoDateTime | null;
   createdAt?: IsoDateTime;
   updatedAt?: IsoDateTime;
@@ -135,7 +137,7 @@ export interface Supplier {
   phone: string | null;
   website: string | null;
   description: string | null;
-  /** Only on show. */
+  /** Every non-mistaken payment to the supplier (list rows and show). */
   totalPaid?: Money;
   notes?: TicketNote[];
   attachments?: TicketAttachment[];
@@ -182,6 +184,8 @@ export interface Part extends WithNotesAndFiles {
   /** Every unit gets a serial number; movements of it need `serials[]`. */
   trackSerials: boolean;
   deletedAt: IsoDateTime | null;
+  /** GET parts/{part} only: part units recorded, every status. */
+  unitsCount?: number;
 }
 
 export interface PartInput {

@@ -10,6 +10,7 @@ import type {
   IsoDateTime,
   MEnum,
   Money,
+  StoreRef,
   TicketAttachment,
   TicketNote,
   WithFiles,
@@ -212,6 +213,15 @@ export interface IssuePaymentLink {
   amount: Money;
   invoiceNumber: string | null;
   hasInvoice: boolean;
+  /** The files attached to that payment. */
+  invoices?: IssueInvoiceFile[];
+}
+
+/** One file on a payment, as the issue's Costs tab lists it. */
+export interface IssueInvoiceFile {
+  id: number;
+  originalName: string;
+  url: string;
 }
 
 /** Parts used from storage on the issue. */
@@ -451,4 +461,28 @@ export interface CreateIssueV2Fields {
   impact?: Impact;
   contactName?: string;
   contactPhone?: string;
+}
+
+/* ── Issue lookup (the pickers) ──────────────────────────────────────────── */
+
+/** GET ticket-issues: a light row per issue across every store, newest first — never the full read. */
+export interface TicketIssueLookupRow {
+  id: number;
+  ticketId: number;
+  title: string;
+  status: IssueStatus;
+  statusLabel: string;
+  priority: MEnum<Priority> | null;
+  store: StoreRef | null;
+  otherStore: string | null;
+}
+
+export interface TicketIssueLookupFilters {
+  /** Catalog title, free-text title, description, or the ticket id (a leading # allowed). */
+  search?: string;
+  /** A store number. */
+  store?: string;
+  statuses?: readonly IssueStatus[];
+  /** Default 20, at most 100. */
+  limit?: number;
 }

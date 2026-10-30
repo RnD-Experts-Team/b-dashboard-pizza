@@ -34,10 +34,18 @@ import {
   vocabHelp,
   vocabText,
 } from "@/lib/maintenance/vocabulary";
-import type { Part, PartsDestination, PaymentLineType, Supplier, TechnicianPurchase } from "@/types/maintenance-v2";
+import type {
+  IssueInspectionLookupRow,
+  Part,
+  PartsDestination,
+  PaymentLineType,
+  Supplier,
+  TechnicianPurchase,
+} from "@/types/maintenance-v2";
 import type { StorageLocationRef } from "@/types/maintenance-tickets.types";
 import { EntityCombobox } from "./entity-combobox";
 import { Field, fieldId } from "./field";
+import { InspectionPicker } from "./inspection-picker";
 import { LINE_TYPE_ICONS } from "./line-type-badges";
 import { MultiCheckSelect } from "./multi-check-select";
 import { AddSupplierInline } from "./paid-to-picker";
@@ -181,6 +189,25 @@ export function PaymentLineCard({
       onChange={(ids) => patch({ ticketIssueIds: ids }, "ticketIssueIds")}
     />
   );
+
+  /* ── Inspection: the one this line pays for ──────────────────────── */
+
+  /** Picking an inspection also fills in its store (when none is chosen) and ticks its issue there. */
+  const onInspectionPick = (row: IssueInspectionLookupRow | null) => {
+    const issue = row?.ticketIssue ?? null;
+    const fillStore = !otherMode && chosenStore == null && issue?.store != null;
+    const storeId = fillStore ? issue?.store?.id ?? null : line.storeId;
+    const sameStore = issue?.store != null && storeId != null && Number(storeId) === issue.store.id;
+    const tick = sameStore && issue != null && !line.ticketIssueIds.includes(issue.id);
+    patch(
+      {
+        issueInspectionId: row?.id ?? null,
+        storeId,
+        ticketIssueIds: tick && issue ? [...line.ticketIssueIds, issue.id] : line.ticketIssueIds,
+      },
+      "issueInspectionId",
+    );
+  };
 
   /* ── Money inputs ─────────────────────────────────────────────────── */
 
@@ -353,6 +380,23 @@ export function PaymentLineCard({
         {/* ── Fixed / inspection ── */}
         {(line.type === "fixed" || line.type === "inspection") && (
           <>
+            {line.type === "inspection" && (
+              <Field
+                className="sm:col-span-2"
+                htmlFor={idOf("issueInspectionId")}
+                label={t("payments.inspection.label")}
+                help={t("payments.inspection.help")}
+                error={err("issueInspectionId")}
+              >
+                <InspectionPicker
+                  id={idOf("issueInspectionId")}
+                  technicianId={isTechnician ? lookups.paidTo?.id ?? null : null}
+                  value={line.issueInspectionId}
+                  invalid={Boolean(err("issueInspectionId"))}
+                  onPick={onInspectionPick}
+                />
+              </Field>
+            )}
             {storeField}
             {moneyInput("amount", t("common.amount"), { required: true })}
             <div className="sm:col-span-2">{ticketsField}</div>

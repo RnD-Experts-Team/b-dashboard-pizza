@@ -5538,7 +5538,11 @@
       "extra": "{count} extra",
       "copy": "Copy",
       "copied": "Copied",
-      "share": "Share"
+      "share": "Share",
+      "photoKind": {
+        "before": "Before",
+        "after": "After"
+      }
     },
     "names": {
       "duplicateTechnician": "There is already a technician called {name}.",
@@ -5743,7 +5747,8 @@
         "hasInvoice": "Has an invoice",
         "noUnpaid": "Nothing waiting to be paid back.",
         "boughtBy": "bought by {name}",
-        "at": "at {name}"
+        "at": "at {name}",
+        "downloadInvoice": "Download {name}"
       },
       "activity": {
         "empty": "Nothing has happened on this issue yet.",
@@ -6146,7 +6151,6 @@
         "stops": "Stops",
         "stopsHelp": "Add the stores he visits, in order. Tick the issues for each one.",
         "searchStores": "Search stores or issues",
-        "noOpenIssues": "No store has open issues that match.",
         "openIssues": "{count, plural, one {# open issue} other {# open issues}}",
         "added": "Added",
         "removeStop": "Remove this stop",
@@ -6159,7 +6163,11 @@
         "instructions": "Instructions for him",
         "instructionsHelp": "He sees this at the top of his trip page.",
         "create": "Make trip",
-        "created": "Trip made"
+        "created": "Trip made",
+        "noOpenTickets": "No open tickets",
+        "noStoreMatch": "No store matches.",
+        "issuesLoadError": "Could not load the open tickets. Stores can still be added.",
+        "visitOnly": "No open tickets here. He will visit the store only."
       },
       "drawer": {
         "link": "Technician's link",
@@ -6235,6 +6243,14 @@
         "pickKind": "Pick one",
         "kindNeeded": "Pick what happened.",
         "timeNeeded": "Pick the time."
+      },
+      "addStop": {
+        "title": "Add stop",
+        "help": "Pick a store (open tickets or not) or type a place, then tick what he does there. A store already on the trip gets these jobs added.",
+        "pickStore": "Pick a store or type a place.",
+        "change": "Pick another store",
+        "save": "Add stop",
+        "added": "Stop added"
       }
     },
     "tripPortal": {
@@ -6466,7 +6482,22 @@
       "markMistakeTitle": "Mark payment #{id} as a mistake?",
       "markMistakeBody": "It stays in the history, struck through. Its parts leave storage, and its clocked time and purchases count as unpaid again.",
       "reasonRequired": "Say why this payment was a mistake.",
-      "markedMistaken": "Payment marked as a mistake."
+      "markedMistaken": "Payment marked as a mistake.",
+      "inspection": {
+        "label": "Inspection",
+        "help": "Which inspection this pays for. Picking one also ticks its ticket.",
+        "searchPlaceholder": "Search by issue or ticket #",
+        "showPaid": "Show paid ones too",
+        "none": "No inspection matches.",
+        "noneUnpaid": "This technician has no inspection left to pay for.",
+        "paid": "Paid",
+        "notPaid": "Not paid",
+        "quote": "Quote {amount}",
+        "chosen": "Inspection #{id}",
+        "clear": "Clear the inspection",
+        "doneOn": "Done {date}",
+        "bookedFor": "Booked for {date}"
+      }
     },
     "stock": {
       "recordStock": "Record stock",
@@ -6852,8 +6883,6 @@
       "loading": "Loading the suppliers",
       "noMatch": "No supplier matches this search.",
       "emptyBody": "No suppliers yet. Add the shops and companies we buy parts from.",
-      "paidThisYear": "Paid this year",
-      "paidThisYearNote": "Paid this year comes from this year's payments. Open a supplier for the total paid ever.",
       "editTitle": "Edit {name}",
       "nameRequired": "Enter a name.",
       "descriptionHelp": "What we buy there, opening hours, account numbers we quote…",
@@ -6866,7 +6895,8 @@
       "restored": "{name} restored",
       "deleted": "{name} deleted",
       "deleteTitle": "Delete {name}?",
-      "deleteBody": "Its payments stay in the history, and it can be restored."
+      "deleteBody": "Its payments stay in the history, and it can be restored.",
+      "totalPaidNote": "Total paid is every payment to the supplier so far; mistakes are left out."
     }
   }
 }

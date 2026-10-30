@@ -6,15 +6,18 @@
 /*  - stores: the dashboard's own list (auth overview). Each has the numeric */
 /*    stores.id (what a payment line's `store_id` takes) AND the store       */
 /*    number (what the list filter and the ticket routes take).              */
-/*  - a store's ticket issues, for the line's Tickets multi-select.          */
+/*  - a store's ticket issues, for the line's Tickets multi-select (the      */
+/*    issue lookup, `GET ticket-issues?store=&statuses[]=`).                 */
 /*  - storage locations and their place levels, for parts into storage.     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import { useCallback, useMemo } from "react";
 import { useAuthStore } from "@/lib/auth/auth.store";
-import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
 import { storageService } from "@/lib/api/services/storage.service";
 import { useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
+import { TRIPPABLE_ISSUE_STATUSES } from "@/lib/maintenance-trips/view";
+import type { IssueStatus } from "@/types/maintenance-v2";
 
 export interface StoreOption {
   /** Numeric stores.id. */
@@ -52,27 +55,28 @@ export interface StoreIssueOption {
   statusLabel: string | null;
 }
 
-/** Enough for any store's live tickets; the line picks from what it shows. */
-const STORE_TICKETS_PER_PAGE = 100;
+/** The lookup's largest answer: the store's newest 100 issues; the line picks from what it shows. */
+const STORE_ISSUES_LIMIT = 100;
 const CACHE_TTL_MS = 60_000;
-const CANCELLED = "cancelled";
+/** Every status but cancelled: a payment may be for work on an issue that is closed since. */
+const PAYABLE_STATUSES: readonly IssueStatus[] = [...TRIPPABLE_ISSUE_STATUSES, "closed"];
 
 const issueCache = new Map<string, { at: number; promise: Promise<StoreIssueOption[]> }>();
 
 async function fetchStoreIssues(storeNumber: string): Promise<StoreIssueOption[]> {
   try {
-    const res = await maintenanceTicketsService.getTickets(storeNumber, { per_page: STORE_TICKETS_PER_PAGE });
-    return res.data.flatMap((ticket) =>
-      ticket.issues
-        .filter((issue) => issue.status?.value !== CANCELLED)
-        .map((issue) => ({
-          id: issue.id,
-          ticketId: ticket.id,
-          title: issue.title,
-          status: issue.status?.value ?? null,
-          statusLabel: issue.status?.label ?? null,
-        })),
-    );
+    const rows = await maintenanceWorkflowService.lookupIssues({
+      store: storeNumber,
+      statuses: PAYABLE_STATUSES,
+      limit: STORE_ISSUES_LIMIT,
+    });
+    return rows.map((issue) => ({
+      id: issue.id,
+      ticketId: issue.ticketId,
+      title: issue.title,
+      status: issue.status,
+      statusLabel: issue.statusLabel,
+    }));
   } catch (err) {
     // A failed read is never served from the cache.
     issueCache.delete(storeNumber);

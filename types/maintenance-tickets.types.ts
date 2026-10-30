@@ -110,6 +110,8 @@ export interface TicketAttachment {
   contentType: string | null;
   /** Ready-to-use download URL provided by the API. */
   url: string;
+  /** Maintenance v2 job photos: "before" / "after" (trip link or Work done), else null. */
+  kind?: "before" | "after" | null;
   createdBy: number | null;
   createdAt: string;
 }
@@ -458,6 +460,7 @@ export interface ApiTicketAttachment {
   content_type?: string | null;
   mime_type?: string | null;
   url: string;
+  kind?: "before" | "after" | null;
   created_by?: number | null;
   created_at: string;
 }
@@ -536,7 +539,9 @@ export interface ApiTicket {
     display_title?: string | null;
     title?: string | null;
     catalog_issue?: { title?: string | null } | null;
-    status?: ApiEnumField | null;
+    /** v2 sends the issue status as a plain string, `status_label` beside it. */
+    status?: ApiEnumField | string | null;
+    status_label?: string | null;
     priority?: ApiEnumField | null;
     technicians?: Array<{ id: number; name: string }> | null;
     target_completion_at?: string | null;

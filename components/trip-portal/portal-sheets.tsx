@@ -324,7 +324,8 @@ function IssueDoneForm({ target, run, onDone }: { target: IssueTarget; run: Port
                 note: note.trim() || null,
                 findings: inspection ? findings.trim() : null,
                 estimatedCost: inspection && estimate.trim() ? estimate.trim() : null,
-                files: [...before, ...after],
+                before,
+                after,
               }),
             t("tripPortal.markedDone"),
           );

@@ -54,6 +54,7 @@ import type {
 import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 import { http, seg } from "@/lib/api/maintenance-v2/http";
 import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
+import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
 import type {
   PartPriceEntry,
   PartSerialStatus,
@@ -98,8 +99,18 @@ const MAX_PAGE_SIZE = 200;
 const DEFAULT_LOCATIONS_PAGE_SIZE = 50;
 /** Laravel's own default, used when a flat paginator omits per_page. */
 const FALLBACK_PAGE_SIZE = 25;
-/** Tickets read per "Used on a ticket" search (each carries its issues). */
-const ISSUE_SEARCH_TICKETS = 15;
+/** Issues read per "Used on a ticket" search. */
+const ISSUE_SEARCH_LIMIT = 30;
+/**
+ * One "#" at the start of a search: "#123" → "123"; "12#3" is unchanged.
+ * https://regex101.com/?flavor=javascript&regex=%5E%23&testString=%23123%0A12%233
+ */
+const LEADING_HASH = /^#/;
+/**
+ * Digits only, at least one: matches "12", rejects "12a" and "".
+ * https://regex101.com/?flavor=javascript&regex=%5E%5Cd%2B%24&flags=m&testString=12%0A12a
+ */
+const ALL_DIGITS = /^\d+$/;
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -914,29 +925,28 @@ export const storageService = {
   },
 
   /**
-   * Ticket issues matching `q` (ticket #, store, issue title), for "Used on a
-   * ticket". Reads the global ticket list (`GET tickets?q=`) and flattens each
-   * ticket's issues, closed and cancelled ones last.
+   * Ticket issues matching `q` (ticket #, issue title or description), for
+   * "Used on a ticket", via the issue lookup (`GET ticket-issues`). A number
+   * may also be a store, so digits search that store's issues too. Closed and
+   * cancelled ones last.
    */
   async searchTicketIssues(q: string, signal?: AbortSignal): Promise<TicketIssueHit[]> {
-    interface RawTicket {
-      id: number;
-      otherStore?: string | null;
-      store?: { storeNumber?: string | null } | null;
-      issues?: { id: number; ticketId?: number; title?: string | null; displayTitle?: string | null; status?: string | null }[] | null;
-    }
-    const page = await http.page<RawTicket>("/tickets", { query: { q, perPage: ISSUE_SEARCH_TICKETS }, signal });
+    const number = q.replace(LEADING_HASH, "");
+    const [byText, byStore] = await Promise.all([
+      maintenanceWorkflowService.lookupIssues({ search: q, limit: ISSUE_SEARCH_LIMIT }, signal),
+      ALL_DIGITS.test(number) ? maintenanceWorkflowService.lookupIssues({ store: number, limit: ISSUE_SEARCH_LIMIT }, signal) : [],
+    ]);
     const done = new Set(["closed", "cancelled"]);
-    return page.data
-      .flatMap((ticket) =>
-        (ticket.issues ?? []).map<TicketIssueHit>((issue) => ({
-          id: issue.id,
-          ticketId: issue.ticketId ?? ticket.id,
-          title: issue.displayTitle ?? issue.title ?? "",
-          storeNumber: ticket.store?.storeNumber ?? ticket.otherStore ?? null,
-          status: issue.status ?? null,
-        })),
-      )
+    const seen = new Set<number>();
+    return [...byText, ...byStore]
+      .filter((row) => (seen.has(row.id) ? false : (seen.add(row.id), true)))
+      .map<TicketIssueHit>((row) => ({
+        id: row.id,
+        ticketId: row.ticketId,
+        title: row.title,
+        storeNumber: row.store?.storeNumber ?? row.otherStore ?? null,
+        status: row.status,
+      }))
       .sort((a, b) => Number(done.has(a.status ?? "")) - Number(done.has(b.status ?? "")));
   },
 };

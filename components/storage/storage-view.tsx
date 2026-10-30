@@ -55,7 +55,7 @@ export function StorageView() {
   const canStartCount = can("POST", "/stock-counts");
 
   const tab = parseStorageTab(params.get("tab"));
-  const { parts, isLoading: partsLoading, refresh: refreshParts, setData: setParts } = usePartsCatalog();
+  const { parts, refresh: refreshParts, setData: setParts } = usePartsCatalog();
   const locationList = useStorageLocationList();
   const [revision, setRevision] = useState(0);
   const [pending, setPending] = useState<PendingStockAction | null>(null);
@@ -125,7 +125,6 @@ export function StorageView() {
               locationId={stockLocationFilter}
               onFiltersChange={setParams}
               parts={parts}
-              partsLoading={partsLoading}
               locations={locationList.all}
               onOpenPart={(id) => setParams({ p: id }, "push")}
               onAddPart={canAddParts ? () => setAddingPart(true) : undefined}

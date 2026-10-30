@@ -16,7 +16,6 @@ import { formatMoney } from "@/lib/maintenance/money";
 import type { Technician, TechnicianFilters } from "@/types/maintenance-v2";
 import { StarValue } from "./star-rating";
 import { useCatalogIssues } from "./use-catalog-issues";
-import { usePaidByPayee } from "./use-paid-by-payee";
 import { useQueryParams } from "./use-query-params";
 import { useStoreNumberOptions } from "./use-store-options";
 
@@ -47,7 +46,6 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
   const storeOptions = useStoreNumberOptions();
   const { categories } = useTechnicianCategories();
   const { issues } = useCatalogIssues();
-  const paid = usePaidByPayee("thisMonth");
 
   const q = get("q");
   const category = get("category") || ALL;
@@ -84,7 +82,8 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
   const anyFilter = Boolean(q || category !== ALL || store !== ALL || issue !== ALL || emergency);
   const clearAll = () => set(Object.fromEntries(TECHNICIAN_QUERY_KEYS.map((k) => [k, null])));
   const open = (tech: Technician) => router.push(`/${locale}/dashboard/maintenance-technicians/${tech.id}`);
-  const paidOf = (id: number) => (paid.byTechnician ? formatMoney(paid.byTechnician.get(id) ?? "0") : "—");
+  // The list row carries what was paid to him this calendar month (mistakes left out).
+  const paidOf = (tech: Technician) => formatMoney(tech.paidThisMonth ?? null);
 
   return (
     <div className="space-y-4">
@@ -216,7 +215,7 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
                     <td className="px-4 py-3 text-end tabular-nums">{tech.coverageStores?.length ?? 0}</td>
                     <td className="px-4 py-3 text-end tabular-nums">{tech.coveredIssueCount ?? 0}</td>
                     <td className="px-4 py-3"><StarValue value={tech.averageRating} /></td>
-                    <td className="px-4 py-3 text-end font-medium tabular-nums">{paidOf(tech.id)}</td>
+                    <td className="px-4 py-3 text-end font-medium tabular-nums">{paidOf(tech)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -254,7 +253,7 @@ export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAd
                     <span className="text-muted-foreground">
                       {t("technicians.storesCount", { count: tech.coverageStores?.length ?? 0 })} · {t("technicians.issuesCount", { count: tech.coveredIssueCount ?? 0 })}
                     </span>
-                    <span className="justify-self-end font-medium tabular-nums">{paidOf(tech.id)}</span>
+                    <span className="justify-self-end font-medium tabular-nums">{paidOf(tech)}</span>
                   </div>
                 </Link>
               </li>

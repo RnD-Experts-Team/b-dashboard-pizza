@@ -9,7 +9,7 @@
 
 import { maintenancePaymentsService } from "@/lib/api/services/maintenance-payments.service";
 import { keyOf, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { PaymentFilters, TechnicianPurchaseFilters } from "@/types/maintenance-v2";
+import type { IssueInspectionLookupFilters, PaymentFilters, TechnicianPurchaseFilters } from "@/types/maintenance-v2";
 
 export { maintenancePaymentsService };
 
@@ -44,4 +44,12 @@ export function useTechnicianPurchases(filters: TechnicianPurchaseFilters = {}, 
     maintenancePaymentsService.listTechnicianPurchases(filters, signal),
   );
   return { ...res, purchases: res.data ?? [] };
+}
+
+/** Inspections to pay for (the Inspection line's picker), newest first. */
+export function useInspectionLookup(filters: IssueInspectionLookupFilters, enabled = true) {
+  const res = useMaintenanceResource(enabled ? keyOf("issue-inspections", filters) : null, (signal) =>
+    maintenancePaymentsService.lookupInspections(filters, signal),
+  );
+  return { ...res, inspections: res.data ?? [] };
 }

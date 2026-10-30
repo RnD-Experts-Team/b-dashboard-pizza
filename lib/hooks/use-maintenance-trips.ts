@@ -8,11 +8,7 @@
 
 import { maintenanceTripsService } from "@/lib/api/services/maintenance-trips.service";
 import { keyOf, useMaintenanceMutation, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import { TRIPPABLE_ISSUE_STATUSES } from "@/lib/maintenance-trips/view";
 import type { Trip, TripFilters } from "@/types/maintenance-v2";
-
-/** Tickets read per New trip dialog (the global list, open issues only). */
-const PLANNER_PAGE_SIZE = 100;
 
 export { maintenanceTripsService };
 
@@ -49,15 +45,4 @@ export function useUnpaidSessions(technicianId: number | null) {
     maintenanceTripsService.listUnpaidSessions(technicianId as number, signal),
   );
   return { ...res, sessions: res.data ?? [] };
-}
-
-/** Tickets with issues a technician can still be sent for (the New trip dialog's stops). */
-export function usePlannerTickets(search: string, enabled = true) {
-  const res = useMaintenanceResource(enabled ? keyOf("trip-planner-tickets", { search }) : null, (signal) =>
-    maintenanceTripsService.listPlannerTickets(
-      { issueStatuses: TRIPPABLE_ISSUE_STATUSES, search: search || undefined, perPage: PLANNER_PAGE_SIZE },
-      signal,
-    ),
-  );
-  return { ...res, tickets: res.data?.data ?? [] };
 }

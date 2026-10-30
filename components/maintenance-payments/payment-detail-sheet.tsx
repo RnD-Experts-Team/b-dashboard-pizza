@@ -216,8 +216,10 @@ function LineDetail({ line }: { line: PaymentLine }) {
   const t = useTranslations("maintenanceV2");
   const locale = useLocale();
   const Icon = LINE_TYPE_ICONS[line.type];
+  // Parts into storage: the location, then the spot the part sits in there now ("Zone A › Shelf 3").
+  const spot = (line.place ?? []).map((p) => p.value).filter(Boolean);
   const where =
-    line.storageLocation?.name ??
+    (line.storageLocation ? [line.storageLocation.name, ...spot].join(" › ") : null) ??
     (line.store ? t("payments.storeNumber", { number: line.store.storeNumber }) : line.otherStore) ??
     "—";
 

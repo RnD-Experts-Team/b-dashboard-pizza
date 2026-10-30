@@ -134,6 +134,8 @@ export interface Trip {
   link: TripLinkStatus;
   onClock: boolean;
   openSessionId: number | null;
+  /** What he is doing now (TripService::state, the link's reading) — on list rows and show. */
+  state?: TripState;
   totals: TripTotals;
   stops: TripStop[];
   sessions: TripSession[];
@@ -233,30 +235,6 @@ export interface UnpaidSession {
   ticketIssues: { id: number; ticketId: number; title: string; storeNumber: string | null }[];
 }
 
-/**
- * A ticket from the global list (`GET tickets?issue_statuses[]=…`) as the
- * New trip dialog reads it: the numeric store id the stop needs, and the
- * ticket's issues. Camelized raw (not the tickets service's transform, which
- * swaps the store id for its number).
- */
-export interface TripPlannerTicket {
-  id: number;
-  storeId: number | null;
-  otherStore: string | null;
-  store: StoreRef | null;
-  issues:
-    | {
-        id: number;
-        ticketId: number;
-        title?: string | null;
-        displayTitle?: string | null;
-        status: IssueStatus;
-        priority: { value: Priority; label: string } | null;
-        assignedPriority: { value: Priority; label: string } | null;
-      }[]
-    | null;
-}
-
 /* ── Public (technician) trip page ───────────────────────────────────────── */
 
 /** GET public/trips/{token}: the trip minus audits/private notes, plus state and stores. */
@@ -297,6 +275,9 @@ export interface PublicNotDonePayload {
 }
 
 export interface PublicIssueDonePayload extends WithFiles {
+  /** Job photos, stored on the issue as "Before - …" / "After - …" and read back as attachment `kind`. */
+  before?: File[];
+  after?: File[];
   note?: string | null;
   /** Inspection visits: what he found and the quote. */
   findings?: string | null;

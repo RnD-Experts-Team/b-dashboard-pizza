@@ -12,7 +12,7 @@ import type { TicketIssueHit } from "@/types/maintenance-v2";
 
 /**
  * "Which ticket?" for parts used from storage: type a ticket number, a store
- * or what is broken, pick the issue. Searches the ticket list (`GET tickets?q=`).
+ * or what is broken, pick the issue. Searches the issue lookup (`GET ticket-issues`).
  */
 
 export interface IssueSearchProps {

@@ -340,7 +340,8 @@ export function draftFromPayment(payment: Payment): PaymentDraft {
         storeId: l.store?.id ?? null,
         otherStore: l.otherStore ?? "",
         storageLocationId: l.storageLocation?.id ?? null,
-        place: l.place ?? [],
+        // Parts into storage: the spot the part sits in there now (only the ids go back).
+        place: (l.place ?? []).map((p) => ({ levelId: p.levelId, valueId: p.valueId })),
         description: l.description ?? "",
         amount: str(l.amount),
         tripSessionIds: l.tripSessions.map((s) => s.id),

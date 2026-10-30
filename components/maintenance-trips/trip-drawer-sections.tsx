@@ -80,15 +80,28 @@ export function StopsSection({
   trip,
   readOnly,
   onMarkStopMistaken,
+  onAddStop,
 }: {
   trip: Trip;
   readOnly: boolean;
   onMarkStopMistaken: (stop: TripStop) => void;
+  onAddStop: () => void;
 }) {
   const t = useTranslations("maintenanceV2");
   const locale = useLocale();
   return (
-    <Section title={t("trips.drawer.stops")} count={trip.stops.filter((s) => !s.mistaken).length}>
+    <Section
+      title={t("trips.drawer.stops")}
+      count={trip.stops.filter((s) => !s.mistaken).length}
+      action={
+        !readOnly && (
+          <Button type="button" variant="outline" size="xs" onClick={onAddStop}>
+            <Plus aria-hidden="true" />
+            {t("trips.addStop.title")}
+          </Button>
+        )
+      }
+    >
       {!trip.stops.length ? (
         <Empty text={t("trips.drawer.noStops")} />
       ) : (

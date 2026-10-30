@@ -16,6 +16,7 @@ import type {
   TicketNote,
 } from "./common.types";
 import type { UnpaidSession } from "./trips.types";
+import type { InspectionStatus } from "./workflow.types";
 
 /** `App\Enums\PaymentLineType`. */
 export type PaymentLineType = "hourly" | "fixed" | "inspection" | "parts" | "gas" | "other";
@@ -53,6 +54,8 @@ export interface PaymentListRow {
   types: PaymentLineType[];
   hasInvoice: boolean;
   mistaken: boolean;
+  /** The body of its `mistaken` note, or null. */
+  mistakenReason?: string | null;
   createdAt: IsoDateTime;
 }
 
@@ -84,6 +87,12 @@ export interface PlaceAddressLine {
   valueId: number;
 }
 
+/** A parts-into-storage line's spot as read back: the stock balance's address NOW, with names. */
+export interface PaymentLinePlace extends PlaceAddressLine {
+  level?: string;
+  value?: string;
+}
+
 export interface PaymentLine {
   id: number;
   type: PaymentLineType;
@@ -104,7 +113,8 @@ export interface PaymentLine {
   unitCost: Money | null;
   boughtFrom: IdName | null;
   destination: PartsDestination | null;
-  place?: PlaceAddressLine[];
+  /** Parts into storage: where that part sits in the location now ([] = nobody said); null on every other line. */
+  place?: PaymentLinePlace[] | null;
   stockMovementId: number | null;
   serials: string[];
   technicianPurchases: TechnicianPurchase[];
@@ -232,4 +242,36 @@ export interface TechnicianPurchaseInput {
   ticketIssueId?: number | null;
   serialNumber?: string | null;
   receipt?: File[];
+}
+
+/* ── Inspection lookup (the Inspection line's picker) ────────────────────── */
+
+/** GET issue-inspections: one row per inspection, newest first; mistaken ones never. */
+export interface IssueInspectionLookupRow {
+  id: number;
+  ticketIssue: {
+    id: number;
+    ticketId: number;
+    title: string;
+    store: StoreRef | null;
+    otherStore: string | null;
+  } | null;
+  technician: IdName | null;
+  status: InspectionStatus;
+  statusLabel: string;
+  doneAt: IsoDateTime | null;
+  scheduledDate: IsoDate | null;
+  estimatedCost: Money | null;
+  /** A line of a non-mistaken payment names this inspection. */
+  paid: boolean;
+}
+
+export interface IssueInspectionLookupFilters {
+  technicianId?: number;
+  /** Only the ones no payment line pays yet. */
+  unpaid?: boolean;
+  /** The issue's title or the ticket id (a leading # allowed). */
+  search?: string;
+  /** Default 50, at most 100. */
+  limit?: number;
 }

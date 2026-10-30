@@ -133,6 +133,12 @@ function transformEnumField(raw: { value: string; label: string }): EnumField {
   return { value: raw.value, label: raw.label };
 }
 
+/** A list issue's status: v2 sends `"in_review"` with `status_label`; older servers `{value, label}`. */
+function issueStatusOf(raw: { value: string; label: string } | string | null | undefined, label?: string | null): EnumField | null {
+  if (!raw) return null;
+  return typeof raw === "string" ? { value: raw, label: label ?? raw } : transformEnumField(raw);
+}
+
 
 
 
@@ -154,7 +160,7 @@ function transformTicket(raw: ApiTicket): Ticket {
     issues: (raw.issues ?? []).map((i) => ({
       id: i.id,
       title: i.display_title ?? i.catalog_issue?.title ?? i.title ?? `Issue #${i.id}`,
-      status: i.status ? transformEnumField(i.status) : null,
+      status: issueStatusOf(i.status, i.status_label),
       priority: i.priority ? transformEnumField(i.priority) : null,
       technicians: (i.technicians ?? []).map((t) => ({ id: t.id, name: t.name })),
       targetCompletionAt: i.target_completion_at ?? null,
@@ -437,6 +443,7 @@ export function transformAttachment(raw: ApiTicketAttachment): TicketAttachment 
     fileSize,
     contentType,
     url: raw.url,
+    kind: raw.kind ?? null,
     createdBy: raw.created_by ?? null,
     createdAt: raw.created_at,
   };

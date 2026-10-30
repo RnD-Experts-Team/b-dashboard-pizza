@@ -25,6 +25,7 @@ import {
   tripStoreNumbers,
 } from "@/lib/maintenance-trips";
 import type { Trip, TripEvent, TripSession, TripStop } from "@/types/maintenance-v2";
+import { AddStopDialog } from "./add-stop-dialog";
 import { EventDialog } from "./event-dialog";
 import { ReasonDialog } from "./reason-dialog";
 import { SessionDialog } from "./session-dialog";
@@ -116,6 +117,7 @@ function DrawerBody({
   const [confirm, setConfirm] = useState<Pending | null>(null);
   const [sessionDialog, setSessionDialog] = useState<{ session: TripSession | null } | null>(null);
   const [eventDialog, setEventDialog] = useState<{ session: TripSession; event: TripEvent | null } | null>(null);
+  const [addingStop, setAddingStop] = useState(false);
 
   if (isLoading && !trip) return <DrawerSkeleton />;
   if (error && !trip) {
@@ -183,7 +185,12 @@ function DrawerBody({
           onNewLink={() => (trip.link.active ? setConfirm({ kind: "newLink" }) : void issueLinkOrToast())}
         />
         <TotalsStrip trip={trip} />
-        <StopsSection trip={trip} readOnly={readOnly} onMarkStopMistaken={(stop) => setConfirm({ kind: "stopMistaken", stop })} />
+        <StopsSection
+          trip={trip}
+          readOnly={readOnly}
+          onMarkStopMistaken={(stop) => setConfirm({ kind: "stopMistaken", stop })}
+          onAddStop={() => setAddingStop(true)}
+        />
         <SessionsSection trip={trip} readOnly={readOnly} handlers={handlers} />
         <PurchasesSection trip={trip} />
         <FilesSection trip={trip} />
@@ -242,6 +249,11 @@ function DrawerBody({
             t("trips.drawer.eventSaved"),
           )
         }
+      />
+      <AddStopDialog
+        open={addingStop}
+        onOpenChange={setAddingStop}
+        onAdd={(stop) => write((id) => maintenanceTripsService.addStop(id, stop), t("trips.addStop.added"))}
       />
       <ConfirmDialogs confirm={confirm} onClose={() => setConfirm(null)} write={write} issueLink={issueLink} />
     </>

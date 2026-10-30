@@ -20,7 +20,6 @@ import type {
   Trip,
   TripFilters,
   TripLinkIssued,
-  TripPlannerTicket,
   TripStopInput,
   TripWithLink,
   UnpaidSession,
@@ -111,22 +110,6 @@ export const maintenanceTripsService = {
   },
   addAttachments(tripId: number, files: File[]): Promise<TicketAttachment[]> {
     return http.post<TicketAttachment[]>(`${tripPath(tripId)}/attachments`, { files });
-  },
-
-  /* ── New trip: tickets with issues a technician can still be sent for ─── */
-
-  /**
-   * The global ticket list filtered to the given issue statuses, camelized
-   * raw so each ticket keeps its NUMERIC store id (stops are sent by it).
-   */
-  listPlannerTickets(
-    opts: { issueStatuses: readonly string[]; search?: string; perPage?: number },
-    signal?: AbortSignal,
-  ): Promise<Page<TripPlannerTicket>> {
-    return http.page<TripPlannerTicket>("/tickets", {
-      query: { issueStatuses: [...opts.issueStatuses], q: opts.search, perPage: opts.perPage },
-      signal,
-    });
   },
 
   /* ── Unpaid sessions (the hourly payment line's picker) ──────────────── */
