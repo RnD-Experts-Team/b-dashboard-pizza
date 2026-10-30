@@ -122,9 +122,9 @@ export function SearchableSelect<TValue extends string | number = string>({
         {/* Fixed 240px, deliberately not configurable — that one number IS the
             "fixed height" every dropdown in the app now shares.
             onWheel: without it, scrolling past the end of this list chains to a
-            scrolling parent (the daily-pay dialog is max-h-[90vh] overflow-y-auto),
+            scrolling parent (a payment dialog is max-h-[90vh] overflow-y-auto),
             which moves the trigger this popover is anchored to. House style —
-            daily-pay/multi-select.tsx does the same. */}
+            shared/multi-select.tsx does the same. */}
         <div
           className="max-h-[240px] overflow-y-auto p-1"
           onWheel={(e) => e.stopPropagation()}

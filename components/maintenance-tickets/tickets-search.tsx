@@ -41,17 +41,13 @@ export function TicketsSearch({
 }: TicketsSearchProps) {
   const [draft, setDraft] = useState(value);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** The last value we ourselves committed. Lets us tell "the parent changed
-   *  the filter" (adopt it) from "our own commit came back" (ignore it, or the
-   *  caret jumps while the user is still typing). */
-  const committed = useRef(value);
-
-  useEffect(() => {
-    if (value !== committed.current) {
-      committed.current = value;
-      setDraft(value);
-    }
-  }, [value]);
+  /** The last value seen: the parent's, or our own commit. A parent change
+   *  is adopted; our own commit coming back is not (the caret would jump). */
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setDraft(value);
+  }
 
   useEffect(() => {
     return () => {
@@ -62,8 +58,8 @@ export function TicketsSearch({
   function commit(next: string) {
     if (timer.current) clearTimeout(timer.current);
     const trimmed = next.trim();
-    if (trimmed === committed.current) return;
-    committed.current = trimmed;
+    if (trimmed === seen) return;
+    setSeen(trimmed);
     onChange(trimmed);
   }
 

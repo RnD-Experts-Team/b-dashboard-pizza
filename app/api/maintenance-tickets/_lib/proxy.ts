@@ -296,3 +296,90 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
     );
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  Maintenance v2: generic passthrough for the catch-all route handlers     */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+const BODYLESS = new Set(["GET", "HEAD", "DELETE"]);
+
+/**
+ * Forwards the request as it came: method, query string, and body bytes with
+ * their content type (so a multipart boundary survives). Used by the v2
+ * catch-all routes (trips, payments, stock counts…), where one handler serves
+ * a whole area and a per-method helper would only repeat itself.
+ *
+ * `auth: false` is ONLY for the public trip link: no Authorization header is
+ * read or sent, the token in the path is the credential.
+ */
+export async function proxyPassthrough(
+  request: NextRequest,
+  upstreamUrl: string,
+  opts: { auth?: boolean } = {},
+): Promise<NextResponse> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+
+  if (opts.auth !== false) {
+    const auth = authorizationOrError(request);
+    if ("error" in auth) return auth.error;
+    headers.Authorization = auth.authorization;
+  }
+
+  const method = request.method.toUpperCase();
+  let body: ArrayBuffer | undefined;
+  if (!BODYLESS.has(method)) {
+    body = await request.arrayBuffer();
+    headers["Content-Type"] =
+      request.headers.get("content-type") || "application/json";
+  }
+
+  try {
+    const res = await fetchWithTimeout(upstreamUrl, { method, headers, body });
+    if (res.status === 204) {
+      return new NextResponse(null, {
+        status: 204,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: {
+        "Content-Type": res.headers.get("content-type") || "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown";
+    if (msg.includes("abort") || msg.includes("timed out")) {
+      return errorJson("TIMEOUT", "Upstream request timed out", 504);
+    }
+    return errorJson(
+      "NETWORK_ERROR",
+      "Failed to reach maintenance service",
+      502,
+    );
+  }
+}
+
+/**
+ * Builds `${BASE_URL}/<prefix>/<segments…>?<query>` from a catch-all route's
+ * segments, encoding each segment and forwarding the query string verbatim
+ * (repeated `stores[]` keys stay intact).
+ */
+export function upstreamFromSegments(
+  request: NextRequest,
+  prefix: string,
+  segments: string[] | undefined,
+): string {
+  const path = [prefix, ...(segments ?? []).map((s) => encodeURIComponent(s))]
+    .filter(Boolean)
+    .join("/");
+  const qs = new URL(request.url).search;
+  return `${BASE_URL}/${path}${qs}`;
+}
+
+/** Rejects a path segment that could walk out of the area ("..", empty). */
+export function hasUnsafeSegment(segments: string[] | undefined): boolean {
+  return (segments ?? []).some((s) => !s || s === "." || s === ".." || s.includes("/"));
+}

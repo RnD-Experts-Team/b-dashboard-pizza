@@ -76,15 +76,15 @@ export function AnalyticsView({
               valueLabel="issues"
             />
           </AnalyticsCard>
-          <AnalyticsCard center icon={Hourglass} title="Time to complete" description={`Average from report to complete, for issues completed ${rangeLabel.toLowerCase()}.`}>
+          <AnalyticsCard center icon={Hourglass} title="Time to close" description={`Average from report to closed, for issues closed ${rangeLabel.toLowerCase()}.`}>
             <AnalyticsBarChart
-              title="Average time from reported to complete, by issue"
+              title="Average time from reported to closed, by issue"
               rows={summary.completion_by_issue.map((r) => ({ label: `${r.title} (${r.completed})`, value: r.avg_hours }))}
               valueLabel="hours"
               format={formatHours}
             />
           </AnalyticsCard>
-          <AnalyticsCard icon={StoreIcon} title="By store" description="Busiest first: opened and completed in this range, open right now." flush>
+          <AnalyticsCard icon={StoreIcon} title="By store" description="Busiest first: opened and closed in this range, open right now." flush>
             <ByStore rows={summary.by_store} />
           </AnalyticsCard>
         </div>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, User } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils/date-display";
 import { StatusChip } from "./ticket-chips";
-import type { TicketIssue } from "@/types/maintenance-tickets.types";
+import type { TicketIssueStatusChange } from "@/types/maintenance-tickets.types";
 
 /**
  * Every status this issue has been through, who moved it, and why.
@@ -21,7 +21,7 @@ import type { TicketIssue } from "@/types/maintenance-tickets.types";
 export function IssueStatusHistory({
   changes,
 }: {
-  changes: TicketIssue["statusChanges"];
+  changes: TicketIssueStatusChange[];
 }) {
   const [open, setOpen] = useState(false);
 

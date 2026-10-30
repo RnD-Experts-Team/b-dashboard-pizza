@@ -12,9 +12,11 @@ import type { StoreOption } from "@/components/business-reports/store-multi-sele
 import { AnalyticsControls } from "@/components/maintenance-tickets/analytics/analytics-controls";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
+import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
 import { LONG_RANGE_PRESETS, RANGE_PRESETS, daysToInstants, matchPreset, presetDays } from "@/lib/maintenance-tickets/local-range";
 import type { StoreSelection } from "@/types/business-reports.types";
-import type { CatalogCategory, CatalogIssue } from "@/types/maintenance-tickets.types";
+import type { CatalogIssue } from "@/types/maintenance-tickets.types";
+import type { TechnicianCategory } from "@/types/maintenance-v2";
 import type { TechnicianAnalyticsParams } from "@/types/technician-analytics.types";
 
 const ALL = "all";
@@ -82,11 +84,11 @@ export function TechnicianFilters({
   isUpdating: boolean;
 }) {
   const [issues, setIssues] = useState<CatalogIssue[]>([]);
-  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [categories, setCategories] = useState<TechnicianCategory[]>([]);
 
   useEffect(() => {
     maintenanceTicketsService.getCatalogIssues().then((all) => setIssues(all.filter((i) => !i.deletedAt).sort((a, b) => a.title.localeCompare(b.title)))).catch(() => setIssues([]));
-    if (showCategory) maintenanceTicketsService.getCatalogCategories().then(setCategories).catch(() => setCategories([]));
+    if (showCategory) maintenanceCatalogService.listCategories().then(setCategories).catch(() => setCategories([]));
   }, [showCategory]);
 
   return (

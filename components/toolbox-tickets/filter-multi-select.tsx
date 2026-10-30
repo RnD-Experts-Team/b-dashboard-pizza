@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { MultiSelectOption } from "@/components/daily-pay/multi-select";
+import type { MultiSelectOption } from "@/components/shared/multi-select";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  A multi-select where "nothing chosen" is shown as "everything chosen".    */

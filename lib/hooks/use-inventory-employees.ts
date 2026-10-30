@@ -6,7 +6,7 @@ import {
   getInventoryErrorMessage,
   isCanceledError,
 } from "@/lib/api/inventory-errors";
-import type { MultiSelectOption } from "@/components/daily-pay/multi-select";
+import type { MultiSelectOption } from "@/components/shared/multi-select";
 
 /**
  * Only these statuses are eligible for inventory link generation — mirrors the

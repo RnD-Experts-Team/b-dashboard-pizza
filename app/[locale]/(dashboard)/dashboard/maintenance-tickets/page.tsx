@@ -1,30 +1,17 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useMemo, useState } from "react";
-import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { RefreshCw } from "lucide-react";
+import { BookOpen, ClipboardList, Plus, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
-import {
-  TicketsSkeleton,
-  TicketsEmptyState,
-  TicketsErrorCard,
-  TicketsTable,
-  TicketsFiltersBar,
-  TicketsAnalyticsPanel,
-  CreateTicketDialog,
-  CatalogManagementDialog,
-} from "@/components/maintenance-tickets";
-import { TicketsSearch } from "@/components/maintenance-tickets/tickets-search";
-import { TicketsAttentionChips } from "@/components/maintenance-tickets/tickets-attention-chips";
-import { IssueBasketBar } from "@/components/maintenance-tickets/issue-basket-bar";
-import { VisitBasketPanel } from "@/components/maintenance-tickets/visit-basket-panel";
-import {
-  parseFiltersFromUrl,
-  buildUrlFromFilters,
-} from "@/lib/maintenance-tickets/filters-url";
+import { CatalogManagementDialog, CreateTicketDialog, TicketsErrorCard, TicketsSkeleton } from "@/components/maintenance-tickets";
+import { NO_TECHNICIAN, TicketsFilterRow } from "@/components/maintenance-tickets/list/tickets-filter-row";
+import { TicketsAttention } from "@/components/maintenance-tickets/list/tickets-attention";
+import { TicketsList } from "@/components/maintenance-tickets/list/tickets-list";
+import { buildUrlFromFilters, parseFiltersFromUrl } from "@/lib/maintenance-tickets/filters-url";
 import { useMaintenanceTickets } from "@/lib/hooks/use-maintenance-tickets";
 import { useMaintenanceTicketsStore } from "@/lib/store/maintenance-tickets.store";
 import { useAuth } from "@/lib/auth/use-auth";
@@ -32,8 +19,22 @@ import { useAuthStore } from "@/lib/auth/auth.store";
 import { useSelectedStoreStore } from "@/lib/store/selected-store.store";
 import type { Ticket, TicketsFilters } from "@/types/maintenance-tickets.types";
 
+const CATEGORY_PARAM = "category";
+
+/** The URL for these filters plus the technician category (which is not a server filter). */
+function listQuery(filters: TicketsFilters, categoryId: number | null): string {
+  const qs = new URLSearchParams(buildUrlFromFilters(filters));
+  if (categoryId) qs.set(CATEGORY_PARAM, String(categoryId));
+  return qs.toString();
+}
+
+/**
+ * Tickets list (docs/MAINTENANCE-V2-UI.md §1): header + New ticket, one flat
+ * filter row, the "needs attention" chips, then the table (cards on a
+ * phone). Filters live in the URL so Back and shared links restore them.
+ */
 function MaintenanceTicketsPageInner() {
-  const t = useTranslations("maintenanceTickets");
+  const t = useTranslations("maintenanceV2");
   const router = useRouter();
   const pathname = usePathname();
   const routeParams = useParams();
@@ -44,111 +45,19 @@ function MaintenanceTicketsPageInner() {
   const { overviewStores } = useAuthStore();
   const { selectedStore } = useSelectedStoreStore();
 
-  // ─── Auth checks ──────────────────────────────────────────────────────────
-  const canAccessCatalog = canAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/technicians",
-  });
+  const canAccessCatalog = canAccessRoute({ service: "Maintenance", method: "POST", path: "/technicians" });
+  const canFilterTechnicians = canAccessRoute({ service: "Maintenance", method: "GET", path: "/technicians" });
+  /** Every store's tickets with no stores[] (the MOS head, super admins). */
+  const seesEveryStore = canAccessRoute({ service: "Maintenance", method: "GET", path: "/tickets" });
 
-  const canCancelTicket = canAccessRoute({
-    service: "Maintenance",
-    method: "POST",
-    path: "/stores/placeholder/tickets/placeholder/cancel",
-  });
+  const activeStores = useMemo(() => overviewStores.filter((s) => s.isActive), [overviewStores]);
+  const storeIdOf = (s: (typeof activeStores)[number]) => s.storeId ?? s.id;
 
-  /**
-   * True when the user may read every store's tickets: GET /tickets with no
-   * stores[] (the MOS head and super admins, per the pizzasys rule). Anyone
-   * else's "All stores" means every store in THEIR list, sent as stores[] --
-   * the server refuses them a read with no store.
-   */
-  const canAccessAllStores = canAccessRoute({
-    service: "Maintenance",
-    method: "GET",
-    path: "/tickets",
-  });
-  const seesEveryStore = canAccessAllStores;
-
-  /** The stores[] a multi-store selection is sent with; null = unrestricted. */
-  function scopeFor(selection: string[]): string[] | null {
-    const isEveryStoreSelected = activeStores.length > 0 && selection.length === activeStores.length;
-    return seesEveryStore && isEveryStoreSelected ? null : selection;
-  }
-
-  // ─── Available stores ─────────────────────────────────────────────────────
-  const activeStores = useMemo(
-    () => overviewStores.filter((s) => s.isActive),
-    [overviewStores]
-  );
-
-  // ─── Page-level store selection (independent from sidebar) ────────────────
-  /**
-   * `null`   → still initializing (renders skeleton / nothing)
-   * string[] → one or more specific store ids the user has applied.
-   *            length === 1 uses the per-store endpoint; length > 1 (or all
-   *            of them) uses the global endpoint scoped via stores[] — unless
-   *            the user may read every store (the MOS head), in which case
-   *            selecting every store is sent unrestricted.
-   */
   const pageStoreSelection = useMaintenanceTicketsStore((s) => s.storeSelection);
   const setPageStoreSelection = useMaintenanceTicketsStore((s) => s.setStoreSelection);
+  const isSingleStore = Array.isArray(pageStoreSelection) && pageStoreSelection.length === 1;
+  const hookStoreId = isSingleStore ? pageStoreSelection[0] : undefined;
 
-  const initRef = useRef(false);
-  useEffect(() => {
-    if (initRef.current) return;
-    initRef.current = true;
-
-    // Coming back from a ticket: the selection (and mode / scope) is still in
-    // the store, so keep it rather than snapping back to the sidebar store.
-    // Only trust it while every store in it is still one the user can pick.
-    const kept = useMaintenanceTicketsStore.getState().storeSelection;
-    const keptIsValid =
-      kept != null &&
-      kept.length > 0 &&
-      kept.every((id) => activeStores.some((s) => (s.storeId ?? s.id) === id));
-    if (keptIsValid) {
-      // The scope is re-derived for whoever is signed in now, never trusted
-      // from the store: it may have been set for an earlier session.
-      if (kept.length > 1) setScopedStoreIds(scopeFor(kept));
-      return;
-    }
-
-    // Default to whichever store is selected in the sidebar, not "All Stores" —
-    // only fall back to all-stores / first-active-store when the sidebar has no
-    // (valid) selection.
-    const sidebarStoreId = selectedStore?.storeId;
-    const sidebarStoreIsActive =
-      sidebarStoreId != null &&
-      activeStores.some((s) => (s.storeId ?? s.id) === sidebarStoreId);
-
-    if (sidebarStoreIsActive) {
-      setPageStoreSelection([sidebarStoreId as string]);
-      setScopedStoreIds(null);
-      setMode("store");
-    } else if (canAccessAllStores) {
-      const all = activeStores.map((s) => s.storeId ?? s.id);
-      setPageStoreSelection(all);
-      setScopedStoreIds(scopeFor(all));
-      setMode("global");
-    } else {
-      const first = activeStores[0];
-      if (first) {
-        const id = first.storeId ?? first.id;
-        setPageStoreSelection([id]);
-        setMode("store");
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const isSingleStore =
-    Array.isArray(pageStoreSelection) && pageStoreSelection.length === 1;
-
-  /** storeId passed to the hook: only set for a single specific store selection. */
-  const hookStoreId = isSingleStore ? pageStoreSelection![0] : undefined;
-
-  // ─── Tickets hook ─────────────────────────────────────────────────────────
   const {
     data,
     isLoading,
@@ -163,264 +72,190 @@ function MaintenanceTicketsPageInner() {
     goToPage,
     applyFilters,
     catalogIssues,
-    catalogTechnicians,
     reloadCatalog,
-    analytics,
     baseAnalytics,
-    baseAnalyticsLoading,
-    analyticsLoading,
-    analyticsError,
   } = useMaintenanceTickets({ storeId: hookStoreId });
 
-  // ─── URL <-> filters ──────────────────────────────────────────────────────
-  /**
-   * The URL is the shareable record of what the list is showing. Daily Pay
-   * already works this way; tickets did not, so a filtered view could not be
-   * linked, bookmarked, or survive a refresh -- and "look at this one" is the
-   * single most common thing the coordinator needs to say to someone else.
-   *
-   * Read once on mount only. Making this track `search` on every change would
-   * fight the store, which is still the owner of the live filter state; the URL
-   * here is a mirror that happens to be readable at load time.
-   */
+  /** stores[] for a multi-store pick; null = unrestricted (only for whoever may read every store). */
+  const scopeFor = useCallback(
+    (selection: string[]) => (seesEveryStore && activeStores.length > 0 && selection.length === activeStores.length ? null : selection),
+    [seesEveryStore, activeStores.length],
+  );
+
+  const applyStores = useCallback(
+    (selection: string[]) => {
+      setPageStoreSelection(selection);
+      if (selection.length === 1) {
+        setScopedStoreIds(null);
+        setMode("store");
+      } else {
+        setScopedStoreIds(scopeFor(selection));
+        setMode("global");
+      }
+    },
+    [setPageStoreSelection, setScopedStoreIds, setMode, scopeFor],
+  );
+
+  /* ── First store selection: kept from a visit, else the sidebar store ── */
+  const initRef = useRef(false);
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+    const kept = useMaintenanceTicketsStore.getState().storeSelection;
+    const keptIsValid = kept != null && kept.length > 0 && kept.every((id) => activeStores.some((s) => storeIdOf(s) === id));
+    if (keptIsValid) {
+      if (kept.length > 1) setScopedStoreIds(scopeFor(kept));
+      return;
+    }
+    const sidebarStoreId = selectedStore?.storeId;
+    if (sidebarStoreId != null && activeStores.some((s) => storeIdOf(s) === sidebarStoreId)) return applyStores([sidebarStoreId]);
+    if (seesEveryStore && activeStores.length) return applyStores(activeStores.map(storeIdOf));
+    if (activeStores[0]) applyStores([storeIdOf(activeStores[0])]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── URL ⇄ filters ───────────────────────────────────────────────────── */
+  const [categoryId, setCategoryId] = useState<number | null>(() => Number(searchParams.get(CATEGORY_PARAM)) || null);
   const urlSeeded = useRef(false);
   useEffect(() => {
     if (urlSeeded.current) return;
     urlSeeded.current = true;
-
     const parsed = parseFiltersFromUrl(new URLSearchParams(search));
-    // Nothing in the URL means nothing to restore -- and crucially, no extra
-    // request on top of the one the hook already fires on mount.
     if (Object.keys(parsed).length === 0) {
-      // Coming back from a ticket via a bare link: the hook kept the filters
-      // from the store, so put them back in the URL to keep it truthful.
       const kept = useMaintenanceTicketsStore.getState();
-      const qs = buildUrlFromFilters({ ...kept.filters, page: kept.currentPage });
+      const qs = listQuery({ ...kept.filters, page: kept.currentPage }, categoryId);
       if (qs) router.replace(`${pathname}?${qs}`, { scroll: false });
       return;
     }
-
     applyFilters(parsed);
     if (parsed.page && parsed.page > 1) goToPage(parsed.page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Apply a filter change AND record it in the URL. Every filter entry point
-   *  on this page goes through here, so there is one writer. */
   const applyFiltersAndSync = useCallback(
-    (next: TicketsFilters) => {
+    (next: TicketsFilters, category: number | null = categoryId) => {
       applyFilters(next);
-      const qs = buildUrlFromFilters(next);
+      const qs = listQuery(next, category);
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [applyFilters, router, pathname]
+    [applyFilters, router, pathname, categoryId],
   );
 
-  const handleSearchChange = useCallback(
-    (q: string) => {
-      // A new search always starts at page 1; keeping the old page would land
-      // on an empty page of a smaller result set.
-      applyFiltersAndSync({ ...filters, q: q || undefined, page: 1 });
-    },
-    [applyFiltersAndSync, filters]
-  );
+  function onCategoryChange(next: number | null, technicianIds: number[] | undefined) {
+    setCategoryId(next);
+    applyFiltersAndSync({ ...filters, technician_ids: technicianIds, page: 1 }, next);
+  }
 
-  // ─── Dialog / sheet state ─────────────────────────────────────────────────
+  function onStoresChange(selection: string[]) {
+    const next = selection.length ? selection : activeStores.map(storeIdOf);
+    applyStores(next);
+    setCategoryId(null);
+    router.replace(pathname, { scroll: false });
+  }
+
   const [createOpen, setCreateOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
-  /** Called only when the user clicks Apply in the store filter — not per checkbox click. */
-  function handleStoreApply(selection: string[]) {
-    if (selection.length === 0) return; // must keep at least one store selected
-    setPageStoreSelection(selection);
-    // Changing store starts the filters clean (see the hook), so the URL must
-    // not keep describing the old ones.
-    router.replace(pathname, { scroll: false });
-    if (selection.length === 1) {
-      setScopedStoreIds(null);
-      setMode("store");
-    } else {
-      // Unrestricted only for someone who may read every store; otherwise scoped via stores[].
-      setScopedStoreIds(scopeFor(selection));
-      setMode("global");
-    }
-  }
-
-  /**
-   * Opens the ticket on its own page instead of the 75vw sheet.
-   *
-   * The sheet was the reason everything inside it had to be collapsed -- there
-   * was no room -- and it could not be linked, bookmarked, or survive a
-   * refresh. Navigating costs a back-press; the rail on the ticket page carries
-   * the surrounding tickets so working a queue does not need one.
-   */
-  function handleTicketClick(ticket: Ticket) {
-    // The store rides along so the ticket page can tell the authorizer which
-    // store to scope to -- `reports view` is granted per store, and without it
-    // the read falls back to a global permission check those users fail.
+  function openTicket(ticket: Ticket) {
     const store = ticket.storeId ? `?store=${encodeURIComponent(ticket.storeId)}` : "";
     router.push(`/${locale}/dashboard/maintenance-tickets/${ticket.id}${store}`);
   }
 
-  function handleMutationSuccess() {
+  function onMutationSuccess() {
     refetch();
     reloadCatalog();
   }
 
-  // ─── Derived values ───────────────────────────────────────────────────────
   const hasSelection = pageStoreSelection !== null;
-  const isStoreMode = isSingleStore;
-  /** storeId forwarded to child components that need a specific store context */
-  const activeStoreId = isSingleStore ? pageStoreSelection![0] : undefined;
-
-  /**
-   * Store sent as X-Store-Id on catalog/issues GET and POST.
-   * Priority: page-selected store → last-opened ticket's store → first active store.
-   * This ensures the header is ALWAYS populated when any store context is available.
-   */
-  const catalogStoreId =
-    activeStoreId ||
-    activeStores[0]?.storeId ||
-    activeStores[0]?.id ||
-    undefined;
+  const activeStoreId = isSingleStore ? pageStoreSelection[0] : undefined;
+  const catalogStoreId = activeStoreId || activeStores[0]?.storeId || activeStores[0]?.id || undefined;
+  const filtered = Object.entries(filters).some(([k, v]) => k !== "page" && v !== undefined && !(Array.isArray(v) && v.length === 0));
+  const onlyNobody = filters.technician_ids?.length === 1 && filters.technician_ids[0] === NO_TECHNICIAN;
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t("title")} description={t("description")}>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isLoading || isRefreshing}
-        >
-          <RefreshCw
-            className={cn("me-2 h-4 w-4", isRefreshing && "animate-spin")}
-          />
-          {t("refresh")}
+      <PageHeader title={t("pages.tickets")} description={t("tickets.list.description")}>
+        <Button variant="ghost" size="icon" onClick={() => refetch()} disabled={isLoading || isRefreshing} aria-label={t("common.refresh")}>
+          <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} aria-hidden="true" />
+        </Button>
+        {canAccessCatalog ? (
+          <Button variant="outline" onClick={() => setCatalogOpen(true)}>
+            <BookOpen className="me-1.5 h-4 w-4" aria-hidden="true" />
+            {t("tickets.list.catalog")}
+          </Button>
+        ) : null}
+        <Button onClick={() => setCreateOpen(true)} disabled={!hasSelection}>
+          <Plus className="me-1.5 h-4 w-4" aria-hidden="true" />
+          {t("tickets.newTicket")}
         </Button>
       </PageHeader>
 
-      {/* Search — the primary way in. Put above the filter panel because it is
-          what the coordinator reaches for first: they remember the store, the
-          technician, or "the fryer thing", never the ticket id. */}
-      {hasSelection && (
-        <TicketsSearch
-          value={filters.q ?? ""}
-          onChange={handleSearchChange}
-          isSearching={isLoading || isRefreshing}
-        />
-      )}
+      {hasSelection ? (
+        <div className="space-y-3">
+          <TicketsFilterRow
+            filters={filters}
+            onFiltersChange={(next) => applyFiltersAndSync(next)}
+            stores={activeStores}
+            selectedStoreIds={pageStoreSelection ?? []}
+            onStoresChange={onStoresChange}
+            categoryId={categoryId}
+            onCategoryChange={onCategoryChange}
+            canFilterTechnicians={canFilterTechnicians}
+            isSearching={isLoading || isRefreshing}
+            disabled={isLoading && !data}
+          />
+          <TicketsAttention baseAnalytics={baseAnalytics} filters={filters} onFiltersChange={(next) => applyFiltersAndSync(next)} disabled={isLoading && !data} />
+        </div>
+      ) : null}
 
-      {/* What needs me — plain counts the backend already computed over this
-          same filtered set, each one a toggle. No extra request. */}
-      {hasSelection && (
-        <TicketsAttentionChips
-          baseAnalytics={baseAnalytics}
-          analytics={analytics}
-          filters={filters}
-          onFiltersChange={applyFiltersAndSync}
-          isLoading={baseAnalyticsLoading}
-          disabled={isLoading}
-        />
-      )}
+      {!hasSelection || (isLoading && !data) ? <TicketsSkeleton /> : null}
 
-      {/* The basket follows you here from the ticket pages, so a trip picked up
-          across several tickets can be booked or logged in one go. Renders
-          nothing when empty. */}
-      <IssueBasketBar
-        technicians={catalogTechnicians}
-        onChanged={handleMutationSuccess}
-      />
+      {hasSelection && error && !data ? <TicketsErrorCard error={error} onRetry={() => refetch()} onClearError={clearError} /> : null}
 
-      {/* Where a collected visit gets logged. This is what the Log visit button
-          became -- same capability, without having to find the issues again. */}
-      <VisitBasketPanel technicians={catalogTechnicians} onLogged={handleMutationSuccess} />
+      {hasSelection && !isLoading && !error && data && data.data.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-24 text-center">
+          <ClipboardList className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">
+            {filtered || onlyNobody ? t("tickets.list.emptyFiltered") : t("tickets.list.empty")}
+          </p>
+          {filtered ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCategoryId(null);
+                applyFiltersAndSync({ page: 1 }, null);
+              }}
+            >
+              {t("common.clearAll")}
+            </Button>
+          ) : (
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="me-1.5 h-4 w-4" aria-hidden="true" />
+              {t("tickets.newTicket")}
+            </Button>
+          )}
+        </div>
+      ) : null}
 
-      {/* Filters bar — always shown once a selection is initialised */}
-      {hasSelection && (
-        <TicketsFiltersBar
-          filters={filters}
-          onFiltersChange={applyFiltersAndSync}
-          onCreateClick={() => setCreateOpen(true)}
-          onCatalogClick={() => setCatalogOpen(true)}
-          canAccessCatalog={canAccessCatalog}
-          storeId={catalogStoreId}
-          disabled={isLoading}
-          stores={activeStores}
-          selectedStoreIds={pageStoreSelection ?? []}
-          onStoreApply={handleStoreApply}
-          loadedCreators={(data?.data ?? []).map((ticket) => ticket.creator)}
-        />
-      )}
+      {hasSelection && data && data.data.length > 0 ? (
+        <TicketsList data={data} isRefreshing={isRefreshing} currentPage={currentPage} onPageChange={goToPage} onOpen={openTicket} />
+      ) : null}
 
-      {/* Analytics — reflects whatever filters/store are currently applied */}
-      {hasSelection && (
-        <TicketsAnalyticsPanel
-          analytics={analytics}
-          isLoading={baseAnalyticsLoading}
-          error={analyticsError}
-        />
-      )}
-
-      {/* Still initialising */}
-      {!hasSelection && <TicketsSkeleton />}
-
-      {/* Loading skeleton */}
-      {hasSelection && isLoading && !data && <TicketsSkeleton />}
-
-      {/* Error state */}
-      {hasSelection && error && !data && (
-        <TicketsErrorCard
-          error={error}
-          onRetry={() => refetch()}
-          onClearError={clearError}
-        />
-      )}
-
-      {/* Empty data */}
-      {hasSelection && !isLoading && !error && data && data.data.length === 0 && (
-        <TicketsEmptyState type="no-data" />
-      )}
-
-      {/* Data table */}
-      {hasSelection && data && data.data.length > 0 && (
-        <TicketsTable
-          data={data}
-          isRefreshing={isRefreshing}
-          currentPage={currentPage}
-          onPageChange={goToPage}
-          onTicketClick={handleTicketClick}
-          onRowChanged={handleMutationSuccess}
-          canCancelTicket={canCancelTicket}
-        />
-      )}
-
-      {/* Create ticket dialog */}
       <CreateTicketDialog
         open={createOpen}
         storeId={activeStoreId ?? ""}
         catalogIssues={catalogIssues}
-        stores={!isStoreMode ? activeStores : undefined}
+        stores={!isSingleStore ? activeStores : undefined}
         onClose={() => setCreateOpen(false)}
-        onSuccess={handleMutationSuccess}
+        onSuccess={onMutationSuccess}
       />
 
-      {/* Catalog management dialog */}
-      <CatalogManagementDialog
-        open={catalogOpen}
-        onClose={() => setCatalogOpen(false)}
-        onReloadCatalog={reloadCatalog}
-        storeId={catalogStoreId}
-      />
+      <CatalogManagementDialog open={catalogOpen} onClose={() => setCatalogOpen(false)} onReloadCatalog={reloadCatalog} storeId={catalogStoreId} />
     </div>
   );
 }
 
-/**
- * useSearchParams needs a Suspense boundary to avoid opting the whole route
- * into client-side rendering -- same wrapper Daily Pay uses for the same reason.
- */
+/** useSearchParams needs a Suspense boundary. */
 export default function MaintenanceTicketsPage() {
   return (
     <Suspense fallback={<TicketsSkeleton />}>

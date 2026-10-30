@@ -16,7 +16,7 @@ import { localDay } from "@/lib/maintenance-tickets/local-range";
 import type { TechnicianHours, TechniciansOverview } from "@/types/technician-analytics.types";
 
 /**
- * The latest day they worked: the later of their latest pay-sheet day and
+ * The latest day they worked: the later of their latest payment day and
  * their latest unpaid visit (in the viewer's clock), as "YYYY-MM-DD".
  */
 export function lastWorkedDay(lastVisitAt: string | null, lastPayDate: string | null): string | null {
@@ -87,7 +87,7 @@ export function TechniciansReport({
             value: money(totals.paid),
             icon: Banknote,
             tint: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-            note: data?.filtered_money ? `${rangeLabel} · those stores / issues` : `${rangeLabel} · from the pay sheets`,
+            note: data?.filtered_money ? `${rangeLabel} · those stores / issues` : `${rangeLabel} · from the payments`,
           }} />
           <KpiTile kpi={{
             label: "Worked",
@@ -101,7 +101,7 @@ export function TechniciansReport({
             value: totals.visits,
             icon: Wrench,
             tint: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-            note: "Days on pay sheets + unpaid visits",
+            note: "Clocked sessions on trips",
           }} />
           <KpiTile kpi={{
             label: "Hours",
@@ -115,7 +115,7 @@ export function TechniciansReport({
 
       {data && (
         <div className="grid gap-6 @4xl:grid-cols-2">
-          <AnalyticsCard center icon={Banknote} title="Paid by technician" description={`${rangeLabel}, from the daily pay sheets.`}>
+          <AnalyticsCard center icon={Banknote} title="Paid by technician" description={`${rangeLabel}, from the payments.`}>
             <AnalyticsBarChart
               title="Paid by technician"
               rows={active.filter((t) => Number(t.paid) !== 0).map((t) => ({ label: t.name, value: Number(t.paid) }))}
@@ -123,7 +123,7 @@ export function TechniciansReport({
               format={moneyFormat}
             />
           </AnalyticsCard>
-          <AnalyticsCard center icon={BarChart3} title="Hours by technician" description="Work, travel and parts runs: pay sheets plus unpaid visits.">
+          <AnalyticsCard center icon={BarChart3} title="Hours by technician" description="Work, travel and parts runs: clocked sessions on trips.">
             <AnalyticsBarChart
               title="Paid hours by technician"
               rows={active.filter((t) => paidHours(t.hours) > 0).map((t) => ({ label: t.name, value: paidHours(t.hours) }))}

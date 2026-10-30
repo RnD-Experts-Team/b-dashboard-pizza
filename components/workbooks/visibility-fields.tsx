@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { normalizeRoles, sharedRoles } from "@/lib/workbooks/roles";
 import type { VisibilityOption, VisibilityPayload } from "@/types/workbooks.types";
-import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
+import { MultiSelect, type MultiSelectOption } from "@/components/shared/multi-select";
 import { useMyStoreRoles } from "@/lib/hooks/use-my-store-roles";
 import { VisibilityChip } from "./visibility-chip";
 import { visibilityAccent } from "./visibility-accent";

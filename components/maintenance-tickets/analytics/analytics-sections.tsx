@@ -64,7 +64,16 @@ const BAR = {
 
 type Tone = keyof typeof TONES;
 
+/** v2 issue statuses (MAINTENANCE-V2 §2) first; the v1 keys stay for tickets read from older rows. */
 const STATUS_TONE: Record<string, Tone> = {
+  new: "yellow",
+  in_review: "blue",
+  waiting_on_store: "purple",
+  inspection: "indigo",
+  waiting_approval: "orange",
+  scheduled: "blue",
+  work_done: "indigo",
+  closed: "green",
   pending: "yellow",
   assigned: "blue",
   in_progress: "indigo",
@@ -653,7 +662,7 @@ export function ByStore({ rows }: { rows: AnalyticsSummary["by_store"] }) {
         <tr>
           <th scope="col" className={TH}>Store</th>
           <th scope="col" className={cn(TH, "text-end")}>Opened</th>
-          <th scope="col" className={cn(TH, "text-end")}>Completed</th>
+          <th scope="col" className={cn(TH, "text-end")}>Closed</th>
           <th scope="col" className={cn(TH, "text-end")}>Open now</th>
         </tr>
       </thead>

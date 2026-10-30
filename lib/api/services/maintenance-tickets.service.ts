@@ -1,5 +1,4 @@
 import axios from "axios";
-import { buildNestedFormData, payloadHasFiles } from "@/lib/api/form-data";
 import type {
   AnalyticsActivityPage,
   AnalyticsParams,
@@ -8,76 +7,20 @@ import type {
 } from "@/types/maintenance-analytics.types";
 import type { TechnicianAnalytics, TechnicianAnalyticsParams, TechniciansOverview } from "@/types/technician-analytics.types";
 import type {
-  AttendanceDurations,
-  AttendanceMinutes,
-  ApiAttendanceDurations,
-  ApiIssuePaymentBlock,
-  ApiRecordPaymentBlock,
-  ApiRecordPaymentClaim,
-  ApiStorageLocationRef,
-  IssuePaymentBlock,
-  PaymentStatusField,
-  RecordPaymentBlock,
-  RecordPaymentClaim,
-  StorageLocationRef,
   TicketsListResponse,
-  TicketIssuesResponse,
-  TicketWithIssuesResponse,
   CatalogIssue,
-  CatalogTechnician,
-  CatalogCategory,
-  CatalogPart,
   CreateTicketPayload,
-  AssignIssuesPayload,
-  StatusChangePayload,
-  DeferPayload,
-  CancelPayload,
-  WaitPayload,
-  RelinkIssuePayload,
-  AssignedPriorityPayload,
-  FinalNotePayload,
   CreateNotePayload,
-  CreateDiagnosisPayload,
-  CreateAttendanceEntryPayload,
-  CreateAttendanceEventPayload,
-  CreatePartUsagePayload,
-  CreatePayEntryPayload,
-  CreateWarrantyPayload,
-  AttachTechniciansPayload,
-  DelayAssignmentPayload,
-  ChangeAssignmentTechniciansPayload,
   TicketsFilters,
   ApiTicketsListResponse,
-  ApiTicketIssuesResponse,
   ApiTicket,
-  ApiTicketIssue,
-  ApiTicketAssignment,
-  ApiTicketAssignmentDelay,
-  ApiTicketIssueStatusChange,
   ApiTicketAttachment,
-  ApiTicketIssueDiagnosis,
-  ApiTicketIssueAttendance,
-  ApiTicketIssuePartUsage,
-  ApiTicketIssuePayEntry,
-  ApiTicketIssueWarranty,
   ApiTicketNote,
   TicketNote,
   ApiCatalogIssue,
-  ApiCatalogTechnician,
-  ApiCatalogPart,
-  ApiCatalogCategory,
   EnumField,
   Ticket,
-  TicketIssue,
   TicketAttachment,
-  TicketIssueDiagnosis,
-  TicketIssueAttendance,
-  TicketIssuePartUsage,
-  TicketIssuePayEntry,
-  TicketIssueWarranty,
-  TicketAssignment,
-  TicketAssignmentDelay,
-  TicketIssueStatusChange,
   LaravelPaginationMeta,
   LaravelPaginationLinks,
   ApiTicketsAnalytics,
@@ -86,20 +29,12 @@ import type {
   ApiIssueHistoryResponse,
   ApiIssueHistoryRow,
   ApiTroubleshootingGuide,
-  ApiTroubleshootingSnapshot,
-  TechnicianInput,
   IssueTroubleshooting,
   TroubleshootingGuide,
   TroubleshootingGuideInput,
-  TroubleshootingSnapshot,
   ApiTicketNoteWithOwner,
   TicketNoteWithOwner,
   TroubleshootingLibraryItem,
-  ApiTechnicianRating,
-  TechnicianAbilityBoard,
-  TechnicianRating,
-  TechnicianRatingInput,
-  TechnicianRatingSaved,
   IssueHistoryPage,
   IssueHistoryRow,
   TicketsAnalytics,
@@ -111,47 +46,12 @@ import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 /*  Error Handling                                                          */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export type TicketsErrorCode =
-  | "NO_STORE"
-  | "NOT_AUTHENTICATED"
-  | "UNAUTHORIZED"
-  | "FORBIDDEN"
-  | "NOT_FOUND"
-  | "VALIDATION_ERROR"
-  | "RATE_LIMITED"
-  | "TIMEOUT"
-  | "NETWORK_ERROR"
-  | "SERVER_ERROR"
-  | "CANCELLED"
-  | "CONFLICT"
-  | "UNKNOWN";
+import { MaintenanceTicketsError, type TicketsErrorCode } from "@/lib/api/maintenance-error";
 
-export class MaintenanceTicketsError extends Error {
-  readonly code: TicketsErrorCode;
-  readonly retryable: boolean;
-  readonly validationErrors?: Record<string, string[]>;
-  /**
-   * Structured 422 detail, when the API sends it. Currently the stock-shortfall
-   * block: { part_id, storage_location_id, requested, available }, which lets
-   * the UI show the shortfall inline instead of just a sentence.
-   * Read it via readStockShortfall in lib/api/maintenance-tickets-errors.ts.
-   */
-  readonly context?: Record<string, unknown>;
-
-  constructor(
-    message: string,
-    code: TicketsErrorCode,
-    validationErrors?: Record<string, string[]>,
-    context?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = "MaintenanceTicketsError";
-    this.code = code;
-    this.validationErrors = validationErrors;
-    this.context = context;
-    this.retryable = ["TIMEOUT", "NETWORK_ERROR", "SERVER_ERROR"].includes(code);
-  }
-}
+// The error class lives in lib/api/maintenance-error.ts (shared by the v2
+// services); re-exported here so existing imports keep working.
+export { MaintenanceTicketsError };
+export type { TicketsErrorCode };
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Token helper                                                            */
@@ -233,97 +133,10 @@ function transformEnumField(raw: { value: string; label: string }): EnumField {
   return { value: raw.value, label: raw.label };
 }
 
-function transformDelay(raw: ApiTicketAssignmentDelay): TicketAssignmentDelay {
-  return {
-    id: raw.id,
-    assignmentId: raw.assignment_id,
-    newDate: raw.new_date,
-    newHour: raw.new_hour,
-    reason: raw.reason,
-    mistaken: raw.mistaken ?? false,
-    createdAt: raw.created_at,
-  };
-}
 
-function transformTechnician(raw: ApiCatalogTechnician): CatalogTechnician {
-  return {
-    id: raw.id,
-    name: raw.name,
-    phone: raw.phone ?? null,
-    location: raw.location ?? null,
-    coverageNotes: raw.coverage_notes ?? null,
-    coverageStores: raw.coverage_stores ? raw.coverage_stores.map((s) => ({ id: s.id, storeNumber: s.store_number })) : null,
-    categoryId: raw.category_id,
-    categoryName: raw.category?.name ?? null,
-    deletedAt: raw.deleted_at ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email } : null,
-    notes: (raw.notes ?? []).map(transformNote),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-  };
-}
 
-function transformAssignment(raw: ApiTicketAssignment): TicketAssignment {
-  return {
-    id: raw.id,
-    assignedDate: raw.assigned_date,
-    assignedHour: raw.assigned_hour,
-    technicians: [], // technicians live at the issue level in the API response
-    delays: (raw.delays ?? []).map(transformDelay),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    mistaken: raw.mistaken ?? false,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email } : null,
-    createdAt: raw.created_at,
-  };
-}
 
-function transformStatusChange(raw: ApiTicketIssueStatusChange): TicketIssueStatusChange {
-  // API returns raw status strings; build a display-friendly EnumField from to_status
-  const label = raw.to_status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  return {
-    id: raw.id,
-    status: { value: raw.to_status, label },
-    changedBy: raw.created_by != null ? String(raw.created_by) : null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    reason: raw.reason,
-    createdAt: raw.created_at,
-  };
-}
 
-function transformIssue(raw: ApiTicketIssue): TicketIssue {
-  return {
-    id: raw.id,
-    ticketId: raw.ticket_id,
-    issueId: raw.issue_id,
-    issueTitle: raw.display_title ?? raw.issue?.title ?? null,
-    otherTitle: raw.other_title,
-    priority: transformEnumField(raw.priority),
-    assignedPriority: raw.assigned_priority ? transformEnumField(raw.assigned_priority) : null,
-    status: transformEnumField(raw.status),
-    description: raw.description,
-    parentId: raw.parent_id,
-    troubleshootingConfirmedAt: raw.troubleshooting_confirmed_at ?? null,
-    troubleshootingOutcome: raw.troubleshooting_outcome ?? (raw.troubleshooting_confirmed_at ? "tried" : null),
-    troubleshootingGuideId: raw.troubleshooting_guide_id ?? null,
-    troubleshootingSnapshot: raw.troubleshooting_snapshot ? transformTroubleshootingSnapshot(raw.troubleshooting_snapshot) : null,
-    assignments: (raw.assignments ?? []).map(transformAssignment),
-    statusChanges: (raw.status_changes ?? []).map(transformStatusChange),
-    technicians: (raw.technicians ?? []).map(transformTechnician),
-    children: (raw.children ?? []).map(transformIssue),
-    diagnoses: (raw.diagnoses ?? []).map(transformDiagnosis),
-    attendanceEntries: (raw.attendance_entries ?? []).map(transformAttendance),
-    partUsages: (raw.part_usages ?? []).map(transformPartUsage),
-    payEntries: (raw.pay_entries ?? []).map(transformPayEntry),
-    warranties: (raw.warranties ?? []).map(transformWarranty),
-    payment: transformIssuePaymentBlock(raw.payment),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    createdAt: raw.created_at,
-    updatedAt: raw.updated_at,
-  };
-}
 
 function transformTicket(raw: ApiTicket): Ticket {
   return {
@@ -344,6 +157,7 @@ function transformTicket(raw: ApiTicket): Ticket {
       status: i.status ? transformEnumField(i.status) : null,
       priority: i.priority ? transformEnumField(i.priority) : null,
       technicians: (i.technicians ?? []).map((t) => ({ id: t.id, name: t.name })),
+      targetCompletionAt: i.target_completion_at ?? null,
     })),
     issueTitles: (raw.issues ?? [])
       .map((i) => i.display_title ?? i.catalog_issue?.title ?? i.title ?? null)
@@ -429,17 +243,6 @@ function transformLinks(raw: ApiTicketsListResponse): LaravelPaginationLinks {
   };
 }
 
-function transformTechnicianRating(raw: ApiTechnicianRating): TechnicianRating {
-  return {
-    technicianId: raw.technician_id,
-    issueId: raw.issue_id ?? null,
-    rating: raw.rating ?? null,
-    notes: raw.notes ?? null,
-    callFirst: Boolean(raw.call_first),
-    editor: raw.editor ?? null,
-    updatedAt: raw.updated_at ?? null,
-  };
-}
 
 export function transformTroubleshootingGuide(raw: ApiTroubleshootingGuide): TroubleshootingGuide {
   return {
@@ -462,23 +265,6 @@ export function transformTroubleshootingGuide(raw: ApiTroubleshootingGuide): Tro
   };
 }
 
-/**
- * A ticket's frozen troubleshooting. Snapshots taken before 2026-10-08 (one
- * guide per issue, steps as plain strings, no outcome) read as "tried".
- */
-function transformTroubleshootingSnapshot(raw: ApiTroubleshootingSnapshot): TroubleshootingSnapshot {
-  return {
-    outcome: raw.outcome ?? "tried",
-    guideId: raw.guide_id ?? null,
-    guideTitle: raw.guide_title ?? null,
-    version: raw.version ?? null,
-    steps: (raw.steps ?? []).map((step) => (typeof step === "string" ? { body: step, files: [] } : { body: step.body, files: step.files ?? [] })),
-    linkUrl: raw.link_url ?? null,
-    files: raw.files ?? [],
-    guidesShown: raw.guides_shown ?? [],
-    confirmedBy: raw.confirmed_by ?? null,
-  };
-}
 
 function transformCatalogIssue(raw: ApiCatalogIssue): CatalogIssue {
   return {
@@ -492,26 +278,7 @@ function transformCatalogIssue(raw: ApiCatalogIssue): CatalogIssue {
   };
 }
 
-function transformCatalogCategory(raw: ApiCatalogCategory): CatalogCategory {
-  return {
-    id: raw.id,
-    name: raw.name,
-    description: raw.description,
-    notes: (raw.notes ?? []).map(transformNote),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-  };
-}
 
-function transformCatalogPart(raw: ApiCatalogPart): CatalogPart {
-  return {
-    id: raw.id,
-    name: raw.name,
-    description: raw.description,
-    deletedAt: raw.deleted_at,
-    notes: (raw.notes ?? []).map(transformNote),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-  };
-}
 
 function transformIssueHistoryRow(raw: ApiIssueHistoryRow): IssueHistoryRow {
   return {
@@ -592,6 +359,11 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
 
     (issue.files ?? []).forEach((file) => form.append(`issues[${i}][files][]`, file));
 
+    // v2 per-issue fields (MAINTENANCE-V2 §2 "Create a ticket").
+    if (issue.impact) form.append(`issues[${i}][impact]`, issue.impact);
+    if (issue.contactName) form.append(`issues[${i}][contact_name]`, issue.contactName);
+    if (issue.contactPhone) form.append(`issues[${i}][contact_phone]`, issue.contactPhone);
+
     // How troubleshooting went, and which guide (and version) it was, if any.
     if (issue.troubleshooting) {
       form.append(`issues[${i}][troubleshooting]`, issue.troubleshooting);
@@ -616,28 +388,6 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
   return form;
 }
 
-/**
- * Chooses the encoding for an attendance POST. Shared by the ticket-scoped and
- * global endpoints so the two can never drift.
- *
- * Files can hide inside `payload.notes[i].files`, so `files?.length` alone is
- * not sufficient to decide.
- *
- * The conditional is KEPT rather than going multipart-always: if the upstream
- * rejects multipart with no files, always-multipart would break attendance for
- * every user, not just the new notes path. The multipart branch already works
- * today whenever files are attached.
- */
-function attendanceRequestBody(
-  payload: CreateAttendanceEntryPayload,
-  files?: File[]
-): { body: FormData | CreateAttendanceEntryPayload; extraHeaders: Record<string, string> } {
-  const hasFile = !!files?.length || payloadHasFiles(payload.notes);
-  return {
-    body: hasFile ? buildNestedFormData(payload, files) : payload,
-    extraHeaders: hasFile ? {} : { "Content-Type": "application/json" },
-  };
-}
 
 function buildFilterParams(filters: TicketsFilters): URLSearchParams {
   const p = new URLSearchParams();
@@ -709,261 +459,23 @@ export function transformNote(raw: ApiTicketNote): TicketNote {
   };
 }
 
-function transformDiagnosis(raw: ApiTicketIssueDiagnosis): TicketIssueDiagnosis {
-  return {
-    id: raw.id,
-    ticketIssueId: raw.ticket_issue_id,
-    body: raw.body,
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    mistaken: raw.mistaken,
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    createdAt: raw.created_at,
-  };
-}
 
-/**
- * Laravel decimals arrive as strings. Falls back rather than producing NaN —
- * never `parseFloat` straight into `.toFixed()`, or a legacy row or a
- * partially-deployed upstream puts "NaN" on screen.
- */
-function safeDecimal(
-  raw: string | number | null | undefined,
-  fallback: number
-): number {
-  if (raw == null) return fallback;
-  const parsed = typeof raw === "number" ? raw : parseFloat(raw);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
-function transformMinutes(
-  raw: Partial<AttendanceMinutes> | null | undefined
-): AttendanceMinutes {
-  return {
-    work: raw?.work ?? 0,
-    travel: raw?.travel ?? 0,
-    break: raw?.break ?? 0,
-    parts_run: raw?.parts_run ?? 0,
-  };
-}
 
-function transformDurations(
-  raw: ApiAttendanceDurations | null | undefined
-): AttendanceDurations | null {
-  if (raw == null) return null;
-  const minutes = transformMinutes(raw.minutes);
-  return {
-    minutes,
-    // `hours` is only the rounded presentation of `minutes`, which is
-    // authoritative — derive it when the API omits it rather than showing 0.
-    hours: {
-      work: raw.hours?.work ?? minutes.work / 60,
-      travel: raw.hours?.travel ?? minutes.travel / 60,
-      break: raw.hours?.break ?? minutes.break / 60,
-      parts_run: raw.hours?.parts_run ?? minutes.parts_run / 60,
-    },
-    warnings: raw.warnings ?? [],
-  };
-}
 
-function transformStorageLocationRef(
-  raw: ApiStorageLocationRef | null | undefined
-): StorageLocationRef | null {
-  return raw ? { id: raw.id, name: raw.name, code: raw.code ?? null } : null;
-}
 
-function transformPaymentClaim(raw: ApiRecordPaymentClaim): RecordPaymentClaim {
-  return {
-    dailyPayPaymentId: raw.daily_pay_payment_id,
-    dailyPayEntryId: raw.daily_pay_entry_id,
-    dailyPayLineId: raw.daily_pay_line_id ?? null,
-    date: raw.date,
-    technicianId: raw.technician_id,
-    technician: raw.technician
-      ? { id: raw.technician.id, name: raw.technician.name }
-      : null,
-    amount: raw.amount != null ? safeDecimal(raw.amount, 0) : null,
-    minutes: raw.minutes != null ? transformMinutes(raw.minutes) : null,
-  };
-}
 
-/**
- * `payment` is null when the claims were not loaded, and `payments` is `[]`
- * when the record is genuinely unpaid. Those are different facts, so this
- * returns null rather than fabricating an "unpaid" block.
- */
-function transformPaymentBlock(
-  raw: ApiRecordPaymentBlock | null | undefined
-): RecordPaymentBlock | null {
-  if (raw == null) return null;
-  return {
-    status: transformEnumField(raw.status) as PaymentStatusField,
-    payments: (raw.payments ?? []).map(transformPaymentClaim),
-  };
-}
 
-function transformIssuePaymentBlock(
-  raw: ApiIssuePaymentBlock | null | undefined
-): IssuePaymentBlock | null {
-  if (raw == null) return null;
-  return {
-    status: transformEnumField(raw.status) as PaymentStatusField,
-    dailyPayLineIds: raw.daily_pay_line_ids ?? [],
-  };
-}
 
-function transformAttendance(raw: ApiTicketIssueAttendance): TicketIssueAttendance {
-  return {
-    id: raw.id,
-    ticketIssueId: raw.ticket_issue_id,
-    technicianId: raw.technician_id,
-    technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
-    startClock: raw.start_clock,
-    endClock: raw.end_clock,
-    // Kept in the order the server sent it -- oldest first, by the time each
-    // thing happened rather than the order it was typed in.
-    events: (raw.events ?? []).map((e) => ({
-      id: e.id,
-      kind: e.kind,
-      label: e.label,
-      bucket: e.bucket,
-      opens: e.opens,
-      paid: e.paid,
-      at: e.at,
-      mistaken: e.mistaken,
-    })),
-    durations: transformDurations(raw.durations),
-    payment: transformPaymentBlock(raw.payment),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    mistaken: raw.mistaken,
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    createdAt: raw.created_at,
-  };
-}
 
-/**
- * Part usage, defensive against pre-v2 rows.
- *
- * Legacy rows carry only `cost`, and the spec says to read them as "one unit at
- * that price, purchased, paid by us". The quantity/cost fallbacks below encode
- * exactly that — but `source` and `paidBy` fall back to NULL rather than to a
- * synthesized {value:"purchased"}, because a fabricated label on screen is
- * worse than a blank one. `isLegacy` then lets the card render a bare cost
- * instead of an invented "1 ×".
- */
-function transformPartUsage(raw: ApiTicketIssuePartUsage): TicketIssuePartUsage {
-  const quantity = safeDecimal(raw.quantity, 1);
-  const cost = safeDecimal(raw.cost, 0);
-  // One unit at that price ⇒ the unit cost IS the cost.
-  const unitCost = safeDecimal(raw.unit_cost, cost);
 
-  return {
-    id: raw.id,
-    ticketIssueId: raw.ticket_issue_id,
-    partId: raw.part_id,
-    part: raw.part ? { id: raw.part.id, name: raw.part.name } : null,
-    quantity,
-    unitCost,
-    cost,
-    // No returns on a legacy row, so net equals gross.
-    netQuantity: safeDecimal(raw.net_quantity, quantity),
-    netCost: safeDecimal(raw.net_cost, cost),
-    source: raw.source ? transformEnumField(raw.source) : null,
-    paidBy: raw.paid_by ? transformEnumField(raw.paid_by) : null,
-    reimbursable: raw.reimbursable ?? false,
-    paidByTechnicianId: raw.paid_by_technician_id ?? null,
-    paidByTechnician: raw.paid_by_technician
-      ? { id: raw.paid_by_technician.id, name: raw.paid_by_technician.name }
-      : null,
-    storageLocationId: raw.storage_location_id ?? null,
-    storageLocation: transformStorageLocationRef(raw.storage_location),
-    returnedQuantity: raw.returned_quantity != null ? safeDecimal(raw.returned_quantity, 0) : null,
-    returnedToStorageLocationId: raw.returned_to_storage_location_id ?? null,
-    returnedToStorageLocation: transformStorageLocationRef(raw.returned_to_storage_location),
-    stockMovementIds: raw.stock_movement_ids ?? [],
-    payment: transformPaymentBlock(raw.payment),
-    isLegacy: raw.quantity == null,
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    mistaken: raw.mistaken,
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    createdAt: raw.created_at,
-  };
-}
 
-function parseDecimal(value: string | null): number | null {
-  return value != null ? parseFloat(value) : null;
-}
 
-function transformPayEntry(raw: ApiTicketIssuePayEntry): TicketIssuePayEntry {
-  return {
-    id: raw.id,
-    ticketIssueId: raw.ticket_issue_id,
-    technicianId: raw.technician_id,
-    technician: raw.technician ? { id: raw.technician.id, name: raw.technician.name } : null,
-    basePay: parseDecimal(raw.base_pay),
-    performancePay: parseDecimal(raw.performance_pay),
-    drivingBasePay: parseDecimal(raw.driving_base_pay),
-    drivingPerformancePay: parseDecimal(raw.driving_performance_pay),
-    drivingTime: parseDecimal(raw.driving_time),
-    milesDriven: parseDecimal(raw.miles_driven),
-    perMileRate: parseDecimal(raw.per_mile_rate),
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    mistaken: raw.mistaken,
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    createdAt: raw.created_at,
-  };
-}
-
-function transformWarranty(raw: ApiTicketIssueWarranty): TicketIssueWarranty {
-  return {
-    id: raw.id,
-    ticketIssueId: raw.ticket_issue_id,
-    body: raw.body,
-    expiryDate: raw.expiry_date ?? null,
-    attachments: (raw.attachments ?? []).map(transformAttachment),
-    notes: (raw.notes ?? []).map(transformNote),
-    mistaken: raw.mistaken,
-    createdBy: raw.created_by ?? null,
-    creator: raw.creator ? { id: raw.creator.id, name: raw.creator.name, email: raw.creator.email ?? null } : null,
-    createdAt: raw.created_at,
-  };
-}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Entity path builders (for generic addNote / addAttachments)             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/**
- * Builds the relative entity path passed to `addNote` / `addAttachments`.
- * Each value is the path WITHOUT the `/notes` or `/attachments` suffix.
- */
-/**
- * One attendance session's URL.
- *
- * Built in one place because three calls share it, and a typo in one of them
- * would be a 404 with no obvious cause.
- *
- * NULL STORE OR TICKET GIVES THE UNSCOPED URL. A visit covering issues on
- * several tickets has no one ticket its URL could honestly name -- which is
- * why the create endpoint has an unscoped variant too. Only the path differs
- * between the two, so switching it here beats three more near-identical
- * methods that could drift apart.
- */
-const ATT_BASE = (
-  storeId: string | null,
-  ticketId: number | null,
-  attendanceId: number
-) =>
-  storeId && ticketId
-    ? `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}`
-    : `/api/maintenance-tickets/attendance-entries/${attendanceId}`;
 
 export const entityPaths = {
   ticket: (store: string, ticket: number) =>
@@ -1147,273 +659,15 @@ export const maintenanceTicketsService = {
     }
   },
 
-  /** Get all issues (with full history) for a ticket */
-  async getTicketIssues(
-    storeId: string,
-    ticketId: number,
-    signal?: AbortSignal
-  ): Promise<TicketIssuesResponse> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<ApiTicketIssuesResponse>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues`,
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-          signal,
-        }
-      );
-      return { data: res.data.data.map(transformIssue) };
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /**
-   * The same listing, without needing to know the store.
-   *
-   * Prefer getTicketIssues when a store is in hand -- that is the canonical
-   * route. This exists because a ticket created with `otherStore` has a null
-   * store_id and cannot bind inside upstream's /stores/{store}/... group, so
-   * those tickets have no other way to be read. It is also what lets the
-   * ticket page be a clean /maintenance-tickets/{id} URL rather than one that
-   * smuggles a store the ticket may not have.
-   */
-  async getTicketIssuesById(
-    ticketId: number,
-    storeNumber?: string | null,
-    signal?: AbortSignal
-  ): Promise<TicketWithIssuesResponse> {
-    const token = requireToken();
-    // Passed purely for authorization. Upstream's globalIndex(Ticket) ignores
-    // it; pizzasys reads it out of the query string to scope the rule to this
-    // ticket's store, which is what lets a reports-view user -- whose
-    // `reports view` is granted per store, not globally -- read the ticket at
-    // all. Omitted for an other-store ticket, which has no store to name.
-    const qs = storeNumber ? `?store_id=${encodeURIComponent(storeNumber)}` : "";
-    try {
-      const res = await axios.get<
-        ApiTicketIssuesResponse & { ticket: ApiTicket }
-      >(
-        `/api/maintenance-tickets/tickets/${ticketId}/issues${qs}`,
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-          signal,
-        }
-      );
-      return {
-        data: res.data.data.map(transformIssue),
-        ticket: transformTicket(res.data.ticket),
-      };
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Assign issues to technicians with a date */
-  async assignIssues(
-    storeId: string,
-    ticketId: number,
-    payload: AssignIssuesPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Bulk change status of one or more ticket issues */
-  async changeIssueStatus(
-    storeId: string,
-    ticketId: number,
-    payload: StatusChangePayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/status`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Defer an issue (creates a new pending child) */
-  async deferIssue(
-    storeId: string,
-    ticketId: number,
-    issueId: number,
-    payload: DeferPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/defer`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Cancel an issue (terminal; reason required; no child spawned) */
-  async cancelIssue(
-    storeId: string,
-    ticketId: number,
-    issueId: number,
-    payload: CancelPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/cancel`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Put an issue into waiting (reason required; resume via changeIssueStatus) */
-  async waitIssue(
-    storeId: string,
-    ticketId: number,
-    issueId: number,
-    payload: WaitPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/wait`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Re-link a ticket-issue line to a different catalog issue. Only the catalog association changes. */
-  async relinkIssue(
-    storeId: string,
-    ticketId: number,
-    issueId: number,
-    payload: RelinkIssuePayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.patch(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Set (or clear, via `priority: null`) the independent assigned_priority on a ticket-issue line. */
-  async setAssignedPriority(
-    storeId: string,
-    ticketId: number,
-    issueId: number,
-    payload: AssignedPriorityPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}/assigned-priority`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          timeout: 15_000,
-        }
-      );
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /**
-   * Append a typed closing note to a ticket (multipart; supports files).
-   * Returns the refreshed ticket including all notes.
-   */
-  async addFinalNote(
-    storeId: string,
-    ticketId: number,
-    payload: FinalNotePayload,
-    files?: File[]
-  ): Promise<Ticket> {
-    const token = requireToken();
-    const body = buildFormData(payload, files);
-    try {
-      const res = await axios.post<{ data: ApiTicket }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/final-note`,
-        body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
-      );
-      return transformTicket(res.data.data);
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
   /**
    * Add a free-text note to ANY entity. Pass the entity's relative path
@@ -1519,38 +773,7 @@ export const maintenanceTicketsService = {
     }
   },
 
-  /** Load catalog technicians (for dropdowns). Requests a large page so all technicians come back in one shot. */
-  async getCatalogTechnicians(signal?: AbortSignal, opts?: { includeDeleted?: boolean }): Promise<CatalogTechnician[]> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<{ data: ApiCatalogTechnician[] }>(
-        `/api/maintenance-tickets/catalog/technicians?per_page=1000${trashedParam(opts)}`,
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-          signal,
-        }
-      );
-      return (res.data.data ?? []).map(transformTechnician);
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** One technician, with their coverage -- the technician page. */
-  async getTechnician(id: number, signal?: AbortSignal): Promise<CatalogTechnician> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<{ data: ApiCatalogTechnician }>(`/api/maintenance-tickets/catalog/technicians/${id}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        timeout: 15_000,
-        signal,
-      });
-      return transformTechnician(res.data.data);
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
   /** Every technician's pay and work in a range -- the Technicians page. */
   async getTechniciansAnalytics(params: TechnicianAnalyticsParams, signal?: AbortSignal): Promise<TechniciansOverview> {
@@ -1562,41 +785,7 @@ export const maintenanceTicketsService = {
     return technicianAnalyticsGet<{ data: TechnicianAnalytics }>(`/api/maintenance-tickets/catalog/technicians/${id}/analytics`, params, signal).then((r) => r.data);
   },
 
-  /** Load all catalog categories */
-  async getCatalogCategories(signal?: AbortSignal): Promise<CatalogCategory[]> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<{ data: ApiCatalogCategory[] }>(
-        "/api/maintenance-tickets/catalog/categories?per_page=1000",
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-          signal,
-        }
-      );
-      return (res.data.data ?? res.data as unknown as ApiCatalogCategory[]).map(transformCatalogCategory);
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
-  /** Load all catalog parts */
-  async getCatalogParts(signal?: AbortSignal, opts?: { includeDeleted?: boolean }): Promise<CatalogPart[]> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<{ data: ApiCatalogPart[] }>(
-        `/api/maintenance-tickets/catalog/parts?per_page=1000${trashedParam(opts)}`,
-        {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-          timeout: 15_000,
-          signal,
-        }
-      );
-      return (res.data.data ?? []).map(transformCatalogPart);
-    } catch (err) {
-      return handleAxiosError(err);
-    }
-  },
 
   /* ── Catalog CRUD ─────────────────────────────────────────────────────── */
 
@@ -1638,86 +827,13 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
-  async createCatalogTechnician(payload: TechnicianInput & { name: string }): Promise<CatalogTechnician> {
-    const token = requireToken();
-    try {
-      const res = await axios.post<{ data: ApiCatalogTechnician }>(
-        "/api/maintenance-tickets/catalog/technicians",
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformTechnician(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async deleteCatalogTechnician(id: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.delete(`/api/maintenance-tickets/catalog/technicians/${id}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
-      });
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async restoreCatalogTechnician(id: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(`/api/maintenance-tickets/catalog/technicians/${id}/restore`, {}, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
-      });
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async createCatalogCategory(payload: { name: string; description?: string }): Promise<CatalogCategory> {
-    const token = requireToken();
-    try {
-      const res = await axios.post<{ data: ApiCatalogCategory }>(
-        "/api/maintenance-tickets/catalog/categories",
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformCatalogCategory(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async deleteCatalogCategory(id: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.delete(`/api/maintenance-tickets/catalog/categories/${id}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
-      });
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async createCatalogPart(payload: { name: string; description?: string }): Promise<CatalogPart> {
-    const token = requireToken();
-    try {
-      const res = await axios.post<{ data: ApiCatalogPart }>(
-        "/api/maintenance-tickets/catalog/parts",
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformCatalogPart(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async deleteCatalogPart(id: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.delete(`/api/maintenance-tickets/catalog/parts/${id}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
-      });
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async restoreCatalogPart(id: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(`/api/maintenance-tickets/catalog/parts/${id}/restore`, {}, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
-      });
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Catalog edits (partial: only the fields sent change) ──────────────── */
 
@@ -1733,44 +849,8 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
-  async updateCatalogTechnician(
-    id: number,
-    payload: TechnicianInput,
-  ): Promise<CatalogTechnician> {
-    const token = requireToken();
-    try {
-      const res = await axios.patch<{ data: ApiCatalogTechnician }>(
-        `/api/maintenance-tickets/catalog/technicians/${id}`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformTechnician(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async updateCatalogCategory(id: number, payload: { name?: string; description?: string | null }): Promise<CatalogCategory> {
-    const token = requireToken();
-    try {
-      const res = await axios.patch<{ data: ApiCatalogCategory }>(
-        `/api/maintenance-tickets/catalog/categories/${id}`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformCatalogCategory(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async updateCatalogPart(id: number, payload: { name?: string; description?: string | null }): Promise<CatalogPart> {
-    const token = requireToken();
-    try {
-      const res = await axios.patch<{ data: ApiCatalogPart }>(
-        `/api/maintenance-tickets/catalog/parts/${id}`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformCatalogPart(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /**
    * Earlier tickets at a store that reported the same catalog issue
@@ -1957,62 +1037,9 @@ export const maintenanceTicketsService = {
 
   /* ── Technician abilities ──────────────────────────────────────────────── */
 
-  /**
-   * Every rating, overall and per issue. The server keeps these off the
-   * technician list, which store users read; a 403 here means this person
-   * does not see ratings.
-   */
-  async getTechnicianAbilities(signal?: AbortSignal): Promise<TechnicianAbilityBoard> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<{ data: { overall?: ApiTechnicianRating[]; by_issue?: ApiTechnicianRating[] } }>(
-        "/api/maintenance-tickets/catalog/technician-abilities",
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
-      );
-      return {
-        overall: (res.data.data?.overall ?? []).map(transformTechnicianRating),
-        byIssue: (res.data.data?.by_issue ?? []).map(transformTechnicianRating),
-      };
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /**
-   * Rate a technician on one issue. Replaces the entry; one with no stars,
-   * notes or pin is removed (rating comes back null).
-   */
-  async saveTechnicianAbility(technicianId: number, issueId: number, input: TechnicianRatingInput): Promise<TechnicianRatingSaved> {
-    const token = requireToken();
-    try {
-      const res = await axios.put<{ data: ApiTechnicianRating | null; moved_from: { id: number; name: string } | null }>(
-        `/api/maintenance-tickets/catalog/technicians/${technicianId}/abilities/${issueId}`,
-        input,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return { rating: res.data.data ? transformTechnicianRating(res.data.data) : null, movedFrom: res.data.moved_from ?? null };
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  async removeTechnicianAbility(technicianId: number, issueId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.delete(`/api/maintenance-tickets/catalog/technicians/${technicianId}/abilities/${issueId}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000,
-      });
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** The overall rating, and the overall "call first" pin. */
-  async saveTechnicianRating(technicianId: number, input: TechnicianRatingInput): Promise<TechnicianRatingSaved> {
-    const token = requireToken();
-    try {
-      const res = await axios.patch<{ data: ApiTechnicianRating; moved_from: { id: number; name: string } | null }>(
-        `/api/maintenance-tickets/catalog/technicians/${technicianId}/rating`,
-        input,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return { rating: transformTechnicianRating(res.data.data), movedFrom: res.data.moved_from ?? null };
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Analytics ─────────────────────────────────────────────────────────── */
 
@@ -2099,152 +1126,20 @@ export const maintenanceTicketsService = {
     } catch (err) { return handleAxiosError(err); }
   },
 
-  /** Get a single ticket issue with its full history */
-  async getSingleIssue(storeId: string, ticketId: number, issueId: number, signal?: AbortSignal): Promise<TicketIssue> {
-    const token = requireToken();
-    try {
-      const res = await axios.get<{ data: ApiTicketIssue }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/issues/${issueId}`,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000, signal }
-      );
-      return transformIssue(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Assignment mutations ──────────────────────────────────────────────── */
 
-  /** Attach technicians to one or more issues (without scheduling a date) */
-  async attachTechnicians(storeId: string, ticketId: number, payload: AttachTechniciansPayload): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/technicians`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Add a delay record to an existing assignment (reschedule with history) */
-  async delayAssignment(
-    storeId: string,
-    ticketId: number,
-    assignmentId: number,
-    payload: DelayAssignmentPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/delays`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Replace the technician list on an existing assignment */
-  async changeAssignmentTechnicians(
-    storeId: string,
-    ticketId: number,
-    assignmentId: number,
-    payload: ChangeAssignmentTechniciansPayload
-  ): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/change-technicians`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Diagnoses ─────────────────────────────────────────────────────────── */
 
-  /** Add a diagnosis to one or more ticket issues (optionally with attachments) */
-  async createDiagnosis(
-    storeId: string,
-    ticketId: number,
-    payload: CreateDiagnosisPayload,
-    files?: File[]
-  ): Promise<TicketIssueDiagnosis> {
-    const token = requireToken();
-    const body = buildFormData(payload, files);
-    try {
-      const res = await axios.post<{ data: ApiTicketIssueDiagnosis }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/diagnoses`,
-        body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
-      );
-      return transformDiagnosis(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark a diagnosis as mistaken (retains record; excluded from rollups) */
-  async markDiagnosisMistaken(storeId: string, ticketId: number, diagnosisId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/diagnoses/${diagnosisId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Attendance entries ────────────────────────────────────────────────── */
 
-  /** Add an attendance/time entry to one or more ticket issues */
-  async createAttendanceEntry(
-    storeId: string,
-    ticketId: number,
-    payload: CreateAttendanceEntryPayload,
-    files?: File[]
-  ): Promise<TicketIssueAttendance> {
-    const token = requireToken();
-    const { body, extraHeaders } = attendanceRequestBody(payload, files);
-    try {
-      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries`,
-        body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...extraHeaders }, timeout: 120_000 }
-      );
-      return transformAttendance(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /**
-   * Log an attendance entry WITHOUT a ticket-scoped URL, for a visit that does
-   * not sit under any one ticket. Identical payload and encoding to
-   * createAttendanceEntry — only the URL differs.
-   */
-  async createAttendanceEntryGlobal(
-    payload: CreateAttendanceEntryPayload,
-    files?: File[]
-  ): Promise<TicketIssueAttendance> {
-    const token = requireToken();
-    const { body, extraHeaders } = attendanceRequestBody(payload, files);
-    try {
-      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
-        `/api/maintenance-tickets/attendance-entries`,
-        body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...extraHeaders }, timeout: 120_000 }
-      );
-      return transformAttendance(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark an attendance entry as mistaken */
-  async markAttendanceMistaken(storeId: string, ticketId: number, attendanceId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/attendance-entries/${attendanceId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Attendance events ─────────────────────────────────────────────────── */
 
@@ -2258,197 +1153,22 @@ export const maintenanceTicketsService = {
    * start to a saved clock-in meant flagging the record wrong and retyping it.
    */
 
-  /**
-   * Record one thing that happened.
-   *
-   * A `clock_in` on an already-open session opens a NEW session server-side and
-   * returns that one -- coming back to a store later is a second visit. So the
-   * caller must use the returned session's id rather than assuming it wrote to
-   * the one it was given.
-   */
-  async createAttendanceEvent(
-    storeId: string | null,
-    ticketId: number | null,
-    attendanceId: number,
-    payload: CreateAttendanceEventPayload
-  ): Promise<TicketIssueAttendance> {
-    const token = requireToken();
-    try {
-      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
-        `${ATT_BASE(storeId, ticketId, attendanceId)}/events`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-      return transformAttendance(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /**
-   * Correct when something happened.
-   *
-   * Refused with a 422 once a pay sheet has claimed the session: you can fix
-   * what nobody has been paid against, but not quietly rewrite what somebody
-   * was paid on. The message says so, so surface it rather than replacing it.
-   */
-  async updateAttendanceEvent(
-    storeId: string | null,
-    ticketId: number | null,
-    attendanceId: number,
-    eventId: number,
-    at: string
-  ): Promise<TicketIssueAttendance> {
-    const token = requireToken();
-    try {
-      const res = await axios.patch<{ data: ApiTicketIssueAttendance }>(
-        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}`,
-        { at },
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-      return transformAttendance(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Strike one event. It stays in the ledger, struck through, and stops
-   *  counting -- the same flag every other record here uses. */
-  async markAttendanceEventMistaken(
-    storeId: string | null,
-    ticketId: number | null,
-    attendanceId: number,
-    eventId: number
-  ): Promise<TicketIssueAttendance> {
-    const token = requireToken();
-    try {
-      const res = await axios.post<{ data: ApiTicketIssueAttendance }>(
-        `${ATT_BASE(storeId, ticketId, attendanceId)}/events/${eventId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-      return transformAttendance(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Part usages ───────────────────────────────────────────────────────── */
 
-  /** Add a part-usage record to one or more ticket issues */
-  async createPartUsage(
-    storeId: string,
-    ticketId: number,
-    payload: CreatePartUsagePayload,
-    files?: File[]
-  ): Promise<TicketIssuePartUsage> {
-    const token = requireToken();
-    // Nested builder, for notes[i][body] and notes[i][files][]. Already
-    // always-multipart, so there is no content-type risk in the switch.
-    const body = buildNestedFormData(payload, files);
-    try {
-      const res = await axios.post<{ data: ApiTicketIssuePartUsage }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages`,
-        body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
-      );
-      return transformPartUsage(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark a part-usage record as mistaken (cost excluded from rollups) */
-  async markPartUsageMistaken(storeId: string, ticketId: number, partUsageId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/part-usages/${partUsageId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Pay entries ───────────────────────────────────────────────────────── */
 
-  /** Add a pay entry for a technician to one or more ticket issues */
-  async createPayEntry(
-    storeId: string,
-    ticketId: number,
-    payload: CreatePayEntryPayload
-  ): Promise<TicketIssuePayEntry> {
-    const token = requireToken();
-    try {
-      const res = await axios.post<{ data: ApiTicketIssuePayEntry }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/pay-entries`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" }, timeout: 15_000 }
-      );
-      return transformPayEntry(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark a pay entry as mistaken */
-  async markPayEntryMistaken(storeId: string, ticketId: number, payEntryId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/pay-entries/${payEntryId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Warranties ────────────────────────────────────────────────────────── */
 
-  /** Add a warranty record to one or more ticket issues */
-  async createWarranty(
-    storeId: string,
-    ticketId: number,
-    payload: CreateWarrantyPayload,
-    files?: File[]
-  ): Promise<TicketIssueWarranty> {
-    const token = requireToken();
-    const body = buildFormData(payload, files);
-    try {
-      const res = await axios.post<{ data: ApiTicketIssueWarranty }>(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties`,
-        body,
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 120_000 }
-      );
-      return transformWarranty(res.data.data);
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark a warranty as mistaken */
-  async markWarrantyMistaken(storeId: string, ticketId: number, warrantyId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/warranties/${warrantyId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark an assignment as mistaken */
-  async markAssignmentMistaken(storeId: string, ticketId: number, assignmentId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
-  /** Mark an assignment delay as mistaken */
-  async markAssignmentDelayMistaken(storeId: string, ticketId: number, assignmentId: number, delayId: number): Promise<void> {
-    const token = requireToken();
-    try {
-      await axios.post(
-        `/api/maintenance-tickets/stores/${encodeURIComponent(storeId)}/tickets/${ticketId}/assignments/${assignmentId}/delays/${delayId}/mistaken`,
-        {},
-        { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, timeout: 15_000 }
-      );
-    } catch (err) { return handleAxiosError(err); }
-  },
 
   /* ── Export ────────────────────────────────────────────────────────────── */
 

@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MultiSelect } from "@/components/daily-pay/multi-select";
+import { MultiSelect } from "@/components/shared/multi-select";
 import { InventoryStoreSelect } from "@/components/inventory/inventory-store-select";
 import { toast } from "sonner";
 import { useCreateLinks } from "@/lib/hooks/use-inventory-links";

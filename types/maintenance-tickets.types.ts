@@ -2,21 +2,13 @@
 /*  Enums / Scalars                                                         */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export type TicketStatus =
-  | "pending"
-  | "assigned"
-  | "in_progress"
-  | "waiting"
-  | "complete"
-  | "cancelled";
-export type IssueStatus =
-  | "pending"
-  | "assigned"
-  | "in_progress"
-  | "waiting"
-  | "complete"
-  | "deferred"
-  | "cancelled";
+/**
+ * v2 statuses (MAINTENANCE-V2 §2). The ticket status is derived from its
+ * issues and uses the same values. Labels: lib/maintenance/vocabulary.ts.
+ */
+import type { IssueStatus } from "@/types/maintenance-v2/workflow.types";
+export type { IssueStatus };
+export type TicketStatus = IssueStatus;
 export type Priority = "urgent" | "high" | "medium" | "low";
 export type TicketType = "normal" | "preventive_maintenance";
 
@@ -48,88 +40,13 @@ export type PaymentStatusValue = "unpaid" | "paid" | "not_payable";
 /** Returned as { value, label }; filters take the bare `value`. */
 export type PaymentStatusField = EnumField & { value: PaymentStatusValue };
 
-/** Where a part came from. `from_storage` draws stock in the same transaction. */
-export type PartUsageSource = "purchased" | "from_storage";
 
-/** Who paid for a part. `us` means nobody is owed, so it is not payable. */
-export type PartUsagePayer = "us" | "technician";
 
-/**
- * One daily pay claim against a record. Being on a pay sheet IS being paid.
- * `amount` is part-usages only; attendance entries carry `minutes` instead.
- */
-export interface RecordPaymentClaim {
-  dailyPayPaymentId: number;
-  dailyPayEntryId: number;
-  dailyPayLineId: number | null;
-  date: string;
-  technicianId: number;
-  technician: { id: number; name: string } | null;
-  /** Part usages only. */
-  amount: number | null;
-  /**
-   * Attendance entries only: the minutes THIS payment actually counted, which
-   * can differ from the entry's own durations when several payments touch it.
-   */
-  minutes: AttendanceMinutes | null;
-}
 
-/**
- * Payment status on an attendance entry or part usage.
- *
- * The whole block is `null` when the claims were not loaded; `payments` is `[]`
- * when the record is genuinely unpaid. Never collapse those two.
- */
-export interface RecordPaymentBlock {
-  status: PaymentStatusField;
-  payments: RecordPaymentClaim[];
-}
 
-/**
- * Rolled-up payment status on a ticket issue.
- *
- * ANYTHING STILL OWED DOMINATES: an issue reads `unpaid` until the last of its
- * payables is settled, so an issue whose hours are paid but whose late receipt
- * is not still shows unpaid. That is deliberate — it is the state finance
- * cares about. An issue that costs nobody anything reads `not_payable`.
- */
-export interface IssuePaymentBlock {
-  status: PaymentStatusField;
-  dailyPayLineIds: number[];
-}
 
-/** Minutes per bucket. Authoritative; `hours` is the same figure rounded. */
-export interface AttendanceMinutes {
-  work: number;
-  travel: number;
-  break: number;
-  parts_run: number;
-}
 
-export interface AttendanceHours {
-  work: number;
-  travel: number;
-  break: number;
-  parts_run: number;
-}
 
-/**
- * Server-computed durations for an attendance entry. Nothing is stored — this
- * is derived from the clocks on every read.
- *
- * `work` is NET: break, parts-run and travel intervals that fall inside the
- * clock window are merged and subtracted once. The other three are reported at
- * full recorded length, because they are their own line items.
- */
-export interface AttendanceDurations {
-  minutes: AttendanceMinutes;
-  hours: AttendanceHours;
-  /**
-   * `incomplete_pair:<bucket>` (counted as zero), `inverted_pair:<bucket>`
-   * (counted as zero), `implausible_pair:<bucket>` (clamped to 24h).
-   */
-  warnings: string[];
-}
 
 /** Minimal storage-location reference on a part usage. */
 export interface StorageLocationRef {
@@ -163,67 +80,14 @@ export interface CatalogIssue {
   attachments?: TicketAttachment[];
 }
 
-export interface CatalogTechnician {
-  id: number;
-  name: string;
-  phone: string | null;
-  /** Where they are based ("Columbus, OH"). */
-  location: string | null;
-  /** About their coverage: "north stores only on weekends". */
-  coverageNotes: string | null;
-  /** The stores they can cover. Null when not read with the technician. */
-  coverageStores: { id: number; storeNumber: string }[] | null;
-  categoryId: number | null;
-  categoryName: string | null;
-  deletedAt: string | null;
-  creator: UserRef | null;
-  notes?: TicketNote[];
-  attachments?: TicketAttachment[];
-}
 
-export interface CatalogPart {
-  id: number;
-  name: string;
-  description: string | null;
-  deletedAt: string | null;
-  notes?: TicketNote[];
-  attachments?: TicketAttachment[];
-}
 
-export interface CatalogCategory {
-  id: number;
-  name: string;
-  description: string | null;
-  notes?: TicketNote[];
-  attachments?: TicketAttachment[];
-}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Ticket + Issue (client camelCase)                                       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export interface TicketAssignmentDelay {
-  id: number;
-  assignmentId: number;
-  newDate: string;
-  newHour: string | null;
-  reason: string;
-  mistaken: boolean;
-  createdAt: string;
-}
 
-export interface TicketAssignment {
-  id: number;
-  assignedDate: string;
-  assignedHour: string | null;
-  technicians: CatalogTechnician[];
-  delays: TicketAssignmentDelay[];
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  mistaken: boolean;
-  creator: UserRef | null;
-  createdAt: string;
-}
 
 export interface TicketIssueStatusChange {
   id: number;
@@ -274,233 +138,13 @@ export interface TicketNote {
   updatedAt: string;
 }
 
-/**
- * A diagnosis entry targeting one or more ticket issues.
- * Records are immutable — mark `mistaken` instead of deleting.
- */
-export interface TicketIssueDiagnosis {
-  id: number;
-  ticketIssueId: number;
-  body: string | null;
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  mistaken: boolean;
-  createdBy: number | null;
-  creator: UserRef | null;
-  createdAt: string;
-}
 
-/**
- * The eight things that can happen on the clock.
- *
- * The coordinator's vocabulary, not the database's: these are what somebody
- * says out loud on the phone. Travel and parts-run are paid; break is not.
- */
-export type AttendanceEventKind =
-  | "clock_in"
-  | "clock_out"
-  | "travel_start"
-  | "travel_end"
-  | "break_start"
-  | "break_end"
-  | "parts_run_start"
-  | "parts_run_end";
 
-/**
- * One thing that happened during a session.
- *
- * Each is its own record. Adding "he set off at 08:30" to a session saved an
- * hour ago is an insert -- where before it meant flagging the whole entry
- * wrong and typing it all again, because the API had no update path at all.
- *
- * `label`, `bucket`, `opens` and `paid` come from the server rather than being
- * derived here, so the two sides can never disagree about what a kind means.
- */
-export interface AttendanceEvent {
-  id: number;
-  kind: AttendanceEventKind;
-  /** What a coordinator would say out loud — "Started driving". */
-  label: string;
-  bucket: "work" | "travel" | "break" | "parts_run";
-  opens: boolean;
-  paid: boolean;
-  at: string;
-  /** Struck but still in the ledger. Render it; do not hide it. */
-  mistaken: boolean;
-}
 
-/**
- * One technician's SESSION — one clock-in to one clock-out — over one or more
- * ticket issues.
- *
- * A session can now hold as many breaks, travels and parts runs as the day
- * actually had. It used to hold exactly one of each, because it was four fixed
- * column pairs, so a second break needed a second entry that then read as a
- * second visit.
- */
-export interface TicketIssueAttendance {
-  id: number;
-  ticketIssueId: number;
-  technicianId: number;
-  technician: { id: number; name: string } | null;
-  /**
-   * The clock window, cached server-side from the events.
-   *
-   * `endClock` of null means the session is still OPEN — somebody is on the
-   * clock right now. That is a normal state and warns about nothing; it used to
-   * emit `incomplete_pair:work`.
-   */
-  startClock: string | null;
-  endClock: string | null;
-  /** Everything that happened, oldest first, struck ones included. */
-  events: AttendanceEvent[];
-  /** Server-computed; null only when the API predates the durations block. */
-  durations: AttendanceDurations | null;
-  /** Null when the payment claims were not loaded. */
-  payment: RecordPaymentBlock | null;
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  mistaken: boolean;
-  createdBy: number | null;
-  creator: UserRef | null;
-  createdAt: string;
-}
 
-/**
- * Part used during a repair, for one or more ticket issues.
- *
- * Was a flat `{ part_id, cost }`; now quantity × unit cost, with a source, a
- * payer, and optional returns. `cost` is COMPUTED server-side and is never
- * sent by the client.
- *
- * `cost` vs `net_cost`: `cost` is the gross outlay and is what the
- * `part_cost_single_gt` / `part_cost_total_gt` ticket filters sum. `net_cost`
- * is what the payer is actually out of pocket after returns, and is what a
- * daily pay reimburses. On 10 at £5 with 4 returned: cost 50.00,
- * net_cost 30.00, net_quantity 6.00.
- */
-export interface TicketIssuePartUsage {
-  id: number;
-  ticketIssueId: number;
-  partId: number;
-  part: { id: number; name: string } | null;
-  quantity: number;
-  unitCost: number;
-  /** Gross outlay: quantity × unit cost. Computed server-side. */
-  cost: number;
-  /** Quantity kept after returns. */
-  netQuantity: number;
-  /** What the payer is actually out of pocket after returns. */
-  netCost: number;
-  /** Null on pre-v2 rows — do NOT synthesize a value, show nothing. */
-  source: EnumField | null;
-  paidBy: EnumField | null;
-  /** True when somebody other than us paid and is therefore owed. */
-  reimbursable: boolean;
-  paidByTechnicianId: number | null;
-  paidByTechnician: { id: number; name: string } | null;
-  /** The shelf the part came off, when source is `from_storage`. */
-  storageLocationId: number | null;
-  storageLocation: StorageLocationRef | null;
-  returnedQuantity: number | null;
-  returnedToStorageLocationId: number | null;
-  returnedToStorageLocation: StorageLocationRef | null;
-  /** Ledger rows this usage wrote. `[]`, never null. */
-  stockMovementIds: number[];
-  /** Null when the payment claims were not loaded. */
-  payment: RecordPaymentBlock | null;
-  /**
-   * True for a legacy `{ part_id, cost }` row with no quantity. Such a row
-   * must render as a bare cost — showing a fabricated "1 ×" would be inventing
-   * data we do not have.
-   */
-  isLegacy: boolean;
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  mistaken: boolean;
-  createdBy: number | null;
-  creator: UserRef | null;
-  createdAt: string;
-}
 
-/** Pay record for a technician linked to one or more ticket issues. */
-export interface TicketIssuePayEntry {
-  id: number;
-  ticketIssueId: number;
-  technicianId: number;
-  technician: { id: number; name: string } | null;
-  basePay: number | null;
-  performancePay: number | null;
-  drivingBasePay: number | null;
-  drivingPerformancePay: number | null;
-  /** Hours driven (API sends as decimal string; service parses it). */
-  drivingTime: number | null;
-  milesDriven: number | null;
-  perMileRate: number | null;
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  mistaken: boolean;
-  createdBy: number | null;
-  creator: UserRef | null;
-  createdAt: string;
-}
 
-/** Warranty claim record for one or more ticket issues. */
-export interface TicketIssueWarranty {
-  id: number;
-  ticketIssueId: number;
-  body: string | null;
-  /** Required since v2.0 (YYYY-MM-DD). */
-  expiryDate: string | null;
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  mistaken: boolean;
-  createdBy: number | null;
-  creator: UserRef | null;
-  createdAt: string;
-}
 
-export interface TicketIssue {
-  id: number;
-  ticketId: number;
-  issueId: number | null;
-  issueTitle: string | null;
-  otherTitle: string | null;
-  priority: EnumField;
-  /** Independent priority set later by staff (distinct from `priority`, chosen at creation). Null until set. */
-  assignedPriority: EnumField | null;
-  status: EnumField;
-  description: string | null;
-  parentId: number | null;
-  /** When the manager finished troubleshooting and chose to open the ticket. */
-  troubleshootingConfirmedAt: string | null;
-  /** How it ended: tried and still broken, or no guide described the problem. */
-  troubleshootingOutcome: TroubleshootingTicketOutcome | null;
-  /** The guide they said matched, when they picked one. */
-  troubleshootingGuideId: number | null;
-  /** The troubleshooting, as it read then. */
-  troubleshootingSnapshot: TroubleshootingSnapshot | null;
-  assignments: TicketAssignment[];
-  statusChanges: TicketIssueStatusChange[];
-  technicians: CatalogTechnician[];
-  children: TicketIssue[];
-  diagnoses: TicketIssueDiagnosis[];
-  attendanceEntries: TicketIssueAttendance[];
-  partUsages: TicketIssuePartUsage[];
-  payEntries: TicketIssuePayEntry[];
-  warranties: TicketIssueWarranty[];
-  /**
-   * Rolled-up payment status. ANYTHING STILL OWED DOMINATES — see
-   * IssuePaymentBlock. Null when the claims were not loaded.
-   */
-  payment: IssuePaymentBlock | null;
-  attachments: TicketAttachment[];
-  notes: TicketNote[];
-  createdBy: number | null;
-  creator: UserRef | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 /** The slim issue shape the ticket LIST carries. */
 export interface TicketIssueSummary {
@@ -514,6 +158,8 @@ export interface TicketIssueSummary {
    * the same person's work split across a "known" and an "unknown" payment.
    */
   technicians: Array<{ id: number; name: string }>;
+  /** v2: when the office aims to have it done (null = not set). */
+  targetCompletionAt?: string | null;
 }
 
 export interface Ticket {
@@ -571,9 +217,6 @@ export interface TicketsListResponse {
   meta: LaravelPaginationMeta;
 }
 
-export interface TicketIssuesResponse {
-  data: TicketIssue[];
-}
 
 export interface TicketsAnalyticsStatusBreakdown {
   status: IssueStatus;
@@ -657,6 +300,11 @@ export interface CreateTicketIssueRow {
   troubleshooting_guide_id?: number | null;
   /** ... and the version of it they read. */
   troubleshooting_version?: number | null;
+  /** v2: how much it hurts the store (none | slowed | partly_down | closed). */
+  impact?: import("@/types/maintenance-v2/workflow.types").Impact;
+  /** v2: who to talk to at the store about it. */
+  contactName?: string;
+  contactPhone?: string;
 }
 
 export interface CreateTicketPayload {
@@ -668,45 +316,13 @@ export interface CreateTicketPayload {
   type?: TicketType;
 }
 
-export interface AssignIssuesPayload {
-  ticket_issue_ids: number[];
-  technician_ids: number[];
-  assigned_date: string; // YYYY-MM-DD
-  assigned_hour?: string; // HH:MM
-}
 
-export interface StatusChangePayload {
-  ticket_issue_ids: number[];
-  status: IssueStatus;
-}
 
-export interface DeferPayload {
-  reason: string;
-}
 
-export interface CancelPayload {
-  reason: string;
-}
 
-export interface WaitPayload {
-  reason: string;
-}
 
-/** Re-links a ticket-issue line to a different catalog issue — nothing else on the line changes. */
-export interface RelinkIssuePayload {
-  issue_id: number;
-}
 
-/** Sets (or clears, via null) the independent assigned_priority on a ticket-issue line. */
-export interface AssignedPriorityPayload {
-  priority: Priority | null;
-}
 
-/** A typed closing note appended to a ticket (multipart; supports files). */
-export interface FinalNotePayload {
-  body: string;
-  type: NoteType;
-}
 
 /** Generic free-text note for any entity (multipart; supports files). */
 export interface CreateNotePayload {
@@ -716,129 +332,20 @@ export interface CreateNotePayload {
   is_private?: 0 | 1;
 }
 
-export interface CreateDiagnosisPayload {
-  ticket_issue_ids: number[];
-  body?: string;
-}
 
-/** A note sent alongside the record it belongs to, in the same request. */
-export interface InlineNotePayload {
-  body: string;
-  type?: string;
-  files?: File[];
-}
 
-/**
- * One event appended to a saved session.
- *
- * Separate from CreateAttendanceEntryPayload, which still carries the eight
- * clock fields: creation converts them into events server-side, which is what
- * let the existing form keep working while the ledger went in underneath it.
- */
-export interface CreateAttendanceEventPayload {
-  kind: AttendanceEventKind;
-  /** REQUIRED. An event with no time is not an event — "has not clocked out
-   *  yet" is said by the absence of a clock_out, not by a null. */
-  at: string;
-}
 
-export interface CreateAttendanceEntryPayload {
-  /**
-   * ATTENDANCE ONLY: the nested endpoint now accepts issues belonging to OTHER
-   * tickets, so long as at least one belongs to this one. That is the fix for
-   * "drove to one store, worked three tickets" — one entry, not three.
-   *
-   * The relaxation does NOT extend to parts, assignments or diagnoses, which
-   * still require every issue to belong to the ticket.
-   */
-  ticket_issue_ids: number[];
-  technician_id: number;
-  start_clock?: string;
-  end_clock?: string;
-  start_break?: string;
-  end_break?: string;
-  start_parts_run?: string;
-  end_parts_run?: string;
-  start_travel?: string;
-  end_travel?: string;
-  notes?: InlineNotePayload[];
-}
 
-/**
- * `cost` is deliberately absent: the server computes it as
- * quantity × unit_cost and does not accept it from the client.
- */
-export interface CreatePartUsagePayload {
-  /** Must ALL belong to this ticket — unlike attendance. */
-  ticket_issue_ids: number[];
-  part_id: number;
-  quantity: number;
-  /** The price of ONE unit, not the total. */
-  unit_cost: number;
-  source: PartUsageSource;
-  paid_by: PartUsagePayer;
-  /** Required when paid_by is "technician". */
-  paid_by_technician_id?: number;
-  /** Required when source is "from_storage". */
-  storage_location_id?: number;
-  /** Must not exceed `quantity`. */
-  returned_quantity?: number;
-  /** Required when returning anything. */
-  returned_to_storage_location_id?: number;
-  /** Vendor and receipt details go here — there is deliberately no vendor column. */
-  notes?: InlineNotePayload[];
-}
 
-export interface CreatePayEntryPayload {
-  ticket_issue_ids: number[];
-  technician_id: number;
-  base_pay?: number;
-  performance_pay?: number;
-  driving_base_pay?: number;
-  driving_performance_pay?: number;
-  driving_time?: number;
-  miles_driven?: number;
-  per_mile_rate?: number;
-}
 
-export interface CreateWarrantyPayload {
-  ticket_issue_ids: number[];
-  body?: string;
-  /** Required since v2.0 (YYYY-MM-DD). */
-  expiry_date: string;
-}
 
-export interface AttachTechniciansPayload {
-  ticket_issue_ids: number[];
-  technician_ids: number[];
-}
 
-export interface DelayAssignmentPayload {
-  new_date: string;
-  new_hour?: string;
-  reason: string;
-}
 
-export interface ChangeAssignmentTechniciansPayload {
-  technician_ids: number[];
-}
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Filters                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-/**
- * What GET /tickets/{ticket}/issues returns: the issues, AND the ticket.
- *
- * The store-scoped twin does not need to send the ticket -- that URL already
- * said which store it was. This one has no store segment by design, so the
- * ticket rides along; without it a page reached by link has no way to learn the
- * `store_number` that every subsequent write binds on.
- */
-export interface TicketWithIssuesResponse {
-  data: TicketIssue[];
-  ticket: Ticket;
-}
 
 export interface TicketsFilters {
   /**
@@ -924,73 +431,11 @@ export interface ApiCatalogIssue {
   attachments?: ApiTicketAttachment[];
 }
 
-export interface ApiCatalogTechnician {
-  id: number;
-  name: string;
-  phone?: string | null;
-  location?: string | null;
-  coverage_notes?: string | null;
-  coverage_stores?: { id: number; store_number: string }[] | null;
-  category_id: number | null;
-  category: { id: number; name: string } | null;
-  deleted_at?: string | null;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email: string } | null;
-  notes?: ApiTicketNote[];
-  attachments?: ApiTicketAttachment[];
-}
 
-/** A technician as the add / edit form sends it. Coverage replaces the stored list. */
-export interface TechnicianInput {
-  name?: string;
-  phone?: string | null;
-  category_id?: number | null;
-  location?: string | null;
-  coverage_notes?: string | null;
-  /** Store numbers, e.g. "03795-00001". */
-  coverage_stores?: string[];
-}
 
-export interface ApiCatalogPart {
-  id: number;
-  name: string;
-  description: string | null;
-  deleted_at: string | null;
-  notes?: ApiTicketNote[];
-  attachments?: ApiTicketAttachment[];
-}
 
-export interface ApiCatalogCategory {
-  id: number;
-  name: string;
-  description: string | null;
-  notes?: ApiTicketNote[];
-  attachments?: ApiTicketAttachment[];
-}
 
-export interface ApiTicketAssignmentDelay {
-  id: number;
-  assignment_id: number;
-  new_date: string;
-  new_hour: string | null;
-  reason: string;
-  mistaken?: boolean;
-  created_at: string;
-}
 
-export interface ApiTicketAssignment {
-  id: number;
-  assigned_date: string;
-  assigned_hour: string | null;
-  ticket_issue_ids: number[] | null;
-  delays: ApiTicketAssignmentDelay[];
-  attachments?: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  mistaken?: boolean;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email: string } | null;
-  created_at: string;
-}
 
 export interface ApiTicketIssueStatusChange {
   id: number;
@@ -1053,46 +498,10 @@ export interface TicketNoteWithOwner extends TicketNote {
   owner: { type: TicketNoteOwnerType | null; id: number };
 }
 
-export interface ApiTicketIssueDiagnosis {
-  id: number;
-  ticket_issue_id: number;
-  body: string | null;
-  attachments: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  mistaken: boolean;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email?: string | null } | null;
-  created_at: string;
-}
 
-export interface ApiAttendanceDurations {
-  minutes?: Partial<AttendanceMinutes> | null;
-  hours?: Partial<AttendanceHours> | null;
-  warnings?: string[] | null;
-}
 
-export interface ApiRecordPaymentClaim {
-  daily_pay_payment_id: number;
-  daily_pay_entry_id: number;
-  daily_pay_line_id?: number | null;
-  date: string;
-  technician_id: number;
-  technician?: { id: number; name: string } | null;
-  /** Part usages only. */
-  amount?: string | null;
-  /** Attendance entries only. */
-  minutes?: Partial<AttendanceMinutes> | null;
-}
 
-export interface ApiRecordPaymentBlock {
-  status: { value: string; label: string };
-  payments?: ApiRecordPaymentClaim[] | null;
-}
 
-export interface ApiIssuePaymentBlock {
-  status: { value: string; label: string };
-  daily_pay_line_ids?: number[] | null;
-}
 
 export interface ApiStorageLocationRef {
   id: number;
@@ -1100,140 +509,11 @@ export interface ApiStorageLocationRef {
   code?: string | null;
 }
 
-export interface ApiAttendanceEvent {
-  id: number;
-  kind: AttendanceEventKind;
-  label: string;
-  bucket: "work" | "travel" | "break" | "parts_run";
-  opens: boolean;
-  paid: boolean;
-  at: string;
-  mistaken: boolean;
-}
 
-export interface ApiTicketIssueAttendance {
-  id: number;
-  ticket_issue_id: number;
-  technician_id: number;
-  technician: { id: number; name: string } | null;
-  start_clock: string | null;
-  end_clock: string | null;
-  /** Null when the relation was not loaded — not the same as "no events". */
-  events?: ApiAttendanceEvent[] | null;
-  durations?: ApiAttendanceDurations | null;
-  payment?: ApiRecordPaymentBlock | null;
-  attachments: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  mistaken: boolean;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email?: string | null } | null;
-  created_at: string;
-}
 
-export interface ApiTicketIssuePartUsage {
-  id: number;
-  ticket_issue_id: number;
-  part_id: number;
-  part: { id: number; name: string; description: string | null } | null;
-  /**
-   * Laravel returns decimal fields as strings (e.g. "49.99").
-   *
-   * Every v2 field below is OPTIONAL so that a legacy row — or a
-   * partially-deployed upstream — still parses. See transformPartUsage for the
-   * fallback table and why `source` / `paid_by` fall back to null rather than
-   * to a fabricated value.
-   */
-  cost: string;
-  quantity?: string | null;
-  unit_cost?: string | null;
-  net_quantity?: string | null;
-  net_cost?: string | null;
-  source?: { value: string; label: string } | null;
-  paid_by?: { value: string; label: string } | null;
-  reimbursable?: boolean | null;
-  paid_by_technician_id?: number | null;
-  paid_by_technician?: { id: number; name: string } | null;
-  storage_location_id?: number | null;
-  storage_location?: ApiStorageLocationRef | null;
-  returned_quantity?: string | null;
-  returned_to_storage_location_id?: number | null;
-  returned_to_storage_location?: ApiStorageLocationRef | null;
-  stock_movement_ids?: number[] | null;
-  payment?: ApiRecordPaymentBlock | null;
-  attachments: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  mistaken: boolean;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email?: string | null } | null;
-  created_at: string;
-}
 
-export interface ApiTicketIssuePayEntry {
-  id: number;
-  ticket_issue_id: number;
-  technician_id: number;
-  technician?: { id: number; name: string } | null;
-  base_pay: string | null;
-  performance_pay: string | null;
-  driving_base_pay: string | null;
-  driving_performance_pay: string | null;
-  driving_time: string | null;
-  miles_driven: string | null;
-  per_mile_rate: string | null;
-  attachments?: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  mistaken: boolean;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email?: string | null } | null;
-  created_at: string;
-}
 
-export interface ApiTicketIssueWarranty {
-  id: number;
-  ticket_issue_id: number;
-  body: string | null;
-  expiry_date?: string | null;
-  attachments: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  mistaken: boolean;
-  created_by?: number | null;
-  creator?: { id: number; name: string; email?: string | null } | null;
-  created_at: string;
-}
 
-export interface ApiTicketIssue {
-  id: number;
-  ticket_id: number;
-  issue_id: number | null;
-  troubleshooting_confirmed_at?: string | null;
-  troubleshooting_outcome?: TroubleshootingTicketOutcome | null;
-  troubleshooting_guide_id?: number | null;
-  troubleshooting_snapshot?: ApiTroubleshootingSnapshot | null;
-  issue: { id: number; title: string; description: string | null } | null;
-  display_title: string | null;
-  other_title: string | null;
-  priority: ApiEnumField;
-  assigned_priority: ApiEnumField | null;
-  status: ApiEnumField;
-  description: string | null;
-  parent_id: number | null;
-  assignments: ApiTicketAssignment[];
-  status_changes: ApiTicketIssueStatusChange[];
-  technicians: ApiCatalogTechnician[];
-  children: ApiTicketIssue[];
-  diagnoses: ApiTicketIssueDiagnosis[];
-  attendance_entries: ApiTicketIssueAttendance[];
-  part_usages: ApiTicketIssuePartUsage[];
-  pay_entries: ApiTicketIssuePayEntry[];
-  warranties: ApiTicketIssueWarranty[];
-  payment?: ApiIssuePaymentBlock | null;
-  attachments?: ApiTicketAttachment[];
-  notes?: ApiTicketNote[];
-  created_by?: number | null;
-  creator?: { id: number; name: string; email: string } | null;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface ApiTicket {
   id: number;
@@ -1259,6 +539,7 @@ export interface ApiTicket {
     status?: ApiEnumField | null;
     priority?: ApiEnumField | null;
     technicians?: Array<{ id: number; name: string }> | null;
+    target_completion_at?: string | null;
   }>;
   created_at: string;
   updated_at: string;
@@ -1282,9 +563,6 @@ export interface ApiTicketsListResponse {
   total: number;
 }
 
-export interface ApiTicketIssuesResponse {
-  data: ApiTicketIssue[];
-}
 
 export interface ApiTicketsAnalyticsStatusBreakdown {
   status: IssueStatus;
@@ -1523,47 +801,7 @@ export interface TroubleshootingGuideInput {
 /*  Technician abilities                                                      */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-export interface ApiTechnicianRating {
-  technician_id: number;
-  /** Absent on an overall rating. */
-  issue_id?: number;
-  rating: number | null;
-  notes: string | null;
-  call_first: boolean;
-  updated_by: number | null;
-  editor: { id: number; name: string } | null;
-  updated_at: string | null;
-}
 
-/**
- * How good a technician is: at one catalog issue (issueId set) or overall
- * (issueId null). 1-5 stars, notes, and whether they are the one to call
- * first -- at most one technician per issue, and one overall.
- */
-export interface TechnicianRating {
-  technicianId: number;
-  issueId: number | null;
-  rating: number | null;
-  notes: string | null;
-  callFirst: boolean;
-  editor: { id: number; name: string } | null;
-  updatedAt: string | null;
-}
 
-/** Every rating, as one read: the pickers and the editor both use it. */
-export interface TechnicianAbilityBoard {
-  overall: TechnicianRating[];
-  byIssue: TechnicianRating[];
-}
 
-export interface TechnicianRatingInput {
-  rating: number | null;
-  notes: string | null;
-  call_first: boolean;
-}
 
-/** A saved rating; movedFrom names whoever just lost the "call first" pin. */
-export interface TechnicianRatingSaved {
-  rating: TechnicianRating | null;
-  movedFrom: { id: number; name: string } | null;
-}

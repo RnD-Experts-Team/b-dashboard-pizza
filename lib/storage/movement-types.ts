@@ -1,8 +1,13 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Movement types and their directions — ONE source of truth                */
+/*  Stock movement types (v2) and their directions — ONE source of truth     */
 /*                                                                            */
-/*  Pure, non-React. The composer derives its option list from this table, so */
-/*  the two can never drift apart.                                           */
+/*  Pure, non-React. Labels and icons for these live in                      */
+/*  lib/maintenance/vocabulary.ts (MOVEMENT_TYPES); this file says how each  */
+/*  one changes stock and which ones a person may post.                      */
+/*                                                                            */
+/*  MAINTENANCE-V2 §5: bought +1, used −1, returned +1, moved (line says),   */
+/*  opening_stock +1, stock_count (line says), damaged_lost −1,              */
+/*  undone (line says).                                                       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import type {
@@ -11,72 +16,48 @@ import type {
   StockMovementType,
 } from "@/types/storage.types";
 
-/**
- * Direction per movement type.
- *
- * `null` means the type does NOT fix a direction — every line must state its
- * own (that is `adjustment`, where the whole point is that some lines go up
- * and some go down).
- *
- * Keyed by PostableStockMovementType, which buys two things:
- *   - `reversal` CANNOT be a key. The backend writes those; posting one is
- *     refused, so it is excluded at the type level rather than only hidden in
- *     a dropdown.
- *   - a new postable type is a COMPILE ERROR until its direction is declared.
- */
-export const FIXED_DIRECTION: Record<PostableStockMovementType, StockDirection | null> = {
-  purchase: 1,
-  return: 1,
-  transfer_in: 1,
-  initial_count: 1,
-  draw: -1,
-  transfer_out: -1,
-  adjustment: null,
-};
+/** null = each line states its own direction (a move has a −1 and a +1 side). */
+export const FIXED_DIRECTION = {
+  bought: 1,
+  used: -1,
+  returned: 1,
+  moved: null,
+  opening_stock: 1,
+  stock_count: null,
+  damaged_lost: -1,
+  undone: null,
+} as const satisfies Record<StockMovementType, StockDirection | null>;
 
 /**
- * The composer's option list. DERIVED from the table above rather than written
- * out again, so a type can never appear in the dropdown without a direction.
+ * What `POST stock-movements` accepts. bought comes only from a parts payment
+ * line, stock_count only from applying a count, undone only from /mistaken.
  */
-export const POSTABLE_MOVEMENT_TYPES = Object.keys(
-  FIXED_DIRECTION
-) as PostableStockMovementType[];
+export const POSTABLE_MOVEMENT_TYPES = [
+  "used",
+  "returned",
+  "moved",
+  "opening_stock",
+  "damaged_lost",
+] as const satisfies readonly PostableStockMovementType[];
 
-export const MOVEMENT_TYPE_LABELS: Record<StockMovementType, string> = {
-  purchase: "Purchase",
-  draw: "Draw",
-  return: "Return",
-  transfer_out: "Transfer out",
-  transfer_in: "Transfer in",
-  adjustment: "Adjustment",
-  initial_count: "Initial count",
-  reversal: "Reversal",
-};
+const POSTABLE: ReadonlySet<string> = new Set(POSTABLE_MOVEMENT_TYPES);
 
-export const MOVEMENT_TYPE_HINTS: Record<PostableStockMovementType, string> = {
-  purchase: "Bought into a location",
-  draw: "Taken for a job",
-  return: "Came back to a shelf",
-  transfer_out: "Moved between locations",
-  transfer_in: "Moved between locations",
-  adjustment: "Correcting a count — each line states its own direction",
-  initial_count: "Opening stock",
-};
+export function isPostableMovementType(type: string): type is PostableStockMovementType {
+  return POSTABLE.has(type);
+}
 
-export function fixedDirectionFor(
-  type: PostableStockMovementType
-): StockDirection | null {
+export function fixedDirectionFor(type: StockMovementType): StockDirection | null {
   return FIXED_DIRECTION[type];
 }
 
-/** True for the two-sided transfer layout (one movement, two locations). */
-export function isTransferType(type: PostableStockMovementType): boolean {
-  return type === "transfer_out" || type === "transfer_in";
+/** True for the two-sided layout (one movement, a source and a destination). */
+export function isMoveType(type: StockMovementType): boolean {
+  return type === "moved";
 }
 
-/** "+ In" / "− Out", for the read-only direction chip. */
-export function directionLabel(direction: StockDirection): string {
-  return direction === 1 ? "+ In" : "− Out";
+/** Serial-tracked parts need `serials[]` on the line for these. */
+export function needsSerials(type: StockMovementType): boolean {
+  return type === "used" || type === "returned" || type === "damaged_lost" || type === "moved";
 }
 
 /** Parses the API's direction, which may arrive as a number or a string. */

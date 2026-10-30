@@ -9,9 +9,9 @@ import {
   maintenanceTicketsService,
   MaintenanceTicketsError,
 } from "@/lib/api/services/maintenance-tickets.service";
-import type { Ticket, CatalogIssue, CatalogTechnician } from "@/types/maintenance-tickets.types";
+import type { Ticket, CatalogIssue } from "@/types/maintenance-tickets.types";
 import { CreateTicketDialog } from "@/components/maintenance-tickets/create-ticket-dialog";
-import { TicketDetailSheet } from "@/components/maintenance-tickets/ticket-detail-sheet";
+import { TicketPeekSheet } from "@/components/maintenance-tickets/ticket-peek-sheet";
 import {
   Card,
   CardContent,
@@ -124,10 +124,7 @@ export function RecentMaintenanceTable() {
   const abortRef = useRef<AbortController | null>(null);
 
   // ── Detail sheet ─────────────────────────────────────────────────────
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const [technicians, setTechnicians] = useState<CatalogTechnician[]>([]);
-  const techLoadedRef = useRef(false);
+  const [peekTicket, setPeekTicket] = useState<Ticket | null>(null);
 
   // ── Create dialog ────────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = useState(false);
@@ -168,19 +165,8 @@ export function RecentMaintenanceTable() {
   }, [fetchTickets]);
 
   // ── Open detail sheet ────────────────────────────────────────────────
-  async function handleRowClick(ticket: Ticket) {
-    setSelectedTicketId(ticket.id);
-    setSheetOpen(true);
-    // Lazy-load technicians on first open
-    if (!techLoadedRef.current) {
-      techLoadedRef.current = true;
-      try {
-        const techs = await maintenanceTicketsService.getCatalogTechnicians();
-        setTechnicians(techs);
-      } catch {
-        // Sheet works fine without technicians for read-only viewing
-      }
-    }
+  function handleRowClick(ticket: Ticket) {
+    setPeekTicket(ticket);
   }
 
   // ── Open create dialog ───────────────────────────────────────────────
@@ -382,17 +368,7 @@ export function RecentMaintenanceTable() {
         page — offering half the controls here as well would only split one
         habit across two screens.
       */}
-      {sheetOpen && storeId && (
-        <TicketDetailSheet
-          readOnly
-          open={sheetOpen}
-          ticketId={selectedTicketId}
-          storeId={storeId}
-          tickets={tickets}
-          technicians={technicians}
-          onClose={() => { setSheetOpen(false); setSelectedTicketId(null); }}
-        />
-      )}
+      <TicketPeekSheet ticket={peekTicket} locale={locale} onClose={() => setPeekTicket(null)} />
 
       {/* Create dialog */}
       <CreateTicketDialog

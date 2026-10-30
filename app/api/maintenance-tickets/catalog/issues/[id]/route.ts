@@ -1,60 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requireAuthorization, getAuthorizationHeader } from "@/app/api/_lib/auth";
-import { proxyJsonPatch } from "@/app/api/maintenance-tickets/_lib/proxy";
-
-const BASE_URL =
-  process.env.NEW_MAINTENANCE_API_URL ||
-  process.env.NEXT_PUBLIC_NEW_MAINTENANCE_API_URL ||
-  "https://maintenance.lcportal.cloud";
-
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function errorJson(code: string, message: string, status: number) {
-  return NextResponse.json(
-    { success: false, error: { code, message } },
-    { status, headers: { "Cache-Control": "no-store" } }
-  );
-}
+import { NextRequest } from "next/server";
+import { BASE_URL, proxyDelete, proxyGet, proxyJsonPatch } from "@/app/api/maintenance-tickets/_lib/proxy";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function DELETE(request: NextRequest, { params }: Params) {
-  const authError = requireAuthorization(request);
-  if (authError) return authError;
-  const authorization = getAuthorizationHeader(request)!;
-  const { id } = await params;
+const upstream = (id: string) => `${BASE_URL}/issues/${encodeURIComponent(id)}`;
 
-  try {
-    const res = await fetchWithTimeout(`${BASE_URL}/issues/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: authorization, Accept: "application/json" },
-    });
-    const body = await res.text();
-    return new NextResponse(body || null, {
-      status: res.status,
-      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    if (msg.includes("abort") || msg.includes("timed out")) return errorJson("TIMEOUT", "Upstream request timed out", 504);
-    return errorJson("NETWORK_ERROR", "Failed to reach maintenance service", 502);
-  }
+/** One issues row: read, edit in place (only the fields sent change), delete. */
+export async function GET(request: NextRequest, { params }: Params) {
+  const { id } = await params;
+  return proxyGet(request, upstream(id));
 }
 
-/**
- * Edit in place (partial update: only the fields sent change). Before this the
- * catalog had no edit at all -- changing a technician's category meant deleting
- * and recreating them.
- */
 export async function PATCH(request: NextRequest, { params }: Params) {
   const { id } = await params;
-  return proxyJsonPatch(request, `${BASE_URL}/issues/${id}`);
+  return proxyJsonPatch(request, upstream(id));
+}
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const { id } = await params;
+  return proxyDelete(request, upstream(id));
 }

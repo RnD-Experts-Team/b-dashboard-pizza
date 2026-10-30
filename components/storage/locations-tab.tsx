@@ -1,13 +1,12 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useEffect, useState } from "react";
+import { Archive, ChevronRight, Loader2, MapPinned, Plus, RotateCcw, Warehouse } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LocationPlaces } from "./location-places";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,419 +27,302 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { storageService } from "@/lib/api/services/storage.service";
-import { entityPaths, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
-import { getTicketsFieldErrors, isCancelled } from "@/lib/api/maintenance-tickets-errors";
-import { EntityNotesAttachments } from "@/components/maintenance-tickets/entity-extras";
 import { FieldError } from "@/components/maintenance-tickets/form-bits";
-import {
-  PaginationBar,
-  StorageEmptyState,
-  StorageErrorCard,
-  StorageSkeleton,
-  TBL,
-  TD,
-  TH,
-} from "./storage-shared";
-import type {
-  StorageErrorState,
-  StorageLocation,
-  StorageLocationFilters,
-  StorageLocationListResponse,
-} from "@/types/storage.types";
+import { storageService } from "@/lib/api/services/storage.service";
+import { getTicketsFieldErrors, isCancelled } from "@/lib/api/maintenance-tickets-errors";
+import { useDiscardGuard, useResetOnOpen } from "./discard-guard";
+import { LocationPlaces } from "./location-places";
+import { StorageEmptyState, StorageErrorState, StorageSkeleton } from "./storage-shared";
+import type { StorageLocation } from "@/types/storage.types";
 
-/* ────────────────────────────────────────────────────────────────────────── */
-/*  Storage locations                                                        */
-/*                                                                            */
-/*  Soft-deleted, never removed: a retired location keeps its history and its */
-/*  balances stay readable. "Delete" therefore retires; it does not erase.    */
-/* ────────────────────────────────────────────────────────────────────────── */
+/**
+ * Locations: where we keep things (a store room, a van, a depot) and, for the
+ * selected one, its spot editor. Retiring a location keeps its history and
+ * its stock readable; it can be brought back.
+ */
 
-function CreateLocationDialog({
-  open,
-  onClose,
-  onSuccess,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [address, setAddress] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [formError, setFormError] = useState<string | null>(null);
-
-  function reset() {
-    setName("");
-    setCode("");
-    setAddress("");
-    setFieldErrors({});
-    setFormError(null);
-  }
-
-  async function handleSubmit() {
-    if (!name.trim()) {
-      setFieldErrors({ name: "Name is required." });
-      return;
-    }
-    setIsSubmitting(true);
-    setFormError(null);
-    try {
-      await storageService.createStorageLocation({
-        name: name.trim(),
-        ...(code.trim() ? { code: code.trim() } : {}),
-        ...(address.trim() ? { address: address.trim() } : {}),
-      });
-      toast.success("Location created.");
-      reset();
-      onSuccess();
-      onClose();
-    } catch (err) {
-      if (isCancelled(err)) return;
-      if (err instanceof MaintenanceTicketsError) {
-        const fields = getTicketsFieldErrors(err);
-        if (Object.keys(fields).length) setFieldErrors(fields);
-        setFormError(err.message);
-      }
-      toast.error(
-        err instanceof MaintenanceTicketsError ? err.message : "Something went wrong."
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>New storage location</DialogTitle>
-          <DialogDescription>
-            A shelf, van, or depot that stock can sit in.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">
-              Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setFieldErrors({});
-              }}
-              placeholder="e.g. Main shelf"
-              className={cn("h-9 text-sm", fieldErrors.name && "border-destructive")}
-              disabled={isSubmitting}
-            />
-            <FieldError message={fieldErrors.name} />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Code</Label>
-            <Input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Optional short code"
-              className={cn("h-9 text-sm", fieldErrors.code && "border-destructive")}
-              disabled={isSubmitting}
-            />
-            {fieldErrors.code ? (
-              <FieldError message={fieldErrors.code} />
-            ) : (
-              <p className="text-[11px] text-muted-foreground">
-                Must be unique among live locations.
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Address</Label>
-            <Input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Optional"
-              className="h-9 text-sm"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {formError && <p className="text-xs text-destructive">{formError}</p>}
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="me-1.5 h-4 w-4 animate-spin" />}
-            Create
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface LocationsTabProps {
-  data: StorageLocationListResponse | null;
+export interface LocationsTabProps {
+  locations: readonly StorageLocation[];
   isLoading: boolean;
-  error: StorageErrorState | null;
-  filters: StorageLocationFilters;
-  onFiltersChange: (filters: StorageLocationFilters, page?: number) => void;
+  error: { message: string } | null;
+  onRetry: () => void;
+  selectedId?: number;
+  onSelect: (id: number | null) => void;
   canManage: boolean;
   onChanged: () => void;
-  className?: string;
 }
 
-export function LocationsTab({
-  data,
-  isLoading,
-  error,
-  filters,
-  onFiltersChange,
-  canManage,
-  onChanged,
-  className,
-}: LocationsTabProps) {
-  const [createOpen, setCreateOpen] = useState(false);
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [pendingRetire, setPendingRetire] = useState<StorageLocation | null>(null);
-  const [saving, setSaving] = useState<number | null>(null);
+export function LocationsTab({ locations, isLoading, error, onRetry, selectedId, onSelect, canManage, onChanged }: LocationsTabProps) {
+  const t = useTranslations("maintenanceV2");
+  const [adding, setAdding] = useState(false);
+  const [retiring, setRetiring] = useState<StorageLocation | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const selected = locations.find((l) => l.id === selectedId) ?? null;
+
+  useEffect(() => {
+    // Open the first live location when nothing is picked yet.
+    if (!selectedId && locations.length) onSelect(locations.find((l) => !l.deletedAt)?.id ?? null);
+  }, [selectedId, locations, onSelect]);
 
   async function retire(location: StorageLocation) {
-    setSaving(location.id);
+    setBusyId(location.id);
     try {
       await storageService.deleteStorageLocation(location.id);
-      toast.success(`${location.name} retired. Its history and balances are kept.`);
+      toast.success(t("storage.locations.retired", { name: location.name }));
+      setRetiring(null);
       onChanged();
     } catch (err) {
-      if (isCancelled(err)) return;
-      toast.error(
-        err instanceof MaintenanceTicketsError ? err.message : "Something went wrong."
-      );
+      if (!isCancelled(err)) toast.error(err instanceof Error ? err.message : t("common.saveError"));
     } finally {
-      setSaving(null);
-      setPendingRetire(null);
+      setBusyId(null);
     }
   }
 
   async function restore(location: StorageLocation) {
-    setSaving(location.id);
+    setBusyId(location.id);
     try {
       await storageService.restoreStorageLocation(location.id);
-      toast.success(`${location.name} restored.`);
+      toast.success(t("storage.locations.restored", { name: location.name }));
       onChanged();
     } catch (err) {
-      if (isCancelled(err)) return;
-      toast.error(
-        err instanceof MaintenanceTicketsError ? err.message : "Something went wrong."
-      );
+      if (!isCancelled(err)) toast.error(err instanceof Error ? err.message : t("common.saveError"));
     } finally {
-      setSaving(null);
+      setBusyId(null);
     }
   }
 
-  if (isLoading && !data) return <StorageSkeleton />;
-  if (error && !data) {
-    return <StorageErrorCard error={error} onRetry={() => onFiltersChange(filters, 1)} />;
-  }
+  const addButton = canManage ? (
+    <Button onClick={() => setAdding(true)}>
+      <Plus className="me-1.5 h-4 w-4" aria-hidden="true" />
+      {t("storage.locations.add")}
+    </Button>
+  ) : null;
 
-  const rows = data?.data ?? [];
+  if (error && locations.length === 0) return <StorageErrorState message={error.message} onRetry={onRetry} />;
+  if (isLoading && locations.length === 0) return <StorageSkeleton rows={4} />;
 
   return (
-    <div className={cn("space-y-3", className)}>
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <Checkbox
-            checked={filters.trashed === "with"}
-            onCheckedChange={(v) =>
-              onFiltersChange({ ...filters, trashed: v === true ? "with" : undefined }, 1)
-            }
-          />
-          Show retired locations
-        </label>
-        {canManage && (
-          <Button
-            size="sm"
-            className="ms-auto h-9 gap-1.5"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New location
-          </Button>
-        )}
-      </div>
-
-      {rows.length === 0 ? (
-        <StorageEmptyState
-          title="No storage locations yet"
-          description="Create one for each shelf, van or depot that holds stock. Locations are global, not tied to a store."
-          action={
-            canManage ? (
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="me-1.5 h-3.5 w-3.5" />
-                New location
-              </Button>
-            ) : undefined
-          }
-        />
+    <div className="space-y-3">
+      {locations.length === 0 ? (
+        <StorageEmptyState icon={Warehouse} description={t("storage.locations.empty")} action={addButton} />
       ) : (
-        <>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className={TBL}>
-              <thead>
-                <tr>
-                  <th className={TH}>Name</th>
-                  <th className={TH}>Code</th>
-                  <th className={TH}>Address</th>
-                  <th className={cn(TH, "text-end")}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((location) => {
-                  const retired = location.deletedAt != null;
-                  return (
-                    <Fragment key={location.id}>
-                      <tr
-                        key={location.id}
-                        className={cn(
-                          "cursor-pointer transition-colors hover:bg-muted/40",
-                          retired && "opacity-60"
-                        )}
-                        onClick={() =>
-                          setExpanded(expanded === location.id ? null : location.id)
-                        }
-                      >
-                        <td className={TD}>
-                          <span
-                            className={cn("font-medium", retired && "line-through")}
-                          >
-                            {location.name}
-                          </span>
-                          {retired && (
-                            <Badge
-                              variant="outline"
-                              className="ms-1.5 h-4 px-1 text-[9px] font-normal"
-                            >
-                              Retired
-                            </Badge>
-                          )}
-                        </td>
-                        <td className={cn(TD, retired && "line-through")}>
-                          {location.code ?? "—"}
-                        </td>
-                        <td className={cn(TD, retired && "line-through")}>
-                          {location.address ?? "—"}
-                        </td>
-                        <td className={cn(TD, "text-end")}>
-                          {canManage && (
-                            <div
-                              className="flex justify-end"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {retired ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  disabled={saving === location.id}
-                                  onClick={() => restore(location)}
-                                >
-                                  <RotateCcw className="me-1 h-3 w-3" />
-                                  Restore
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                                  disabled={saving === location.id}
-                                  onClick={() => setPendingRetire(location)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                      {expanded === location.id && (
-                        <tr key={`${location.id}-detail`}>
-                          <td colSpan={4} className="border-t bg-muted/20 p-4">
-                            {/* Where inside this location things sit. The whole point of
-                                the location row expanding.
-
-                                Two unrelated things live in this cell -- the
-                                shelves, and the paperwork -- so there is a rule
-                                between them. Stacked flush they read as one
-                                block and neither had a beginning. */}
-                            <LocationPlaces locationId={location.id} canManage={canManage} />
-
-                            <EntityNotesAttachments
-                              className="mt-5 border-t pt-4"
-                              entityPath={entityPaths.storageLocation(location.id)}
-                              notes={location.notes ?? []}
-                              attachments={location.attachments ?? []}
-                              onSuccess={onChanged}
-                              canAdd={canManage}
-                              alwaysOpen
-                            />
-                          </td>
-                        </tr>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">{t("storage.locations.help")}</p>
+              {addButton}
+            </div>
+            <ul className="space-y-1.5">
+              {locations.map((location) => {
+                const active = location.id === selectedId;
+                const retired = Boolean(location.deletedAt);
+                return (
+                  <li key={location.id}>
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 rounded-md border bg-card p-2.5 transition-colors",
+                        active ? "border-primary/60 bg-primary/5" : "hover:bg-muted/40",
+                        retired && "opacity-70",
                       )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onSelect(location.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-start"
+                        aria-current={active ? "true" : undefined}
+                      >
+                        <Warehouse className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-medium">{location.name}</span>
+                            {location.code && <span className="text-[11px] text-muted-foreground">{location.code}</span>}
+                          </span>
+                          {location.address && <span className="block truncate text-[11px] text-muted-foreground">{location.address}</span>}
+                        </span>
+                        {retired && (
+                          <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                            {t("storage.locations.retiredBadge")}
+                          </Badge>
+                        )}
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden="true" />
+                      </button>
+                      {canManage &&
+                        (retired ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => void restore(location)}
+                            disabled={busyId === location.id}
+                            aria-label={t("storage.locations.restore", { name: location.name })}
+                          >
+                            {busyId === location.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => setRetiring(location)}
+                            aria-label={t("storage.locations.retire", { name: location.name })}
+                          >
+                            <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
 
-          {data && (
-            <PaginationBar
-              currentPage={data.meta.currentPage}
-              lastPage={data.meta.lastPage}
-              onPageChange={(page) => onFiltersChange(filters, page)}
-              disabled={isLoading}
-            />
-          )}
-        </>
+          <div className="rounded-lg border p-4">
+            {selected ? (
+              <LocationPlaces key={selected.id} locationId={selected.id} locationName={selected.name} canManage={canManage && !selected.deletedAt} />
+            ) : (
+              <StorageEmptyState icon={MapPinned} description={t("storage.locations.pickOne")} />
+            )}
+          </div>
+        </div>
       )}
 
       <CreateLocationDialog
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onSuccess={onChanged}
+        open={adding}
+        onOpenChange={setAdding}
+        onCreated={(location) => {
+          onChanged();
+          onSelect(location.id);
+        }}
       />
 
-      {/* "Delete" retires rather than erases — say so, or it reads as data loss. */}
-      <AlertDialog
-        open={pendingRetire !== null}
-        onOpenChange={(o) => !o && setPendingRetire(null)}
-      >
+      <AlertDialog open={retiring != null} onOpenChange={(o) => !o && busyId == null && setRetiring(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Retire {pendingRetire?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              It stops being offered as a destination for new stock. Its movement
-              history and its balances are kept and stay readable, and you can restore
-              it later.
-            </AlertDialogDescription>
+            <AlertDialogTitle className="font-heading font-semibold">
+              {t("storage.locations.retireTitle", { name: retiring?.name ?? "" })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t("storage.locations.retireBody")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busyId != null}>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => pendingRetire && retire(pendingRetire)}
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={busyId != null}
+              onClick={(e) => {
+                e.preventDefault();
+                if (retiring) void retire(retiring);
+              }}
             >
-              Retire
+              {busyId != null && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+              {t("storage.locations.retireConfirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function CreateLocationDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (location: StorageLocation) => void;
+}) {
+  const t = useTranslations("maintenanceV2");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [address, setAddress] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const guard = useDiscardGuard(Boolean(name || code || address) && !saving, () => onOpenChange(false));
+
+  useResetOnOpen(open, () => {
+    setName("");
+    setCode("");
+    setAddress("");
+    setErrors({});
+  });
+
+  async function submit() {
+    if (!name.trim()) {
+      setErrors({ name: t("storage.locations.nameRequired") });
+      return;
+    }
+    setSaving(true);
+    try {
+      const created = await storageService.createStorageLocation({
+        name: name.trim(),
+        ...(code.trim() ? { code: code.trim() } : {}),
+        ...(address.trim() ? { address: address.trim() } : {}),
+      });
+      toast.success(t("storage.locations.created", { name: created.name }));
+      onCreated(created);
+      onOpenChange(false);
+    } catch (err) {
+      if (isCancelled(err)) return;
+      const fields = getTicketsFieldErrors(err);
+      if (Object.keys(fields).length) setErrors(fields);
+      else toast.error(err instanceof Error ? err.message : t("common.saveError"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : guard.requestClose())}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading font-semibold">{t("storage.locations.add")}</DialogTitle>
+            <DialogDescription>{t("storage.locations.addHelp")}</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit();
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="loc-name">
+                {t("common.name")} <span className="text-destructive">*</span>
+              </Label>
+              <Input id="loc-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={Boolean(errors.name)} autoFocus />
+              <FieldError message={errors.name} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="loc-code">
+                {t("storage.locations.code")} <span className="text-xs text-muted-foreground">({t("common.optional")})</span>
+              </Label>
+              <Input id="loc-code" value={code} onChange={(e) => setCode(e.target.value)} className="max-w-40" />
+              <p className="text-[11px] text-muted-foreground">{t("storage.locations.codeHelp")}</p>
+              <FieldError message={errors.code} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="loc-address">
+                {t("storage.locations.address")} <span className="text-xs text-muted-foreground">({t("common.optional")})</span>
+              </Label>
+              <Input id="loc-address" value={address} onChange={(e) => setAddress(e.target.value)} />
+              <FieldError message={errors.address} />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button type="button" variant="outline" onClick={guard.requestClose} disabled={saving}>
+                {t("common.cancel")}
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+                {t("storage.locations.add")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {guard.dialog}
+    </>
   );
 }

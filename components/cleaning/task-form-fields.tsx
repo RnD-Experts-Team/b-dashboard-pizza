@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
-import { MultiSelect, type MultiSelectOption } from "@/components/daily-pay/multi-select";
+import { MultiSelect, type MultiSelectOption } from "@/components/shared/multi-select";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import type { CleaningFrequency } from "@/types/cleaning.types";

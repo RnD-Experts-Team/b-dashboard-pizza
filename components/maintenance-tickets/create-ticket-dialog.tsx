@@ -31,6 +31,9 @@ import { toast } from "sonner";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { CatalogIssue, Priority, TicketType, TroubleshootingTicketOutcome } from "@/types/maintenance-tickets.types";
+import type { Impact } from "@/types/maintenance-v2";
+import { useAuthStore } from "@/lib/auth/auth.store";
+import { IMPACTS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                   */
@@ -44,6 +47,11 @@ interface IssueRow {
   description: string;
   note: string;
   files: File[];
+  /** v2: how much it hurts the store; "" = not said. */
+  impact: Impact | "";
+  /** v2: who to talk to at the store about it. */
+  contactName: string;
+  contactPhone: string;
   /**
    * How troubleshooting went, answered on the issue's troubleshooting page --
    * needed before the ticket can be sent when the issue has guides.
@@ -56,7 +64,26 @@ interface IssueRow {
   } | null;
 }
 
-function makeRow(): IssueRow {
+/** The phone typed last time, a per-viewer convenience (the auth user carries no phone). */
+const CONTACT_PHONE_KEY = "maintenance.ticket.contactPhone";
+
+function rememberedPhone(): string {
+  try {
+    return typeof window === "undefined" ? "" : (window.localStorage.getItem(CONTACT_PHONE_KEY) ?? "");
+  } catch {
+    return "";
+  }
+}
+
+function rememberPhone(phone: string) {
+  try {
+    if (phone) window.localStorage.setItem(CONTACT_PHONE_KEY, phone);
+  } catch {
+    /* storage blocked: nothing to remember */
+  }
+}
+
+function makeRow(contact: { name: string; phone: string } = { name: "", phone: "" }): IssueRow {
   return {
     id: Math.random().toString(36).slice(2),
     issueId: null,
@@ -65,6 +92,9 @@ function makeRow(): IssueRow {
     description: "",
     note: "",
     files: [],
+    impact: "",
+    contactName: contact.name,
+    contactPhone: contact.phone,
     troubleshooting: null,
   };
 }
@@ -160,14 +190,17 @@ export function CreateTicketDialog({
   onSuccess,
 }: CreateTicketDialogProps) {
   const t = useTranslations("maintenanceTickets");
+  const tv = useTranslations("maintenanceV2");
   const { canAccessRoute } = useAuth();
+  const userName = useAuthStore((st) => st.user?.name ?? "");
+  const contactDefaults = () => ({ name: userName, phone: rememberedPhone() });
   /** Same rule as the "Manage Catalog" button — also gates the Type selector and inline issue creation. */
   const canManageCatalog = canAccessRoute({
     service: "Maintenance",
     method: "POST",
     path: "/technicians",
   });
-  const [rows, setRows] = useState<IssueRow[]>([makeRow()]);
+  const [rows, setRows] = useState<IssueRow[]>(() => [makeRow()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   /** The form, or one row's troubleshooting page shown in its place. */
@@ -215,6 +248,9 @@ export function CreateTicketDialog({
       setStoreSearch("");
       setStorePickerOpen(false);
       setLocalCatalogIssues(catalogIssues.filter((i) => !i.deletedAt));
+      setRows((prev) =>
+        prev.map((r) => (r.contactName || r.contactPhone ? r : { ...r, contactName: userName, contactPhone: rememberedPhone() })),
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -273,7 +309,10 @@ export function CreateTicketDialog({
   }
 
   function addRow() {
-    setRows((prev) => [...prev, makeRow()]);
+    setRows((prev) => {
+      const last = prev[prev.length - 1];
+      return [...prev, makeRow(last ? { name: last.contactName, phone: last.contactPhone } : contactDefaults())];
+    });
   }
 
   /** Pastes clipboard images/files into a row's attachments (Ctrl+V on the file zone). */
@@ -305,7 +344,7 @@ export function CreateTicketDialog({
 
   function handleClose() {
     if (isSubmitting) return;
-    setRows([makeRow()]);
+    setRows([makeRow(contactDefaults())]);
     setSubmitError(null);
     setView({ kind: "form" });
     onClose();
@@ -386,6 +425,9 @@ export function CreateTicketDialog({
           description: row.description.trim(),
           ...(row.note.trim() ? { notes: [{ body: row.note.trim() }] } : {}),
           ...(row.files.length ? { files: row.files } : {}),
+          ...(row.impact ? { impact: row.impact } : {}),
+          ...(row.contactName.trim() ? { contactName: row.contactName.trim() } : {}),
+          ...(row.contactPhone.trim() ? { contactPhone: row.contactPhone.trim() } : {}),
           ...(guideCount(row) > 0 && row.troubleshooting
             ? {
                 troubleshooting: row.troubleshooting.outcome,
@@ -397,13 +439,14 @@ export function CreateTicketDialog({
         type: ticketType,
       };
 
+      rememberPhone(rows[rows.length - 1]?.contactPhone.trim() ?? "");
       if (isOtherStore) {
         await maintenanceTicketsService.createTicketOther(otherStoreText.trim(), payload);
       } else {
         await maintenanceTicketsService.createTicket(activeStoreId, payload);
       }
 
-      setRows([makeRow()]);
+      setRows([makeRow(contactDefaults())]);
       setSubmitError(null);
       setView({ kind: "form" });
       toast.success(rows.length > 1 ? "Ticket created with all issues." : "Ticket created successfully.");
@@ -659,6 +702,51 @@ export function CreateTicketDialog({
                   value={row.priority}
                   onChange={(v) => updateRow(row.id, { priority: v })}
                 />
+              </div>
+
+              {/* Impact: how much it hurts the store (v2) */}
+              <div className="space-y-1">
+                <Label className="text-sm" htmlFor={`impact-${row.id}`}>{tv("tickets.create.impact")}</Label>
+                <Select value={row.impact} onValueChange={(v) => updateRow(row.id, { impact: v as Impact })}>
+                  <SelectTrigger id={`impact-${row.id}`} className="text-sm">
+                    <SelectValue placeholder={tv("tickets.create.impactPlaceholder")} />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    {vocabOptions(IMPACTS).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {vocabText(tv, o)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{tv("tickets.create.impactHelp")}</p>
+              </div>
+
+              {/* Who to talk to at the store (v2) */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor={`contact-name-${row.id}`}>{tv("tickets.create.contactName")}</Label>
+                  <Input
+                    id={`contact-name-${row.id}`}
+                    className="text-sm"
+                    value={row.contactName}
+                    onChange={(e) => updateRow(row.id, { contactName: e.target.value })}
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm" htmlFor={`contact-phone-${row.id}`}>{tv("tickets.create.contactPhone")}</Label>
+                  <Input
+                    id={`contact-phone-${row.id}`}
+                    className="text-sm"
+                    type="tel"
+                    inputMode="tel"
+                    value={row.contactPhone}
+                    onChange={(e) => updateRow(row.id, { contactPhone: e.target.value })}
+                    autoComplete="tel"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground sm:col-span-2">{tv("tickets.create.contactHelp")}</p>
               </div>
 
               {/* Description */}

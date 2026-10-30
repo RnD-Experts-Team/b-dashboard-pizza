@@ -36,30 +36,29 @@ import type {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Every movement type the ledger knows about.
+ * Every movement type the ledger knows about (v2, `AppEnumsStockMovementType`).
  *
- * `reversal` is written by the BACKEND ONLY — it is what a "mark mistaken"
- * produces. Posting one is refused, which is why the postable subset below
- * excludes it at the type level rather than only in a dropdown.
+ * Three are written by the BACKEND ONLY: `bought` (from a parts payment
+ * line), `stock_count` (applying a count) and `undone` (marking a movement
+ * as a mistake). The postable subset below excludes them at the type level.
+ * Plain-words labels and icons: lib/maintenance/vocabulary.ts.
  */
 export type StockMovementType =
-  | "purchase"
-  | "draw"
-  | "return"
-  | "transfer_out"
-  | "transfer_in"
-  | "adjustment"
-  | "initial_count"
-  | "reversal";
+  | "bought"
+  | "used"
+  | "returned"
+  | "moved"
+  | "opening_stock"
+  | "stock_count"
+  | "damaged_lost"
+  | "undone";
 
-/** The types a client may actually post. */
-export type PostableStockMovementType = Exclude<StockMovementType, "reversal">;
+/** The types `POST stock-movements` accepts. */
+export type PostableStockMovementType = Exclude<StockMovementType, "bought" | "stock_count" | "undone">;
 
 /** +1 adds to a location, −1 takes away. `quantity` is always positive. */
 export type StockDirection = 1 | -1;
 
-/** Who paid for the stock. Mirrors the part-usage payer enum. */
-export type StockPaidBy = "us" | "technician";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Locations                                                                */
@@ -114,6 +113,8 @@ export interface StockMovementLine {
   direction: StockDirection;
   /** quantity × direction — the signed contribution to on hand. */
   signedQuantity: number;
+  /** Serial numbers moved by this line (serial-tracked parts). */
+  serials: string[];
 }
 
 export interface StockMovement {
@@ -128,9 +129,16 @@ export interface StockMovement {
    * THIS TYPE and switch to `formatTimestamp` the day the contract is confirmed.
    */
   movedAt: string;
-  paidBy: EnumField | null;
-  paidByTechnicianId: number | null;
-  paidByTechnician: { id: number; name: string } | null;
+  /** `used` on a ticket: which issue. */
+  ticketIssue: { id: number; ticketId: number; title: string; storeNumber: string | null } | null;
+  /** `bought`: the payment whose parts line wrote it. */
+  payment: { id: number; paidToName: string | null } | null;
+  /** `stock_count`: the count that was applied. */
+  stockCountId: number | null;
+  /** Sum of the lines' quantity × unit cost; null when not sent. */
+  totalCost?: number | null;
+  /** The movement's own short text (e.g. "Reverses movement #12."). */
+  body?: string | null;
   /**
    * A display marker ONLY. It does NOT remove this movement from any balance —
    * the correction is the separate reversal movement, not this flag.
@@ -204,8 +212,8 @@ export interface StockMovementFilters {
   types?: StockMovementType[];
   part_ids?: number[];
   storage_location_ids?: number[];
-  paid_by?: StockPaidBy[];
-  paid_by_technician_ids?: number[];
+  ticket_issue_id?: number;
+  stock_count_id?: number;
   moved_from?: string;
   moved_to?: string;
   sort?: StockMovementSortColumn;
@@ -426,6 +434,8 @@ export interface CreateStockMovementLinePayload {
   /** Positive magnitude only. */
   quantity: number;
   unit_cost?: number;
+  /** Serial-tracked parts: one serial per unit (count = quantity). */
+  serials?: string[];
   /**
    * Sent on EVERY line for EVERY type, even when the type fixes it.
    *
@@ -448,8 +458,8 @@ export interface CreateStockMovementPayload {
    */
   moved_at: string;
   type: PostableStockMovementType;
-  paid_by?: StockPaidBy;
-  paid_by_technician_id?: number;
+  /** `used` from the ticket page or the storage page. */
+  ticket_issue_id?: number;
   /** Contiguous from 0 — a hole is silently dropped upstream. */
   lines: CreateStockMovementLinePayload[];
   notes?: { body: string; type?: string; files?: File[] }[];
@@ -510,18 +520,24 @@ export interface ApiStockMovementLine {
   quantity: string;
   unit_cost?: string | null;
   direction: number | string;
+  serials?: string[] | null;
 }
 
 export interface ApiStockMovement {
   id: number;
-  type: { value: string; label: string };
+  type: { value: string; label: string } | string;
+  type_label?: string | null;
   moved_at: string;
-  paid_by?: { value: string; label: string } | null;
-  paid_by_technician_id?: number | null;
-  paid_by_technician?: { id: number; name: string } | null;
+  ticket_issue?: { id: number; ticket_id: number; title: string; store_number?: string | null } | null;
+  payment?: { id: number; paid_to_name?: string | null; paid_to?: { name?: string | null } | null } | null;
+  stock_count_id?: number | null;
   mistaken: boolean;
   /** Optional: the API may not link the pair explicitly. */
   reversal_of_id?: number | null;
+  /** What the v2 API actually sends on an `undone` movement. */
+  reverses_stock_movement_id?: number | null;
+  total_cost?: string | null;
+  body?: string | null;
   reversed_by_ids?: number[] | null;
   lines?: ApiStockMovementLine[] | null;
   notes?: ApiTicketNote[] | null;

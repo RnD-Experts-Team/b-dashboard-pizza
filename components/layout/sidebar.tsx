@@ -54,6 +54,7 @@ import {
   MessageSquareWarning,
   LifeBuoy,
   Activity,
+  Route,
 } from "lucide-react";
 import {
   Dialog,
@@ -732,12 +733,32 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           { service: "Maintenance", method: "GET", path: "/stores/*/tickets", storeId: effectiveStoreId }
         ],
       },
+      // Trips and Payments are GLOBAL (no store in the path), so their probes
+      // carry NO storeId, like storage below. Payments replaced Daily Pay.
       {
-        title: t("maintenanceTroubleshooting"),
-        href: `/${locale}/dashboard/maintenance-troubleshooting`,
-        icon: LifeBuoy,
+        title: t("maintenanceTrips"),
+        href: `/${locale}/dashboard/maintenance-trips`,
+        icon: Route,
         requirements: [
-          { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
+          { service: "Maintenance", method: "GET", path: "/trips" }
+        ],
+      },
+      {
+        title: t("maintenancePayments"),
+        href: `/${locale}/dashboard/maintenance-payments`,
+        icon: Wallet,
+        requirements: [
+          { service: "Maintenance", method: "GET", path: "/payments" }
+        ],
+      },
+      {
+        title: t("storage"),
+        href: `/${locale}/dashboard/storage`,
+        icon: Warehouse,
+        requirements: [
+          // NO storeId on purpose — storage endpoints are GLOBAL, and a
+          // store-scoped probe would be wrong. Same as inventoryUnits above.
+          { service: "Maintenance", method: "GET", path: "/storage-locations" }
         ],
       },
       {
@@ -749,21 +770,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         ],
       },
       {
-        title: "Daily Pay",
-        href: `/${locale}/dashboard/daily-pay`,
-        icon: Wallet,
+        title: t("maintenanceTroubleshooting"),
+        href: `/${locale}/dashboard/maintenance-troubleshooting`,
+        icon: LifeBuoy,
         requirements: [
-          { service: "Maintenance", method: "GET", path: "/daily-pay-entries", storeId: effectiveStoreId }
-        ],
-      },
-      {
-        title: t("storage"),
-        href: `/${locale}/dashboard/storage`,
-        icon: Warehouse,
-        requirements: [
-          // NO storeId on purpose — storage endpoints are GLOBAL, and a
-          // store-scoped probe would be wrong. Same as inventoryUnits above.
-          { service: "Maintenance", method: "GET", path: "/storage-locations" }
+          { service: "Maintenance", method: "GET", path: "/troubleshooting-guides", storeId: effectiveStoreId }
         ],
       },
       {

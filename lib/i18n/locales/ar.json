@@ -119,7 +119,9 @@
     "tickets": "التذاكر",
     "maintenanceAnalytics": "تحليلات الصيانة",
     "maintenanceTroubleshooting": "استكشاف الأعطال",
-    "maintenanceTechnicians": "الفنيون"
+    "maintenanceTechnicians": "الفنيون والموردون",
+    "maintenanceTrips": "الرحلات",
+    "maintenancePayments": "المدفوعات"
   },
   "breadcrumbs": {
     "dashboard": "لوحة التحكم",
@@ -175,7 +177,9 @@
     "tickets": "التذاكر",
     "maintenance-analytics": "تحليلات الصيانة",
     "maintenance-troubleshooting": "استكشاف الأعطال",
-    "maintenance-technicians": "الفنيون"
+    "maintenance-technicians": "الفنيون والموردون",
+    "maintenance-trips": "الرحلات",
+    "maintenance-payments": "المدفوعات"
   },
   "employees": {
     "title": "الموظفون",
@@ -5051,5 +5055,1817 @@
     "kpiAlertsHint": "قاصرون في مهارات مقيّدة",
     "scheduleChipLabel": "{count, plural, one {مُقيَّم في # مهارة} other {مُقيَّم في # مهارات}}",
     "scheduleAlertHint": "دون 18 ومُقيَّم في مهارة مقيّدة: لا تضعه عليها أو بالقرب منها."
+  },
+  "maintenanceV2": {
+    "vocab": {
+      "terms": {
+        "technician": {
+          "label": "فني",
+          "help": "شخص أو شركة يصلح لنا الأعطال."
+        },
+        "supplier": {
+          "label": "مورّد",
+          "help": "متجر أو شركة نشتري منها القطع."
+        },
+        "payment": {
+          "label": "دفعة",
+          "help": "مبلغ مدفوع لفني واحد أو لمورّد واحد."
+        },
+        "paymentLine": {
+          "label": "بند الدفعة",
+          "help": "جزء من الدفعة: ساعات، سعر ثابت، قطع، وقود…"
+        },
+        "trip": {
+          "label": "رحلة",
+          "help": "يوم عمل الفني: المتاجر التي يزورها ووقته المسجّل."
+        },
+        "visit": {
+          "label": "زيارة",
+          "help": "توقف واحد عند متجر خلال الرحلة."
+        },
+        "session": {
+          "label": "الوقت المسجّل",
+          "help": "من تسجيل الدخول إلى تسجيل الخروج."
+        },
+        "inspection": {
+          "label": "معاينة",
+          "help": "الذهاب لمعاينة المشكلة وتقديم عرض سعر."
+        },
+        "approval": {
+          "label": "موافقة",
+          "help": "موافقة شخص على صرف المبلغ قبل العمل."
+        },
+        "stockCount": {
+          "label": "جرد المخزون",
+          "help": "عدّ ما هو موجود فعلاً على الرف."
+        },
+        "unpaidWork": {
+          "label": "عمل غير مدفوع",
+          "help": "وقت مسجّل لم يُدفع بعد ومشتريات لم تُسترد."
+        }
+      },
+      "issueStatus": {
+        "new": {
+          "label": "جديد"
+        },
+        "in_review": {
+          "label": "قيد المراجعة"
+        },
+        "waiting_on_store": {
+          "label": "بانتظار المتجر"
+        },
+        "inspection": {
+          "label": "معاينة"
+        },
+        "waiting_approval": {
+          "label": "بانتظار الموافقة"
+        },
+        "scheduled": {
+          "label": "مجدول"
+        },
+        "work_done": {
+          "label": "تم العمل (قيد التحقق)"
+        },
+        "closed": {
+          "label": "مغلق"
+        },
+        "cancelled": {
+          "label": "ملغى"
+        }
+      },
+      "whoseTurn": {
+        "office": {
+          "label": "المكتب"
+        },
+        "store": {
+          "label": "المتجر"
+        },
+        "technician": {
+          "label": "الفني"
+        },
+        "approver": {
+          "label": "صاحب الموافقة"
+        },
+        "office_or_store": {
+          "label": "المكتب / المتجر"
+        },
+        "none": {
+          "label": "لا أحد"
+        }
+      },
+      "priority": {
+        "urgent": {
+          "label": "عاجل"
+        },
+        "high": {
+          "label": "مرتفع"
+        },
+        "medium": {
+          "label": "متوسط"
+        },
+        "low": {
+          "label": "منخفض"
+        }
+      },
+      "impact": {
+        "none": {
+          "label": "لا تأثير على الخدمة"
+        },
+        "slowed": {
+          "label": "يبطئ العمل"
+        },
+        "partly_down": {
+          "label": "جزء من المتجر متوقف"
+        },
+        "closed": {
+          "label": "المتجر مغلق"
+        }
+      },
+      "resolution": {
+        "repaired": {
+          "label": "تم الإصلاح"
+        },
+        "fixed_by_troubleshooting": {
+          "label": "حُلّ عبر استكشاف الأعطال"
+        },
+        "not_needed": {
+          "label": "غير مطلوب"
+        },
+        "replaced": {
+          "label": "تم الاستبدال"
+        },
+        "deferred": {
+          "label": "مؤجّل"
+        }
+      },
+      "inspectionStatus": {
+        "scheduled": {
+          "label": "محجوزة"
+        },
+        "done": {
+          "label": "تمت"
+        },
+        "cancelled": {
+          "label": "ملغاة"
+        }
+      },
+      "approvalDecision": {
+        "approved": {
+          "label": "موافَق عليه"
+        },
+        "rejected": {
+          "label": "مرفوض"
+        }
+      },
+      "answeredVia": {
+        "store": {
+          "label": "المتجر"
+        },
+        "specialist": {
+          "label": "المكتب نيابة عن المتجر"
+        }
+      },
+      "closeChecklist": {
+        "resolved": {
+          "label": "المتجر يؤكد أنه يعمل"
+        },
+        "cost_recorded": {
+          "label": "التكلفة مسجّلة"
+        },
+        "invoice_attached": {
+          "label": "الفاتورة مرفقة"
+        },
+        "notes_completed": {
+          "label": "العمل المنجز مكتوب"
+        }
+      },
+      "visitTaskStatus": {
+        "pending": {
+          "label": "للتنفيذ"
+        },
+        "done": {
+          "label": "تم"
+        },
+        "not_done": {
+          "label": "تعذّر التنفيذ"
+        }
+      },
+      "tripStatus": {
+        "open": {
+          "label": "مفتوحة"
+        },
+        "closed": {
+          "label": "مغلقة"
+        }
+      },
+      "tripState": {
+        "off_clock": {
+          "label": "خارج الدوام"
+        },
+        "on_clock": {
+          "label": "على الدوام"
+        },
+        "on_break": {
+          "label": "في استراحة"
+        },
+        "travelling": {
+          "label": "يقود"
+        },
+        "parts_run": {
+          "label": "يجلب قطعاً"
+        }
+      },
+      "tripEvent": {
+        "break_start": {
+          "label": "بدأت الاستراحة"
+        },
+        "break_end": {
+          "label": "انتهت الاستراحة"
+        },
+        "travel_start": {
+          "label": "بدأ القيادة"
+        },
+        "travel_end": {
+          "label": "توقف عن القيادة"
+        },
+        "parts_run_start": {
+          "label": "ذهب لجلب القطع"
+        },
+        "parts_run_end": {
+          "label": "عاد من جلب القطع"
+        }
+      },
+      "tripStopStatus": {
+        "planned": {
+          "label": "مخطط"
+        },
+        "arrived": {
+          "label": "هناك الآن"
+        },
+        "done": {
+          "label": "تم"
+        },
+        "not_done": {
+          "label": "تعذّر التنفيذ"
+        }
+      },
+      "sessionSource": {
+        "technician": {
+          "label": "سجّله الفني"
+        },
+        "specialist": {
+          "label": "أضافه المكتب"
+        },
+        "migrated": {
+          "label": "من النظام القديم"
+        }
+      },
+      "paymentLineType": {
+        "hourly": {
+          "label": "بالساعة",
+          "help": "الوقت الذي كان فيه الفني على الدوام، دون الاستراحات، مضروباً في أجره بالساعة."
+        },
+        "fixed": {
+          "label": "سعر ثابت",
+          "help": "سعر واحد متفق عليه للعمل في هذا المتجر مهما استغرق من وقت."
+        },
+        "inspection": {
+          "label": "معاينة",
+          "help": "سعر الذهاب لمعاينة المشكلة وتقديم عرض سعر."
+        },
+        "parts": {
+          "label": "قطع",
+          "help": "قطع مشتراة: العدد مضروباً في سعر القطعة، لتذكرة أو للمخزون."
+        },
+        "gas": {
+          "label": "وقود / مسافة",
+          "help": "الوقود أو المسافة: المبلغ المدفوع، أو الأميال المقطوعة مضروبة في سعر الميل."
+        },
+        "other": {
+          "label": "أخرى",
+          "help": "أي شيء آخر، موصوفاً بالكلمات."
+        }
+      },
+      "paymentMethod": {
+        "cash": {
+          "label": "نقداً"
+        },
+        "check": {
+          "label": "شيك"
+        },
+        "card": {
+          "label": "بطاقة"
+        },
+        "bank_transfer": {
+          "label": "تحويل بنكي"
+        },
+        "zelle": {
+          "label": "Zelle"
+        },
+        "other": {
+          "label": "أخرى"
+        }
+      },
+      "paidTo": {
+        "technician": {
+          "label": "فني"
+        },
+        "supplier": {
+          "label": "مورّد"
+        }
+      },
+      "partsDestination": {
+        "storage": {
+          "label": "إلى المخزون",
+          "help": "توضع القطع على رف وتُحسب ضمن المخزون."
+        },
+        "ticket": {
+          "label": "مباشرة إلى تذكرة",
+          "help": "تُستخدم فوراً في التذكرة؛ لا يُضاف شيء إلى المخزون."
+        }
+      },
+      "movementType": {
+        "bought": {
+          "label": "مشتراة",
+          "help": "قطع مشتراة إلى المخزون (من دفعة)."
+        },
+        "used": {
+          "label": "مستخدمة",
+          "help": "أُخذت من الرف لتذكرة."
+        },
+        "returned": {
+          "label": "مُعادة",
+          "help": "عادت إلى الرف."
+        },
+        "moved": {
+          "label": "منقولة",
+          "help": "من مكان إلى آخر."
+        },
+        "opening_stock": {
+          "label": "رصيد افتتاحي",
+          "help": "ما كان موجوداً عندما بدأنا."
+        },
+        "stock_count": {
+          "label": "جرد المخزون",
+          "help": "تصحيحات من عدّ الرف."
+        },
+        "damaged_lost": {
+          "label": "تالفة أو مفقودة",
+          "help": "مكسورة أو مرمية أو مفقودة."
+        },
+        "undone": {
+          "label": "ملغاة",
+          "help": "تلغي حركة وُضعت عليها علامة خطأ."
+        }
+      },
+      "partSerialStatus": {
+        "in_stock": {
+          "label": "في المخزون"
+        },
+        "installed": {
+          "label": "مركّبة"
+        },
+        "returned": {
+          "label": "مُعادة"
+        },
+        "damaged_lost": {
+          "label": "تالفة أو مفقودة"
+        }
+      },
+      "partUnit": {
+        "each": {
+          "label": "قطعة"
+        },
+        "box": {
+          "label": "علبة"
+        },
+        "pack": {
+          "label": "حزمة"
+        },
+        "ft": {
+          "label": "قدم"
+        },
+        "m": {
+          "label": "م"
+        },
+        "gal": {
+          "label": "غالون"
+        },
+        "l": {
+          "label": "لتر"
+        },
+        "kg": {
+          "label": "كغ"
+        },
+        "lb": {
+          "label": "رطل"
+        },
+        "set": {
+          "label": "طقم"
+        }
+      }
+    },
+    "pages": {
+      "tickets": "التذاكر",
+      "ticket": "التذكرة",
+      "trips": "الرحلات",
+      "payments": "المدفوعات",
+      "storage": "المخزون",
+      "technicians": "الفنيون والموردون",
+      "technician": "الفني",
+      "analytics": "تحليلات الصيانة",
+      "stockCount": "جرد المخزون"
+    },
+    "rebuilding": {
+      "description": "يُعاد بناء هذه الصفحة.",
+      "body": "النسخة الجديدة من هذه الشاشة قادمة قريباً."
+    },
+    "common": {
+      "save": "حفظ",
+      "saving": "جارٍ الحفظ…",
+      "cancel": "إلغاء",
+      "close": "إغلاق",
+      "edit": "تعديل",
+      "delete": "حذف",
+      "add": "إضافة",
+      "retry": "إعادة المحاولة",
+      "refresh": "تحديث",
+      "search": "بحث",
+      "clearAll": "مسح الكل",
+      "moreDetails": "تفاصيل إضافية",
+      "fewerDetails": "تفاصيل أقل",
+      "required": "مطلوب",
+      "optional": "اختياري",
+      "reason": "السبب",
+      "reasonHelp": "اذكر السبب — يُحفظ مع التغيير.",
+      "note": "ملاحظة",
+      "notes": "الملاحظات",
+      "photos": "الصور",
+      "files": "الملفات",
+      "addPhotos": "إضافة صور",
+      "date": "التاريخ",
+      "time": "الوقت",
+      "store": "المتجر",
+      "stores": "المتاجر",
+      "otherStore": "متجر آخر",
+      "total": "الإجمالي",
+      "amount": "المبلغ",
+      "status": "الحالة",
+      "priority": "الأولوية",
+      "impact": "التأثير",
+      "category": "الفئة",
+      "phone": "الهاتف",
+      "name": "الاسم",
+      "description": "الوصف",
+      "showAsTable": "عرض كجدول",
+      "showAsChart": "عرض كرسم بياني",
+      "showAll": "عرض الكل",
+      "showMistakes": "إظهار الأخطاء",
+      "markAsMistake": "وضع علامة خطأ",
+      "markAsMistakeConfirm": "هل تريد وضع علامة خطأ؟ سيبقى في السجل مشطوباً.",
+      "mistaken": "خطأ",
+      "unsavedTitle": "تجاهل التغييرات؟",
+      "unsavedBody": "سيضيع ما كتبته.",
+      "discard": "تجاهل",
+      "keepEditing": "متابعة التعديل",
+      "loadError": "تعذّر التحميل.",
+      "saveError": "تعذّر الحفظ. راجع الحقول المحددة بالأحمر.",
+      "saved": "تم الحفظ",
+      "none": "لا شيء",
+      "gap": "فجوة",
+      "missing": "{count} ناقص",
+      "extra": "{count} زائد",
+      "copy": "نسخ",
+      "copied": "تم النسخ",
+      "share": "مشاركة"
+    },
+    "names": {
+      "duplicateTechnician": "يوجد فني باسم {name} بالفعل.",
+      "duplicateSupplier": "يوجد مورّد باسم {name} بالفعل.",
+      "duplicatePart": "توجد قطعة باسم {name} بالفعل.",
+      "duplicateCategory": "توجد فئة باسم {name} بالفعل."
+    },
+    "peek": {
+      "ticketNumber": "تذكرة رقم {id}",
+      "oneIssue": "مشكلة واحدة",
+      "moreIssues": "+{count} مشكلات أخرى",
+      "opened": "فُتحت",
+      "openTicket": "فتح التذكرة"
+    },
+    "tickets": {
+      "newTicket": "تذكرة جديدة",
+      "attention": {
+        "waitingOnStore": "بانتظار المتجر",
+        "waitingApproval": "بانتظار الموافقة",
+        "workDone": "عمل منجز للتحقق",
+        "overdue": "متأخرة"
+      },
+      "moreIssues": "+{count} أخرى",
+      "assignedTo": "مسندة إلى",
+      "targetDate": "التاريخ المستهدف",
+      "nextAction": "الإجراء التالي",
+      "updated": "آخر تحديث",
+      "list": {
+        "description": "كل تذاكر الصيانة لمتاجرك. افتح تذكرة لترى خطوتها التالية.",
+        "catalog": "دليل الأعطال",
+        "attention": "تحتاج إلى انتباه",
+        "all": "الكل",
+        "allStores": "كل المتاجر",
+        "allInCategory": "كل من في الفئة",
+        "picked": "{count} مختارة",
+        "noOptions": "لا شيء مطابق.",
+        "clearThis": "مسح هذا الفلتر",
+        "showing": "عرض {from}–{to} من {total}",
+        "page": "صفحة {current} من {total}",
+        "previous": "الصفحة السابقة",
+        "next": "الصفحة التالية",
+        "openTicket": "فتح التذكرة رقم {id}",
+        "columns": {
+          "number": "رقم التذكرة",
+          "title": "العنوان"
+        },
+        "empty": "لا توجد تذاكر بعد. عندما يبلّغ متجر عن مشكلة تظهر هنا.",
+        "emptyFiltered": "لا توجد تذاكر مطابقة لهذه الفلاتر. امسحها لترى كل شيء."
+      },
+      "create": {
+        "impact": "ما مدى تأثيرها على المتجر؟",
+        "impactPlaceholder": "اختر واحدًا…",
+        "impactHelp": "يساعد فريق الصيانة على تحديد ما يُصلح أولًا.",
+        "contactName": "اسم جهة الاتصال",
+        "contactPhone": "هاتف جهة الاتصال",
+        "contactHelp": "من يجب أن يتصل به فريق الصيانة أو الفني بخصوص هذا."
+      },
+      "page": {
+        "back": "كل التذاكر",
+        "ticketNumber": "التذكرة رقم {id}",
+        "storeNumber": "المتجر {store}",
+        "opened": "فُتحت",
+        "submittedBy": "أرسلها {name}",
+        "moreMenu": "خيارات أخرى",
+        "cancelIssue": "إلغاء هذا العطل",
+        "cancelTicket": "إلغاء التذكرة",
+        "deleteTicket": "حذف التذكرة",
+        "deleteTitle": "حذف التذكرة رقم {id}؟",
+        "deleteBody": "تختفي التذكرة وأعطالها من القوائم. هذا مخصص للتذاكر المفتوحة بالخطأ.",
+        "deleted": "تم حذف التذكرة",
+        "notFound": "هذه التذكرة غير موجودة، أو ليس لديك صلاحية الوصول إليها.",
+        "noIssues": "لا توجد أعطال لعرضها في هذه التذكرة.",
+        "otherStoreReadOnly": "هذه التذكرة لمكان خارج متاجرنا، لذلك لا يمكن تنفيذ خطواتها من هنا.",
+        "readOnly": "يمكنك متابعة هذه التذكرة هنا. فريق الصيانة ينفّذ خطواتها، وسيُطلب منك ما يلزم عند الحاجة.",
+        "issueSwitcher": "الأعطال في هذه التذكرة",
+        "progress": "التقدّم",
+        "stepOf": "الخطوة {step} من {total}: {label}",
+        "stepState": {
+          "done": "منجزة",
+          "current": "الآن",
+          "skipped": "تم تخطيها",
+          "upcoming": "لم تأتِ بعد"
+        }
+      },
+      "overview": {
+        "detailsTitle": "تفاصيل التذكرة",
+        "nobodyYet": "لا أحد بعد",
+        "notSet": "غير محدد",
+        "targetCompletion": "موعد الإنجاز المستهدف",
+        "currentStep": "الخطوة الحالية",
+        "openQuestion": "سؤال للمتجر",
+        "confirmedWorking": "يقول المتجر إنه يعمل الآن.",
+        "confirmedBroken": "يقول المتجر إنه ما زال لا يعمل.",
+        "workPerformed": "العمل المنجز",
+        "closedAs": "أُغلقت بصفة: {resolution}",
+        "closeChecklist": "قبل الإغلاق",
+        "checkDone": "منجز",
+        "checkOpen": "غير منجز بعد",
+        "noDescription": "لم يُكتب وصف.",
+        "contact": "جهة الاتصال في المتجر:",
+        "troubleshooting": "استكشاف الأعطال الذي قام به المتجر",
+        "troubleshootingNoneMatch": "لم يصف أي دليل لاستكشاف الأعطال المشكلة.",
+        "troubleshootingTried": "جرّب \"{guide}\" — وما زال معطّلًا.",
+        "troubleshootingNone": "لم يكن استكشاف الأعطال مطلوبًا لهذا العطل.",
+        "noPhotos": "لا توجد صور بعد.",
+        "warranties": "الضمان",
+        "warrantyUntil": "مشمول حتى {date}",
+        "step": {
+          "new": {
+            "title": "أُرسلت — بانتظار المراجعة",
+            "office": "انظر في المشكلة، وحدّد تاريخًا مستهدفًا، وقرّر الخطوة التالية.",
+            "store": "سينظر فريق الصيانة فيها قريبًا."
+          },
+          "in_review": {
+            "title": "قيد المراجعة",
+            "office": "قرّر ما يحدث بعد ذلك: اسأل المتجر، أو احجز فحصًا، أو جدول العمل.",
+            "store": "يعمل فريق الصيانة على تحديد ما يجب فعله."
+          },
+          "waiting_on_store": {
+            "title": "بانتظار المتجر",
+            "office": "طُرح سؤال على المتجر. سجّل إجابتهم عندما تصل.",
+            "store": "يحتاج فريق الصيانة إلى إجابة منك قبل المتابعة."
+          },
+          "inspection": {
+            "title": "الفحص",
+            "office": "سيأتي فني لينظر فيها. سجّل ما وجده وعرض السعر.",
+            "store": "فني قادم لينظر في المشكلة."
+          },
+          "waiting_approval": {
+            "title": "بانتظار الموافقة",
+            "office": "التكلفة تحتاج إلى موافقة. سجّل القرار عندما يصلك.",
+            "store": "التكلفة بانتظار الموافقة."
+          },
+          "scheduled": {
+            "title": "مجدولة",
+            "office": "العمل محجوز. علّمه كمنجز عندما ينتهي الفني.",
+            "store": "الإصلاح محجوز."
+          },
+          "work_done": {
+            "title": "العمل منجز — قيد التحقق",
+            "office": "تأكد مع المتجر أنه يعمل، ثم أغلقها عند اكتمال القائمة.",
+            "store": "يقول الفني إنه تم الإصلاح. هل يعمل الآن؟"
+          },
+          "closed": {
+            "title": "مغلقة",
+            "office": "هذا العطل انتهى.",
+            "store": "هذا العطل انتهى."
+          },
+          "cancelled": {
+            "title": "ملغاة",
+            "office": "أُلغي هذا العطل.",
+            "store": "أُلغي هذا العطل."
+          }
+        }
+      },
+      "work": {
+        "inspections": "الفحوصات",
+        "noInspections": "لا يوجد فحص محجوز.",
+        "addSecondOpinion": "إضافة رأي ثانٍ",
+        "findings": "ما وجده",
+        "recommendedRepair": "الإصلاح الموصى به",
+        "partsNeeded": "القطع المطلوبة",
+        "quote": "عرض السعر {amount}",
+        "bookings": "الحجوزات",
+        "noBookings": "لا شيء محجوز بعد.",
+        "kind": {
+          "work": "عمل",
+          "inspection": "فحص"
+        },
+        "expectedCompletion": "موعد الإنجاز المتوقع",
+        "expectedBy": "يُتوقع إنجازه بحلول {date}",
+        "movedTimes": "{count, plural, one {نُقل مرة واحدة} other {نُقل # مرات}}",
+        "openTrip": "فتح الرحلة",
+        "move": "نقل",
+        "visits": "الزيارات",
+        "noVisits": "لا توجد زيارات بعد.",
+        "arrived": "وصل",
+        "left": "غادر",
+        "onSite": "في الموقع {time}",
+        "notDoneReason": "تعذّر إنجازه: {reason}",
+        "partsUsed": "القطع المستخدمة",
+        "noPartsUsed": "لم تُستخدم قطع من المخزن بعد.",
+        "useParts": "استخدام قطع من المخزن",
+        "from": "من {location}"
+      },
+      "costs": {
+        "approvedHint": "الموافق عليه {amount}",
+        "fromStorage": "+ {amount} من المخزن",
+        "includesOther": "يشمل {amount} للفحص والوقود وغيرها",
+        "approval": "الموافقة",
+        "waitingFor": "بانتظار موافقة {label} على {amount}.",
+        "level": "موافقة {label}",
+        "approvedBy": "بواسطة {name}",
+        "earlierApprovals": "{count, plural, one {قرار سابق واحد} other {# قرارات سابقة}}",
+        "noApproval": "لا حاجة إلى موافقة حتى الآن.",
+        "invoices": "الفواتير",
+        "noInvoices": "لا توجد فواتير بعد.",
+        "invoiceNumber": "فاتورة {number}",
+        "invoiceFile": "فاتورة",
+        "payments": "المدفوعات",
+        "noPayments": "لم يُدفع شيء لهذا العطل بعد.",
+        "hasInvoice": "لها فاتورة",
+        "noUnpaid": "لا شيء بانتظار السداد.",
+        "boughtBy": "اشتراها {name}",
+        "at": "من {name}"
+      },
+      "activity": {
+        "empty": "لم يحدث شيء على هذا العطل بعد.",
+        "mosOnly": "لفريق الصيانة فقط"
+      },
+      "footer": {
+        "updateReview": "تحديث المراجعة"
+      },
+      "picker": {
+        "category": "الفئة",
+        "allCategories": "كل الفئات",
+        "showEveryone": "إظهار الجميع",
+        "loading": "جارٍ التحميل…",
+        "none": "لم يُعثر على فنيين.",
+        "noneRanked": "لا أحد يغطي هذا المتجر أو هذا العطل. فعّل \"إظهار الجميع\".",
+        "rankedHelp": "الأنسب أولًا: يغطي المتجر، يغطي العطل، ثم الاتصال أولًا والتقييم."
+      },
+      "tripLink": {
+        "expires": "يتوقف عن العمل بعد {hours} ساعة من آخر استخدام.",
+        "copyFailed": "تعذّر النسخ. حدّد الرابط وانسخه بنفسك.",
+        "messageCopied": "تم نسخ الرسالة. الصقها في واتساب أو رسالة نصية."
+      },
+      "dialogs": {
+        "reasonRequired": "اذكر السبب.",
+        "amountRequired": "أدخل مبلغًا.",
+        "amountInvalid": "أدخل مبلغًا مثل 125.50.",
+        "review": {
+          "updateTitle": "تحديث المراجعة",
+          "startHelp": "الحفظ يبدأ المراجعة. كل الحقول اختيارية.",
+          "updateHelp": "غيّر التاريخ المستهدف أو الإجراء التالي أو الأولوية.",
+          "targetHelp": "متى تهدف إلى إصلاحه.",
+          "pickTarget": "اختر التاريخ والوقت",
+          "nextActionPlaceholder": "مثال: الاتصال بالمتجر غدًا",
+          "priority": "الأولوية",
+          "priorityHelp": "قال المتجر: {priority}.",
+          "keepStorePriority": "إبقاء أولوية المتجر"
+        },
+        "askStore": {
+          "help": "تنتظر التذكرة المتجر حتى يجيب.",
+          "question": "سؤالك",
+          "questionPlaceholder": "مثال: هل ما زالت القلاية تصدر الصوت وهي مطفأة؟",
+          "questionRequired": "اكتب سؤالك.",
+          "photosHelp": "اختياري: صورة توضح ما تقصده.",
+          "submit": "إرسال السؤال",
+          "sent": "أُرسل السؤال إلى المتجر"
+        },
+        "answer": {
+          "question": "السؤال",
+          "askedBy": "سأل {name}",
+          "answer": "الإجابة",
+          "answerPlaceholder": "اكتب الإجابة هنا",
+          "answerRequired": "اكتب الإجابة.",
+          "noQuestion": "لا يوجد سؤال مفتوح الآن.",
+          "who": "من أجاب",
+          "whoHelp": "اختر \"المكتب نيابةً عن المتجر\" عندما أخبرك المتجر بالهاتف.",
+          "submit": "إرسال الإجابة",
+          "sent": "أُرسلت الإجابة"
+        },
+        "booking": {
+          "inspectionHelp": "اختر من يذهب لفحصه ومتى. تُضاف الزيارة إلى رحلة الفني في ذلك اليوم.",
+          "workHelp": "اختر من ينفّذ العمل ومتى. تُضاف الزيارة إلى رحلة الفني في ذلك اليوم.",
+          "technicianRequired": "اختر فنيًا.",
+          "dateRequired": "اختر يومًا.",
+          "pickDay": "اختر يومًا",
+          "anyTime": "أي وقت",
+          "expectedHelp": "متى يجب أن ينتهي العمل، إذا استغرق أكثر من يوم.",
+          "instructions": "تعليمات للفني",
+          "instructionsHelp": "تظهر في صفحة رحلة الفني.",
+          "inspectionBooked": "تم حجز الفحص",
+          "workBooked": "تم حجز العمل"
+        },
+        "move": {
+          "help": "تنتقل الزيارة إلى رحلة الفني في اليوم الجديد.",
+          "booking": "أي حجز",
+          "pickBooking": "اختر حجزًا.",
+          "now": "الآن: {when} مع {technician}",
+          "newDay": "اليوم الجديد",
+          "submit": "نقل الحجز",
+          "moved": "تم نقل الحجز"
+        },
+        "inspection": {
+          "help": "ما وجده الفني، وعرض السعر إن قدّمه.",
+          "which": "أي فحص",
+          "pick": "اختر فحصًا.",
+          "noneOpen": "لا يوجد فحص محجوز بانتظار نتيجة.",
+          "findingsPlaceholder": "مثال: منظم الحرارة معطّل ويحتاج إلى استبدال",
+          "findingsRequired": "اكتب ما وجده.",
+          "estimate": "عرض السعر",
+          "estimateHelp": "تكلفة الإصلاح، إن ذكرها."
+        },
+        "approval": {
+          "askHelp": "من يجب أن يوافق يعتمد على المبلغ.",
+          "askSubmit": "طلب الموافقة",
+          "asked": "تم طلب الموافقة",
+          "fromQuote": "من عرض سعر {technician} بقيمة {amount}.",
+          "levelUnknown": "يُحدَّد مستوى الموافقة عند الإرسال.",
+          "recordHelp": "سجّل القرار الذي اتخذه شخص ما بشأن التكلفة.",
+          "decision": "القرار",
+          "decisionRequired": "اختر موافقة أو رفض.",
+          "approver": "من قرّر",
+          "approverRequired": "اكتب من قرّر.",
+          "screenshot": "لقطة شاشة للموافقة",
+          "screenshotHelp": "اختياري: الرسالة أو البريد الذي وافقوا فيه."
+        },
+        "workDone": {
+          "help": "سجّل العمل المنجز نيابةً عن الفني. يُسأل المتجر بعد ذلك إن كان يعمل.",
+          "work": "العمل المنجز",
+          "workPlaceholder": "مثال: استبدلت منظم الحرارة واختبرت السلتين",
+          "workRequired": "اكتب ما تم إنجازه.",
+          "photos": "صور قبل وبعد",
+          "photosHelp": "اختيارية، لكنها تساعد إذا عادت المشكلة.",
+          "addWarranty": "إضافة ضمان",
+          "removeWarranty": "إزالة الضمان",
+          "warranty": "الضمان",
+          "warrantyPlaceholder": "مثال: 90 يومًا على القطع والعمل",
+          "warrantyBodyRequired": "صِف الضمان.",
+          "warrantyUntil": "مشمول حتى",
+          "warrantyDateRequired": "اختر آخر يوم يشمله الضمان.",
+          "saved": "تم تعليم العمل كمنجز"
+        },
+        "confirmation": {
+          "help": "اسأل المتجر إن كانت المشكلة قد زالت.",
+          "question": "هل يعمل الآن؟",
+          "yes": "نعم، يعمل",
+          "no": "لا، ما زال معطّلًا",
+          "noHelp": "يعود العطل إلى المراجعة لجدولة مزيد من العمل.",
+          "thanksWorking": "شكرًا — تم تعليمه كعامل",
+          "thanksBroken": "شكرًا — سيجدول الفريق مزيدًا من العمل"
+        },
+        "close": {
+          "help": "اختر كيف انتهى. تُظهر القائمة ما زال ناقصًا.",
+          "resolution": "كيف انتهى؟",
+          "pickResolution": "اختر واحدًا…",
+          "resolutionRequired": "اختر كيف انتهى.",
+          "reasonHelp": "بعض البنود غير مؤشّرة. يُحفظ سببك مع التغيير.",
+          "reasonRequired": "اذكر لماذا تغلق مع بنود غير مؤشّرة.",
+          "finalNote": "ملاحظة ختامية",
+          "learned": "ما تعلمناه",
+          "learnedHelp": "أي شيء يساعد في المرة القادمة إذا حدث هذا.",
+          "closed": "أُغلق العطل"
+        },
+        "jump": {
+          "help": "انقل العطل مباشرةً إلى حالة أخرى (هو الآن {status}). استخدم هذا فقط لتصحيح خطأ.",
+          "status": "الحالة الجديدة",
+          "pickStatus": "اختر حالة…",
+          "statusRequired": "اختر حالة.",
+          "submit": "تغيير الحالة"
+        },
+        "cancel": {
+          "help": "يبقى العمل الملغى في السجل. اذكر السبب.",
+          "done": "تم الإلغاء"
+        },
+        "update": {
+          "help": "أضف ملاحظة وصورًا إلى هذا العطل.",
+          "placeholder": "ما الذي حدث، أو ما يجب أن يعرفه الجميع",
+          "bodyRequired": "اكتب التحديث.",
+          "whoSees": "من يمكنه رؤيته",
+          "everyone": "كل من على التذكرة",
+          "everyoneHelp": "يمكن للمتجر قراءته أيضًا.",
+          "mosOnly": "لفريق الصيانة فقط",
+          "mosOnlyHelp": "لا يراه إلا فريق الصيانة.",
+          "submit": "إضافة التحديث",
+          "saved": "تمت إضافة التحديث"
+        },
+        "parts": {
+          "help": "أخرج قطعًا من المخزن لهذا العطل. ينقص المخزون بمقدار ما تستخدمه.",
+          "part": "القطعة ومكانها",
+          "pick": "اختر قطعة…",
+          "pickRequired": "اختر قطعة.",
+          "option": "{part} — {location} ({count} متوفرة)",
+          "noStock": "لا يوجد شيء في المخزن الآن.",
+          "quantity": "الكمية",
+          "quantityRequired": "أدخل الكمية.",
+          "onHand": "{count} متوفرة هناك.",
+          "tooMany": "متوفر هناك {count} فقط.",
+          "serials": "أي وحدات",
+          "serialsHelp": "أشّر على الأرقام التسلسلية التي استخدمتها.",
+          "noSerials": "لا توجد وحدات بأرقام تسلسلية في المخزون هناك.",
+          "submit": "استخدام القطع",
+          "saved": "سُجّلت القطع كمستخدمة"
+        }
+      }
+    },
+    "workflow": {
+      "steps": {
+        "submitted": "مُرسلة",
+        "review": "مراجعة",
+        "store": "المتجر",
+        "inspection": "معاينة",
+        "approval": "موافقة",
+        "scheduled": "مجدولة",
+        "workDone": "تم العمل",
+        "closed": "مغلقة"
+      },
+      "actions": {
+        "review": "بدء المراجعة",
+        "info_request": "سؤال المتجر",
+        "answer": "الإجابة عن السؤال",
+        "inspection": "حجز معاينة",
+        "inspection_result": "تسجيل نتيجة المعاينة",
+        "approval_request": "طلب موافقة",
+        "approval": "تسجيل الموافقة",
+        "schedule": "جدولة العمل",
+        "move": "نقل الموعد",
+        "work_done": "تحديد العمل كمنجز",
+        "confirmation": "هل يعمل الآن؟",
+        "close": "إغلاق التذكرة",
+        "jump": "الانتقال إلى حالة",
+        "cancel": "إلغاء"
+      },
+      "addUpdate": "إضافة تحديث",
+      "moreActions": "إجراءات أخرى",
+      "tabs": {
+        "overview": "نظرة عامة",
+        "work": "العمل",
+        "costs": "التكاليف",
+        "activity": "النشاط"
+      },
+      "whoseTurn": "دور من",
+      "needsApprovalFrom": "يحتاج موافقة {label}",
+      "overrideReason": "لماذا الإغلاق مع بنود غير مكتملة؟",
+      "tripLinkTitle": "رابط الرحلة",
+      "tripLinkBody": "أرسل هذا الرابط إلى الفني. يظهر مرة واحدة فقط."
+    },
+    "costs": {
+      "estimated": "التقدير",
+      "approved": "الموافَق عليه",
+      "labor": "العمالة",
+      "parts": "القطع",
+      "totalActual": "الإجمالي الفعلي",
+      "unpaidPurchases": "مشتريات فنيين غير مسددة",
+      "recordPayment": "تسجيل دفعة"
+    },
+    "technicians": {
+      "none": "لا يوجد فنيون.",
+      "addTechnician": "إضافة فني",
+      "addSupplier": "إضافة مورّد",
+      "emergencyOnly": "الطوارئ فقط",
+      "hourlyRate": "الأجر بالساعة",
+      "contactPerson": "جهة الاتصال",
+      "location": "الموقع",
+      "emergencyAvailable": "متاح للطوارئ",
+      "emergencyNotes": "ملاحظات الطوارئ",
+      "storesCovered": "المتاجر المغطاة",
+      "issuesCovered": "المشكلات المغطاة",
+      "coverageNotes": "ملاحظات التغطية",
+      "manageCategories": "إدارة الفئات",
+      "averageRating": "متوسط التقييم",
+      "paidThisMonth": "المدفوع هذا الشهر",
+      "totalPaid": "إجمالي المدفوع",
+      "website": "الموقع الإلكتروني",
+      "standing": {
+        "coversStore": "يغطي المتجر",
+        "coversIssue": "يغطي المشكلة",
+        "emergency": "طوارئ",
+        "callFirst": "اتصل أولاً",
+        "starsForIssue": "التقييم لهذه المشكلة",
+        "starsAverage": "متوسط التقييم",
+        "avg": "متوسط"
+      },
+      "pageDescription": "من يصلح الأعطال لنا، وما الذي يغطيه، والأماكن التي نشتري منها القطع.",
+      "tabTechnicians": "الفنيون",
+      "tabSuppliers": "الموردون",
+      "searchPlaceholder": "الاسم أو الهاتف أو جهة الاتصال…",
+      "searchLabel": "ابحث عن فني",
+      "allCategories": "كل الفئات",
+      "storeCovered": "الفرع المغطى",
+      "anyStore": "أي فرع",
+      "issueCovered": "العطل المغطى",
+      "anyIssue": "أي عطل",
+      "rankedNote": "الأنسب أولًا: يغطي الفرع، ثم يغطي العطل، ثم يُتصل به أولًا، ثم التقييم.",
+      "loading": "جارٍ تحميل الفنيين",
+      "noMatch": "لا يوجد فني يطابق هذه الفلاتر.",
+      "emptyBody": "لا يوجد فنيون بعد. أضف أول شخص أو شركة تصلح الأعطال لنا.",
+      "noCategory": "بدون فئة",
+      "notRated": "غير مُقيَّم",
+      "ratingOutOf": "{value} من 5 نجوم",
+      "starsOfFive": "{count, plural, one {# من 5 نجوم} other {# من 5 نجوم}}",
+      "storesCount": "{count, plural, zero {لا فروع} one {فرع واحد} two {فرعان} few {# فروع} many {# فرعًا} other {# فرع}}",
+      "issuesCount": "{count, plural, zero {لا أعطال} one {عطل واحد} two {عطلان} few {# أعطال} many {# عطلًا} other {# عطل}}",
+      "paidThisMonthNote": "المدفوع هذا الشهر مأخوذ من المدفوعات المسجلة هذا الشهر، دون الأخطاء.",
+      "editTitle": "تعديل {name}",
+      "nameHelp": "اسم شخص أو اسم شركة.",
+      "nameRequired": "أدخل اسمًا.",
+      "hourlyRateHelp": "يُستخدم كسعر في المدفوعات بالساعة.",
+      "hourlyRateInvalid": "أدخل مبلغًا يساوي 0 أو أكثر.",
+      "contactPersonHelp": "الشخص الذي نطلبه عندما يكون شركة.",
+      "locationHelp": "مكان تواجده، مثل مدينة.",
+      "emergencyAvailableHelp": "يمكنه الحضور خارج أوقات العمل للأعطال العاجلة.",
+      "emergencyNotesPlaceholder": "مثال: الليالي وعطلات نهاية الأسبوع، اتصل مرتين",
+      "storesCoveredHelp": "الفروع التي يمكنه الذهاب إليها. اتركها فارغة إن لم تكن متأكدًا بعد.",
+      "coverageNotesHelp": "أي شيء عن أماكن أو أوقات عمله.",
+      "pickStores": "اختر الفروع",
+      "searchStores": "ابحث في الفروع…",
+      "noStoreMatch": "لا يوجد فرع مطابق.",
+      "added": "تمت إضافة {name}",
+      "saved": "تم حفظ {name}",
+      "categoriesHelp": "المجموعات التي يُصنَّف فيها الفنيون، مثل داخلي أو شركة. كل اسم يُستخدم مرة واحدة.",
+      "noCategories": "لا توجد فئات بعد.",
+      "newCategory": "فئة جديدة",
+      "newCategoryPlaceholder": "مثال: شركة تبريد",
+      "categoryAdded": "تمت إضافة الفئة {name}",
+      "categorySaved": "تم حفظ الفئة {name}",
+      "categoryDeleted": "تم حذف الفئة {name}",
+      "renameCategory": "إعادة تسمية {name}",
+      "deleteCategory": "حذف {name}",
+      "deleteCategoryTitle": "حذف الفئة {name}؟",
+      "deleteCategoryBody": "يبقى فنيوها، وسيظهرون بدون فئة.",
+      "technicianCount": "{count, plural, zero {لا فنيين} one {فني واحد} two {فنيان} few {# فنيين} many {# فنيًا} other {# فني}}",
+      "profile": "الملف",
+      "perHour": "{amount} في الساعة",
+      "yes": "نعم",
+      "no": "لا",
+      "noStoresSet": "لم تُحدَّد فروع بعد.",
+      "restore": "استعادة",
+      "deleteTechnician": "حذف الفني",
+      "deleteTitle": "حذف {name}؟",
+      "deleteBody": "تبقى رحلاته ومدفوعاته وتقييماته في السجل، ويمكن استعادته. تُزال علامات \"اتصل أولًا\" الخاصة به.",
+      "deleted": "تم حذف {name}",
+      "restored": "تمت استعادة {name}",
+      "deletedBanner": "هذا الفني محذوف. لا يُقترح لأعمال جديدة؛ استعده لاستخدامه مرة أخرى.",
+      "issuesCoveredHelp": "ما يمكنه إصلاحه، ومدى إتقانه له، ومن يُتصل به أولًا. تُحفظ التغييرات فورًا.",
+      "addIssue": "إضافة عطل",
+      "noIssues": "لا أعطال محددة لهذا الفني.",
+      "noIssuesEditable": "لا أعطال بعد. استخدم \"إضافة عطل\" لتحديد ما يمكن لهذا الفني إصلاحه.",
+      "issueNotesPlaceholder": "مثال: غرفة التبريد فقط",
+      "ratingFor": "التقييم في {issue}",
+      "removeIssue": "إزالة {issue}",
+      "issueSaved": "تم حفظ {issue}",
+      "issueAdded": "تمت إضافة {issue}",
+      "issueRemoved": "تمت إزالة {issue}",
+      "noTrips": "لا رحلات بعد.",
+      "noStops": "بدون محطات",
+      "allTrips": "عرض كل الرحلات ({count})",
+      "tripsHelp": "أحدث الرحلات أولًا.",
+      "noPayments": "لا مدفوعات بعد.",
+      "paymentsTotal": "{count, plural, zero {لا مدفوعات} one {دفعة واحدة} two {دفعتان} few {# دفعات} many {# دفعة} other {# دفعة}} · {total}",
+      "allPayments": "عرض كل المدفوعات ({count})",
+      "paymentsHelp": "أحدث المدفوعات أولًا، دون الأخطاء.",
+      "notesHelp": "ملاحظات وملفات عن هذا الفني.",
+      "workReport": "تقرير العمل",
+      "notFound": "تعذر العثور على هذا الفني.",
+      "backToList": "العودة إلى الفنيين"
+    },
+    "trips": {
+      "newTrip": "رحلة جديدة",
+      "tabs": {
+        "onClock": "على الدوام الآن",
+        "upcoming": "اليوم والقادم",
+        "history": "السجل"
+      },
+      "since": "منذ {time}",
+      "linkActive": "الرابط فعّال",
+      "linkExpired": "انتهت صلاحية الرابط",
+      "newLink": "رابط جديد",
+      "paidTime": "الوقت المدفوع",
+      "breaks": "الاستراحات",
+      "addSession": "إضافة جلسة",
+      "correct": "تصحيح",
+      "closeTrip": "إغلاق الرحلة",
+      "shareText": "رحلتك إلى {stores} يوم {day}: {link}",
+      "description": "أيام عمل الفنيين في الخارج: من يعمل الآن، وإلى أين يذهب، والوقت الذي عمله.",
+      "storeN": "المتجر {number}",
+      "purposeWork": "عمل",
+      "purposeInspection": "معاينة",
+      "reasonNeeded": "اذكر السبب — يُحفظ مع التغيير.",
+      "reopenTrip": "إعادة فتح الرحلة",
+      "copyFailed": "تعذّر النسخ. اضغط مطولاً على الرابط لنسخه.",
+      "linkLabel": "رابط الرحلة",
+      "linkDialogTitle": "رابط الرحلة",
+      "linkDialogBody": "أرسل هذا الرابط إلى الفني. يفتحه على هاتفه ليسجّل دخوله ويعلّم أعماله.",
+      "linkDialogBodyFor": "أرسل هذا الرابط إلى {name}. يفتحه على هاتفه ليسجّل دخوله ويعلّم أعماله.",
+      "linkShownOnce": "يظهر الرابط الآن فقط. إن ضاع، أنشئ رابطاً جديداً من الرحلة.",
+      "durations": {
+        "paid": "مدفوع",
+        "work": "عمل",
+        "travel": "قيادة",
+        "partsRun": "جلب قطع",
+        "break": "استراحات"
+      },
+      "list": {
+        "nobodyOnClock": "لا أحد على رأس العمل الآن.",
+        "noUpcoming": "لا رحلات لليوم أو بعده. أنشئ رحلة لإرسال فني.",
+        "noHistory": "لا رحلات تطابق هذه المرشحات.",
+        "today": "اليوم",
+        "thereNow": "هناك الآن",
+        "nextStop": "التالي",
+        "noStop": "لا محطات بعد",
+        "stores": "المتاجر {stores}",
+        "searchPlaceholder": "ابحث عن فني أو متجر أو مشكلة أو رقم رحلة",
+        "allTechnicians": "كل الفنيين",
+        "from": "من",
+        "to": "إلى",
+        "pageOf": "صفحة {page} من {pages}",
+        "previous": "الصفحة السابقة",
+        "next": "الصفحة التالية"
+      },
+      "newTripDialog": {
+        "help": "اختر اليوم والمتاجر ومشكلاتها المفتوحة ومن يذهب. ستحصل على رابط ترسله له.",
+        "stops": "المحطات",
+        "stopsHelp": "أضف المتاجر التي يزورها بالترتيب. حدّد المشكلات لكل متجر.",
+        "searchStores": "ابحث في المتاجر أو المشكلات",
+        "noOpenIssues": "لا يوجد متجر بمشكلات مفتوحة مطابقة.",
+        "openIssues": "{count, plural, one {مشكلة مفتوحة واحدة} other {# مشكلات مفتوحة}}",
+        "added": "مُضاف",
+        "removeStop": "إزالة هذه المحطة",
+        "somewhereElse": "مكان آخر (اكتب المكان)",
+        "searchTechnician": "ابحث عن فني",
+        "rankedFor": "الأنسب أولاً للمتجر {store}: يغطي المتجر، يغطي المشكلة، التقييم.",
+        "rankedHint": "أضف متجراً أولاً ليظهر من يغطيه في الأعلى.",
+        "pickTechnician": "اختر فنياً.",
+        "pickDate": "اختر اليوم.",
+        "instructions": "تعليمات له",
+        "instructionsHelp": "يراها في أعلى صفحة رحلته.",
+        "create": "إنشاء الرحلة",
+        "created": "تم إنشاء الرحلة"
+      },
+      "drawer": {
+        "link": "رابط الفني",
+        "linkHidden": "يظهر الرابط عند إنشائه فقط. أنشئ رابطاً جديداً لنسخه أو مشاركته.",
+        "linkMade": "تم إنشاء رابط جديد — الرابط القديم لم يعد يعمل",
+        "newLinkTitle": "إنشاء رابط جديد؟",
+        "newLinkBody": "الرابط الذي معه الآن سيتوقف عن العمل. أرسل له الرابط الجديد.",
+        "expiresAt": "يعمل حتى {when} إن لم يُستخدم",
+        "lastUsed": "آخر فتح {when}",
+        "milesLabel": "الأميال",
+        "jobs": "الأعمال",
+        "jobsValue": "{done}/{total} منجزة",
+        "stops": "المحطات",
+        "noStops": "لا محطات في هذه الرحلة.",
+        "removeStop": "إزالة هذه المحطة",
+        "arrivedLeft": "وصل {arrived} · غادر {left}",
+        "odometerAt": "العداد {value}",
+        "whyNot": "السبب: {reason}",
+        "sessions": "الوقت المسجّل",
+        "noSessions": "لم يسجّل دخوله في هذه الرحلة.",
+        "stillOn": "ما زال على رأس العمل",
+        "paid": "مدفوع",
+        "notPaid": "لم يُدفع بعد",
+        "odometer": "العداد {from} ← {to}",
+        "miles": "{miles} ميل",
+        "sessionActions": "إجراءات لهذا الوقت المسجّل",
+        "eventActions": "إجراءات لهذا القيد",
+        "sessionAdded": "تمت إضافة الوقت",
+        "sessionCorrected": "تم تصحيح الوقت",
+        "eventSaved": "تم الحفظ",
+        "sessionMistakenTitle": "تعليم هذا الوقت المسجّل كخطأ؟",
+        "eventMistakenTitle": "تعليم هذا القيد كخطأ؟",
+        "purchases": "اشترى",
+        "quantity": "الكمية {qty}",
+        "serial": "الرقم التسلسلي {serial}",
+        "paidBack": "تم السداد له",
+        "notPaidBack": "لم يُسدَّد له بعد",
+        "photosNotes": "الصور والملاحظات",
+        "audits": "تغييرات المكتب",
+        "noAudits": "لا تغييرات من المكتب.",
+        "change": "تغيير",
+        "because": "السبب: {reason}",
+        "more": "إجراءات أخرى",
+        "tripMistaken": "تعليم الرحلة كخطأ",
+        "markedMistake": "تم التعليم كخطأ",
+        "closeTitle": "إغلاق هذه الرحلة؟",
+        "closeBody": "سيتوقف رابطه عن العمل. يمكنك إعادة فتح الرحلة لاحقاً.",
+        "closed": "تم إغلاق الرحلة",
+        "reopenTitle": "إعادة فتح هذه الرحلة؟",
+        "reopenBody": "أنشئ رابطاً جديداً بعد ذلك ليستخدمه مرة أخرى.",
+        "reopened": "تمت إعادة فتح الرحلة",
+        "notFound": "هذه الرحلة غير موجودة أو تمت إزالتها."
+      },
+      "session": {
+        "correctTitle": "تصحيح الوقت المسجّل",
+        "correctHelp": "صحّح الأوقات أو العداد. تبقى الاستراحات والقيادة كما هي.",
+        "addHelp": "أضف وقتاً عمله ولم يسجّله. يُحتسب كوقت مسجّل.",
+        "clockIn": "تسجيل الدخول",
+        "clockOut": "تسجيل الخروج",
+        "pickTime": "اختر التاريخ والوقت",
+        "stillOn": "ما زال على رأس العمل",
+        "clockInNeeded": "اختر وقت تسجيل دخوله.",
+        "usingCar": "استخدم سيارته",
+        "odometerIn": "العداد عند الدخول",
+        "odometerOut": "العداد عند الخروج"
+      },
+      "event": {
+        "addTitle": "إضافة استراحة أو قيادة",
+        "correctTitle": "تصحيح الوقت",
+        "correctTime": "تصحيح الوقت",
+        "help": "يجب أن يكون الوقت ضمن الوقت المسجّل. اذكر السبب.",
+        "kind": "ماذا حدث",
+        "pickKind": "اختر واحداً",
+        "kindNeeded": "اختر ما حدث.",
+        "timeNeeded": "اختر الوقت."
+      }
+    },
+    "tripPortal": {
+      "buttons": {
+        "clock_in": "تسجيل الدخول",
+        "clock_out": "تسجيل الخروج",
+        "break_start": "بدء استراحة",
+        "break_end": "إنهاء الاستراحة",
+        "travel_start": "أقود",
+        "travel_end": "توقفت عن القيادة",
+        "parts_run_start": "أجلب قطعاً",
+        "parts_run_end": "عدت من جلب القطع"
+      },
+      "usingCar": "هل تستخدم سيارتك؟",
+      "odometer": "عداد المسافة",
+      "odometerPhoto": "صورة عداد المسافة",
+      "imHere": "وصلت",
+      "done": "تم",
+      "couldntDoIt": "تعذّر التنفيذ",
+      "addStore": "إضافة متجر",
+      "boughtSomething": "اشتريت شيئاً",
+      "addNote": "إضافة ملاحظة/صورة",
+      "findings": "ماذا وجدت؟",
+      "estimate": "التقدير",
+      "whatBought": "ماذا اشتريت؟",
+      "cost": "التكلفة",
+      "where": "من أين؟",
+      "receipt": "صورة الإيصال",
+      "whichTicket": "أي تذكرة؟",
+      "expired": "انتهت صلاحية هذا الرابط — اطلب رابطاً جديداً من المكتب.",
+      "notFound": "هذا الرابط لا يعمل. تحقق منه أو اطلب رابطاً جديداً من المكتب.",
+      "offline": "لا يوجد اتصال. تحقق من الإشارة وحاول مجدداً.",
+      "tooFast": "نقرات كثيرة — انتظر قليلاً وحاول مجدداً.",
+      "yes": "نعم",
+      "no": "لا",
+      "yourTime": "وقتك",
+      "yourStops": "محطاتك",
+      "noStops": "لا متاجر في هذه الرحلة بعد. أضف المتجر الذي تذهب إليه.",
+      "more": "المزيد",
+      "fromTheOffice": "من المكتب",
+      "clockedInElsewhere": "ما زلت مسجّل الدخول في رحلة أخرى. سجّل خروجك هناك أولاً.",
+      "clockedIn": "تم تسجيل دخولك",
+      "clockedOut": "تم تسجيل خروجك",
+      "clockOutHelp": "هذا يُنهي أيضاً أي استراحة أو قيادة بدأتها.",
+      "sayIfCar": "اذكر إن كنت تستخدم سيارتك.",
+      "odometerHelp": "الأميال على لوحة السيارة، بأرقام صحيحة.",
+      "takePhoto": "التقط صورة",
+      "addAnotherPhoto": "أضف صورة أخرى",
+      "removePhoto": "إزالة {name}",
+      "eventDone": {
+        "break_start": "بدأت الاستراحة",
+        "break_end": "انتهت الاستراحة",
+        "travel_start": "بدأت القيادة",
+        "travel_end": "انتهت القيادة",
+        "parts_run_start": "بدأ جلب القطع",
+        "parts_run_end": "عدت من جلب القطع"
+      },
+      "arrived": "تم التسجيل: أنت هنا",
+      "arrivedAt": "وصلت {time}",
+      "leftAt": "غادرت {time}",
+      "leaving": "أنا مغادر",
+      "leftStore": "تم التسجيل: غادرت",
+      "couldntGo": "لم أستطع الذهاب إلى هنا",
+      "jobDone": "تم العمل",
+      "inspectionDone": "تمت المعاينة",
+      "whatDidYouDo": "ماذا فعلت؟",
+      "anythingElse": "شيء آخر؟",
+      "estimateHelp": "تكلفة الإصلاح بالدولار.",
+      "beforePhotos": "صور قبل",
+      "afterPhotos": "صور بعد",
+      "sayWhatFound": "اذكر ما وجدته.",
+      "markedDone": "تم التعليم كمنجز",
+      "whyNot": "لماذا لا؟",
+      "sayWhy": "اذكر السبب.",
+      "send": "إرسال",
+      "sent": "أُرسل إلى المكتب",
+      "addStoreHelp": "اختر المتجر الذي تذهب إليه.",
+      "noMoreStores": "لا متاجر أخرى لإضافتها. اتصل بالمكتب لإضافة متجر.",
+      "storeAdded": "تمت إضافة المتجر",
+      "noteHelp": "يراها المكتب فوراً.",
+      "aboutWhichStore": "عن أي متجر؟",
+      "wholeTrip": "الرحلة كلها",
+      "writeSomething": "اكتب شيئاً أولاً.",
+      "noteSent": "تم إرسال الملاحظة",
+      "sayWhatBought": "اذكر ما اشتريته.",
+      "costNeeded": "اكتب التكلفة، مثل 12.50.",
+      "whereHelp": "اكتب اسم المحل. اختره إن ظهر، أو أبقِ كلماتك لمحل جديد.",
+      "newSupplier": "جديد: {name}",
+      "noTicket": "ليس لعمل محدد",
+      "serial": "الرقم التسلسلي",
+      "savePurchase": "حفظ",
+      "purchaseSaved": "تم الحفظ — سيسدّد لك المكتب",
+      "expiredTitle": "انتهت صلاحية الرابط",
+      "notFoundTitle": "الرابط غير موجود",
+      "troubleTitle": "تعذّر تحميل رحلتك",
+      "somethingWrong": "حدث خطأ. حاول مرة أخرى."
+    },
+    "payments": {
+      "recordPayment": "تسجيل دفعة",
+      "paidTo": "مدفوع إلى",
+      "howWePaid": "طريقة الدفع",
+      "reference": "المرجع / رقم الشيك",
+      "invoiceNumber": "رقم الفاتورة",
+      "invoiceFile": "ملف الفاتورة",
+      "lines": "البنود",
+      "addLine": "إضافة بند",
+      "lineType": "النوع",
+      "tickets": "التذاكر",
+      "hours": "الساعات",
+      "typedOver": "مُدخل يدوياً",
+      "rate": "السعر",
+      "clockedTime": "الوقت المسجّل",
+      "part": "القطعة",
+      "quantity": "الكمية",
+      "unitCost": "سعر القطعة",
+      "boughtFrom": "اشتُريت من",
+      "goesTo": "تذهب إلى",
+      "storageSpot": "مكان التخزين",
+      "serialNumbers": "الأرقام التسلسلية",
+      "paysBack": "يسدد",
+      "miles": "الأميال",
+      "runningTotal": "الإجمالي",
+      "unpaidWork": "عمل غير مدفوع",
+      "payThis": "ادفع هذا",
+      "revisions": "المراجعات",
+      "kpiPayments": "المدفوعات",
+      "kpiTotal": "الإجمالي",
+      "addSupplier": "إضافة مورّد",
+      "pageDescription": "ما دفعناه للفنيين والموردين، وما لم يُدفع بعد.",
+      "dialogDescription": "دفعة واحدة لفني واحد أو مورد واحد، مقسّمة إلى بنود.",
+      "editTitle": "تعديل الدفعة رقم {id}",
+      "editDescription": "الحفظ يستبدل البنود. تبقى النسخة القديمة في سجل التعديلات.",
+      "detailTitle": "الدفعة رقم {id}",
+      "detailDescription": "جارٍ تحميل الدفعة…",
+      "paidToPlaceholder": "اختر فنيًا أو موردًا",
+      "paidToHelp": "فني واحد أو مورد واحد لكل دفعة.",
+      "anyonePaid": "أي جهة مدفوع لها",
+      "searchPaidTo": "ابحث في الفنيين والموردين",
+      "groupTechnicians": "الفنيون",
+      "groupSuppliers": "الموردون",
+      "noMatches": "لا توجد نتائج مطابقة.",
+      "clear": "مسح",
+      "addSupplierNamed": "إضافة المورد \"{name}\"",
+      "newSupplierName": "اسم المورد",
+      "useExisting": "استخدم {name}",
+      "methodNotSaid": "غير مسجّل",
+      "referenceHelp": "رقم الشيك أو رقم التحويل أو رقم الإيصال.",
+      "invoiceFileHelp": "صورة أو ملف PDF للفاتورة أو الإيصال.",
+      "filesAlreadyAttached": "{count, plural, one {ملف واحد مرفق مسبقًا. الملفات التي تختارها هنا تُضاف إليه.} two {ملفان مرفقان مسبقًا. الملفات التي تختارها هنا تُضاف إليهما.} few {# ملفات مرفقة مسبقًا. الملفات التي تختارها هنا تُضاف إليها.} many {# ملفًا مرفقًا مسبقًا. الملفات التي تختارها هنا تُضاف إليها.} other {# ملف مرفق مسبقًا. الملفات التي تختارها هنا تُضاف إليها.}}",
+      "linesHelp": "على ماذا صُرف المبلغ.",
+      "lineAmount": "مبلغ البند",
+      "removeLine": "حذف البند {number}",
+      "removeItem": "إزالة {label}",
+      "storeHelp": "الفرع الذي صُرف هذا المبلغ من أجله.",
+      "storePlaceholder": "اختر فرعًا",
+      "searchStores": "ابحث في الفروع",
+      "otherStoreOption": "مكان آخر…",
+      "otherStorePlaceholder": "أين كان؟ (مثلًا: المكتب الرئيسي)",
+      "storeNumber": "الفرع {number}",
+      "ticketsPlaceholder": "ربط التذاكر",
+      "ticketsChosen": "{count, plural, one {تذكرة واحدة مرتبطة} two {تذكرتان مرتبطتان} few {# تذاكر مرتبطة} many {# تذكرة مرتبطة} other {# تذكرة مرتبطة}}",
+      "ticketsHelp": "تذاكر الفرع التي دُفع هذا البند من أجلها.",
+      "ticketsNeedStore": "اختر الفرع أولًا لرؤية تذاكره.",
+      "searchTickets": "ابحث في التذاكر",
+      "noTickets": "لا توجد تذاكر لهذا الفرع لربطها.",
+      "ticketsLoadError": "تعذّر تحميل تذاكر هذا الفرع.",
+      "descriptionPlaceholder": "أي ملاحظة عن هذا البند",
+      "otherDescriptionPlaceholder": "على ماذا كان هذا؟",
+      "hourlyNeedsTechnician": "الدفع بالساعة للفنيين فقط. اختر فنيًا في الأعلى، أو غيّر النوع.",
+      "clockedTimeHelp": "حدّد الوقت المسجّل الذي تدفع مقابله؛ تُملأ الساعات تلقائيًا (من دون الاستراحات).",
+      "pickTechnicianFirst": "اختر الفني في الأعلى لرؤية وقته المسجّل.",
+      "noUnpaidSessions": "لا يوجد وقت مسجّل بانتظار الدفع. اكتب الساعات بدلًا من ذلك.",
+      "onAnotherLine": "في بند آخر",
+      "typedOverHelp": "هذه الساعات مكتوبة يدويًا، وليست مأخوذة من الوقت المسجّل.",
+      "useClockedTime": "استخدم الوقت المسجّل",
+      "rateHelp": "أجره بالساعة {rate}.",
+      "ratePerMile": "السعر لكل ميل",
+      "gasHow": "طريقة الدفع",
+      "gasAmount": "مبلغ",
+      "gasMiles": "أميال × السعر",
+      "partPlaceholder": "اختر قطعة أو أضف واحدة",
+      "searchParts": "ابحث في القطع",
+      "typeToCreatePart": "اكتب اسمًا لإضافة قطعة جديدة.",
+      "createPart": "إضافة القطعة \"{name}\"",
+      "boughtFromHelp": "المحل الذي جاءت منه القطع، إن لم يكن هو المدفوع له.",
+      "supplierPlaceholder": "اختر موردًا",
+      "searchSuppliers": "ابحث في الموردين",
+      "storageLocation": "مكان التخزين",
+      "storageLocationPlaceholder": "اختر مكان حفظها",
+      "storageSpotHelp": "المكان على الرف (اختياري).",
+      "loading": "جارٍ التحميل…",
+      "serialsHelp": "{count, plural, one {أدخل الرقم التسلسلي للقطعة.} two {أدخل رقمًا تسلسليًا لكل قطعة من القطعتين.} few {أدخل رقمًا تسلسليًا لكل قطعة من القطع الـ #.} many {أدخل رقمًا تسلسليًا لكل قطعة من القطع الـ #.} other {أدخل رقمًا تسلسليًا لكل قطعة من القطع الـ #.}}",
+      "serialPlaceholder": "الرقم التسلسلي {number}",
+      "paysBackHelp": "حدّد ما اشتراه الفني من ماله الخاص؛ هذا البند يعيده له.",
+      "savedNew": "تم حفظ دفعة بقيمة {total} إلى {name}.",
+      "savedEdit": "تم حفظ الدفعة.",
+      "conflict": "قام شخص آخر بتغيير هذه الدفعة بعد أن فتحتها. أغلقها وافتحها من جديد ثم أعد تعديلك.",
+      "mistakenCannotEdit": "هذه الدفعة محددة كخطأ ولا يمكن تعديلها. سجّل دفعة جديدة بدلًا منها.",
+      "searchPlaceholder": "ابحث برقم الفاتورة أو المرجع أو الاسم",
+      "filtersLabel": "تصفية الدفعات",
+      "fromDate": "من تاريخ",
+      "toDate": "إلى تاريخ",
+      "technicianCategory": "فئة الفني",
+      "allCategories": "كل الفئات",
+      "allStores": "كل الفروع",
+      "allTypes": "كل الأنواع",
+      "types": "الأنواع",
+      "invoice": "الفاتورة",
+      "hasInvoiceFile": "ملف الفاتورة مرفق",
+      "openPayment": "فتح الدفعة رقم {id}",
+      "empty": "لا توجد دفعات بعد. سجّل أول دفعة.",
+      "emptyFiltered": "لا توجد دفعات تطابق هذه التصفية.",
+      "pagination": "الصفحات",
+      "pageOf": "الصفحة {page} من {pages}",
+      "previousPage": "الصفحة السابقة",
+      "nextPage": "الصفحة التالية",
+      "allPaidUp": "تم الدفع للجميع.",
+      "aboutOwed": "المستحق تقريبًا {amount}",
+      "clockedNotPaid": "وقت مسجّل غير مدفوع",
+      "purchasesNotPaidBack": "مشتريات لم تُعَد قيمتها",
+      "sessionsCount": "{count, plural, one {جلسة واحدة · {time}} two {جلستان · {time}} few {# جلسات · {time}} many {# جلسة · {time}} other {# جلسة · {time}}}",
+      "purchasesCount": "{count, plural, one {مشترى واحد · {total}} two {مشتريان · {total}} few {# مشتريات · {total}} many {# مشترى · {total}} other {# مشترى · {total}}}",
+      "mistakenBanner": "حُددت هذه الدفعة كخطأ. بنودها محفوظة للسجل، وتم التراجع عن المخزون والمطالبات الخاصة بها.",
+      "milesTimesRate": "{miles} ميل × {rate}",
+      "stockMovement": "حركة المخزون رقم {id}",
+      "noRevisions": "لم تُعدَّل منذ تسجيلها.",
+      "someone": "شخص ما",
+      "editedIt": "عدّلها",
+      "markMistakeTitle": "تحديد الدفعة رقم {id} كخطأ؟",
+      "markMistakeBody": "تبقى في السجل مشطوبة. تخرج قطعها من المخزون، ويعود وقتها المسجّل ومشترياتها غير مدفوعة.",
+      "reasonRequired": "اذكر سبب كون هذه الدفعة خطأ.",
+      "markedMistaken": "تم تحديد الدفعة كخطأ."
+    },
+    "stock": {
+      "recordStock": "تسجيل مخزون",
+      "tabs": {
+        "stock": "المخزون",
+        "movements": "الحركات",
+        "counts": "جرد المخزون",
+        "locations": "المواقع"
+      },
+      "actions": {
+        "bought": {
+          "label": "قطع مشتراة",
+          "help": "تُسجَّل كدفعة ببند قطع يذهب إلى المخزون."
+        },
+        "used": {
+          "label": "استُخدمت في تذكرة",
+          "help": "أُخذت من الرف لإصلاح شيء في تذكرة."
+        },
+        "returned": {
+          "label": "مُعادة",
+          "help": "لم تكن مطلوبة وعادت إلى الرف."
+        },
+        "moved": {
+          "label": "منقولة",
+          "help": "من مكان إلى آخر. لم يُستخدم شيء."
+        },
+        "opening_stock": {
+          "label": "رصيد افتتاحي",
+          "help": "ما كان على الرف قبل أن نبدأ العد."
+        },
+        "damaged_lost": {
+          "label": "تالفة أو مفقودة",
+          "help": "مكسورة أو مرمية أو لا يمكن العثور عليها."
+        }
+      },
+      "startCount": "بدء جرد",
+      "expected": "المتوقع",
+      "counted": "المعدود",
+      "difference": "الفرق",
+      "value": "القيمة",
+      "countedProgress": "تم عدّ {counted}/{total}",
+      "saveDraft": "حفظ المسودة",
+      "applyCount": "تطبيق الجرد",
+      "applyConfirm": "تطبيق هذا الجرد؟ سيُصحَّح المخزون لـ {count} قطعة.",
+      "onHand": "المتوفر"
+    },
+    "analytics": {
+      "tabs": {
+        "overview": "نظرة عامة",
+        "finances": "المالية",
+        "coverage": "التغطية"
+      },
+      "spent": "المصروف",
+      "vsPrevious": "مقارنة بالفترة السابقة",
+      "stockValue": "قيمة المخزون المتوفر",
+      "month": "شهر",
+      "week": "أسبوع",
+      "gapsOnly": "الفجوات فقط",
+      "techsForStores": "فنيون للمتاجر",
+      "techsForIssues": "فنيون للمشكلات",
+      "techsForBoth": "فنيون للاثنين",
+      "emergencyAvailable": "متاحون للطوارئ",
+      "dateRange": "نطاق التاريخ",
+      "from": "من",
+      "to": "إلى",
+      "presets": {
+        "yesterday": "أمس",
+        "today": "اليوم",
+        "last7": "7 أيام",
+        "last30": "30 يومًا",
+        "thisMonth": "هذا الشهر",
+        "thisYear": "هذا العام"
+      },
+      "technicianCategory": "فئة الفني",
+      "allCategories": "كل الفئات",
+      "coverageAsOfNow": "التغطية هي من يغطي ماذا اليوم — التواريخ لا تنطبق هنا.",
+      "coverageDescription": "من يمكننا الاتصال به لكل فرع وعطل، حتى اليوم.",
+      "yourTimeZone": "الأيام بتوقيتك ({zone})",
+      "noStores": "اختر فرعًا واحدًا على الأقل لرؤية تقريره.",
+      "loading": "جارٍ تحميل التقرير",
+      "nothingInRange": "لا شيء في هذا النطاق.",
+      "rangeTooLong": "اختر نطاقًا لا يزيد عن {days} يومًا.",
+      "name": "الاسم",
+      "linesCount": "{count, plural, zero {لا بنود} one {بند دفع واحد} two {بندا دفع} few {# بنود دفع} many {# بند دفع} other {# بند دفع}}",
+      "nothingBefore": "لم يُصرف شيء في الفترة السابقة",
+      "previousWas": "{amount} في {range}",
+      "payments": "المدفوعات",
+      "paymentsNote": "دون الأخطاء",
+      "unpaidNote": "{sessions, plural, zero {لا جلسات} one {جلسة واحدة} two {جلستان} few {# جلسات} many {# جلسة} other {# جلسة}} · {purchases, plural, zero {لا مشتريات} one {عملية شراء واحدة} two {عمليتا شراء} few {# عمليات شراء} many {# عملية شراء} other {# عملية شراء}} ({amount}) لم تُدفع بعد",
+      "stockValueNote": "قيمة القطع الموجودة على الرفوف الآن",
+      "spendTrend": "الإنفاق عبر الوقت",
+      "spendTrendHelp": "ما تم دفعه، مقسمًا حسب نوع بند الدفع.",
+      "byWeek": "أسبوعيًا",
+      "byMonth": "شهريًا",
+      "byStore": "حسب الفرع",
+      "byStoreHelp": "القطع المشتراة للمخزن تُحسب كمخزن.",
+      "byTechnician": "حسب الفني",
+      "bySupplier": "حسب المورد",
+      "byCategory": "حسب فئة الفني",
+      "byCategoryHelp": "مدفوعات الموردين ليست هنا: الموردون بلا فئة.",
+      "topHelp": "تُرسم أعلى {count}؛ \"عرض الكل\" يسرد الباقي.",
+      "showAllRows": "عرض الكل ({count})",
+      "showTop": "عرض أعلى {count} فقط",
+      "intoStorage": "إلى المخزن",
+      "stockMoney": "أموال المخزون",
+      "stockMoneyHelp": "قيمة القطع المشتراة والمستخدمة والناقصة أو الزائدة في الجرد، والتالفة أو المفقودة.",
+      "countLosses": "ناقص في الجرد",
+      "countGains": "زائد في الجرد",
+      "approvalsByLevel": "الموافقات حسب المستوى",
+      "approvalsByLevelHelp": "من كان عليه الموافقة على الإصلاحات، وبأي مبلغ.",
+      "level": "المستوى",
+      "approvals": "الموافقات",
+      "ticketCosts": "تكاليف التذاكر",
+      "avgPerTicket": "المتوسط لكل تذكرة",
+      "topTickets": "أعلى التذاكر تكلفة",
+      "topTicketsHelp": "ما دُفع على كل تذكرة في هذا النطاق.",
+      "byIssue": "حسب العطل",
+      "byIssueHelp": "المال على كل عطل في الكتالوج؛ البند المرتبط بعدة أعطال يُقسم بينها.",
+      "estimateVsActual": "التقدير مقابل الفعلي",
+      "estimateVsActualHelp": "آخر تقدير من المعاينة مقابل ما دُفع.",
+      "actual": "الفعلي",
+      "difference": "الفرق",
+      "issue": "العطل",
+      "recurringCostly": "أعطال متكررة مكلفة",
+      "recurringCostlyHelp": "العطل نفسه في الفرع نفسه على تذكرتين أو أكثر.",
+      "noRecurring": "لم يتكرر أي عطل في الفرع نفسه في هذا النطاق.",
+      "techsForStoresNote": "يغطون واحدًا على الأقل من هذه الفروع",
+      "techsForIssuesNote": "يغطون واحدًا على الأقل من هذه الأعطال",
+      "techsForBothNote": "يغطون فرعًا وعطلًا هنا",
+      "emergencyAvailableNote": "منهم، من يمكنه الحضور خارج أوقات العمل",
+      "coverageGrid": "التغطية: الفرع × العطل",
+      "coverageGridHelp": "كل خانة هي عدد الفنيين الذين يغطون ذلك الفرع وذلك العطل. {gaps, plural, =0 {لا فجوات.} one {فجوة واحدة: فني واحد أو لا أحد.} two {فجوتان: فني واحد أو لا أحد.} few {# فجوات: فني واحد أو لا أحد.} many {# فجوة: فني واحد أو لا أحد.} other {# فجوة: فني واحد أو لا أحد.}}",
+      "allIssues": "كل الأعطال",
+      "searchIssues": "ابحث في الأعطال…",
+      "noIssueMatch": "لا يوجد عطل مطابق.",
+      "showAsGrid": "عرض كشبكة",
+      "noGaps": "لا فجوات: كل فرع وعطل لديه فنيان على الأقل.",
+      "noCoverageData": "لا فروع أو أعطال للعرض.",
+      "technicians": "الفنيون",
+      "cellTechnicians": "{count, plural, zero {لا فنيين} one {فني واحد} two {فنيان} few {# فنيين} many {# فنيًا} other {# فني}}",
+      "cellEmergency": "{count} للطوارئ",
+      "cellRating": "متوسط ★ {rating}",
+      "legend": "معنى الألوان",
+      "legendNone": "لا أحد — فجوة",
+      "legendOne": "فني واحد — فجوة",
+      "legendTwo": "اثنان",
+      "legendMore": "أربعة أو أكثر"
+    },
+    "storage": {
+      "page": {
+        "description": "ما لدينا على الرفوف، وما حدث له، وأين هو."
+      },
+      "pagination": {
+        "pageOf": "صفحة {page} من {last}",
+        "previous": "السابق",
+        "next": "التالي"
+      },
+      "stock": {
+        "searchPlaceholder": "ابحث عن القطع بالاسم أو العلامة التجارية أو الطراز أو رقم القطعة",
+        "locationFilter": "الموقع",
+        "allLocations": "كل المواقع",
+        "part": "القطعة",
+        "where": "المكان",
+        "short": "ناقص — عُدّها",
+        "each": "{cost} للواحدة",
+        "unknownCost": "جزء من هذا المخزون بلا سعر",
+        "unknownCostHelp": "{qty} {unit} بلا سعر مسجّل، لذا القيمة أقل من حقيقتها.",
+        "broadSearch": "قطع كثيرة تطابق هذا البحث: تمت تصفية هذه الصفحة فقط. اكتب المزيد لتضييقه.",
+        "empty": "لا شيء في المخزن بعد. سجّل المخزون الافتتاحي أو القطع المشتراة للبدء.",
+        "emptyFiltered": "لا يوجد مخزون يطابق هذه الفلاتر."
+      },
+      "spot": {
+        "notSet": "المكان غير محدد",
+        "notSaid": "غير محدد",
+        "noLevels": "لم تُحدَّد أماكن داخل هذا الموقع بعد (تبويب المواقع).",
+        "newValuePlaceholder": "{level} جديد…",
+        "addValue": "أضف {level} غير موجود في القائمة",
+        "dialogTitle": "أين هي؟",
+        "dialogBody": "{part} في {location}. املأ ما تعرفه — كل مستوى اختياري.",
+        "save": "حفظ المكان",
+        "savedAt": "{part} في {spot}.",
+        "cleared": "تم مسح مكان {part}. الكمية لم تتغير.",
+        "setFor": "حدّد المكان في {location}"
+      },
+      "parts": {
+        "addPart": "إضافة قطعة",
+        "addTitle": "إضافة قطعة",
+        "editTitle": "تعديل القطعة",
+        "editDetails": "تعديل التفاصيل",
+        "formHelp": "التفاصيل التي تميّز هذه القطعة عند شرائها واستخدامها.",
+        "nameRequired": "أعطِ القطعة اسمًا.",
+        "unit": "تُعدّ بـ",
+        "unitHelp": "كيف تُعدّ الواحدة منها: قطعة، علبة، قدم…",
+        "brand": "العلامة التجارية",
+        "model": "الطراز",
+        "partNumber": "رقم القطعة",
+        "trackSerials": "تتبّع الأرقام التسلسلية",
+        "trackSerialsHelp": "كل قطعة تأخذ رقمًا تسلسليًا خاصًا بها، لتعرف أيّها ذهبت إلى أين.",
+        "serialBadge": "أرقام تسلسلية",
+        "created": "تمت إضافة {name} إلى قائمة القطع.",
+        "updated": "تم حفظ {name}.",
+        "details": "التفاصيل",
+        "yes": "نعم",
+        "no": "لا",
+        "countedIn": "تُعدّ بـ {unit}",
+        "whereItIs": "أين هي",
+        "noStock": "لا يوجد منها في المخزن الآن.",
+        "worth": "بقيمة {value}"
+      },
+      "serials": {
+        "title": "الأرقام التسلسلية",
+        "serial": "الرقم التسلسلي",
+        "whereNow": "أين هي الآن",
+        "warranty": "الضمان حتى",
+        "warrantyUntil": "الضمان حتى {date}",
+        "installedOn": "رُكّبت في {date}",
+        "none": "لا توجد أرقام تسلسلية مسجلة بعد.",
+        "edit": "تعديل الرقم {serial}",
+        "pickLocationFirst": "اختر الموقع أولًا.",
+        "noneHere": "لا توجد قطع ذات أرقام تسلسلية من هذا النوع في هذا الموقع.",
+        "typePlaceholder": "اكتب رقمًا تسلسليًا واضغط Enter",
+        "typeLabel": "الرقم التسلسلي",
+        "remove": "إزالة {serial}",
+        "knownHelp": "قطع معروفة ليست في المخزن الآن — اضغط للإضافة:"
+      },
+      "prices": {
+        "title": "سجل الأسعار",
+        "help": "ما دفعناه في كل مرة اشتريناها، الأحدث أولًا.",
+        "each": "سعر الواحدة",
+        "none": "لا توجد مشتريات مسجلة بعد."
+      },
+      "issue": {
+        "placeholder": "رقم التذكرة أو المتجر أو ما هو معطّل",
+        "results": "التذاكر المطابقة",
+        "noResults": "لا توجد تذكرة مطابقة. جرّب رقم التذكرة.",
+        "change": "اختر تذكرة أخرى",
+        "line": "تذكرة #{ticket} · متجر {store}"
+      },
+      "record": {
+        "part": "القطعة",
+        "partPlaceholder": "اختر قطعة",
+        "partSearch": "ابحث في القطع…",
+        "noParts": "لا توجد قطعة مطابقة.",
+        "ticket": "التذكرة",
+        "location": {
+          "out": "أُخذت من",
+          "in": "وُضعت في",
+          "both": "من",
+          "to": "إلى"
+        },
+        "pickLocation": "اختر موقعًا",
+        "pickPartFirst": "اختر القطعة أولًا",
+        "onHandHere": "{qty} {unit} هنا",
+        "noneInStorage": "لا يوجد من هذه القطعة في المخزن.",
+        "spot": "المكان",
+        "quantity": "الكمية",
+        "serials": "أي القطع",
+        "serialsHelp": "{count, plural, =0 {لم يُختر شيء بعد} one {قطعة واحدة} two {قطعتان} few {# قطع} many {# قطعة} other {# قطعة}}",
+        "when": "متى",
+        "whenHelp": "اتركه على الآن إلا إذا حدث قبل ذلك.",
+        "submit": "حفظ",
+        "saved": "تم الحفظ: {action}.",
+        "problems": {
+          "required": "هذا مطلوب.",
+          "positive": "اكتب رقمًا أكبر من 0.",
+          "notEnough": "يوجد {available} {unit} فقط في ذلك الموقع.",
+          "sameLocation": "اختر موقعًا مختلفًا لنقلها إليه.",
+          "serialsNeeded": "اختر أو اكتب الرقم التسلسلي لكل قطعة.",
+          "serialRepeated": "الرقم التسلسلي نفسه مكرر."
+        }
+      },
+      "movements": {
+        "type": "ما الذي حدث",
+        "allTypes": "الكل",
+        "allParts": "كل القطع",
+        "location": "الموقع",
+        "from": "من",
+        "to": "إلى",
+        "when": "متى",
+        "what": "ما الذي حدث",
+        "linked": "لأجل",
+        "actions": "الإجراءات",
+        "actionsFor": "إجراءات الحركة #{id}",
+        "payment": "دفعة #{id} · {name}",
+        "count": "جرد #{id}",
+        "cancels": "يلغي #{id}",
+        "mistakeBody": "يعود المخزون كما كان قبل هذه الحركة، وتبقى الحركة في القائمة مشطوبة.",
+        "markedMistake": "تم تعليمها كخطأ. أُعيد المخزون.",
+        "empty": "لم يُسجَّل شيء بعد.",
+        "emptyFiltered": "لا توجد حركات تطابق هذه الفلاتر."
+      },
+      "counts": {
+        "count": "الجرد",
+        "countNumber": "جرد #{id}",
+        "started": "بدأ",
+        "missingValue": "ناقص",
+        "extraValue": "زائد",
+        "allStatuses": "أي حالة",
+        "status": {
+          "draft": "مسودة",
+          "applied": "مُطبّق"
+        },
+        "empty": "لا توجد عمليات جرد بعد. ابدأ واحدة لتتأكد مما هو فعلًا على الرف.",
+        "emptyFiltered": "لا توجد عمليات جرد تطابق هذه الفلاتر.",
+        "startHelp": "تعرض الورقة كل قطعة يظن النظام أنها هناك. وأنت تكتب ما تعدّه فعلًا.",
+        "onlySpot": "هذا المكان فقط",
+        "onlySpotHelp": "اجرد رفًا أو منطقة واحدة في كل مرة في الموقع الكبير.",
+        "wholeLocation": "الموقع بالكامل",
+        "startedToast": "بدأ الجرد."
+      },
+      "count": {
+        "back": "عمليات الجرد",
+        "more": "المزيد",
+        "help": "اكتب ما هو موجود فعلًا. Enter ينقلك إلى القطعة التالية. اترك الخانة فارغة إن لم تعدّها.",
+        "startedBy": "بدأ {date} بواسطة {name}",
+        "appliedBy": "طُبّق {date} بواسطة {name}",
+        "matches": "مطابق",
+        "notCounted": "لم يُعدّ",
+        "countedFor": "العدد لـ {part}",
+        "emptySheet": "لا توجد قطع في هذه الورقة. أضف ما تجده.",
+        "addPart": "وجدت قطعة ليست في الورقة؟",
+        "addToSheet": "أضف إلى الورقة",
+        "addPartHelp": "المتوقع هو ما يسجّله النظام لها هنا.",
+        "partAdded": "أُضيفت إلى الورقة.",
+        "missingTotal": "ناقص {value}",
+        "extraTotal": "زائد {value}",
+        "unsaved": "لم يُحفظ بعد",
+        "draftSaved": "تم حفظ المسودة.",
+        "applied": "تم تطبيق الجرد. صُحّح المخزون.",
+        "applyNoChanges": "كل ما عددته مطابق. التطبيق يغلق الجرد دون تغيير المخزون.",
+        "applySummary": "ناقص {missing} · زائد {extra}. {uncounted, plural, =0 {عُدّت كل القطع.} one {قطعة واحدة لم تُعدّ وتبقى كما هي.} two {قطعتان لم تُعدّا وتبقيان كما هما.} few {# قطع لم تُعدّ وتبقى كما هي.} many {# قطعة لم تُعدّ وتبقى كما هي.} other {# قطعة لم تُعدّ وتبقى كما هي.}}",
+        "deleteDraft": "حذف المسودة",
+        "deleteBody": "تُحذف الورقة وما كُتب فيها. لا يتغير المخزون.",
+        "deleted": "تم حذف المسودة.",
+        "notFound": "هذا الجرد غير موجود."
+      },
+      "locations": {
+        "add": "إضافة موقع",
+        "addHelp": "مكان تُحفظ فيه القطع: غرفة تخزين، أو سيارة، أو مستودع.",
+        "help": "اختر موقعًا لترتيب الأماكن داخله.",
+        "code": "رمز قصير",
+        "codeHelp": "اختياري، مثل VAN1. يجب أن يكون فريدًا.",
+        "address": "العنوان",
+        "nameRequired": "أعطِ الموقع اسمًا.",
+        "created": "تمت إضافة {name}.",
+        "empty": "لا توجد مواقع تخزين بعد. أضف أول مكان تُحفظ فيه القطع.",
+        "pickOne": "اختر موقعًا لترى الأماكن داخله.",
+        "retiredBadge": "متوقف",
+        "retire": "إيقاف {name}",
+        "retireTitle": "إيقاف {name}؟",
+        "retireBody": "يتوقف عن استقبال مخزون جديد. يبقى سجله وما فيه مقروءًا، ويمكن إعادته.",
+        "retireConfirm": "إيقاف",
+        "retired": "تم إيقاف {name}.",
+        "restore": "إعادة {name}",
+        "restored": "عاد {name} إلى الاستخدام."
+      },
+      "places": {
+        "title": "الأماكن في {location}",
+        "help": "أضف المستويات التي تستخدمها، الأكبر أولًا (منطقة، ثم رف، ثم صندوق)، ثم الأسماء في كل مستوى. مكان القطعة هو واحد من كل مستوى، وكل مستوى اختياري.",
+        "example": "يبدو المكان هكذا: {spot}",
+        "empty": "لم تُحدَّد أماكن لهذا الموقع.",
+        "emptyManage": "لا توجد أماكن بعد. أضف المستوى الأول أدناه، مثل منطقة أو رف.",
+        "firstLevelPlaceholder": "المستوى الأول، مثل منطقة",
+        "nextLevelPlaceholder": "المستوى التالي، مثل رف",
+        "addLevel": "إضافة مستوى",
+        "levelName": "اسم المستوى",
+        "renameLevel": "إعادة تسمية {level}",
+        "removeLevel": "إزالة {level}",
+        "noValues": "لا توجد أسماء بعد.",
+        "valuesPlaceholder": "أضف أسماء {level}، مثل A, B, C",
+        "addValues": "إضافة أسماء {level}",
+        "removeValue": "إزالة {value}",
+        "removeLevelTitle": "إزالة المستوى {level}؟",
+        "removeLevelBody": "تُزال أسماؤه أيضًا، وتفقد القطع هذا الجزء من مكانها. الكميات لا تتغير.",
+        "removeValueTitle": "إزالة {value}؟",
+        "removeValueBody": "تفقد القطع الموجودة فيه هذا الجزء من مكانها. الكميات لا تتغير.",
+        "removed": "تمت الإزالة."
+      }
+    },
+    "suppliers": {
+      "searchPlaceholder": "الاسم أو الهاتف أو الموقع…",
+      "searchLabel": "ابحث عن مورد",
+      "loading": "جارٍ تحميل الموردين",
+      "noMatch": "لا يوجد مورد يطابق هذا البحث.",
+      "emptyBody": "لا يوجد موردون بعد. أضف المحلات والشركات التي نشتري منها القطع.",
+      "paidThisYear": "المدفوع هذا العام",
+      "paidThisYearNote": "المدفوع هذا العام مأخوذ من مدفوعات هذا العام. افتح المورد لرؤية إجمالي ما دُفع له.",
+      "editTitle": "تعديل {name}",
+      "nameRequired": "أدخل اسمًا.",
+      "descriptionHelp": "ما نشتريه منه، وأوقات العمل، وأرقام الحساب التي نذكرها…",
+      "added": "تمت إضافة {name}",
+      "saved": "تم حفظ {name}",
+      "details": "التفاصيل",
+      "totalPaidHelp": "كل المدفوعات لهذا المورد حتى الآن، دون الأخطاء.",
+      "deletedNote": "هذا المورد محذوف. استعده للدفع له مرة أخرى.",
+      "restore": "استعادة",
+      "restored": "تمت استعادة {name}",
+      "deleted": "تم حذف {name}",
+      "deleteTitle": "حذف {name}؟",
+      "deleteBody": "تبقى مدفوعاته في السجل، ويمكن استعادته."
+    }
   }
 }

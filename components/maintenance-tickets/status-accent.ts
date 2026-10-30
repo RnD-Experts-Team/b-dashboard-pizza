@@ -13,14 +13,17 @@ export interface StatusAccent {
   text: string;
 }
 
+/** v2 statuses (MAINTENANCE-V2 §2); the badge text always comes with it. */
 export const STATUS_ACCENT: Record<string, StatusAccent> = {
-  pending:     { bar: "bg-yellow-500", text: "text-yellow-700 dark:text-yellow-400" },
-  assigned:    { bar: "bg-blue-500",   text: "text-blue-700 dark:text-blue-400" },
-  in_progress: { bar: "bg-indigo-500", text: "text-indigo-700 dark:text-indigo-400" },
-  waiting:     { bar: "bg-purple-500", text: "text-purple-700 dark:text-purple-400" },
-  complete:    { bar: "bg-green-500",  text: "text-green-700 dark:text-green-400" },
-  deferred:    { bar: "bg-orange-500", text: "text-orange-700 dark:text-orange-400" },
-  cancelled:   { bar: "bg-red-500",    text: "text-red-700 dark:text-red-400" },
+  new:              { bar: "bg-sky-500",     text: "text-sky-700 dark:text-sky-400" },
+  in_review:        { bar: "bg-indigo-500",  text: "text-indigo-700 dark:text-indigo-400" },
+  waiting_on_store: { bar: "bg-amber-500",   text: "text-amber-700 dark:text-amber-400" },
+  inspection:       { bar: "bg-cyan-500",    text: "text-cyan-700 dark:text-cyan-400" },
+  waiting_approval: { bar: "bg-orange-500",  text: "text-orange-700 dark:text-orange-400" },
+  scheduled:        { bar: "bg-violet-500",  text: "text-violet-700 dark:text-violet-400" },
+  work_done:        { bar: "bg-teal-500",    text: "text-teal-700 dark:text-teal-400" },
+  closed:           { bar: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400" },
+  cancelled:        { bar: "bg-red-500",     text: "text-red-700 dark:text-red-400" },
 };
 
 export const FALLBACK_ACCENT: StatusAccent = {

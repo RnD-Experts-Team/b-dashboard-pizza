@@ -52,6 +52,19 @@ import type {
   UserRef,
 } from "@/types/maintenance-tickets.types";
 import { BUSY_MESSAGE } from "@/lib/api/utils/error";
+import { http, seg } from "@/lib/api/maintenance-v2/http";
+import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
+import type {
+  PartPriceEntry,
+  PartSerialStatus,
+  PartSerialUnit,
+  PartSerialUnitInput,
+  SaveStockCountPayload,
+  StartStockCountPayload,
+  StockCount,
+  StockCountFilters,
+  TicketIssueHit,
+} from "@/types/maintenance-v2";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Storage locations, the stock ledger, and on-hand balances                */
@@ -64,6 +77,29 @@ import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 /*  idiom and the readStockShortfall / getTicketsFieldErrors helpers work     */
 /*  identically across both services — one error taxonomy, two services.     */
 /* ────────────────────────────────────────────────────────────────────────── */
+
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
+const HTTP_UNPROCESSABLE = 422;
+const HTTP_TOO_MANY = 429;
+const HTTP_SERVER_ERROR = 500;
+const HTTP_UNAVAILABLE = 503;
+
+/** Plain reads and small writes. */
+const READ_TIMEOUT_MS = 15_000;
+/** Marking a movement mistaken writes its reversal too. */
+const WRITE_TIMEOUT_MS = 30_000;
+/** Anything that may carry photos/PDFs. */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+/** The flat dropdown list of locations: every live one. */
+const MAX_PAGE_SIZE = 200;
+const DEFAULT_LOCATIONS_PAGE_SIZE = 50;
+/** Laravel's own default, used when a flat paginator omits per_page. */
+const FALLBACK_PAGE_SIZE = 25;
+/** Tickets read per "Used on a ticket" search (each carries its issues). */
+const ISSUE_SEARCH_TICKETS = 15;
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -100,10 +136,10 @@ function handleAxiosError(err: unknown): never {
     if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
       throw new MaintenanceTicketsError("Request timed out. Please try again.", "TIMEOUT");
     }
-    if (status === 401) throw new MaintenanceTicketsError(message, "NOT_AUTHENTICATED");
-    if (status === 403) throw new MaintenanceTicketsError(message, "FORBIDDEN");
-    if (status === 404) throw new MaintenanceTicketsError(message, "NOT_FOUND");
-    if (status === 422) {
+    if (status === HTTP_UNAUTHORIZED) throw new MaintenanceTicketsError(message, "NOT_AUTHENTICATED");
+    if (status === HTTP_FORBIDDEN) throw new MaintenanceTicketsError(message, "FORBIDDEN");
+    if (status === HTTP_NOT_FOUND) throw new MaintenanceTicketsError(message, "NOT_FOUND");
+    if (status === HTTP_UNPROCESSABLE) {
       // `context` carries the stock-shortfall block — readStockShortfall reads it.
       throw new MaintenanceTicketsError(
         message || "Validation failed.",
@@ -112,9 +148,9 @@ function handleAxiosError(err: unknown): never {
         data?.context
       );
     }
-    if (status === 429) throw new MaintenanceTicketsError("Too many requests.", "RATE_LIMITED");
-    if (status != null && status >= 500) {
-      throw new MaintenanceTicketsError(status === 503 ? BUSY_MESSAGE : "Server error. Please try again.", "SERVER_ERROR");
+    if (status === HTTP_TOO_MANY) throw new MaintenanceTicketsError("Too many requests.", "RATE_LIMITED");
+    if (status != null && status >= HTTP_SERVER_ERROR) {
+      throw new MaintenanceTicketsError(status === HTTP_UNAVAILABLE ? BUSY_MESSAGE : "Server error. Please try again.", "SERVER_ERROR");
     }
     if (!err.response) {
       throw new MaintenanceTicketsError("Network error. Check your connection.", "NETWORK_ERROR");
@@ -195,7 +231,7 @@ function transformPagination<T>(raw: ApiPaginatedResponse<T>): {
 
   const rows = raw.data ?? [];
   const total = raw.total ?? rows.length;
-  const perPage = raw.per_page ?? (rows.length || 25);
+  const perPage = raw.per_page ?? (rows.length || FALLBACK_PAGE_SIZE);
   return {
     meta: {
       currentPage: raw.current_page ?? 1,
@@ -246,21 +282,36 @@ function transformMovementLine(raw: ApiStockMovementLine): StockMovementLine {
     // The signed contribution to on hand. Precomputed so no caller has to
     // remember that `quantity` is an unsigned magnitude.
     signedQuantity: quantity * direction,
+    serials: raw.serials ?? [],
   };
 }
 
 function transformMovement(raw: ApiStockMovement): StockMovement {
   return {
     id: raw.id,
-    type: transformEnumField(raw.type),
+    // v2 sends `type` as a bare value next to `type_label`; older rows as {value,label}.
+    type:
+      typeof raw.type === "string"
+        ? { value: raw.type, label: raw.type_label ?? raw.type }
+        : transformEnumField(raw.type),
     movedAt: raw.moved_at,
-    paidBy: raw.paid_by ? transformEnumField(raw.paid_by) : null,
-    paidByTechnicianId: raw.paid_by_technician_id ?? null,
-    paidByTechnician: raw.paid_by_technician
-      ? { id: raw.paid_by_technician.id, name: raw.paid_by_technician.name }
+    ticketIssue: raw.ticket_issue
+      ? {
+          id: raw.ticket_issue.id,
+          ticketId: raw.ticket_issue.ticket_id,
+          title: raw.ticket_issue.title,
+          storeNumber: raw.ticket_issue.store_number ?? null,
+        }
       : null,
+    payment: raw.payment
+      ? { id: raw.payment.id, paidToName: raw.payment.paid_to_name ?? raw.payment.paid_to?.name ?? null }
+      : null,
+    stockCountId: raw.stock_count_id ?? null,
+    totalCost: optionalDecimal(raw.total_cost),
+    body: raw.body ?? null,
     mistaken: raw.mistaken,
-    reversalOfId: raw.reversal_of_id ?? null,
+    // v2 names the link `reverses_stock_movement_id`; older builds `reversal_of_id`.
+    reversalOfId: raw.reverses_stock_movement_id ?? raw.reversal_of_id ?? null,
     reversedByIds: raw.reversed_by_ids ?? [],
     lines: mapRelation(raw.lines, transformMovementLine),
     notes: mapRelation(raw.notes, transformNote),
@@ -367,10 +418,9 @@ export function buildStockMovementParams(f: StockMovementFilters): URLSearchPara
   (f.storage_location_ids ?? []).forEach((v) =>
     p.append("storage_location_ids[]", String(v))
   );
-  (f.paid_by ?? []).forEach((v) => v && p.append("paid_by[]", v));
-  (f.paid_by_technician_ids ?? []).forEach((v) =>
-    p.append("paid_by_technician_ids[]", String(v))
-  );
+  // The API filters by `ticket_issue_ids[]` (StockMovementController::index).
+  if (f.ticket_issue_id) p.append("ticket_issue_ids[]", String(f.ticket_issue_id));
+  if (f.stock_count_id) p.set("stock_count_id", String(f.stock_count_id));
   if (f.moved_from) p.set("moved_from", f.moved_from);
   if (f.moved_to) p.set("moved_to", f.moved_to);
   if (f.sort) p.set("sort", f.sort);
@@ -424,7 +474,7 @@ export const storageService = {
     try {
       const res = await axios.get<ApiPaginatedResponse<ApiStorageLocation>>(
         `${BASE}/storage-locations`,
-        { params: { per_page: 200 }, headers: authHeaders(token), timeout: 15_000, signal }
+        { params: { per_page: MAX_PAGE_SIZE }, headers: authHeaders(token), timeout: READ_TIMEOUT_MS, signal }
       );
       return (res.data.data ?? []).map((raw) => ({
         id: raw.id,
@@ -444,12 +494,12 @@ export const storageService = {
     const token = requireToken();
     const params = new URLSearchParams();
     if (filters?.trashed) params.set("trashed", filters.trashed);
-    params.set("per_page", String(filters?.per_page ?? 50));
+    params.set("per_page", String(filters?.per_page ?? DEFAULT_LOCATIONS_PAGE_SIZE));
     if (filters?.page) params.set("page", String(filters.page));
     try {
       const res = await axios.get<ApiPaginatedResponse<ApiStorageLocation>>(
         `${BASE}/storage-locations?${params}`,
-        { headers: authHeaders(token), timeout: 15_000, signal }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS, signal }
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformStorageLocation), meta, links };
@@ -467,7 +517,7 @@ export const storageService = {
       const res = await axios.post<ApiStorageLocationResponse>(
         `${BASE}/storage-locations`,
         buildNestedFormData(payload, files),
-        { headers: authHeaders(token), timeout: 120_000 }
+        { headers: authHeaders(token), timeout: UPLOAD_TIMEOUT_MS }
       );
       return transformStorageLocation(res.data.data);
     } catch (err) {
@@ -481,7 +531,7 @@ export const storageService = {
     try {
       await axios.delete(`${BASE}/storage-locations/${id}`, {
         headers: authHeaders(token),
-        timeout: 15_000,
+        timeout: READ_TIMEOUT_MS,
       });
     } catch (err) {
       return handleAxiosError(err);
@@ -497,7 +547,7 @@ export const storageService = {
         {},
         {
           headers: { ...authHeaders(token), "Content-Type": "application/json" },
-          timeout: 15_000,
+          timeout: READ_TIMEOUT_MS,
         }
       );
     } catch (err) {
@@ -516,7 +566,7 @@ export const storageService = {
     try {
       const res = await axios.get<ApiPaginatedResponse<ApiStockMovement>>(
         `${BASE}/stock-movements${qs ? `?${qs}` : ""}`,
-        { headers: authHeaders(token), timeout: 15_000, signal }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS, signal }
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformMovement), meta, links };
@@ -530,7 +580,7 @@ export const storageService = {
     try {
       const res = await axios.get<ApiStockMovementResponse>(`${BASE}/stock-movements/${id}`, {
         headers: authHeaders(token),
-        timeout: 15_000,
+        timeout: READ_TIMEOUT_MS,
         signal,
       });
       return transformMovement(res.data.data);
@@ -560,7 +610,7 @@ export const storageService = {
       const res = await axios.post<ApiStockMovementResponse>(
         `${BASE}/stock-movements`,
         buildNestedFormData(payload, files),
-        { headers: authHeaders(token), timeout: 120_000 }
+        { headers: authHeaders(token), timeout: UPLOAD_TIMEOUT_MS }
       );
       return transformMovement(res.data.data);
     } catch (err) {
@@ -582,7 +632,7 @@ export const storageService = {
         {},
         {
           headers: { ...authHeaders(token), "Content-Type": "application/json" },
-          timeout: 30_000,
+          timeout: WRITE_TIMEOUT_MS,
         }
       );
       return {
@@ -611,7 +661,7 @@ export const storageService = {
     try {
       const res = await axios.get<ApiPaginatedResponse<ApiStockBalance>>(
         `${BASE}/stock-balances${qs ? `?${qs}` : ""}`,
-        { headers: authHeaders(token), timeout: 15_000, signal }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS, signal }
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformBalance), meta, links };
@@ -636,7 +686,7 @@ export const storageService = {
     try {
       const res = await axios.get<ApiPaginatedResponse<ApiPartStockTotal>>(
         `${BASE}/stock-balances${qs ? `?${qs}` : ""}`,
-        { headers: authHeaders(token), timeout: 15_000, signal }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS, signal }
       );
       const { meta, links } = transformPagination(res.data);
       return { data: (res.data.data ?? []).map(transformPartTotal), meta, links };
@@ -664,7 +714,7 @@ export const storageService = {
     try {
       const res = await axios.get<{ data: ApiStoragePlaceLevel[] }>(
         `${BASE}/storage-locations/${locationId}/place-levels`,
-        { headers: authHeaders(token), timeout: 15_000, signal }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS, signal }
       );
       return (res.data.data ?? []).map(transformPlaceLevel);
     } catch (err) {
@@ -681,7 +731,7 @@ export const storageService = {
       const res = await axios.post<{ data: ApiStoragePlaceLevel }>(
         `${BASE}/storage-locations/${locationId}/place-levels`,
         payload,
-        { headers: authHeaders(token), timeout: 15_000 }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS }
       );
       return transformPlaceLevel(res.data.data);
     } catch (err) {
@@ -701,7 +751,7 @@ export const storageService = {
       const res = await axios.patch<{ data: ApiStoragePlaceLevel }>(
         `${BASE}/storage-locations/${locationId}/place-levels/${levelId}`,
         payload,
-        { headers: authHeaders(token), timeout: 15_000 }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS }
       );
       return transformPlaceLevel(res.data.data);
     } catch (err) {
@@ -716,7 +766,7 @@ export const storageService = {
     try {
       await axios.delete(`${BASE}/storage-locations/${locationId}/place-levels/${levelId}`, {
         headers: authHeaders(token),
-        timeout: 15_000,
+        timeout: READ_TIMEOUT_MS,
       });
     } catch (err) {
       return handleAxiosError(err);
@@ -733,7 +783,7 @@ export const storageService = {
       const res = await axios.post<{ data: ApiStoragePlaceValue }>(
         `${BASE}/storage-locations/${locationId}/place-levels/${levelId}/values`,
         payload,
-        { headers: authHeaders(token), timeout: 15_000 }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS }
       );
       return transformPlaceValue(res.data.data);
     } catch (err) {
@@ -752,7 +802,7 @@ export const storageService = {
       const res = await axios.patch<{ data: ApiStoragePlaceValue }>(
         `${BASE}/storage-locations/${locationId}/place-levels/${levelId}/values/${valueId}`,
         payload,
-        { headers: authHeaders(token), timeout: 15_000 }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS }
       );
       return transformPlaceValue(res.data.data);
     } catch (err) {
@@ -769,7 +819,7 @@ export const storageService = {
     try {
       await axios.delete(
         `${BASE}/storage-locations/${locationId}/place-levels/${levelId}/values/${valueId}`,
-        { headers: authHeaders(token), timeout: 15_000 }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS }
       );
     } catch (err) {
       return handleAxiosError(err);
@@ -795,7 +845,7 @@ export const storageService = {
       const res = await axios.put<{ data: ApiStockPlaceLine[] }>(
         `${BASE}/stock-balances/${balanceId}/place`,
         { place_value_ids: valueIds } satisfies SetStockPlacePayload,
-        { headers: authHeaders(token), timeout: 15_000 }
+        { headers: authHeaders(token), timeout: READ_TIMEOUT_MS }
       );
       return transformPlace(res.data.data);
     } catch (err) {
@@ -814,5 +864,79 @@ export const storageService = {
       signal
     );
     return res.data[0]?.onHand ?? null;
+  },
+
+  /* ── Stock counts (v2) ────────────────────────────────────────────────── */
+
+  listStockCounts(filters: StockCountFilters = {}, signal?: AbortSignal): Promise<StockCount[]> {
+    return http.rows<StockCount>("/stock-counts", { query: filters, signal });
+  },
+
+  /** A draft with one line per part that has a balance there; counted = null. */
+  startStockCount(payload: StartStockCountPayload): Promise<StockCount> {
+    return http.post<StockCount>("/stock-counts", payload);
+  },
+
+  /** The count sheet: lines (expected, counted, difference, value) and totals. */
+  getStockCount(id: number, signal?: AbortSignal): Promise<StockCount> {
+    return http.get<StockCount>(`/stock-counts/${seg(id)}`, { signal });
+  },
+
+  /** Save draft (also adds parts not on the sheet). Drafts only. */
+  saveStockCount(id: number, payload: SaveStockCountPayload): Promise<StockCount> {
+    return http.patch<StockCount>(`/stock-counts/${seg(id)}`, payload);
+  },
+
+  /** Writes ONE stock_count movement with a line per difference; values freeze. */
+  applyStockCount(id: number): Promise<StockCount> {
+    return http.post<StockCount>(`/stock-counts/${seg(id)}/apply`);
+  },
+
+  /** Drafts only. */
+  deleteStockCount(id: number): Promise<null> {
+    return http.delete(`/stock-counts/${seg(id)}`);
+  },
+
+  /* ── Serial units (v2) ────────────────────────────────────────────────── */
+
+  /** The serial-numbered units of one part (the part sheet's list). */
+  listPartUnits(partId: number, status?: PartSerialStatus, signal?: AbortSignal): Promise<PartSerialUnit[]> {
+    return maintenanceCatalogService.listPartUnits(partId, status, signal);
+  },
+
+  updatePartUnit(unitId: number, input: PartSerialUnitInput): Promise<PartSerialUnit> {
+    return maintenanceCatalogService.updatePartUnit(unitId, input);
+  },
+
+  /** What we paid for this part, newest first (at most 50 purchases). */
+  getPartPriceHistory(partId: number, signal?: AbortSignal): Promise<PartPriceEntry[]> {
+    return http.rows<PartPriceEntry>(`/catalog/parts/${seg(partId)}/price-history`, { signal });
+  },
+
+  /**
+   * Ticket issues matching `q` (ticket #, store, issue title), for "Used on a
+   * ticket". Reads the global ticket list (`GET tickets?q=`) and flattens each
+   * ticket's issues, closed and cancelled ones last.
+   */
+  async searchTicketIssues(q: string, signal?: AbortSignal): Promise<TicketIssueHit[]> {
+    interface RawTicket {
+      id: number;
+      otherStore?: string | null;
+      store?: { storeNumber?: string | null } | null;
+      issues?: { id: number; ticketId?: number; title?: string | null; displayTitle?: string | null; status?: string | null }[] | null;
+    }
+    const page = await http.page<RawTicket>("/tickets", { query: { q, perPage: ISSUE_SEARCH_TICKETS }, signal });
+    const done = new Set(["closed", "cancelled"]);
+    return page.data
+      .flatMap((ticket) =>
+        (ticket.issues ?? []).map<TicketIssueHit>((issue) => ({
+          id: issue.id,
+          ticketId: issue.ticketId ?? ticket.id,
+          title: issue.displayTitle ?? issue.title ?? "",
+          storeNumber: ticket.store?.storeNumber ?? ticket.otherStore ?? null,
+          status: issue.status ?? null,
+        })),
+      )
+      .sort((a, b) => Number(done.has(a.status ?? "")) - Number(done.has(b.status ?? "")));
   },
 };

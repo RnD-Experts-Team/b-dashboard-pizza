@@ -3,14 +3,29 @@ import { BASE_URL, errorJson, proxyGet } from "@/app/api/maintenance-tickets/_li
 
 type Params = { params: Promise<{ section: string }> };
 
-const SECTIONS = new Set(["summary", "activity", "watchlist"]);
+const SECTIONS = new Set(["summary", "activity", "watchlist", "finances", "coverage"]);
 
-/** Only these reach upstream; `stores[]` may repeat. */
-const SINGLE = ["from", "to", "recurring_min", "recurring_days", "untouched_days", "page", "per_page"] as const;
+/** Only these reach upstream. */
+const SINGLE = [
+  "from",
+  "to",
+  "recurring_min",
+  "recurring_days",
+  "untouched_days",
+  "page",
+  "per_page",
+  // finances / coverage (MAINTENANCE-V2 §6)
+  "category_id",
+  "technician_id",
+  "supplier_id",
+  "group",
+] as const;
+/** Repeatable keys. */
+const MANY = ["stores[]", "issue_ids[]"] as const;
 
 /**
- * GET /maintenance-analytics/{summary|activity|watchlist} -- the analytics
- * page's three sections, for the stores named in stores[].
+ * GET /maintenance-analytics/{summary|activity|watchlist|finances|coverage}
+ * -- the analytics page's sections, for the stores named in stores[].
  */
 export async function GET(request: NextRequest, { params }: Params) {
   const { section } = await params;
@@ -20,8 +35,10 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   const incoming = new URL(request.url).searchParams;
   const forward = new URLSearchParams();
-  for (const store of incoming.getAll("stores[]")) {
-    if (store) forward.append("stores[]", store);
+  for (const key of MANY) {
+    for (const value of incoming.getAll(key)) {
+      if (value) forward.append(key, value);
+    }
   }
   for (const key of SINGLE) {
     const value = incoming.get(key);

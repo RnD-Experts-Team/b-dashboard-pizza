@@ -11,6 +11,9 @@ import type {
   AnalyticsSummary,
   AnalyticsWatchlist,
 } from "@/types/maintenance-analytics.types";
+import { maintenanceAnalyticsService } from "@/lib/api/services/maintenance-analytics.service";
+import { keyOf, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
+import type { CoverageParams, FinancesParams } from "@/types/maintenance-v2";
 
 type Section = "summary" | "activity" | "watchlist";
 
@@ -100,4 +103,24 @@ export function useMaintenanceAnalytics() {
     load,
     loadMoreActivity,
   };
+}
+
+/* ────────────────────────────────────────────────────────────────────────── */
+/*  v2: Finances and Coverage tabs (MAINTENANCE-V2 §6)                       */
+/* ────────────────────────────────────────────────────────────────────────── */
+
+/** Finances tab: spend totals, trend by type, by store/technician/supplier/category, stock money, ticket costs. */
+export function useMaintenanceFinances(params: FinancesParams | null) {
+  const res = useMaintenanceResource(params ? keyOf("analytics-finances", params) : null, (signal) =>
+    maintenanceAnalyticsService.getFinances(params as FinancesParams, signal),
+  );
+  return { ...res, finances: res.data };
+}
+
+/** Coverage tab: KPI tiles and the store × issue grid (gap when ≤ 1 technician). */
+export function useMaintenanceCoverage(params: CoverageParams | null) {
+  const res = useMaintenanceResource(params ? keyOf("analytics-coverage", params) : null, (signal) =>
+    maintenanceAnalyticsService.getCoverage(params ?? {}, signal),
+  );
+  return { ...res, coverage: res.data };
 }

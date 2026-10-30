@@ -90,7 +90,7 @@ export function AnalyticsKpis({ summary, rangeLabel }: { summary: AnalyticsSumma
       note: "Tickets, right now",
     },
     {
-      label: "Completed",
+      label: "Closed",
       value: k.issues_completed,
       icon: CheckCircle2,
       tint: "bg-green-500/10 text-green-600 dark:text-green-400",

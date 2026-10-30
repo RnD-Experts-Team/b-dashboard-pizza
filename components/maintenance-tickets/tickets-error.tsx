@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, WifiOff, ServerCrash, ShieldOff, Clock, XCircle } from "lucide-react";
+import { WifiOff, ServerCrash, ShieldOff, Clock, XCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

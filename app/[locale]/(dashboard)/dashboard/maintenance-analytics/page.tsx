@@ -1,121 +1,73 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense } from "react";
 import { useParams } from "next/navigation";
-import { RefreshCw, Store as StoreIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useTranslations } from "next-intl";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/layout/page-header";
-import { useAuthStore } from "@/lib/auth/auth.store";
-import { useMaintenanceAnalytics } from "@/lib/hooks/use-maintenance-analytics";
-import { daysToInstants, matchPreset, presetDays, RANGE_PRESETS, viewerTimeZone } from "@/lib/maintenance-tickets/local-range";
+import { PizzaLoader } from "@/components/shared/pizza-loader";
 import { formatDateOnly } from "@/lib/utils/date-display";
-import type { StoreOption } from "@/components/business-reports/store-multi-select";
-import type { StoreSelection } from "@/types/business-reports.types";
-import { AnalyticsControls } from "@/components/maintenance-tickets/analytics/analytics-controls";
-import { AnalyticsSkeleton, AnalyticsView } from "@/components/maintenance-tickets/analytics/analytics-view";
+import { viewerTimeZone } from "@/lib/maintenance-tickets/local-range";
+import { AnalyticsFilterBar } from "@/components/maintenance-analytics/analytics-filter-bar";
+import { CoverageTab } from "@/components/maintenance-analytics/coverage-tab";
+import { FinancesTab } from "@/components/maintenance-analytics/finances-tab";
+import { OverviewTab } from "@/components/maintenance-analytics/overview-tab";
+import { ANALYTICS_TABS, useAnalyticsFilters, type AnalyticsTab } from "@/components/maintenance-analytics/use-analytics-filters";
 
 /**
- * Maintenance analytics -- "a one-stop shop, one look, know it all".
- *
- * Opens on YESTERDAY (the viewer's yesterday) across every store the viewer
- * can see. This file only picks the days and stores and loads the report;
- * AnalyticsView lays it out.
+ * Maintenance analytics (docs/MAINTENANCE-V2-UI.md §8):
+ * `?tab=overview|finances|coverage`, one shared filter bar (days, stores,
+ * technician category) — every filter in the URL.
  */
-export default function MaintenanceAnalyticsPage() {
+function MaintenanceAnalytics() {
+  const t = useTranslations("maintenanceV2");
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
-  const overviewStores = useAuthStore((s) => s.overviewStores);
+  const filters = useAnalyticsFilters();
 
-  // The API speaks store NUMBERS ("03795-00001"), so that is the option id.
-  const storeOptions: StoreOption[] = useMemo(
-    () =>
-      (overviewStores ?? [])
-        .filter((s) => s.isActive && s.storeId)
-        .map((s) => ({ id: s.storeId as string, name: s.name ? `${s.storeId} · ${s.name}` : (s.storeId as string) })),
-    [overviewStores],
-  );
-
-  const initial = useMemo(() => presetDays("yesterday"), []);
-  const [selection, setSelection] = useState<StoreSelection>("all");
-  const [startDate, setStartDate] = useState(initial.startDate);
-  const [endDate, setEndDate] = useState(initial.endDate);
-
-  const { summary, watchlist, activity, activityPage, errors, isLoading, isLoadingMore, loadedParams, load, loadMoreActivity } =
-    useMaintenanceAnalytics();
-
-  const stores = useMemo(
-    () => (selection === "all" ? storeOptions.map((o) => o.id) : selection),
-    [selection, storeOptions],
-  );
-
-  const reload = useCallback(() => {
-    const range = daysToInstants(startDate, endDate);
-    if (!range || stores.length === 0) return;
-    void load({ stores, from: range.from, to: range.to });
-  }, [startDate, endDate, stores, load]);
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
-  const preset = matchPreset(startDate, endDate);
-  const presetLabel = RANGE_PRESETS.find((p) => p.id === preset)?.label;
   const days =
-    startDate === endDate
-      ? formatDateOnly(startDate, "EEEE, MMMM d")
-      : `${formatDateOnly(startDate, "MMM d")} to ${formatDateOnly(endDate, "MMM d, yyyy")}`;
+    filters.from === filters.to
+      ? formatDateOnly(filters.from, "EEEE, MMMM d")
+      : `${formatDateOnly(filters.from, "MMM d")} – ${formatDateOnly(filters.to, "MMM d, yyyy")}`;
   const zone = viewerTimeZone();
-  const scope = selection === "all" ? `all ${storeOptions.length} stores` : `${stores.length} ${stores.length === 1 ? "store" : "stores"}`;
+  const description =
+    filters.tab === "coverage" ? t("analytics.coverageDescription") : `${days}${zone ? ` · ${t("analytics.yourTimeZone", { zone })}` : ""}`;
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Maintenance Analytics"
-        description={`${presetLabel ? `${presetLabel}, ` : ""}${days} · ${scope}${zone ? ` · days in your time zone (${zone})` : ""}`}
-      >
-        <Button variant="outline" onClick={reload} disabled={isLoading}>
-          <RefreshCw className={isLoading ? "me-2 h-4 w-4 animate-spin" : "me-2 h-4 w-4"} aria-hidden="true" />
-          Refresh
-        </Button>
-      </PageHeader>
+      <PageHeader title={t("pages.analytics")} description={description} />
 
-      <AnalyticsControls
-        storeOptions={storeOptions}
-        selection={selection}
-        onSelectionChange={setSelection}
-        startDate={startDate}
-        endDate={endDate}
-        onRangeChange={(s, e) => {
-          setStartDate(s);
-          setEndDate(e);
-        }}
-        isUpdating={isLoading && loadedParams !== null}
-      />
+      <Tabs value={filters.tab} onValueChange={(v) => filters.setTab(v as AnalyticsTab)}>
+        <div className="-mx-1 overflow-x-auto px-1">
+          <TabsList className="h-auto w-max flex-nowrap gap-1 p-1">
+            {ANALYTICS_TABS.map((tab) => (
+              <TabsTrigger key={tab} value={tab}>{t(`analytics.tabs.${tab}`)}</TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-      {stores.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-24 text-center">
-          <StoreIcon className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm font-medium">Pick at least one store to see its report.</p>
+        <div className="mt-4 space-y-6">
+          <AnalyticsFilterBar filters={filters} />
+          <TabsContent value="overview" className="mt-0">
+            {filters.tab === "overview" && <OverviewTab locale={locale} filters={filters} />}
+          </TabsContent>
+          <TabsContent value="finances" className="mt-0">
+            {filters.tab === "finances" && <FinancesTab locale={locale} filters={filters} />}
+          </TabsContent>
+          <TabsContent value="coverage" className="mt-0">
+            {filters.tab === "coverage" && <CoverageTab filters={filters} />}
+          </TabsContent>
         </div>
-      ) : !loadedParams ? (
-        <AnalyticsSkeleton />
-      ) : (
-        <div className={isLoading ? "opacity-60 transition-opacity duration-200" : "transition-opacity duration-200"}>
-          <AnalyticsView
-            // A new report starts every table back on its first page.
-            key={JSON.stringify(loadedParams)}
-            locale={locale}
-            rangeLabel={presetLabel ?? "This range"}
-            summary={summary}
-            watchlist={watchlist}
-            activity={activity}
-            activityPage={activityPage}
-            errors={errors}
-            isLoadingMore={isLoadingMore}
-            onLoadMore={() => void loadMoreActivity()}
-          />
-        </div>
-      )}
+      </Tabs>
     </div>
+  );
+}
+
+export default function MaintenanceAnalyticsPage() {
+  // useSearchParams needs a Suspense boundary.
+  return (
+    <Suspense fallback={<PizzaLoader fullScreen={false} />}>
+      <MaintenanceAnalytics />
+    </Suspense>
   );
 }
