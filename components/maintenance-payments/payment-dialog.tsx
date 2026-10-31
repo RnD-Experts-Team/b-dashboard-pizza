@@ -51,7 +51,7 @@ import {
 import { changePaidTo, draftFromPrefill, draftSignature, hydratePaidTo, type PaymentPrefill } from "@/lib/maintenance-payments/prefill";
 import { formatMoney } from "@/lib/maintenance/money";
 import { PAYMENT_METHODS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
-import type { Part, Payment, PaymentMethod, Supplier, TechnicianPurchase } from "@/types/maintenance-v2";
+import type { Part, Payment, PaymentMethod, Supplier, TechnicianPurchase } from "@/types/maintenance-system";
 import { Field, fieldId } from "./field";
 import { PaidToPicker, paidToChoiceFrom } from "./paid-to-picker";
 import { PaymentLineCard, type LineLookups } from "./payment-line-card";
@@ -76,7 +76,7 @@ const ERROR_SHAPE = { rootFields: [...PAYMENT_ROOT_FIELDS], itemArrays: ["lines"
 const ACCEPT_FILES = "image/*,application/pdf";
 
 /**
- * Record a payment / Edit a payment (docs/MAINTENANCE-V2-UI.md §5): one
+ * Record a payment / Edit a payment (docs/MAINTENANCE-UI.md §5): one
  * scrolling form, no wizard. Paid to · date · how we paid · reference ·
  * invoice # · invoice file, then the lines (each a compact card whose Type
  * reveals only its fields), and a sticky running total with Save.
@@ -90,7 +90,7 @@ export function PaymentDialog(props: PaymentDialogProps) {
 }
 
 function PaymentDialogBody({ onOpenChange, paymentId, prefill, onSaved }: PaymentDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const editing = paymentId != null;
   const [today] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [prefillDraft] = useState(() => draftFromPrefill(today, prefill));

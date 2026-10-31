@@ -1,18 +1,18 @@
 /**
- * Maintenance v2 — the plain-words glossary every screen uses.
+ * Maintenance — the plain-words glossary every screen uses.
  *
- * docs/MAINTENANCE-V2-UI.md rule 3: never "payee", "draw", "transfer_out",
+ * docs/MAINTENANCE-UI.md rule 3: never "payee", "draw", "transfer_out",
  * "adjustment", "attendance entry". Say technician, supplier, payment, trip,
  * visit, inspection, Bought / Used / Returned / Moved / Opening stock /
  * Stock count / Damaged or lost.
  *
- * Each entry carries its i18n key (namespace `maintenanceV2`, e.g.
+ * Each entry carries its i18n key (namespace `maintenanceSystem`, e.g.
  * `vocab.issueStatus.in_review`) and the English fallback. Render with
- * `vocabText(t, entry)` from a `useTranslations("maintenanceV2")` t, or read
+ * `vocabText(t, entry)` from a `useTranslations("maintenanceSystem")` t, or read
  * `.label` directly where no translator is at hand. Icons are lucide-react
  * names, resolved by the component so this stays React-free.
  *
- * The English here and in lib/i18n/locales/en.json (`maintenanceV2.vocab`)
+ * The English here and in lib/i18n/locales/en.json (`maintenanceSystem.vocab`)
  * are the same words; keep them in step when one changes.
  */
 
@@ -39,11 +39,11 @@ import type {
   TripStopStatus,
   VisitTaskStatus,
   WhoseTurn,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 
 export interface VocabEntry<V extends string = string> {
   value: V;
-  /** Key inside the `maintenanceV2` namespace. */
+  /** Key inside the `maintenanceSystem` namespace. */
   key: string;
   /** English fallback. */
   label: string;

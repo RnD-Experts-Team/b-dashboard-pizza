@@ -1,10 +1,10 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — settings: approval levels, trip link idle hours (§2)    */
+/*  Maintenance — settings: approval levels, trip link idle hours (§2)    */
 /*  Internal route: maintenance-settings.                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { http } from "@/lib/api/maintenance-v2/http";
-import type { MaintenanceSettings, MaintenanceSettingsInput } from "@/types/maintenance-v2";
+import { http } from "@/lib/api/maintenance-system/http";
+import type { MaintenanceSettings, MaintenanceSettingsInput } from "@/types/maintenance-system";
 
 export const maintenanceSettingsService = {
   getSettings(signal?: AbortSignal): Promise<MaintenanceSettings> {

@@ -68,7 +68,7 @@ export function StorageEmptyState({
 
 /** A failed read, with Retry. */
 export function StorageErrorState({ message, onRetry }: { message?: string | null; onRetry?: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-destructive/50 py-16 text-center">
       <AlertTriangle className="h-8 w-8 text-destructive" aria-hidden="true" />
@@ -126,7 +126,7 @@ export function PaginationBar({
   onPageChange: (page: number) => void;
   disabled?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   if (lastPage <= 1) return null;
   return (
     <div className="flex items-center justify-between gap-3 pt-3">
@@ -161,7 +161,7 @@ export function PaginationBar({
 
 /** "Zone A › Shelf S", or a muted "Spot not set" (empty means nobody has said, not "nowhere"). */
 export function PlaceBreadcrumb({ place, className }: { place: StockPlaceLine[]; className?: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const label = placeLabel(place);
   return (
     <span className={cn("inline-flex items-center gap-1 text-xs", label ? "text-foreground" : "text-muted-foreground", className)}>
@@ -215,7 +215,7 @@ export function MovementTypeLabel({
   serverLabel?: string | null;
   className?: string;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const entry = vocabEntry(MOVEMENT_TYPES, type, serverLabel);
   return (
     <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap", className)}>

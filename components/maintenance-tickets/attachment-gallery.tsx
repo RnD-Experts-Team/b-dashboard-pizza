@@ -7,7 +7,7 @@ import type { TicketAttachment } from "@/types/maintenance-tickets.types";
 
 /** The small "Before" / "After" tag on a job photo (attachment `kind`). */
 function KindTag({ kind, overlay }: { kind: NonNullable<TicketAttachment["kind"]>; overlay?: boolean }) {
-  const t = useTranslations("maintenanceV2.common.photoKind");
+  const t = useTranslations("maintenanceSystem.common.photoKind");
   return (
     <span
       className={cn(

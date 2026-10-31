@@ -1,15 +1,15 @@
 /**
  * Where a technician stands for a ticket, for the technician picker
- * (docs/MAINTENANCE-V2-UI.md §2 "Book inspection / Schedule work": badges
+ * (docs/MAINTENANCE-UI.md §2 "Book inspection / Schedule work": badges
  * covers store · covers issue · emergency · call first · ★rating).
  *
- * v2 ranks on the SERVER: `GET technicians?store=&issue_id=&urgent=` returns
+ * Ranking happens on the SERVER: `GET technicians?store=&issue_id=&urgent=` returns
  * the list in order (covers store → covers issue → emergency when urgent →
  * call first → rating → name), each row with `standing`. This file only turns
  * that standing into badges/words; it never re-sorts.
  */
 
-import type { Technician } from "@/types/maintenance-v2";
+import type { Technician } from "@/types/maintenance-system";
 
 export interface TechnicianStandingView {
   coversStore: boolean;

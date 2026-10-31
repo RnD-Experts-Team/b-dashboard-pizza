@@ -15,12 +15,12 @@ import { OverviewTab } from "@/components/maintenance-analytics/overview-tab";
 import { ANALYTICS_TABS, useAnalyticsFilters, type AnalyticsTab } from "@/components/maintenance-analytics/use-analytics-filters";
 
 /**
- * Maintenance analytics (docs/MAINTENANCE-V2-UI.md §8):
+ * Maintenance analytics (docs/MAINTENANCE-UI.md §8):
  * `?tab=overview|finances|coverage`, one shared filter bar (days, stores,
  * technician category) — every filter in the URL.
  */
 function MaintenanceAnalytics() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
   const filters = useAnalyticsFilters();

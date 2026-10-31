@@ -19,7 +19,7 @@ export function TechnicianStandingBadges({
   standing: TechnicianStandingView;
   className?: string;
 }) {
-  const t = useTranslations("maintenanceV2.technicians.standing");
+  const t = useTranslations("maintenanceSystem.technicians.standing");
   const any = standing.coversStore || standing.coversIssue || standing.callFirst || standing.emergency || standing.stars != null;
   if (!any) return null;
 

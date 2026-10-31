@@ -13,7 +13,7 @@ import { TRIPPABLE_ISSUE_STATUSES } from "@/lib/maintenance-trips";
 import { ISSUE_STATUSES, PRIORITIES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { nameKey } from "@/lib/maintenance/names";
 import { cn } from "@/lib/utils";
-import type { Priority, SchedulePurpose, TicketIssueLookupRow } from "@/types/maintenance-v2";
+import type { Priority, SchedulePurpose, TicketIssueLookupRow } from "@/types/maintenance-system";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Picking trip stops (New trip dialog, the drawer's Add stop)              */
@@ -155,7 +155,7 @@ export function StoreChoices({
   onRetry: () => void;
   onToggle: (store: PlannerStore) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   if (loading && !stores.length) {
     return (
       <div className="space-y-1 p-2">
@@ -233,7 +233,7 @@ export function StopIssueList({
   known: readonly PlannerIssue[];
   onChange: (issueIds: number[]) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const own = useIssueLookup(
     stop.storeNumber ? { store: stop.storeNumber, statuses: TRIPPABLE_ISSUE_STATUSES, limit: LOOKUP_LIMIT } : null,
   );

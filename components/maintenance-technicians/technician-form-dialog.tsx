@@ -25,7 +25,7 @@ import { maintenanceCatalogService, useTechnicianCategories, useTechnicians } fr
 import { useMaintenanceMutation } from "@/lib/hooks/use-maintenance-resource";
 import { findNameClash, tidyName } from "@/lib/maintenance/names";
 import { parseDecimal } from "@/lib/maintenance/money";
-import type { Technician, TechnicianInput } from "@/types/maintenance-v2";
+import type { Technician, TechnicianInput } from "@/types/maintenance-system";
 import { DiscardChangesDialog } from "./discard-changes-dialog";
 import { describedBy, focusFirstInvalid, FormField } from "./form-field";
 import { CategoryManagerDialog } from "./category-manager-dialog";
@@ -104,7 +104,7 @@ function rootKey(key: string): string {
 }
 
 /**
- * Add or edit a technician (docs/MAINTENANCE-V2-UI.md §7). The essentials up
+ * Add or edit a technician (docs/MAINTENANCE-UI.md §7). The essentials up
  * front, the rest behind "More details". The name is checked while it is
  * typed against every technician, deleted ones included (the backend's rule:
  * a deleted technician's name stays taken), and again by the server's 422.
@@ -121,7 +121,7 @@ export function TechnicianFormDialog({
   onOpenChange: (open: boolean) => void;
   onSaved?: (technician: Technician) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const storeOptions = useStoreNumberOptions();
   const { technicians: everyone } = useTechnicians(ALL_NAMES, open);
   const categories = useTechnicianCategories(open);

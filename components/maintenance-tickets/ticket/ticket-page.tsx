@@ -24,7 +24,7 @@ import { useAuthStore } from "@/lib/auth/auth.store";
 import { useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
 import { useTicketPage } from "@/lib/hooks/use-ticket-issue";
 import { withPrivateNotes } from "@/lib/maintenance-workflow";
-import type { WorkflowNextAction } from "@/types/maintenance-v2";
+import type { WorkflowNextAction } from "@/types/maintenance-system";
 import { ActivityTab } from "./activity-tab";
 import { CostsTab } from "./costs-tab";
 import { ActionHost, hasDialog, type OpenAction } from "./dialogs/action-host";
@@ -62,7 +62,7 @@ function PageSkeleton() {
 }
 
 export function TicketPage() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const params = useParams();
   const router = useRouter();
   const pathname = usePathname();

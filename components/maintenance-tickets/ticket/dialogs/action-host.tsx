@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { WorkflowActionId } from "@/types/maintenance-v2";
+import type { WorkflowActionId } from "@/types/maintenance-system";
 import { BookInspectionDialog, MoveBookingDialog, ScheduleWorkDialog } from "./booking-dialogs";
 import { CancelDialog, CloseDialog, JumpDialog, WorkDoneDialog } from "./finish-dialogs";
 import { ApprovalRequestDialog, InspectionResultDialog, RecordApprovalDialog } from "./inspection-approval-dialogs";

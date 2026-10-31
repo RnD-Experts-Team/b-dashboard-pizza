@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { decimalOr0, formatMoney } from "@/lib/maintenance/money";
 import { APPROVAL_DECISIONS, PAYMENT_LINE_TYPES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import type { TicketIssueV2 } from "@/types/maintenance-v2";
+import type { TicketIssueDetail } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
 import { formatDay } from "./format";
@@ -51,11 +51,11 @@ export function CostsTab({
   canPay,
   onRecordPayment,
 }: {
-  issue: TicketIssueV2;
+  issue: TicketIssueDetail;
   canPay: boolean;
   onRecordPayment: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const c = issue.costs;
   const paymentHref = (id: number) => `/${locale}/dashboard/maintenance-payments?payment=${id}`;

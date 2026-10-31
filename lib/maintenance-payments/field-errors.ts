@@ -11,13 +11,13 @@
 /*  server-side validation render through one code path. Nothing is ever    */
 /*  swallowed: a key no control claims goes to `form[]` (a banner).          */
 /*                                                                            */
-/*  Works for any v2 dialog, not just payments: pass the root fields it has */
+/*  Works for any dialog, not just payments: pass the root fields it has */
 /*  controls for, and the array names whose items have per-field controls. */
 /*  A refused workflow step arrives as `errors.status` — list "status" as a */
 /*  root field, or let it fall into the banner.                             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { camelToSnake } from "@/lib/api/maintenance-v2/http";
+import { camelToSnake } from "@/lib/api/maintenance-system/http";
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 
 export interface FormErrors {

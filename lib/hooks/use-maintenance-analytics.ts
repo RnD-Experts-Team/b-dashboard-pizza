@@ -13,7 +13,7 @@ import type {
 } from "@/types/maintenance-analytics.types";
 import { maintenanceAnalyticsService } from "@/lib/api/services/maintenance-analytics.service";
 import { keyOf, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { CoverageParams, FinancesParams } from "@/types/maintenance-v2";
+import type { CoverageParams, FinancesParams } from "@/types/maintenance-system";
 
 type Section = "summary" | "activity" | "watchlist";
 
@@ -106,7 +106,7 @@ export function useMaintenanceAnalytics() {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  v2: Finances and Coverage tabs (MAINTENANCE-V2 §6)                       */
+/*  Finances and Coverage tabs (MAINTENANCE §6)                       */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /** Finances tab: spend totals, trend by type, by store/technician/supplier/category, stock money, ticket costs. */

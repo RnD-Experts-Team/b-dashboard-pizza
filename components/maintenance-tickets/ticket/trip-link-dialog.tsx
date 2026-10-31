@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { tripLinkUrl, tripShareText } from "@/lib/maintenance-trips";
-import type { TripLinkIssued } from "@/types/maintenance-v2";
+import type { TripLinkIssued } from "@/types/maintenance-system";
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -43,7 +43,7 @@ export function TripLinkDialog({
   storeNumber: string | null;
   onClose: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const [copied, setCopied] = useState(false);
   const url = link ? tripLinkUrl(link.urlToken, locale) : "";

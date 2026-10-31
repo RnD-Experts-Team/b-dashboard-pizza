@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { decimalOr0, formatMinutes, formatMoney, minutesToHours } from "@/lib/maintenance/money";
 import type { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
-import type { UnpaidWork } from "@/types/maintenance-v2";
+import type { UnpaidWork } from "@/types/maintenance-system";
 
 const SKELETON_ROWS = 3;
 
@@ -29,7 +29,7 @@ export function UnpaidWorkPanel({
   onRetry: () => void;
   onPay: (work: UnpaidWork) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
 
   return (
     <Card className="gap-3 py-4">

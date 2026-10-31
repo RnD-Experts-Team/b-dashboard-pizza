@@ -46,7 +46,7 @@ import { partIdOf, type CountLineState, type CountLineView } from "@/lib/storage
 import { formatWireDateTime } from "@/lib/utils/date-display";
 import { CountStatusBadge, countPlaceLabel } from "./counts-tab";
 import { StorageEmptyState, StorageErrorState, StorageSkeleton, TBL, TD, TH } from "./storage-shared";
-import type { StockCountLine } from "@/types/maintenance-v2";
+import type { StockCountLine } from "@/types/maintenance-system";
 
 /**
  * The count sheet (`/dashboard/storage/counts/[id]`): type what is really on
@@ -63,7 +63,7 @@ const DIFF_STYLE: Record<CountLineState, { icon: typeof Circle; tone: string }> 
 };
 
 function useDiffText() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (view: CountLineView): string => {
     const amount = formatQuantity(Math.abs(view.difference ?? 0));
     if (view.state === "missing") return t("common.missing", { count: amount });
@@ -85,7 +85,7 @@ function DiffCell({ view }: { view: CountLineView }) {
 }
 
 export function CountSheet({ countId }: { countId: number }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const router = useRouter();
   const sheet = useStockCount(countId);

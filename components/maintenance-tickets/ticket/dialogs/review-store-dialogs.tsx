@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
 import { ANSWERED_VIA, PRIORITIES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
-import type { AnsweredVia, InfoRequest, Priority, TicketIssueV2 } from "@/types/maintenance-v2";
+import type { AnsweredVia, InfoRequest, Priority, TicketIssueDetail } from "@/types/maintenance-system";
 import { DateTimePicker, Segmented } from "../../form-bits";
 import { PasteFileZone } from "../../paste-file-zone";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
@@ -20,14 +20,14 @@ import type { RunStep, StepDialogProps } from "./types";
 const STORE_PRIORITY = "store";
 
 /** The open question the store has not answered yet (latest first). */
-export function openInfoRequest(issue: TicketIssueV2): InfoRequest | null {
+export function openInfoRequest(issue: TicketIssueDetail): InfoRequest | null {
   return [...issue.infoRequests].reverse().find((r) => !r.mistaken && !r.answeredAt) ?? null;
 }
 
 /* ── Review (and the inline "Ticket details" edit) ───────────────────────── */
 
 export function ReviewDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const initial = {
     target: isoToLocalInput(issue.targetCompletionAt),
@@ -98,7 +98,7 @@ export function ReviewDialog({ open, onOpenChange, issue, run }: StepDialogProps
 /* ── Ask the store ───────────────────────────────────────────────────────── */
 
 export function AskStoreDialog({ open, onOpenChange, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [question, setQuestion] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -146,8 +146,8 @@ export function AskStoreDialog({ open, onOpenChange, run }: StepDialogProps) {
 
 /* ── The store's answer ──────────────────────────────────────────────────── */
 
-function useAnswer(issue: TicketIssueV2, run: RunStep, isMos: boolean) {
-  const t = useTranslations("maintenanceV2");
+function useAnswer(issue: TicketIssueDetail, run: RunStep, isMos: boolean) {
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const request = openInfoRequest(issue);
   const [answer, setAnswer] = useState("");
@@ -235,7 +235,7 @@ export function AnswerDialog({ open, onOpenChange, issue, run, isMos }: StepDial
 }
 
 /** The store manager's answer box on the Overview's current step card. */
-export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueV2; run: RunStep; isMos: boolean }) {
+export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueDetail; run: RunStep; isMos: boolean }) {
   const state = useAnswer(issue, run, isMos);
   const { t, form } = state;
   if (!state.request) return null;
@@ -265,7 +265,7 @@ export function InlineAnswer({ issue, run, isMos }: { issue: TicketIssueV2; run:
 /* ── Is it working now? ──────────────────────────────────────────────────── */
 
 function useConfirmation(run: RunStep, isMos: boolean) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [working, setWorking] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
@@ -282,7 +282,7 @@ function useConfirmation(run: RunStep, isMos: boolean) {
 }
 
 function YesNo({ value, onChange, disabled }: { value: boolean | null; onChange: (v: boolean) => void; disabled?: boolean }) {
-  const t = useTranslations("maintenanceV2.tickets.dialogs.confirmation");
+  const t = useTranslations("maintenanceSystem.tickets.dialogs.confirmation");
   const options = [
     { v: true, label: t("yes"), Icon: CircleCheck, on: "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
     { v: false, label: t("no"), Icon: CircleX, on: "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300" },

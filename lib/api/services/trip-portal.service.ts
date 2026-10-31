@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — the technician's trip page (public, no login, §3)       */
+/*  Maintenance — the technician's trip page (public, no login, §3)       */
 /*                                                                            */
 /*  Everything goes to /api/public/maintenance-trips/{token}/… with NO       */
 /*  Authorization header — the token in the link is the credential.          */
@@ -11,7 +11,7 @@
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
-import { http, PUBLIC_TRIPS_API, seg, type RequestOptions } from "@/lib/api/maintenance-v2/http";
+import { http, PUBLIC_TRIPS_API, seg, type RequestOptions } from "@/lib/api/maintenance-system/http";
 import type {
   ArrivePayload,
   ClockInPayload,
@@ -25,7 +25,7 @@ import type {
   PublicPurchasePayload,
   PublicTrip,
   TripPortalErrorKind,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 
 const PUBLIC: Pick<RequestOptions, "auth" | "base"> = { auth: false, base: PUBLIC_TRIPS_API };
 

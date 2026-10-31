@@ -23,7 +23,7 @@ export function TicketPeekSheet({
   locale: string;
   onClose: () => void;
 }) {
-  const t = useTranslations("maintenanceV2.peek");
+  const t = useTranslations("maintenanceSystem.peek");
   const title = ticket?.issues[0]?.title ?? ticket?.issueTitles[0] ?? "";
   const more = ticket ? Math.max(0, ticket.issueCount - 1) : 0;
   const store = ticket?.otherStore ?? ticket?.storeId ?? "—";

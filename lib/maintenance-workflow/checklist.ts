@@ -1,12 +1,12 @@
 /**
- * The close checklist (MAINTENANCE-V2 §2 `close`): resolved · cost recorded ·
+ * The close checklist (MAINTENANCE §2 `close`): resolved · cost recorded ·
  * invoice attached · notes completed. The server sends it in
  * `workflow.checklist` with `done` per key; fixed_by_troubleshooting and
  * not_needed exempt every item. Unticked items need an override reason.
  */
 
 import { CLOSE_CHECKLIST, type VocabEntry } from "@/lib/maintenance/vocabulary";
-import type { CloseChecklistItem, CloseChecklistKey, CloseResolution } from "@/types/maintenance-v2";
+import type { CloseChecklistItem, CloseChecklistKey, CloseResolution } from "@/types/maintenance-system";
 
 export const CLOSE_CHECKLIST_KEYS = [
   "resolved",

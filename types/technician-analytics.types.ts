@@ -62,28 +62,28 @@ export interface TechnicianPaidByStore {
   store_id: number | null;
   store_number: string | null;
   other_store: string | null;
-  /** v2: parts bought for the shelf -- the line is for a storage location, not a store. */
+  /** Parts bought for the shelf -- the line is for a storage location, not a store. */
   storage_location?: { id: number; name: string } | null;
-  /** v1 only: what no store carried (a payment lump sum, payment gas / money owed). */
+  /** Older data only: what no store carried (a payment lump sum, payment gas / money owed). */
   payment_level?: boolean;
   amount: string;
   lines: number;
 }
 
 /**
- * Money per payment line type. v2 keys are the line types (hourly, fixed,
- * inspection, parts, gas, other -- every one present); v1 sent hourly_labour,
+ * Money per payment line type. The keys are the line types (hourly, fixed,
+ * inspection, parts, gas, other -- every one present); older data sent hourly_labour,
  * lump_sums, gas, money_owed, parts_reimbursed.
  */
 export type TechnicianPaidByKind = Record<string, string>;
 
-/** One payment to the technician in the range (v2), or a v1 pay sheet. */
+/** One payment to the technician in the range, or an old pay sheet. */
 export interface TechnicianPaySheet {
-  /** v2: the payment. */
+  /** The payment. */
   payment_id?: number;
   method?: string | null;
   invoice_number?: string | null;
-  /** v1 only. */
+  /** Older data only. */
   daily_pay_entry_id?: number;
   daily_pay_payment_id?: number;
   /** "YYYY-MM-DD", the payment's (or sheet's) day. */
@@ -112,14 +112,14 @@ export interface TechnicianWorkByIssue {
  * clocked in and not on a pay sheet yet.
  */
 export interface TechnicianWorkVisit {
-  /** v2: "session" -- one clock-in → clock-out on a trip. v1: "pay_sheet" | "visit". */
+  /** "session" -- one clock-in → clock-out on a trip. older rows: "pay_sheet" | "visit". */
   source: "session" | "pay_sheet" | "visit";
-  /** v2: the trip and session the work was clocked on. */
+  /** The trip and session the work was clocked on. */
   trip_id?: number | null;
   trip_session_id?: number | null;
   attendance_entry_id?: number | null;
   daily_pay_entry_id?: number | null;
-  /** v1: the pay sheet's day ("YYYY-MM-DD"); null (or absent) for a clocked session. */
+  /** Older rows: the pay sheet's day ("YYYY-MM-DD"); null (or absent) for a clocked session. */
   date?: string | null;
   /** A visit's clock-in; null for a pay-sheet day. */
   start: string | null;

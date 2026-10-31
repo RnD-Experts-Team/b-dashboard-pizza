@@ -16,7 +16,7 @@ import { useMemo } from "react";
 import { portalErrorKind, tripPortalService } from "@/lib/api/services/trip-portal.service";
 import { useMaintenanceMutation, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
 import { buttonsForState } from "@/lib/maintenance-trips";
-import type { PublicTrip } from "@/types/maintenance-v2";
+import type { PublicTrip } from "@/types/maintenance-system";
 
 export { tripPortalService };
 

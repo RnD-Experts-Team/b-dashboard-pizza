@@ -45,7 +45,7 @@ import {
   TD,
   TH,
 } from "./storage-shared";
-import type { Part } from "@/types/maintenance-v2";
+import type { Part } from "@/types/maintenance-system";
 import type { StockMovement, StorageLocation } from "@/types/storage.types";
 
 /**
@@ -68,7 +68,7 @@ export interface MovementsTabProps {
 }
 
 export function MovementsTab({ filters, onFiltersChange, parts, locations, canMarkMistaken, revision, onChanged }: MovementsTabProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const apiFilters = useMemo(() => toMovementApiFilters(filters), [filters]);
   const { rows, meta, isLoading, isRefreshing, error, refresh } = useStockMovements(apiFilters, true, revision);
   const [confirming, setConfirming] = useState<StockMovement | null>(null);
@@ -216,7 +216,7 @@ function MovementRow({
   canMarkMistaken: boolean;
   onMarkMistaken: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const summary = summarizeMovement(movement);
   const struck = movement.mistaken && "line-through decoration-muted-foreground/60";
@@ -306,7 +306,7 @@ function WhereCell({ from, to }: { from: string[]; to: string[] }) {
 }
 
 function MistakeConfirm({ movement, onClose, onDone }: { movement: StockMovement | null; onClose: () => void; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { markMistaken } = useStorageWrites();
 
   async function confirm() {

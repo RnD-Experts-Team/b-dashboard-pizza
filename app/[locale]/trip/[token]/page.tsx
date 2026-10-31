@@ -6,7 +6,7 @@ interface Props {
 }
 
 /**
- * The technician's trip page (docs/MAINTENANCE-V2-UI.md §4) — PUBLIC, no
+ * The technician's trip page (docs/MAINTENANCE-UI.md §4) — PUBLIC, no
  * login: the token in the link is the only credential. Lives outside the
  * (dashboard) group, so there is no auth gate and no dashboard shell; the
  * root [locale] layout still gives it the theme (light/dark), translations

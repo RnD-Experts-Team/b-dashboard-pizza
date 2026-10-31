@@ -15,7 +15,7 @@ import {
 
 /**
  * The unsaved-changes guard every storage dialog with typed data uses
- * (docs/MAINTENANCE-V2-UI.md rule 5): closing with something typed asks
+ * (docs/MAINTENANCE-UI.md rule 5): closing with something typed asks
  * first; closing a clean form just closes.
  *
  *   const guard = useDiscardGuard(isDirty, () => onOpenChange(false));
@@ -23,7 +23,7 @@ import {
  *   {guard.dialog}
  */
 export function useDiscardGuard(dirty: boolean, close: () => void) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [asking, setAsking] = useState(false);
 
   const requestClose = useCallback(() => {

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ISSUE_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { useTicketIssueSearch } from "@/lib/hooks/use-storage";
-import type { TicketIssueHit } from "@/types/maintenance-v2";
+import type { TicketIssueHit } from "@/types/maintenance-system";
 
 /**
  * "Which ticket?" for parts used from storage: type a ticket number, a store
@@ -24,7 +24,7 @@ export interface IssueSearchProps {
 }
 
 export function IssueSearch({ id, value, onChange, invalid, describedBy }: IssueSearchProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [query, setQuery] = useState("");
   const { hits, isSearching, error } = useTicketIssueSearch(query);
 
@@ -92,7 +92,7 @@ export function IssueSearch({ id, value, onChange, invalid, describedBy }: Issue
 }
 
 function IssueLine({ issue }: { issue: TicketIssueHit }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const status = vocabEntry(ISSUE_STATUSES, issue.status);
   return (
     <span className="min-w-0 flex-1">

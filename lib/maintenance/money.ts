@@ -1,9 +1,9 @@
 /**
- * Money, quantities and durations for maintenance v2 screens.
+ * Money, quantities and durations for maintenance screens.
  *
  * The API sends money and hours as 2-decimal STRINGS ("1234.50"). Parse them
  * here — never `parseFloat(x).toFixed()` inline, which puts NaN on screen for
- * a missing value. Display rules (docs/MAINTENANCE-V2-UI.md rule 8): money
+ * a missing value. Display rules (docs/MAINTENANCE-UI.md rule 8): money
  * `$1,234.50`, hours `3h 25m`, always `tabular-nums` in the markup.
  */
 

@@ -3,7 +3,7 @@ import { BASE_URL, errorJson, proxyGet } from "@/app/api/maintenance-tickets/_li
 
 type Params = { params: Promise<{ store: string; ticket: string }> };
 
-/** A ticket's issues, each with its workflow, costs and timeline (MAINTENANCE-V2 §2 "Read"). */
+/** A ticket's issues, each with its workflow, costs and timeline (MAINTENANCE §2 "Read"). */
 export async function GET(request: NextRequest, { params }: Params) {
   const { store, ticket } = await params;
   if (!store || !ticket) return errorJson("MISSING_PARAM", "store and ticket are required", 400);

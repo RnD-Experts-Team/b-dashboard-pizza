@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — the ticket issue and its workflow (MAINTENANCE-V2 §2)   */
+/*  Maintenance — the ticket issue and its workflow (MAINTENANCE §2)   */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import type {
@@ -36,7 +36,7 @@ export type IssueStatus =
   | "closed"
   | "cancelled";
 
-export type TicketStatusV2 = IssueStatus;
+export type TicketStatusValue = IssueStatus;
 
 export type Priority = "urgent" | "high" | "medium" | "low";
 
@@ -301,7 +301,7 @@ export interface TimelineEntry {
 
 /* ── The issue ───────────────────────────────────────────────────────────── */
 
-export interface TicketIssueV2 {
+export interface TicketIssueDetail {
   id: number;
   ticketId: number;
   /** Display title: the catalog issue's title, or other_title. */
@@ -362,7 +362,7 @@ export interface TripLinkIssued {
 
 /** What every workflow action returns: the issue, plus a trip link when one was issued. */
 export interface WorkflowResult {
-  issue: TicketIssueV2;
+  issue: TicketIssueDetail;
   tripLink: TripLinkIssued | null;
 }
 
@@ -456,8 +456,8 @@ export interface CancelIssuePayload {
   reason: string;
 }
 
-/** Per-issue additions to ticket creation (v2). */
-export interface CreateIssueV2Fields {
+/** Per-issue additions to ticket creation. */
+export interface CreateIssueExtraFields {
   impact?: Impact;
   contactName?: string;
   contactPhone?: string;

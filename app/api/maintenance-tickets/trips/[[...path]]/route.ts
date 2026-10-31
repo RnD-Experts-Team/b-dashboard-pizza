@@ -1,6 +1,6 @@
 import { areaHandlers } from "@/app/api/maintenance-tickets/_lib/area-route";
 
-/** Trips (clocking): list/create, one trip, its link, stops, sessions, events, notes, attachments. MAINTENANCE-V2 §3. */
+/** Trips (clocking): list/create, one trip, its link, stops, sessions, events, notes, attachments. MAINTENANCE §3. */
 const area = areaHandlers("trips");
 
 export const GET = area.GET;

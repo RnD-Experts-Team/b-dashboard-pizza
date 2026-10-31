@@ -17,7 +17,7 @@ import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workf
 import { storageService } from "@/lib/api/services/storage.service";
 import { useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
 import { TRIPPABLE_ISSUE_STATUSES } from "@/lib/maintenance-trips/view";
-import type { IssueStatus } from "@/types/maintenance-v2";
+import type { IssueStatus } from "@/types/maintenance-system";
 
 export interface StoreOption {
   /** Numeric stores.id. */

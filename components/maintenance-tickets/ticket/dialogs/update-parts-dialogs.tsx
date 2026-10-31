@@ -32,7 +32,7 @@ export function AddUpdateDialog({
   issueKey: IssueKey | null;
   onSaved: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -124,7 +124,7 @@ export function UsePartsDialog({
   ticketIssueId: number;
   onSaved: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [loading, setLoading] = useState(true);

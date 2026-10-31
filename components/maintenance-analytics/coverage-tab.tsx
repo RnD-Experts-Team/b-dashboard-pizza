@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { MultiSelect } from "@/components/shared/multi-select";
 import { cn } from "@/lib/utils";
 import { useMaintenanceCoverage } from "@/lib/hooks/use-maintenance-analytics";
-import type { CoverageCell, CoverageParams } from "@/types/maintenance-v2";
+import type { CoverageCell, CoverageParams } from "@/types/maintenance-system";
 import { AnalyticsCard } from "@/components/maintenance-tickets/analytics/analytics-card";
 import { KpiTile } from "@/components/maintenance-tickets/analytics/analytics-kpis";
 import { useCatalogIssues } from "@/components/maintenance-technicians/use-catalog-issues";
@@ -37,14 +37,14 @@ const SHADES = [
 const shadeOf = (count: number) => SHADES[Math.min(count, SHADES.length - 1)];
 
 /**
- * Coverage (docs/MAINTENANCE-V2-UI.md §8): who we could call, per store and
+ * Coverage (docs/MAINTENANCE-UI.md §8): who we could call, per store and
  * issue. KPI tiles, then the store × issue grid — each cell the number of
  * technicians covering both, shaded by count, ⚠ "Gap" when there are 0–1;
  * the tooltip adds how many come out for emergencies and their ★ average.
  * Issue filter and "Gaps only" are in the URL (`issues=`, `gaps=1`).
  */
 export function CoverageTab({ filters }: { filters: AnalyticsFilters }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { issues: catalog } = useCatalogIssues();
   const issuesParam = filters.get("issues");
   const issueIds = useMemo(
@@ -233,7 +233,7 @@ export function CoverageTab({ filters }: { filters: AnalyticsFilters }) {
 }
 
 function GapMark() {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   return (
     <span className="inline-flex items-center gap-1 font-semibold text-rose-700 dark:text-rose-300">
       <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -244,7 +244,7 @@ function GapMark() {
 
 /** What the shades mean, each with its words. */
 function Legend() {
-  const t = useTranslations("maintenanceV2.analytics");
+  const t = useTranslations("maintenanceSystem.analytics");
   const items = [
     { shade: SHADES[0], label: t("legendNone"), gap: true },
     { shade: SHADES[1], label: t("legendOne"), gap: true },

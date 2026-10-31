@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — analytics: finances and coverage (MAINTENANCE-V2 §6)    */
+/*  Maintenance — analytics: finances and coverage (MAINTENANCE §6)    */
 /*  Summary / activity / watchlist keep types/maintenance-analytics.types.ts. */
 /* ────────────────────────────────────────────────────────────────────────── */
 

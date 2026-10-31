@@ -25,7 +25,7 @@ import {
 } from "@/lib/maintenance-trips";
 import { cn } from "@/lib/utils";
 import { formatDateOnly, formatDateOnlyWithWeekday, formatTimestamp } from "@/lib/utils/date-display";
-import type { Trip, TripFilters } from "@/types/maintenance-v2";
+import type { Trip, TripFilters } from "@/types/maintenance-system";
 import { LinkStatusBadge, TripStateBadge, TripStatusBadge } from "./trip-badges";
 
 const LIVE_PAGE_SIZE = 50;
@@ -48,7 +48,7 @@ function ListSkeleton({ rows = SKELETON_CARDS }: { rows?: number }) {
 }
 
 function ListError({ onRetry }: { onRetry: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-16 text-center">
       <AlertCircle className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
@@ -93,7 +93,7 @@ function placesOf(trip: Trip, other: string): string {
 /* ── On the clock now ────────────────────────────────────────────────────── */
 
 function OnClockCard({ trip, now, onOpen }: { trip: Trip; now: number; onOpen: (id: number) => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const session = liveOpenSession(trip);
   const stop = currentStop(trip);
   const place = stop ? stopPlace(stop) : null;
@@ -127,7 +127,7 @@ function OnClockCard({ trip, now, onOpen }: { trip: Trip; now: number; onOpen: (
 }
 
 export function OnClockList({ reload, onOpen }: { reload: number; onOpen: (id: number) => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { trips, isLoading, error, refresh, isRefreshing } = useTrips({ onClock: true, status: "open", perPage: LIVE_PAGE_SIZE });
   const [now, setNow] = useState(() => Date.now());
   useReload(reload, refresh);
@@ -163,7 +163,7 @@ export function OnClockList({ reload, onOpen }: { reload: number; onOpen: (id: n
 /* ── Today & upcoming ────────────────────────────────────────────────────── */
 
 function UpcomingRow({ trip, onOpen }: { trip: Trip; onOpen: (id: number) => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const jobs = jobCounts(trip);
   const places = placesOf(trip, t("common.otherStore"));
   return (
@@ -192,7 +192,7 @@ export function UpcomingList({
   onOpen: (id: number) => void;
   emptyAction: ReactNode;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [today] = useState(todayLocal);
   const { trips, isLoading, error, refresh } = useTrips({ status: "open", from: today, perPage: LIVE_PAGE_SIZE });
   useReload(reload, refresh);
@@ -242,7 +242,7 @@ export function HistoryList({
   onFilters: (next: HistoryFilters) => void;
   onOpen: (id: number) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState(filters.search);
   const { technicians } = useTechnicians({ perPage: TECH_FILTER_PAGE_SIZE });

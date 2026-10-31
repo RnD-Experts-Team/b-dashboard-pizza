@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMinutes, formatMoney, formatQuantity } from "@/lib/maintenance/money";
 import { INSPECTION_STATUSES, VISIT_TASK_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import type { IssueSchedule, IssueVisit, TicketIssueV2 } from "@/types/maintenance-v2";
+import type { IssueSchedule, IssueVisit, TicketIssueDetail } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
 import { liveSchedules } from "./dialogs/booking-dialogs";
@@ -74,7 +74,7 @@ export function WorkTab({
   onMove,
   onUseParts,
 }: {
-  issue: TicketIssueV2;
+  issue: TicketIssueDetail;
   isMos: boolean;
   canUseStock: boolean;
   onSecondOpinion: () => void;
@@ -82,7 +82,7 @@ export function WorkTab({
   onMove: (scheduleId: number) => void;
   onUseParts: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const inspections = issue.inspections.filter((i) => !i.mistaken).sort((a, b) => b.id - a.id);
   const bookings: IssueSchedule[] = liveSchedules(issue.schedules);

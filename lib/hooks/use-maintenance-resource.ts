@@ -1,7 +1,7 @@
 "use client";
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  The read / write state every maintenance v2 hook is built from           */
+/*  The read / write state every maintenance hook is built from           */
 /*                                                                            */
 /*  useMaintenanceResource(key, fetcher): loads when `key` changes (null =   */
 /*  don't load), cancels the request in flight so a fast filter change can  */

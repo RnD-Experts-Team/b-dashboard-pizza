@@ -13,7 +13,7 @@ export interface StatusAccent {
   text: string;
 }
 
-/** v2 statuses (MAINTENANCE-V2 §2); the badge text always comes with it. */
+/** The statuses (MAINTENANCE §2); the badge text always comes with it. */
 export const STATUS_ACCENT: Record<string, StatusAccent> = {
   new:              { bar: "bg-sky-500",     text: "text-sky-700 dark:text-sky-400" },
   in_review:        { bar: "bg-indigo-500",  text: "text-indigo-700 dark:text-indigo-400" },

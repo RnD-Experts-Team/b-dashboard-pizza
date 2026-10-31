@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Catalog reads for v2 screens: technicians (ranked when a store/issue is
+ * Catalog reads for the screens: technicians (ranked when a store/issue is
  * given — the technician picker), one technician, categories, suppliers,
  * parts, a part's serial units, and who covers which issue. Writes go
  * through `useMaintenanceMutation(maintenanceCatalogService.x)`.
@@ -9,7 +9,7 @@
 
 import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
 import { keyOf, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { PartSerialStatus, SupplierFilters, TechnicianFilters } from "@/types/maintenance-v2";
+import type { PartSerialStatus, SupplierFilters, TechnicianFilters } from "@/types/maintenance-system";
 
 export { maintenanceCatalogService };
 

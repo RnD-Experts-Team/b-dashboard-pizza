@@ -24,7 +24,7 @@ import { useStorageWrites } from "@/lib/hooks/use-storage";
 import { findNameClash, tidyName } from "@/lib/maintenance/names";
 import { PART_UNITS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 import { useDiscardGuard, useResetOnOpen } from "./discard-guard";
-import type { Part, PartInput, PartMeasureUnit } from "@/types/maintenance-v2";
+import type { Part, PartInput, PartMeasureUnit } from "@/types/maintenance-system";
 
 /**
  * Add a part to the catalog, or edit one (catalog `POST parts` /
@@ -79,7 +79,7 @@ export interface PartFormDialogProps {
 }
 
 export function PartFormDialog({ open, onOpenChange, part, catalog, onSaved }: PartFormDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { createPart, updatePart } = useStorageWrites();
   const [form, setForm] = useState<FormState>(() => stateOf(part));
   const [initial, setInitial] = useState<FormState>(() => stateOf(part));

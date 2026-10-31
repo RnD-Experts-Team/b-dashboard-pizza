@@ -26,7 +26,7 @@ import {
   TH,
   signTone,
 } from "./storage-shared";
-import type { Part } from "@/types/maintenance-v2";
+import type { Part } from "@/types/maintenance-system";
 import type { PartStockLocation, StockPlaceLine, StorageLocation } from "@/types/storage.types";
 
 /**
@@ -77,7 +77,7 @@ export function StockTab({
   canSetSpot,
   revision,
 }: StockTabProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [draft, setDraft] = useState(search);
   const [page, setPage] = useState(1);
   const [spot, setSpot] = useState<SpotTarget | null>(null);
@@ -321,7 +321,7 @@ function LocationLine({
   canSetSpot: boolean;
   onSetSpot: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <span className="font-medium">{loc.storageLocation?.name ?? `#${loc.storageLocationId}`}</span>

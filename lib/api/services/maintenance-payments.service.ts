@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — payments, unpaid work, technician purchases (§4)        */
+/*  Maintenance — payments, unpaid work, technician purchases (§4)        */
 /*                                                                            */
 /*  A payment is paid to ONE technician or ONE supplier and is a list of     */
 /*  lines (hourly · fixed · inspection · parts · gas · other). The server     */
@@ -15,7 +15,7 @@
 /*  technician-purchases/[[...path]], issue-inspections.                     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { http, seg } from "@/lib/api/maintenance-v2/http";
+import { http, seg } from "@/lib/api/maintenance-system/http";
 import type {
   EditPaymentInput,
   IssueInspectionLookupFilters,
@@ -31,7 +31,7 @@ import type {
   TechnicianPurchaseFilters,
   TechnicianPurchaseInput,
   UnpaidWork,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.types";
 
 const paymentPath = (id: number) => `/payments/${seg(id)}`;

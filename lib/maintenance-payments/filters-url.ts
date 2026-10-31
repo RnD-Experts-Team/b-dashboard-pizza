@@ -8,7 +8,7 @@
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import { LINE_TYPE_ORDER } from "@/lib/maintenance-payments/line-types";
-import type { PaidToType, PaymentFilters, PaymentLineType } from "@/types/maintenance-v2";
+import type { PaidToType, PaymentFilters, PaymentLineType } from "@/types/maintenance-system";
 
 export interface PaymentsPageFilters {
   from: string;

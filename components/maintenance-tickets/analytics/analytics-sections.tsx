@@ -64,7 +64,7 @@ const BAR = {
 
 type Tone = keyof typeof TONES;
 
-/** v2 issue statuses (MAINTENANCE-V2 §2) first; the v1 keys stay for tickets read from older rows. */
+/** The issue statuses (MAINTENANCE §2) first; the old keys stay for tickets read from older rows. */
 const STATUS_TONE: Record<string, Tone> = {
   new: "yellow",
   in_review: "blue",

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
 import { storageService } from "@/lib/api/services/storage.service";
 import { keyOf, useMaintenanceMutation, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { PartInput, PartSerialStatus, StartStockCountPayload } from "@/types/maintenance-v2";
+import type { PartInput, PartSerialStatus, StartStockCountPayload } from "@/types/maintenance-system";
 import type {
   CreateStockMovementPayload,
   StockBalanceFilters,
@@ -17,7 +17,7 @@ const LOCATION_LIST_SIZE = 200;
 const SEARCH_DEBOUNCE_MS = 300;
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 Storage page (docs/MAINTENANCE-V2-UI.md §6)              */
+/*  Maintenance Storage page (docs/MAINTENANCE-UI.md §6)              */
 /*                                                                            */
 /*  One small hook per read, built on useMaintenanceResource: each tab loads  */
 /*  only what it shows, and a fast filter change cancels the older request.  */

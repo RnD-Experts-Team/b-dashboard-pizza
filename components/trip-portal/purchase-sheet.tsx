@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { tripPortalService } from "@/lib/hooks/use-trip-portal";
 import { cn } from "@/lib/utils";
-import type { IdName, PublicTrip } from "@/types/maintenance-v2";
+import type { IdName, PublicTrip } from "@/types/maintenance-system";
 import { BIG_INPUT, BigButton, BigField, PhotoField, PortalSheet, usePortalErrorText } from "./portal-bits";
 import type { PortalRun } from "./portal-sheets";
 
@@ -38,7 +38,7 @@ export function PurchaseSheet({
   token: string;
   run: PortalRun;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <PortalSheet open={open} onOpenChange={onOpenChange} title={t("tripPortal.boughtSomething")}>
       <PurchaseForm trip={trip} token={token} run={run} onDone={() => onOpenChange(false)} />
@@ -49,7 +49,7 @@ export function PurchaseSheet({
 type Errors = Partial<Record<"description" | "total_cost" | "supplier" | "form", string>>;
 
 function PurchaseForm({ trip, token, run, onDone }: { trip: PublicTrip; token: string; run: PortalRun; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const errorText = usePortalErrorText();
   const [description, setDescription] = useState("");
   const [cost, setCost] = useState("");

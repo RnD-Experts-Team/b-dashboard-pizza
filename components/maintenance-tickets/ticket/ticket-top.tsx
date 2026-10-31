@@ -26,10 +26,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { TicketHeaderV2 } from "@/lib/api/services/maintenance-workflow.service";
+import type { TicketHeaderInfo } from "@/lib/api/services/maintenance-workflow.service";
 import { IMPACTS, ISSUE_STATUSES, PRIORITIES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { STATUS_TONE, stepDots, type StepDotState } from "@/lib/maintenance-workflow";
-import type { IssueStatus, Priority, TicketIssueV2 } from "@/types/maintenance-v2";
+import type { IssueStatus, Priority, TicketIssueDetail } from "@/types/maintenance-system";
 import { LocalTimestamp } from "../local-timestamp";
 
 const PILL = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium";
@@ -49,14 +49,14 @@ const PRIORITY_TONE: Record<Priority, string> = {
 };
 
 export function StatusBadge({ status, label, className }: { status: string; label?: string; className?: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const entry = vocabEntry(ISSUE_STATUSES, status, label);
   const tone = STATUS_TONE[status as IssueStatus] ?? STATUS_TONE.cancelled;
   return <span className={cn(PILL, tone, className)}>{vocabText(t, entry)}</span>;
 }
 
 export function PriorityBadge({ priority, label }: { priority: string; label?: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const key = (priority in PRIORITY_ICON ? priority : "medium") as Priority;
   const Icon = PRIORITY_ICON[key];
   return (
@@ -68,7 +68,7 @@ export function PriorityBadge({ priority, label }: { priority: string; label?: s
 }
 
 /** The issue's effective priority: the office's when set, else the store's. */
-export function effectivePriority(issue: TicketIssueV2) {
+export function effectivePriority(issue: TicketIssueDetail) {
   return issue.assignedPriority ?? issue.priority;
 }
 
@@ -93,8 +93,8 @@ export function TicketHeader({
   onCancelTicket,
   onDelete,
 }: {
-  ticket: TicketHeaderV2;
-  issue: TicketIssueV2;
+  ticket: TicketHeaderInfo;
+  issue: TicketIssueDetail;
   issueCount: number;
   backHref: string;
   isRefreshing: boolean;
@@ -105,7 +105,7 @@ export function TicketHeader({
   onCancelTicket: () => void;
   onDelete: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const priority = effectivePriority(issue);
   const store = ticket.storeNumber ?? ticket.otherStore ?? "—";
   const terminal = issue.status.value === "closed" || issue.status.value === "cancelled";
@@ -205,11 +205,11 @@ export function IssueSwitcher({
   selectedId,
   onSelect,
 }: {
-  issues: TicketIssueV2[];
+  issues: TicketIssueDetail[];
   selectedId: number;
   onSelect: (id: number) => void;
 }) {
-  const t = useTranslations("maintenanceV2.tickets.page");
+  const t = useTranslations("maintenanceSystem.tickets.page");
   if (issues.length <= 1) return null;
   return (
     <div className="-mx-1 overflow-x-auto px-1">
@@ -256,7 +256,7 @@ const LINE_CLASS: Record<StepDotState, string> = {
 };
 
 /** Every status the issue has been in (the presenter sends `to_status` on each change). */
-export function visitedStatuses(issue: TicketIssueV2): IssueStatus[] {
+export function visitedStatuses(issue: TicketIssueDetail): IssueStatus[] {
   return issue.statusChanges.flatMap((c) => {
     const raw = c as unknown as { toStatus?: string; status?: { value?: string } | null };
     const value = raw.toStatus ?? raw.status?.value;
@@ -264,8 +264,8 @@ export function visitedStatuses(issue: TicketIssueV2): IssueStatus[] {
   });
 }
 
-export function ProgressStrip({ issue }: { issue: TicketIssueV2 }) {
-  const t = useTranslations("maintenanceV2");
+export function ProgressStrip({ issue }: { issue: TicketIssueDetail }) {
+  const t = useTranslations("maintenanceSystem");
   const visited = visitedStatuses(issue);
   const dots = stepDots(issue.status.value, [...visited, issue.status.value]);
   const cancelled = issue.status.value === "cancelled";

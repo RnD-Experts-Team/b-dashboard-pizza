@@ -1,9 +1,9 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — storage: stock counts (MAINTENANCE-V2 §5)               */
+/*  Maintenance — storage: stock counts (MAINTENANCE §5)               */
 /*                                                                            */
 /*  Locations, place levels, balances and the movement ledger keep their      */
-/*  types in types/storage.types.ts (reworked there for the v2 movement       */
-/*  types); this file adds what v2 brings new.                                */
+/*  types in types/storage.types.ts (reworked there for the new movement       */
+/*  types); this file adds what is new.                                */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import type { Decimal, IdName, IsoDateTime, Money } from "./common.types";

@@ -22,7 +22,7 @@ import {
   type PaymentsPageFilters,
 } from "@/lib/maintenance-payments/filters-url";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { UnpaidWork } from "@/types/maintenance-v2";
+import type { UnpaidWork } from "@/types/maintenance-system";
 import { PaymentDetailSheet } from "./payment-detail-sheet";
 import { PaymentDialog, type PaymentPrefill } from "./payment-dialog";
 import { PaymentsFilters } from "./payments-filters";
@@ -37,12 +37,12 @@ const SKELETON_ROWS = 6;
 type DialogState = { open: false } | { open: true; paymentId?: number; prefill?: PaymentPrefill };
 
 /**
- * Payments `/dashboard/maintenance-payments` (docs/MAINTENANCE-V2-UI.md §5):
+ * Payments `/dashboard/maintenance-payments` (docs/MAINTENANCE-UI.md §5):
  * header + primary Record a payment, one filter row, KPI strip, the list,
  * and the Unpaid work panel. Filters and the open payment live in the URL.
  */
 export function PaymentsPage() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

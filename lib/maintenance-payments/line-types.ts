@@ -1,6 +1,6 @@
 /**
  * The payment line-type catalogue: which fields each type shows
- * (docs/MAINTENANCE-V2-UI.md §5 "Lines" — choosing a type reveals ONLY its
+ * (docs/MAINTENANCE-UI.md §5 "Lines" — choosing a type reveals ONLY its
  * fields plus its one-sentence explanation from the vocabulary).
  *
  * Every line has exactly one place: a store (or a typed "other store"), or —
@@ -8,7 +8,7 @@
  */
 
 import { PAYMENT_LINE_TYPES, type VocabEntry } from "@/lib/maintenance/vocabulary";
-import type { PaymentLineType } from "@/types/maintenance-v2";
+import type { PaymentLineType } from "@/types/maintenance-system";
 
 /** The draft fields a line card can show. */
 export type LineField =

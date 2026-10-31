@@ -52,7 +52,7 @@ import type {
   UserRef,
 } from "@/types/maintenance-tickets.types";
 import { BUSY_MESSAGE } from "@/lib/api/utils/error";
-import { http, seg } from "@/lib/api/maintenance-v2/http";
+import { http, seg } from "@/lib/api/maintenance-system/http";
 import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
 import type {
@@ -65,7 +65,7 @@ import type {
   StockCount,
   StockCountFilters,
   TicketIssueHit,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Storage locations, the stock ledger, and on-hand balances                */
@@ -300,7 +300,7 @@ function transformMovementLine(raw: ApiStockMovementLine): StockMovementLine {
 function transformMovement(raw: ApiStockMovement): StockMovement {
   return {
     id: raw.id,
-    // v2 sends `type` as a bare value next to `type_label`; older rows as {value,label}.
+    // the server sends `type` as a bare value next to `type_label`; older rows as {value,label}.
     type:
       typeof raw.type === "string"
         ? { value: raw.type, label: raw.type_label ?? raw.type }
@@ -321,7 +321,7 @@ function transformMovement(raw: ApiStockMovement): StockMovement {
     totalCost: optionalDecimal(raw.total_cost),
     body: raw.body ?? null,
     mistaken: raw.mistaken,
-    // v2 names the link `reverses_stock_movement_id`; older builds `reversal_of_id`.
+    // the server names the link `reverses_stock_movement_id`; older builds `reversal_of_id`.
     reversalOfId: raw.reverses_stock_movement_id ?? raw.reversal_of_id ?? null,
     reversedByIds: raw.reversed_by_ids ?? [],
     lines: mapRelation(raw.lines, transformMovementLine),
@@ -877,7 +877,7 @@ export const storageService = {
     return res.data[0]?.onHand ?? null;
   },
 
-  /* ── Stock counts (v2) ────────────────────────────────────────────────── */
+  /* ── Stock counts ────────────────────────────────────────────────── */
 
   listStockCounts(filters: StockCountFilters = {}, signal?: AbortSignal): Promise<StockCount[]> {
     return http.rows<StockCount>("/stock-counts", { query: filters, signal });
@@ -908,7 +908,7 @@ export const storageService = {
     return http.delete(`/stock-counts/${seg(id)}`);
   },
 
-  /* ── Serial units (v2) ────────────────────────────────────────────────── */
+  /* ── Serial units ────────────────────────────────────────────────── */
 
   /** The serial-numbered units of one part (the part sheet's list). */
   listPartUnits(partId: number, status?: PartSerialStatus, signal?: AbortSignal): Promise<PartSerialUnit[]> {

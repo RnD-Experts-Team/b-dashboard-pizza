@@ -1,6 +1,6 @@
 import { areaHandlers } from "@/app/api/maintenance-tickets/_lib/area-route";
 
-/** Trip sessions not yet paid: GET trip-sessions/unpaid. MAINTENANCE-V2 §3. */
+/** Trip sessions not yet paid: GET trip-sessions/unpaid. MAINTENANCE §3. */
 const area = areaHandlers("trip-sessions");
 
 export const GET = area.GET;

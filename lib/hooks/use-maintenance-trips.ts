@@ -8,7 +8,7 @@
 
 import { maintenanceTripsService } from "@/lib/api/services/maintenance-trips.service";
 import { keyOf, useMaintenanceMutation, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { Trip, TripFilters } from "@/types/maintenance-v2";
+import type { Trip, TripFilters } from "@/types/maintenance-system";
 
 export { maintenanceTripsService };
 

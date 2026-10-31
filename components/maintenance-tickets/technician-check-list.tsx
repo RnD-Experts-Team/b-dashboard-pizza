@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { standingOf } from "@/lib/maintenance-tickets/technician-ranking";
-import type { Technician } from "@/types/maintenance-v2";
+import type { Technician } from "@/types/maintenance-system";
 import { TechnicianStandingBadges } from "./technician-standing";
 
 /**
@@ -24,7 +24,7 @@ export function TechnicianCheckList({
   onToggle: (technicianId: number) => void;
   emptyText?: string;
 }) {
-  const t = useTranslations("maintenanceV2.technicians");
+  const t = useTranslations("maintenanceSystem.technicians");
   const live = technicians.filter((tech) => !tech.deletedAt);
 
   return (

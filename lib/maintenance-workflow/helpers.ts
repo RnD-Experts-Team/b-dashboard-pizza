@@ -4,7 +4,7 @@
  * chips on the tickets list, and the paired status badge tones.
  */
 
-import type { IssueStatus, WhoseTurn } from "@/types/maintenance-v2";
+import type { IssueStatus, WhoseTurn } from "@/types/maintenance-system";
 
 /** `App\Enums\IssueStatus` whose-turn column. */
 export const WHOSE_TURN_BY_STATUS = {

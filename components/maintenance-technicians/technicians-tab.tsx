@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { useTechnicianCategories, useTechnicians } from "@/lib/hooks/use-maintenance-catalog";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { Technician, TechnicianFilters } from "@/types/maintenance-v2";
+import type { Technician, TechnicianFilters } from "@/types/maintenance-system";
 import { StarValue } from "./star-rating";
 import { useCatalogIssues } from "./use-catalog-issues";
 import { useQueryParams } from "./use-query-params";
@@ -33,14 +33,14 @@ export const EMERGENCY_BADGE =
   "inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[11px] font-semibold text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
 
 /**
- * Technicians tab (docs/MAINTENANCE-V2-UI.md §7): one flat filter row —
+ * Technicians tab (docs/MAINTENANCE-UI.md §7): one flat filter row —
  * search, category, store covered, issue covered, "Emergency only" — then the
  * list (a table on desktop, cards on a phone). Filters live in the URL.
  * With a store or an issue chosen the server ranks the list (covers store →
  * covers issue → call first → rating), so the order is the server's.
  */
 export function TechniciansTab({ locale, onAdd, canAdd }: { locale: string; onAdd: () => void; canAdd: boolean }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const router = useRouter();
   const { get, set } = useQueryParams();
   const storeOptions = useStoreNumberOptions();

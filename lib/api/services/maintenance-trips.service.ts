@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — trips, the office side (MAINTENANCE-V2 §3)              */
+/*  Maintenance — trips, the office side (MAINTENANCE §3)              */
 /*                                                                            */
 /*  A trip is one technician's day: stops (stores + their issues), sessions  */
 /*  (clock in → clock out) with break/driving/parts-run events, purchases,   */
@@ -10,7 +10,7 @@
 /*  Internal routes: trips/[[...path]], trip-sessions/[...path].             */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { http, request, seg } from "@/lib/api/maintenance-v2/http";
+import { http, request, seg } from "@/lib/api/maintenance-system/http";
 import type {
   AddEventPayload,
   AddSessionPayload,
@@ -26,7 +26,7 @@ import type {
   UpdateEventPayload,
   UpdateSessionPayload,
   UpdateTripPayload,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.types";
 
 const tripPath = (tripId: number) => `/trips/${seg(tripId)}`;

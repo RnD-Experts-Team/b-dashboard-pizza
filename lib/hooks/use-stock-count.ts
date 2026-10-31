@@ -20,7 +20,7 @@ import {
   countTotals,
   type CountEdits,
 } from "@/lib/storage/stock-count";
-import type { StockCountFilters } from "@/types/maintenance-v2";
+import type { StockCountFilters } from "@/types/maintenance-system";
 
 export function useStockCounts(filters: StockCountFilters = {}, enabled = true) {
   const res = useMaintenanceResource(enabled ? keyOf("stock-counts", filters) : null, (signal) =>

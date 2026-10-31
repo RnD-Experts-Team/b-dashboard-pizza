@@ -1,5 +1,5 @@
 import type { Ticket, TicketNote, TicketNoteWithOwner } from "@/types/maintenance-tickets.types";
-import type { TicketIssueV2 } from "@/types/maintenance-v2";
+import type { TicketIssueDetail } from "@/types/maintenance-system";
 
 /**
  * Put a ticket's notes — from GET .../notes or .../notes/all (the "all" read
@@ -9,9 +9,9 @@ import type { TicketIssueV2 } from "@/types/maintenance-v2";
  */
 export function withTicketNotes(
   ticket: Ticket,
-  issues: TicketIssueV2[],
+  issues: TicketIssueDetail[],
   notes: TicketNoteWithOwner[],
-): { ticket: Ticket; issues: TicketIssueV2[] } {
+): { ticket: Ticket; issues: TicketIssueDetail[] } {
   const byOwner = notes.reduce<Map<string, TicketNote[]>>((acc, { owner, ...note }) => {
     if (!owner.type) return acc;
     const key = `${owner.type}:${owner.id}`;
@@ -20,7 +20,7 @@ export function withTicketNotes(
   }, new Map());
   const notesOf = (type: string, id: number) => byOwner.get(`${type}:${id}`) ?? [];
 
-  const placeOnIssue = (issue: TicketIssueV2): TicketIssueV2 => ({
+  const placeOnIssue = (issue: TicketIssueDetail): TicketIssueDetail => ({
     ...issue,
     notes: notesOf("ticket_issue", issue.id),
     inspections: issue.inspections.map((i) => ({ ...i, notes: notesOf("issue_inspection", i.id) })),

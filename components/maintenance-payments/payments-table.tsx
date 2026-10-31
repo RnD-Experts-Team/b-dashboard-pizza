@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { PaymentListRow } from "@/types/maintenance-v2";
+import type { PaymentListRow } from "@/types/maintenance-system";
 import { LineTypeBadges } from "./line-type-badges";
 import { formatPaidDate } from "./payment-detail-sheet";
 
@@ -22,7 +22,7 @@ function categoryName(row: PaymentListRow): string | null {
  * below md; the table from md up. A row opens the detail sheet.
  */
 export function PaymentsTable({ rows, onOpen }: { rows: PaymentListRow[]; onOpen: (id: number) => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
 
   const invoiceCell = (row: PaymentListRow) => (
     <span className="inline-flex items-center gap-1 text-xs">

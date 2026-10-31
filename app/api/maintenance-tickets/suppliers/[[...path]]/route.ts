@@ -1,6 +1,6 @@
 import { areaHandlers } from "@/app/api/maintenance-tickets/_lib/area-route";
 
-/** Suppliers: list/create, one supplier, edit, delete, restore, notes, attachments. MAINTENANCE-V2 §1. */
+/** Suppliers: list/create, one supplier, edit, delete, restore, notes, attachments. MAINTENANCE §1. */
 const area = areaHandlers("suppliers");
 
 export const GET = area.GET;

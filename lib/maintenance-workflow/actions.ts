@@ -8,7 +8,7 @@
  * `service` names the maintenanceWorkflowService method it calls.
  */
 
-import type { WorkflowActionId, WorkflowNextAction } from "@/types/maintenance-v2";
+import type { WorkflowActionId, WorkflowNextAction } from "@/types/maintenance-system";
 
 export interface WorkflowActionMeta {
   id: WorkflowActionId;

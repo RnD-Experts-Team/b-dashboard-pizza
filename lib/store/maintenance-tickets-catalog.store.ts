@@ -3,7 +3,7 @@ import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { maintenanceTicketsService } from "@/lib/api/services/maintenance-tickets.service";
 import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
 import type { CatalogIssue } from "@/types/maintenance-tickets.types";
-import type { Technician, TechnicianAbility } from "@/types/maintenance-v2";
+import type { Technician, TechnicianAbility } from "@/types/maintenance-system";
 
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  The shared maintenance catalog: issues (what can break), technicians and */

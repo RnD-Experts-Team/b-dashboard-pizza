@@ -1,10 +1,10 @@
 /**
- * The "Record stock" menu on the Storage page (docs/MAINTENANCE-V2-UI.md §6),
- * in the words people use. Each entry maps onto ONE v2 movement type, or —
+ * The "Record stock" menu on the Storage page (docs/MAINTENANCE-UI.md §6),
+ * in the words people use. Each entry maps onto ONE movement type, or —
  * for parts bought — onto the payment dialog with a parts line to storage,
  * because a Bought movement only ever comes from a payment.
  *
- * Labels are i18n keys under `maintenanceV2.stock.actions.*` with an English
+ * Labels are i18n keys under `maintenanceSystem.stock.actions.*` with an English
  * fallback; icons are lucide names resolved by the component, so this file
  * stays React-free.
  */
@@ -15,7 +15,7 @@ export type StockActionId = "bought" | "used" | "returned" | "moved" | "opening_
 
 export interface StockAction {
   id: StockActionId;
-  /** i18n key (maintenanceV2.stock.actions.<id>.label / .help). */
+  /** i18n key (maintenanceSystem.stock.actions.<id>.label / .help). */
   labelKey: string;
   helpKey: string;
   label: string;
@@ -30,7 +30,7 @@ export interface StockAction {
   twoLocations?: boolean;
 }
 
-const key = (id: StockActionId) => `maintenanceV2.stock.actions.${id}`;
+const key = (id: StockActionId) => `maintenanceSystem.stock.actions.${id}`;
 
 export const STOCK_ACTIONS = [
   {

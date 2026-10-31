@@ -36,7 +36,7 @@ export function TechnicianPicker({
   invalid?: boolean;
   id?: string;
 }) {
-  const t = useTranslations("maintenanceV2.tickets.picker");
+  const t = useTranslations("maintenanceSystem.tickets.picker");
   const [category, setCategory] = useState<string>(ALL);
   const [everyone, setEveryone] = useState(false);
   const { categories } = useTechnicianCategories();

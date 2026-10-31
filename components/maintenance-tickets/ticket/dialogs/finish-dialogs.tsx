@@ -11,7 +11,7 @@ import { maintenanceTicketsService } from "@/lib/api/services/maintenance-ticket
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
 import { CLOSE_CHECKLIST, ISSUE_STATUSES, RESOLUTIONS, vocabEntry, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 import { CHECKLIST_EXEMPT_RESOLUTIONS, CLOSE_RESOLUTIONS, openChecklistItems } from "@/lib/maintenance-workflow";
-import type { CloseChecklistItem, CloseResolution, IssueStatus } from "@/types/maintenance-v2";
+import type { CloseChecklistItem, CloseResolution, IssueStatus } from "@/types/maintenance-system";
 import { DatePicker } from "../../form-bits";
 import { PasteFileZone } from "../../paste-file-zone";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
@@ -20,7 +20,7 @@ import type { StepDialogProps } from "./types";
 /* ── Mark work done ──────────────────────────────────────────────────────── */
 
 export function WorkDoneDialog({ open, onOpenChange, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [work, setWork] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -107,7 +107,7 @@ export function WorkDoneDialog({ open, onOpenChange, run }: StepDialogProps) {
 /* ── Close ───────────────────────────────────────────────────────────────── */
 
 export function ChecklistView({ items, resolution }: { items: readonly CloseChecklistItem[]; resolution: CloseResolution | null }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const exempt = resolution ? CHECKLIST_EXEMPT_RESOLUTIONS.has(resolution) : false;
   return (
     <ul className="space-y-1.5">
@@ -131,7 +131,7 @@ export function ChecklistView({ items, resolution }: { items: readonly CloseChec
 }
 
 export function CloseDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [resolution, setResolution] = useState<CloseResolution | "">("");
   const [finalNote, setFinalNote] = useState("");
@@ -219,7 +219,7 @@ export function CloseDialog({ open, onOpenChange, issue, run }: StepDialogProps)
 /* ── Jump to a status ────────────────────────────────────────────────────── */
 
 export function JumpDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [status, setStatus] = useState<IssueStatus | "">("");
   const [reason, setReason] = useState("");
@@ -283,7 +283,7 @@ export function CancelDialog({
   ticketId,
   onTicketCancelled,
 }: StepDialogProps & { scope: "issue" | "ticket"; ticketId: number; onTicketCancelled: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [reason, setReason] = useState("");
   const whole = scope === "ticket";

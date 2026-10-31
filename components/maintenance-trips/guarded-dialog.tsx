@@ -35,7 +35,7 @@ export function GuardedDialog({
   className?: string;
   children: ReactNode;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [asking, setAsking] = useState(false);
 
   function request(next: boolean): void {

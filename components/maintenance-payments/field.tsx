@@ -34,7 +34,7 @@ export function Field({
   /** Small thing at the end of the label row (a badge, a reset link). */
   aside?: ReactNode;
 }) {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   return (
     <div className={cn("min-w-0 space-y-1", className)}>
       <div className="flex min-h-5 items-center justify-between gap-2">

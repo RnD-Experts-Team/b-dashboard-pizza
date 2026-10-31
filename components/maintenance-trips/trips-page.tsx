@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { parseTripTab, tripLinkUrl, tripShareText, tripStoreNumbers, type TripTab } from "@/lib/maintenance-trips";
-import type { TripWithLink } from "@/types/maintenance-v2";
+import type { TripWithLink } from "@/types/maintenance-system";
 import { NewTripDialog } from "./new-trip-dialog";
 import { TripDrawer } from "./trip-drawer";
 import { TripLinkDialog } from "./trip-link-dialog";
@@ -28,12 +28,12 @@ interface ShownLink {
 }
 
 /**
- * Trips (docs/MAINTENANCE-V2-UI.md §3): On the clock now · Today & upcoming ·
+ * Trips (docs/MAINTENANCE-UI.md §3): On the clock now · Today & upcoming ·
  * History, the New trip dialog and the trip drawer. Tab, open trip and the
  * history filters live in the URL (?tab= ?trip= ?tech= ?from= ?to= ?q=).
  */
 export function TripsPage() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();

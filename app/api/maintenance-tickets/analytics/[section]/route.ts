@@ -14,7 +14,7 @@ const SINGLE = [
   "untouched_days",
   "page",
   "per_page",
-  // finances / coverage (MAINTENANCE-V2 §6)
+  // finances / coverage (MAINTENANCE §6)
   "category_id",
   "technician_id",
   "supplier_id",

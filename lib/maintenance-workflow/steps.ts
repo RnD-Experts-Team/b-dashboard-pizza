@@ -1,5 +1,5 @@
 /**
- * The ticket page's progress strip (docs/MAINTENANCE-V2-UI.md §2): the 11
+ * The ticket page's progress strip (docs/MAINTENANCE-UI.md §2): the 11
  * flowchart steps compressed to 8 dots —
  *
  *   Submitted · Review · Store · Inspection · Approval · Scheduled · Work done · Closed
@@ -11,7 +11,7 @@
  * ("skipped"); the rest are done or still to come.
  */
 
-import type { IssueStatus } from "@/types/maintenance-v2";
+import type { IssueStatus } from "@/types/maintenance-system";
 
 export type StepDotId =
   | "submitted"
@@ -27,7 +27,7 @@ export type StepDotState = "done" | "current" | "skipped" | "upcoming";
 
 export interface StepDot {
   id: StepDotId;
-  /** i18n key in `maintenanceV2`. */
+  /** i18n key in `maintenanceSystem`. */
   key: string;
   label: string;
   /** The status this dot stands for. */

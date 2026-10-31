@@ -28,7 +28,7 @@ import { getTicketsFieldErrors } from "@/lib/api/maintenance-tickets-errors";
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { maintenanceCatalogService, useTechnicianCategories } from "@/lib/hooks/use-maintenance-catalog";
 import { findNameClash, tidyName } from "@/lib/maintenance/names";
-import type { TechnicianCategory } from "@/types/maintenance-v2";
+import type { TechnicianCategory } from "@/types/maintenance-system";
 
 const SKELETON_ROWS = 3;
 
@@ -52,7 +52,7 @@ export function CategoryManagerDialog({
   /** After any change, so the caller's category list reloads. */
   onChanged?: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { categories, isLoading, error, refresh, setData } = useTechnicianCategories(open);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
@@ -207,7 +207,7 @@ function CategoryRow({
   onSaved: (saved: TechnicianCategory) => void;
   onDelete: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [saving, setSaving] = useState(false);

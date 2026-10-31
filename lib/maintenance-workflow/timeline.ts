@@ -6,7 +6,7 @@
  */
 
 import type { TicketNote } from "@/types/maintenance-tickets.types";
-import type { IdName, TimelineEntry } from "@/types/maintenance-v2";
+import type { IdName, TimelineEntry } from "@/types/maintenance-system";
 
 export type TimelineTone = "neutral" | "store" | "technician" | "money" | "done" | "warning";
 

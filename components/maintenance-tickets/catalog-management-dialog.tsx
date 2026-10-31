@@ -25,7 +25,7 @@ import {
   entityPaths,
 } from "@/lib/api/services/maintenance-tickets.service";
 import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalog.service";
-import type { Part, TechnicianCategory } from "@/types/maintenance-v2";
+import type { Part, TechnicianCategory } from "@/types/maintenance-system";
 import type {
   CatalogIssue,
   TicketNote,

@@ -49,7 +49,7 @@ export function TicketsAttention({
   onFiltersChange: (next: TicketsFilters) => void;
   disabled?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const before = yesterday();
 
   function countOf(chip: (typeof ATTENTION_CHIPS)[number]): number | null {

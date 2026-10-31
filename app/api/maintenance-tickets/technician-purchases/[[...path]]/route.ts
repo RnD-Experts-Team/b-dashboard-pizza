@@ -1,6 +1,6 @@
 import { areaHandlers } from "@/app/api/maintenance-tickets/_lib/area-route";
 
-/** Technician purchases (things a technician bought and is owed for). MAINTENANCE-V2 §4. */
+/** Technician purchases (things a technician bought and is owed for). MAINTENANCE §4. */
 const area = areaHandlers("technician-purchases");
 
 export const GET = area.GET;

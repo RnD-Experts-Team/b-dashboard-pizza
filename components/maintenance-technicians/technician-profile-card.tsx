@@ -24,7 +24,7 @@ import {
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { maintenanceCatalogService } from "@/lib/hooks/use-maintenance-catalog";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { Technician } from "@/types/maintenance-v2";
+import type { Technician } from "@/types/maintenance-system";
 import { StarValue } from "./star-rating";
 import { EMERGENCY_BADGE } from "./technicians-tab";
 
@@ -44,7 +44,7 @@ export function TechnicianProfileCard({
   onEdit: () => void;
   onChanged: (next: Technician | null) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const deleted = Boolean(technician.deletedAt);

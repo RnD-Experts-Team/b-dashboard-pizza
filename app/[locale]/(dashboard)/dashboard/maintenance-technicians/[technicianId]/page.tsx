@@ -25,12 +25,12 @@ import { PaymentsList } from "@/components/maintenance-technicians/payments-list
 const SKELETON_BLOCKS = 3;
 
 /**
- * One technician (docs/MAINTENANCE-V2-UI.md §7): the profile card, the issues
+ * One technician (docs/MAINTENANCE-UI.md §7): the profile card, the issues
  * he covers (★ per issue, call first, notes), his latest trips and payments,
  * notes and files, then his work report for a range.
  */
 export default function MaintenanceTechnicianPage() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const params = useParams();
   const router = useRouter();
   const locale = (params?.locale as string) ?? "en";

@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — settings (GET/PUT maintenance-settings, §2)              */
+/*  Maintenance — settings (GET/PUT maintenance-settings, §2)              */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import type { ApprovalLevelKey } from "./workflow.types";

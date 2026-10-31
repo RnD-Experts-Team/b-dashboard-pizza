@@ -16,7 +16,7 @@ import { getTicketsFieldErrors } from "@/lib/api/maintenance-tickets-errors";
 import { useTechnicians } from "@/lib/hooks/use-maintenance-catalog";
 import { maintenanceTripsService } from "@/lib/hooks/use-maintenance-trips";
 import { todayLocal } from "@/lib/maintenance-trips";
-import type { SchedulePurpose, TripWithLink } from "@/types/maintenance-v2";
+import type { SchedulePurpose, TripWithLink } from "@/types/maintenance-system";
 import { GuardedDialog } from "./guarded-dialog";
 import { draftFor, otherDraft, StopIssueList, StoreChoices, useTripStores, type PlannerStore, type StopDraft } from "./stop-picker";
 
@@ -75,7 +75,7 @@ function NewTripForm({
   onBusy: (busy: boolean) => void;
   onCreated: (result: TripWithLink) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [date, setDate] = useState(todayLocal());
   const [stops, setStops] = useState<StopDraft[]>([]);
   const [technicianId, setTechnicianId] = useState<number | null>(null);
@@ -258,7 +258,7 @@ function StopsPicker({
   onChange: (stops: StopDraft[]) => void;
   error?: string;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [search, setSearch] = useState("");
   const [other, setOther] = useState("");
   const deferred = useDeferredValue(search);

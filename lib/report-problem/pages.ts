@@ -158,7 +158,7 @@ export const REPORT_PAGES: ReportPage[] = [
   { path: "/maintenance-analytics", labelKey: "nav.maintenanceAnalytics", sectionKey: K.maintenanceAnalytics },
   { path: "/maintenance-troubleshooting", labelKey: "nav.maintenanceTroubleshooting", sectionKey: K.troubleshooting },
   { path: "/maintenance-technicians", labelKey: "nav.maintenanceTechnicians", sectionKey: K.technicians },
-  // Payments replaced Daily Pay (maintenance v2) and reports into the same section;
+  // Payments replaced Daily Pay and reports into the same section;
   // trips report with the maintenance tickets until Tickets has an area for them.
   { path: "/maintenance-payments", labelKey: "nav.maintenancePayments", sectionKey: K.dailyPay },
   { path: "/maintenance-trips", labelKey: "nav.maintenanceTrips", sectionKey: K.maintenanceTickets },

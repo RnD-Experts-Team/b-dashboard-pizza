@@ -11,7 +11,7 @@ import { useMaintenanceSettings } from "@/lib/hooks/use-maintenance-settings";
 import { formatMoney, parseDecimal } from "@/lib/maintenance/money";
 import { APPROVAL_DECISIONS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 import { approvalLevelOf } from "@/lib/maintenance-workflow";
-import type { ApprovalDecision, Inspection, TicketIssueV2 } from "@/types/maintenance-v2";
+import type { ApprovalDecision, Inspection, TicketIssueDetail } from "@/types/maintenance-system";
 import { Segmented } from "../../form-bits";
 import { PasteFileZone } from "../../paste-file-zone";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
@@ -19,12 +19,12 @@ import { amountOrNull, formatDayTime } from "../format";
 import type { StepDialogProps } from "./types";
 
 /** Inspections still waiting for their result, newest first. */
-export function scheduledInspections(issue: TicketIssueV2): Inspection[] {
+export function scheduledInspections(issue: TicketIssueDetail): Inspection[] {
   return issue.inspections.filter((i) => !i.mistaken && i.status === "scheduled").sort((a, b) => b.id - a.id);
 }
 
 /** The latest inspection that gave a quote (the one an approval is about). */
-export function quotedInspection(issue: TicketIssueV2): Inspection | null {
+export function quotedInspection(issue: TicketIssueDetail): Inspection | null {
   return (
     issue.inspections
       .filter((i) => !i.mistaken && i.status === "done" && i.estimatedCost != null)
@@ -57,7 +57,7 @@ export function InspectionResultDialog({
   run,
   inspectionId,
 }: StepDialogProps & { inspectionId?: number | null }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const open_ = scheduledInspections(issue);
   const [picked, setPicked] = useState(String(inspectionId ?? open_[0]?.id ?? ""));
@@ -148,8 +148,8 @@ export function InspectionResultDialog({
 /* ── Ask for approval ────────────────────────────────────────────────────── */
 
 /** "Needs Maintenance Manager approval" for a typed amount. */
-function useLevelLabel(issue: TicketIssueV2, amount: string): string | null {
-  const t = useTranslations("maintenanceV2");
+function useLevelLabel(issue: TicketIssueDetail, amount: string): string | null {
+  const t = useTranslations("maintenanceSystem");
   const canReadSettings = useAuthStore((s) => s.canAccessRoute({ service: "Maintenance", method: "GET", path: "/maintenance-settings" }));
   const { settings } = useMaintenanceSettings(canReadSettings);
   const server = issue.workflow?.approvalLevelFor ?? null;
@@ -164,7 +164,7 @@ function useLevelLabel(issue: TicketIssueV2, amount: string): string | null {
 }
 
 export function ApprovalRequestDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const quote = quotedInspection(issue);
   const initial = issue.costs?.estimated ?? quote?.estimatedCost ?? "";
@@ -211,7 +211,7 @@ export function ApprovalRequestDialog({ open, onOpenChange, issue, run }: StepDi
 /* ── Record the approval ─────────────────────────────────────────────────── */
 
 export function RecordApprovalDialog({ open, onOpenChange, issue, run }: StepDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const quote = quotedInspection(issue);
   const initialAmount = issue.costs?.estimated ?? quote?.estimatedCost ?? "";

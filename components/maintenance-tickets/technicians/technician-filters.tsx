@@ -16,7 +16,7 @@ import { maintenanceCatalogService } from "@/lib/api/services/maintenance-catalo
 import { LONG_RANGE_PRESETS, RANGE_PRESETS, daysToInstants, matchPreset, presetDays } from "@/lib/maintenance-tickets/local-range";
 import type { StoreSelection } from "@/types/business-reports.types";
 import type { CatalogIssue } from "@/types/maintenance-tickets.types";
-import type { TechnicianCategory } from "@/types/maintenance-v2";
+import type { TechnicianCategory } from "@/types/maintenance-system";
 import type { TechnicianAnalyticsParams } from "@/types/technician-analytics.types";
 
 const ALL = "all";

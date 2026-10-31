@@ -26,7 +26,7 @@ import {
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { TIMELINE_TONE_CLASS, actorName, timelineKindMeta } from "@/lib/maintenance-workflow";
-import type { TimelineEntry } from "@/types/maintenance-v2";
+import type { TimelineEntry } from "@/types/maintenance-system";
 import { LocalTimestamp } from "../local-timestamp";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -52,7 +52,7 @@ const ICONS: Record<string, LucideIcon> = {
 
 /** One vertical timeline, newest first: a dot and a card per event. */
 export function ActivityTab({ entries }: { entries: TimelineEntry[] }) {
-  const t = useTranslations("maintenanceV2.tickets.activity");
+  const t = useTranslations("maintenanceSystem.tickets.activity");
 
   if (!entries.length) {
     return (

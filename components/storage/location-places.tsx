@@ -43,7 +43,7 @@ const VALUE_SEPARATORS = /[,\n]/;
 type Pending = { kind: "level"; level: StoragePlaceLevel } | { kind: "value"; level: StoragePlaceLevel; value: StoragePlaceValue };
 
 export function LocationPlaces({ locationId, locationName, canManage }: { locationId: number; locationName: string; canManage: boolean }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { levels, isLoading, error, refresh, setData } = usePlaceLevels(locationId);
   const [newLevel, setNewLevel] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -220,7 +220,7 @@ function LevelCard({
   onDeleteValue: (value: StoragePlaceValue) => void;
   onError: (err: unknown) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(level.name);
   const [newValues, setNewValues] = useState("");

@@ -36,7 +36,7 @@ export interface SpotPickerProps {
 }
 
 export function SpotPicker({ locationId, value, onChange, canDeclare, disabled, hideWhenEmpty }: SpotPickerProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { levels, isLoading, setData } = usePlaceLevels(locationId);
 
   if (!locationId) return null;
@@ -93,7 +93,7 @@ function LevelSelect({
   canDeclare?: boolean;
   disabled?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);

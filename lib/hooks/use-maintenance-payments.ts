@@ -9,7 +9,7 @@
 
 import { maintenancePaymentsService } from "@/lib/api/services/maintenance-payments.service";
 import { keyOf, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { IssueInspectionLookupFilters, PaymentFilters, TechnicianPurchaseFilters } from "@/types/maintenance-v2";
+import type { IssueInspectionLookupFilters, PaymentFilters, TechnicianPurchaseFilters } from "@/types/maintenance-system";
 
 export { maintenancePaymentsService };
 

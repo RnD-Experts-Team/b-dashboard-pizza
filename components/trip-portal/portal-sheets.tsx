@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { tripPortalService } from "@/lib/hooks/use-trip-portal";
-import type { PublicTrip, TripStop, TripStopIssue } from "@/types/maintenance-v2";
+import type { PublicTrip, TripStop, TripStopIssue } from "@/types/maintenance-system";
 import {
   BIG_INPUT,
   BIG_TEXTAREA,
@@ -56,7 +56,7 @@ function FormError({ message }: { message: string | null }) {
 /* ── Clock in / clock out ────────────────────────────────────────────────── */
 
 export function ClockInSheet({ open, onOpenChange, run }: { open: boolean; onOpenChange: (o: boolean) => void; run: PortalRun }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <PortalSheet open={open} onOpenChange={onOpenChange} title={t("tripPortal.buttons.clock_in")}>
       <ClockInForm run={run} onDone={() => onOpenChange(false)} />
@@ -65,7 +65,7 @@ export function ClockInSheet({ open, onOpenChange, run }: { open: boolean; onOpe
 }
 
 function ClockInForm({ run, onDone }: { run: PortalRun; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [car, setCar] = useState<"yes" | "no" | null>(null);
   const [odometer, setOdometer] = useState("");
   const [photo, setPhoto] = useState<File[]>([]);
@@ -137,7 +137,7 @@ export function ClockOutSheet({
   run: PortalRun;
   usingCar: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <PortalSheet open={open} onOpenChange={onOpenChange} title={t("tripPortal.buttons.clock_out")} description={t("tripPortal.clockOutHelp")}>
       <ClockOutForm run={run} usingCar={usingCar} onDone={() => onOpenChange(false)} />
@@ -146,7 +146,7 @@ export function ClockOutSheet({
 }
 
 function ClockOutForm({ run, usingCar, onDone }: { run: PortalRun; usingCar: boolean; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [odometer, setOdometer] = useState("");
   const [photo, setPhoto] = useState<File[]>([]);
   const { busy, error, submit } = useSheetSubmit(run, onDone);
@@ -202,7 +202,7 @@ export function ArriveSheet({
   run: PortalRun;
   storeName: string;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <PortalSheet open={!!stop} onOpenChange={(o) => !o && onClose()} title={t("tripPortal.imHere")} description={storeName}>
       {stop && <ArriveForm stop={stop} run={run} onDone={onClose} />}
@@ -211,7 +211,7 @@ export function ArriveSheet({
 }
 
 function ArriveForm({ stop, run, onDone }: { stop: TripStop; run: PortalRun; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [odometer, setOdometer] = useState("");
   const [photo, setPhoto] = useState<File[]>([]);
   const { busy, error, submit } = useSheetSubmit(run, onDone);
@@ -254,7 +254,7 @@ export interface IssueTarget {
 }
 
 export function IssueDoneSheet({ target, onClose, run }: { target: IssueTarget | null; onClose: () => void; run: PortalRun }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const inspection = target?.issue.purpose === "inspection";
   return (
     <PortalSheet
@@ -271,7 +271,7 @@ export function IssueDoneSheet({ target, onClose, run }: { target: IssueTarget |
 const DECIMAL_INPUT = "decimal";
 
 function IssueDoneForm({ target, run, onDone }: { target: IssueTarget; run: PortalRun; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const inspection = target.issue.purpose === "inspection";
   const [note, setNote] = useState("");
   const [findings, setFindings] = useState("");
@@ -370,7 +370,7 @@ function ReasonForm({
   run: PortalRun;
   onDone: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [reason, setReason] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const { busy, error, submit } = useSheetSubmit(run, onDone);
@@ -414,7 +414,7 @@ export function AddStoreSheet({
   trip: PublicTrip;
   run: PortalRun;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <PortalSheet open={open} onOpenChange={onOpenChange} title={t("tripPortal.addStore")} description={t("tripPortal.addStoreHelp")}>
       <AddStoreForm trip={trip} run={run} onDone={() => onOpenChange(false)} />
@@ -423,7 +423,7 @@ export function AddStoreSheet({
 }
 
 function AddStoreForm({ trip, run, onDone }: { trip: PublicTrip; run: PortalRun; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { busy, error, submit } = useSheetSubmit(run, onDone);
   const onTrip = new Set(trip.stops.flatMap((s) => (s.store ? [s.store.id] : [])));
   const choices = (trip.stores ?? []).filter((s) => !onTrip.has(s.id));
@@ -465,7 +465,7 @@ export function NoteSheet({
   trip: PublicTrip;
   run: PortalRun;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <PortalSheet open={open} onOpenChange={onOpenChange} title={t("tripPortal.addNote")} description={t("tripPortal.noteHelp")}>
       <NoteForm trip={trip} run={run} onDone={() => onOpenChange(false)} />
@@ -474,7 +474,7 @@ export function NoteSheet({
 }
 
 function NoteForm({ trip, run, onDone }: { trip: PublicTrip; run: PortalRun; onDone: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const here = trip.stops.find((s) => s.status === "arrived" && !s.leftAt) ?? null;

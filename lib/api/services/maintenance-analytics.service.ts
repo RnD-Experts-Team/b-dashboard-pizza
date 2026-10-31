@@ -1,18 +1,18 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — analytics: finances and coverage (MAINTENANCE-V2 §6)    */
+/*  Maintenance — analytics: finances and coverage (MAINTENANCE §6)    */
 /*                                                                            */
 /*  summary / activity / watchlist keep their hand-mapped readers in         */
 /*  maintenance-tickets.service.ts (used by the Overview tab today); this    */
 /*  service adds the two new sections. Internal route: analytics/[section]. */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { http, REPORT_TIMEOUT_MS } from "@/lib/api/maintenance-v2/http";
+import { http, REPORT_TIMEOUT_MS } from "@/lib/api/maintenance-system/http";
 import type {
   CoverageParams,
   FinancesParams,
   MaintenanceCoverage,
   MaintenanceFinances,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 
 export const maintenanceAnalyticsService = {
   /** `from`/`to` required, at most 400 days apart; mistaken payments excluded. */

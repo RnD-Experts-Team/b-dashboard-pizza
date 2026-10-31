@@ -43,11 +43,11 @@ import { IssueSearch } from "./issue-search";
 import { SerialPicker } from "./serial-picker";
 import { SpotPicker } from "./spot-picker";
 import { StockIcon } from "./storage-shared";
-import type { Part, TicketIssueHit } from "@/types/maintenance-v2";
+import type { Part, TicketIssueHit } from "@/types/maintenance-system";
 import type { PostableStockMovementType, StockMovement, StorageLocation } from "@/types/storage.types";
 
 /**
- * One small dialog per "Record stock" action (docs/MAINTENANCE-V2-UI.md §6):
+ * One small dialog per "Record stock" action (docs/MAINTENANCE-UI.md §6):
  * Used on a ticket · Returned · Moved · Opening stock · Damaged or lost. Each
  * shows only its own fields; date and a note sit behind "More details".
  * Serial-tracked parts pick or type their serials instead of a quantity.
@@ -105,7 +105,7 @@ export function StockActionDialog({
   canDeclareSpots,
   onRecorded,
 }: StockActionDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const action = stockActionById(type);
   const shape = shapeOf(type);
   const { recordMovement } = useStorageWrites();

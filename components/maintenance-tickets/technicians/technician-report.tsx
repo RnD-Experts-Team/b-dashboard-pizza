@@ -14,7 +14,7 @@ import { hoursText, lastWorkedDay, money, paidHours } from "./technicians-report
 import { PAYMENT_LINE_TYPES, vocabHelp, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 import type { TechnicianAnalytics, TechnicianPaidByStore, TechnicianPaySheet, TechnicianWorkVisit } from "@/types/technician-analytics.types";
 
-/** The kinds of pay, in the order of the v2 payment line types (the report sends every one). */
+/** The kinds of pay, in the order of the payment line types (the report sends every one). */
 const KINDS = vocabOptions(PAYMENT_LINE_TYPES);
 
 /** Where a line of pay went: a store, a storage location (parts for the shelf), or a store outside the list. */
@@ -28,10 +28,10 @@ function paidWhere(r: TechnicianPaidByStore): string {
 const paidWhereKey = (r: TechnicianPaidByStore) =>
   `${r.store_id ?? ""}:${r.storage_location?.id ?? ""}:${r.other_store ?? ""}:${r.payment_level ? "p" : ""}`;
 
-/** The payment (v2) or the old pay sheet (v1) a row of pay is. */
+/** The payment, or the old pay sheet, a row of pay is. */
 const paymentIdOf = (s: TechnicianPaySheet) => s.payment_id ?? s.daily_pay_payment_id ?? null;
 
-/** The trip a clocked session was on; v1 work rows have none. */
+/** The trip a clocked session was on; older work rows have none. */
 const tripOf = (v: TechnicianWorkVisit) => v.trip_id ?? null;
 
 const moneyFormat = (v: number) => money(v);
@@ -55,7 +55,7 @@ export function TechnicianReport({
   error: string | null;
   rangeLabel: string;
 }) {
-  const tv = useTranslations("maintenanceV2");
+  const tv = useTranslations("maintenanceSystem");
   const sheets = usePaged(data?.pay_sheets ?? []);
   const work = usePaged(data?.work_log ?? [], undefined, 8);
   const byIssue = usePaged(data?.work_by_issue ?? []);

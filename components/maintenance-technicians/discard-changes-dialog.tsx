@@ -25,7 +25,7 @@ export function DiscardChangesDialog({
   onKeepEditing: () => void;
   onDiscard: () => void;
 }) {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   return (
     <AlertDialog open={open} onOpenChange={(next) => !next && onKeepEditing()}>
       <AlertDialogContent>

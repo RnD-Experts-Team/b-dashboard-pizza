@@ -51,7 +51,7 @@ export function PlacePickerDialog({
   canManage,
   onSaved,
 }: PlacePickerDialogProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [chosen, setChosen] = useState<number[]>(() => current.map((l) => l.valueId));
   const [saving, setSaving] = useState(false);
 

@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useSuppliers } from "@/lib/hooks/use-maintenance-catalog";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { Supplier, SupplierFilters } from "@/types/maintenance-v2";
+import type { Supplier, SupplierFilters } from "@/types/maintenance-system";
 import { useQueryParams } from "@/components/maintenance-technicians/use-query-params";
 import { SupplierSheet, websiteHref } from "./supplier-sheet";
 
@@ -22,7 +22,7 @@ const SKELETON_ROWS = 5;
 export const SUPPLIER_QUERY_KEYS = ["sq", "supplier"] as const;
 
 /**
- * Suppliers tab (docs/MAINTENANCE-V2-UI.md §7): search, then the list (name,
+ * Suppliers tab (docs/MAINTENANCE-UI.md §7): search, then the list (name,
  * phone, website, total paid). A row opens the supplier's sheet — its id
  * goes in the URL (`?supplier=`) so the sheet can be linked to.
  *
@@ -30,7 +30,7 @@ export const SUPPLIER_QUERY_KEYS = ["sq", "supplier"] as const;
  * people without access to the Finances report too.
  */
 export function SuppliersTab({ locale, onAdd, canAdd, reloadKey }: { locale: string; onAdd: () => void; canAdd: boolean; reloadKey: number }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { get, set } = useQueryParams();
 
   const q = get("sq");

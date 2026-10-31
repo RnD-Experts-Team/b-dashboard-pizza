@@ -53,7 +53,7 @@ export interface LocationsTabProps {
 }
 
 export function LocationsTab({ locations, isLoading, error, onRetry, selectedId, onSelect, canManage, onChanged }: LocationsTabProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [adding, setAdding] = useState(false);
   const [retiring, setRetiring] = useState<StorageLocation | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -233,7 +233,7 @@ function CreateLocationDialog({
   onOpenChange: (open: boolean) => void;
   onCreated: (location: StorageLocation) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [address, setAddress] = useState("");

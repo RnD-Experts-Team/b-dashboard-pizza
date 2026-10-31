@@ -10,14 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { maintenanceCatalogService } from "@/lib/hooks/use-maintenance-catalog";
-import type { TechnicianAbilityInput, TechnicianCoveredIssue } from "@/types/maintenance-v2";
+import type { TechnicianAbilityInput, TechnicianCoveredIssue } from "@/types/maintenance-system";
 import { StarRatingInput } from "./star-rating";
 import { useCatalogIssues } from "./use-catalog-issues";
 
 const errorText = (err: unknown, fallback: string) => (err instanceof MaintenanceTicketsError ? err.message : fallback);
 
 /**
- * Issues covered (docs/MAINTENANCE-V2-UI.md §7): each catalog issue the
+ * Issues covered (docs/MAINTENANCE-UI.md §7): each catalog issue the
  * technician can fix, with his ★ rating for it, the "call first" pin and
  * notes. Every change saves at once (PUT abilities/{issue}); "Add issue"
  * adds one unrated; the bin removes it. The average rating on the profile
@@ -35,7 +35,7 @@ export function TechnicianIssuesCovered({
   /** After a save: the page reloads the technician (average rating, counts). */
   onChanged: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const catalog = useCatalogIssues(canEdit);
   const [rows, setRows] = useState(issues);
   const [pending, setPending] = useState<number | null>(null);
@@ -167,7 +167,7 @@ function IssueRow({
   onSave: (patch: TechnicianAbilityInput) => void;
   onRemove: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [notes, setNotes] = useState(row.notes ?? "");
   const [savedNotes, setSavedNotes] = useState(row.notes);
   if (row.notes !== savedNotes) {

@@ -40,7 +40,7 @@ export function FilterMulti<T extends string | number>({
   /** Hold the picks and report them once, when the list closes (costly filters such as stores). */
   deferred?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<T[] | null>(null);

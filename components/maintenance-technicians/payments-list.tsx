@@ -9,7 +9,7 @@ import { usePayments } from "@/lib/hooks/use-maintenance-payments";
 import { formatMoney } from "@/lib/maintenance/money";
 import { PAYMENT_LINE_TYPES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { formatDateOnly } from "@/lib/utils/date-display";
-import type { PaymentFilters } from "@/types/maintenance-v2";
+import type { PaymentFilters } from "@/types/maintenance-system";
 
 /** The newest payments shown here; the Payments page has the rest. */
 const RECENT_PAYMENTS = 10;
@@ -35,7 +35,7 @@ export function PaymentsList({
   /** The Payments page filtered to this payee. */
   allHref: string;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { payments, meta, totals, isLoading, error, refresh } = usePayments({ ...filters, perPage: RECENT_PAYMENTS });
 
   if (isLoading) {

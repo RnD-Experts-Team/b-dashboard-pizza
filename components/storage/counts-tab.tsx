@@ -28,7 +28,7 @@ import { PLACE_SEPARATOR } from "@/lib/storage/stock-forms";
 import { formatWireDateTime } from "@/lib/utils/date-display";
 import { useResetOnOpen } from "./discard-guard";
 import { StorageEmptyState, StorageErrorState, StorageSkeleton, TBL, TD, TH } from "./storage-shared";
-import type { StockCount, StockCountStatus } from "@/types/maintenance-v2";
+import type { StockCount, StockCountStatus } from "@/types/maintenance-system";
 import type { StorageLocation } from "@/types/storage.types";
 
 /**
@@ -58,7 +58,7 @@ export function countPlaceLabel(count: Pick<StockCount, "storageLocation" | "sto
 }
 
 export function CountStatusBadge({ status }: { status: StockCountStatus }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const applied = status === "applied";
   const Icon = applied ? CheckCircle2 : PencilLine;
   return (
@@ -76,7 +76,7 @@ export function CountStatusBadge({ status }: { status: StockCountStatus }) {
 }
 
 export function CountsTab({ locationId, status, onFiltersChange, locations, liveLocations, canStart, revision }: CountsTabProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const filters = useMemo(() => ({ storageLocationId: locationId, status, perPage: COUNTS_PER_READ }), [locationId, status]);
   const { counts, isLoading, isRefreshing, error, refresh } = useStockCounts(filters);
@@ -200,7 +200,7 @@ function StartCountDialog({
   locations: readonly StorageLocation[];
   defaultLocationId?: number;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const router = useRouter();
   const { startCount } = useStorageWrites();

@@ -54,7 +54,7 @@ export function RankedBars({
   /** false keeps the given order (e.g. Bought → Used → …). */
   sorted?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const ink = useChartInk();
   const [showAll, setShowAll] = useState(false);
   const all = useMemo(() => (sorted ? [...rows].sort((a, b) => b.value - a.value) : rows), [rows, sorted]);

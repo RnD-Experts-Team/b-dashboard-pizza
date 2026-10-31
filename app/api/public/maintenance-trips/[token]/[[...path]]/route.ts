@@ -13,7 +13,7 @@ type Params = { params: Promise<{ token: string; path?: string[] }> };
  * The technician's trip page (`/[locale]/trip/[token]`) — NO dashboard login.
  * The token in the path is the only credential, so no Authorization header is
  * read or forwarded. Forwards to `${BASE_URL}/public/trips/{token}/…`
- * (MAINTENANCE-V2 §3 "Public endpoints"): 404 unknown token, 410 expired.
+ * (MAINTENANCE §3 "Public endpoints"): 404 unknown token, 410 expired.
  *
  * Rate-limited here as well as upstream (60/min), per client and token, so a
  * guessed-token scan is slowed before it reaches the service.

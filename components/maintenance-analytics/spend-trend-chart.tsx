@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { formatDateOnly } from "@/lib/utils/date-display";
 import { decimalOr0, formatMoney } from "@/lib/maintenance/money";
 import { PAYMENT_LINE_TYPES, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
-import type { FinanceTrendGroup, FinancesTrendPoint } from "@/types/maintenance-v2";
+import type { FinanceTrendGroup, FinancesTrendPoint } from "@/types/maintenance-system";
 import { ChartCard, ChartEmpty, DataTable, FINANCE, PEOPLE, ReactApexChart, useChartInk } from "./chart-kit";
 
 const TYPES = vocabOptions(PAYMENT_LINE_TYPES);
@@ -30,7 +30,7 @@ function periodLabel(period: string, by: FinanceTrendGroup): string {
  * which; the card shows it as a label, there is nothing to toggle.
  */
 export function SpendTrendChart({ trend, trendBy }: { trend: FinancesTrendPoint[]; trendBy: FinanceTrendGroup }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const ink = useChartInk();
   const categories = useMemo(() => trend.map((p) => periodLabel(p.period, trendBy)), [trend, trendBy]);
   const series = useMemo(

@@ -1,9 +1,9 @@
-# Maintenance v2 — screens and UX rules
+# Maintenance — screens and UX rules
 
 _Last updated: 2026-10-30_
 
-The API these screens call is `MaintenancePizza/docs/MAINTENANCE-V2.md`
-(`C:\Projects\New folder (2)\MaintenancePizza\docs\MAINTENANCE-V2.md`). This file
+The API these screens call is `MaintenancePizza/docs/MAINTENANCE.md`
+(`C:\Projects\New folder (2)\MaintenancePizza\docs\MAINTENANCE.md`). This file
 says what each screen shows and how it behaves. The goal set by the owner: **simple
 pages, few options, nothing that tires the person using it.**
 

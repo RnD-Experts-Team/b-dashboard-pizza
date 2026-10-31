@@ -1,9 +1,9 @@
 /**
- * The small "Record stock" dialogs (docs/MAINTENANCE-V2-UI.md §6), as pure
+ * The small "Record stock" dialogs (docs/MAINTENANCE-UI.md §6), as pure
  * logic: which fields each action shows, how its form is checked before it is
  * sent, and the exact `POST stock-movements` body it becomes.
  *
- * MAINTENANCE-V2 §5 / StoreStockMovementRequest:
+ * MAINTENANCE §5 / StoreStockMovementRequest:
  * - every line names a part, a location, a positive quantity and (sent always)
  *   its direction; a move is ONE movement with a −1 source line and a +1
  *   destination line;
@@ -18,7 +18,7 @@ import { format } from "date-fns";
 import { nameKey } from "@/lib/maintenance/names";
 import { parseDecimal } from "@/lib/maintenance/money";
 import { fixedDirectionFor } from "@/lib/storage/movement-types";
-import type { Part } from "@/types/maintenance-v2";
+import type { Part } from "@/types/maintenance-system";
 import type {
   CreateStockMovementLinePayload,
   CreateStockMovementPayload,

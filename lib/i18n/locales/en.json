@@ -5057,7 +5057,7 @@
     "scheduleChipLabel": "{count, plural, one {Rated on # skill} other {Rated on # skills}}",
     "scheduleAlertHint": "Under 18 and rated on a restricted skill: don't place them on or near it."
   },
-  "maintenanceV2": {
+  "maintenanceSystem": {
     "vocab": {
       "terms": {
         "technician": {

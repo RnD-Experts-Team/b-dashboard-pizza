@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { hasActiveFilters, type PaymentsPageFilters } from "@/lib/maintenance-payments/filters-url";
 import { LINE_TYPE_ORDER } from "@/lib/maintenance-payments/line-types";
 import { PAYMENT_LINE_TYPES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import type { PaymentLineType, Supplier, Technician, TechnicianCategory } from "@/types/maintenance-v2";
+import type { PaymentLineType, Supplier, Technician, TechnicianCategory } from "@/types/maintenance-system";
 import { PaidToPicker } from "./paid-to-picker";
 import type { StoreOption } from "./use-payment-lookups";
 
@@ -40,7 +40,7 @@ export function PaymentsFilters({
   categories: TechnicianCategory[];
   stores: StoreOption[];
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
 
   /* Search types freely and applies after a pause; an outside reset (Clear all) wins. */
   const [search, setSearch] = useState(filters.search);

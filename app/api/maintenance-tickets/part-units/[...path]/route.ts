@@ -1,6 +1,6 @@
 import { areaHandlers } from "@/app/api/maintenance-tickets/_lib/area-route";
 
-/** One serial-tracked part unit: PATCH part-units/{unit}. MAINTENANCE-V2 §1. */
+/** One serial-tracked part unit: PATCH part-units/{unit}. MAINTENANCE §1. */
 const area = areaHandlers("part-units");
 
 export const GET = area.GET;

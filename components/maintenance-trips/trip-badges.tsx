@@ -24,7 +24,7 @@ import {
   VISIT_TASK_STATUSES,
   vocabText,
 } from "@/lib/maintenance/vocabulary";
-import type { TripState, TripStatus, TripStopStatus, VisitTaskStatus } from "@/types/maintenance-v2";
+import type { TripState, TripStatus, TripStopStatus, VisitTaskStatus } from "@/types/maintenance-system";
 
 /** lucide names used by the trips vocabulary → components. */
 export const TRIP_ICONS: Record<string, LucideIcon> = {
@@ -50,7 +50,7 @@ const PILL = "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px
 
 /** What the technician is doing now: icon + words, never colour alone. */
 export function TripStateBadge({ state, className }: { state: TripState; className?: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const entry = TRIP_STATES[state];
   return (
     <span className={cn(PILL, TRIP_STATE_TONE[state], className)}>
@@ -66,13 +66,13 @@ const STATUS_TONE: Record<TripStatus, string> = {
 };
 
 export function TripStatusBadge({ status }: { status: TripStatus }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return <span className={cn(PILL, STATUS_TONE[status])}>{vocabText(t, TRIP_STATUSES[status])}</span>;
 }
 
 /** Link working or not, with an icon. */
 export function LinkStatusBadge({ active }: { active: boolean }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const Icon = active ? Link2 : Link2Off;
   return (
     <span
@@ -97,7 +97,7 @@ const STOP_TONE: Record<TripStopStatus, string> = {
 };
 
 export function StopStatusBadge({ status, className }: { status: TripStopStatus; className?: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const entry = TRIP_STOP_STATUSES[status];
   return (
     <span className={cn(PILL, STOP_TONE[status] ?? STOP_TONE.planned, className)}>
@@ -114,7 +114,7 @@ const TASK_TONE: Record<VisitTaskStatus, string> = {
 };
 
 export function TaskStatusBadge({ status, className }: { status: VisitTaskStatus; className?: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const entry = VISIT_TASK_STATUSES[status];
   return (
     <span className={cn(PILL, TASK_TONE[status] ?? TASK_TONE.pending, className)}>

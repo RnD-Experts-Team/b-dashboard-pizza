@@ -13,7 +13,7 @@ import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { getTicketsFieldErrors } from "@/lib/api/maintenance-tickets-errors";
 import { isoToLocalInput, localInputToIso } from "@/lib/maintenance-trips";
 import { TRIP_EVENT_KINDS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
-import type { AddEventPayload, TripEvent, TripEventKind, UpdateEventPayload } from "@/types/maintenance-v2";
+import type { AddEventPayload, TripEvent, TripEventKind, UpdateEventPayload } from "@/types/maintenance-system";
 import { GuardedDialog } from "./guarded-dialog";
 
 type Errors = Partial<Record<"kind" | "at" | "reason" | "form", string>>;
@@ -86,7 +86,7 @@ function EventForm({
   onUpdate: (eventId: number, payload: UpdateEventPayload) => Promise<unknown>;
   onDone: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [kind, setKind] = useState<TripEventKind | "">(event?.kind ?? "");
   const [at, setAt] = useState(isoToLocalInput(event?.at ?? defaultAt));
   const [reason, setReason] = useState("");

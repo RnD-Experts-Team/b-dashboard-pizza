@@ -36,7 +36,7 @@ import type {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Every movement type the ledger knows about (v2, `AppEnumsStockMovementType`).
+ * Every movement type the ledger knows about (`AppEnumsStockMovementType`).
  *
  * Three are written by the BACKEND ONLY: `bought` (from a parts payment
  * line), `stock_count` (applying a count) and `undone` (marking a movement
@@ -534,7 +534,7 @@ export interface ApiStockMovement {
   mistaken: boolean;
   /** Optional: the API may not link the pair explicitly. */
   reversal_of_id?: number | null;
-  /** What the v2 API actually sends on an `undone` movement. */
+  /** What the API actually sends on an `undone` movement. */
   reverses_stock_movement_id?: number | null;
   total_cost?: string | null;
   body?: string | null;

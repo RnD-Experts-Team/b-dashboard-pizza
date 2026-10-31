@@ -13,7 +13,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { maintenanceWorkflowService, type IssueKey } from "@/lib/api/services/maintenance-workflow.service";
 import { useMaintenanceMutation, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { TicketIssueV2, TripLinkIssued, WorkflowResult } from "@/types/maintenance-v2";
+import type { TicketIssueDetail, TripLinkIssued, WorkflowResult } from "@/types/maintenance-system";
 
 export { maintenanceWorkflowService };
 export type { IssueKey };
@@ -32,7 +32,7 @@ export function useTicketIssues(store: string | null, ticketId: number | null, s
   const [lastTripLink, setLastTripLink] = useState<TripLinkIssued | null>(null);
 
   const replaceIssue = useCallback(
-    (next: TicketIssueV2) => setIssues((prev) => (prev ?? []).map((i) => (i.id === next.id ? next : i))),
+    (next: TicketIssueDetail) => setIssues((prev) => (prev ?? []).map((i) => (i.id === next.id ? next : i))),
     [setIssues],
   );
 
@@ -92,7 +92,7 @@ export function useTicketPage(ticketId: number | null, storeFromLink: string | n
   const [lastTripLink, setLastTripLink] = useState<TripLinkIssued | null>(null);
 
   const replaceIssue = useCallback(
-    (next: TicketIssueV2) =>
+    (next: TicketIssueDetail) =>
       setData((prev) => (prev ? { ...prev, issues: prev.issues.map((i) => (i.id === next.id ? next : i)) } : prev)),
     [setData],
   );

@@ -36,7 +36,7 @@ import {
   vocabEntry,
   vocabText,
 } from "@/lib/maintenance/vocabulary";
-import type { Payment, PaymentLine } from "@/types/maintenance-v2";
+import type { Payment, PaymentLine } from "@/types/maintenance-system";
 import { LINE_TYPE_ICONS } from "./line-type-badges";
 
 export function formatPaidDate(iso: string): string {
@@ -61,7 +61,7 @@ export function PaymentDetailSheet({
   /** After a write, so the list refetches. */
   onChanged: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { payment, isLoading, error, refresh } = usePayment(paymentId);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -131,7 +131,7 @@ export function PaymentDetailSheet({
 }
 
 function PaymentDetailBody({ payment }: { payment: Payment }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const method = vocabEntry(PAYMENT_METHODS, payment.method);
   const facts: { label: string; value: string }[] = [
     { label: t("payments.paidTo"), value: `${payment.paidTo.name} (${vocabText(t, vocabEntry(PAID_TO_TYPES, payment.paidTo.type))})` },
@@ -213,7 +213,7 @@ function PaymentDetailBody({ payment }: { payment: Payment }) {
 }
 
 function LineDetail({ line }: { line: PaymentLine }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const Icon = LINE_TYPE_ICONS[line.type];
   // Parts into storage: the location, then the spot the part sits in there now ("Zone A › Shelf 3").
@@ -329,7 +329,7 @@ function MarkMistakeDialog({
   payment: Payment;
   onDone: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const mark = useMaintenanceMutation(maintenancePaymentsService.markPaymentMistaken);

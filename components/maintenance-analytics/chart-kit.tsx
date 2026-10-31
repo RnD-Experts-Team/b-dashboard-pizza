@@ -62,7 +62,7 @@ export function ChartCard({
   extra?: ReactNode;
   className?: string;
 }) {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   const [asTable, setAsTable] = useState(false);
   return (
     <AnalyticsCard

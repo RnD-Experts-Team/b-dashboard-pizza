@@ -38,7 +38,7 @@ export function SerialPicker(props: SerialPickerProps) {
 }
 
 function OutgoingSerials({ partId, locationId, value, onChange, invalid, describedBy }: SerialPickerProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { units, isLoading } = useStoragePartUnits(partId, "in_stock", Boolean(locationId));
   const here = units.filter((u) => u.storageLocation?.id === locationId);
 
@@ -77,7 +77,7 @@ function OutgoingSerials({ partId, locationId, value, onChange, invalid, describ
 }
 
 function IncomingSerials({ partId, value, onChange, invalid, describedBy }: SerialPickerProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [draft, setDraft] = useState("");
   const { units } = useStoragePartUnits(partId);
   const known = units.filter((u) => u.status !== "in_stock" && !value.includes(u.serialNumber));

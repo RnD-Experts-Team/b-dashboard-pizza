@@ -10,7 +10,7 @@ import { useMaintenanceMutation } from "@/lib/hooks/use-maintenance-resource";
 import { formErrorsFrom } from "@/lib/maintenance-payments/field-errors";
 import type { PaidToChoice } from "@/lib/maintenance-payments/form-state";
 import { findNameClash, tidyName } from "@/lib/maintenance/names";
-import type { Supplier, Technician } from "@/types/maintenance-v2";
+import type { Supplier, Technician } from "@/types/maintenance-system";
 import { EntityCombobox, type ComboGroup } from "./entity-combobox";
 
 const SEP = ":";
@@ -65,7 +65,7 @@ export function PaidToPicker({
   /** Shown while the catalog has not loaded the chosen one (or it was deleted). */
   fallbackName?: string;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
 
   const groups = useMemo<ComboGroup[]>(() => {
     const techOptions = technicians
@@ -136,7 +136,7 @@ export function AddSupplierInline({
   onCreated: (supplier: Supplier) => void;
   onUseExisting: (supplier: Supplier) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);

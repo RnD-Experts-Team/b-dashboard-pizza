@@ -1,6 +1,6 @@
 import { areaHandlers } from "@/app/api/maintenance-tickets/_lib/area-route";
 
-/** Payments: list/create, one payment, edit, mistaken, notes, attachments. MAINTENANCE-V2 §4. */
+/** Payments: list/create, one payment, edit, mistaken, notes, attachments. MAINTENANCE §4. */
 const area = areaHandlers("payments");
 
 export const GET = area.GET;

@@ -10,12 +10,12 @@ import type { AnalyticsFilters } from "./use-analytics-filters";
 
 /**
  * Overview: the existing ticket analytics (KPIs, charts, what changed, the
- * watch list), now on the v2 statuses, driven by the page's shared filters.
+ * watch list), now on the new statuses, driven by the page's shared filters.
  * The summary API needs an explicit store list, so "All stores" sends every
  * store the viewer can see; the range goes as the viewer's local midnights.
  */
 export function OverviewTab({ locale, filters }: { locale: string; filters: AnalyticsFilters }) {
-  const t = useTranslations("maintenanceV2.analytics");
+  const t = useTranslations("maintenanceSystem.analytics");
   const { summary, watchlist, activity, activityPage, errors, isLoading, isLoadingMore, loadedParams, load, loadMoreActivity } =
     useMaintenanceAnalytics();
 

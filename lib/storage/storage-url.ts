@@ -1,5 +1,5 @@
 /**
- * The Storage page's place in the URL (docs/MAINTENANCE-V2-UI.md rule 9):
+ * The Storage page's place in the URL (docs/MAINTENANCE-UI.md rule 9):
  * `?tab=stock|movements|counts|locations` plus each tab's filters, so a shared
  * link opens the exact view and Back restores it.
  *
@@ -10,7 +10,7 @@
  */
 
 import type { StockMovementFilters, StockMovementType } from "@/types/storage.types";
-import type { StockCountStatus } from "@/types/maintenance-v2";
+import type { StockCountStatus } from "@/types/maintenance-system";
 import { VOCABULARY } from "@/lib/maintenance/vocabulary";
 
 export const STORAGE_TABS = ["stock", "movements", "counts", "locations"] as const;

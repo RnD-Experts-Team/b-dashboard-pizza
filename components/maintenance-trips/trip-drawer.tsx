@@ -24,7 +24,7 @@ import {
   tripShareText,
   tripStoreNumbers,
 } from "@/lib/maintenance-trips";
-import type { Trip, TripEvent, TripSession, TripStop } from "@/types/maintenance-v2";
+import type { Trip, TripEvent, TripSession, TripStop } from "@/types/maintenance-system";
 import { AddStopDialog } from "./add-stop-dialog";
 import { EventDialog } from "./event-dialog";
 import { ReasonDialog } from "./reason-dialog";
@@ -71,7 +71,7 @@ export function TripDrawer({
   /** A write changed the trip (refresh the lists). */
   onChanged: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <Sheet open={tripId != null} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-xl">
@@ -88,7 +88,7 @@ export function TripDrawer({
 }
 
 function DrawerSkeleton() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <div className="space-y-4 p-4">
       <SheetTitle className="sr-only">{t("vocab.terms.trip.label")}</SheetTitle>
@@ -112,7 +112,7 @@ function DrawerBody({
   onLinkIssued: (tripId: number, token: string) => void;
   onChanged: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { trip, isLoading, error, refresh, act, pending } = useTrip(tripId);
   const [confirm, setConfirm] = useState<Pending | null>(null);
   const [sessionDialog, setSessionDialog] = useState<{ session: TripSession | null } | null>(null);
@@ -261,7 +261,7 @@ function DrawerBody({
 }
 
 function DrawerHeader({ trip }: { trip: Trip }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const state = officeTripState(trip);
   return (
     <SheetHeader className="border-b pe-12">
@@ -301,7 +301,7 @@ function LinkSection({
   readOnly: boolean;
   onNewLink: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const url = issuedToken ? tripLinkUrl(issuedToken, locale) : null;
   const shareText = url
@@ -346,7 +346,7 @@ function LinkSection({
 }
 
 function TotalsStrip({ trip }: { trip: Trip }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const jobs = jobCounts(trip);
   const cells = [
     { label: t("trips.paidTime"), value: formatMinutes(trip.totals.paidMinutes) },
@@ -377,7 +377,7 @@ function ConfirmDialogs({
   write: (fn: (id: number) => Promise<Trip>, done: string) => Promise<void>;
   issueLink: () => Promise<void>;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const open = !!confirm;
   const onOpenChange = (next: boolean) => !next && onClose();
   const kind = confirm?.kind;

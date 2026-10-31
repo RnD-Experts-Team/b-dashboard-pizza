@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 /**
- * One labelled form field (docs/MAINTENANCE-V2-UI.md rule 4): the label, a
+ * One labelled form field (docs/MAINTENANCE-UI.md rule 4): the label, a
  * "Required" mark where it applies, the control, helper text under anything
  * not obvious, and the error under the field. `id` ties the label, the helper
  * and the error to the control (`aria-describedby` is the caller's: use
@@ -29,7 +29,7 @@ export function FormField({
   className?: string;
   children: ReactNode;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <div className={cn("space-y-1.5", className)} data-slot="form-field">
       <Label htmlFor={id} className="flex items-center gap-1.5">

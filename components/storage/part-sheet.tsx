@@ -23,7 +23,7 @@ import { formatTimestamp, formatWireDateTime } from "@/lib/utils/date-display";
 import { PartFormDialog } from "./part-form-dialog";
 import { RecordStockMenu } from "./record-stock-menu";
 import { PlaceBreadcrumb, TBL, TD, TH, signTone } from "./storage-shared";
-import type { Part, PartSerialUnit } from "@/types/maintenance-v2";
+import type { Part, PartSerialUnit } from "@/types/maintenance-system";
 
 /**
  * One part: its details (editable), where it is and how many, its serial
@@ -60,7 +60,7 @@ export function PartSheet({
   canRecordPayments,
   revision,
 }: PartSheetProps) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [editing, setEditing] = useState(false);
   const listed = parts.find((p) => p.id === partId) ?? null;
   // A part the page's catalog does not hold (a deleted one, from a link): read it on its own.
@@ -135,7 +135,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function PartDetails({ part }: { part: Part }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const rows: [string, string | null][] = [
     [t("storage.parts.brand"), part.brand],
     [t("storage.parts.model"), part.model],
@@ -164,7 +164,7 @@ function PartDetails({ part }: { part: Part }) {
 }
 
 function StockByLocation({ partId, unit, revision }: { partId: number; unit: string; revision: number }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { total, locations, isLoading, error } = usePartStockAt(partId, revision);
   return (
     <Section title={t("storage.parts.whereItIs")}>
@@ -220,7 +220,7 @@ function StockByLocation({ partId, unit, revision }: { partId: number; unit: str
 }
 
 function SerialUnits({ partId, canEdit, revision }: { partId: number; canEdit: boolean; revision: number }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const { units, isLoading, error, setData } = useStoragePartUnits(partId, undefined, true, revision);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -304,7 +304,7 @@ function SerialUnits({ partId, canEdit, revision }: { partId: number; canEdit: b
 }
 
 function SerialEditRow({ unit, onDone }: { unit: PartSerialUnit; onDone: (saved: PartSerialUnit | null) => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [serial, setSerial] = useState(unit.serialNumber);
   const [warranty, setWarranty] = useState(unit.warrantyUntil ?? "");
   const [saving, setSaving] = useState(false);
@@ -359,7 +359,7 @@ function SerialEditRow({ unit, onDone }: { unit: PartSerialUnit; onDone: (saved:
 }
 
 function PriceHistory({ partId, unit, revision }: { partId: number; unit: string; revision: number }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { entries, isLoading, error } = usePartPriceHistory(partId, revision);
   return (
     <Section title={t("storage.prices.title")}>

@@ -4,7 +4,7 @@
 
 import { maintenanceSettingsService } from "@/lib/api/services/maintenance-settings.service";
 import { useMaintenanceMutation, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { MaintenanceSettingsInput } from "@/types/maintenance-v2";
+import type { MaintenanceSettingsInput } from "@/types/maintenance-system";
 
 export function useMaintenanceSettings(enabled = true) {
   const res = useMaintenanceResource(enabled ? "maintenance-settings" : null, (signal) => maintenanceSettingsService.getSettings(signal));

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { FieldError, Segmented } from "@/components/maintenance-tickets/form-bits";
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { getTicketsFieldErrors } from "@/lib/api/maintenance-tickets-errors";
-import type { SchedulePurpose, TripStopInput } from "@/types/maintenance-v2";
+import type { SchedulePurpose, TripStopInput } from "@/types/maintenance-system";
 import { GuardedDialog } from "./guarded-dialog";
 import { draftFor, otherDraft, StopIssueList, StoreChoices, useTripStores, type PlannerStore, type StopDraft } from "./stop-picker";
 
@@ -66,7 +66,7 @@ function AddStopForm({
   onAdd: (stop: TripStopInput) => Promise<void>;
   onDone: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [search, setSearch] = useState("");
   const [other, setOther] = useState("");
   const [stop, setStop] = useState<StopDraft | null>(null);

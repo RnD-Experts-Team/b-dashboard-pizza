@@ -1,8 +1,8 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — shared scalars and small references                     */
+/*  Maintenance — shared scalars and small references                     */
 /*                                                                            */
-/*  Mirrors MaintenancePizza/docs/MAINTENANCE-V2.md. Wire keys are snake_case; */
-/*  the services camelCase every key (lib/api/maintenance-v2/http.ts), so the */
+/*  Mirrors MaintenancePizza/docs/MAINTENANCE.md. Wire keys are snake_case; */
+/*  the services camelCase every key (lib/api/maintenance-system/http.ts), so the */
 /*  types here are the camelCase reading of the contract, field for field.    */
 /*                                                                            */
 /*  Money and hours stay STRINGS with 2 decimals, exactly as the API sends    */

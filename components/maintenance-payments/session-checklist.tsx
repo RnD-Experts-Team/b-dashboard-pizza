@@ -43,7 +43,7 @@ export function SessionChecklist({
   onToggle: (sessionId: number) => void;
   invalid?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2.payments");
+  const t = useTranslations("maintenanceSystem.payments");
 
   if (sessions.length === 0) {
     return (

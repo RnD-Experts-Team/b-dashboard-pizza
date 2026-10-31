@@ -1,12 +1,12 @@
 /**
  * Trips pure logic: session durations, the trip link and its share text,
  * and the technician page's state → big buttons mapping
- * (docs/MAINTENANCE-V2-UI.md §3–4).
+ * (docs/MAINTENANCE-UI.md §3–4).
  */
 
 import { formatMinutes } from "@/lib/maintenance/money";
 import { TRIP_STATES, type VocabEntry } from "@/lib/maintenance/vocabulary";
-import type { SessionDurations, Trip, TripEventKind, TripSession, TripState } from "@/types/maintenance-v2";
+import type { SessionDurations, Trip, TripEventKind, TripSession, TripState } from "@/types/maintenance-system";
 
 export { formatMinutes };
 
@@ -62,7 +62,7 @@ export function shortWeekday(date: string, locale = "en-US"): string {
 /**
  * The message sent with Share (WhatsApp/SMS via the Web Share API):
  * "Your trip for Store 12 on Tue: <link>". `template` is the translated
- * `maintenanceV2.trips.shareText` with {stores} {day} {link} placeholders.
+ * `maintenanceSystem.trips.shareText` with {stores} {day} {link} placeholders.
  */
 export function tripShareText(opts: {
   link: string;

@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils";
 import { useMaintenanceFinances } from "@/lib/hooks/use-maintenance-analytics";
 import { decimalOr0, formatMinutes, formatMoney, parseDecimal } from "@/lib/maintenance/money";
 import { formatDateOnly } from "@/lib/utils/date-display";
-import type { FinancesParams, MaintenanceFinances } from "@/types/maintenance-v2";
+import type { FinancesParams, MaintenanceFinances } from "@/types/maintenance-system";
 import { AnalyticsCard } from "@/components/maintenance-tickets/analytics/analytics-card";
 import { KpiTile } from "@/components/maintenance-tickets/analytics/analytics-kpis";
 import { ChartCard, ChartEmpty, DataTable, FINANCE, PEOPLE, ReactApexChart, TD, TH, useChartInk } from "./chart-kit";
@@ -59,13 +59,13 @@ function ticketHref(locale: string, ticketId: number, store: string | null): str
 }
 
 /**
- * Finances (docs/MAINTENANCE-V2-UI.md §8 + MAINTENANCE-V2 §6): where the
+ * Finances (docs/MAINTENANCE-UI.md §8 + MAINTENANCE §6): where the
  * money went in the range — KPI tiles, the spend trend by type, by store /
  * technician / supplier / category, stock money, and what tickets cost.
  * Mistaken payments are left out by the server.
  */
 export function FinancesTab({ locale, filters }: { locale: string; filters: AnalyticsFilters }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const tooLong = daysIn(filters.from, filters.to) > MAX_RANGE_DAYS;
 
   const params: FinancesParams | null = useMemo(
@@ -130,7 +130,7 @@ export function FinancesTab({ locale, filters }: { locale: string; filters: Anal
 /* ── KPI tiles ───────────────────────────────────────────────────────────── */
 
 function FinanceKpis({ finances }: { finances: MaintenanceFinances }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { totals, unpaid, stock, range } = finances;
   const change = parseDecimal(totals.changePct);
   const previousRange = range ? `${formatDateOnly(range.previousFrom, "MMM d")} – ${formatDateOnly(range.previousTo, "MMM d")}` : "";
@@ -166,7 +166,7 @@ function FinanceKpis({ finances }: { finances: MaintenanceFinances }) {
 /* ── By store / technician / supplier / category ─────────────────────────── */
 
 function WhereItWent({ finances }: { finances: MaintenanceFinances }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const spent = t("analytics.spent");
 
   const storeLabel = (store: string | null, other?: string | null) => {
@@ -193,7 +193,7 @@ function WhereItWent({ finances }: { finances: MaintenanceFinances }) {
 /* ── Stock money ─────────────────────────────────────────────────────────── */
 
 function StockMoney({ finances }: { finances: MaintenanceFinances }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const s = finances.stock;
   const rows: RankedRow[] = [
     { key: "bought", label: t("vocab.movementType.bought.label"), value: decimalOr0(s.boughtValue) },
@@ -219,7 +219,7 @@ function StockMoney({ finances }: { finances: MaintenanceFinances }) {
 }
 
 function ApprovalsByLevel({ finances }: { finances: MaintenanceFinances }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const rows = finances.tickets.approvalsByLevel;
   return (
     <AnalyticsCard icon={BadgeCheck} title={t("analytics.approvalsByLevel")} description={t("analytics.approvalsByLevelHelp")} flush>
@@ -252,7 +252,7 @@ function ApprovalsByLevel({ finances }: { finances: MaintenanceFinances }) {
 /* ── Ticket costs ────────────────────────────────────────────────────────── */
 
 function TicketCosts({ locale, finances }: { locale: string; finances: MaintenanceFinances }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const tk = finances.tickets;
   const byIssue: RankedRow[] = tk.byIssue.map((r) => ({ key: String(r.issueId ?? "other"), label: r.title, value: decimalOr0(r.amount) }));
 
@@ -329,7 +329,7 @@ function TicketCosts({ locale, finances }: { locale: string; finances: Maintenan
 
 /** Estimate vs actual for the issues that cost most: two bars per issue, the top ten drawn. */
 function EstimateVsActual({ finances }: { finances: MaintenanceFinances }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const ink = useChartInk();
   const rows = finances.tickets.estimateVsActual;
   const top = useMemo(() => rows.slice(0, TOP_BARS), [rows]);

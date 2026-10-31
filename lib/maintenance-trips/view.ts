@@ -1,6 +1,6 @@
 /**
  * Trips — what the office drawer and the technician page derive from a
- * presented trip (docs/MAINTENANCE-V2-UI.md §3–4). Pure, React-free.
+ * presented trip (docs/MAINTENANCE-UI.md §3–4). Pure, React-free.
  */
 
 import { format, parseISO } from "date-fns";
@@ -14,7 +14,7 @@ import type {
   TripState,
   TripStop,
   TripStopIssue,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 
 /* ── Tabs (URL ?tab=) ────────────────────────────────────────────────────── */
 

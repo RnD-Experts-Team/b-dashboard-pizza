@@ -15,12 +15,12 @@ const PRESET_OPTIONS = PRESETS.map((id) => ({ id, label: id }));
 const ALL = "all";
 
 /**
- * The analytics page's one filter row (docs/MAINTENANCE-V2-UI.md §8): the
+ * The analytics page's one filter row (docs/MAINTENANCE-UI.md §8): the
  * days (presets or two dates), the stores, the technician category. A tab
  * that does not use one of them says so instead of silently ignoring it.
  */
 export function AnalyticsFilterBar({ filters }: { filters: AnalyticsFilters }) {
-  const t = useTranslations("maintenanceV2.analytics");
+  const t = useTranslations("maintenanceSystem.analytics");
   const { categories } = useTechnicianCategories();
   const usesDates = filters.tab !== "coverage";
   const usesCategory = filters.tab !== "overview";

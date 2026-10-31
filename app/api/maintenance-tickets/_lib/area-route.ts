@@ -9,7 +9,7 @@ import {
 type CatchAllContext = { params: Promise<{ path?: string[] }> };
 
 /**
- * Route handlers for one v2 area served by a single catch-all route
+ * Route handlers for one area served by a single catch-all route
  * (`trips/[[...path]]`, `payments/[[...path]]`, …). Every request is checked
  * for an Authorization header (app/api/_lib/auth.ts, via proxyPassthrough)
  * and forwarded as-is to `${BASE_URL}/<upstreamPrefix>/<path>`; the upstream

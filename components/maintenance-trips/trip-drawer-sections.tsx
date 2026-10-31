@@ -26,7 +26,7 @@ import {
   vocabText,
 } from "@/lib/maintenance/vocabulary";
 import { auditChanges, sessionDurationParts, stopPlace, tripFiles } from "@/lib/maintenance-trips";
-import type { Trip, TripAudit, TripEvent, TripSession, TripStop } from "@/types/maintenance-v2";
+import type { Trip, TripAudit, TripEvent, TripSession, TripStop } from "@/types/maintenance-system";
 import { StopStatusBadge, TaskStatusBadge } from "./trip-badges";
 
 const DATE_TIME = "MMM d · h:mm a";
@@ -66,7 +66,7 @@ function Empty({ text }: { text: string }) {
 }
 
 function MistakeTag() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <span className="rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
       {t("common.mistaken")}
@@ -87,7 +87,7 @@ export function StopsSection({
   onMarkStopMistaken: (stop: TripStop) => void;
   onAddStop: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   return (
     <Section
@@ -188,7 +188,7 @@ export interface SessionHandlers {
 }
 
 function DurationRow({ session }: { session: TripSession }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const parts = sessionDurationParts(session.durations).filter((p) => p.key === "paid" || p.minutes);
   return (
     <dl className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -213,7 +213,7 @@ function EventRow({
   readOnly: boolean;
   handlers: SessionHandlers;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const entry = vocabEntry(TRIP_EVENT_KINDS, event.kind, event.label);
   return (
     <li className={cn("flex items-center gap-2 text-xs", event.mistaken && "opacity-60")}>
@@ -252,7 +252,7 @@ function SessionCard({
   readOnly: boolean;
   handlers: SessionHandlers;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   const source = vocabEntry(SESSION_SOURCES, session.source);
   const editable = !readOnly && !session.mistaken;
@@ -334,7 +334,7 @@ export function SessionsSection({
   readOnly: boolean;
   handlers: SessionHandlers;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <Section
       title={t("trips.drawer.sessions")}
@@ -364,7 +364,7 @@ export function SessionsSection({
 /* ── Purchases ───────────────────────────────────────────────────────────── */
 
 export function PurchasesSection({ trip }: { trip: Trip }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const locale = useLocale();
   if (!trip.purchases.length) return null;
   return (
@@ -422,7 +422,7 @@ export function PurchasesSection({ trip }: { trip: Trip }) {
 /* ── Photos & notes ──────────────────────────────────────────────────────── */
 
 export function FilesSection({ trip }: { trip: Trip }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const files = tripFiles(trip);
   if (!files.length && !trip.notes?.length) return null;
   return (
@@ -451,7 +451,7 @@ function actionWords(action: string | null | undefined): string {
 }
 
 function AuditRow({ audit }: { audit: TripAudit }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const changes = auditChanges(audit);
   return (
     <li className="space-y-1 rounded-md border bg-card px-3 py-2 text-xs">
@@ -477,7 +477,7 @@ function AuditRow({ audit }: { audit: TripAudit }) {
 }
 
 export function AuditSection({ trip }: { trip: Trip }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const audits = [...(trip.audits ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   return (
     <Section title={t("trips.drawer.audits")} count={audits.length || undefined}>

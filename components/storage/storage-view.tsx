@@ -25,10 +25,10 @@ import { PartFormDialog } from "./part-form-dialog";
 import { PartSheet } from "./part-sheet";
 import { RecordStockMenu, StockActionHost, type PendingStockAction } from "./record-stock-menu";
 import { StockTab } from "./stock-tab";
-import type { Part } from "@/types/maintenance-v2";
+import type { Part } from "@/types/maintenance-system";
 
 /**
- * Storage (docs/MAINTENANCE-V2-UI.md §6): Stock · Movements · Stock counts ·
+ * Storage (docs/MAINTENANCE-UI.md §6): Stock · Movements · Stock counts ·
  * Locations, `?tab=` and each tab's filters in the URL. The one primary
  * action is "Record stock" (Stock and Movements); the other tabs carry their
  * own (Start a count, Add location).
@@ -39,7 +39,7 @@ import type { Part } from "@/types/maintenance-v2";
 const MAINTENANCE = "Maintenance";
 
 export function StorageView() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();

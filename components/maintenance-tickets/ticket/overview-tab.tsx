@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RESOLUTIONS, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
 import { isOverdue } from "@/lib/maintenance-workflow";
-import type { TicketIssueV2 } from "@/types/maintenance-v2";
+import type { TicketIssueDetail } from "@/types/maintenance-system";
 import { AttachmentGallery } from "../attachment-gallery";
 import { LocalTimestamp } from "../local-timestamp";
 import { TroubleshootingSteps } from "../troubleshooting/troubleshooting-steps";
@@ -47,7 +47,7 @@ export function OverviewTab({
   canEditDetails,
   onEditDetails,
 }: {
-  issue: TicketIssueV2;
+  issue: TicketIssueDetail;
   run: RunStep;
   isMos: boolean;
   canAnswer: boolean;
@@ -56,7 +56,7 @@ export function OverviewTab({
   canEditDetails: boolean;
   onEditDetails: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const status = issue.status.value;
   const request = openInfoRequest(issue);
   const overdue = isOverdue(issue.targetCompletionAt, status);

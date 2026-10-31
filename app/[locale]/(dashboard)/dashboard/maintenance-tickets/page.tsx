@@ -29,12 +29,12 @@ function listQuery(filters: TicketsFilters, categoryId: number | null): string {
 }
 
 /**
- * Tickets list (docs/MAINTENANCE-V2-UI.md §1): header + New ticket, one flat
+ * Tickets list (docs/MAINTENANCE-UI.md §1): header + New ticket, one flat
  * filter row, the "needs attention" chips, then the table (cards on a
  * phone). Filters live in the URL so Back and shared links restore them.
  */
 function MaintenanceTicketsPageInner() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const router = useRouter();
   const pathname = usePathname();
   const routeParams = useParams();

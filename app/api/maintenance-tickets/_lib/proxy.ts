@@ -298,14 +298,14 @@ export async function proxyRawPost(request: NextRequest, upstreamUrl: string) {
 }
 
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2: generic passthrough for the catch-all route handlers     */
+/*  Maintenance: generic passthrough for the catch-all route handlers     */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 const BODYLESS = new Set(["GET", "HEAD", "DELETE"]);
 
 /**
  * Forwards the request as it came: method, query string, and body bytes with
- * their content type (so a multipart boundary survives). Used by the v2
+ * their content type (so a multipart boundary survives). Used by the
  * catch-all routes (trips, payments, stock counts…), where one handler serves
  * a whole area and a per-method helper would only repeat itself.
  *

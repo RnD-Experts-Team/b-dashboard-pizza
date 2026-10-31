@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { actionMeta, splitNextActions } from "@/lib/maintenance-workflow";
-import type { IssueStatus, WorkflowNextAction } from "@/types/maintenance-v2";
+import type { IssueStatus, WorkflowNextAction } from "@/types/maintenance-system";
 
 /** The step's label in the viewer's language; the server's words for ids this app does not know. */
 export function useActionLabel() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (action: WorkflowNextAction, status: IssueStatus): string => {
     if (action.action === "review" && status === "in_review") return t("tickets.footer.updateReview");
     const meta = actionMeta(action.action);
@@ -37,7 +37,7 @@ export function TicketFooter({
   onAction: (action: WorkflowNextAction) => void;
   onAddUpdate: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const label = useActionLabel();
   const { primary, others } = splitNextActions(next);
   if (!primary && !canAddUpdate) return null;

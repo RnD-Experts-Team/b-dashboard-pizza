@@ -19,12 +19,12 @@ type Tab = "technicians" | "suppliers";
 const TABS: readonly Tab[] = ["technicians", "suppliers"];
 
 /**
- * Technicians & Suppliers (docs/MAINTENANCE-V2-UI.md §7):
+ * Technicians & Suppliers (docs/MAINTENANCE-UI.md §7):
  * `?tab=technicians|suppliers`. One primary action per tab — Add technician
  * or Add supplier — in the header.
  */
 function TechniciansAndSuppliers() {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const params = useParams();
   const locale = (params?.locale as string) ?? "en";
   const router = useRouter();

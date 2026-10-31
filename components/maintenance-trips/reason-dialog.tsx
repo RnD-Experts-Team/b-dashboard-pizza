@@ -84,7 +84,7 @@ function ReasonBody({
   onConfirm: (reason: string) => Promise<unknown>;
   onDone: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);

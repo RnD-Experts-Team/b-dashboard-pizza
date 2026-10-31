@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — one ticket issue and its workflow (MAINTENANCE-V2 §2)   */
+/*  Maintenance — one ticket issue and its workflow (MAINTENANCE §2)   */
 /*                                                                            */
 /*  Read an issue (with workflow, costs, inspections, approvals, schedules,  */
 /*  visits, payments, purchases, stock used, timeline) and run every step:   */
@@ -17,7 +17,7 @@
 /*  (+ ticket-issues, the global issue lookup the pickers search).           */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { http, request, seg } from "@/lib/api/maintenance-v2/http";
+import { http, request, seg } from "@/lib/api/maintenance-system/http";
 import type {
   ApprovalRequestPayload,
   BookInspectionPayload,
@@ -36,11 +36,11 @@ import type {
   ScheduleWorkPayload,
   TicketIssueLookupFilters,
   TicketIssueLookupRow,
-  TicketIssueV2,
+  TicketIssueDetail,
   TripLinkIssued,
   WorkDonePayload,
   WorkflowResult,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 import type { TicketAttachment, TicketNote, TroubleshootingSnapshot } from "@/types/maintenance-tickets.types";
 
 /** Which issue: the store number, the ticket, the ticket issue. */
@@ -83,7 +83,7 @@ function normaliseSnapshot(raw: RawSnapshot | null | undefined): Troubleshooting
   };
 }
 
-type RawIssue = Partial<TicketIssueV2> & {
+type RawIssue = Partial<TicketIssueDetail> & {
   status?: RawEnum;
   statusLabel?: string;
   priority?: RawEnum;
@@ -102,10 +102,10 @@ const FALLBACK_PRIORITY: MEnum<Priority> = { value: "medium", label: "Medium" };
  * One presented issue, with every list defaulted to [] so screens never
  * branch on "not loaded" vs "empty" for these.
  */
-export function normaliseIssue(raw: RawIssue): TicketIssueV2 {
-  const status = toMEnum<TicketIssueV2["status"]["value"]>(raw.status, raw.statusLabel) ?? { value: "new", label: "New" };
+export function normaliseIssue(raw: RawIssue): TicketIssueDetail {
+  const status = toMEnum<TicketIssueDetail["status"]["value"]>(raw.status, raw.statusLabel) ?? { value: "new", label: "New" };
   return {
-    ...(raw as TicketIssueV2),
+    ...(raw as TicketIssueDetail),
     title: raw.title ?? raw.issue?.title ?? raw.otherTitle ?? "",
     issue: raw.issue ?? null,
     otherTitle: raw.otherTitle ?? null,
@@ -155,14 +155,14 @@ async function step(key: IssueKey, action: string, payload: object = {}): Promis
 /* ── The ticket a page shows (GET tickets/{ticket}/issues) ───────────────── */
 
 /** The ticket around its issues: who opened it, when, and where. */
-export interface TicketHeaderV2 {
+export interface TicketHeaderInfo {
   id: number;
   /** Numeric store id (stores.id, the auth system's id); null for an other-store ticket. */
   storeId: number | null;
   /** Store number, the route key every store-scoped path binds on. */
   storeNumber: string | null;
   otherStore: string | null;
-  status: MEnum<TicketIssueV2["status"]["value"]>;
+  status: MEnum<TicketIssueDetail["status"]["value"]>;
   type: MEnum | null;
   creator: { id: number; name: string } | null;
   createdAt: string;
@@ -187,7 +187,7 @@ type RawTicketHeader = {
   attachments?: TicketAttachment[];
 };
 
-function normaliseTicketHeader(raw: RawTicketHeader): TicketHeaderV2 {
+function normaliseTicketHeader(raw: RawTicketHeader): TicketHeaderInfo {
   const numeric = raw.store?.id ?? raw.storeId;
   return {
     id: raw.id,
@@ -238,7 +238,7 @@ export const maintenanceWorkflowService = {
     ticketId: number,
     storeNumber?: string | null,
     signal?: AbortSignal,
-  ): Promise<{ ticket: TicketHeaderV2; issues: TicketIssueV2[] }> {
+  ): Promise<{ ticket: TicketHeaderInfo; issues: TicketIssueDetail[] }> {
     const body = await http.raw<{ data?: RawIssue[]; ticket: RawTicketHeader }>("GET", `/tickets/${seg(ticketId)}/issues`, {
       query: storeNumber ? { storeId: storeNumber } : undefined,
       signal,
@@ -246,12 +246,12 @@ export const maintenanceWorkflowService = {
     return { ticket: normaliseTicketHeader(body.ticket), issues: (body.data ?? []).map(normaliseIssue) };
   },
 
-  async getIssue(key: IssueKey, signal?: AbortSignal): Promise<TicketIssueV2> {
+  async getIssue(key: IssueKey, signal?: AbortSignal): Promise<TicketIssueDetail> {
     return normaliseIssue(await http.get<RawIssue>(issuePath(key), { signal }));
   },
 
   /** Every issue of a ticket, each fully presented. */
-  async listIssues(store: string, ticketId: number, signal?: AbortSignal): Promise<TicketIssueV2[]> {
+  async listIssues(store: string, ticketId: number, signal?: AbortSignal): Promise<TicketIssueDetail[]> {
     const rows = await http.rows<RawIssue>(`/stores/${seg(store)}/tickets/${seg(ticketId)}/issues`, { signal });
     return rows.map(normaliseIssue);
   },

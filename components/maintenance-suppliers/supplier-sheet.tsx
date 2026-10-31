@@ -21,7 +21,7 @@ import { EntityNotesAttachments } from "@/components/maintenance-tickets/entity-
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { maintenanceCatalogService, useSupplier } from "@/lib/hooks/use-maintenance-catalog";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { Supplier } from "@/types/maintenance-v2";
+import type { Supplier } from "@/types/maintenance-system";
 import { PaymentsList } from "@/components/maintenance-technicians/payments-list";
 import { SupplierFormDialog } from "./supplier-form-dialog";
 
@@ -55,7 +55,7 @@ export function SupplierSheet({
   onOpenChange: (open: boolean) => void;
   onChanged: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { supplier, isLoading, error, refresh, setData } = useSupplier(supplierId);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

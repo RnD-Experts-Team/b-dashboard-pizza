@@ -15,7 +15,7 @@ import { PaymentDialog, type PaymentPrefill } from "@/components/maintenance-pay
 import { STOCK_ACTIONS, type StockActionId } from "@/lib/storage/stock-actions";
 import { StockActionDialog, type StockActionPrefill } from "./stock-action-dialog";
 import { StockIcon } from "./storage-shared";
-import type { Part } from "@/types/maintenance-v2";
+import type { Part } from "@/types/maintenance-system";
 import type { StockMovement, StorageLocation } from "@/types/storage.types";
 
 /**
@@ -41,7 +41,7 @@ export function RecordStockMenu({
   canRecordMovements: boolean;
   canRecordPayments: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [bought, ...movements] = STOCK_ACTIONS;
   return (
     <DropdownMenu>
@@ -74,7 +74,7 @@ function ActionItem({
   disabled: boolean;
   onPick: (id: StockActionId) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <DropdownMenuItem disabled={disabled} onSelect={() => onPick(id)} className="items-start gap-2 py-2">
       <StockIcon name={icon} className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

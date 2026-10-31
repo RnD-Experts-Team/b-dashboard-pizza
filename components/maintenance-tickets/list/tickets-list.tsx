@@ -64,7 +64,7 @@ function viewOf(ticket: Ticket): RowView {
 }
 
 function TargetCell({ row }: { row: RowView }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   if (!row.target) return <span className="text-muted-foreground">—</span>;
   return (
     <span className={cn("tabular-nums", row.overdue && "font-medium text-orange-700 dark:text-orange-400")}>
@@ -87,7 +87,7 @@ export function TicketsList({
   onPageChange: (page: number) => void;
   onOpen: (ticket: Ticket) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const rows = data.data.map(viewOf);
   const { meta } = data;
 

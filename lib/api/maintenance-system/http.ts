@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — the HTTP core every v2 service uses                     */
+/*  Maintenance — the HTTP core every service uses                     */
 /*                                                                            */
 /*  One place for: the auth token, the internal route base, snake ⇄ camel    */
 /*  key mapping, JSON vs multipart encoding, and turning an axios failure    */
@@ -280,7 +280,7 @@ export async function requestData<T>(method: HttpMethod, path: string, opts?: Re
  * A list: `{ data: [...], meta }` when paginated, or a bare `{ data: [...] }`.
  * A missing meta is filled in from the rows so callers never branch.
  */
-export async function requestPage<T, M = import("@/types/maintenance-v2").PageMeta>(
+export async function requestPage<T, M = import("@/types/maintenance-system").PageMeta>(
   path: string,
   opts?: RequestOptions,
 ): Promise<{ data: T[]; meta: M }> {

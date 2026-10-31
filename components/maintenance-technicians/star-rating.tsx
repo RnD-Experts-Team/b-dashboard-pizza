@@ -10,7 +10,7 @@ const STARS = Array.from({ length: MAX_STARS }, (_, i) => i + 1);
 
 /** Read-only stars with the number beside them ("★ 4.5"); "Not rated" when null. */
 export function StarValue({ value, className }: { value: number | string | null | undefined; className?: string }) {
-  const t = useTranslations("maintenanceV2.technicians");
+  const t = useTranslations("maintenanceSystem.technicians");
   const n = value == null || value === "" ? null : Number(value);
   if (n == null || !Number.isFinite(n)) {
     return <span className={cn("text-xs text-muted-foreground", className)}>{t("notRated")}</span>;
@@ -40,7 +40,7 @@ export function StarRatingInput({
   /** What is being rated, for screen readers ("Rating for Ovens"). */
   label: string;
 }) {
-  const t = useTranslations("maintenanceV2.technicians");
+  const t = useTranslations("maintenanceSystem.technicians");
   return (
     <div role="radiogroup" aria-label={label} className="inline-flex items-center gap-0.5">
       {STARS.map((n) => {

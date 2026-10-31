@@ -2,7 +2,7 @@
 
 /**
  * The pieces every small action dialog on the ticket page is made of
- * (docs/MAINTENANCE-V2-UI.md rules 4–5): a labelled field with its error
+ * (docs/MAINTENANCE-UI.md rules 4–5): a labelled field with its error
  * under it, a submit that disables + spins, a 422 mapped onto the fields
  * with focus moved to the first invalid one, a success toast, and an
  * unsaved-changes guard when something was typed.
@@ -56,7 +56,7 @@ function firstMessages(bag: Record<string, string[]> | undefined): Record<string
 }
 
 export function useDialogSubmit(): DialogSubmit {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -129,7 +129,7 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   return (
     <div className={cn("space-y-1.5", className)}>
       <Label htmlFor={id} className="text-sm font-medium">
@@ -183,7 +183,7 @@ export function ActionDialog({
   children: ReactNode;
   footerStart?: ReactNode;
 }) {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const formId = useId();
 
@@ -265,7 +265,7 @@ export function ActionDialog({
 
 /** "More details" disclosure for the optional fields of a step. */
 export function MoreDetails({ children, defaultOpen = false }: { children: ReactNode; defaultOpen?: boolean }) {
-  const t = useTranslations("maintenanceV2.common");
+  const t = useTranslations("maintenanceSystem.common");
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="space-y-3">

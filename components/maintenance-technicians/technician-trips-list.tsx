@@ -25,7 +25,7 @@ export function tripHref(locale: string, tripId: number): string {
  * he is on the clock or the trip is closed. A row opens the trip.
  */
 export function TechnicianTripsList({ locale, technicianId }: { locale: string; technicianId: number }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { data, isLoading, error, refresh } = useTrips({ technicianId, perPage: RECENT_TRIPS });
   const trips = data?.data ?? [];
   const total = data?.meta.total ?? trips.length;

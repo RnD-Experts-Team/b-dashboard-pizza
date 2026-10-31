@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  The payment dialog's form state (docs/MAINTENANCE-V2-UI.md §5)           */
+/*  The payment dialog's form state (docs/MAINTENANCE-UI.md §5)           */
 /*                                                                            */
 /*  One scrolling form: paid to · date · how we paid · reference · invoice # · */
 /*  invoice file · lines · running total. Pure functions over a plain draft, */
@@ -31,7 +31,7 @@ import type {
   PaymentMethod,
   PlaceAddressLine,
   UnpaidWork,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 
 /* ── Shapes ──────────────────────────────────────────────────────────────── */
 

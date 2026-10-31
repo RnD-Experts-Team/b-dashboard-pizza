@@ -13,7 +13,7 @@ import { DateTimePicker, FieldError } from "@/components/maintenance-tickets/for
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { getTicketsFieldErrors } from "@/lib/api/maintenance-tickets-errors";
 import { isoToLocalInput, localInputToIso } from "@/lib/maintenance-trips";
-import type { AddSessionPayload, TripSession, UpdateSessionPayload } from "@/types/maintenance-v2";
+import type { AddSessionPayload, TripSession, UpdateSessionPayload } from "@/types/maintenance-system";
 import { GuardedDialog } from "./guarded-dialog";
 
 type Errors = Partial<Record<"clock_in" | "clock_out" | "odometer_in" | "odometer_out" | "reason" | "form", string>>;
@@ -86,7 +86,7 @@ function SessionForm({
   onUpdate: (sessionId: number, payload: UpdateSessionPayload) => Promise<unknown>;
   onDone: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [clockIn, setClockIn] = useState(isoToLocalInput(session?.clockIn));
   const [clockOut, setClockOut] = useState(isoToLocalInput(session?.clockOut));
   const [usingCar, setUsingCar] = useState(session?.usingCar ?? false);

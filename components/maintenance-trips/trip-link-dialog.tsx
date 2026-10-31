@@ -24,7 +24,7 @@ export function canShare(): boolean {
 
 /** Copy and Share for one trip link (the plain token is only ever known right after it is issued). */
 export function useTripLinkActions(url: string, shareText: string) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [copied, setCopied] = useState(false);
 
   async function copy(): Promise<void> {
@@ -57,7 +57,7 @@ export function useTripLinkActions(url: string, shareText: string) {
 
 /** The link, Copy, Share — the same row in the dialog and in the drawer. */
 export function TripLinkActions({ url, shareText }: { url: string; shareText: string }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { copied, copy, share } = useTripLinkActions(url, shareText);
   return (
     <div className="space-y-2">
@@ -93,7 +93,7 @@ export function TripLinkDialog({
   shareText: string;
   technicianName?: string | null;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">

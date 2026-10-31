@@ -11,7 +11,7 @@ type Params = {
 };
 
 /**
- * The v2 issue workflow actions (MAINTENANCE-V2 §2 "Workflow actions"), all
+ * The issue workflow actions (MAINTENANCE §2 "Workflow actions"), all
  * POST under stores/{store}/tickets/{ticket}/issues/{issue}/…:
  *
  *   review · info-requests[/{r}/answer] · inspections[/{i}/result] ·

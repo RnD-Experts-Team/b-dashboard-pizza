@@ -3,10 +3,10 @@
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * v2 statuses (MAINTENANCE-V2 §2). The ticket status is derived from its
+ * The statuses (MAINTENANCE §2). The ticket status is derived from its
  * issues and uses the same values. Labels: lib/maintenance/vocabulary.ts.
  */
-import type { IssueStatus } from "@/types/maintenance-v2/workflow.types";
+import type { IssueStatus } from "@/types/maintenance-system/workflow.types";
 export type { IssueStatus };
 export type TicketStatus = IssueStatus;
 export type Priority = "urgent" | "high" | "medium" | "low";
@@ -110,7 +110,7 @@ export interface TicketAttachment {
   contentType: string | null;
   /** Ready-to-use download URL provided by the API. */
   url: string;
-  /** Maintenance v2 job photos: "before" / "after" (trip link or Work done), else null. */
+  /** Maintenance job photos: "before" / "after" (trip link or Work done), else null. */
   kind?: "before" | "after" | null;
   createdBy: number | null;
   createdAt: string;
@@ -160,7 +160,7 @@ export interface TicketIssueSummary {
    * the same person's work split across a "known" and an "unknown" payment.
    */
   technicians: Array<{ id: number; name: string }>;
-  /** v2: when the office aims to have it done (null = not set). */
+  /** When the office aims to have it done (null = not set). */
   targetCompletionAt?: string | null;
 }
 
@@ -302,9 +302,9 @@ export interface CreateTicketIssueRow {
   troubleshooting_guide_id?: number | null;
   /** ... and the version of it they read. */
   troubleshooting_version?: number | null;
-  /** v2: how much it hurts the store (none | slowed | partly_down | closed). */
-  impact?: import("@/types/maintenance-v2/workflow.types").Impact;
-  /** v2: who to talk to at the store about it. */
+  /** How much it hurts the store (none | slowed | partly_down | closed). */
+  impact?: import("@/types/maintenance-system/workflow.types").Impact;
+  /** Who to talk to at the store about it. */
   contactName?: string;
   contactPhone?: string;
 }
@@ -528,7 +528,7 @@ export interface ApiTicket {
     store_number: string;
   } | null;
   status: ApiEnumField;
-  /** Removed in v2.0; kept optional for backward-compat. */
+  /** Removed from the server; kept optional for backward-compat. */
   final_note?: string | null;
   notes?: ApiTicketNote[];
   attachments?: ApiTicketAttachment[];
@@ -539,7 +539,7 @@ export interface ApiTicket {
     display_title?: string | null;
     title?: string | null;
     catalog_issue?: { title?: string | null } | null;
-    /** v2 sends the issue status as a plain string, `status_label` beside it. */
+    /** The server sends the issue status as a plain string, `status_label` beside it. */
     status?: ApiEnumField | string | null;
     status_label?: string | null;
     priority?: ApiEnumField | null;

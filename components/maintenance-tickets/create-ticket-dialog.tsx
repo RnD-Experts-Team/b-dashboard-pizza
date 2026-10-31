@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { maintenanceTicketsService, MaintenanceTicketsError } from "@/lib/api/services/maintenance-tickets.service";
 import type { OverviewStore } from "@/lib/api/services/auth.service";
 import type { CatalogIssue, Priority, TicketType, TroubleshootingTicketOutcome } from "@/types/maintenance-tickets.types";
-import type { Impact } from "@/types/maintenance-v2";
+import type { Impact } from "@/types/maintenance-system";
 import { useAuthStore } from "@/lib/auth/auth.store";
 import { IMPACTS, vocabOptions, vocabText } from "@/lib/maintenance/vocabulary";
 
@@ -47,9 +47,9 @@ interface IssueRow {
   description: string;
   note: string;
   files: File[];
-  /** v2: how much it hurts the store; "" = not said. */
+  /** How much it hurts the store; "" = not said. */
   impact: Impact | "";
-  /** v2: who to talk to at the store about it. */
+  /** Who to talk to at the store about it. */
   contactName: string;
   contactPhone: string;
   /**
@@ -190,7 +190,7 @@ export function CreateTicketDialog({
   onSuccess,
 }: CreateTicketDialogProps) {
   const t = useTranslations("maintenanceTickets");
-  const tv = useTranslations("maintenanceV2");
+  const tv = useTranslations("maintenanceSystem");
   const { canAccessRoute } = useAuth();
   const userName = useAuthStore((st) => st.user?.name ?? "");
   const contactDefaults = () => ({ name: userName, phone: rememberedPhone() });
@@ -704,7 +704,7 @@ export function CreateTicketDialog({
                 />
               </div>
 
-              {/* Impact: how much it hurts the store (v2) */}
+              {/* Impact: how much it hurts the store */}
               <div className="space-y-1">
                 <Label className="text-sm" htmlFor={`impact-${row.id}`}>{tv("tickets.create.impact")}</Label>
                 <Select value={row.impact} onValueChange={(v) => updateRow(row.id, { impact: v as Impact })}>
@@ -722,7 +722,7 @@ export function CreateTicketDialog({
                 <p className="text-xs text-muted-foreground">{tv("tickets.create.impactHelp")}</p>
               </div>
 
-              {/* Who to talk to at the store (v2) */}
+              {/* Who to talk to at the store */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label className="text-sm" htmlFor={`contact-name-${row.id}`}>{tv("tickets.create.contactName")}</Label>

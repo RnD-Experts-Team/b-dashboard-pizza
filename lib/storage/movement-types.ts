@@ -1,11 +1,11 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Stock movement types (v2) and their directions — ONE source of truth     */
+/*  Stock movement types and their directions — ONE source of truth     */
 /*                                                                            */
 /*  Pure, non-React. Labels and icons for these live in                      */
 /*  lib/maintenance/vocabulary.ts (MOVEMENT_TYPES); this file says how each  */
 /*  one changes stock and which ones a person may post.                      */
 /*                                                                            */
-/*  MAINTENANCE-V2 §5: bought +1, used −1, returned +1, moved (line says),   */
+/*  MAINTENANCE §5: bought +1, used −1, returned +1, moved (line says),   */
 /*  opening_stock +1, stock_count (line says), damaged_lost −1,              */
 /*  undone (line says).                                                       */
 /* ────────────────────────────────────────────────────────────────────────── */

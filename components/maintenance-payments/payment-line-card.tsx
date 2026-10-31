@@ -41,7 +41,7 @@ import type {
   PaymentLineType,
   Supplier,
   TechnicianPurchase,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 import type { StorageLocationRef } from "@/types/maintenance-tickets.types";
 import { EntityCombobox } from "./entity-combobox";
 import { Field, fieldId } from "./field";
@@ -97,7 +97,7 @@ export function PaymentLineCard({
   onChange: (next: PaymentLineDraft, touchedField?: string) => void;
   onRemove: () => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [otherMode, setOtherMode] = useState(Boolean(line.otherStore) && line.storeId == null);
   const [showMore, setShowMore] = useState(Boolean(line.description) && line.type !== "other");
 
@@ -509,7 +509,7 @@ function TicketsField({
   required: boolean;
   onChange: (ids: number[]) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { issues, isLoading, error: loadError, refresh } = useStoreIssues(storeNumber);
 
   const options = useMemo(() => {
@@ -579,7 +579,7 @@ function PartsFields({
   isTechnician: boolean;
   intoStorage: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
 
   const partGroups = useMemo(
     () => [
@@ -763,7 +763,7 @@ function StorageSpotFields({
   idOf: (field: string) => string;
   patch: (p: Partial<PaymentLineDraft>, field?: string) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { levels, isLoading } = usePlaceLevels(line.storageLocationId);
 
   return (
@@ -860,7 +860,7 @@ function PurchaseChecklist({
   lockedIds: number[];
   onToggle: (purchaseId: number) => void;
 }) {
-  const t = useTranslations("maintenanceV2.payments");
+  const t = useTranslations("maintenanceSystem.payments");
   return (
     <div id={id} tabIndex={-1} role="group" className="max-h-44 divide-y overflow-y-auto rounded-md border bg-background">
       {purchases.map((p) => {
@@ -921,7 +921,7 @@ function CreatePartInline({
   parts: Part[];
   onPicked: (part: Part, created: boolean) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const create = useMaintenanceMutation(maintenanceCatalogService.createPart);
   const [error, setError] = useState<string | null>(null);
   const name = tidyName(initialName);

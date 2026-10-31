@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { cn } from "@/lib/utils";
 import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { portalErrorKind } from "@/lib/api/services/trip-portal.service";
-import type { TripPortalErrorKind } from "@/types/maintenance-v2";
+import type { TripPortalErrorKind } from "@/types/maintenance-system";
 
 /* ── Big touch targets (UX rule 11: ≥ 48 px, full width, 8 px apart) ─────── */
 
@@ -57,7 +57,7 @@ export function PortalSheet({
   description?: string;
   children: ReactNode;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" showCloseButton={false} className="max-h-[92dvh] gap-0 overflow-y-auto rounded-t-2xl pb-[env(safe-area-inset-bottom)]">
@@ -126,7 +126,7 @@ export function PhotoField({
   multiple?: boolean;
   help?: string;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   return (
@@ -221,7 +221,7 @@ const KIND_KEYS: Partial<Record<TripPortalErrorKind, string>> = {
 
 /** What to say under a form when an action fails (the server's own words for a refusal). */
 export function usePortalErrorText(): (err: unknown) => string {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   return (err: unknown) => {
     const kind = portalErrorKind(err);
     const key = KIND_KEYS[kind];

@@ -1,5 +1,5 @@
 /**
- * Stock count sheet maths (docs/MAINTENANCE-V2-UI.md §6 "Count sheet").
+ * Stock count sheet maths (docs/MAINTENANCE-UI.md §6 "Count sheet").
  *
  * The server owns the numbers it stores (difference, value_difference and
  * the totals) and recomputes `expected` when the count is applied; this is
@@ -11,7 +11,7 @@
  */
 
 import { parseDecimal, roundCents } from "@/lib/maintenance/money";
-import type { StockCountLine } from "@/types/maintenance-v2";
+import type { StockCountLine } from "@/types/maintenance-system";
 
 export type CountLineState = "not_counted" | "match" | "missing" | "extra";
 

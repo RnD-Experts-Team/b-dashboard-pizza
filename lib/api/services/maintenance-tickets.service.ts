@@ -48,8 +48,8 @@ import { BUSY_MESSAGE } from "@/lib/api/utils/error";
 
 import { MaintenanceTicketsError, type TicketsErrorCode } from "@/lib/api/maintenance-error";
 
-// The error class lives in lib/api/maintenance-error.ts (shared by the v2
-// services); re-exported here so existing imports keep working.
+// The error class lives in lib/api/maintenance-error.ts (shared by the
+// maintenance services); re-exported here so existing imports keep working.
 export { MaintenanceTicketsError };
 export type { TicketsErrorCode };
 
@@ -133,7 +133,7 @@ function transformEnumField(raw: { value: string; label: string }): EnumField {
   return { value: raw.value, label: raw.label };
 }
 
-/** A list issue's status: v2 sends `"in_review"` with `status_label`; older servers `{value, label}`. */
+/** A list issue's status: the server sends `"in_review"` with `status_label`; older servers `{value, label}`. */
 function issueStatusOf(raw: { value: string; label: string } | string | null | undefined, label?: string | null): EnumField | null {
   if (!raw) return null;
   return typeof raw === "string" ? { value: raw, label: label ?? raw } : transformEnumField(raw);
@@ -365,7 +365,7 @@ function buildTicketFormData(payload: CreateTicketPayload): FormData {
 
     (issue.files ?? []).forEach((file) => form.append(`issues[${i}][files][]`, file));
 
-    // v2 per-issue fields (MAINTENANCE-V2 §2 "Create a ticket").
+    // Per-issue fields (MAINTENANCE §2 "Create a ticket").
     if (issue.impact) form.append(`issues[${i}][impact]`, issue.impact);
     if (issue.contactName) form.append(`issues[${i}][contact_name]`, issue.contactName);
     if (issue.contactPhone) form.append(`issues[${i}][contact_phone]`, issue.contactPhone);

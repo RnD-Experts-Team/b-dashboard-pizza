@@ -5056,7 +5056,7 @@
     "scheduleChipLabel": "{count, plural, one {مُقيَّم في # مهارة} other {مُقيَّم في # مهارات}}",
     "scheduleAlertHint": "دون 18 ومُقيَّم في مهارة مقيّدة: لا تضعه عليها أو بالقرب منها."
   },
-  "maintenanceV2": {
+  "maintenanceSystem": {
     "vocab": {
       "terms": {
         "technician": {

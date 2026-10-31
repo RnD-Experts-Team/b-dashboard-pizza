@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useInspectionLookup } from "@/lib/hooks/use-maintenance-payments";
 import { useDebouncedValue } from "@/lib/hooks/use-toolbox-tickets-poll";
 import { formatMoney } from "@/lib/maintenance/money";
-import type { IssueInspectionLookupRow } from "@/types/maintenance-v2";
+import type { IssueInspectionLookupRow } from "@/types/maintenance-system";
 
 const SEARCH_DEBOUNCE_MS = 300;
 /** The lookup's largest answer. */
@@ -48,7 +48,7 @@ export function InspectionPicker({
   onPick: (row: IssueInspectionLookupRow | null) => void;
   invalid?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const [search, setSearch] = useState("");
   // Editing a payment: its own inspection now reads as paid, so start with paid ones shown.
   const [showPaid, setShowPaid] = useState(value != null);
@@ -124,7 +124,7 @@ export function InspectionPicker({
 }
 
 function InspectionRow({ row, on, onPick }: { row: IssueInspectionLookupRow; on: boolean; onPick: () => void }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const issue = row.ticketIssue;
   const done = shortDay(row.doneAt);
   const booked = shortDay(row.scheduledDate);

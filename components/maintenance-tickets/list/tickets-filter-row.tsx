@@ -49,7 +49,7 @@ export function TicketsFilterRow({
   isSearching: boolean;
   disabled?: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { categories } = useTechnicianCategories(canFilterTechnicians);
   const { technicians } = useTechnicians({ perPage: TECHNICIAN_PAGE_SIZE }, canFilterTechnicians);
   const inCategory = useMemo(

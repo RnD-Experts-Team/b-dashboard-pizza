@@ -8,7 +8,7 @@
 
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
 import { keyOf, useMaintenanceResource } from "@/lib/hooks/use-maintenance-resource";
-import type { TicketIssueLookupFilters } from "@/types/maintenance-v2";
+import type { TicketIssueLookupFilters } from "@/types/maintenance-system";
 
 export function useIssueLookup(filters: TicketIssueLookupFilters | null) {
   const res = useMaintenanceResource(filters ? keyOf("ticket-issues", filters) : null, (signal) =>

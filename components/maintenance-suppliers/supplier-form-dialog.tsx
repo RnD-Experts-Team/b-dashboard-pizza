@@ -20,7 +20,7 @@ import { MaintenanceTicketsError } from "@/lib/api/maintenance-error";
 import { maintenanceCatalogService, useSuppliers } from "@/lib/hooks/use-maintenance-catalog";
 import { useMaintenanceMutation } from "@/lib/hooks/use-maintenance-resource";
 import { findNameClash, tidyName } from "@/lib/maintenance/names";
-import type { Supplier, SupplierInput } from "@/types/maintenance-v2";
+import type { Supplier, SupplierInput } from "@/types/maintenance-system";
 import { DiscardChangesDialog } from "@/components/maintenance-technicians/discard-changes-dialog";
 import { describedBy, focusFirstInvalid, FormField } from "@/components/maintenance-technicians/form-field";
 
@@ -69,7 +69,7 @@ export function SupplierFormDialog({
   onOpenChange: (open: boolean) => void;
   onSaved?: (supplier: Supplier) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const { suppliers: everyone } = useSuppliers(ALL_NAMES, open);
   const initial = useMemo(() => draftOf(supplier), [supplier]);
   const [draft, setDraft] = useState<Draft>(initial);

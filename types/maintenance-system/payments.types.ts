@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — payments, unpaid work, technician purchases (§4)        */
+/*  Maintenance — payments, unpaid work, technician purchases (§4)        */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import type {

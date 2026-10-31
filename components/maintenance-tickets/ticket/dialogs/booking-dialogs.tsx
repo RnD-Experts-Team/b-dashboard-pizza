@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { maintenanceWorkflowService } from "@/lib/api/services/maintenance-workflow.service";
-import type { IssueSchedule } from "@/types/maintenance-v2";
+import type { IssueSchedule } from "@/types/maintenance-system";
 import { DatePicker, TimePicker } from "../../form-bits";
 import { ActionDialog, Field, MoreDetails, useDialogSubmit } from "../dialog-kit";
 import { formatDayTime } from "../format";
@@ -35,7 +35,7 @@ function BookingDialog({
   kind,
   secondOpinion = false,
 }: BookingDialogProps & { kind: "inspection" | "work" }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const [technicianId, setTechnicianId] = useState<number | null>(null);
   const [date, setDate] = useState("");
@@ -154,7 +154,7 @@ export function MoveBookingDialog({
   run,
   scheduleId,
 }: StepDialogProps & { scheduleId?: number | null }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const form = useDialogSubmit();
   const bookings = liveSchedules(issue.schedules);
   const [picked, setPicked] = useState<string>(String(scheduleId ?? bookings[0]?.id ?? ""));

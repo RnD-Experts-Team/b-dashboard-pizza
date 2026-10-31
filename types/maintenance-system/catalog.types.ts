@@ -1,6 +1,6 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — catalog: technicians, categories, suppliers, parts      */
-/*  (MAINTENANCE-V2.md §1)                                                    */
+/*  Maintenance — catalog: technicians, categories, suppliers, parts      */
+/*  (MAINTENANCE.md §1)                                                    */
 /* ────────────────────────────────────────────────────────────────────────── */
 
 import type {

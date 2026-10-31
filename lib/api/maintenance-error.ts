@@ -1,7 +1,7 @@
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  The one error type every maintenance service throws                      */
 /*                                                                            */
-/*  Lives on its own so the v2 services (catalog, workflow, trips, payments,  */
+/*  Lives on its own so the services (catalog, workflow, trips, payments,  */
 /*  storage, analytics, settings, the public trip portal) share it without    */
 /*  importing the tickets service. maintenance-tickets.service.ts re-exports  */
 /*  it, so `instanceof MaintenanceTicketsError` keeps working everywhere and  */

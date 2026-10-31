@@ -1,5 +1,5 @@
 /**
- * Which approval level an amount needs (MAINTENANCE-V2 §2 "Approval levels").
+ * Which approval level an amount needs (MAINTENANCE §2 "Approval levels").
  *
  * `maintenance_settings.approval_levels` lists levels with an EXCLUSIVE upper
  * bound `max` in dollars; the last one has `max: null` (no limit). The
@@ -10,7 +10,7 @@
  */
 
 import { parseDecimal } from "@/lib/maintenance/money";
-import type { ApprovalLevel } from "@/types/maintenance-v2";
+import type { ApprovalLevel } from "@/types/maintenance-system";
 
 /** The contract's default, used only when the settings are not readable. */
 const SPECIALIST_MAX_DOLLARS = 300;

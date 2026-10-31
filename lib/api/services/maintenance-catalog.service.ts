@@ -1,5 +1,5 @@
 /* ────────────────────────────────────────────────────────────────────────── */
-/*  Maintenance v2 — catalog service (MAINTENANCE-V2 §1)                     */
+/*  Maintenance — catalog service (MAINTENANCE §1)                     */
 /*                                                                            */
 /*  Technicians, technician categories, suppliers, parts, serial units and   */
 /*  who covers which issue. Catalog ISSUES (what can break) stay in          */
@@ -9,7 +9,7 @@
 /*  categories, parts), suppliers/[[...path]], part-units/[...path].         */
 /* ────────────────────────────────────────────────────────────────────────── */
 
-import { http, seg } from "@/lib/api/maintenance-v2/http";
+import { http, seg } from "@/lib/api/maintenance-system/http";
 import type {
   Page,
   Part,
@@ -27,7 +27,7 @@ import type {
   TechnicianCategoryInput,
   TechnicianFilters,
   TechnicianInput,
-} from "@/types/maintenance-v2";
+} from "@/types/maintenance-system";
 import type { TicketAttachment, TicketNote } from "@/types/maintenance-tickets.types";
 
 const CATALOG = "/catalog";
@@ -77,7 +77,7 @@ export const maintenanceCatalogService = {
   /** Who covers which issue, as one read (the pickers and the coverage editor). */
   async listAbilities(signal?: AbortSignal): Promise<TechnicianAbility[]> {
     const body = await http.get<TechnicianAbility[] | { byIssue?: TechnicianAbility[] }>(`${CATALOG}/technician-abilities`, { signal });
-    // Older servers wrap the list as { overall, by_issue }; v2 drops `overall`.
+    // Older servers wrap the list as { overall, by_issue }; the server now drops `overall`.
     return Array.isArray(body) ? body : body?.byIssue ?? [];
   },
   saveAbility(technicianId: number, issueId: number, input: TechnicianAbilityInput): Promise<TechnicianAbility> {

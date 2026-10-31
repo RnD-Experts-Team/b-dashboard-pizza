@@ -27,7 +27,7 @@ import { formatDateOnlyWithWeekday, formatTimestamp } from "@/lib/utils/date-dis
 import { tripPortalService, useTripPortal } from "@/lib/hooks/use-trip-portal";
 import { openSession, TRIP_BUTTONS, TRIP_STATE_TONE, type TripButton } from "@/lib/maintenance-trips";
 import { PRIORITIES, TRIP_STATES, TRIP_STOP_STATUSES, VISIT_TASK_STATUSES, vocabEntry, vocabText } from "@/lib/maintenance/vocabulary";
-import type { PublicTrip, TripPortalErrorKind, TripState, TripStop } from "@/types/maintenance-v2";
+import type { PublicTrip, TripPortalErrorKind, TripState, TripStop } from "@/types/maintenance-system";
 import { BigButton, usePortalErrorText } from "./portal-bits";
 import {
   AddStoreSheet,
@@ -65,7 +65,7 @@ function pageStateOf(kind: TripPortalErrorKind): keyof typeof PAGE_STATES {
 }
 
 function FullPageMessage({ kind, onRetry, busy }: { kind: TripPortalErrorKind; onRetry: () => void; busy: boolean }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const spec = PAGE_STATES[pageStateOf(kind)];
   const Icon = spec.icon;
   const body = kind === "rate_limited" ? "tripPortal.tooFast" : spec.body;
@@ -101,7 +101,7 @@ function PortalSkeleton() {
 /* ── The page ────────────────────────────────────────────────────────────── */
 
 /**
- * The technician's trip page (docs/MAINTENANCE-V2-UI.md §4), no login: the
+ * The technician's trip page (docs/MAINTENANCE-UI.md §4), no login: the
  * token in the link is the credential. One giant button that follows his
  * state, big secondary ones, his stops and jobs, then "I bought something"
  * and "Add a note/photo". Every action returns the refreshed trip.
@@ -141,7 +141,7 @@ function PortalBody({
   onRefresh: () => void;
   refreshing: boolean;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const errorText = usePortalErrorText();
   const [sheet, setSheet] = useState<SheetId | null>(null);
   const [arriveAt, setArriveAt] = useState<TripStop | null>(null);
@@ -380,7 +380,7 @@ function StopCard({
   onDone: (issue: IssueTarget["issue"]) => void;
   onNotDone: (issue: IssueTarget["issue"] | null) => void;
 }) {
-  const t = useTranslations("maintenanceV2");
+  const t = useTranslations("maintenanceSystem");
   const here = stop.status === "arrived" && !stop.leftAt;
   const planned = stop.status === "planned";
   return (
